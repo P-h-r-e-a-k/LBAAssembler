@@ -43,7 +43,7 @@ public sealed class SceneScripts
     }
 
     private readonly SceneRecord record;
-    private readonly OpcodeSet dialect;
+    private OpcodeSet dialect;   // (Translate changes it)
     private readonly int sceneNumber;
     private readonly Func<int, ScriptKind, CommentSet?> commentSource;
     private readonly Entry[] life;
@@ -84,6 +84,10 @@ public sealed class SceneScripts
     public static SceneScripts Load(byte[] sceneRecordBytes, int sceneNumber = -1, Func<int, ScriptKind, CommentSet?>? comments = null, bool lba1 = false) =>
         lba1 ? new(SceneRecord.ParseLba1(sceneRecordBytes), Opcodes.Lba1, sceneNumber, comments)
              : new(SceneRecord.Parse(sceneRecordBytes), Opcodes.Lba2, sceneNumber, comments);
+
+    // An LBA2-layout scene whose scripts are in another dialect (the 1996 demo's: Opcodes.Demo96).
+    internal static SceneScripts Load(byte[] sceneRecordBytes, OpcodeSet dialect, int sceneNumber = -1) =>
+        new(SceneRecord.Parse(sceneRecordBytes), dialect, sceneNumber, null);
 
     private Entry EntryOf(int actor, ScriptKind kind)
     {
@@ -315,6 +319,19 @@ public sealed class SceneScripts
             errors.Add(new ScriptDiagnostic(0, ScriptKind.Life, 0, 0, ex.Message));
             return new SceneBuildResult(null, errors);
         }
+    }
+
+    // Every script decompiled in this scene's dialect, changed by `rewrite` (actor, kind, text -> text), then compiled in `target`:
+    // the 1996 demo's scripts into the retail game's bytecode. The instance is in `target` afterwards.
+    internal SceneBuildResult Translate(OpcodeSet target, Func<int, ScriptKind, string, string> rewrite)
+    {
+        var texts = new List<(int Actor, ScriptKind Kind, string Text)>();
+        for (var a = 0; a < ActorCount; a++)
+            foreach (var kind in new[] { ScriptKind.Life, ScriptKind.Track })
+                texts.Add((a, kind, rewrite(a, kind, OriginalText(a, kind))));
+        dialect = target;
+        foreach (var (a, kind, text) in texts) EntryOf(a, kind).EditedText = text;
+        return Build();
     }
 
     private string TextForCompile(int actor, ScriptKind kind) => EntryOf(actor, kind).EditedText ?? OriginalText(actor, kind);

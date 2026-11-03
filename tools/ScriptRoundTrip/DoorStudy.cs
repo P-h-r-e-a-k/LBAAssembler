@@ -436,9 +436,72 @@ internal static class ScriptGrep2
             try { var record = store.LoadRecord(s); scripts = LBAAssembler.LbaScript.SceneScripts.Load(record, s); model = store.Load(s); } catch { continue; }
             for (var a = 0; a < model.Actors.Count; a++)
                 foreach (var kind in new[] { LBAAssembler.LbaScript.ScriptKind.Life, LBAAssembler.LbaScript.ScriptKind.Track })
-                    foreach (var line in scripts.GetText(a, kind).Split('\n').Where(l => l.Contains(args[2])))
+                {
+                    string text;
+                    try { text = scripts.GetText(a, kind); }
+                    catch (Exception e) { Console.WriteLine($"scene {s} actor {a} {kind}: UNDECODED {e.Message}"); continue; }
+                    foreach (var line in text.Split('\n').Where(l => l.Contains(args[2])))
                         Console.WriteLine($"scene {s} actor {a} {kind}: {line.Trim()}");
+                }
         }
+        return 0;
+    }
+}
+
+// scriptdump <LBA2 folder> <out folder> [scene,scene...|all] [demo96]: every actor's life and track text, one file per scene
+// (sceneNNN.txt); demo96 = the scripts are the 1996 demo's (Opcodes.Demo96).
+internal static class ScriptDump
+{
+    public static int Run(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        Directory.CreateDirectory(args[2]);
+        var only = args.Length > 3 && args[3] != "all" ? args[3].Split(',').Select(int.Parse).ToHashSet() : null;
+        var dialect = args.Length > 4 && args[4] == "demo96" ? LBAAssembler.LbaScript.Opcodes.Demo96 : LBAAssembler.LbaScript.Opcodes.Lba2;
+        for (var s = 0; s < store.SceneCount; s++)
+        {
+            if (!store.SceneExists(s) || only != null && !only.Contains(s)) continue;
+            LBAAssembler.LbaScript.SceneScripts scripts; LBAAssembler.Scenes.SceneModel model;
+            try { var record = store.LoadRecord(s); scripts = LBAAssembler.LbaScript.SceneScripts.Load(record, dialect, s); model = store.Load(s); } catch (Exception e) { Console.WriteLine($"scene {s}: {e.Message}"); continue; }
+            var text = new System.Text.StringBuilder();
+            for (var a = 0; a < model.Actors.Count; a++)
+                foreach (var kind in new[] { LBAAssembler.LbaScript.ScriptKind.Life, LBAAssembler.LbaScript.ScriptKind.Track })
+                {
+                    text.AppendLine($"// ===== actor {a} {kind}");
+                    try { text.AppendLine(scripts.GetText(a, kind)); }
+                    catch (Exception e) { text.AppendLine($"// UNDECODED {e.Message}"); }
+                }
+            File.WriteAllText(Path.Combine(args[2], $"scene{s:D3}.txt"), text.ToString());
+        }
+        return 0;
+    }
+}
+
+// scriptbytes <LBA2 folder> <scene>: every actor's raw life and track bytes as hex.
+internal static class ScriptBytes
+{
+    public static int Run(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var record = LBAAssembler.LbaScript.SceneRecord.Parse(store.LoadRecord(int.Parse(args[2])));
+        for (var a = 0; a < record.Actors.Count; a++)
+        {
+            Console.WriteLine($"actor {a} life {Convert.ToHexString(record.Life(record.Actors[a]).ToArray())}");
+            Console.WriteLine($"actor {a} track {Convert.ToHexString(record.Track(record.Actors[a]).ToArray())}");
+        }
+        return 0;
+    }
+}
+
+// texts <TEXT.HQR> <language> <file> [id,id...]: the texts of one text file (all, or the ids given).
+internal static class Texts
+{
+    public static int Run(string[] args)
+    {
+        var bank = LBAAssembler.Lba2TextBank.Load(LBAAssembler.HqrArchive.Open(args[1]), int.Parse(args[2]), int.Parse(args[3]));
+        var only = args.Length > 4 ? args[4].Split(',').Select(int.Parse).ToHashSet() : null;
+        foreach (var t in bank.Texts.Where(t => only == null || only.Contains(t.Id)))
+            Console.WriteLine($"{t.Id} [{t.Attribute}] {t.Value}");
         return 0;
     }
 }

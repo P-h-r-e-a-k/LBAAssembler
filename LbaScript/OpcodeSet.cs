@@ -75,6 +75,8 @@ internal static class Opcodes
 
     public static readonly OpcodeSet Lba1 = Lba1Tables.Build();
 
+    public static readonly OpcodeSet Demo96 = Demo96Tables.Build();
+
     [ThreadStatic] private static OpcodeSet? current;
 
     public static OpcodeSet Active => current ?? Lba2;

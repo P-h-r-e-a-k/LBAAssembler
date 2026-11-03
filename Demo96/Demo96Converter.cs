@@ -27,7 +27,7 @@ internal static class Demo96Converter
     // The file a converted folder carries (MarkerFile): what it is, the converter's version and the demo folder it was made from, then each
     // demo scene's retail counterpart ("scene <demo> <retail>", -1 for none): the editor names the demo's scenes by them.
     public const string MarkerFile = "LBA2-1996-DEMO.TXT";
-    public const int Version = 2;
+    public const int Version = 3;   // (3: the scripts translated into the retail bytecode, Demo96Scripts)
 
     // Whether `dir` is a converted folder of this version made from `demoDir`.
     public static bool IsConverted(string dir, string demoDir)
@@ -99,22 +99,30 @@ internal static class Demo96Converter
         {
             var demo = Entries(File.ReadAllBytes(Demo("SCENE.HQR")));
             var scenes = new List<byte[]?> { null };
-            var largest = 0; var unpatched = 0; var failed = new List<string>();
+            var largest = 0; var untranslated = new List<string>(); var failed = new List<string>();
             for (var i = 0; i < demo.Count; i++)
             {
                 if (demo[i] is null) { scenes.Add(null); continue; }
                 try
                 {
-                    var model = Demo96Scenes.Parse(Unpack(demo[i]!));
-                    byte[] record;
-                    try { record = SceneSerializer.Write(model); }
-                    catch (Exception)
+                    var lines = new List<short[]?>();
+                    var model = Demo96Scenes.Parse(Unpack(demo[i]!), lines);
+                    // the record with the demo's scripts (and an empty patch table: the retail one can't be made from them)
+                    model.RebuildPatches = false; model.Tail = new byte[4];
+                    var record = SceneSerializer.Write(model);
+                    try
                     {
-                        // (scripts the patch table can't be rebuilt from: an empty one)
-                        model.RebuildPatches = false; model.Tail = new byte[4];
+                        // the scripts in the retail bytecode (Demo96Scripts), the patch table made from them
+                        var translated = LbaScript.SceneRecord.Parse(Demo96Scripts.Translate(record, i, lines));
+                        for (var k = 0; k < model.Actors.Count; k++)
+                        {
+                            model.Actors[k].Life = translated.Life(translated.Actors[k]).ToArray();
+                            model.Actors[k].Track = translated.Track(translated.Actors[k]).ToArray();
+                        }
+                        model.RebuildPatches = true;
                         record = SceneSerializer.Write(model);
-                        unpatched++;
                     }
+                    catch (Exception e) { untranslated.Add($"{i}: {e.Message}"); }
                     largest = Math.Max(largest, record.Length);
                     scenes.Add(HqrWriter.StoredEntry(record));
                 }
@@ -124,7 +132,9 @@ internal static class Demo96Converter
             scenes[0] = HqrWriter.StoredEntry(size);
             File.WriteAllBytes(Out("SCENE.HQR"), Build(scenes));
             log.Add($"SCENE.HQR: {scenes.Count(s => s is not null) - 1} scenes in the retail format (demo scene N is retail entry N + 1)" +
-                    (unpatched > 0 ? $", {unpatched} with an empty patch table" : "") + (failed.Count > 0 ? $"; not converted: {string.Join("; ", failed)}" : ""));
+                    ", the scripts in the retail bytecode" +
+                    (untranslated.Count > 0 ? $" but for {untranslated.Count} scenes' (left as the demo's, with an empty patch table: {string.Join("; ", untranslated.Take(4))})" : "") +
+                    (failed.Count > 0 ? $"; not converted: {string.Join("; ", failed)}" : ""));
         }
 
         // the interiors' header

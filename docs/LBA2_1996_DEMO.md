@@ -34,7 +34,7 @@ game folder in them is never replaced by the demo's; the joined interior maps (m
 | Interiors (grids, libraries, bricks) | all; already in the retail format, only the file's header differs |
 | Bodies | 116 of 116 characters (3 partly), 56 of 56 objects, all island decors (323) |
 | Animations, sprites, texts, samples, screens, flows | copied as they are: the retail format |
-| Scripts | 44 scenes decode completely (379 scripts); 22 use instructions the retail game does not have (below) |
+| Scripts | 66 of 66 scenes, translated into the retail bytecode (the demo's script language, below); they run in the retail engine |
 
 What the editor does with it:
 - every island in 3D with its actors and zones, the minimap, the scenes' interiors, actors, zones and track points;
@@ -101,19 +101,45 @@ Both in `native/lba2-classic-community/SOURCES/3DEXT/`, both harmless for the re
 - `RENDERER_API.CPP`: the renderer kept the last palette's number across a change of game folder, so after opening the demo (or closing
   it) it kept a palette buffer that was gone and drew black. It is reset when the renderer starts again.
 
+## The demo's script language
+
+Found by disassembling `LBA2DEMO.EXE` (a DOS4GW LE executable; Watcom, as the retail `LBA2.EXE`) and lining its interpreter up against the
+retail one (2026-11-03). Its life interpreter's switch (jump table at 0x236EC) runs 0-148, retail's 0-154; its conditions 0-40 (retail
+0-45) and its track instructions 0-39 (retail 0-52). For each case, how far it moves the script pointer gives the instruction's length.
+
+- **The conditions** are the retail ones: the same operand bytes and the same answer types.
+- **The track instructions** are the retail ones but for `SPRITE`, whose sprite number is one byte (retail: two).
+- **The life instructions** are the retail ones but for:
+  - `SAMPLE`, `SAMPLE_RND`, `SAMPLE_ALWAYS`, `SAMPLE_STOP`: a one-byte sample number (retail: two); `REPEAT_SAMPLE` a byte sample and a byte
+    count. (Reading them as retail is what threw the scripts out: the byte after the sample number was taken for an instruction.)
+  - 132 (no operand): the talking actor says its line for the chapter. The hero says one of a few picked at random from a table in the
+    executable (0x80B0A: chapter 0 "Hello", "Bye", "Hi"; chapter 1 the lighthouse keeper ones); any other actor its own -- the 40 bytes a
+    demo actor record carries are its 20 chapter lines. Nothing at chapter 20 and above.
+  - 70 (two bytes): an island decor object shown or hidden (scene 42 only); 72 (none): the holomap's icon; 88 (an actor): extras thrown
+    about it; 99 (none): a palette call. Not used by the scenes, but for 70.
+  - 69, 73, 83-87, 90-92, 103, 104 and 111 have no case in the demo's engine (they do nothing there), yet its scripts use `ASK_CHOICE` (69)
+    and `ASK_CHOICE_OBJ` (91) with the retail operands: the scripts were compiled for a newer language than the demo runs.
+
+`LbaScript/Demo96Tables.cs` is that language (`Opcodes.Demo96`). The converter (`Demo96/Demo96Scripts.cs`) decompiles every script in it,
+rewrites 132 as `switch (chapter())` with `message()`s (the hero's a `switch (rnd(n))` inside) and drops the other four with a comment, and
+compiles the text again in the retail language. The demo's sewers (scenes 17 and 18) run so in the engine: the painter walks his track.
+
+The tools: `ScriptRoundTrip scriptdump <folder> <out> all demo96` (every script's text, in the demo's language), `scriptbytes`, and the
+Python disassembly scripts in `E:\dump\TEMP\demo96\dis` (capstone; `switches.py`, `advance.py`, `case.py`).
+
+The texts: the demo's `TEXT.HQR` isn't laid out as the retail one (its English Citadel dialogue is its "file 7", where the retail game has
+file 3), so a script's `message(236)` is the demo's text 236 of that file, not the retail game's.
+
 ## As a game patch, later
 
 The pictures, islands, interiors and characters are all there, so "the demo's scenes in the retail game" is within reach. What it needs:
 
-1. **The scripts.** 22 scenes stop at an instruction the retail game doesn't have: life instruction 132 (17 scenes: most of the Citadel
-   Island houses and the storm scenes), 5, 6 and 9, track instruction 100 and condition 115. Each needs finding in the demo's executable
-   (`LBA2DEMO.EXE`) and mapping onto a retail one (or a new engine instruction); 132, in 17 scenes, would open most of them. One script
-   (scene 44, actor 3) decodes but not back into the same bytes.
+1. **The scripts.** Done: translated into the retail bytecode (above).
 2. **Texts and voices.** The scripts' text numbers are the demo's own `TEXT.HQR`; a patch would add them to the retail texts (or keep the
    demo's) -- there are no demo voices.
 3. **Scene numbers.** The demo's scenes would go past the retail 222 (or replace retail scenes), with their cube-change zones renumbered
    and the holomap told where they are.
 4. **What is missing**: Otringal's sky, three partly-read bodies, and the demo's music (its `MIDI_*.HQR` files are not converted).
 
-The scenes already open in the engine (the picture at the top). Not tested yet: how far the scripts that do decode behave as they did in
-the demo, and what the engine does on reaching one of the unknown instructions.
+The scenes already open in the engine (the picture at the top), their scripts running. Not checked yet, scene by scene: that each behaves
+as it did in the demo (the texts, item 2, are the first thing that would differ).

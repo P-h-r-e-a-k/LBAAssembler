@@ -10,8 +10,9 @@ namespace LBAAssembler.Demo96;
 //
 //   - an ambient sample slot is three words (sample, repeat, round): retail added a frequency and a volume (the retail scenes' unused
 //     slots carry 4096 and 110, which the demo's are given);
-//   - an actor carries 40 more bytes after its armour and life points, before its scripts (0xFF in most actors: what they meant is not
-//     known; the retail engine has no use for them, so they are left out).
+//   - an actor carries 40 more bytes after its armour and life points, before its scripts: 20 text numbers, its line in each chapter
+//     (-1 = none), which the demo's life instruction 132 says (Demo96Scripts). The retail record has no room for them: they are left out
+//     of it and handed to the script translation (`chapterLines`).
 //
 // The zones and the track points are the retail ones. The demo's records end with the track points: no patch table (the retail one is
 // written fresh from the scripts, or left empty where they don't decode).
@@ -19,7 +20,8 @@ internal static class Demo96Scenes
 {
     public const int AmbientFrequency = 4096, AmbientVolume = 110, ActorExtra = 40;
 
-    public static SceneModel Parse(byte[] record)
+    // `chapterLines` gets each actor's 20 chapter lines (null for the hero, who has none).
+    public static SceneModel Parse(byte[] record, List<short[]?>? chapterLines = null)
     {
         var r = new Reader(record);
         var s = new SceneModel { Game = SceneGame.Lba2 };
@@ -34,6 +36,7 @@ internal static class Demo96Scenes
         hero.Track = r.Bytes(r.Length("hero track"));
         hero.Life = r.Bytes(r.Length("hero life"));
         s.Actors.Add(hero);
+        chapterLines?.Add(null);
 
         var objects = r.S16();
         for (var n = 1; n < objects; n++)
@@ -46,7 +49,8 @@ internal static class Demo96Scenes
             for (var k = 0; k < 4; k++) a.Info[k] = r.S16();
             a.NbBonus = r.S16(); a.CoulObj = r.S8();
             a.Armor = r.S8(); a.LifePoints = r.S8();
-            r.Bytes(ActorExtra);
+            var lines = r.Bytes(ActorExtra);
+            chapterLines?.Add(Enumerable.Range(0, ActorExtra / 2).Select(k => BinaryPrimitives.ReadInt16LittleEndian(lines.AsSpan(k * 2))).ToArray());
             a.Track = r.Bytes(r.Length($"object {n} track"));
             a.Life = r.Bytes(r.Length($"object {n} life"));
             // (the retail ANIM_3DS flag would make the retail loader read two more fields the demo's record doesn't have)
