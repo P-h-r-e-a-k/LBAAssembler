@@ -39,6 +39,17 @@ public partial class MainWindow
     private (double X, double Z, double Y)? trackFlag;
     private bool trackFlagArmed, trackFlagDragging;
     private Button? trackTestButton;
+    private Slider? trackWidthSlider;
+    private TextBlock? trackWidthLabel;
+    private bool trackWidthSyncing;
+    // (the slider as the island's pieces have it, without saving again)
+    private void SyncTrackWidthSlider()
+    {
+        if (trackWidthSlider is null) return;
+        trackWidthSyncing = true;
+        try { trackWidthSlider.Value = trackPieces.Width * 100; }
+        finally { trackWidthSyncing = false; }
+    }
     private const double TrackTurnStep = Math.PI / 12, TrackLiftStep = 250;
 
     private bool TrackPiecesActive => editMode == EditMode.Build && buildTrackView && TerrainEditable;
@@ -77,6 +88,28 @@ public partial class MainWindow
         row.Children.Add(Btn("Up (PgUp)", "Raise the piece being laid (where it joins nothing), or the one selected, by 250", () => LiftTrackPiece(1)));
         row.Children.Add(Btn("Down (PgDn)", "Lower it by 250", () => LiftTrackPiece(-1)));
         root.Children.Add(row);
+        // (the road's width: the user, 2026-11-03, "add a setting to allow a user to make the track wider if they wish")
+        var widthRow = new DockPanel { Margin = new Thickness(0, 6, 0, 6) };
+        var widthText = Text("Road width", 0, false);
+        widthText.Width = 80; widthText.VerticalAlignment = VerticalAlignment.Center;
+        trackWidthLabel = Text("100 %", 0, false);
+        trackWidthLabel.Width = 48; trackWidthLabel.VerticalAlignment = VerticalAlignment.Center;
+        trackWidthSlider = new Slider { Minimum = 100, Maximum = TrackPieceSet.WidthMost * 100, Value = 100, TickFrequency = 10, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "How wide the road is built: its asphalt, kerbs and a raised road's deck, from the usual (100 %) to twice it" };
+        trackWidthSlider.ValueChanged += (_, e) =>
+        {
+            if (trackWidthLabel is not null) trackWidthLabel.Text = $"{e.NewValue:0} %";
+            if (trackWidthSyncing || Math.Abs(trackPieces.Width - e.NewValue / 100) < 1e-6) return;
+            trackPieces.Width = e.NewValue / 100;
+            trackPlanPath = null;
+            if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
+            SaveTrackPieces();
+            DrawTrackOverlay();
+            SetTrackStatus($"The road {e.NewValue:0} % of the usual width: Make the track (or Test from the flag) to build it so.");
+        };
+        DockPanel.SetDock(widthText, Dock.Left); DockPanel.SetDock(trackWidthLabel, Dock.Right);
+        widthRow.Children.Add(widthText); widthRow.Children.Add(trackWidthLabel); widthRow.Children.Add(trackWidthSlider);
+        root.Children.Add(widthRow);
         var edit = new WrapPanel();
         edit.Children.Add(Btn("Delete (Del)", "Take the selected piece away", DeleteTrackPiece));
         edit.Children.Add(Btn("Undo", "Take back the last change to the pieces", UndoTrackPieces));
@@ -215,6 +248,7 @@ public partial class MainWindow
     // ---- kept for the island ------------------------------------------------------------------------------------------------------------
 
     private sealed record SavedPiece(string Section, double X, double Z, double Y, double Heading);
+    private sealed record SavedPieces(double Width, List<SavedPiece> Pieces);
 
     private void SaveTrackPieces()
     {
@@ -222,7 +256,7 @@ public partial class MainWindow
         try
         {
             Directory.CreateDirectory(TrackPiecesFolder);
-            var saved = trackPieces.Pieces.Select(p => new SavedPiece(p.Section.Name, p.X, p.Z, p.Y, p.Heading)).ToList();
+            var saved = new SavedPieces(trackPieces.Width, trackPieces.Pieces.Select(p => new SavedPiece(p.Section.Name, p.X, p.Z, p.Y, p.Heading)).ToList());
             File.WriteAllText(TrackPiecesFile(trackIsland), JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { DebugLog.Log($"track pieces not saved: {e.Message}"); }
@@ -231,16 +265,21 @@ public partial class MainWindow
     private void LoadTrackPieces()
     {
         trackIsland = activeFile ?? "";
-        trackPieces.Pieces.Clear(); trackUndo.Clear(); trackSelected = null; trackPlanPath = null; trackFlag = null; trackFlagArmed = false;
+        trackPieces.Pieces.Clear(); trackUndo.Clear(); trackSelected = null; trackPlanPath = null; trackFlag = null; trackFlagArmed = false; trackPieces.Width = 1;
         if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
         var file = TrackPiecesFile(trackIsland);
         if (!File.Exists(file)) return;
         try
         {
-            foreach (var s in JsonSerializer.Deserialize<List<SavedPiece>>(File.ReadAllText(file)) ?? new())
+            var text = File.ReadAllText(file);
+            var saved = text.TrimStart().StartsWith('[') ? new SavedPieces(1, JsonSerializer.Deserialize<List<SavedPiece>>(text) ?? new())
+                : JsonSerializer.Deserialize<SavedPieces>(text) ?? new SavedPieces(1, new());
+            trackPieces.Width = Math.Clamp(saved.Width, 1, TrackPieceSet.WidthMost);
+            foreach (var s in saved.Pieces ?? new())
                 if (Section.All.FirstOrDefault(a => a.Name == s.Section) is { } section) trackPieces.Pieces.Add(new TrackPiece(section, s.X, s.Z, s.Y, s.Heading));
         }
         catch (Exception e) when (e is IOException or JsonException) { DebugLog.Log($"track pieces not read: {e.Message}"); }
+        finally { SyncTrackWidthSlider(); }
     }
 
     // ---- the mouse and the keys -----------------------------------------------------------------------------------------------------------
@@ -352,12 +391,18 @@ public partial class MainWindow
             trackPieces.Pieces.Clear();
             trackLift = first[2]; trackHeading = first[3] * Math.PI / 180;
             var laid = 0;
-            foreach (var name in items.Skip(1))
+            // (LBA2_TRACKPIECES_WIDTH: the road's width, a share of the usual, as the panel's slider sets it)
+            if (double.TryParse(Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_WIDTH"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var width))
+            { trackPieces.Width = Math.Clamp(width, 1, TrackPieceSet.WidthMost); SyncTrackWidthSlider(); }
+            foreach (var item in items.Skip(1))
             {
+                // ("piece@x,z": dropped where it says, its way the last one's -- a gap left before it)
+                var name = item.Split('@')[0];
                 if (Section.All.FirstOrDefault(s => s.Name == name) is not { } section) { DebugLog.Log($"track pieces test: no piece {name}"); continue; }
                 ArmTrackPiece(section);
                 double x = first[0], z = first[1];
-                if (trackPieces.Pieces.LastOrDefault() is { } last) { var e = last.End; x = e.X + Math.Cos(e.Heading) * 0.6; z = e.Z + Math.Sin(e.Heading) * 0.6; }
+                if (trackPieces.Pieces.LastOrDefault() is { } last) { var e = last.End; x = e.X + Math.Cos(e.Heading) * 0.6; z = e.Z + Math.Sin(e.Heading) * 0.6; trackHeading = e.Heading; }
+                if (item.Contains('@')) { var at2 = item.Split('@')[1].Split(','); x = double.Parse(at2[0], System.Globalization.CultureInfo.InvariantCulture); z = double.Parse(at2[1], System.Globalization.CultureInfo.InvariantCulture); }
                 var gy = IslandOps.Altitude(ground, x * 512, z * 512) ?? 0;
                 if (Screen(x, z, gy) is { } at && LayTrackPiece(at))
                 {
@@ -606,7 +651,10 @@ public partial class MainWindow
         return pen;
     }
     // the road's half widths (cells): the asphalt's and to the kerbs' outer edge -- RaceTrackOptions' AsphaltHalfWidth, CurbHalfWidth
-    private const double TrackAsphaltHalf = 3.5, TrackKerbHalf = 4.5, TrackDeckDepth = 300, TrackLoopRadius = 4, TrackLoopAcross = 3;
+    private const double TrackDeckDepth = 300, TrackLoopRadius = 4, TrackLoopAcross = 3;
+    // a jump's ramps as the build makes them (RaceTrackOptions.JumpRampHeight, JumpRampLength, JumpLandingLength; the landing ramp's height
+    // the flight's end's, about 300)
+    private const double JumpUpRamp = 800, JumpRampCells = 8, JumpDownRamp = 300, JumpLandCells = 12;
     // a loop's band and rails as the build makes them (RaceTrackBuilder.LoopBandHalf, cells; RaceTrackLoopBody: rail width, height and the
     // band's thickness, world units -- the rail's width here in cells)
     private const double TrackLoopBand = 1.3, TrackLoopRailWidth = 90 / 512.0, TrackLoopRail = 150, TrackLoopThickness = 160;
@@ -679,10 +727,33 @@ public partial class MainWindow
             }
             faces.Add((depth / corners.Length, points, fill, pen));
         }
+        double asphaltHalf = trackPieces.AsphaltHalf, kerbHalf = trackPieces.KerbHalf;
+        var leaps = trackPieces.GapJumps();
         void Piece(TrackPiece p, bool selected, bool ghost)
         {
             var line = p.Line();
             var n = line.Count;
+            // (a jump's ramps, as the build makes them: up JumpUpRamp over its last JumpRampCells before the lip -- a Jump piece's gap, or a gap
+            // this piece's end leaps -- and down JumpDownRamp over JumpLandCells after the landing lip)
+            var lift = new double[n];
+            static double Rise(double f) => (1 - Math.Cos(Math.PI * Math.Clamp(f, 0, 1))) / 2;
+            void Ramp(int lip, int way, double height, double cells)
+            {
+                for (var k = 0; k <= cells * 2; k++)
+                {
+                    var i = lip - way * k;
+                    if (i < 0 || i >= n || line[i].Kind == SketchKind.Jump) continue;
+                    lift[i] = Math.Max(lift[i], height * Rise(1 - k / (cells * 2)));
+                }
+            }
+            for (var i = 0; i + 1 < n; i++)
+            {
+                if (line[i].Kind != SketchKind.Jump && line[i + 1].Kind == SketchKind.Jump) Ramp(i, 1, JumpUpRamp, JumpRampCells);
+                if (line[i].Kind == SketchKind.Jump && line[i + 1].Kind != SketchKind.Jump) Ramp(i + 1, -1, JumpDownRamp, JumpLandCells);
+            }
+            if (leaps.Any(l => ReferenceEquals(l.From, p))) Ramp(n - 1, 1, JumpUpRamp, JumpRampCells);
+            if (leaps.Any(l => ReferenceEquals(l.To, p))) Ramp(0, -1, JumpDownRamp, JumpLandCells);
+            if (lift.Any(v => v > 0)) line = line.Select((q, i) => (q.X, q.Z, q.Y + lift[i], q.Kind)).ToList();
             // each point's way across (unit, cells): the road's edges are its middle that far either side
             var across = new (double X, double Z)[n];
             for (var i = 0; i < n; i++)
@@ -700,13 +771,13 @@ public partial class MainWindow
                 var raised = !double.IsNaN(Ground(line[i].X, line[i].Z)) && line[i].Y > Ground(line[i].X, line[i].Z) + 300;
                 // (the deck's edges, a raised road's: its thickness, both sides)
                 if (raised && !ghost)
-                    foreach (var side in new[] { -TrackKerbHalf, TrackKerbHalf })
+                    foreach (var side in new[] { -kerbHalf, kerbHalf })
                         Face(TrackDeck, null, At(i, side), At(i + 1, side), At(i + 1, side, -TrackDeckDepth), At(i, side, -TrackDeckDepth));
-                Face(asphalt, ghost ? TrackGhostEdge : null, At(i, -TrackAsphaltHalf), At(i + 1, -TrackAsphaltHalf), At(i + 1, TrackAsphaltHalf), At(i, TrackAsphaltHalf));
+                Face(asphalt, ghost ? TrackGhostEdge : null, At(i, -asphaltHalf), At(i + 1, -asphaltHalf), At(i + 1, asphaltHalf), At(i, asphaltHalf));
                 // (the kerbs: a cell red, a cell white -- two of the line's half cells each)
                 var kerb = ghost ? TrackGhostKerb : (i / 2) % 2 == 0 ? TrackKerbRed : TrackKerbWhite;
-                Face(kerb, null, At(i, -TrackKerbHalf), At(i + 1, -TrackKerbHalf), At(i + 1, -TrackAsphaltHalf), At(i, -TrackAsphaltHalf));
-                Face(kerb, null, At(i, TrackAsphaltHalf), At(i + 1, TrackAsphaltHalf), At(i + 1, TrackKerbHalf), At(i, TrackKerbHalf));
+                Face(kerb, null, At(i, -kerbHalf), At(i + 1, -kerbHalf), At(i + 1, -asphaltHalf), At(i, -asphaltHalf));
+                Face(kerb, null, At(i, asphaltHalf), At(i + 1, asphaltHalf), At(i + 1, kerbHalf), At(i, kerbHalf));
                 // (a pier down to the ground every 4 cells under a raised piece)
                 if (raised && !ghost && i % 8 == 0) Face(null, TrackPier, At(i, 0, -TrackDeckDepth), (line[i].X, Ground(line[i].X, line[i].Z), line[i].Z));
             }
@@ -773,6 +844,18 @@ public partial class MainWindow
             }
         }
         foreach (var p in trackPieces.Pieces) Piece(p, ReferenceEquals(p, trackSelected), false);
+        // (a gap left between pieces, which the build makes a jump: its flight's arc from the up ramp's lip to the landing)
+        foreach (var (a, b) in leaps)
+        {
+            var e = a.End;
+            double length = Math.Sqrt(Math.Pow(b.X - e.X, 2) + Math.Pow(b.Z - e.Z, 2)) * 512, y0 = e.Y + JumpUpRamp, y1 = b.Y + JumpDownRamp;
+            for (var k = 0; k < 16; k++)
+            {
+                double f0 = k / 16.0, f1 = (k + 1) / 16.0;
+                (double X, double Y, double Z) Arc(double f) => (e.X + (b.X - e.X) * f, y0 + (y1 - y0) * f + length / 4 * 4 * f * (1 - f), e.Z + (b.Z - e.Z) * f);
+                Face(null, TrackFlight, Arc(f0), Arc(f1));
+            }
+        }
         if (trackGhost is { } g) Piece(g, false, true);
         foreach (var e in trackPieces.OpenEnds().Concat(trackPieces.OpenStarts()))
             if (model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) trackDrawing.Rings.Add(ToWidget(model, u, v));

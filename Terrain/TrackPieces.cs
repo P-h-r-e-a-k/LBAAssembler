@@ -57,6 +57,13 @@ internal sealed class TrackPieceSet
     private const int Scale = 2;
 
     public List<TrackPiece> Pieces { get; } = new();
+    // How wide the road is, a share of the usual (the user, 2026-11-03: "add a setting to allow a user to make the track wider if they
+    // wish"): its asphalt, its kerbs' and verge's edges and a raised road's deck that many times as far from its middle -- a kerb a cell wide
+    public double Width { get; set; } = 1;
+    public const double WidthMost = 2;
+    // the road's half widths as built (RaceTrackOptions: AsphaltHalfWidth 3.5, VergeHalfWidth 6; RaisedHalfWidth 3.75)
+    public double AsphaltHalf => 3.5 * Width;
+    public double KerbHalf => AsphaltHalf + 1;
 
     private static double Gap((double X, double Z, double Y) a, (double X, double Z, double Y) b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
     private static bool Joins((double X, double Z, double Y) a, (double X, double Z, double Y) b, double cells) => Gap(a, b) < cells && Math.Abs(a.Y - b.Y) < SnapHeight;
@@ -114,13 +121,47 @@ internal sealed class TrackPieceSet
     // longest run of them that is (`left`: the road pieces left out), so a track can be tried before it is whole.
     public List<(double X, double Z, double Y, SketchKind Kind)>? Chain(out bool closed) => Chain(out closed, out _, out _);
 
+    // A gap left between two pieces that a car can leap (the user, 2026-11-03: "Any gaps that have been left let's automatically add scripting
+    // to make them into a jump"): `b`'s start ahead of `a`'s end, JumpFrom to JumpTo cells on along a's way (within JumpAim of it), b going
+    // the same way (within JumpTurn), and no higher than a car leaps up to (a drop below is fine). The build makes it a gap jump -- an up
+    // ramp to the lip, the flight, a landing ramp -- as the generator's Jump piece is.
+    public const double JumpFrom = JoinCells, JumpTo = 22;
+    private const double JumpAim = 20 * Math.PI / 180, JumpTurn = 25 * Math.PI / 180, JumpUp = 300, JumpDown = 4000;
+    public static bool Leaps(TrackPiece a, TrackPiece b)
+    {
+        var e = a.End;
+        double dx = b.X - e.X, dz = b.Z - e.Z, d = Math.Sqrt(dx * dx + dz * dz);
+        if (d <= JumpFrom || d > JumpTo || b.Y - e.Y > JumpUp || e.Y - b.Y > JumpDown) return false;
+        static double Turned(double x, double y) => Math.Abs(Math.IEEERemainder(x - y, 2 * Math.PI));
+        return Turned(Math.Atan2(dz, dx), e.Heading) <= JumpAim && Turned(b.Heading, e.Heading) <= JumpTurn;
+    }
+
+    // The gaps the road pieces leave that are jumps: each its take-off (a piece's end) and its landing (the next's start)
+    public List<(TrackPiece From, TrackPiece To)> GapJumps()
+    {
+        var roads = Pieces.Where(p => !p.IsPit).ToList();
+        var jumps = new List<(TrackPiece, TrackPiece)>();
+        foreach (var a in roads)
+        {
+            if (roads.Any(b => !ReferenceEquals(a, b) && Joins((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y), JoinCells))) continue;
+            var landing = roads.Where(b => !ReferenceEquals(a, b) && Leaps(a, b)
+                                          && !roads.Any(o => !ReferenceEquals(o, b) && Joins((o.End.X, o.End.Z, o.End.Y), (b.X, b.Z, b.Y), JoinCells)))
+                .OrderBy(b => Gap((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y))).FirstOrDefault();
+            if (landing is not null) jumps.Add((a, landing));
+        }
+        return jumps;
+    }
+
     public List<(double X, double Z, double Y, SketchKind Kind)>? Chain(out bool closed, out int left, out List<TrackPiece> order)
     {
         closed = false; left = 0; order = new List<TrackPiece>();
         var roads = Pieces.Where(p => !p.IsPit).ToList();
         if (roads.Count == 0) return null;
+        var leaps = GapJumps();
+        // (the next piece: the one its end joins, else the one it leaps a gap onto)
         TrackPiece? Next(TrackPiece a, IEnumerable<TrackPiece> from) =>
-            from.Where(b => !ReferenceEquals(a, b) && Joins((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y), JoinCells)).OrderBy(b => Gap((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y))).FirstOrDefault();
+            from.Where(b => !ReferenceEquals(a, b) && Joins((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y), JoinCells)).OrderBy(b => Gap((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y))).FirstOrDefault()
+            ?? leaps.Where(l => ReferenceEquals(l.From, a) && from.Contains(l.To)).Select(l => l.To).FirstOrDefault();
         // (each run from a piece nothing leads into -- or, a ring, from its first -- followed on; the longest of them)
         var firsts = roads.Where(r => !roads.Any(o => !ReferenceEquals(o, r) && ReferenceEquals(Next(o, roads), r))).ToList();
         if (firsts.Count == 0) firsts.Add(roads[0]);
@@ -133,10 +174,33 @@ internal sealed class TrackPieceSet
         left = roads.Count - order.Count;
         closed = order.Count > 1 && Joins((order[^1].End.X, order[^1].End.Z, order[^1].End.Y), (order[0].X, order[0].Z, order[0].Y), CloseCells);
         var line = new List<(double X, double Z, double Y, SketchKind Kind)>();
+        TrackPiece? previous = null;
         foreach (var p in order.ToList())
+        {
+            // (a gap leapt from the piece before: the flight's line over it, a jump's, from its end to this one's start)
+            if (previous is not null && leaps.Any(l => ReferenceEquals(l.From, previous) && ReferenceEquals(l.To, p)))
+            {
+                var e = previous.End;
+                var steps = Math.Max(2, (int)Math.Ceiling(Gap((e.X, e.Z, e.Y), (p.X, p.Z, p.Y)) * 2));
+                for (var s = 1; s < steps; s++)
+                {
+                    var f = (double)s / steps;
+                    line.Add((e.X + (p.X - e.X) * f, e.Z + (p.Z - e.Z) * f, e.Y + (p.Y - e.Y) * f, SketchKind.Jump));
+                }
+            }
             foreach (var q in p.Line())
                 if (line.Count == 0 || Math.Abs(line[^1].X - q.X) + Math.Abs(line[^1].Z - q.Z) > 0.2) line.Add(q);
+            previous = p;
+        }
         return line;
+    }
+
+    // The plan's road as wide as Width says
+    private void Widen(RaceTrackPlan? plan)
+    {
+        if (plan is null || Math.Abs(Width - 1) < 0.01) return;
+        plan.AsphaltHalf = AsphaltHalf; plan.CurbHalf = KerbHalf; plan.VergeHalf = 6 * Width;
+        plan.RaisedHalf = (plan.RaisedHalf ?? 3.75) * Width;
     }
 
     // The plan the pieces make on `island` (the island as its track is built on it: IslandScaler.AsBuilt), or why not (the result's Problems)
@@ -154,6 +218,9 @@ internal sealed class TrackPieceSet
         // (a track not finished yet: tried as far as it goes, start to finish once -- the user, 2026-11-03: "check users can test it in
         // LBAAssembler even when it isn't complete")
         if (left > 0) notes.Add($"{left} piece(s) not joined to the longest road left out (put each on from an open end, the yellow rings)");
+        var leaps = GapJumps().Where(l => order.Contains(l.From) && order.Contains(l.To)).ToList();
+        foreach (var (a, b) in leaps)
+            notes.Add($"the gap of {Gap((a.End.X, a.End.Z, 0), (b.X, b.Z, 0)):0} cells after the {a.Section.Name.ToLowerInvariant()} made a jump: a ramp up to its lip, a landing ramp");
         // (a sprint's start line: RunUp cells along it where the road before it allows -- its grid stands on that road, its cars none of them
         // past the road's end in the air: the user, 2026-11-03, of a test from a flag on a raised road, "That opponent is floating in mid-air")
         double LengthTo(List<(double X, double Z, double Y, SketchKind Kind)> c, int upTo)
@@ -213,6 +280,12 @@ internal sealed class TrackPieceSet
         }
         // (heights stamped where a piece is up off the ground: the tracer makes the road a raised one there; the exact heights follow below)
         double Ground(double x, double z) => Math.Max(0.0, IslandOps.Altitude(island, x * 512, z * 512) ?? 0);
+        foreach (var (a, b) in leaps)
+        {
+            var e = a.End;
+            var up = e.Y > Ground(e.X, e.Z) + 500 ? (float)e.Y : float.NaN;
+            Stamp((e.X, e.Z), (b.X, b.Z), SketchKind.Jump, up);
+        }
         foreach (var p in used)
         {
             var line = p.Line();
@@ -227,7 +300,7 @@ internal sealed class TrackPieceSet
         var given = chain.Select(p => ((p.X - x0) * Scale, (p.Z - z0) * Scale)).ToList();
         var rise = chain.Select(p => p.Y - chain[0].Y).ToList();
         var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: ShortestTry, openStart: openStart);
-        if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); return first; }
+        if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); Widen(first.Plan); return first; }
         // the height each point of the route was laid at: the chain at the same share of the way along (a lap's route begins elsewhere
         // round it: the turn of the one against the other that puts their points nearest)
         var route = first.Route;
@@ -266,6 +339,7 @@ internal sealed class TrackPieceSet
         }
         var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), ShortestTry, openStart);
         second.Notes.InsertRange(0, notes);
+        Widen(second.Plan);
         return second;
     }
 }

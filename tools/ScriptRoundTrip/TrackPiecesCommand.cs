@@ -19,7 +19,8 @@ internal static class TrackPiecesCommand
             var v = s.Split(',').Select(t => double.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
             return (v[0], v[1], v[2], v[3] * Math.PI / 180);
         }
-        var set = new TrackPieceSet();
+        // (TRACKPIECES_WIDTH: the road's width, a share of the usual -- the panel's Road width)
+        var set = new TrackPieceSet { Width = double.TryParse(Environment.GetEnvironmentVariable("TRACKPIECES_WIDTH"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var w) ? w : 1 };
         var at = Spot(items[0]);
         (double X, double Z, double Y, double Heading)? last = null;
         foreach (var item in items.Skip(1))
