@@ -17,7 +17,8 @@ namespace LBAAssembler.Demo96;
 //                the storm) and Desert Island (13), none for Otringal
 //   LBA_BKG.HQR  a 14-byte header without the retail one's four buffer sizes (the grids, block libraries and bricks are the retail
 //                format: a demo brick is byte for byte retail brick 198)
-//   ANIM.HQR, the islands (.ILE), SPRITES.HQR, SPRIRAW.HQR   the retail format, copied
+//   ANIM.HQR     the retail format but for the keyframes' times: 1/50 s, retail ms
+//   the islands (.ILE), SPRITES.HQR, SPRIRAW.HQR   the retail format, copied
 //
 // What the demo has none of and the engine reads when it starts -- the memory sizes (RESS 2), the inventory pictures (5, 8), the 3DS
 // animations (RESS 43 and ANIM3DS.HQR), the particle flows (45), POF, impacts and the ACF list (46-48), the main archive (LBA2.HQR, which
@@ -27,7 +28,7 @@ internal static class Demo96Converter
     // The file a converted folder carries (MarkerFile): what it is, the converter's version and the demo folder it was made from, then each
     // demo scene's retail counterpart ("scene <demo> <retail>", -1 for none): the editor names the demo's scenes by them.
     public const string MarkerFile = "LBA2-1996-DEMO.TXT";
-    public const int Version = 3;   // (3: the scripts translated into the retail bytecode, Demo96Scripts)
+    public const int Version = 4;   // (3: the scripts translated into the retail bytecode, Demo96Scripts; 4: the animations' times in ms)
 
     // Whether `dir` is a converted folder of this version made from `demoDir`.
     public static bool IsConverted(string dir, string demoDir)
@@ -68,8 +69,19 @@ internal static class Demo96Converter
         string Demo(string name) => Path.Combine(demoDir, name);
         string Out(string name) => Path.Combine(outDir, name);
 
+        // the animations: the retail format but for the keyframes' times, in the demo's timer's ticks (1/50 s: Twinsen's walk 15, 10, 10 ...)
+        // where the retail game's are in ms (300, 200, 200 ...) -- copied as they were, every character moved 20 times too fast
+        if (File.Exists(Demo("ANIM.HQR")))
+        {
+            var anims = Entries(File.ReadAllBytes(Demo("ANIM.HQR")));
+            var scaled = 0;
+            for (var i = 0; i < anims.Count; i++)
+                if (anims[i] is { } entry && Unpack(entry) is var anim && TicksToMs(anim)) { anims[i] = HqrWriter.StoredEntry(anim); scaled++; }
+            File.WriteAllBytes(Out("ANIM.HQR"), Build(anims));
+            log.Add($"ANIM.HQR: {scaled} animations' keyframe times from the demo's 1/50 s to the retail game's ms");
+        }
         // copied as they are
-        foreach (var name in new[] { "ANIM.HQR", "SPRITES.HQR", "SPRIRAW.HQR", "TEXT.HQR", "SAMPLES.HQR", "SCREEN.HQR", "SCRSHOT.HQR", "FLOW.HQR", "FILE3D.HQR" })
+        foreach (var name in new[] { "SPRITES.HQR", "SPRIRAW.HQR", "TEXT.HQR", "SAMPLES.HQR", "SCREEN.HQR", "SCRSHOT.HQR", "FLOW.HQR", "FILE3D.HQR" })
             if (File.Exists(Demo(name))) File.Copy(Demo(name), Out(name), true);
         foreach (var (island, _) in Islands)
         {
@@ -84,7 +96,7 @@ internal static class Demo96Converter
         // (the engine wants the cutscene videos' file, in video/, to start: an empty one -- viewing the demo plays none)
         Directory.CreateDirectory(Out("video"));
         if (!File.Exists(Out(Path.Combine("video", "VIDEO.HQR")))) File.WriteAllBytes(Out(Path.Combine("video", "VIDEO.HQR")), Build(new List<byte[]?>()));
-        log.Add("copied: the animations, the islands' ground, the sprites, the texts and the samples (the retail format)");
+        log.Add("copied: the islands' ground, the sprites, the texts and the samples (the retail format)");
 
         // the bodies
         foreach (var name in new[] { "BODY.HQR", "OBJFIX.HQR" }.Concat(Islands.Select(i => i.File + ".OBL")))
@@ -389,6 +401,21 @@ internal static class Demo96Converter
 
     // A stored entry's data, uncompressed.
     private static byte[] Unpack(byte[] entry) => HqrArchive.DecodeEntry(entry);
+
+    // An animation's keyframe times (U16 frames, U16 bones, U16 loop frame, U16, then per frame U16 time, three S16 steps and 8 bytes a
+    // bone) from 1/50 s to ms, in place; false for an entry that isn't one.
+    private static bool TicksToMs(byte[] anim)
+    {
+        if (anim.Length < 8) return false;
+        int frames = U16(anim, 0), bones = U16(anim, 2);
+        if (frames == 0 || 8 + frames * (8 + bones * 8) > anim.Length) return false;
+        for (var f = 0; f < frames; f++)
+        {
+            var at = 8 + f * (8 + bones * 8);
+            BinaryPrimitives.WriteUInt16LittleEndian(anim.AsSpan(at), (ushort)Math.Min(ushort.MaxValue, U16(anim, at) * 1000 / 50));
+        }
+        return true;
+    }
 
     private static int U16(byte[] b, int at) => BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(at));
 }
