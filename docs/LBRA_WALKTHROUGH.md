@@ -381,7 +381,7 @@ all week."
   **The neighbour:** "Gallic acid! Let's see..."
 
   He dabs the acid over the sheet. Lines come up out of the paper: a road round Citadel's town, the rampart walkway, a jump, a pit lane
-  where the Tavern stood. In the corner: "STORM CIRCUIT. Design sheet. Esmer approved."
+  where the Tavern stood. In the corner: "STORM CIRCUIT. Design sheet. Passed for safety: Mr. Paul."
 
   **The neighbour:** "The gallic acid has revealed a text previously invisible. It's that race track they built in the rain! Here, it's
   yours: I don't drive, and I'm not getting in a car with you."
