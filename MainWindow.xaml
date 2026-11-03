@@ -125,6 +125,7 @@
     <DockPanel LastChildFill="True">
         <Menu DockPanel.Dock="Top" Background="{DynamicResource ThemeRaisedBrush}" Foreground="{DynamicResource ThemeTextBrush}" Padding="6,2" BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,0,0,1">
             <MenuItem Header="_File" Foreground="{DynamicResource ThemeTextBrush}">
+                <MenuItem Header="New _track…" Click="NewTrack_Click" ToolTip="A race track of its own: on a copy of one of the islands, or on a new island of the shape you tick on a grid -- a map file of its own, saved as you lay the track in Build > Race track, opened again with Open map"/>
                 <MenuItem Header="_New map…" Click="NewMap_Click" ToolTip="A new LBA2 island, LBA2 interior or LBA1 interior, made from one of the game's own, in a map file of its own"/>
                 <MenuItem Header="Open _map…" Click="OpenMap_Click" ToolTip="A map file (.lbamap), or an LBA2 island (.ILE) from outside the game folder: opened in a copy of the game folder, to edit and play"/>
                 <MenuItem Header="Save m_ap" Click="SaveMap_Click"/>
@@ -480,7 +481,7 @@
                                                       ToolTip="Pressing Play first shows the scene with Twinsen on it: drag him where you want him and let go to start the game there"/>
                                             <TextBlock x:Name="PlayStatus" TextWrapping="Wrap" FontFamily="Consolas" FontSize="10.5" Foreground="{DynamicResource ThemeTextMutedBrush}" Margin="0,8,0,4"/>
                                             <TextBlock x:Name="AudioHeading" Text="Sound" Style="{StaticResource Eyebrow}" Margin="0,0,0,6"/>
-                                            <CheckBox x:Name="AudioMuteCheck" Content="Mute all sound" Foreground="{DynamicResource ThemeTextBrush}" Click="AudioMute_Click"/>
+                                            <CheckBox x:Name="AudioMuteCheck" Content="Mute all sound" Foreground="{DynamicResource ThemeTextBrush}" Checked="AudioMute_Click" Unchecked="AudioMute_Click"/>
                                             <Grid Margin="0,10,0,0">
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="*"/><ColumnDefinition Width="38"/></Grid.ColumnDefinitions>
                                                 <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="30"/><RowDefinition Height="30"/></Grid.RowDefinitions>

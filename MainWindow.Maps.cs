@@ -367,7 +367,7 @@ public partial class MainWindow
         static bool Same(byte[]? x, byte[]? y) => (x is null) == (y is null) && (x is null || x.AsSpan().SequenceEqual(y));
         return a.Scenes.Count == b.Scenes.Count && a.Scenes.Zip(b.Scenes).All(p => Same(p.First.Record, p.Second.Record))
             && Same(a.Grid, b.Grid) && Same(a.Library, b.Library) && Same(a.Ile, b.Ile) && Same(a.Obl, b.Obl)
-            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick && Same(a.Comments, b.Comments) && Same(a.Text, b.Text) && a.Name == b.Name && a.Description == b.Description && a.Weather == b.Weather && a.Ledges == b.Ledges && Same(a.Characters, b.Characters) && a.CharacterBodies.Count == b.CharacterBodies.Count && a.CharacterBodies.Zip(b.CharacterBodies).All(p => Same(p.First, p.Second)) && a.CharacterAnims.Count == b.CharacterAnims.Count && a.CharacterAnims.Zip(b.CharacterAnims).All(p => Same(p.First, p.Second));
+            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick && Same(a.Comments, b.Comments) && Same(a.Text, b.Text) && Same(a.RaceTrack, b.RaceTrack) && a.Name == b.Name && a.Description == b.Description && a.Weather == b.Weather && a.Ledges == b.Ledges && Same(a.Characters, b.Characters) && a.CharacterBodies.Count == b.CharacterBodies.Count && a.CharacterBodies.Zip(b.CharacterBodies).All(p => Same(p.First, p.Second)) && a.CharacterAnims.Count == b.CharacterAnims.Count && a.CharacterAnims.Zip(b.CharacterAnims).All(p => Same(p.First, p.Second));
     }
 
     // ---- File > Save map / Save map as

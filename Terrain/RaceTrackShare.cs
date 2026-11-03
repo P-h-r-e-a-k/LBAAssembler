@@ -68,6 +68,46 @@ internal static class RaceTrackShare
     // (RaceTrackService.Build calls this after making its islands, before building any track) -- under the copy's names and numbers, the
     // copies' cube changes to one another pointed at one another, Twinsen's own scripts emptied (a story's scenes would take him out of his
     // car). The build then puts the track on them as on the island's own: making them bigger, giving cubes scenes.
+    // A map's island's copy (RaceTrackIsland.Custom) made in the folder: its ground and decor bodies, and its outside scenes from the map
+    // itself -- the map's own scene numbers (LbaMap.LocalScene + k) its cube changes give pointed at the copies', Twinsen's own scripts
+    // emptied -- under the copy's names and numbers, before any track is built.
+    public static string InstallCustom(string gameDirectory, RaceTrackIsland custom)
+    {
+        var map = custom.CustomMap ?? throw new ArgumentException($"{custom.Name} isn't a map's island.");
+        if (map.Ile is null || map.Obl is null) throw new InvalidDataException($"The map \"{map.Name}\" has no island files.");
+        foreach (var (bytes, copy) in new[] { (map.Ile, custom.IleFile), (map.Obl, custom.OblFile) })
+        {
+            var target = Path.Combine(gameDirectory, copy);
+            if (File.Exists(target)) File.SetAttributes(target, FileAttributes.Normal);
+            File.WriteAllBytes(target, bytes);
+        }
+        var pairs = custom.SharedScenes ?? Array.Empty<(int From, int To)>();
+        var copyOf = pairs.ToDictionary(p => p.From, p => p.To);
+        var path = Path.Combine(gameDirectory, "SCENE.HQR");
+        var hqr = HqrFile.Parse(File.ReadAllBytes(path));
+        var retargeted = 0;
+        for (var k = 0; k < pairs.Length && k < map.Scenes.Count; k++)
+        {
+            var entry = pairs[k].To + 1;
+            if (entry < hqr.Count && !hqr.IsEmpty(entry)) throw new InvalidDataException($"The game already has a scene {pairs[k].To}: the map's island would go there.");
+            var model = LBAAssembler.Scenes.SceneSerializer.Parse(LBAAssembler.Scenes.SceneGame.Lba2, map.Scenes[k].Record);
+            foreach (var zone in model.Zones.Where(z => z.Type == 0 && copyOf.ContainsKey(z.Num))) { zone.Num = copyOf[zone.Num]; retargeted++; }
+            model.Hero.Life = new byte[] { 0 };
+            var record = LBAAssembler.Scenes.SceneSerializer.Write(model);
+            while (hqr.Count < entry) hqr.Slots.Add(new HqrFile.Slot());
+            if (hqr.Count == entry) hqr.Add(record); else hqr.SetStored(entry, record);
+            if (record.Length > System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(hqr.Read(0)))
+            {
+                var size = new byte[4];
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(size, record.Length);
+                hqr.SetStored(0, size);
+            }
+        }
+        File.WriteAllBytes(path, hqr.ToBytes());
+        return $"{custom.Name}: {custom.IleFile} and {custom.OblFile}, the map's island as it is, raced as island {custom.IslandByte}; scenes {custom.FirstScene}-{custom.LastScene}, " +
+               $"the map's {map.Scenes.Count} ({retargeted} cube changes between them pointed at them)";
+    }
+
     public static string Install(string gameDirectory, RaceTrackIsland shared)
     {
         var from = shared.SharedFrom ?? throw new ArgumentException($"{shared.Name} isn't a shared track's island.");

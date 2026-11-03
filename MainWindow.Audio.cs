@@ -45,8 +45,11 @@ public partial class MainWindow
         AudioEffectsValue.Text = audio.Effects + "%";
     }
 
+    // (on Checked and Unchecked, not Click: ticked any way -- the keyboard's Space, a screen reader, UI Automation's Toggle, which raises no
+    // Click -- it mutes; a race test ticked it that way, 2026-11-03, and the box said muted while the game played with sound)
     private void AudioMute_Click(object sender, RoutedEventArgs e)
     {
+        if (audioSyncing) return;
         var audio = CurrentAudio;
         audio.Mute = AudioMuteCheck.IsChecked == true;
         AudioMusicSlider.IsEnabled = AudioVoicesSlider.IsEnabled = AudioEffectsSlider.IsEnabled = !audio.Mute;

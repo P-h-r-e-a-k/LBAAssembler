@@ -72,6 +72,22 @@ at the heights they were laid at, and says what is wrong where it can't (two dec
 its track once first so the view shows the island as it will be. `ScriptRoundTrip trackpieces <game> <ILE> <spec> <out.json>` lays
 pieces the same way from the command line.
 
+### A track of its own: File > New track
+
+**File > New track…** makes a race track that is a map of its own (a `.lbamap` in the Maps folder beside the editor), so your game
+folder's islands are never changed:
+- **On a copy of one of the islands:** any island the folder has, as it was before any race track was built on it.
+- **On a new island:** tick the squares of a 6 × 6 grid that are land. A beach runs round the shape's own edge. The island takes its
+  ground, sea, sky and music from one of the game's islands.
+
+The map opens in Build > Race track. The pieces you lay are saved into the map file as you go, and **File > Open map** opens it again.
+**Test from the flag** builds the track into a scratch copy of the game folder (`_TRACK_TEST`) and races it there. A map's island races
+as an island of its own, with its own files and scenes, in the look it was made with.
+
+Testing from the flag works on any island: Twinsen's car is put on the road at the flag and the whole laid road is built. A flag at an
+open road's far end drives the road the other way, and a test with no road behind the flag for a grid has Twinsen racing alone. The
+**Remove the test start** button (or Delete with nothing selected) takes the flag away.
+
 ### Sharing a track with Little Big Racing Adventure
 
 In **Tools > LBA2: race track**, with **A plan file** chosen (one you wrote, saved from the built-in track, drawn in the race track

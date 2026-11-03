@@ -84,6 +84,11 @@ internal sealed class LbaMap
     public byte[]? Comments { get; set; }
     // Its own lines of dialogue (TEXT.TXT's UTF-8: MapText), or null: none -- its scenes say the island's
     public byte[]? Text { get; set; }
+    // The race track laid on an island map in the 3D view (Build > Race track's pieces and road width: MainWindow.TrackPieces' JSON), or
+    // null: none. File > New track makes a map for one (the user, 2026-11-03: "This can auto-save to a new map file, and we should allow
+    // the user to load it also"). The engine doesn't read it.
+    public byte[]? RaceTrack { get; set; }
+    public const string RaceTrackSuffix = "_TRACK.JSON";
     // Its own characters (MapCharacters, numbered as the map's own), their bodies, animations and entity records, or null: none
     public byte[]? Characters { get; set; }
     public List<byte[]> CharacterBodies { get; set; } = new();
@@ -157,6 +162,7 @@ internal sealed class LbaMap
         var obl = Put(".OBL", Obl);
         var comments = Put("_COMMENTS.JSON", Comments);
         var text = Put(MapText.Suffix, Text);
+        var track = Put(RaceTrackSuffix, RaceTrack);
         string? characters = null, characterBodies = null, characterAnims = null, characterEntities = null;
         if (Characters is not null)
         {
@@ -166,7 +172,8 @@ internal sealed class LbaMap
             characterEntities = Put("_ENTITIES.HQR", HqrFileOf(CharacterEntities));
         }
         files.Insert(0, (ManifestName, Encoding.UTF8.GetBytes(ManifestText(sceneFiles, grid, library, bricks, fragments, ile, obl, comments, text) +
-                                                              (characters is null ? "" : $"characters = {characters}\r\ncharacter bodies = {characterBodies}\r\ncharacter anims = {characterAnims}\r\ncharacter entities = {characterEntities}\r\n"))));
+                                                              (characters is null ? "" : $"characters = {characters}\r\ncharacter bodies = {characterBodies}\r\ncharacter anims = {characterAnims}\r\ncharacter entities = {characterEntities}\r\n") +
+                                                              (track is null ? "" : $"race track = {track}\r\n"))));
         return files;
     }
 
@@ -291,6 +298,7 @@ internal sealed class LbaMap
         map.Ile = Part("ile"); map.Obl = Part("obl");
         map.Comments = Part("comments");
         map.Text = Part("text");
+        map.RaceTrack = Part("race track");
         map.Characters = Part("characters");
         if (map.Characters is not null)
         {

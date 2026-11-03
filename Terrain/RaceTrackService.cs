@@ -522,6 +522,12 @@ internal static class RaceTrackService
                 progress?.Report(new((setup - 0.2) / whole, $"{shared.Name} (copying its island)"));
                 made.Add(RaceTrackShare.Install(gameDirectory, shared));
             }
+            // (a map's island: RaceTrackIsland.Custom)
+            foreach (var custom in islands.Where(i => i.CustomMap is not null))
+            {
+                progress?.Report(new((setup - 0.2) / whole, $"{custom.Name} (its island from the map)"));
+                made.Add(RaceTrackShare.InstallCustom(gameDirectory, custom));
+            }
 
             var session = new BuildSession { Together = true };
             var log = new List<string>();

@@ -1547,7 +1547,7 @@ void comportement_1()
         // TempleTrack.Install)
         if (island == RaceTrackIsland.Palace || island == RaceTrackIsland.Temple || island == RaceTrackIsland.Harvest) return null;
         // (a shared track's copies are made with its island, RaceTrackShare.Install, before any track is built)
-        if (island.SharedFrom is not null) return null;
+        if (island.SharedFrom is not null || island.CustomMap is not null) return null;
         // (an island the build makes that races in a copy of a game's scene -- Island CX's, CXTOWER -- gets that copy, as below)
         if (island.Created && island.CopiesScene is null && island.CopiesScenes is null)
         {

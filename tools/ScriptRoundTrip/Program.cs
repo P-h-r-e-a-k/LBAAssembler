@@ -218,6 +218,7 @@ internal static class Program
             "lba2sprite" => Lba2SpriteCommand.Run(args),
             "bodypolys" => BodyPolysCommand.Run(args),
             "gridgirl" => GridGirlCommand.Run(args),
+            "maptrack" => MapTrackCommand.Run(args),
             "demo96" => Demo96Command.Run(args),
             "palaceactors" => PalaceStudy.Actors(args),
             "islandmesh" => PalaceStudy.Mesh(args),

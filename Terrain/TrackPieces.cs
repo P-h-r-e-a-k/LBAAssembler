@@ -248,10 +248,31 @@ internal sealed class TrackPieceSet
         return line;
     }
 
-    // The plan's road as wide as Width says
-    private void Widen(RaceTrackPlan? plan)
+    // The plan's road as wide as Width says -- and, a road all on the ground with no jump or loop (the tracer gives such a plan no heights),
+    // its heights the ground's, smoothed: the builder lays a road where its plan says it starts only with them (a plan's Planned), and a
+    // flat island's track laid from pieces had no start line, so no race (File > New track's own island, 2026-11-03)
+    private void Widen(RaceTrackPlan? plan, IslandFile island)
     {
-        if (plan is null || Math.Abs(Width - 1) < 0.01) return;
+        if (plan is null) return;
+        if (plan.Heights is not { Length: > 0 } && plan.Points is { Length: > 1 } points)
+        {
+            var ground = points.Select(p => Math.Max(300.0, IslandOps.Altitude(island, (p[0] + plan.OriginCellX) * 512, (p[1] + plan.OriginCellZ) * 512) ?? 0)).ToArray();
+            for (var pass = 0; pass < 3; pass++)
+            {
+                var next = (double[])ground.Clone();
+                for (var k = 0; k < ground.Length; k++)
+                {
+                    int a = plan.Open ? Math.Max(0, k - 3) : k - 3, b = plan.Open ? Math.Min(ground.Length - 1, k + 3) : k + 3;
+                    double sum = 0; var n = 0;
+                    for (var j = a; j <= b; j++) { sum += ground[((j % ground.Length) + ground.Length) % ground.Length]; n++; }
+                    next[k] = sum / n;
+                }
+                ground = next;
+            }
+            plan.Heights = ground.Select(v => Math.Round(v)).ToArray();
+            plan.MaxGrade ??= 0.15;
+        }
+        if (Math.Abs(Width - 1) < 0.01) return;
         plan.AsphaltHalf = AsphaltHalf; plan.CurbHalf = KerbHalf; plan.VergeHalf = 6 * Width;
         plan.RaisedHalf = (plan.RaisedHalf ?? 3.75) * Width;
     }
@@ -265,6 +286,8 @@ internal sealed class TrackPieceSet
     // other way -- the user, 2026-11-03: "I just tried to test a 3 segment track by placing the flag at one end but the test was refused
     // as it was at the end of the track. If we want to test a section let us test it, just position a car on the track at the flag point")
     public const double TestShortest = 10, TestAhead = 12;
+    // (how far behind the start line Twinsen's car stands, and a cell more: RaceTrackScenes' pole, RaceTrackOptions.GridFirst 3)
+    public const double PoleRoom = 4;
 
     // ... and whether the road behind the flag has room for a grid (RunUp cells): without, the test is Twinsen's car alone on the flag
     public SketchResult MakePlan(IslandFile island, (double X, double Z, double Y)? from, out bool gridRoom)
@@ -325,8 +348,9 @@ internal sealed class TrackPieceSet
             }
             else
             {
-                // (an open road: all of it built, the start line -- Twinsen's car -- on the flag, the road before it behind him)
-                openStart = (int)Math.Round(before);
+                // (an open road: all of it built, the start line on the flag, the road before it behind him -- or, with less road behind
+                // the flag than his car stands back from the line, the line PoleRoom past the flag: his car on the flag, on the road)
+                openStart = (int)Math.Round(before >= PoleRoom ? before : Math.Min(before + PoleRoom, Math.Max(before, roadLength - 6)));
                 gridRoom = before >= RunUp;
                 notes.Add(gridRoom ? "tried from the flag to the road's end, as a sprint"
                     : "tried from the flag to the road's end, as a sprint: Twinsen's car alone on the flag (no room behind it for a grid)");
@@ -384,7 +408,7 @@ internal sealed class TrackPieceSet
         var given = chain.Select(p => ((p.X - x0) * Scale, (p.Z - z0) * Scale)).ToList();
         var rise = chain.Select(p => p.Y - chain[0].Y).ToList();
         var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: shortest, openStart: openStart);
-        if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); Widen(first.Plan); return first; }
+        if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); Widen(first.Plan, island); return first; }
         // the height each point of the route was laid at: the chain at the same share of the way along (a lap's route begins elsewhere
         // round it: the turn of the one against the other that puts their points nearest)
         var route = first.Route;
@@ -423,7 +447,7 @@ internal sealed class TrackPieceSet
         }
         var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), shortest, openStart);
         second.Notes.InsertRange(0, notes);
-        Widen(second.Plan);
+        Widen(second.Plan, island);
         return second;
     }
 }

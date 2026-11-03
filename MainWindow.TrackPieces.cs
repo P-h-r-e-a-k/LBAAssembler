@@ -67,11 +67,19 @@ public partial class MainWindow
     private bool TrackPiecesActive => editMode == EditMode.Build && buildTrackView && TerrainEditable;
 
     // The island the open file is, as a race track's (Citadel Island's two files one island)
-    private RaceTrackIsland? TrackIslandOfView() => RaceTrackIsland.BuiltIn.FirstOrDefault(i =>
+    // (an open map's island: its own -- MainWindow.NewTrack's MapTrackIsland)
+    private RaceTrackIsland? TrackIslandOfView() => MapTrackIsland() ?? RaceTrackIsland.BuiltIn.FirstOrDefault(i =>
         string.Equals(i.IleFile, activeFile, StringComparison.OrdinalIgnoreCase) || string.Equals(i.TwinIleFile, activeFile, StringComparison.OrdinalIgnoreCase));
 
     private static string TrackPiecesFolder => System.IO.Path.Combine(AppContext.BaseDirectory, "TrackPlans");
-    private string TrackPiecesFile(string ile) => System.IO.Path.Combine(TrackPiecesFolder, System.IO.Path.GetFileNameWithoutExtension(ile).ToLowerInvariant() + "_pieces.json");
+    // Where the island's pieces are kept: an open map's in its workspace (LbaMap.RaceTrack, into the map's file on Save map), else beside the editor
+    private string TrackPiecesFile(string ile) =>
+        MapOpen && openMap is { Kind: Maps.MapKind.Lba2Island } map && openMapInstalled is { } at && string.Equals(map.IslandFile + ".ILE", ile, StringComparison.OrdinalIgnoreCase)
+            ? Maps.MapInstall.RaceTrackPath(map, at.Directory)
+            : System.IO.Path.Combine(TrackPiecesFolder, System.IO.Path.GetFileNameWithoutExtension(ile).ToLowerInvariant() + "_pieces.json");
+    // (the pieces in hand are of this: the island file in view, and the map it's of -- a map's copy of an island has the island's name)
+    private string TrackKey => (MapOpen ? (openMapPath ?? openMap!.Name) + "|" : "") + activeFile;
+    private string trackKey = "";
 
     // ---- the panel ------------------------------------------------------------------------------------------------------------------------
 
@@ -173,7 +181,7 @@ public partial class MainWindow
         var on = TrackPiecesActive;
         TrackPanelHost.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on && TrackPanelHost.Content is null) TrackPanelHost.Content = TrackPanel();
-        if (on && !string.Equals(trackIsland, activeFile, StringComparison.OrdinalIgnoreCase)) LoadTrackPieces();
+        if (on && !string.Equals(trackKey, TrackKey, StringComparison.OrdinalIgnoreCase)) LoadTrackPieces();
         if (!on) { trackArmed = null; trackGhost = null; trackDragging = null; }
         else RunTrackPiecesTest();
         if (on)
@@ -360,7 +368,12 @@ public partial class MainWindow
         {
             Directory.CreateDirectory(TrackPiecesFolder);
             var saved = new SavedPieces(trackPieces.Width, trackPieces.Pieces.Select(p => new SavedPiece(p.Section.Name, p.X, p.Z, p.Y, p.Heading, p.Tilt)).ToList());
-            File.WriteAllText(TrackPiecesFile(trackIsland), JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }));
+            var file = TrackPiecesFile(trackIsland);
+            // (a map's: written as the map's workspace files are, beside it and swapped in -- its folder's files are hard links)
+            if (MapOpen) new FileTransaction().Write(file, System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }))).Commit();
+            else File.WriteAllText(file, JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }));
+            // (and into the map's file, a moment later)
+            ScheduleMapTrackSave();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { DebugLog.Log($"track pieces not saved: {e.Message}"); }
     }
@@ -368,6 +381,7 @@ public partial class MainWindow
     private void LoadTrackPieces()
     {
         trackIsland = activeFile ?? "";
+        trackKey = TrackKey;
         trackPieces.Pieces.Clear(); trackUndo.Clear(); trackRedo.Clear(); trackSelected = null; trackGroup = null; trackGroupDrag = null; trackPlanPath = null; trackFlag = null; trackFlagArmed = false; trackPieces.Width = 1;
         if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
         var file = TrackPiecesFile(trackIsland);
@@ -711,8 +725,13 @@ public partial class MainWindow
         DisarmTrackPiece();
         var result = trackPieces.MakePlan(ground, flag, out var gridRoom);
         if (result.Plan is not { } plan) { SetTrackStatus("No test: " + string.Join(" ", result.Problems.Concat(result.Notes).Select(n => n.TrimEnd('.') + "."))); return; }
-        var others = RaceTrackService.BuiltIslands(gameRoot).Where(i => !string.Equals(i.IleFile, island.IleFile, StringComparison.OrdinalIgnoreCase))
-            .DistinctBy(i => i.IleFile, StringComparer.OrdinalIgnoreCase).ToList();
+        // (a map's island: as the map is now -- its ground edited, its scenes -- MapInstall.Capture)
+        if (island.CustomMap is not null && openMapInstalled is { } at)
+        {
+            if (terrainEditor is { Dirty: true } editor) editor.Save();
+            try { island = RaceTrackIsland.Custom(Maps.MapInstall.Capture(at)); }
+            catch (Exception e) when (e is IOException or InvalidDataException) { SetTrackStatus($"The map's island can't be read back: {e.Message}"); return; }
+        }
         var answer = MessageBox.Show(this,
             $"Build the test -- {island.Shown} from the flag, {string.Join(", ", result.Notes.Take(2))} -- and race it?\n\n" +
             "It's built into a scratch copy of the game folder: the game folder's own islands and tracks aren't changed.",
@@ -739,7 +758,8 @@ public partial class MainWindow
             o.Story = o.Story && i.IleFile == RaceTrackIsland.Citadel.IleFile;
             return o;
         }
-        var builds = others.Select(i => new RaceTrackService.TrackBuild(RaceTrackPlan.Built(i), Options(i))).ToList();
+        // (the tested track alone: the scratch copy needn't have the folder's other tracks)
+        var builds = new List<RaceTrackService.TrackBuild>();
         // (no road behind the flag for a grid: Twinsen's car alone on the flag, no opponents -- they would stand on nothing)
         var tested = Options(island);
         if (!gridRoom) tested.Drivers = new List<RaceDriver>();
@@ -748,11 +768,17 @@ public partial class MainWindow
         if (trackTestButton is not null) trackTestButton.IsEnabled = false;
         SetTrackStatus("Building the test…");
         var root = trackTestRoot.Directory;
+        DebugLog.Log($"track pieces: building the test of {island.Name} in {root}");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         RaceTrackService.BuildResult built;
         try { built = await Task.Run(() => RaceTrackService.Build(root, builds)); }
         finally { if (trackTestButton is not null) trackTestButton.IsEnabled = true; }
-        if (!built.Ok) { SetTrackStatus("The test couldn't be built: " + built.Summary); MessageBox.Show(this, built.Summary, "Test race", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        DebugLog.Log($"track pieces: test from the flag built in {root} -- {built.Summary}");
+        if (!built.Ok)
+        {
+            DebugLog.Log($"track pieces: the test couldn't be built ({clock.Elapsed.TotalSeconds:0} s): {built.Summary}");
+            SetTrackStatus("The test couldn't be built: " + built.Summary); MessageBox.Show(this, built.Summary, "Test race", MessageBoxButton.OK, MessageBoxImage.Warning); return;
+        }
+        DebugLog.Log($"track pieces: test from the flag built in {root} ({clock.Elapsed.TotalSeconds:0} s) -- {built.Summary}");
         SetTrackStatus("The test is built (in a scratch copy: the game folder isn't changed): racing it. " + string.Join(" ", result.Notes.Select(n => n.TrimEnd('.') + ".")));
         StartPlay(GameKind.Lba2, root: root);
     }
@@ -1100,6 +1126,7 @@ public partial class MainWindow
     private void BuildTrackFromPieces()
     {
         if (trackPlanPath is not { } path || TrackIslandOfView() is not { } island) return;
+        if (island.CustomMap is not null) { SetTrackStatus("A map's island has no race track window: Test from the flag races its track (put the flag at its start for the whole of it)."); return; }
         OpenRaceTrackWindow(w => w.UsePlan(island, path));
     }
 }

@@ -81,7 +81,7 @@ public partial class MainWindow
         // (of a folder with several race tracks, the one of the island the editor has open)
         raceToPlay = game == GameKind.Lba2 ? RaceTrackToPlay() : null;
         // (an open map plays its own scene as a game: no race car, no race -- RaceTrackToPlay)
-        if (game == GameKind.Lba2 && MapOpen) askRaceCar = raceStart = false;
+        if (game == GameKind.Lba2 && MapOpen && root is null) askRaceCar = raceStart = false;
         if (game == GameKind.Lba2 && askRaceCar && !RaceTrackUpToDate()) return;
         if (game == GameKind.Lba2 && askRaceCar && !AskRaceCar()) return;
         // the story from a new game (every track raced where and when the game is), or a race track on its start/finish straight, Twinsen
@@ -103,7 +103,8 @@ public partial class MainWindow
     {
         // (none for an open map: its workspace is a copy of a folder that may have race tracks built, and a map's island carries a game
         // island's number -- the snow island's the Desert's -- so Play raced the Desert's track instead of playing the map, 2026-10-22)
-        if (MapOpen) return null;
+        // (a track test's own folder races, map or not: MainWindow.TrackPieces)
+        if (MapOpen && playRoot is null) return null;
         if (!Lba2Configured || !Terrain.RaceTrackService.HasBackups(PlayRoot)) return null;
         var shown = currentGame == GameKind.Lba2 && !interiorSceneActive && currentIsland is not null ? activeFile : null;
         var sceneIsland = allSceneEntries.FirstOrDefault(s => s.Option.Index == Lba2SceneToPlay())?.IslandFile;
@@ -285,7 +286,7 @@ public partial class MainWindow
         // (the story from the town circuit's file -- CITABAU.ILE open -- in the weather once the storm is over: a scene entered as it is
         // starts in the storm's chapter, and loaded the storm's file, 2026-10-27. A new game keeps the game's own weather)
         var fine = story && !options.NewGame && raceToPlay?.Dream is null && Terrain.RaceTrackService.FineWeather(raceToPlay, false);
-        options.RaceCarFile = MapOpen ? null : Terrain.RaceTrackService.CarFileWriter(PlayRoot, raceToPlay, story, fine);
+        options.RaceCarFile = MapOpen && playRoot is null ? null : Terrain.RaceTrackService.CarFileWriter(PlayRoot, raceToPlay, story, fine);
         // (whether this play races, and which -- the first thing to know about a race that didn't start)
         DebugLog.Log(MapOpen ? $"Lba2Play: scene {scene}, the map \"{openMap!.Name}\"'s: no race-track mode"
             : options.RaceCarFile is null

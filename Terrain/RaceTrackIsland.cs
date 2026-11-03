@@ -413,6 +413,31 @@ internal sealed record RaceTrackIsland(
             RailHeld = from.RailHeld, Title = $"{name} (shared, on {from.Shown})",
         };
     }
+    // A track laid on a map's island (File > New track; the user, 2026-11-03: "Either the user selects an existing island, out of any of our
+    // islands that exist or can create a brand new island by placing new map squares on a grid"), raced as a shared track's copy is -- its
+    // own files (CustomFile.ILE and .OBL, the map's island as it is now: MapInstall.Capture) and its outside scenes (the map's, numbered from
+    // `firstScene`, their cube changes to one another pointed at one another: RaceTrackShare.InstallCustom) -- drawn as the island number the
+    // map borrows its look from (its sky, palette, music). Nothing of that island's own goes with it: no scale, no story, no actors, no
+    // doors. Its jumps' flights are numbered as a shared track's (SharedIndex CustomIndex).
+    public LBAAssembler.Maps.LbaMap? CustomMap { get; init; }
+    public const string CustomFile = "MAPTRACK";
+    public const int CustomIndex = 900, CustomFirstScene = 900;
+    public static RaceTrackIsland Custom(LBAAssembler.Maps.LbaMap map, int firstScene = CustomFirstScene)
+    {
+        var look = BuiltIn.FirstOrDefault(i => i.IslandByte == map.IslandByte && !i.Created && i.PaletteEntry > 0) ?? Desert;
+        var copies = Enumerable.Range(0, map.Scenes.Count).Select(k => (From: LBAAssembler.Maps.LbaMap.LocalScene + k, To: firstScene + k)).ToArray();
+        var name = $"{map.Name} (map)";
+        var island = new RaceTrackIsland(name, CustomFile + ".ILE", CustomFile + ".OBL", map.IslandByte, firstScene, firstScene + copies.Length - 1, look.PaletteEntry, look.PlanResource, null)
+        {
+            Created = true, RaceFile = CustomFile.ToLowerInvariant(), SharedScenes = copies, NoHolomap = true, CustomMap = map, SharedIndex = CustomIndex,
+            Title = $"{map.Name} (a map's island, in {look.Shown}'s look)", View = look.View, Look = look.Look,
+        };
+        // (known by its name to what reads a built folder's tracks back: RACETRACK.JSON's records, Play's track)
+        SharedIslands.RemoveAll(i => i.CustomMap is not null);
+        SharedIslands.Add(island);
+        return island;
+    }
+
     // The first scene number after a shared track's copies: the next one's first
     public int SharedNextScene => Scenes.Max() + 1;
     // The files a shared track's copy is made from: the island's own -- Citadel Island's town circuit's, CITABAU, the file a plan for it is

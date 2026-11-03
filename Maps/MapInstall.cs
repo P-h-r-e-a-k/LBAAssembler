@@ -43,7 +43,18 @@ internal static class MapInstall
         };
         PutComments(map, directory, installed.Scenes);
         PutText(map, directory);
+        PutRaceTrack(map, directory);
         return installed;
+    }
+
+    // ---- the race track laid on it (LbaMap.RaceTrack): <stem>_TRACK.JSON beside its files, where Build > Race track keeps it
+    public static string RaceTrackPath(LbaMap map, string directory) => Path.Combine(directory, map.Stem + LbaMap.RaceTrackSuffix);
+
+    private static void PutRaceTrack(LbaMap map, string directory)
+    {
+        var path = RaceTrackPath(map, directory);
+        if (map.RaceTrack is { } track) new FileTransaction().Write(path, track).Commit();
+        else if (File.Exists(path)) File.Delete(path);
     }
 
     // ---- the script editor's comments on the map's scripts: the folder's comments file (beside SCENE.HQR, ScriptSession's) under the numbers
@@ -231,6 +242,8 @@ internal static class MapInstall
         var ownEntities = map.IsLba1 ? null : MapCharacters.Load(MapCharacters.SidecarPath(at.Directory, map.Stem)).Select(c => c.Entity).ToList();
         var textPath = TextPath(map, at.Directory);
         captured.Text = File.Exists(textPath) ? File.ReadAllBytes(textPath) : null;
+        var trackPath = RaceTrackPath(map, at.Directory);
+        captured.RaceTrack = File.Exists(trackPath) ? File.ReadAllBytes(trackPath) : null;
         var game = map.IsLba1 ? SceneGame.Lba1 : SceneGame.Lba2;
         var store = new SceneStore(game, at.Directory);
         for (var k = 0; k < at.Scenes.Count; k++)
@@ -281,30 +294,36 @@ internal static class MapInstall
 
     // An island and its outside scenes: those ISLANDS.TXT draws on it, or -- one of the game's own -- those carrying its island number
     // that ISLANDS.TXT doesn't take elsewhere.
-    public static LbaMap ExportLba2Island(string directory, string islandFile, string name)
+    // `originals`: as the folder had them before any race track went on (the race track build's backups, where there are: File > New track
+    // on an island of the game's -- a copy of the island as it is, not with a track built on it); `mapFile`: the map's own island file name
+    // (none: the island's)
+    public static LbaMap ExportLba2Island(string directory, string islandFile, string name, bool originals = false, string? mapFile = null)
     {
         var file = islandFile.ToUpperInvariant();
         var islands = IslandFiles.Load(directory);
         var own = islands.Scenes.Where(s => s.Value.Equals(file, StringComparison.OrdinalIgnoreCase)).Select(s => s.Key).ToList();
         var islandByte = islands.Look.TryGetValue(file, out var look) ? look
             : MapNew.GameIslands.FirstOrDefault(g => g.File == file) is { File: not null } g ? g.Byte : -1;
-        var store = new SceneStore(SceneGame.Lba2, directory);
+        string Source(string f) => originals ? LBAAssembler.Terrain.RaceTrackService.OriginalPath(directory, f) : Path.Combine(directory, f);
+        // (the scenes: SCENE.HQR's, or its original)
+        var sceneFile = Source("SCENE.HQR");
+        var hqr = HqrFile.Parse(File.ReadAllBytes(sceneFile));
+        byte[]? Record(int n) => n + 1 < hqr.Count && !hqr.IsEmpty(n + 1) ? hqr.Read(n + 1) : null;
         var numbers = new List<int>();
-        for (var n = 0; n < store.SceneCount; n++)
+        for (var n = 0; n + 1 < hqr.Count; n++)
         {
-            if (!store.SceneExists(n)) continue;
-            var record = store.LoadRecord(n);
-            if (record.Length < 6 || record[5] != 1) continue;
+            if (Record(n) is not { } record || record.Length < 6 || record[5] != 1) continue;
             if (own.Contains(n) || own.Count == 0 && record[0] == islandByte && !islands.Scenes.ContainsKey(n)) numbers.Add(n);
         }
+        var stem = mapFile ?? file;
         var map = new LbaMap
         {
-            Kind = MapKind.Lba2Island, Name = name, IslandByte = Math.Max(0, islandByte), IslandFile = LbaMap.ValidIslandFile(file) ? file : LbaMap.FileNameFrom(name, 8),
-            Ile = File.ReadAllBytes(Path.Combine(directory, file + ".ILE")), Obl = File.ReadAllBytes(Path.Combine(directory, file + ".OBL")),
+            Kind = MapKind.Lba2Island, Name = name, IslandByte = Math.Max(0, islandByte), IslandFile = LbaMap.ValidIslandFile(stem) ? stem : LbaMap.FileNameFrom(name, 8),
+            Ile = File.ReadAllBytes(Source(file + ".ILE")), Obl = File.ReadAllBytes(Source(file + ".OBL")),
         };
         foreach (var n in numbers)
         {
-            var record = store.LoadRecord(n);
+            var record = Record(n)!;
             map.Scenes.Add(new MapScene(WithLocalScenes(record, SceneGame.Lba2, numbers), record[1], record[2]));
         }
         if (map.Scenes.Count == 0) throw new SceneEditException($"No outside scene is on {file}: an island map needs one at least.");

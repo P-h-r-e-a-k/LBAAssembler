@@ -52,16 +52,52 @@ internal static class MapNew
 
     // `heightmap`: the ground from a picture instead (IslandHeightmap: resampled to the island's size, `shape` its black and white heights and
     // sea level), textured by slope with the base island's sea, flat and steep ground and lit from its sun as the flat island is.
+    // `squares`: the island's shape, the squares (cubes) of the cubesX by cubesZ grid that are land (File > New track's own island: the user,
+    // 2026-11-03, "create a brand new island by placing new map squares on a grid to give them their own basic shape"), its beach round
+    // the shape's own edge; null: every square.
     public static LbaMap Lba2Island(string gameDirectory, string name, string fileName, string baseIsland, int cubesX, int cubesZ, int landHeight,
-        HeightmapPicture? heightmap = null, HeightmapImportOptions? shape = null)
+        HeightmapPicture? heightmap = null, HeightmapImportOptions? shape = null, IReadOnlyCollection<(int X, int Z)>? squares = null)
     {
         if (!LbaMap.ValidIslandFile(fileName)) throw new SceneEditException($"\"{fileName}\" can't be an island's file name: one to eight letters or digits.");
         if (cubesX is < 1 or > 6 || cubesZ is < 1 or > 6) throw new SceneEditException("An island is 1 to 6 cubes each way.");
+        if (squares is { Count: 0 }) throw new SceneEditException("The island's shape has no squares: tick one at least.");
+        if (squares?.Any(s => s.X < 0 || s.Z < 0 || s.X >= cubesX || s.Z >= cubesZ) == true) throw new SceneEditException("A square of the shape is off its grid.");
         var islandByte = GameIslands.FirstOrDefault(g => g.File.Equals(baseIsland, StringComparison.OrdinalIgnoreCase)).Byte;
-        var source = IslandFile.Load(Path.Combine(gameDirectory, baseIsland + ".ILE"));
+        // (the base island as the game has it, not with a race track built on it: its ground's most common textures are the island's own,
+        // not the road's asphalt -- the race track build's original, where there is one)
+        var source = IslandFile.Load(LBAAssembler.Terrain.RaceTrackService.OriginalPath(gameDirectory, baseIsland + ".ILE"));
         var firstX = (IslandFile.MapSize - cubesX) / 2; var firstZ = (IslandFile.MapSize - cubesZ) / 2;
         var cubes = new List<(int X, int Z)>();
-        for (var cz = 0; cz < cubesZ; cz++) for (var cx = 0; cx < cubesX; cx++) cubes.Add((firstX + cx, firstZ + cz));
+        for (var cz = 0; cz < cubesZ; cz++) for (var cx = 0; cx < cubesX; cx++)
+                if (squares is null || squares.Contains((cx, cz))) cubes.Add((firstX + cx, firstZ + cz));
+        // (how far each point of the grid is from the sea, cells: from the nearest edge of a square that isn't land -- off the grid is sea
+        // too -- a chamfer distance over the points, every square's 64 cells a side)
+        int vw = cubesX * IslandCube.Cells + 1, vd = cubesZ * IslandCube.Cells + 1;
+        var land = new HashSet<(int, int)>(cubes.Select(c => (c.X - firstX, c.Z - firstZ)));
+        bool LandCell(int x, int z) => x >= 0 && z >= 0 && x < vw - 1 && z < vd - 1 && land.Contains((x / IslandCube.Cells, z / IslandCube.Cells));
+        var coast = new double[vw * vd];
+        for (var z = 0; z < vd; z++)
+            for (var x = 0; x < vw; x++)
+                coast[z * vw + x] = LandCell(x, z) && LandCell(x - 1, z) && LandCell(x, z - 1) && LandCell(x - 1, z - 1) ? 1e9 : 0;
+        const double Diagonal = 1.41421356;
+        for (var z = 0; z < vd; z++)
+            for (var x = 0; x < vw; x++)
+            {
+                ref var d = ref coast[z * vw + x];
+                if (x > 0) d = Math.Min(d, coast[z * vw + x - 1] + 1);
+                if (z > 0) d = Math.Min(d, coast[(z - 1) * vw + x] + 1);
+                if (x > 0 && z > 0) d = Math.Min(d, coast[(z - 1) * vw + x - 1] + Diagonal);
+                if (x + 1 < vw && z > 0) d = Math.Min(d, coast[(z - 1) * vw + x + 1] + Diagonal);
+            }
+        for (var z = vd - 1; z >= 0; z--)
+            for (var x = vw - 1; x >= 0; x--)
+            {
+                ref var d = ref coast[z * vw + x];
+                if (x + 1 < vw) d = Math.Min(d, coast[z * vw + x + 1] + 1);
+                if (z + 1 < vd) d = Math.Min(d, coast[(z + 1) * vw + x] + 1);
+                if (x + 1 < vw && z + 1 < vd) d = Math.Min(d, coast[(z + 1) * vw + x + 1] + Diagonal);
+                if (x > 0 && z + 1 < vd) d = Math.Min(d, coast[(z + 1) * vw + x - 1] + Diagonal);
+            }
         var island = IslandFile.Parse(IslandScaler.NewFile(source, cubes), fileName + ".ILE");
 
         // the cubes' settings (light, fog, sky): the base island's cube with the most land
@@ -74,7 +110,7 @@ internal static class MapNew
         int gx0 = firstX * IslandCube.Cells, gz0 = firstZ * IslandCube.Cells;
         double HeightAt(int x, int z)
         {
-            double d = Math.Min(Math.Min(x, z), Math.Min(width - x, depth - z));
+            double d = x < 0 || z < 0 || x >= vw || z >= vd ? 0 : coast[z * vw + x];
             var t = Math.Clamp((d - SeaMargin) / Beach, 0, 1);
             return landHeight * t * t * (3 - 2 * t);
         }
@@ -92,6 +128,7 @@ internal static class MapNew
         for (var z = 0; z < depth; z++)
             for (var x = 0; x < width; x++)
             {
+                if (!land.Contains((x / IslandCube.Cells, z / IslandCube.Cells))) continue;
                 double a = HeightAt(x, z), b = HeightAt(x + 1, z), c = HeightAt(x, z + 1), e = HeightAt(x + 1, z + 1);
                 if (Math.Max(Math.Max(a, b), Math.Max(c, e)) <= 0) { seaCells.Add((gx0 + x, gz0 + z)); continue; }
                 var slope = Math.Atan(Math.Max(Math.Abs(a - e), Math.Abs(b - c)) / (512 * Math.Sqrt(2))) * 180 / Math.PI;
@@ -105,7 +142,10 @@ internal static class MapNew
         var bake = BakeOptions.For(island.CubeAt(cubes[0].X, cubes[0].Z)!);
         bake.TerrainShadows = true;
         var vertices = new List<(int, int)>();
-        for (var z = 0; z <= depth; z++) for (var x = 0; x <= width; x++) vertices.Add((gx0 + x, gz0 + z));
+        for (var z = 0; z <= depth; z++) for (var x = 0; x <= width; x++)
+                if (land.Contains((Math.Min(x, width - 1) / IslandCube.Cells, Math.Min(z, depth - 1) / IslandCube.Cells))
+                    || land.Contains((Math.Max(x - 1, 0) / IslandCube.Cells, Math.Max(z - 1, 0) / IslandCube.Cells)))
+                    vertices.Add((gx0 + x, gz0 + z));
         IslandBake.Bake(island, new Cells(vertices), bake);
         if (heightmap is not null)
         {
@@ -115,7 +155,7 @@ internal static class MapNew
             IslandHeightmap.Apply(island, heightmap, options);
         }
 
-        return IslandMap(gameDirectory, name, fileName, island.ToBytes(), File.ReadAllBytes(Path.Combine(gameDirectory, baseIsland + ".OBL")), islandByte);
+        return IslandMap(gameDirectory, name, fileName, island.ToBytes(), File.ReadAllBytes(LBAAssembler.Terrain.RaceTrackService.OriginalPath(gameDirectory, baseIsland + ".OBL")), islandByte);
     }
 
     // An island map round island files (a new island's, or an ILE opened from outside the game folder): an outside scene for each of its cubes,
