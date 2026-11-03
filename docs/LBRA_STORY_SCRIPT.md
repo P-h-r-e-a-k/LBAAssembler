@@ -136,6 +136,26 @@ The original quests don't run, so their flags are free to use for what they're n
 | var 232 | free | Q_SHEET: the neighbour's design sheet, the Citadel 1 page (chapters 1-2) |
 | var 17 / item 17 | the gallic acid (restores old documents; in the game it brings out the neighbour's map) | the same: it brings out the neighbour's design sheet |
 
+### Everyone else on Citadel (built)
+
+The user, 2026-11-03: "Every NPC we leave in the game should have updated text lines to suit our new mod." Citadel's 40 scenes have 120
+people who speak, saying 328 texts. Their scripts still run as the game's (who stands where, who answers what and when), but 134 of
+those texts are retold for the story (`Terrain/CitadelRetell.cs`, the lines in `CitadelRetell.Lines.cs`, six languages):
+- **Twinsen's question to everyone** after the Wizard ("Do you know where I can find Raph the lighthouse keeper?") is now "Have you seen
+  a thief with a pair of driving gloves?", so everyone's answer about Raph became a sighting of the thief, most of them pointing at the
+  harbour.
+- **The storm** lines know about the race track in the rain (the taxi, the tourist, the mother, the schoolchildren, the cow).
+- **The fine-weather** lines know the Esmers built a circuit in one night and put the Tavern back (Tim, Luc, Pat, the old man, the
+  drunk, Bazoo, the taxi, the lovesick boy, the Wizard).
+- **The neighbour** has the faded design sheet instead of the sewer map, and **the sewer painter** follows the thief's footprints.
+
+Not retold: prices, shop menus, greetings, "It's locked.", the jukebox, and the game's lines from later chapters, which the story never
+reaches on Citadel.
+
+The new lines are texts at the end of Citadel's file, so the CD voices (which go by a text's place) don't speak old words over them; the
+game's texts that nothing says any more keep their place but lose their words, which keeps each language's file well under its 64 KB
+limit (German 34 KB after).
+
 ### The 1996 demo's sewers
 
 The user, 2026-11-03: "The Demo 96 files that we had, I want to pull the sewer files from there and have them in the sewers with our
@@ -776,8 +796,8 @@ added to Mr. Paul's prize, and the two pages' pictures.
    > **Zoe:** "Charming."
 
    **The clue:** Johnny Rocket, at the space port:
-   > **Johnny Rocket:** "A black car? Came off the moon ship last night and took the first shuttle to Twinsun. The souvenir seller on
-   > Celebration Island sells pictures of every car he's seen. Ask him."
+   > **Johnny Rocket:** "A black car? Came off the moon ship last night and took the first shuttle to Celebration Island. The
+   > souvenir seller there sells pictures of every car he's seen. Ask him."
    >
    > **Johnny Rocket:** "I'll fly you there myself, if you like."
 
@@ -921,33 +941,58 @@ added to Mr. Paul's prize, and the two pages' pictures.
 | Who | Made from | Where |
 |---|---|---|
 | Lyra | the marshal, on the deck's edge | the start |
-| The monkey monster | his crate (built) | the grid |
-| The small monkey monsters | built (crate-throwers on the lower decks) | |
-| The Franco policeman | the game's (BODY 86) | by the elevator |
-| Zoe | the companion, watching from the elevator's cage | no pit box: a head-to-head |
+| The monkey monster | his crate (built: the story's race is him alone, RaceTrackIsland.StoryHeadToHead) | the grid, beside his crate |
+| The small monkey monsters | built (crate-throwers on the lower decks): hazards, not racers | |
+| Zoe | the companion, then in the elevator's cage | no pit box: a head-to-head |
+
+The user, 2026-11-03: "We should add in some dialog for the elevator track" -- then: "The elevator doesn't need a quest, perhaps some
+pre-race dialog from the Monkey monster, who I feel should be the only opponent of Twinsen for this race." No quest: the monster talks
+before the race, and he gives the clue after it. (Track select's race keeps its extra drivers, the Franco policeman and the monkey with
+the sword; the story's has the monster alone.)
 
 **Walkthrough:**
 
-1. **Arrival.** Lyra:
-   > **Lyra:** "The monster won't let anybody down to the undergas without a race. It's just you and him."
+1. **Arrival.** De La Fontaine's convoy pulls up on the top deck. Lyra, on the deck's edge:
+   > **Lyra:** "Twinsen! Welcome to the Elevator Platform. The monster won't let anybody down to the undergas without a race. It's just
+   > you and him."
+2. **The monster,** beside his crate on the grid. When Twinsen comes near (or talks to him):
+   > **The monkey monster:** "RAAARGH! You! Small blue one! You race me?"
+   >
+   > **The monkey monster:** "This my platform. My elevator. Nobody go down without race. Nobody beat me down. Nobody! Ever!"
+   >
+   > **The monkey monster:** "Black car came. At night. While I sleep! Not fair! Not a race! I wake up, he gone. RAAARGH!"
+   >
+   > **Zoe:** "So the masked driver sneaked past him. No wonder he's in a mood."
+   >
+   > **The monkey monster:** "You. You race fair? Down to bottom, up to top. My little ones throw crates. That is fair too. Ha!"
 
-   The monster, from his crate:
-   > **The monkey monster:** "RAAARGH! Race! Now!"
-2. **The radio rings.**
+   Talking to him again before the race:
+   > **The monkey monster:** "Hrrm. You still here? Race! Now!"
+3. **The radio rings.**
    > **Baldino (radio):** "That platform's a rollercoaster. Grip, grip and more grip, I've given you all I've got. Hold on to your hat.
    > And your lunch."
-3. **The race.** The monster alone (built). No quest.
-4. **Won.**
-   > **The monkey monster:** "Hrrm. Good race. Grr."
+4. **The start.** Zoe goes to the lift cage:
+   > **Zoe:** "No pit stops on this one. I'll be in the lift cage, watching. Just don't fall off."
+
+   The monster climbs into his crate:
+   > **The monkey monster:** "RAAARGH! Go!"
+5. **The race.** The monster alone (built). His little ones throw crates from the lower decks.
+
+   Lost: > **The monkey monster:** "Ha! Too slow! Again? Again! RAAARGH!" The race restarts.
+6. **Won.**
+   > **The monkey monster:** "Hrrm. Good race. Grr." *(he thumps his chest)* "Real race. Not like black car."
+   >
+   > **The monkey monster:** "Black car went down behind the big tanker. Tanker never came up. Black car never came up. Something
+   > down there, under the gas. You go see. You fast. Grr. Good."
    >
    > **Lyra:** "The elevator is yours. Down we go!"
-
-   **The clue:** the policeman:
-   > **The policeman:** "A black car went down before you. Didn't race the monster either. He's still sulking about it."
 
    `inc_chapter()` -> 9. `change_cube(98)`.
 
 **Flags:** none new.
+
+**To build:** the monster on foot beside his crate on the grid before the race, with his lines (Action, or once as Twinsen comes near);
+his start, lost and won lines (the race's own, as the other tracks' mains have); Lyra's and Zoe's lines.
 
 ---
 

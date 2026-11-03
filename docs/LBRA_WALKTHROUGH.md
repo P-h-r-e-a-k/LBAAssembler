@@ -611,8 +611,8 @@ A Dark Monk priest stands in the crowd at the palace bend. As Twinsen walks past
 
 **9. The space port.** Johnny Rocket is leaning on his ship.
 
-**Johnny Rocket:** "A black car? Came off the moon ship last night and took the first shuttle to Twinsun. The souvenir seller on
-Celebration Island sells pictures of every car he's seen. Ask him."
+**Johnny Rocket:** "A black car? Came off the moon ship last night and took the first shuttle to Celebration Island. The souvenir
+seller there sells pictures of every car he's seen. Ask him."
 
 **Johnny Rocket:** "I'll fly you there myself, if you like."
 
@@ -741,38 +741,54 @@ The convoy takes them to the Elevator Platform.
 
 **Track:** the Elevator Platform's rollercoaster. **To beat:** the monkey monster, head to head.
 
-**1. Arrival.** Lyra is on the deck's edge.
+**1. Arrival.** De La Fontaine's convoy pulls up on the top deck. Lyra is on the deck's edge.
 
-**Lyra:** "The monster won't let anybody down to the undergas without a race. It's just you and him."
-
-The monkey monster roars from his crate.
-
-**The monkey monster:** "RAAARGH! Race! Now!"
+**Lyra:** "Twinsen! Welcome to the Elevator Platform. The monster won't let anybody down to the undergas without a race. It's just you
+and him."
 
 A new page on the slate: the Elevator Platform.
 
-**2. The radio rings.**
+**2. The monster.** The monkey monster stands beside his crate on the grid, beating his chest. As Twinsen comes near:
+
+**The monkey monster:** "RAAARGH! You! Small blue one! You race me?"
+
+**The monkey monster:** "This my platform. My elevator. Nobody go down without race. Nobody beat me down. Nobody! Ever!"
+
+**The monkey monster:** "Black car came. At night. While I sleep! Not fair! Not a race! I wake up, he gone. RAAARGH!"
+
+**Zoe:** "So the masked driver sneaked past him. No wonder he's in a mood."
+
+**The monkey monster:** "You. You race fair? Down to bottom, up to top. My little ones throw crates. That is fair too. Ha!"
+
+Talking to him again: **The monkey monster:** "Hrrm. You still here? Race! Now!"
+
+**3. The radio rings.**
 
 **Baldino** (radio): "That platform's a rollercoaster. Grip, grip and more grip, I've given you all I've got. Hold on to your hat. And
 your lunch."
 
-There's no quest here and no pit box: Zoe watches from the elevator's cage.
+**4. The start.** There's no pit box on this track: Zoe goes to watch from the elevator's cage.
 
-**Zoe:** "No pit stops on this one. Just don't fall off."
+**Zoe:** "No pit stops on this one. I'll be in the lift cage, watching. Just don't fall off."
 
-**3. The race.** Twinsen against the monster alone. The small monkey monsters on the lower decks throw crates.
+The monster climbs into his crate.
+
+**The monkey monster:** "RAAARGH! Go!"
+
+**5. The race.** Twinsen against the monster, and nobody else. The little monkey monsters on the lower decks throw crates.
 
 *Tip:* the crates bounce towards you on the downhill sections. Stay to one side of the deck and let them roll past.
 
-**4. Won.**
+If Twinsen loses: **The monkey monster:** "Ha! Too slow! Again? Again! RAAARGH!" The race starts again.
 
-**The monkey monster:** "Hrrm. Good race. Grr."
+**6. Won.**
+
+**The monkey monster:** "Hrrm. Good race. Grr." He thumps his chest. "Real race. Not like black car."
+
+**The monkey monster:** "Black car went down behind the big tanker. Tanker never came up. Black car never came up. Something down there,
+under the gas. You go see. You fast. Grr. Good."
 
 **Lyra:** "The elevator is yours. Down we go!"
-
-A Franco policeman stands by the elevator.
-
-**The policeman:** "A black car went down before you. Didn't race the monster either. He's still sulking about it."
 
 The elevator takes them down to Wannies Island.
 
