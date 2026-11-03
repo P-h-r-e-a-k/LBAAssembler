@@ -298,6 +298,7 @@ internal static class Program
             "dummybody" => DummyBodyStudy.Run(args),
             "actordump" => ActorDump.Run(args),
             "spritesurvey" => SpriteSurvey.Run(args),
+            "animstudy" => AnimStudy.Run(args),
             "scriptgrep" => ScriptGrep.Run(args),
             "scriptgrep2" => ScriptGrep2.Run(args),
             "scriptdump" => ScriptDump.Run(args),

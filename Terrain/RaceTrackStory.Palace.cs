@@ -1,5 +1,6 @@
 using LBAAssembler.LbaScript;
 using LBAAssembler.Scenes;
+using LBAAssembler.Terrain.Palace;
 
 namespace LBAAssembler.Terrain;
 
@@ -24,8 +25,9 @@ internal static partial class RaceTrackStory
     public const int QEmperor = 224, GateTold = 1, GateOpen = 2, EmpressTold = 3, BedroomOpen = 4, SwordGiven = 5, StanReady = 6;
     private const int PalaceChapter = 13, PalaceTexts = 3 + 4, Sword = 10;
     // the game's: Stan (Otringal's scene 158, actor 6: entity 316), the Emperor and the Empress (entities 330 and 331, generic body 0; their
-    // standing animations, ANIM.HQR)
-    private const int StanScene = 158, StanActor = 6, EmperorEntity = 330, EmperorStand = 2012, EmpressEntity = 331, EmpressStand = 2023;
+    // standing animations' generic numbers -- an actor's animation is its entity's generic, not an ANIM.HQR entry: the Emperor's 0, the
+    // Empress's made for her, PalaceEmpress)
+    private const int StanScene = 158, StanActor = 6, EmperorEntity = 330, EmperorStand = 0, EmpressEntity = PalaceEmpress.Entity, EmpressStand = PalaceEmpress.Stand;
 
     private enum PLine { Arrive, Fragments, NoFragments, Ring, Baldino, Empress, Sing, ZoeWorse, Locked, Emperor, Stan }
     private static readonly string[][] PalaceLines =
@@ -131,13 +133,14 @@ internal static partial class RaceTrackStory
         },
     };
 
-    // (the Empress's generic idle is a pose lying down -- her own animations' first, as the game's end shows her: she stands talking, generic 28)
-    private static string StandUp(string life) => life.Replace("        set_comportement(comportement_1);", "        anim(28);\n        set_comportement(comportement_1);");
+    // (the Empress's own animations all have her in bed: she stands with PalaceEmpress's, put on again by her script)
+    private static string StandUp(string life) => life.Replace("        set_comportement(comportement_1);", $"        anim({EmpressStand});\n        set_comportement(comportement_1);");
 
     public static List<string> ApplyPalace(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes)
     {
         var s = new LateStory(gameDirectory, report, island, scenes.StartScene);
         if (!s.Ready("the Emperor's palace")) return s.Log;
+        s.Log.AddRange(PalaceEmpress.Install(gameDirectory));
         var first = s.Texts(PalaceTexts, PalaceLines, "the Emperor's palace");
         int Id(PLine line) => first + (int)line;
         var when = $"{PalaceChapter} == chapter()";

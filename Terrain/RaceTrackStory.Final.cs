@@ -27,8 +27,8 @@ internal static partial class RaceTrackStory
     // the race run (finish=224 7) and another race asked for once (224 8)
     public const int FinalRaced = 7, FinalAgain = 8;
     private const int FinalChapter = 14, FinalTexts = 3 + 5, StatueRisen = 79;
-    // the game's: FunFrock (entity 217, his body's generic 154, standing 1440), Baldino (entity 93, standing 715)
-    private const int FunFrockEntity = 217, FunFrockBody = 154, FunFrockStand = 1440, BaldinoEntity = 93, BaldinoStand = 715;
+    // the game's: FunFrock (entity 217, his body's generic 154), Baldino (entity 93); their standing: their generic animation 0 (ANIM.HQR 1440, 715)
+    private const int FunFrockEntity = 217, FunFrockBody = 154, FunFrockStand = 0, BaldinoEntity = 93, BaldinoStand = 0;
 
     private enum FLine
     {
