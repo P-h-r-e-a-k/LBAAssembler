@@ -53,7 +53,7 @@ public partial class MainWindow
         ApplyMode();
         // (the status line says what the view does now, as a change of mode does)
         if (editMode == EditMode.Build && buildTrackView)
-            FileLabel.Text = "Build: choose a track piece in the Build tab and click on the island to lay it; drag a piece to move it. Right drag turns the view.";
+            FileLabel.Text = "Build: choose a track piece in the Build tab and click on the island to lay it; drag a piece to move it, Shift+drag its whole section. Drag the ground (or right drag) to turn the view; Ctrl+Z undoes.";
         else if (editMode == EditMode.Build && !buildTerrainView)
             FileLabel.Text = "Build: click an actor, a zone's outline or a track point to edit it in the Build tab, drag it to move it; Add (or right-click the ground) places a new one where you click.";
     }

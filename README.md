@@ -58,10 +58,13 @@ from the source never updates itself. In a folder that can't be written to, it o
 ### Laying a race track in the 3D view
 
 **Build > Race track** lays a track on the open island in the 3D view, from the race track generator's pieces (straights, bends,
-hairpins, jumps, loops, the pit lane, ramps, steep climbs and spirals), true to size and at any height. Choose a piece, then click on
+hairpins, jumps, loops, the pit lane, the Ramp and spirals), true to size and at any height. Choose a piece, then click on
 the island: it goes on from the nearest open end (the yellow rings) at that end's height and way, or onto the ground under the
-pointer. **Q** and **E** turn it, **PgUp** and **PgDn** raise and lower it, **Esc** stops laying; drag a laid piece to move it,
-**Delete** takes the selected one away, right drag turns the view and middle drag pans it. Posts down to the ground show how high a
+pointer. **Q** and **E** turn it, **PgUp** and **PgDn** raise and lower it, **R** and **F** tilt the Ramp up and down (5 % a step, up
+to 30 %; a laid one tilts about its middle), **Esc** stops laying. Drag a laid piece to move it, or **Shift**+drag (or tick *Drag
+whole sections*) to move every piece joined to it, which then goes on from an open end near it; Q, E, PgUp, PgDn and **Delete** work
+on the whole section selected. **Ctrl+Z** and **Ctrl+Y** (Edit > Undo, Redo) step back and forward through the pieces' changes. Drag
+the ground (*Rotate/tilt with mouse*) or right drag to turn the view, middle drag to pan it. Posts down to the ground show how high a
 piece is from any side, so climbs, spirals and roads passing over each other can be built and checked by turning the view. The
 pieces are kept for the island (`TrackPlans\<island>_pieces.json` beside the editor). **Make the track** follows them into a plan
 at the heights they were laid at, and says what is wrong where it can't (two decks too close, a lap that doesn't come back down);

@@ -44,5 +44,25 @@ internal sealed record TrackSection(string Name, string Tip, TrackPart[] Parts)
         new("Spiral down right", "A turn and a quarter to the right, dropping 4000", new[] { Arc(12, 450, -4000) }),
     };
 
+    // The 3D view's pieces (Build > Race track): the generator's, its four ramps one Ramp tilted as the user likes (the user, 2026-11-03:
+    // "replace the different ramp options for race track build and just have one ramp option that pivots around its centre") -- level as it
+    // is, its climb each piece's own (TrackPiece.Tilt)
+    public const string RampName = "Ramp";
+    public static readonly TrackSection Ramp = new(RampName, "30 cells of road that tilts about its middle: R tilts it up, F down, 5 % a step", new[] { new TrackPart(SketchKind.Road, RampLength) });
+    public const double RampLength = 30;
+    private static readonly string[] OldRamps = { "Ramp up", "Ramp down", "Steep up", "Steep down" };
+    public static readonly TrackSection[] Laid = All.Where(s => !OldRamps.Contains(s.Name) && s.Rise == 0).Append(Ramp).Concat(All.Where(s => s.Rise != 0 && !OldRamps.Contains(s.Name))).ToArray();
+    public bool Tilts => Name == RampName;
+
+    // A piece by its name, as saved: one of the old ramps (pieces kept before 2026-11-03) the Ramp at its climb, as steep as it was
+    public static TrackSection? Named(string name, out double tilt)
+    {
+        tilt = 0;
+        if (Laid.FirstOrDefault(s => s.Name == name) is { } laid) return laid;
+        if (All.FirstOrDefault(s => s.Name == name && OldRamps.Contains(s.Name)) is not { } old) return null;
+        tilt = Math.Round(old.Rise / old.Parts.Sum(p => p.Length) * RampLength);
+        return Ramp;
+    }
+
     private static TrackPart Arc(double radius, double degrees, double rise = 0) => new(SketchKind.Road, Math.Abs(degrees) * Math.PI / 180 * radius, radius, degrees * Math.PI / 180, rise);
 }

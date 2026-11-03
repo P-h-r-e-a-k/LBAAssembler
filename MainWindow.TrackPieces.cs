@@ -20,7 +20,12 @@ public partial class MainWindow
 {
     private bool buildTrackView;                 // Build on an island: the track pieces (BuildTrackRadio)
     private readonly TrackPieceSet trackPieces = new();
-    private readonly Stack<List<TrackPiece>> trackUndo = new();
+    // The pieces' history (Edit > Undo / Redo, Ctrl+Z / Ctrl+Y and the panel's Undo step it while the mode is on -- the user, 2026-11-03: "Our
+    // LBAAssembler undo function doesn't appear to work with our race track"): each step the pieces and the road's width as they were, and
+    // what was done
+    private sealed record TrackState(double Width, List<TrackPiece> Pieces, string What);
+    private readonly Stack<TrackState> trackUndo = new(), trackRedo = new();
+    private long lastTrackEditAt;
     private Section? trackArmed;                 // the panel's piece being laid
     private TrackPiece? trackGhost;              // ... where it would go
     private double trackHeading;                 // its way while it follows the pointer (Q, E)
@@ -28,6 +33,13 @@ public partial class MainWindow
     private TrackPiece? trackSelected;
     private TrackPiece? trackDragging;           // the piece picked up and moving, as it was
     private (double X, double Z) trackDragOffset;
+    // A whole section selected (Drag whole sections, or Shift): its pieces as they are now; while it's dragged, each as it was and where it
+    // is in the list, and the ground under the pointer when it was picked up
+    private List<TrackPiece>? trackGroup;
+    private List<(int Index, TrackPiece Was)>? trackGroupDrag;
+    private (double X, double Z) trackGroupAnchor;
+    private CheckBox? trackSectionsBox;
+    private double trackTilt;                    // the Ramp being laid: its climb (R, F)
     private string trackIsland = "";             // the island file the pieces are of
     private Canvas? trackCanvas;
     private TextBlock? trackStatus;
@@ -79,15 +91,22 @@ public partial class MainWindow
             return b;
         }
         var pieces = new WrapPanel { Margin = new Thickness(0, 0, 0, 0) };
-        foreach (var section in Section.All)
+        foreach (var section in Section.Laid)
             pieces.Children.Add(Btn(section.Name, section.Tip, () => ArmTrackPiece(section)));
         root.Children.Add(pieces);
         var row = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        row.Children.Add(Btn("Turn left (Q)", "Turn the piece being laid, or the one selected, 15 degrees", () => TurnTrackPiece(-1)));
-        row.Children.Add(Btn("Turn right (E)", "Turn the piece being laid, or the one selected, 15 degrees", () => TurnTrackPiece(1)));
-        row.Children.Add(Btn("Up (PgUp)", "Raise the piece being laid (where it joins nothing), or the one selected, by 250", () => LiftTrackPiece(1)));
+        row.Children.Add(Btn("Turn left (Q)", "Turn the piece being laid, or the one or the section selected, 15 degrees", () => TurnTrackPiece(-1)));
+        row.Children.Add(Btn("Turn right (E)", "Turn the piece being laid, or the one or the section selected, 15 degrees", () => TurnTrackPiece(1)));
+        row.Children.Add(Btn("Up (PgUp)", "Raise the piece being laid (where it joins nothing), or the one or the section selected, by 250", () => LiftTrackPiece(1)));
         row.Children.Add(Btn("Down (PgDn)", "Lower it by 250", () => LiftTrackPiece(-1)));
+        row.Children.Add(Btn("Tilt up (R)", "Tilt the Ramp being laid, or the one selected, 5 % steeper upwards: a laid one about its middle", () => TiltTrackPiece(1)));
+        row.Children.Add(Btn("Tilt down (F)", "Tilt the Ramp 5 % further downwards", () => TiltTrackPiece(-1)));
         root.Children.Add(row);
+        // (a drag on a piece moves that piece, or with this -- or Shift held -- every piece joined to it)
+        trackSectionsBox = new CheckBox { Content = "Drag whole sections (or hold Shift)", Margin = new Thickness(0, 4, 0, 0),
+            ToolTip = "A drag on a piece moves every piece joined to it, and Q, E, PgUp, PgDn and Delete then work on all of them; without, the piece alone" };
+        trackSectionsBox.SetResourceReference(Control.ForegroundProperty, "ThemeTextBrush");
+        root.Children.Add(trackSectionsBox);
         // (the road's width: the user, 2026-11-03, "add a setting to allow a user to make the track wider if they wish")
         var widthRow = new DockPanel { Margin = new Thickness(0, 6, 0, 6) };
         var widthText = Text("Road width", 0, false);
@@ -100,6 +119,10 @@ public partial class MainWindow
         {
             if (trackWidthLabel is not null) trackWidthLabel.Text = $"{e.NewValue:0} %";
             if (trackWidthSyncing || Math.Abs(trackPieces.Width - e.NewValue / 100) < 1e-6) return;
+            // (one step for a drag of the slider: the steps of a slide within a second of each other are one)
+            if (!(trackUndo.TryPeek(out var last) && last.What == "change the road's width" && Environment.TickCount64 - lastTrackEditAt < 1000))
+                RememberTrackPieces("change the road's width");
+            lastTrackEditAt = Environment.TickCount64;
             trackPieces.Width = e.NewValue / 100;
             trackPlanPath = null;
             if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
@@ -112,11 +135,12 @@ public partial class MainWindow
         root.Children.Add(widthRow);
         var edit = new WrapPanel();
         edit.Children.Add(Btn("Delete (Del)", "Take the selected piece away", DeleteTrackPiece));
-        edit.Children.Add(Btn("Undo", "Take back the last change to the pieces", UndoTrackPieces));
+        edit.Children.Add(Btn("Undo (Ctrl+Z)", "Take back the last change to the pieces", () => StepTrackHistory(undo: true)));
+        edit.Children.Add(Btn("Redo (Ctrl+Y)", "Do again the change last taken back", () => StepTrackHistory(undo: false)));
         edit.Children.Add(Btn("Clear all", "Take every piece away", () =>
         {
             if (trackPieces.Pieces.Count == 0 || MessageBox.Show(this, "Take every piece away?", "Race track", MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
-            RememberTrackPieces(); trackPieces.Pieces.Clear(); trackSelected = null; TrackPiecesChanged();
+            RememberTrackPieces("clear all"); trackPieces.Pieces.Clear(); trackSelected = null; trackGroup = null; TrackPiecesChanged();
         }));
         root.Children.Add(edit);
         var make = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
@@ -135,8 +159,9 @@ public partial class MainWindow
         // (how it works, under the pieces: the buttons first, where they are seen)
         root.Children.Add(Text("Lay a race track in the 3D view from the generator's pieces, true to size. Choose a piece, then click on the island: " +
                                "it goes on from the nearest open end (the yellow rings) at that end's height, or onto the ground under the pointer. " +
-                               "Q and E turn it, PgUp and PgDn raise and lower it, Esc stops laying. Drag a piece to move it, Delete takes the selected one away. " +
-                               "Right drag turns the view, middle drag pans it.", 10));
+                               "Q and E turn it, PgUp and PgDn raise and lower it, R and F tilt a Ramp, Esc stops laying. Drag a piece to move it, or Shift+drag " +
+                               "to move the whole section it's part of; Delete takes the selected one away. Ctrl+Z undoes, Ctrl+Y redoes. " +
+                               "Drag the ground (Rotate/tilt with mouse) or right drag to turn the view, middle drag to pan it.", 10));
         return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
     }
 
@@ -180,8 +205,8 @@ public partial class MainWindow
     private void ArmTrackPiece(Section section)
     {
         if (!TrackPiecesActive) return;
-        trackArmed = section; trackGhost = null; trackSelected = null;
-        SetTrackStatus($"{section.Name}: click on the island to lay it ({section.Tip}). Q, E turn it; PgUp, PgDn raise it; Esc stops.");
+        trackArmed = section; trackGhost = null; trackSelected = null; trackGroup = null;
+        SetTrackStatus($"{section.Name}: click on the island to lay it ({section.Tip}). Q, E turn it; PgUp, PgDn raise it;{(section.Tilts ? $" R, F tilt it ({RampSlope(trackTilt)});" : "")} Esc stops.");
         TerrainViewport.Cursor = Cursors.Cross;
         DrawTrackOverlay();
     }
@@ -196,46 +221,119 @@ public partial class MainWindow
     private void TurnTrackPiece(int way)
     {
         if (trackArmed is not null) { trackHeading += way * TrackTurnStep; if (trackGhost is { } g) trackGhost = trackPieces.Snapped(g with { Heading = g.Heading + way * TrackTurnStep }); }
-        else if (trackSelected is { } s) ReplaceTrackPiece(s, s with { Heading = s.Heading + way * TrackTurnStep });
+        else if (trackGroup is { Count: > 0 } group)
+        {
+            // (the section turned about its middle: each piece's start round it, its way with it)
+            var points = group.SelectMany(p => new[] { (p.X, p.Z), (p.End.X, p.End.Z) }).ToList();
+            double cx = points.Average(q => q.X), cz = points.Average(q => q.Z), a = way * TrackTurnStep, cos = Math.Cos(a), sin = Math.Sin(a);
+            ChangeTrackGroup(p => p with { X = cx + (p.X - cx) * cos - (p.Z - cz) * sin, Z = cz + (p.X - cx) * sin + (p.Z - cz) * cos, Heading = p.Heading + a }, "turn the section");
+        }
+        else if (trackSelected is { } s) ReplaceTrackPiece(s, s with { Heading = s.Heading + way * TrackTurnStep }, "turn");
         DrawTrackOverlay();
+    }
+
+    // R, F: the Ramp being laid steeper or less steep, or the one selected tilted about its middle
+    private void TiltTrackPiece(int way)
+    {
+        if (trackArmed is { } armed)
+        {
+            if (!armed.Tilts) { SetTrackStatus("Only the Ramp tilts: choose the Ramp."); return; }
+            trackTilt = Math.Clamp(trackTilt + way * TrackPiece.TiltStep, -TrackPiece.TiltMost, TrackPiece.TiltMost);
+            if (trackGhost is { } g) trackGhost = trackPieces.Snapped(g with { Tilt = trackTilt });
+            SetTrackStatus($"The Ramp {RampSlope(trackTilt)}.");
+        }
+        else if (trackSelected is { Section.Tilts: true } s)
+        {
+            var tilted = s.TiltedBy(way);
+            if (tilted == s) { SetTrackStatus($"The Ramp is as steep as it goes ({RampSlope(s.Tilt)})."); return; }
+            ReplaceTrackPiece(s, tilted, way > 0 ? "tilt up" : "tilt down");
+            SetTrackStatus($"The Ramp {RampSlope(tilted.Tilt)}, tilted about its middle.");
+        }
+        else SetTrackStatus("Only the Ramp tilts: select one (click it), or choose the Ramp to lay.");
+        DrawTrackOverlay();
+    }
+
+    private static string RampSlope(double tilt) =>
+        Math.Abs(tilt) < 1 ? "level" : $"{(tilt > 0 ? "climbing" : "dropping")} {Math.Abs(tilt) / (Section.RampLength * 512) * 100:0} % ({Math.Abs(tilt):0} over its {Section.RampLength:0} cells)";
+
+    // Every piece of the section selected changed by `change`, as one step
+    private void ChangeTrackGroup(Func<TrackPiece, TrackPiece> change, string what)
+    {
+        if (trackGroup is not { Count: > 0 } group) return;
+        RememberTrackPieces(what);
+        var now = new List<TrackPiece>();
+        foreach (var p in group)
+        {
+            var i = trackPieces.Pieces.FindIndex(q => ReferenceEquals(q, p));
+            if (i < 0) continue;
+            var q = change(p);
+            trackPieces.Pieces[i] = q; now.Add(q);
+            if (ReferenceEquals(p, trackSelected)) trackSelected = q;
+        }
+        trackGroup = now;
+        TrackPiecesChanged();
     }
 
     private void LiftTrackPiece(int way)
     {
         if (trackArmed is not null) { trackLift = Math.Max(0, trackLift + way * TrackLiftStep); if (trackGhost is { } g) trackGhost = g with { Y = g.Y + way * TrackLiftStep }; SetTrackStatus($"Laid {trackLift:0} over the ground where it joins nothing."); }
-        else if (trackSelected is { } s) ReplaceTrackPiece(s, s with { Y = s.Y + way * TrackLiftStep });
+        else if (trackGroup is { Count: > 0 }) ChangeTrackGroup(p => p with { Y = p.Y + way * TrackLiftStep }, way > 0 ? "raise the section" : "lower the section");
+        else if (trackSelected is { } s) ReplaceTrackPiece(s, s with { Y = s.Y + way * TrackLiftStep }, way > 0 ? "raise" : "lower");
         DrawTrackOverlay();
     }
 
     private void DeleteTrackPiece()
     {
-        if (trackSelected is not { } s) return;
-        RememberTrackPieces();
-        trackPieces.Pieces.Remove(s); trackSelected = null;
+        if (trackGroup is { Count: > 1 } group)
+        {
+            RememberTrackPieces($"delete a section of {group.Count} pieces");
+            trackPieces.Pieces.RemoveAll(p => group.Any(g => ReferenceEquals(g, p)));
+        }
+        else if (trackSelected is { } s)
+        {
+            RememberTrackPieces($"delete the {s.Section.Name.ToLowerInvariant()}");
+            trackPieces.Pieces.RemoveAll(p => ReferenceEquals(p, s));
+        }
+        else return;
+        trackSelected = null; trackGroup = null;
         TrackPiecesChanged();
     }
 
-    private void ReplaceTrackPiece(TrackPiece old, TrackPiece now)
+    private void ReplaceTrackPiece(TrackPiece old, TrackPiece now, string what)
     {
-        var i = trackPieces.Pieces.IndexOf(old);
+        var i = trackPieces.Pieces.FindIndex(p => ReferenceEquals(p, old));
         if (i < 0) return;
-        RememberTrackPieces();
+        RememberTrackPieces($"{what} the {old.Section.Name.ToLowerInvariant()}");
         trackPieces.Pieces[i] = now; trackSelected = now;
+        if (trackGroup is { } group) { var k = group.FindIndex(p => ReferenceEquals(p, old)); if (k >= 0) group[k] = now; }
         TrackPiecesChanged();
     }
 
-    private void RememberTrackPieces()
+    private void RememberTrackPieces(string what)
     {
-        trackUndo.Push(trackPieces.Pieces.ToList());
+        trackUndo.Push(new TrackState(trackPieces.Width, trackPieces.Pieces.ToList(), what));
+        trackRedo.Clear();
+        lastTrackEditAt = Environment.TickCount64;
         trackPlanPath = null;
         if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
     }
 
-    private void UndoTrackPieces()
+    // What Undo (or Redo) would take back on the pieces, or null: nothing, or the mode is off
+    private string? TrackHistoryLabel(bool undo) => TrackPiecesActive && (undo ? trackUndo : trackRedo).TryPeek(out var s) ? s.What : null;
+
+    // One step back (or forward) through the pieces' history: the state before it kept on the other stack
+    private void StepTrackHistory(bool undo)
     {
-        if (trackUndo.Count == 0) return;
-        trackPieces.Pieces.Clear(); trackPieces.Pieces.AddRange(trackUndo.Pop()); trackSelected = null;
+        var from = undo ? trackUndo : trackRedo;
+        if (!from.TryPop(out var step)) return;
+        (undo ? trackRedo : trackUndo).Push(new TrackState(trackPieces.Width, trackPieces.Pieces.ToList(), step.What));
+        lastTrackEditAt = Environment.TickCount64;
+        trackPieces.Pieces.Clear(); trackPieces.Pieces.AddRange(step.Pieces); trackSelected = null; trackGroup = null; trackDragging = null; trackGroupDrag = null;
+        trackPieces.Width = step.Width; SyncTrackWidthSlider();
+        trackPlanPath = null;
+        if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
         TrackPiecesChanged();
+        SetTrackStatus($"{(undo ? "Undid" : "Redid")}: {step.What} ({trackPieces.Pieces.Count} piece(s)).");
     }
 
     private void TrackPiecesChanged()
@@ -247,7 +345,7 @@ public partial class MainWindow
 
     // ---- kept for the island ------------------------------------------------------------------------------------------------------------
 
-    private sealed record SavedPiece(string Section, double X, double Z, double Y, double Heading);
+    private sealed record SavedPiece(string Section, double X, double Z, double Y, double Heading, double Tilt = 0);
     private sealed record SavedPieces(double Width, List<SavedPiece> Pieces);
 
     private void SaveTrackPieces()
@@ -256,7 +354,7 @@ public partial class MainWindow
         try
         {
             Directory.CreateDirectory(TrackPiecesFolder);
-            var saved = new SavedPieces(trackPieces.Width, trackPieces.Pieces.Select(p => new SavedPiece(p.Section.Name, p.X, p.Z, p.Y, p.Heading)).ToList());
+            var saved = new SavedPieces(trackPieces.Width, trackPieces.Pieces.Select(p => new SavedPiece(p.Section.Name, p.X, p.Z, p.Y, p.Heading, p.Tilt)).ToList());
             File.WriteAllText(TrackPiecesFile(trackIsland), JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { DebugLog.Log($"track pieces not saved: {e.Message}"); }
@@ -265,7 +363,7 @@ public partial class MainWindow
     private void LoadTrackPieces()
     {
         trackIsland = activeFile ?? "";
-        trackPieces.Pieces.Clear(); trackUndo.Clear(); trackSelected = null; trackPlanPath = null; trackFlag = null; trackFlagArmed = false; trackPieces.Width = 1;
+        trackPieces.Pieces.Clear(); trackUndo.Clear(); trackRedo.Clear(); trackSelected = null; trackGroup = null; trackGroupDrag = null; trackPlanPath = null; trackFlag = null; trackFlagArmed = false; trackPieces.Width = 1;
         if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
         var file = TrackPiecesFile(trackIsland);
         if (!File.Exists(file)) return;
@@ -276,7 +374,7 @@ public partial class MainWindow
                 : JsonSerializer.Deserialize<SavedPieces>(text) ?? new SavedPieces(1, new());
             trackPieces.Width = Math.Clamp(saved.Width, 1, TrackPieceSet.WidthMost);
             foreach (var s in saved.Pieces ?? new())
-                if (Section.All.FirstOrDefault(a => a.Name == s.Section) is { } section) trackPieces.Pieces.Add(new TrackPiece(section, s.X, s.Z, s.Y, s.Heading));
+                if (Section.Named(s.Section, out var tilt) is { } section) trackPieces.Pieces.Add(new TrackPiece(section, s.X, s.Z, s.Y, s.Heading, s.Tilt != 0 ? s.Tilt : tilt));
         }
         catch (Exception e) when (e is IOException or JsonException) { DebugLog.Log($"track pieces not read: {e.Message}"); }
         finally { SyncTrackWidthSlider(); }
@@ -325,12 +423,27 @@ public partial class MainWindow
         }
         var hit = TrackPieceAt(at);
         trackSelected = hit;
+        // (the whole section it is part of: Drag whole sections ticked, or Shift held)
+        var whole = hit is not null && (trackSectionsBox?.IsChecked == true || (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+        trackGroup = whole ? trackPieces.SectionOf(hit!) : null;
         if (hit is not null && TrackGround(at, out var gx, out var gz, out _))
         {
-            trackDragging = hit; trackDragOffset = (hit.X - gx, hit.Z - gz);
-            RememberTrackPieces();
+            if (trackGroup is { } group)
+            {
+                trackGroupDrag = group.Select(p => (trackPieces.Pieces.FindIndex(q => ReferenceEquals(q, p)), p)).Where(d => d.Item1 >= 0).ToList();
+                trackGroupAnchor = (gx, gz);
+                RememberTrackPieces($"move a section of {group.Count} pieces");
+                SetTrackStatus($"A section of {group.Count} pieces: drag to move it (it goes on from an open end near it), Q, E to turn it, PgUp, PgDn to raise it, Delete to take it away.");
+            }
+            else
+            {
+                trackDragOffset = (hit.X - gx, hit.Z - gz);
+                RememberTrackPieces($"move the {hit.Section.Name.ToLowerInvariant()}");
+                SetTrackStatus($"{hit.Section.Name}: drag to move it, Q, E to turn it, PgUp, PgDn to raise it,{(hit.Section.Tilts ? $" R, F to tilt it ({RampSlope(hit.Tilt)})," : "")} " +
+                               "Delete to take it away. Shift+drag moves the whole section.");
+            }
+            trackDragging = hit;
             TerrainViewport.CaptureMouse();
-            SetTrackStatus($"{hit.Section.Name}: drag to move it, Q, E to turn it, PgUp, PgDn to raise it, Delete to take it away.");
         }
         DrawTrackOverlay();
         if (hit is null) return false;
@@ -343,7 +456,7 @@ public partial class MainWindow
     {
         UpdateTrackGhost(at);
         if (trackGhost is not { } g) { SetTrackStatus("Point at the island's ground to lay the piece."); return false; }
-        RememberTrackPieces();
+        RememberTrackPieces($"lay a {g.Section.Name.ToLowerInvariant()}");
         trackPieces.Pieces.Add(g);
         // (the next one of the same goes on from it: its way kept)
         trackHeading = g.End.Heading;
@@ -397,8 +510,10 @@ public partial class MainWindow
             foreach (var item in items.Skip(1))
             {
                 // ("piece@x,z": dropped where it says, its way the last one's -- a gap left before it)
-                var name = item.Split('@')[0];
-                if (Section.All.FirstOrDefault(s => s.Name == name) is not { } section) { DebugLog.Log($"track pieces test: no piece {name}"); continue; }
+                // ("Ramp~1500": the Ramp tilted to climb that much, as R and F would)
+                var name = item.Split('@')[0].Split('~')[0];
+                if (Section.Named(name, out var oldTilt) is not { } section) { DebugLog.Log($"track pieces test: no piece {name}"); continue; }
+                trackTilt = item.Split('@')[0].Split('~') is { Length: 2 } t ? double.Parse(t[1], System.Globalization.CultureInfo.InvariantCulture) : oldTilt;
                 ArmTrackPiece(section);
                 double x = first[0], z = first[1];
                 if (trackPieces.Pieces.LastOrDefault() is { } last) { var e = last.End; x = e.X + Math.Cos(e.Heading) * 0.6; z = e.Z + Math.Sin(e.Heading) * 0.6; trackHeading = e.Heading; }
@@ -413,6 +528,15 @@ public partial class MainWindow
                 else DebugLog.Log($"track pieces test: {name} at ({x:0.0}, {z:0.0}) not laid (off the view or the island)");
             }
             DisarmTrackPiece();
+            // (LBA2_TRACKPIECES_UNDO="n,m": n steps undone through Edit > Undo's own path -- Ctrl+Z's -- then m redone)
+            if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_UNDO") is { Length: > 0 } undoSpec)
+            {
+                var nm = undoSpec.Split(',').Select(int.Parse).ToArray();
+                for (var k = 0; k < nm[0]; k++) { DebugLog.Log($"track pieces test: Edit > Undo would say \"{TrackHistoryLabel(true)}\" (the track's: {UndoIsTrack(true)})"); StepHistory(undo: true); }
+                DebugLog.Log($"track pieces test: {nm[0]} undone, {trackPieces.Pieces.Count} piece(s)");
+                for (var k = 0; k < (nm.Length > 1 ? nm[1] : 0); k++) StepHistory(undo: false);
+                DebugLog.Log($"track pieces test: {(nm.Length > 1 ? nm[1] : 0)} redone, {trackPieces.Pieces.Count} piece(s); status: {trackStatus?.Text}");
+            }
             // (LBA2_TRACKPIECES_FLAG="x,z": the test start put on the road nearest that cell, through the click's own path -- the flag chosen,
             // the pointer where the view draws that road point; LBA2_TRACKPIECES_TESTFLAG=1: then Test from the flag)
             if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_FLAG") is { Length: > 0 } flagAt)
@@ -435,7 +559,7 @@ public partial class MainWindow
                 targetY = trackPieces.Pieces.Count > 0 ? trackPieces.Pieces.Average(p => p.Y) : 2000;
                 nativeAlpha = (int)D(2); nativeBeta = (int)D(3); nativeDistance = (int)D(4);
                 RenderNativeCamera();
-                var next = Section.All.FirstOrDefault(s => s.Name == v[5]);
+                var next = Section.Named(v[5], out _);
                 var wait = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
                 wait.Tick += (_, _) =>
                 {
@@ -472,11 +596,32 @@ public partial class MainWindow
             if (TrackRoadNear(at, 60) is { } spot) { trackFlag = spot; DrawTrackOverlay(); }
             return true;
         }
+        if (trackDragging is not null && trackGroupDrag is { } drag)
+        {
+            // (the section moved as one by how far the ground under the pointer has moved, then on from an open end near it)
+            if (!TrackGround(at, out var sx, out var sz, out _)) return true;
+            double dx = sx - trackGroupAnchor.X, dz = sz - trackGroupAnchor.Z;
+            void Place(double ox, double oz, double oy)
+            {
+                foreach (var (i, was) in drag)
+                {
+                    var now = was with { X = was.X + ox, Z = was.Z + oz, Y = was.Y + oy };
+                    if (ReferenceEquals(trackPieces.Pieces[i], trackSelected)) trackSelected = now;
+                    trackPieces.Pieces[i] = now;
+                }
+                trackGroup = drag.Select(d => trackPieces.Pieces[d.Index]).ToList();
+            }
+            Place(dx, dz, 0);
+            var snap = trackPieces.SnapSection(trackGroup!);
+            if (snap != (0, 0, 0)) Place(dx + snap.X, dz + snap.Z, snap.Y);
+            DrawTrackOverlay();
+            return true;
+        }
         if (trackDragging is { } held && trackSelected is { } current)
         {
             if (!TrackGround(at, out var gx, out var gz, out _)) return true;
             var moved = trackPieces.Snapped(current with { X = gx + trackDragOffset.X, Z = gz + trackDragOffset.Z, Y = held.Y, Heading = held.Heading }, current);
-            var i = trackPieces.Pieces.IndexOf(current);
+            var i = trackPieces.Pieces.FindIndex(p => ReferenceEquals(p, current));
             if (i >= 0) { trackPieces.Pieces[i] = moved; trackSelected = moved; }
             DrawTrackOverlay();
             return true;
@@ -497,8 +642,10 @@ public partial class MainWindow
             return true;
         }
         if (trackDragging is null || e.ChangedButton != MouseButton.Left) return false;
-        trackDragging = null;
+        trackDragging = null; trackGroupDrag = null;
         Mouse.Capture(null);
+        // (a piece or a section clicked, to select it, and not moved: no step to undo)
+        if (trackUndo.TryPeek(out var top) && top.Pieces.SequenceEqual(trackPieces.Pieces)) trackUndo.Pop();
         TrackPiecesChanged();
         return true;
     }
@@ -506,7 +653,7 @@ public partial class MainWindow
     private void UpdateTrackGhost(Point at)
     {
         if (trackArmed is not { } section || !TrackGround(at, out var gx, out var gz, out var gy)) { trackGhost = null; return; }
-        trackGhost = trackPieces.Snapped(new TrackPiece(section, gx, gz, gy + trackLift, trackHeading));
+        trackGhost = trackPieces.Snapped(new TrackPiece(section, gx, gz, gy + trackLift, trackHeading, section.Tilts ? trackTilt : 0));
     }
 
     private void ArmTrackFlag()
@@ -617,10 +764,12 @@ public partial class MainWindow
             case Key.E: TurnTrackPiece(1); break;
             case Key.PageUp: LiftTrackPiece(1); break;
             case Key.PageDown: LiftTrackPiece(-1); break;
+            case Key.R when Keyboard.Modifiers == ModifierKeys.None: TiltTrackPiece(1); break;
+            case Key.F when Keyboard.Modifiers == ModifierKeys.None: TiltTrackPiece(-1); break;
             case Key.Delete when trackArmed is null && trackSelected is not null: DeleteTrackPiece(); break;
             case Key.Escape when trackFlagArmed: trackFlagArmed = false; TerrainViewport.Cursor = null; SetTrackStatus("The test start not placed."); break;
             case Key.Escape when trackArmed is not null: DisarmTrackPiece(); SetTrackStatus("Stopped laying. Choose a piece to lay another."); break;
-            case Key.Escape when trackSelected is not null: trackSelected = null; DrawTrackOverlay(); break;
+            case Key.Escape when trackSelected is not null: trackSelected = null; trackGroup = null; DrawTrackOverlay(); break;
             default: return false;
         }
         e.Handled = true;
@@ -843,7 +992,7 @@ public partial class MainWindow
                 i = j + 1;
             }
         }
-        foreach (var p in trackPieces.Pieces) Piece(p, ReferenceEquals(p, trackSelected), false);
+        foreach (var p in trackPieces.Pieces) Piece(p, ReferenceEquals(p, trackSelected) || trackGroup?.Any(g => ReferenceEquals(g, p)) == true, false);
         // (a gap left between pieces, which the build makes a jump: its flight's arc from the up ramp's lip to the landing)
         foreach (var (a, b) in leaps)
         {

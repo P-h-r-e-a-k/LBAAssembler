@@ -8,23 +8,36 @@ namespace LBAAssembler.Terrain;
 // (island cells), how high (world units) and their way (radians: 0 along +x, + turning towards +z, as the generator's map has it). A piece
 // dropped near another's open end goes on from it, at its height; the pieces in one chain become a plan through the generator's own tracer
 // (TrackSketchTracer), at the heights they were laid at -- one over another where they were stacked.
-internal sealed record TrackPiece(Section Section, double X, double Z, double Y, double Heading)
+// Tilt: the Ramp's climb over its length (world units, - a drop), the piece's own (TrackSection.Tilts); 0 for every other piece.
+internal sealed record TrackPiece(Section Section, double X, double Z, double Y, double Heading, double Tilt = 0)
 {
+    // the Ramp's steepest either way and its step (R, F): 5 % of its length a step, 30 % at most
+    public const double TiltStep = 0.05 * Section.RampLength * 512, TiltMost = 6 * TiltStep;
+
+    // The piece tilted `way` steps about its middle (the Ramp): its middle where it was, its start as far down as its end goes up
+    public TrackPiece TiltedBy(int way)
+    {
+        var tilt = Math.Clamp(Tilt + way * TiltStep, -TiltMost, TiltMost);
+        return this with { Tilt = tilt, Y = Y - (tilt - Tilt) / 2 };
+    }
+
     // Its middle line, a point every half cell: island cells across, world units up, each point's kind
     public List<(double X, double Z, double Y, SketchKind Kind)> Line()
     {
         var line = new List<(double, double, double, SketchKind)> { (X, Z, Y, Section.Parts[0].Kind) };
         double x = X, z = Z, y = Y, h = Heading;
+        var length = Section.Parts.Sum(p => p.Length);
         foreach (var part in Section.Parts)
         {
             var n = Math.Max(2, (int)Math.Ceiling(part.Length * 2));
+            var rise = part.Rise + (Section.Tilts ? Tilt * part.Length / length : 0);
             for (var i = 1; i <= n; i++)
             {
                 var ds = part.Length / n;
                 if (part.Radius > 0) h += part.Turn / n;
                 // (an arc: each small step along the way turned so far, half of this step's turn in it -- the generator's Strokes)
                 var mid = part.Radius > 0 ? h - part.Turn / n / 2 : h;
-                x += Math.Cos(mid) * ds; z += Math.Sin(mid) * ds; y += part.Rise / n;
+                x += Math.Cos(mid) * ds; z += Math.Sin(mid) * ds; y += rise / n;
                 line.Add((x, z, y, part.Kind));
             }
         }
@@ -114,6 +127,46 @@ internal sealed class TrackPieceSet
             best = turned with { X = st.X - off.X, Z = st.Z - off.Z, Y = st.Y - off.Y };
         }
         return best ?? piece;
+    }
+
+    // The whole section of road `piece` is part of (the user, 2026-11-03: "allow the user to move whole sections of track, or click on an
+    // individual piece of track to move it"): every road piece joined to it, end to start either way or across a gap jump, and those joined
+    // to them; a pit lane alone
+    public List<TrackPiece> SectionOf(TrackPiece piece)
+    {
+        if (piece.IsPit) return new() { piece };
+        var roads = Pieces.Where(p => !p.IsPit).ToList();
+        var leaps = GapJumps();
+        bool Linked(TrackPiece a, TrackPiece b) =>
+            Joins((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y), JoinCells) || Joins((b.End.X, b.End.Z, b.End.Y), (a.X, a.Z, a.Y), JoinCells)
+            || leaps.Any(l => ReferenceEquals(l.From, a) && ReferenceEquals(l.To, b) || ReferenceEquals(l.From, b) && ReferenceEquals(l.To, a));
+        var found = new List<TrackPiece> { piece };
+        for (var k = 0; k < found.Count; k++)
+            foreach (var r in roads)
+                if (!found.Any(f => ReferenceEquals(f, r)) && Linked(found[k], r)) found.Add(r);
+        return found;
+    }
+
+    // How far to move a section (`group`, as it lies now) so one of its open ends goes on from a road's open end, or its open start, outside
+    // it, within SnapCells -- moved only, not turned (Q and E turn it); zero with none near
+    public (double X, double Z, double Y) SnapSection(List<TrackPiece> group)
+    {
+        bool In(TrackPiece p) => group.Any(g => ReferenceEquals(g, p));
+        var others = Pieces.Where(p => !p.IsPit && !In(p)).ToList();
+        var mine = group.Where(p => !p.IsPit).ToList();
+        IEnumerable<(double X, double Z, double Y)> Ends(List<TrackPiece> set) =>
+            set.Where(p => !set.Any(o => !ReferenceEquals(o, p) && Joins((p.End.X, p.End.Z, p.End.Y), (o.X, o.Z, o.Y), JoinCells))).Select(p => (p.End.X, p.End.Z, p.End.Y));
+        IEnumerable<(double X, double Z, double Y)> Starts(List<TrackPiece> set) =>
+            set.Where(p => !set.Any(o => !ReferenceEquals(o, p) && Joins((o.End.X, o.End.Z, o.End.Y), (p.X, p.Z, p.Y), JoinCells))).Select(p => (p.X, p.Z, p.Y));
+        (double X, double Z, double Y) best = (0, 0, 0); var nearest = SnapCells;
+        void Try((double X, double Z, double Y) from, (double X, double Z, double Y) to)
+        {
+            var d = Gap(from, to);
+            if (d < nearest) { nearest = d; best = (to.X - from.X, to.Z - from.Z, to.Y - from.Y); }
+        }
+        foreach (var s in Starts(mine)) foreach (var e in Ends(others)) Try(s, e);
+        foreach (var e in Ends(mine)) foreach (var s in Starts(others)) Try(e, s);
+        return best;
     }
 
     // The road pieces end to start in one chain: their middle line in order (cells, world units up, kinds), and whether it comes back round

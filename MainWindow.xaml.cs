@@ -1500,8 +1500,8 @@ public partial class MainWindow : Window
     private void EditMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         // Edit > Undo / Redo step whichever of the two histories (the terrain editor's, the saved scene changes) was changed last.
-        var undo = UndoIsTerrain(true) ? terrainEditor!.UndoLabel : Scenes.SceneHistory.UndoDescription;
-        var redo = UndoIsTerrain(false) ? terrainEditor!.RedoLabel : Scenes.SceneHistory.RedoDescription;
+        var undo = UndoIsTrack(true) ? TrackHistoryLabel(true) : UndoIsTerrain(true) ? terrainEditor!.UndoLabel : Scenes.SceneHistory.UndoDescription;
+        var redo = UndoIsTrack(false) ? TrackHistoryLabel(false) : UndoIsTerrain(false) ? terrainEditor!.RedoLabel : Scenes.SceneHistory.RedoDescription;
         UndoMenuItem.Header = undo is null ? "_Undo" : $"_Undo {undo}";
         UndoMenuItem.IsEnabled = undo is not null;
         RedoMenuItem.Header = redo is null ? "_Redo" : $"_Redo {redo}";
@@ -1535,9 +1535,18 @@ public partial class MainWindow : Window
         return scene is null || lastTerrainEditAt >= lastSceneEditAt;
     }
 
+    // (Build > Race track: the pieces' own history, MainWindow.TrackPieces -- when it was changed after the saved scene changes)
+    private bool UndoIsTrack(bool undo)
+    {
+        if (TrackHistoryLabel(undo) is null) return false;
+        var scene = undo ? Scenes.SceneHistory.UndoDescription : Scenes.SceneHistory.RedoDescription;
+        return scene is null || lastTrackEditAt >= lastSceneEditAt;
+    }
+
     private void StepHistory(bool undo)
     {
-        if (UndoIsTerrain(undo)) { if (undo) terrainEditor!.Undo(); else terrainEditor!.Redo(); }
+        if (UndoIsTrack(undo)) StepTrackHistory(undo);
+        else if (UndoIsTerrain(undo)) { if (undo) terrainEditor!.Undo(); else terrainEditor!.Redo(); }
         else RunHistoryStep(undo);
     }
 
@@ -3045,9 +3054,11 @@ public partial class MainWindow : Window
         }
         // The middle button drags the ground along, in every mode.
         if (e.ChangedButton == MouseButton.Middle && BeginPan3D(e.GetPosition(TerrainViewport))) { e.Handled = true; return; }
-        // (laying track pieces, as with a terrain tool: the right button turns the view)
+        // (laying track pieces: the right button turns the view, as with a terrain tool, and so does the left -- "Rotate/tilt with mouse" -- on
+        // the ground away from the pieces: a click on a piece, or with one being laid, never gets here. The user, 2026-11-03: "Testing with the
+        // mouse left me unable to tilt/rotate with the mouse function")
         var laying = TrackPiecesActive;
-        orbiting = (e.ChangedButton == MouseButton.Left && !paint && !laying && RotateViewCheckBox.IsChecked == true) || ((paint || laying) && e.ChangedButton == MouseButton.Right);
+        orbiting = (e.ChangedButton == MouseButton.Left && !paint && RotateViewCheckBox.IsChecked == true) || ((paint || laying) && e.ChangedButton == MouseButton.Right);
         if (!orbiting) return;
         lastMousePosition = e.GetPosition(TerrainViewport);
         TerrainViewport.CaptureMouse();
