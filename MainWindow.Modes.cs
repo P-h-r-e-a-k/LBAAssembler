@@ -49,9 +49,12 @@ public partial class MainWindow
         if (!modeReady) return;
         buildDecorView = BuildDecorRadio.IsChecked == true;
         buildTerrainView = BuildTerrainRadio.IsChecked == true || buildDecorView;      // (buildings and decor use the terrain editor's own pointer tools)
+        buildTrackView = BuildTrackRadio.IsChecked == true;                            // (the race track's pieces: MainWindow.TrackPieces)
         ApplyMode();
         // (the status line says what the view does now, as a change of mode does)
-        if (editMode == EditMode.Build && !buildTerrainView)
+        if (editMode == EditMode.Build && buildTrackView)
+            FileLabel.Text = "Build: choose a track piece in the Build tab and click on the island to lay it; drag a piece to move it. Right drag turns the view.";
+        else if (editMode == EditMode.Build && !buildTerrainView)
             FileLabel.Text = "Build: click an actor, a zone's outline or a track point to edit it in the Build tab, drag it to move it; Add (or right-click the ground) places a new one where you click.";
     }
 
@@ -105,7 +108,8 @@ public partial class MainWindow
         UpdateLive();
         if (!wantTerrain) { paintingTerrain = false; hoverCell = null; DrawTerrainOverlay(); }
         TerrainPanelHost.Visibility = wantTerrain ? Visibility.Visible : Visibility.Collapsed;
-        BuildScenePanel.Visibility = wantTerrain ? Visibility.Collapsed : Visibility.Visible;
+        BuildScenePanel.Visibility = wantTerrain || TrackPiecesActive ? Visibility.Collapsed : Visibility.Visible;
+        SyncTrackPieces();
         if (wantTerrain) OnTerrainStateChanged();
         BuildSceneHelp.Text = BuildHelpText();
         // The Build tab's own Editors buttons are a second entry point to the same windows the Tools
@@ -377,6 +381,8 @@ public partial class MainWindow
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // (the race track's pieces: turning, raising, taking away -- MainWindow.TrackPieces)
+        if (HandleTrackKey(e)) return;
         // While a scene is played the keys belong to the game (the LBA1 play view gets them from here; LBA2's engine has its own window).
         if (placing && e.Key == Key.Escape) { CancelPlacement(); e.Handled = true; return; }
         if (playing) { lba1Play?.ForwardKey(e, true); return; }

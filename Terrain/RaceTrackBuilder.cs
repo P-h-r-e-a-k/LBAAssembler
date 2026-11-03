@@ -2877,7 +2877,7 @@ internal static class RaceTrackBuilder
                          $"the flight ({flight:0.0} cells, the retail one x{scale:0.00}) starts at cell ({sx:0.0}, {sz:0.0}), " +
                          $"{JumpZoneBefore:0.#} cells before the lip, and lands {land - lipDown:0.0} cells down the far ramp at ({lx:0.0}, {lz:0.0}); heading turn {beta}, {boxes.Count} zone boxes");
         double OnLap(double ds) { var v = (s0 + ds) % r.Length; return v < 0 ? v + r.Length : v; }
-        return new JumpInfo(sx, sz, lx, lz, hx, hz, beta, height, cube.Item1, cube.Item2, boxes, o.JumpZone + index, o.JumpAnim + RaceTrackJumpAnim.JumpOffset * index,
+        return new JumpInfo(sx, sz, lx, lz, hx, hz, beta, height, cube.Item1, cube.Item2, boxes, o.JumpZone + index, o.JumpAnim + RaceTrackJumpAnim.StepFor(o.Island) * index,
             scale, flight, index, OnLap(start), OnLap(land), drop);
     }
 

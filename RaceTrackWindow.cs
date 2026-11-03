@@ -249,11 +249,6 @@ internal sealed class RaceTrackWindow : Window
     private void ShareForLbra()
     {
         if (PlanIsland() is not { } island) return;
-        if (island.NotShareable is { } why)
-        {
-            MessageBox.Show(this, why + ".", Title, MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
         var plan = planPath.Text.Trim();
         if (!File.Exists(plan))
         {

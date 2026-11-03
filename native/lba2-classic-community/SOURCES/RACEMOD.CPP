@@ -3194,8 +3194,8 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
 // that time is carried into the next keyframe here, or a flight flown fast would lose a good part of its rate to it (at 60 frames a
 // second, twice as fast, a third of it).
 #define RACE_JUMP_ANIM_FIRST 200           // the flights' generic animations (Terrain/RaceTrackJumpAnim.cs Generic..Last: 200 + the island's
-#define RACE_JUMP_ANIM_LAST 391            // number, 12 more for a track in the island's other file, 24 more for each of a track's jumps after its first;
-                                           // a shared track's 296 + its index, RaceTrackJumpAnim.SharedFirst)
+#define RACE_JUMP_ANIM_LAST 65535          // number, 12 more for a track in the island's other file, 24 more for each of a track's jumps after its first;
+                                           // the shared tracks' from 296, four each: RaceTrackJumpAnim.SharedFirst -- as many as there are)
 static double s_jumpLo = 0.6, s_jumpHi = 4.0; // jump_speed=<lo> <hi>: the bounds of the rate (0: the flight in its own time)
 static double s_jumpRate = 0;              // the flight's clock rate (0: not flying)
 static double s_jumpFrac = 0;              // the part of a millisecond of the flight's clock carried to the next frame

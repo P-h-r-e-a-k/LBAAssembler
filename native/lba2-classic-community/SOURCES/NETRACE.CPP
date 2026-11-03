@@ -404,7 +404,9 @@ static void Take(const NetKitMessage *m) {
         }
         break;
     case M_VOTE:
-        if (peer && end - p >= 1) peer->Vote = *p + 1;
+        // (the track in two bytes since the shared tracks, 2026-11-03 -- one from a game before them)
+        if (peer && end - p >= 2) peer->Vote = (p[0] | p[1] << 8) + 1;
+        else if (peer && end - p >= 1) peer->Vote = *p + 1;
         break;
     case M_CHOSEN:
         if (peer) peer->Chosen = 1;
@@ -794,11 +796,11 @@ int RaceNet_Stage(int *msLeft, int *track) {
 
 void RaceNet_Vote(int track) {
     if (!s_kit) return;
-    uint8_t b[2];
-    b[0] = M_VOTE; b[1] = (uint8_t)track;
+    uint8_t b[3];
+    b[0] = M_VOTE; b[1] = (uint8_t)track; b[2] = (uint8_t)(track >> 8);
     SDL_LockMutex(s_lock);
     s_selfVote = track + 1;
-    NetKit_Broadcast(s_kit, b, 2, 1);
+    NetKit_Broadcast(s_kit, b, 3, 1);
     SDL_UnlockMutex(s_lock);
 }
 

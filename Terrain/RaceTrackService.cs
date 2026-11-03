@@ -378,11 +378,11 @@ internal static class RaceTrackService
     {
         var tracks = Tracks(ReadInfo(gameDirectory));
         if (tracks.Count == 0) return null;
-        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && (i.CopiesScene is not null || i.CopiesScenes is not null) && i.HasScene(scene)) is { } its) return its;
+        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && (i.CopiesScene is not null || i.CopiesScenes is not null || i.SharedFrom is not null) && i.HasScene(scene)) is { } its) return its;
         try
         {
             var record = HqrArchive.Open(Path.Combine(gameDirectory, "SCENE.HQR")).Read(scene + 1);
-            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.IslandByte == record[0] && i.CopiesScene is null && i.CopiesScenes is null) is { } own) return own;
+            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.IslandByte == record[0] && i.CopiesScene is null && i.CopiesScenes is null && i.SharedFrom is null) is { } own) return own;
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException) { }
         return tracks[0];
@@ -443,8 +443,9 @@ internal static class RaceTrackService
         if (tracks.Count == 0) return new(false, "No island is chosen: nothing was changed.", new(), null);
         // (the bar's shares, by how long each part takes: the originals, Polar Island added when the folder hasn't got it, Sendell's Well
         // made, then each track its own -- BuildSeconds)
-        var addPolar = tracks.Any(t => t.Options.Island.Dream) && !PolarInOriginals(gameDirectory);
-        var islands = tracks.Select(t => t.Options.Island).ToHashSet();
+        // (the islands made for the build: those of its tracks, and those a shared track is a copy of -- RaceTrackShare)
+        var islands = tracks.Select(t => t.Options.Island).Concat(tracks.Select(t => t.Options.Island.SharedFrom).OfType<RaceTrackIsland>()).ToHashSet();
+        var addPolar = islands.Any(i => i.Dream) && !PolarInOriginals(gameDirectory);
         var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (islands.Contains(RaceTrackIsland.Sendell) ? 0.4 : 0)
                     + (islands.Contains(RaceTrackIsland.Palace) ? PalaceAddSeconds : 0)
                     + (islands.Contains(RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0)
@@ -455,7 +456,7 @@ internal static class RaceTrackService
         {
             // (Polar Island's track needs the island: added to the originals when they haven't got it)
             if (addPolar) progress?.Report(new(0, "Polar Island: making the island from LBA1's scenes"));
-            var polar = tracks.Any(t => t.Options.Island.Dream) ? EnsurePolar(gameDirectory) : new List<string>();
+            var polar = islands.Any(i => i.Dream) ? EnsurePolar(gameDirectory) : new List<string>();
             progress?.Report(new((setup - 0.4) / whole, "Keeping the original files and starting from them"));
             var files = tracks.SelectMany(t => FilesFor(t.Options.Island)).Concat(ExtraFiles).Distinct().ToArray();
             foreach (var f in files)
@@ -503,7 +504,13 @@ internal static class RaceTrackService
                 made.AddRange(LBAAssembler.Terrain.Harvest.HarvestTrack.Install(gameDirectory));
             }
             // (shared tracks' copies of the game's islands: RaceTrackShare)
-            foreach (var shared in islands.Where(i => i.SharedFrom is not null)) made.Add(RaceTrackShare.Install(gameDirectory, shared));
+            // (each said as its track's own step: a copy that can't be made is that track's, and the race game's setup leaves it out -- the
+            // progress names it)
+            foreach (var shared in islands.Where(i => i.SharedFrom is not null))
+            {
+                progress?.Report(new((setup - 0.2) / whole, $"{shared.Name} (copying its island)"));
+                made.Add(RaceTrackShare.Install(gameDirectory, shared));
+            }
 
             var session = new BuildSession { Together = true };
             var log = new List<string>();
@@ -711,6 +718,10 @@ internal static class RaceTrackService
                 LBAAssembler.Terrain.Polar.PolarDream.LoseText, LBAAssembler.Terrain.Polar.PolarDream.WakeScene, inOpening ? -1 : wake, LBAAssembler.Terrain.Polar.PolarDream.WakeActor,
                 inOpening ? LBAAssembler.Terrain.Polar.PolarDream.DreamVar : -1, LBAAssembler.Terrain.Polar.PolarDream.WakeFlightMs);
         }
+        // (any other sprint -- a plan whose ends don't meet: a shared track's copy of the palace or Polar Island, a generator's drawing --
+        // start line to finish line once, and no story round it)
+        if (dream is null && report.FinishLine is { } other)
+            dream = new DreamInfo(LineInfo(other, report.FinishLineHeight), 0, -1, -1, -1, -1, -1);
         WriteInfo(gameDirectory, report, options, scenes, own, session, story.Info, dream);
         return new Built(report, options, twin, scenes, extra);
     }

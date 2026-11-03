@@ -3009,6 +3009,8 @@ public partial class MainWindow : Window
     {
         // (the scene panel's Add waiting for a click on the ground)
         if (HandleScenePlacementDown(e)) return;
+        // (the race track's pieces: one laid, or one picked up -- MainWindow.TrackPieces)
+        if (HandleTrackMouseDown(e)) return;
         // Interior scenes are only ever meant to be viewed from the one
         // fixed isometric angle Init3DView/CameraCenter set up natively --
         // rotate/tilt-with-mouse only ever makes sense for the outdoor 3D
@@ -3040,7 +3042,9 @@ public partial class MainWindow : Window
         }
         // The middle button drags the ground along, in every mode.
         if (e.ChangedButton == MouseButton.Middle && BeginPan3D(e.GetPosition(TerrainViewport))) { e.Handled = true; return; }
-        orbiting = (e.ChangedButton == MouseButton.Left && !paint && RotateViewCheckBox.IsChecked == true) || (paint && e.ChangedButton == MouseButton.Right);
+        // (laying track pieces, as with a terrain tool: the right button turns the view)
+        var laying = TrackPiecesActive;
+        orbiting = (e.ChangedButton == MouseButton.Left && !paint && !laying && RotateViewCheckBox.IsChecked == true) || ((paint || laying) && e.ChangedButton == MouseButton.Right);
         if (!orbiting) return;
         lastMousePosition = e.GetPosition(TerrainViewport);
         TerrainViewport.CaptureMouse();
@@ -3050,6 +3054,7 @@ public partial class MainWindow : Window
     {
         if (sceneDrag is not null) { UpdateSceneDrag(e.GetPosition(ActorMarkerCanvas)); return; }
         if (HandleScenePlacementMove(e)) return;
+        if (!orbiting && !panning3D && HandleTrackMouseMove(e)) return;
         if (draggingActorIndex is int dragIndex)
         {
             var interiorDrag = actorDragKind != ActorDragKind.Exterior;
@@ -3097,6 +3102,7 @@ public partial class MainWindow : Window
     private void TerrainViewport_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (sceneDrag is not null) { EndSceneDrag(); return; }
+        if (HandleTrackMouseUp(e)) return;
         if (draggingActorIndex is int dragIndex)
         {
             if (actorDragKind != ActorDragKind.Exterior) EndInteriorActorDrag(dragIndex);
@@ -3367,6 +3373,7 @@ public partial class MainWindow : Window
                     lastNativeActorRoutes = projectedRoutes;
                     DrawNativeActorOverlay();
                     DrawTerrainOverlay();
+                    DrawTrackOverlay();
                     UpdatePlacementMarker();
                 });
             }
@@ -3472,7 +3479,7 @@ public partial class MainWindow : Window
         return new System.Windows.Shapes.Path { Data = geometry, Stroke = Brushes.Black, StrokeThickness = 0.5, Fill = brush };
     }
     private void ViewportHost_SizeChanged(object sender, SizeChangedEventArgs e) { if (interiorSceneActive) ApplyInteriorView(); }
-    private void TerrainViewport_SizeChanged(object sender, SizeChangedEventArgs e) { if (interiorSceneActive) return; if (nativeViewActive) DrawNativeActorOverlay(); else RenderSoftwareTerrain(); }
+    private void TerrainViewport_SizeChanged(object sender, SizeChangedEventArgs e) { if (interiorSceneActive) return; if (nativeViewActive) { DrawNativeActorOverlay(); DrawTrackOverlay(); } else RenderSoftwareTerrain(); }
     // Startup does enough synchronous work before the window ever appears (native renderer init, an
     // island load, a first native render) that Windows' foreground-lock grace period can already have
     // elapsed by the time Show() actually runs -- past that window, a newly started process no longer

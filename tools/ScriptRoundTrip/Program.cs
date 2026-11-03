@@ -72,6 +72,7 @@ internal static class Program
             "buildtogether" => RaceTrackCommand.BuildTogether(args),
             "buildhere" => RaceTrackCommand.BuildHere(args),
             "sharetrack" => RaceTrackCommand.ShareTrack(args),
+            "trackpieces" => TrackPiecesCommand.Run(args),
             // trackrestore <game folder>: the race track window's "Put the original files back"
             "trackrestore" => Echo(LBAAssembler.Terrain.RaceTrackService.Restore(args[1])),
             "sendell" => SendellIsland.Run(args),

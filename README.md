@@ -55,15 +55,28 @@ and **Help > Check for updates at start** turns the check on start off. Only a n
 from the source never updates itself. In a folder that can't be written to, it offers the release's page instead.
 `LBA_ASSEMBLER_UPDATE_URL` (on this PC only) points it at a stand-in for GitHub, for tests.
 
+### Laying a race track in the 3D view
+
+**Build > Race track** lays a track on the open island in the 3D view, from the race track generator's pieces (straights, bends,
+hairpins, jumps, loops, the pit lane, ramps, steep climbs and spirals), true to size and at any height. Choose a piece, then click on
+the island: it goes on from the nearest open end (the yellow rings) at that end's height and way, or onto the ground under the
+pointer. **Q** and **E** turn it, **PgUp** and **PgDn** raise and lower it, **Esc** stops laying; drag a laid piece to move it,
+**Delete** takes the selected one away, right drag turns the view and middle drag pans it. Posts down to the ground show how high a
+piece is from any side, so climbs, spirals and roads passing over each other can be built and checked by turning the view. The
+pieces are kept for the island (`TrackPlans\<island>_pieces.json` beside the editor). **Make the track** follows them into a plan
+at the heights they were laid at, and says what is wrong where it can't (two decks too close, a lap that doesn't come back down);
+**Build it...** hands the plan to the race track window. On an island its track's build enlarges (the Francos, Island CX Mk2), build
+its track once first so the view shows the island as it will be. `ScriptRoundTrip trackpieces <game> <ILE> <spec> <out.json>` lays
+pieces the same way from the command line.
+
 ### Sharing a track with Little Big Racing Adventure
 
-In **Tools > LBA2: race track**, with **A plan file** chosen (one you wrote, saved from the built-in track, or drawn in the
-race track generator) and the island it's the track of, **Share for LBRA...** asks for the track's name and saves a
-`.lbrtrack` file: the name, the island and the plan, nothing of the game's own data. Send it to whoever you race. In Little Big
-Racing Adventure, **Racing > Shared tracks > Add or remove tracks...** adds it; the game builds it from the player's own copy of
-LBA2, on a copy of the island beside the island's own track, and lists it there and in the online vote. Tracks on the islands
-the build makes or enlarges (Polar Island, the Francos, Otringal, Island CX, the palace, the temple, the Long Table) can't be
-shared. `ScriptRoundTrip sharetrack <plan> <island> <name> <out.lbrtrack>` does the same from the command line.
+In **Tools > LBA2: race track**, with **A plan file** chosen (one you wrote, saved from the built-in track, drawn in the race track
+generator or laid in the 3D view) and the island it's the track of, **Share for LBRA...** asks for the track's name and saves a
+`.lbrtrack` file: the name, the island and the plan, nothing of the game's own data. Any island will do. Send it to whoever you
+race. In Little Big Racing Adventure, **Racing > Shared tracks** builds every file in its folder in; the game builds each from the
+player's own LBA2, on a copy of the island beside the island's own track, and lists it there and in the online vote.
+`ScriptRoundTrip sharetrack <plan> <island> <name> <out.lbrtrack>` does the same from the command line.
 
 The current first slice provides an editable exterior-map workspace with terrain painting, level selection, zoom, reset, and JSON draft export.
 

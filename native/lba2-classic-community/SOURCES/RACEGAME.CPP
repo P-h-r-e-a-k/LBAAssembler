@@ -138,7 +138,8 @@ extern void RaceMod_StopSound(U32 handle);
 extern S32 FollowCamera;                                                                                    // FOLLOWCAM.CPP
 
 #define RG_MAX_SPECIALS 8
-#define RG_MAX_ENTRIES 40                   // the specials and Track select's tracks together (s_sp)
+#define RG_MAX_ENTRIES 1024                 // the specials, Track select's tracks and the shared tracks together (s_sp) -- as many shared tracks as
+                                            // anyone keeps (the user, 2026-11-03: "an unlimited amount of shared tracks")
 #define RG_MAX_CARS 16
 #define RG_MAX_GRID 320                     // Track select's cars (gridcar=)
 #define RG_MAX_TIMES 10
@@ -257,6 +258,7 @@ static int s_nbSpecials = 0, s_nbTracks = 0;
 // select's are) -- how many, and what the setup said of them (shared_status=)
 static int s_nbShared = 0;
 static char s_sharedStatus[256] = "";
+static char s_sharedFolder[16] = "";        // shared_folder=: the folder as the setup built it (SharedFolderKey)
 static T_RG_CAR s_cars[RG_MAX_CARS];        // the specials' cars (car=: the car page)
 static int s_nbCars = 0;
 static int s_car = 0;                       // the car chosen last
@@ -445,6 +447,7 @@ static void Read(void) {
         else if (!strcmp(key, "story_file")) snprintf(s_storyFile, sizeof(s_storyFile), "%s", v);
         else if (!strcmp(key, "story_code")) snprintf(s_storyCode, sizeof(s_storyCode), "%s", v);
         else if (!strcmp(key, "shared_status")) snprintf(s_sharedStatus, sizeof(s_sharedStatus), "%s", v);
+        else if (!strcmp(key, "shared_folder")) snprintf(s_sharedFolder, sizeof(s_sharedFolder), "%s", v);
         else if (((!strcmp(key, "special") && s_nbSpecials < RG_MAX_SPECIALS) || !strcmp(key, "track") || !strcmp(key, "shared")) && s_nbSp < RG_MAX_ENTRIES) {
             // (a special, or one of Track select's tracks, or a shared track: the same fields)
             T_RG_SPECIAL *sp = &s_sp[s_nbSp];
@@ -2787,7 +2790,9 @@ static int CodePage(const char *what, const char *want) {
     return result;
 }
 
-static int SharedManage(void);
+static int SharedManage(int buildNow);
+static int SharedFolderChanged(void);
+static void SharedOpenFolder(void);
 // Track select's tracks, in RACEGAME.TXT's order, each with its best lap: up and down (or the mouse) to choose, Enter the track's race or
 // time trial (ModePage), Esc back. Non-zero: a race is set up.
 // (30, was 24: at 24 a name's apostrophe -- "14. Emperor's Palace" -- reached up to the line above's, the user, 2026-10-22; spaced out, the
@@ -2803,7 +2808,13 @@ static int TracksPage(int shared) {
             list[n++] = i;
         }
     const int tracks = n;
-    if (shared) list[n++] = -3;
+    // (and after them: the folder's new files built in, when it has changed since the game was built -- the user, 2026-11-03: "just pick up
+    // all tracks in a shared track folder"; the setup's window; the folder itself)
+    const int fresh = shared && SharedFolderChanged();
+    if (fresh) list[n++] = -4;
+    if (shared) { list[n++] = -3; list[n++] = -5; }
+    // (opened on it: what there is to do first)
+    if (fresh) { at = tracks; Log_Info("[racegame] Shared tracks: the folder has changed since the game was built -- its new tracks offered"); }
     if (n <= 0) return 0;
     ReadTimes();
     int first = 0;
@@ -2854,7 +2865,9 @@ static int TracksPage(int shared) {
                 const S32 y = top + r * RG_TRACK_LINE;
                 // (the chosen one in orange -- no frame round it: it didn't fit the line, the user, 2026-10-22)
                 char line[160], text[256];
-                if (sp < 0) snprintf(line, sizeof(line), "Add or remove tracks...");
+                if (sp == -4) snprintf(line, sizeof(line), "Build in the folder's new tracks");
+                else if (sp == -5) snprintf(line, sizeof(line), "Open the shared tracks folder");
+                else if (sp < 0) snprintf(line, sizeof(line), "Add or remove tracks...");
                 else snprintf(line, sizeof(line), "%d. %s", k + 1, s_sp[sp].Name);
                 Label(text, line);
                 TextAt(lx0 + 12, y, text, k == at ? RG_ORANGE : LBAWHITE);
@@ -2870,7 +2883,9 @@ static int TracksPage(int shared) {
             // the track's best lap, under the list (the names take the page's width) -- on the Shared tracks page's last row, what the setup
             // said of them, or how to get one
             if (list[at] < 0) {
-                const char *say = s_sharedStatus[0] ? s_sharedStatus
+                const char *say = list[at] == -4 ? "The folder has changed since the game was built: build in what is there now. The game closes, and starts again with them in a few minutes."
+                    : list[at] == -5 ? "Put .lbrtrack files here, as many as you like, then come back: the game offers to build them in."
+                    : s_sharedStatus[0] ? s_sharedStatus
                     : tracks ? "Add a track a friend shared, or take one out: the game builds them in again, which takes a few minutes."
                     : "No shared tracks yet. Draw one in LBA Assembler and share it (Share for LBRA), or add one a friend sent you.";
                 SmallWrapped(cx - RG_PAGE_HALF + 30, bestY - 6, 2 * RG_PAGE_HALF - 60, 22, say, RG_GREY, 3);
@@ -2891,10 +2906,11 @@ static int TracksPage(int shared) {
         }
         AsciiMode = FALSE;
         Page(NULL, 0);
-        if (chosen == -3) {
-            if (SharedManage()) return 0;
+        if (chosen == -3 || chosen == -4) {
+            if (SharedManage(chosen == -4)) return 0;
             continue;
         }
+        if (chosen == -5) { SharedOpenFolder(); continue; }
         if (chosen < 0) return 0;
         s_lastTrack = chosen;
         Log_Info("[racegame] %s: %s", shared ? "Shared tracks" : "Track select", s_sp[chosen].Name);
@@ -4394,8 +4410,16 @@ static int VotePage(void) {
             else if (dx) at = at < rows ? (at + rows < n ? at + rows : at) : at - rows;
         }
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 340, x1 = cx + 340, y0 = 30 + oy, y1 = 450 + oy, colW = 330;
-        // (the rows closer, and their names smaller, where the shared tracks make more than the page holds at a lobby's line apart)
-        const S32 room = (y1 - 80) - (y0 + 54), rowH = rows * RG_LOBBY_ROW <= room ? RG_LOBBY_ROW : room / rows;
+        // (the rows closer, and their names smaller, where the shared tracks make more than the page holds at a lobby's line apart -- and past
+        // a smaller line's room, the rows scroll with the one chosen)
+        const S32 room = (y1 - 80) - (y0 + 54), rowH = rows * RG_LOBBY_ROW <= room ? RG_LOBBY_ROW : room / rows >= 22 ? room / rows : 22;
+        const int shown = (int)(room / rowH) < rows ? (int)(room / rowH) : rows;
+        const int atRow = at < rows ? at : at - rows;
+        static int top = 0;
+        if (atRow < top) top = atRow;
+        if (atRow >= top + shown) top = atRow - shown + 1;
+        if (top > rows - shown) top = rows - shown;
+        if (top < 0) top = 0;
         S32 mx, my;
         const int click = Clicked(&mx, &my);
         Page(NULL, 0);
@@ -4406,7 +4430,9 @@ static int VotePage(void) {
         Text(cx, y0 + 12, line, RG_ORANGE);
         for (int i = 0; i < n; i++) {
             const int col = i >= rows;
-            const S32 x = cx + (col ? colW / 2 : -colW / 2), y = y0 + 54 + (i - (col ? rows : 0)) * rowH;
+            const int row = i - (col ? rows : 0);
+            if (row < top || row >= top + shown) continue;
+            const S32 x = cx + (col ? colW / 2 : -colW / 2), y = y0 + 54 + (row - top) * rowH;
             if (click == 1 && mx >= x - colW / 2 && mx < x + colW / 2 && my >= y && my < y + rowH) { at = i; mine = -2; }
             const int votes = counts[list[i]];
             if (votes) snprintf(line, sizeof(line), "%s: %d", s_sp[list[i]].Name, votes);
@@ -4840,11 +4866,62 @@ static int RaceAgain(const T_RG_CAR *car) {
     return StartRace(s_raceSp, s_raceTrial, car, s_raceLevel, s_raceWatch[0] ? s_raceWatch : NULL);
 }
 
+// The shared tracks folder (User\LBA2\Tracks) as a key: its .lbrtrack files' names in ASCII lower case, in byte order, each with its length,
+// FNV-1a -- the setup's SharedTracks.FolderKey, which it writes as shared_folder= when it builds them in. Non-zero: the folder differs.
+static uint32_t FnvByte(uint32_t h, unsigned char b) { return (h ^ b) * 16777619u; }
+static int SharedFolderChanged(void) {
+    char dir[ADELINE_MAX_PATH];
+    GetCfgPath(dir, ADELINE_MAX_PATH, "Tracks");
+    int count = 0;
+    char **names = SDL_GlobDirectory(dir, "*.lbrtrack", SDL_GLOB_CASEINSENSITIVE, &count);
+    static char lower[RG_MAX_ENTRIES][128];
+    int n = 0;
+    for (int i = 0; names && i < count && n < RG_MAX_ENTRIES; i++) {
+        snprintf(lower[n], sizeof(lower[n]), "%s", names[i]);
+        for (char *c = lower[n]; *c; c++) if (*c >= 'A' && *c <= 'Z') *c = (char)(*c + 32);
+        n++;
+    }
+    qsort(lower, (size_t)n, sizeof(lower[0]), [](const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); });
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < n; i++) {
+        char full[ADELINE_MAX_PATH], size[32];
+        // (the length by the file's own name, as it is on disk)
+        for (int k = 0; names && k < count; k++) {
+            if (SDL_strcasecmp(names[k], lower[i])) continue;
+            snprintf(full, sizeof(full), "%s/%s", dir, names[k]);
+            break;
+        }
+        SDL_PathInfo info;
+        snprintf(size, sizeof(size), "%llu", SDL_GetPathInfo(full, &info) ? (unsigned long long)info.size : 0ull);
+        for (const char *c = lower[i]; *c; c++) h = FnvByte(h, (unsigned char)*c);
+        h = FnvByte(h, 0);
+        for (const char *c = size; *c; c++) h = FnvByte(h, (unsigned char)*c);
+        h = FnvByte(h, 0);
+    }
+    SDL_free(names);
+    char key[16];
+    snprintf(key, sizeof(key), "%08x", (unsigned)h);
+    // (a game built before the key was written: built from an empty folder)
+    const char *built = s_sharedFolder[0] ? s_sharedFolder : "811c9dc5";
+    return strcmp(key, built) != 0;
+}
+
+// The folder opened in Explorer (made first: the game's first look at it)
+static void SharedOpenFolder(void) {
+    char dir[ADELINE_MAX_PATH], url[ADELINE_MAX_PATH + 16];
+    GetCfgPath(dir, ADELINE_MAX_PATH, "Tracks");
+    SDL_CreateDirectory(dir);
+    snprintf(url, sizeof(url), "file:///%s", dir);
+    for (char *c = url; *c; c++) if (*c == '\\') *c = '/';
+    if (!SDL_OpenURL(url)) Log_Warn("[racegame] the shared tracks folder couldn't be opened (%s): %s", dir, SDL_GetError());
+    else Log_Info("[racegame] the shared tracks folder opened: %s", dir);
+}
+
 // Shared tracks' "Add or remove tracks...": the setup's window for them (its SharedTracks.cs, LBRA-Setup.exe --shared-tracks <the game's
 // folder>), this page waiting on it. Building them there writes Update\shared_now.txt, "build": the game closes, and the setup builds them
 // into it and starts it again, an update's way (its Updater.Update); its window closed without, "closed". Non-zero: the game closes.
 #define RG_SHARED_NOW "Update\\shared_now.txt"
-static int SharedManage(void) {
+static int SharedManage(int buildNow) {
     char exe[ADELINE_MAX_PATH], dir[ADELINE_MAX_PATH], now[ADELINE_MAX_PATH];
     GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
     GetResPath(now, ADELINE_MAX_PATH, RG_SHARED_NOW);
@@ -4856,7 +4933,7 @@ static int SharedManage(void) {
     remove(now);
     const char *said = NULL;
     if (!RaceUpdate_Exists(exe)) said = "The game's folder has no setup to do that: install the game again.";
-    else if (!RaceUpdate_Tool(exe, "--shared-tracks", dir)) said = "The setup couldn't be started.";
+    else if (!RaceUpdate_Tool(exe, buildNow ? "--build-shared-tracks" : "--shared-tracks", dir)) said = "The setup couldn't be started.";
     S32 padDir;
     PageLoopStart(&padDir);
     int result = -1;
@@ -4872,13 +4949,14 @@ static int SharedManage(void) {
                 fclose(f);
                 remove(now);
                 result = !strncmp(word, "build", 5);
-                Log_Info("[racegame] shared tracks: the setup's window %s", result ? "builds them in: the game closes" : "closed");
+                Log_Info("[racegame] shared tracks: the setup %s", result ? "builds them in: the game closes" : "window closed");
             }
         }
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
         PageFrame("Shared tracks");
         Wrapped(cx - RG_PAGE_HALF + 30, RG_PAGE_TOP + oy + 80, 2 * RG_PAGE_HALF - 60, RG_LINE,
-                said ? said : "Add or remove tracks in the setup's window that opened. Building them in closes the game, and it starts again with them in a few minutes.", LBAWHITE);
+                said ? said : buildNow ? "Building the folder's tracks in: the game closes, and it starts again with them in a few minutes."
+                : "Add or remove tracks in the setup's window that opened. Building them in closes the game, and it starts again with them in a few minutes.", LBAWHITE);
         Text(cx, RG_PAGE_BOTTOM + oy - 32, "Esc: back", RG_GREY);
         Present();
         if (result >= 0) break;

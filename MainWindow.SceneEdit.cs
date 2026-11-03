@@ -27,7 +27,7 @@ public partial class MainWindow : IScenePanelHost
     private (string Path, DateTime Written)? sceneGroundOf;
 
     // The panel is there whenever Build edits the scene rather than the island's ground: "Actors and zones", any interior, any LBA1 scene.
-    private bool ScenePanelActive => editMode == EditMode.Build && !terrainToolsActive && scenePanel is not null && SceneStoreInView() is not null;
+    private bool ScenePanelActive => editMode == EditMode.Build && !terrainToolsActive && !TrackPiecesActive && scenePanel is not null && SceneStoreInView() is not null;
 
     private void CreateScenePanel()
     {

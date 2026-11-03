@@ -195,7 +195,8 @@ internal static class SendellWell
     // scene 44: island 1, its cube, Twinsen alone on the paving south of the well facing it, no zones or track points; and its place on the
     // holomap (its record of HOLOMAP.HQR entry 12: Twinsen's place on the island, and island 1's on the planet). Returns the scene, as
     // SCENE.HQR now has it, for whatever is to be added to it.
-    public static SceneModel AddScene(string gameDirectory, int number = Scene)
+    // (`holomap` false: none -- a shared track's copy, numbered past the holomap's table: RaceTrackShare)
+    public static SceneModel AddScene(string gameDirectory, int number = Scene, bool holomap = true)
     {
         var path = Path.Combine(gameDirectory, "SCENE.HQR");
         var model = SceneSerializer.Parse(SceneGame.Lba2, HqrArchive.Open(Original(gameDirectory, "SCENE.HQR")).Read(SourceScene + 1));
@@ -221,6 +222,7 @@ internal static class SendellWell
             hqr.SetStored(0, size);
         }
         File.WriteAllBytes(path, hqr.ToBytes());
+        if (!holomap) return model;
 
         var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
         var positions = HqrArchive.Open(holoPath).Read(PositionsEntry);

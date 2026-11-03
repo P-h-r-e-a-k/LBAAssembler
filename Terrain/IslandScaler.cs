@@ -47,7 +47,9 @@ internal static class IslandScaler
     public static IslandFile AsBuilt(IslandFile source, RaceTrackIsland where, List<string> log)
     {
         if (where.Scale <= 1) return source;
-        return where.Created && where.AddedScenes.Any()
+        // (a shared track's copy of an island as the island itself is: RaceTrackIsland.Shared)
+        var like = where.SharedFrom ?? where;
+        return like.Created && like.AddedScenes.Any()
             ? Scale(source, where.Scale, log, IslandDecors.MaxPerCubeOwnEngine, spread: true, ownSea: true)
             : Scale(source, where.Scale, log);
     }
