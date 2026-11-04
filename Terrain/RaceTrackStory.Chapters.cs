@@ -18,8 +18,8 @@ namespace LBAAssembler.Terrain;
 //       line, as from that lift. The sewers' painter has seen him go through to the far tunnel; the far tunnel's door (into scene 18, a
 //       key's in the game) is open for the chase, and in that last room the thief is trapped (Q_THIEF 4). Action beside him: the gloves
 //       (item 7), and he drops the umbrella (item 20) as he climbs out, up a ladder that brings Twinsen out on the quay (Q_THIEF 5). The
-//       umbrella back to Tim: ten kashes (Q_THIEF 6). (The 1996 demo's sewers, which the story will have here, aren't imported yet: the
-//       game's stand in.)
+//       umbrella back to Tim: ten kashes (Q_THIEF 6). (The sewers are the 1996 demo's where the build put
+//       them in, Demo96Rooms.Sewers: the hatch lands where the demo starts Twinsen, the thief cornered beside its far halls' lift.)
 //     - the museum's blueprints (Q_BLUEPRINT 1, under a case in scene 15) and the neighbour's design sheet (Q_SHEET 1, scene 9): seen now,
 //       copied in chapter 2.
 //     - the spell at the lighthouse no longer moves the game on to chapter 2 (the game's own script set chapter() there): the Wizard says
@@ -74,13 +74,20 @@ internal static partial class RaceTrackStory
     // whose zone the scene's own script lowers him from; the far room's dead end (scene 18), the thief there; a scene's change-cube zones
     // switched on and off by number (their Info4: set_change_cube)
     private static readonly (int X, int Y, int Z) SewerLiftTop = (24576, 3072, 8192), DeadEnd = (1350, 512, 2300);
+    // (the 1996 demo's sewers, Demo96Rooms.Sewers: the painter's place and actor, where the demo starts Twinsen in them (the hatch lands
+    // there: on the cellar lift's platform the demo's lift ride started, and he fell and drowned), the
+    // corner by the barrels beside the far halls' lift)
+    // (the hatch a cell in front of the quay's railing: behind it, by the water, Twinsen couldn't come to it -- 2026-11-04)
+    private static readonly (int X, int Z) DemoPainter = (17664, 15664);
+    private static readonly (int X, int Y, int Z) DemoSewerArrival = (20357, 1536, 15140), DemoDeadEnd = (12800, 3072, 2300);
+    private const int DemoPainterActor = 7;
     private const int HatchSwitch = 213, LadderSwitch = 214;
     // the museum's blueprints: under a case by the hall's displays (an invisible actor Action is pressed by)
     private static readonly (int X, int Y, int Z) BlueprintFile = (17920, 768, 23296);
     // the island's places (cells): the harbour's quay below the warehouses (the thief, the hatch further along it -- a straight run on its
     // paving: from behind the warehouses he ran into their walls), the scrap on the quay, the Tavern's doorstep (outside scene 42's door
     // zone into scene 3; the Tavern's front either side of it is a search zone, see Givers), the yard by the carport (RaceTrackIsland's CarHome)
-    private static readonly (double X, double Z) ThiefSpot = (478.0, 605.5), Hatch = (470.5, 605.5), Scrap = (472.0, 604.0), TavernDoor = (546.9, 591.6),
+    private static readonly (double X, double Z) ThiefSpot = (478.0, 605.5), Hatch = (470.5, 604.5), Scrap = (472.0, 604.0), TavernDoor = (546.9, 591.6),
                                                    YardSpot = (547.5, 652.5);
     // a per-visit flag of a scene's own (var_cube): no script of the game's uses these
     private const int Once1 = 40, Once2 = 41;
@@ -831,6 +838,11 @@ stop();
     // ---- the thief (scenes 43, 17, 18) -----------------------------------------------------------------------------------------------
     private static void Thief(StoryParts p)
     {
+        // (the sewers the 1996 demo's when the build put them in -- Demo96Rooms.Sewers: the painter at his place in the demo's -- the hatch
+        // landing on its cellar lift's platform, the thief cornered by the barrels beside the far halls' lift, no locked door between)
+        var demoSewers = p.Store.SceneExists(Sewers) && p.Store.Load(Sewers).Actors.Any(a => a.X == DemoPainter.X && a.Z == DemoPainter.Z);
+        var liftTop = demoSewers ? DemoSewerArrival : SewerLiftTop;
+        var deadEnd = demoSewers ? DemoDeadEnd : DeadEnd;
         // the harbour: the game's umbrella thief on the quay below the warehouses (with the umbrella: his body 100, as scene 48 shows him before he
         // gives it back), from Zoe's word on, until he is down the hatch; within three cells of Twinsen on foot he says so, and runs to the
         // hatch on the quay and down it. The hatch is a door of its own into the sewers (scene 17) at the lift from the storm track's start
@@ -861,10 +873,13 @@ stop();
                 Type = 0, Num = Sewers, X0 = hx - 256, X1 = hx + 255, Z0 = hz - 256, Z1 = hz + 255, Y0 = hy - 200, Y1 = hy + 1500,
                 // (into the sewers at the lift's top -- the engine adds Twinsen's height over the zone's foot, 200 here -- switched off
                 // until the thief is down)
-                Info = new[] { SewerLiftTop.X, SewerLiftTop.Y - 200, SewerLiftTop.Z, 0, HatchSwitch, 0, 1, 0 },
+                Info = new[] { liftTop.X, liftTop.Y - 200, liftTop.Z, 0, HatchSwitch, 0, 1, 0 },
             });
             // (the hatch itself, on the quay over the zone -- before the thief, who must stay the scene's last actor)
-            SceneOps.AddActor(model, RaceTrackScenes.SpriteProp(hx, hy, hz, RaceTrackScenes.HatchSprite));
+            // (one Twinsen stands on, as the game's hatches are -- OBJ_CARRIER: a sprite is solid, and the hatch pushed him off its own door)
+            var hatchProp = RaceTrackScenes.SpriteProp(hx, hy, hz, RaceTrackScenes.HatchSprite);
+            hatchProp.Flags |= RaceTrackScenes.CarrierFlag;
+            SceneOps.AddActor(model, hatchProp);
             var life = p.Add(model, thief, $@"void comportement_0()
 {{
     if (2 > chapter() && {ThiefDown} <= var_game({QThief}))
@@ -925,6 +940,13 @@ stop();
         // the sewers: the painter (scene 17's actor 12, the game's sewer worker) says his own line first, then -- asked again in the same
         // visit, while the thief is somewhere ahead -- that he went through to the far tunnel (the game's 237, retold so); and the far
         // tunnel's door (actor 17, a key's in the game) opens for the chase
+        if (demoSewers)
+            p.Edit(Sewers, "the demo's sewers' painter: the thief gone through to the far halls while he is ahead, then his own line", _ => scripts =>
+            {
+                var painter = scripts.GetText(DemoPainterActor, ScriptKind.Life);
+                scripts.SetText(DemoPainterActor, ScriptKind.Life, Loose(painter, "if (1 == chapter())", $"if ({ThiefDown} == var_game({QThief}))"));
+            });
+        else
         p.Edit(Sewers, "the sewers' painter: his own line, then the thief gone through to the far tunnel; the far tunnel's door opens once the thief is down", _ => scripts =>
         {
             var painter = scripts.GetText(12, ScriptKind.Life);
@@ -949,11 +971,11 @@ stop();
         if (cornered is null) return;
         p.Edit(FarSewer, $"the thief cornered in the sewers' far room gives back the driving gloves (item {GlovesSlot}) and leaves the umbrella (item {Umbrella}); a ladder up to the quay", model =>
         {
-            cornered.X = DeadEnd.X; cornered.Y = DeadEnd.Y; cornered.Z = DeadEnd.Z; cornered.Beta = 1024;
+            cornered.X = deadEnd.X; cornered.Y = deadEnd.Y; cornered.Z = deadEnd.Z; cornered.Beta = 1024;
             int qx = RaceTrackScenes.CubeLocal(qy.X, (int)Math.Floor(qy.X / 64)), qz = RaceTrackScenes.CubeLocal(qy.Z, (int)Math.Floor(qy.Z / 64));
             model.Zones.Add(new SceneZoneModel
             {
-                Type = 0, Num = Harbour, X0 = DeadEnd.X - 256, X1 = DeadEnd.X + 255, Z0 = DeadEnd.Z - 256, Z1 = DeadEnd.Z + 255, Y0 = DeadEnd.Y, Y1 = DeadEnd.Y + 1536,
+                Type = 0, Num = Harbour, X0 = deadEnd.X - 256, X1 = deadEnd.X + 255, Z0 = deadEnd.Z - 256, Z1 = deadEnd.Z + 255, Y0 = deadEnd.Y, Y1 = deadEnd.Y + 1536,
                 // (out on the quay beside the hatch, at its ground, readjusted onto it; switched off until the thief has gone up)
                 Info = new[] { qx, (int)Math.Round(qy.Y) + 100, qz, 0, LadderSwitch, 0, 0, 0 },
             });

@@ -124,11 +124,11 @@
   </ItemGroup>
 
   <!--
-    The 1996 demo's School of Magic, which every race track build puts into the game (Demo96/Demo96Rooms.cs): Demo96\school.zip, made by
-    `ScriptRoundTrip demo96pack <converted demo> Demo96\school.zip`. LBRA's installer carries it the same.
+    The 1996 demo's School of Magic, which every race track build puts into the game (Demo96/Demo96Rooms.cs): Demo96\rooms.zip, made by
+    `ScriptRoundTrip demo96pack <converted demo> Demo96\rooms.zip`. LBRA's installer carries it the same.
   -->
   <ItemGroup>
-    <EmbeddedResource Include="Demo96\school.zip" LogicalName="Demo96/school.zip" />
+    <EmbeddedResource Include="Demo96\rooms.zip" LogicalName="Demo96/rooms.zip" />
   </ItemGroup>
 
   <!--

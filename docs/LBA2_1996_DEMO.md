@@ -156,10 +156,10 @@ The user, 2026-11-03: "The demo scenes for the school of magic, let's switch the
 magic scenes". Every race-track build now puts the demo's School (its scenes 27 and 28) into the retail game's slots 27 and 28
 (`Demo96/Demo96Rooms.cs`, from `RaceTrackService` right after the build's originals are put back, before the story):
 
-- **Where the demo comes from**: the package the program carries, `demo96\school.zip` (embedded by LBA Assembler and LBRA's installer --
+- **Where the demo comes from**: the package the program carries, `Demo96\rooms.zip` (embedded by LBA Assembler and LBRA's installer --
   the user, 2026-11-03: "We should ship the demo school packaged inside the installer"): a converted demo cut down to the entries the
   School takes (its two scenes, grids, library and the bricks it names, the characters' 5 bodies and 25 animations, its sprites, the entity
-  table, the palette), 478 KB, made by `ScriptRoundTrip demo96pack <converted demo> demo96\school.zip` -- installed from it, the game's
+  table, the palette), 478 KB, made by `ScriptRoundTrip demo96pack <converted demo> Demo96\rooms.zip` -- installed from it, the game's
   files come out byte for byte as from the whole converted demo. `LBA2_DEMO96` (a converted folder, or the demo's own) comes first;
   the editor's converted copy (File > Open the 1996 demo) is used when a build carries no package.
 - **The interior**: the demo's grids in grids 27 and 28, drawn with the demo's block library 1 (202 blocks) as a library of its own
@@ -180,3 +180,28 @@ magic scenes". Every race-track build now puts the demo's School (its scenes 27 
 Checked (a build of all 15 islands, E:\dump\TEMP\allstory4): the halls drawn as in the demo, the Dean and his assistant in the demo's
 bodies; the Dean's beats (Q_PAGES 1 -> 2, 5 -> 6 and the diploma); the door to the desert (28 -> 61); the training room's door shut at that
 point of the story as retail's is; 10426/10426 scripts round-trip; a second install adds nothing to LBA_BKG.HQR.
+
+## In the race mod: Citadel Island's sewers
+
+The user, 2026-11-03: "Let's make sure we swap in the citadel sewers tomorrow". The demo's sewers (its scenes 17 and 18: the painter
+repainting the signs, the barrels, the far halls with their lift up to the harbour district) go into the game's slots 17 and 18 on every
+race-track build, after the School (`Demo96Rooms.Sewers`, the same package `Demo96\rooms.zip`, the same block library):
+
+- **Doors in**: every door of the game's into the slots is pointed where the demo's door from the same scene lands (`Doors`): scene 21
+  and 34 into 17 at the demo's places, the lift down from scene 48 into the far halls (18), the Tavern's cellar lift onto the demo's cellar
+  lift platform. The storm track's lift (scene 42), which the demo hasn't, lands where the demo starts Twinsen in the sewers
+  (20357, 1536, 15140) -- on the cellar lift's platform the demo's lift ride starts, and Twinsen, come any other way, fell and drowned.
+  The demo scenes those doors are in go into the package too.
+- **Texts**: the demo's Citadel texts aren't the game's numbers here (`SewerTexts`): Twinsen's greetings 6 and 102 are the game's 100
+  and 101, his questions after the lighthouse keeper 105 and 106 the game's 520 and 107, the broken device's 383 the game's 110 ("It's
+  locked."); the painter's 236 and 237 are the game's under the same numbers.
+- **Sounds**: demo 54 is retail 126 byte for byte; 118 (the painter's splash) is the demo's own number, which no retail script plays.
+- **The story** (chapter 1): the thief's hatch on the harbour quay (moved a cell in front of the railing -- behind it Twinsen couldn't
+  reach it -- and its sprite a carrier, OBJ_CARRIER, as the game's hatches are: a sprite is solid, and it pushed him off its own door)
+  lands Twinsen at the demo's start; the demo's painter (actor 7) tells of the thief while he is ahead; the thief is cornered by the
+  barrels beside the far halls' lift (12800, 3072, 2300), the ladder up to the quay there.
+
+Checked (a build of all 15 islands from the package, E:\dump\TEMP\allstory10): the hatch takes Twinsen into the demo's sewers, safe
+after 500 ticks; in the far halls the thief is cornered (213 3 -> 4), Action beside him gives back the gloves and the umbrella (213 5,
+items 7 and 20), and the ladder brings him out on the harbour's quay; the doors from 21, 34, 42, 48 and the cellar land where listed;
+10400/10400 scripts round-trip. The lifts (the cellar's, 42's, 48's) weren't ridden: a headless test can't work a lift.

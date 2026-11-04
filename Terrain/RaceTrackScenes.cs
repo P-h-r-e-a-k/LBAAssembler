@@ -114,6 +114,7 @@ internal static class RaceTrackScenes
     internal const int PaperSprite = 238, WheelSprite = 247, MonkStatuetteSprite = 250, HatchSprite = 280;
     private const uint FloorSprite = 0x21400;
     internal const uint InvisibleFlag = 0x0200;
+    internal const uint CarrierFlag = 0x4000;
 
     // (`sceneOf`: the island's outside scene of each cube)
     private static List<EdgeCrossing> EdgeCrossings(Dictionary<(int, int), int> sceneOf, RaceTrackReport report, RaceTrackOptions options)

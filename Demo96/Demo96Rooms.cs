@@ -25,7 +25,8 @@ namespace LBAAssembler.Demo96;
 //                  bytes (Samples). Texts: the demo's School lines are the game's Desert texts under the same numbers, in every language.
 internal static class Demo96Rooms
 {
-    public sealed record Room(int DemoScene, int Slot, string Name);
+    // (Arrival: where a door of the game's into the slot lands Twinsen when the demo has no door from that place -- its own way in)
+    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null);
 
     public static readonly Room[] School =
     {
@@ -33,14 +34,32 @@ internal static class Demo96Rooms
         new(28, 28, "the School of Magic's entrance"),
     };
 
-    // The demo's samples the rooms play, as the game's: 35 and 41 byte for byte retail 617 and 501; 122, which the demo plays at the
-    // hall's flow points, as retail's hall does there (441).
-    private static readonly Dictionary<int, int> Samples = new() { [35] = 617, [41] = 501, [122] = 441 };
+    // The Citadel Island sewers (the user, 2026-11-03: "Let's make sure we swap in the citadel sewers tomorrow"): the demo's 17 and 18,
+    // the painter at work on the signs, in the game's sewers' slots. The game's doors into them land where the demo's own doors from
+    // the same places do (the Tavern's cellar lift, scenes 21 and 34, the lift down from the harbour, 48, into the far halls); the
+    // storm track's lift (scene 42), which the demo hasn't, lands where the demo starts Twinsen in them (on the cellar lift's
+    // platform the demo's lift ride starts, and Twinsen, come any other way, fell from it and drowned).
+    public static readonly Room[] Sewers =
+    {
+        new(17, 17, "the sewers", (20357, 1536, 15140)),
+        new(18, 18, "the sewers' far halls"),
+    };
+
+    // The sewers' lines in the demo's Citadel texts, as the game's: Twinsen's greetings to the painter (the demo's 6, 100-102: the game's
+    // 100 "Hello." and 101 "Hi."), asking after the lighthouse keeper (105, 106: the game's 520, 107), the painter's own two (236, 237: the
+    // game's under the same numbers) and the broken device by the gate (383: the game's 110, "It's locked.").
+    public static readonly Dictionary<int, int> SewerTexts = new() { [6] = 100, [102] = 101, [105] = 520, [106] = 107, [383] = 110 };
+
+    // The demo's samples the rooms play, as the game's: 35, 41 and 54 byte for byte retail 617, 501 and 126; 122, which the demo plays
+    // at the hall's flow points, as retail's hall does there (441). (118, the painter's splash into the sewer's water, is the demo's own:
+    // no script of the game's plays that number.)
+    private static readonly Dictionary<int, int> Samples = new() { [35] = 617, [41] = 501, [54] = 126, [122] = 441 };
+    private static readonly Regex MessageCall = new(@"\b(message|message_zoe)\((\d+)\)|\b(message_obj)\((\d+), (\d+)\)", RegexOptions.Compiled);
     private const int DemoMecaPenguin = 9, MecaPenguin = 14;
     private static readonly Regex SampleCall = new(@"\b(sample|sample_rnd|sample_always|stop_sample|repeat_sample)\((\d+)", RegexOptions.Compiled);
 
     // The converted demo a build takes the rooms from: LBA2_DEMO96 (a converted folder, or the demo's own: converted into the scratch
-    // folder, with what it lacks from `gameDirectory`), else the package the program carries (Pack: the repo's demo96\school.zip, embedded
+    // folder, with what it lacks from `gameDirectory`), else the package the program carries (Pack: the repo's Demo96\rooms.zip, embedded
     // by LBAAssembler.csproj and LBRA's installer as PackageResource -- the user, 2026-11-03: "We should ship the demo school packaged
     // inside the installer"), unpacked into the scratch folder, else the editor's (File > Open the 1996 demo), or null.
     public static string? Source(string gameDirectory)
@@ -61,7 +80,7 @@ internal static class Demo96Rooms
         return Demo96Converter.IsConverted(editors, Demo96Converter.SourceOf(editors) ?? "") ? editors : null;
     }
 
-    public const string PackageResource = "Demo96/school.zip";
+    public const string PackageResource = "Demo96/rooms.zip";
 
     // The package the program carries, unpacked into a scratch folder named by its contents' hash (unpacked once), or null.
     private static string? Carried()
@@ -100,6 +119,9 @@ internal static class Demo96Rooms
             brk = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(6)), maxBrk = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8));
         keep["LBA_BKG.HQR"].Add(brk + maxBrk);
         var demoTable = HqrArchive.Open(Path.Combine(converted, "RESS.HQR")).Read(44);
+        // (the demo's scenes with doors into the rooms too: where those doors land is where the game's land -- Doors)
+        for (var s = 0; s < store.SceneCount; s++)
+            if (store.SceneExists(s) && store.Load(s).Zones.Any(z => z.Type == 0 && rooms.Any(r => r.DemoScene == z.Num))) keep["SCENE.HQR"].Add(s + 1);
         foreach (var r in rooms)
         {
             keep["SCENE.HQR"].Add(r.DemoScene + 1);
@@ -139,7 +161,7 @@ internal static class Demo96Rooms
         return log;
     }
 
-    public static List<string> Install(string gameDirectory, string converted, IReadOnlyList<Room> rooms)
+    public static List<string> Install(string gameDirectory, string converted, IReadOnlyList<Room> rooms, IReadOnlyDictionary<int, int>? texts = null)
     {
         var log = new List<string>();
         var demoStore = new SceneStore(SceneGame.Lba2, converted);
@@ -204,6 +226,8 @@ internal static class Demo96Rooms
                     else if (to < 0) { log.Add($"  scene {r.Slot}: the door to the demo's scene {zone.Num} (none in the game) shut"); zone.X1 = zone.X0 - 1; }
                     else zone.Num = to;
                 }
+                // (a text zone's number a text too)
+                if (zone.Type == 5 && texts is not null && texts.TryGetValue(zone.Num, out var said)) zone.Num = said;
                 model.Zones.Add(zone);
             }
             var record = SceneSerializer.Write(model);
@@ -214,6 +238,11 @@ internal static class Demo96Rooms
                 {
                     var text = scripts.GetText(a, kind);
                     var mapped = SampleCall.Replace(text, m => $"{m.Groups[1].Value}({(Samples.TryGetValue(int.Parse(m.Groups[2].Value), out var g) ? g : int.Parse(m.Groups[2].Value))}");
+                    // (and the texts the game's, where the demo's numbers aren't: `texts`)
+                    if (texts is not null)
+                        mapped = MessageCall.Replace(mapped, m => m.Groups[1].Success
+                            ? $"{m.Groups[1].Value}({texts.GetValueOrDefault(int.Parse(m.Groups[2].Value), int.Parse(m.Groups[2].Value))})"
+                            : $"{m.Groups[3].Value}({m.Groups[4].Value}, {texts.GetValueOrDefault(int.Parse(m.Groups[5].Value), int.Parse(m.Groups[5].Value))})");
                     if (mapped != text) scripts.SetText(a, kind, mapped);
                 }
             var built = scripts.Build();
@@ -221,8 +250,42 @@ internal static class Demo96Rooms
             PutScene(scenes, r.Slot, built.Record!);
             log.Add($"{r.Name} (scene {r.Slot}): the demo's scene {r.DemoScene}: {model.Actors.Count - 1} actors, {model.Zones.Count} zones, its scripts");
         }
+        Doors(scenes, store, demoStore, sceneOf, rooms, log);
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         return log;
+    }
+
+    // The game's doors into the rooms from its other scenes: each lands where the demo's door from the same scene (its counterpart,
+    // the converter's map) lands -- the nearest of them to the game's door -- else at the room's Arrival; the rest of the door (its
+    // switch, whether it is on) the game's.
+    private static void Doors(HqrFile scenes, SceneStore store, SceneStore demoStore, Dictionary<int, int> sceneOf, IReadOnlyList<Room> rooms, List<string> log)
+    {
+        var slots = rooms.ToDictionary(r => r.Slot);
+        var demoOf = sceneOf.Where(p => !rooms.Any(r => r.DemoScene == p.Key)).GroupBy(p => p.Value).ToDictionary(g => g.Key, g => g.First().Key);
+        for (var s = 0; s < store.SceneCount; s++)
+        {
+            if (slots.ContainsKey(s) || !store.SceneExists(s)) continue;
+            SceneModel model;
+            try { model = SceneSerializer.Parse(SceneGame.Lba2, scenes.Read(s + 1)); } catch (Exception e) when (e is InvalidDataException or ArgumentException) { continue; }
+            var doors = model.Zones.Where(z => z.Type == 0 && slots.ContainsKey(z.Num)).ToList();
+            if (doors.Count == 0) continue;
+            var theirs = demoOf.TryGetValue(s, out var d) && demoStore.SceneExists(d)
+                ? demoStore.Load(d).Zones.Where(z => z.Type == 0 && rooms.Any(r => r.DemoScene == z.Num)).ToList() : new List<SceneZoneModel>();
+            foreach (var door in doors)
+            {
+                double Far(SceneZoneModel z) => Math.Abs((z.X0 + z.X1) / 2.0 - (door.X0 + door.X1) / 2.0) + Math.Abs((z.Z0 + z.Z1) / 2.0 - (door.Z0 + door.Z1) / 2.0);
+                var was = $"scene {door.Num} at ({door.Info[0]},{door.Info[1]},{door.Info[2]})";
+                if (theirs.OrderBy(Far).FirstOrDefault() is { } demo)
+                {
+                    door.Num = rooms.First(r => r.DemoScene == demo.Num).Slot;
+                    for (var k = 0; k < 3; k++) door.Info[k] = demo.Info[k];
+                }
+                else if (slots[door.Num].Arrival is { } at) { door.Info[0] = at.X; door.Info[1] = at.Y; door.Info[2] = at.Z; }
+                else { log.Add($"  scene {s}: its door to {was} has no counterpart in the demo -- left"); continue; }
+                log.Add($"  scene {s}: its door to {was} now to scene {door.Num} at ({door.Info[0]},{door.Info[1]},{door.Info[2]})");
+            }
+            PutScene(scenes, s, SceneSerializer.Write(model));
+        }
     }
 
     // The demo's characters (its entities: their records as they are, the bodies and animations they name added at the ends of BODY.HQR
