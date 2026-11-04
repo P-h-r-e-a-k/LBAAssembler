@@ -539,7 +539,9 @@ void comportement_1()
         {
             if (Report.Marshal is { Length: >= 10 } m && InCube(model, m[6] / 512.0, m[7] / 512.0))
                 return RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(m[6] / 512.0, model.CubeX), m[8], RaceTrackScenes.CubeLocal(m[7] / 512.0, model.CubeY), 9);
-            var at = Near(model, 2, 2) ?? throw new NotTheGames("no room by the start line for the marshal");
+            // (else by where the scene starts Twinsen: the Emperor's palace's start line is in another cube than its start scene's, and the
+            // whole of chapter 13 was left out for want of a place for her talker, 2026-11-04 -- she is drawn by the race-track mode anyway)
+            var at = Near(model, 2, 2) ?? ByHero(model, 2, 2);
             return RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(at.X, model.CubeX), (int)Math.Round(at.Y), RaceTrackScenes.CubeLocal(at.Z, model.CubeY), 9);
         }
 

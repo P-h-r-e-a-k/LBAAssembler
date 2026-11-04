@@ -55,6 +55,23 @@ internal static class PalaceIsland
     public const string IleFile = "PALACE.ILE", OblFile = "PALACE.OBL";
     // where things are on the island, for the race track built on it (its plan's design, tools/RaceTrackPlan/palace_design.py)
     public const string LayoutFile = "PALACE.JSON";
+
+    // The dungeon in a game folder's layout, as the race-track mode takes a room walked on foot (RACEMOD.CPP foot_room=): [x0, z0, x1, z1
+    // in world units from the island's corner, its floor's top, its ceiling], or null
+    public static int[]? DungeonRoom(string gameDirectory)
+    {
+        var path = Path.Combine(gameDirectory, LayoutFile);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            if (!json.RootElement.TryGetProperty("dungeon", out var d) || d.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            int W(string name) => (int)Math.Round(d.GetProperty(name).GetDouble() * 512);
+            int H(string name) => (int)Math.Round(d.GetProperty(name).GetDouble());
+            return new[] { W("x0"), W("z0"), W("x1"), W("z1"), H("floorTop"), H("ceiling") };
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException) { return null; }
+    }
     public const string SourceIle = "OTRINGAL.ILE", SourceObl = "OTRINGAL.OBL";
     public const int PaletteEntry = 31;                 // RESS.HQR: Otringal's
     public const int Across = 4;                        // a brick's 512 across, this many times

@@ -167,6 +167,7 @@ internal static class RaceCarEngineFile
         if (!story && track?.Guards?.Any(g => g[0] == RaceTrackGuards.Felix) == true) text.Append("hide_actor=43 2\n");
         if (track?.CrabModel is { } crab) text.Append($"guard_crab={crab}\n");
         if (track?.BarrelModel is { } barrel) text.Append($"guard_barrel={barrel}\n");
+        foreach (var room in track?.FootRooms ?? new()) text.Append($"foot_room={string.Join(' ', room)}\n");
         // (the small monkey monsters only throw: their reach and pace are no one's)
         if (track?.Guards is { Count: > 0 } people && people.Any(g => g[0] < RaceTrackGuards.Monkey)) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
         foreach (var teleport in track?.Teleports ?? new()) text.Append($"teleport={string.Join(' ', teleport)}\n");

@@ -220,6 +220,7 @@ internal static class Program
             "zonedump" => ZoneDumpCommand.Run(args),
             "zoneon" => ZoneDumpCommand.On(args),
             "lba2text" => Lba2TextCommand.Run(args),
+            "discretail" => DiscRetailCommand.Run(args),
             "lba2sprite" => Lba2SpriteCommand.Run(args),
             "bodypolys" => BodyPolysCommand.Run(args),
             "gridgirl" => GridGirlCommand.Run(args),

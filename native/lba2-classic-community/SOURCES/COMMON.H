@@ -296,6 +296,7 @@ typedef	struct	{
 // The storm over Citadel Island (rain, thunder, the CITADEL island file and its sky) lasts until chapter 2, when the aliens land after
 // the lighthouse. A race-track mod's file can ask for the weather after it without moving the story on (RACEMOD.CPP: weather=fine).
 S32 RaceMod_FineWeather(void);
+S32 RaceMod_FootRoom(void);       // (RACEMOD.CPP foot_room=: Twinsen on foot in a room under the ground -- the follow camera's then, PERSO.CPP)
 // The storm's lightning and thunder on Citadel Island: over in the fine weather, and in a race-track mod's story already once the Weather
 // Wizard's spell is cast (the storm plot, game variable 51, at 4), while its rain falls on until the morning the Esmers land.
 S32 RaceMod_StormSpent(void);

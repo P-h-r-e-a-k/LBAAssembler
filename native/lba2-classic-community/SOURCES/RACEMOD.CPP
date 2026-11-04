@@ -647,23 +647,36 @@ static int s_finishSet[2 * RACE_MAX_SETS], s_nbFinishSet = 0;
 //   no_hit=<var> <value>            the race finished without one of Island CX's missiles hitting Twinsen's car (Baldino's grey paint)
 //   weather_var=<var>               from the grid to the finish, the variable's 1 rain and 2 snow on the race (the Weather Wizard's
 //                                   encore on the town circuit: COMMON.H RAIN_FALLS, SNOW.CPP SnowFalls)
-//   tortoise=<s> <opponent> <text>  Twinsen not off his grid spot <s> seconds after GO: the opponent (1 the first) trundles past him at
+//   tortoise=<s> <opponent> <text>  Twinsen not over the start line <s> seconds after GO: the opponent (1 the first) trundles past him at
 //                                   a walk, the text is said and the race starts again (TortoiseWatch) -- the Francos' Tortoise and the Hare
 static S32 s_lapRecordMs = 0, s_marginMs = 0;
 static int s_lapRecordVar = -1, s_lapRecordValue = 0, s_marginVar = -1, s_marginValue = 0;
 static int s_noHitVar = -1, s_noHitValue = 0, s_heroMissileHits = 0;
 static int s_weatherVar = -1;
+// foot_room=<x0> <z0> <x1> <z1> <floor> <ceiling> (world units): a room under the island's ground Twinsen walks on foot -- the Emperor's
+// palace's dungeon. The classic camera on foot stands high over him, and over the dungeon it looked down at the ground floor over it, him
+// nowhere to be seen (2026-11-04: the easter eggs down there, the Brune sisters, Island CX's staff passage). On foot inside, the camera
+// is the follow camera's (PERSO.CPP: Auto as in his car, RaceMod_FootRoom) and its eye the race-track mode's (FootRoomCamera): under the
+// ceiling, RACE_ROOM_CAM_BACK from him -- beyond the near plane, where he was cut from the picture -- towards the room's middle, kept
+// inside the room's walls.
+#define RACE_MAX_FOOT_ROOMS 4
+#define RACE_ROOM_CAM_BACK 4000
+#define RACE_ROOM_CAM_UNDER 700            // (the eye this far under the ceiling ...
+#define RACE_ROOM_CAM_UP 2600              // ... and no more than this over the floor)
+#define RACE_ROOM_CAM_WALL 900             // (kept this far inside the room's walls)
+static struct { double X0, Z0, X1, Z1; S32 Floor, Ceiling; } s_footRooms[RACE_MAX_FOOT_ROOMS];
+static int s_nbFootRooms = 0, s_footRoom = -1;
 // unlock_at=<var> <value> <id>: once the variable reaches the value, the race game's story unlock <id> (RaceGame_StoryUnlock) -- the
 // Little Big Postcards' gold car, given in the final (an easter egg, the user, 2026-11-04)
 static int s_unlockAtVar = -1, s_unlockAtValue = 0, s_unlockAtDone = 0;
 static char s_unlockAt[24] = "";
 static S32 s_tortoiseMs = 0, s_tortoiseAt = 0;
 static int s_tortoiseOpp = -1, s_tortoiseText = -1, s_tortoiseArmed = 0;
-static double s_tortoiseX = 0, s_tortoiseZ = 0;
+static double s_tortoiseX = 0, s_tortoiseZ = 0;   // (where his car stood at GO)
 #define RACE_TORTOISE_PACE 0.12            // her pace, the jet-pack's factor: a walk
 #define RACE_TORTOISE_BEHIND (3 * 512.0)   // put this far behind him on her line, out of sight behind the camera
 #define RACE_TORTOISE_MS 9000              // she passes him, then the moral and the race again
-#define RACE_TORTOISE_MOVED (2 * 512.0)    // Twinsen this far from his grid spot has set off
+#define RACE_TORTOISE_FAR (48 * 512.0)     // Twinsen this far from where his car stood at GO has gone somewhere, pedal or not
 static void SetAtLeast(int var, int value, const char *why) {
     if (var < 0 || var > 255 || ListVarGame[var] >= value) return;
     ListVarGame[var] = (S16)value;
@@ -4506,6 +4519,12 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "margin_win")) { if (sscanf(v, "%d %d %d", &s_marginMs, &s_marginVar, &s_marginValue) != 3) s_marginVar = -1; }
         else if (!strcmp(key, "no_hit")) { if (sscanf(v, "%d %d", &s_noHitVar, &s_noHitValue) != 2) s_noHitVar = -1; }
         else if (!strcmp(key, "weather_var")) { if (sscanf(v, "%d", &s_weatherVar) != 1) s_weatherVar = -1; }
+        else if (!strcmp(key, "foot_room") && s_nbFootRooms < RACE_MAX_FOOT_ROOMS) {
+            int f, c;
+            if (sscanf(v, "%lf %lf %lf %lf %d %d", &s_footRooms[s_nbFootRooms].X0, &s_footRooms[s_nbFootRooms].Z0, &s_footRooms[s_nbFootRooms].X1, &s_footRooms[s_nbFootRooms].Z1, &f, &c) == 6) {
+                s_footRooms[s_nbFootRooms].Floor = f; s_footRooms[s_nbFootRooms].Ceiling = c; s_nbFootRooms++;
+            }
+        }
         else if (!strcmp(key, "unlock_at")) { if (sscanf(v, "%d %d %23s", &s_unlockAtVar, &s_unlockAtValue, s_unlockAt) != 3) s_unlockAtVar = -1; s_unlockAtDone = 0; }
         else if (!strcmp(key, "tortoise")) {
             int s = 0;
@@ -4979,6 +4998,28 @@ static int FinishPlace(int laps, int *racers) {
 static double PlayerProgress(void);
 static double OpponentProgress(const T_RACE_OPPONENT *o);
 static S32 MarginAhead(void);
+S32 RaceMod_FootRoom(void) { return RaceMod_Active() && s_footRoom >= 0 && Comportement != C_BUGGY; }
+static S32 FootRoomCamera(S32 *eye, S32 *target) {
+    if (!RaceMod_FootRoom()) return FALSE;
+    const T_OBJ_3D *h = &ListObjet[NUM_PERSO].Obj;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double wx = h->X + cx, wz = h->Z + cz;
+    const double mx = (s_footRooms[s_footRoom].X0 + s_footRooms[s_footRoom].X1) / 2, mz = (s_footRooms[s_footRoom].Z0 + s_footRooms[s_footRoom].Z1) / 2;
+    double dx = mx - wx, dz = mz - wz, d = sqrt(dx * dx + dz * dz);
+    // (by the room's middle: behind him, the way he faces)
+    if (d < 1000) { const double b = h->Beta * 2 * 3.14159265358979 / 4096; dx = -sin(b); dz = -cos(b); d = 1; }
+    double ex = wx + dx / d * RACE_ROOM_CAM_BACK, ez = wz + dz / d * RACE_ROOM_CAM_BACK;
+    const double lo = RACE_ROOM_CAM_WALL;
+    if (ex < s_footRooms[s_footRoom].X0 + lo) ex = s_footRooms[s_footRoom].X0 + lo;
+    if (ex > s_footRooms[s_footRoom].X1 - lo) ex = s_footRooms[s_footRoom].X1 - lo;
+    if (ez < s_footRooms[s_footRoom].Z0 + lo) ez = s_footRooms[s_footRoom].Z0 + lo;
+    if (ez > s_footRooms[s_footRoom].Z1 - lo) ez = s_footRooms[s_footRoom].Z1 - lo;
+    S32 ey = s_footRooms[s_footRoom].Ceiling - RACE_ROOM_CAM_UNDER;
+    if (ey > s_footRooms[s_footRoom].Floor + RACE_ROOM_CAM_UP) ey = s_footRooms[s_footRoom].Floor + RACE_ROOM_CAM_UP;
+    eye[0] = (S32)(ex - cx); eye[1] = ey; eye[2] = (S32)(ez - cz);
+    target[0] = h->X; target[1] = h->Y + 700; target[2] = h->Z;
+    return TRUE;
+}
 static void SprintOver(S32 now, int crossed);
 static void RaceFromGrid(void);
 static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot);
@@ -8627,6 +8668,7 @@ static S32 RaceCameraEye(S32 *eye, S32 *target) {
     FollowCamArmPercent = Comportement == C_BUGGY ? (S32)floor(100 + (RACE_VIEW_FAR_ARM - 100) * s_viewW + 0.5) : 100;
     s_viewTunnel = 0;
     if (s_insideOn) { FollowCamEyeWho = "inside"; return TRUE; }
+    if (FootRoomCamera(eye, target)) { FollowCamEyeWho = "room"; return TRUE; }
     // (which of them placed the eye: the camera trace's, FOLLOWCAM.CPP camtrace)
     if (ArcCamera(eye, target)) { FollowCamEyeWho = "arc"; return TRUE; }
     if (JumpCamera(eye, target)) { FollowCamEyeWho = "jump"; return TRUE; }
@@ -17138,6 +17180,19 @@ void RaceMod_Frame(void) {
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
+    // (Twinsen on foot in a room of foot_room=: its camera -- FootRoomCamera)
+    {
+        const int was = s_footRoom;
+        s_footRoom = -1;
+        if (Comportement != C_BUGGY && CubeMode == CUBE_EXTERIEUR) {
+            const T_OBJ_3D *h = &ListObjet[NUM_PERSO].Obj;
+            const double wx = h->X + CurrentCubeX * 32768.0, wz = h->Z + CurrentCubeY * 32768.0;
+            for (int i = 0; i < s_nbFootRooms && s_footRoom < 0; i++)
+                if (wx >= s_footRooms[i].X0 && wx <= s_footRooms[i].X1 && wz >= s_footRooms[i].Z0 && wz <= s_footRooms[i].Z1
+                        && h->Y >= s_footRooms[i].Floor - 500 && h->Y < s_footRooms[i].Ceiling) s_footRoom = i;
+        }
+        if (s_footRoom != was) Log_Info("[racemod] Twinsen on foot %s", s_footRoom >= 0 ? "in a room under the ground: the camera under its ceiling" : "out of the room under the ground");
+    }
     TortoiseWatch(TimerRefHR);
     if (s_unlockAtVar >= 0 && s_unlockAtVar < 256 && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
         s_unlockAtDone = 1;
@@ -17574,14 +17629,16 @@ static double OpponentProgress(const T_RACE_OPPONENT *o) {
 }
 
 // tortoise= (the Island of the Francos: its De La Fontaine is named after Jean de La Fontaine, whose fable of the Tortoise and the Hare
-// ends "Rien ne sert de courir; il faut partir a point" -- an easter egg, the user, 2026-11-04): at GO, where Twinsen's car stands is
-// kept (armed, 1); driven RACE_TORTOISE_MOVED off it, nothing more this race (2). Still there s_tortoiseMs after GO: the opponent -- Moya,
-// the turtle -- is put RACE_TORTOISE_BEHIND behind him on her own line at a walk (a jet-pack's factor under 1, RACE_TORTOISE_PACE) and
-// passes him; RACE_TORTOISE_MS later the race starts again from the grid, the moral said as a loss's line is (s_pendLose).
+// ends "Rien ne sert de courir; il faut partir a point" -- an easter egg, the user, 2026-11-04): Twinsen's foot never on a pedal since GO,
+// s_tortoiseMs after it -- he has sat on the grid. (Not where his car is: the cars behind him on the grid shunt a standing car down the
+// road, and the Francos' oil drips skid it; nor the start line, the laps counted or how far round the lap: the pole's spot is past the
+// line, and they move with the car standing still. Only RACE_TORTOISE_FAR away is he somewhere else.) The opponent -- De La Fontaine, the fable's teller -- is put
+// RACE_TORTOISE_BEHIND behind him on his own line at a walk (a jet-pack's factor under 1, RACE_TORTOISE_PACE) and passes him; RACE_TORTOISE_MS later the race starts again from the
+// grid, the moral said as a loss's line is (s_pendLose). Off the grid once, nothing more this race (2).
 static void TortoiseWatch(S32 now) {
     if (s_tortoiseOpp < 0 || !s_goAt || s_place) return;
     T_RACE_OPPONENT *o = &s_opp[s_tortoiseOpp];
-    if (!o->Count || !o->Scenes || o->Length <= 0) return;
+    if (!o->Count || !o->Scenes || o->Length <= 0) { static int said = 0; if (!said++) Log_Info("[racemod] tortoise: opponent %d isn't racing", s_tortoiseOpp + 1); return; }
     if (s_tortoiseAt) {
         if (now - s_tortoiseAt < RACE_TORTOISE_MS) return;
         o->JetUntil = 0; o->JetFactor = 1;
@@ -17594,8 +17651,8 @@ static void TortoiseWatch(S32 now) {
     if (s_phase != PHASE_RACE || now < s_goAt || s_tortoiseArmed == 2 || Comportement != C_BUGGY) return;
     const T_OBJET *h = &ListObjet[NUM_PERSO];
     const double wx = h->Obj.X + CurrentCubeX * 32768.0, wz = h->Obj.Z + CurrentCubeY * 32768.0;
-    if (!s_tortoiseArmed) { s_tortoiseArmed = 1; s_tortoiseX = wx; s_tortoiseZ = wz; return; }
-    if ((wx - s_tortoiseX) * (wx - s_tortoiseX) + (wz - s_tortoiseZ) * (wz - s_tortoiseZ) > RACE_TORTOISE_MOVED * RACE_TORTOISE_MOVED) { s_tortoiseArmed = 2; return; }
+    if (!s_tortoiseArmed) { s_tortoiseArmed = 1; s_tortoiseX = wx; s_tortoiseZ = wz; }
+    if ((Input & (I_UP | I_DOWN)) || (wx - s_tortoiseX) * (wx - s_tortoiseX) + (wz - s_tortoiseZ) * (wz - s_tortoiseZ) > RACE_TORTOISE_FAR * RACE_TORTOISE_FAR) { s_tortoiseArmed = 2; Log_Info("[racemod] tortoise: Twinsen off the grid %.1f s after GO -- not this race (at %.0f,%.0f, from %.0f,%.0f)", (now - s_goAt) / 1000.0, wx, wz, s_tortoiseX, s_tortoiseZ); return; }
     if (now - s_goAt < s_tortoiseMs) return;
     int best = -1;
     double bd = 1e30;
@@ -19543,7 +19600,7 @@ static void ResetTrack(void) {
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
-    s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
+    s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_nbFootRooms = 0; s_footRoom = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_unlockWin[0] = s_unlockBeat[0] = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;

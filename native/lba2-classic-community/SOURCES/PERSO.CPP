@@ -1968,12 +1968,14 @@ restartloop:
                     RestoreTimer();
                 }
 
-                /* (Auto camera in a car: on while Twinsen drives, Classic on foot -- picked up as he gets in or out) */
-                if (FollowCameraInCar AND (Comportement == C_BUGGY) != (FollowCamera != 0)) {
-                    FollowCamera = Comportement == C_BUGGY;
+                /* (Auto camera in a car: on while Twinsen drives, Classic on foot -- picked up as he gets in or out; and on foot in a room
+                   under the ground, the race-track mode's foot_room= -- the palace's dungeon: the classic camera saw the floor over him) */
+                const S32 autoNow = Comportement == C_BUGGY || RaceMod_FootRoom();
+                if (FollowCameraInCar AND autoNow != (FollowCamera != 0)) {
+                    FollowCamera = autoNow;
                     if (FollowCamera)
                         FollowCamResetToView();
-                    Log_Info("[camera] %s camera: Twinsen %s", FollowCamera ? "Auto" : "Classic", FollowCamera ? "in his car" : "on foot");
+                    Log_Info("[camera] %s camera: Twinsen %s", FollowCamera ? "Auto" : "Classic", Comportement == C_BUGGY ? "in his car" : FollowCamera ? "on foot in a room under the ground" : "on foot");
                 }
                 if (FollowCamera AND CubeMode == CUBE_EXTERIEUR)
                     UpdateFollowCameraExt();

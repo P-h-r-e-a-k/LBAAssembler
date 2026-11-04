@@ -204,6 +204,9 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? CrabModel = null,
         // BarrelModel: the Elevator Platform's monkeys' barrel, in OBJFIX.HQR (RACEMOD.CPP guard_barrel=; an easter egg, RaceTrackStory.Eggs.Elevator.cs)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? BarrelModel = null,
+        // FootRooms: rooms under the island's ground Twinsen walks on foot -- the Emperor's palace's dungeon -- each [x0, z0, x1, z1 (world
+        // units from the island's corner), floor, ceiling] (RACEMOD.CPP foot_room=: the camera on foot inside under the ceiling)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? FootRooms = null,
         // JetSignals: the steam jets' signals in BODY.HQR, safe and dangerous (RaceTrackPipes.InstallSignals; RACEMOD.CPP jet_signals=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? JetSignals = null,
         // JetSignalPlaces: where they stand (RaceTrackReport.JetSignalPlaces; RACEMOD.CPP jet_signal=)
@@ -1081,6 +1084,8 @@ internal static class RaceTrackService
         // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)
         if (info.ArcJumps is not null || info.Teleports is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
+        // (the palace's dungeon, walked on foot under its ground floor: its box from the palace's layout -- PALACE.JSON's dungeon)
+        if (options.Island == RaceTrackIsland.Palace && Palace.PalaceIsland.DungeonRoom(gameDirectory) is { } dungeon) info = info with { FootRooms = new() { dungeon } };
         // (the race's own music: the Temple of Bú's LBA1 temple music, when the build found it)
         if (options.Island == RaceTrackIsland.Temple && LBAAssembler.Terrain.Temple.TempleMusic.Installed(gameDirectory) is { } music) info = info with { Music = music };
         if (options.Island == RaceTrackIsland.Palace) info = info with { WindowSmash = session.WindowSmash };
