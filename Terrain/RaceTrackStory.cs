@@ -438,6 +438,8 @@ internal static partial class RaceTrackStory
         log.Add($"the souvenir seller's {SellerLines.Length} lines are texts {first}-{first + SellerLines.Length - 1} of Celebration Island's, chapter 6's {LavaLines.Length} texts {lava}-{lava + LavaLines.Length - 1}, in all {languages} languages");
 
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
+        // (the dive into the lava past the jump: RaceTrackStory.LavaLake.cs)
+        log.AddRange(LavaDive(store, report, lava));
         var changes = new List<SceneChange>();
         // the seller: a challenge before he is beaten, what he knows after
         try

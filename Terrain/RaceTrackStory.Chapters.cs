@@ -691,7 +691,38 @@ void comportement_1()
         TownPeople(p);
         Yard(p);
         StartLine(p);
+        PackageLevers(p);
     }
+
+    // ---- the package centre's hidden room (scene 16): its three levers ------------------------------------------------------------
+    // The user, 2026-11-03: "Inside the package centre on Citadel Island there's a hidden room with three levers. Currently if Twinsen
+    // pulls the third lever he gets rewarded with a box containing 102 kashes. Let's change the levers he has to pull so in order to get a
+    // reward he has to pull the middle lever, followed by the right lever - this is a call back to the first game." The game's levers
+    // (actors 4, 5, 6 -- the right, the middle, the left as the picture shows them) each send the pusher (actor 3) to its place, and the
+    // box (actor 2) down that way: the right's (the third from the left) to the floor and Twinsen, the others up onto the racks and round
+    // back to the start, to be tried again. Now the middle lever is pulled down and remembered (var_cube LeversSet), the box left where
+    // it is; the right lever after it sends the box the rewarding way, and without it the left's way, round and back; the left lever
+    // forgets the middle.
+    private const int LeversScene = 16, LeversSet = 5;
+    private static void PackageLevers(StoryParts p) => p.Edit(LeversScene, "the package centre's levers: the middle, then the right (LBA1's call back)", _ => scripts =>
+    {
+        var hero = scripts.GetText(0, ScriptKind.Life);
+        hero = Loose(hero, "set_track_obj(3, label_3);", $@"if (1 == var_cube({LeversSet}))
+        {{
+            set_track_obj(3, label_3);
+        }}
+        else
+        {{
+            set_track_obj(3, label_1);
+        }}
+        set_var_cube({LeversSet}, 0);");
+        hero = Loose(hero, "set_var_cube(0, 1); set_track_obj(5, label_0); set_track_obj(3, label_2);", $@"set_track_obj(5, label_0);
+        set_var_cube({LeversSet}, 1);");
+        hero = Loose(hero, "set_track_obj(3, label_1); set_comportement(comportement_0);", $@"set_track_obj(3, label_1);
+        set_var_cube({LeversSet}, 0);
+        set_comportement(comportement_0);");
+        scripts.SetText(0, ScriptKind.Life, hero);
+    });
 
     // ---- the night and the morning (scene 0) -------------------------------------------------------------------------------------
     // The bed's Action (Apply step 1) made it the night and started the scene again: Twinsen lies asleep in his bed (Polar's places and

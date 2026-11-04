@@ -214,6 +214,8 @@ internal static partial class RaceTrackStory
         }
         // (the palace's win is the sprint's own, win=79 1: the statue risen -- RaceCarEngineFile's dream)
         if (island == RaceTrackIsland.Palace) yield return $"gate={QEmperor} {StanReady} Stan waits in the library!";
+        // (the lava lake: after the dive into the lava, the clovers filled -- RACEMOD.CPP clovers_fill=, LavaDive)
+        if (island == RaceTrackIsland.CelebrationLava) yield return $"clovers_fill={LavaDived}";
         if (island == RaceTrackIsland.Celebration)
         {
             yield return $"win={FinalStep} {FinalWon}";

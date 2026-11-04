@@ -46,6 +46,8 @@
  *     holo_arrow=<n>             the holomap arrow the mod's story points at the start line: cleared once Twinsen drives
  *     start_item=<n>             a power-up in Twinsen's item box as the race goes (PU_*: 1 the protection spell, 4 the super jet-pack)
  *     won_set=<var> <value>...   as win=, but only when the player really beat the one to beat (a dream_any_end= dream applies win= either way)
+ *     clovers_fill=<var>         whenever the game variable <var> is 2, Twinsen's clovers are filled to his clover boxes and <var> back to 0
+ *                                (a script can't read how many boxes he has: the lava lake's dive, Zoe's word on the way back, 2026-11-04)
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
  *     grid_back=1                with qualifying=0: the player at the back of the grid instead, the opponents before him in their
  *                                qualifying times' order (the race game's "skip qualifying", RACEGAME.CPP)
@@ -631,6 +633,8 @@ static int s_winSet[2 * RACE_MAX_SETS], s_nbWinSet = 0;
 // won_set=: as win=, but only when the player really beat the one to beat -- a dream that wakes him whoever got there first
 // (dream_any_end=) applies win= either way; the story's DREAM_CAUGHT is a won_set=
 static int s_wonSet[2 * RACE_MAX_SETS], s_nbWonSet = 0;
+// clovers_fill=: the game variable that, at 2, fills Twinsen's clovers to his boxes (and goes back to 0); -1 none
+static int s_cloversFill = -1;
 static int s_place = 0, s_racers = 0;      // the player's place when he finished the race (0: not finished)
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
@@ -4453,6 +4457,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
         else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
+        else if (!strcmp(key, "clovers_fill")) { int var; if (sscanf(v, "%d", &var) == 1 && var >= 0 && var < MAX_FLAGS) s_cloversFill = var; }
         else if (!strcmp(key, "unlock_win")) sscanf(v, "%23s", s_unlockWin);
         else if (!strcmp(key, "unlock_beat")) sscanf(v, "%23s", s_unlockBeat);
         else if (!strcmp(key, "sprint")) s_sprint = atoi(v);
@@ -5420,6 +5425,12 @@ void RaceMod_Story(void) {
     }
     if (!RaceMod_Active()) return;
     const S32 now = TimerRefHR;
+    // (clovers_fill=: the clovers filled to the boxes -- the lava lake's dive, after the life it cost)
+    if (s_cloversFill >= 0 && ListVarGame[s_cloversFill] == 2) {
+        ListVarGame[s_cloversFill] = 0;
+        ListVarGame[FLAG_CLOVER] = NbCloverBox;
+        Log_Info("[racemod] clovers_fill: Twinsen's clovers filled to his %d boxes", (int)NbCloverBox);
+    }
     // (the parade car pulled up beside Twinsen: its driver's line -- parade_stop=; said from the car)
     if (s_pullSay && NewCube == -1) {
         s_pullSay = 0;
@@ -19384,7 +19395,7 @@ static void ResetTrack(void) {
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_safeAt = 0; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0;
-    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_place = s_racers = 0;
+    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_cloversFill = -1; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;

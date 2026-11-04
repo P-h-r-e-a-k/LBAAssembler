@@ -23,7 +23,7 @@ internal static partial class RaceTrackStory
     private const int LavaChapter = 6, FrancosStart = 257, FrancosDock = 109, ShipSwitch = 236;
 
     // The lava lake's new lines, after the seller's own (SellerLines) at the end of Celebration Island's texts (file 8)
-    internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo }
+    internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo, LavaNever }
     internal static readonly string[][] LavaLines =
     {
         new[]
@@ -116,6 +116,16 @@ internal static partial class RaceTrackStory
             "¡Boing! Perdón por lo del puesto. ¡Boing!",
             "Boing! Scusa per la bancarella. Boing!",
             "Boing! Desculpa lá a banca. Boing!",
+        },
+        // (LavaNever: Zoe, after the dive into the lava -- the Imperial Hotel's dive, LavaDive)
+        new[]
+        {
+            "Lava is never the answer, Twinsen.",
+            "La lave n'est jamais la solution, Twinsen.",
+            "Lava ist nie die Lösung, Twinsen.",
+            "La lava nunca es la respuesta, Twinsen.",
+            "La lava non è mai la risposta, Twinsen.",
+            "A lava nunca é a resposta, Twinsen.",
         },
     };
     // the tourist kangaroo of scene 95 (BODY.HQR 308: entity 214), whose own line (185, retold by IslandRetell) waits for after the race
@@ -259,6 +269,119 @@ void comportement_1()
 "));
             }
             return scripts => { foreach (var e in edits) e(scripts); };
+        });
+        return log;
+    }
+
+    // ---- the dive into the lava (the user, 2026-11-03: "For celebrat.ile we have a jump over the lava, and inside the imperial hotel
+    // (81: Otringal, the Imperial Hotel (room #51)) there's a hidden animation Twinsen can trigger if he does a running jump on the stairs,
+    // it can trigger a dive into the pool. Let's use this hidden animation but instead have Twinsen dive into the lava, this will kill
+    // Twinsen, but after he's lost a life and respawns let's have this refill all of his clover boxes (lives), and a text line from Zoe
+    // scolding him saying "Lava is never the answer""): a zone over the lava just past the lap's first carried jump's lip -- Twinsen on
+    // foot, jumping off the lip, comes down into it -- where the hotel's dive (the hero's animation 76) takes him and the lava has him
+    // (his life points 0 as the dive ends: the game takes a clover and he goes on where he is -- KILL_OBJ marks him dead, which the
+    // game's own death skips); back on his feet, after the life it cost: Zoe's word (LavaNever), and his clovers filled to his boxes (the
+    // race-track mode's clovers_fill=, variable LavaDived at 2: a script can't read how many boxes he has). (The scene started again with
+    // the variable at 1 -- his last clover gone, a game reloaded -- has her word then.)
+    public const int LavaDived = 228;
+    // (the dive: the hero's track's labels DiveLabel -- the animation -- and DiveDone after it, added to his own track as the hotel's
+    // hero plays it from his: an ANIM_OBJ from another actor doesn't take, his behaviour putting his own back each frame)
+    private const int DiveAnim = 76, DiveZone = 99, DiveLabel = 150, DiveDone = 151;
+    internal static List<string> LavaDive(SceneStore store, RaceTrackReport? report, int lava)
+    {
+        var log = new List<string>();
+        if (report is null) { log.Add("the dive into the lava left out: no track"); return log; }
+        // (the lap's first jump: a carried jump's lip and landing, else -- the lava lake's own, gaps in its raised road -- the points either
+        // side of the first run of the raised road's points with no width, its first jump over the lava channel)
+        int lipAt = -1, landAt = -1;
+        if (report.ArcJumps.Count > 0) (_, lipAt, landAt, _, _, _) = report.ArcJumps[0];
+        else
+            for (var k = 1; k + 1 < report.Raised.Count && lipAt < 0; k++)
+                if (report.Raised[k][3] == 0 && report.Raised[k - 1][3] > 0)
+                {
+                    var end = k;
+                    while (end < report.Raised.Count && report.Raised[end][3] == 0) end++;
+                    if (end < report.Raised.Count) { lipAt = k - 1; landAt = end; }
+                }
+        if (lipAt < 0 || landAt < 0 || lipAt >= report.Raised.Count || landAt >= report.Raised.Count) { log.Add("the dive into the lava left out: the jump's lip isn't on the raised road"); return log; }
+        int[] lip = report.Raised[lipAt], land = report.Raised[landAt];
+        double dx = land[0] - lip[0], dz = land[1] - lip[1], len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 512) { log.Add("the dive into the lava left out: the jump has no gap"); return log; }
+        dx /= len; dz /= len;
+        // (2.5 cells past the lip, as wide as the road there, at the lava's height -- the channel's lava a floor Twinsen on foot stands on:
+        // coming down into it off the end of the ramp he dives, standing on the lip he isn't in it)
+        double cx = (lip[0] + dx * 2.5 * 512) / 512.0, cz = (lip[1] + dz * 2.5 * 512) / 512.0;
+        var half = Math.Max(1.5, lip[3] / 512.0);
+        var scene = GroupB.OutsideScene(store, RaceTrackIsland.CelebrationLava, cx, cz);
+        if (scene < 0) { log.Add($"the dive into the lava left out: no scene at cell ({cx:0.#}, {cz:0.#})"); return log; }
+        GroupB.EditScene(store, scene, log, $"the dive into the lava past the jump's lip, at cell ({cx:0.#}, {cz:0.#}): Zoe's word and the clovers filled after it", model =>
+        {
+            int x = RaceTrackScenes.CubeLocal(cx, model.CubeX), z = RaceTrackScenes.CubeLocal(cz, model.CubeY), r = (int)Math.Round(half * 512);
+            // (the channel's lava a hand under the deck -- 1606 at the lava lake's first jump, its lip's deck 1700 -- which the island's
+            // ground there doesn't have: up to just under the lip's height)
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = DiveZone, X0 = x - r, X1 = x + r, Z0 = z - r, Z1 = z + r, Y0 = lip[2] - 2500, Y1 = lip[2] - 60, Info = new int[8] });
+            var helper = GroupB.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 4), $@"void comportement_0()
+{{
+    if (1 == var_game({LavaDived}))
+    {{
+        set_var_game({LavaDived}, 2);
+        message_zoe({lava + (int)LavaLine.LavaNever});
+    }}
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if ({DiveZone} == zone_obj(0) && {Driving} != comportement_hero())
+    {{
+        set_var_game({LavaDived}, 1);
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj(0, label_{DiveLabel});
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if ({DiveDone} == l_track_obj(0))
+    {{
+        set_life_point_obj(0, 0);
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if (0 < life_point_obj(0))
+    {{
+        set_dir_obj(0, MOVE_MANUAL);
+        set_var_game({LavaDived}, 2);
+        message_zoe({lava + (int)LavaLine.LavaNever});
+        set_comportement(comportement_5);
+    }}
+}}
+
+void comportement_5()
+{{
+    if ({DiveZone} != zone_obj(0))
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+");
+            return scripts =>
+            {
+                helper(scripts);
+                scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $@"
+
+label({DiveLabel});
+anim({DiveAnim});
+wait_anim();
+
+label({DiveDone});
+stop();
+");
+            };
         });
         return log;
     }
