@@ -2094,7 +2094,7 @@ static T_RACE_TELEPORT s_teleports[RACE_MAX_TELEPORTS];
 static int s_nbTeleports = 0;
 static S32 s_teleportedAt = 0;
 static S32 s_passageAt = 0, s_passageUntil = 0;   // the passage the car is going through (TimerRefHR), 0 none
-typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; int Crab; double SeaX, SeaZ; } T_RACE_THROWN;   // (Crab: Felix's, and the sea it came from)
+typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; int Crab; double SeaX, SeaZ; int Barrel; } T_RACE_THROWN;   // (Crab: Felix's, and the sea it came from; Barrel: a monkey's barrel, guard_barrel=)
 static T_RACE_THROWN s_thrown[RACE_MAX_THROWN];
 static S32 s_guardGrace[RACE_MAX_OPPONENTS + 1];   // a car just struck by one of them is let be till then
 // (where each car is going: its last place and its way, units a second -- -1 Twinsen's at 0)
@@ -2678,6 +2678,11 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
 static double s_tunnelScale = 1;
 static int s_crabModel = -1;               // guard_crab=: the crab Felix fishes up, in OBJFIX.HQR
+// guard_barrel= (an easter egg, the user, 2026-11-04 -- "How high can you get?"): one throw in RACE_BARREL_EVERY of the small monkey monsters'
+// is a barrel, OBJFIX.HQR's this one, as Donkey Kong's ape threw them: caught on Twinsen's car it stops nothing -- "+100" and a kash (or a
+// zlito, the money where he is) -- and it stops no opponent either
+static int s_barrelModel = -1, s_monkeyThrows = 0;
+#define RACE_BARREL_EVERY 10
 // spill=<x> <y> <z> (the Long Table's, 2026-11-02): a place where a slick lies on the road, the cranberries' or the gravy's, as a drip's does (DripOil), and lies again a while after a car
 // has taken it
 #define RACE_MAX_SPILLS 12
@@ -4339,6 +4344,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "tunnel_scale")) s_tunnelScale = atof(v) > 0 ? atof(v) : 1;
         else if (!strcmp(key, "guard_crab")) s_crabModel = atoi(v);
+        else if (!strcmp(key, "guard_barrel")) s_barrelModel = atoi(v);
         else if (!strcmp(key, "spill")) { if (s_nbSpills < RACE_MAX_SPILLS && sscanf(v, "%lf %lf %lf", &s_spills[s_nbSpills].X, &s_spills[s_nbSpills].Y, &s_spills[s_nbSpills].Z) == 3) s_spills[s_nbSpills++].Next = 0; }
         else if (!strcmp(key, "leaves")) sscanf(v, "%d %d %d %d", &s_leafBorder, &s_leaf[0], &s_leaf[1], &s_leaf[2]);
         else if (!strcmp(key, "race_driver_body")) { if (s_nbDriverBodies < RACE_MAX_DRIVER_BODIES) s_driverBody[s_nbDriverBodies++] = atoi(v); }
@@ -14499,7 +14505,9 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     const S32 beta = TurnOf(atan2(tx - fromX, tz - fromZ));
     const S32 alpha = TurnRound(h);
     if (g->Kind == 4) {
-        u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), RACE_CRATE_OBJ, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
+        u->Barrel = s_barrelModel >= 0 && ++s_monkeyThrows % RACE_BARREL_EVERY == 0;
+        u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), u->Barrel ? s_barrelModel : RACE_CRATE_OBJ, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
+        if (u->Barrel) Log_Info("[racemod] %s: it's a barrel", GuardName(g));
         if (u->Extra >= 0) u->Sprite = ListExtra[u->Extra].Sprite;
     }
     else if (g->Kind == 5) u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), SPRITE_BALLE_LVL_4, alpha, beta, RACE_CRATE_SPEED, RACE_THROWN_WEIGHT, 0);
@@ -14700,8 +14708,8 @@ static void Guards(S32 now, int driving, S32 dt) {
         if (!u->On || now - u->T0 < u->Dur) continue;
         u->On = 0;
         const int alive = u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == u->Sprite && ListExtra[u->Extra].Owner == (U8)u->Owner;
-        const int crab = u->Crab && alive;
-        u->Crab = 0;
+        const int crab = u->Crab && alive, barrel = u->Barrel;
+        u->Crab = 0; u->Barrel = 0;
         if (alive && !crab) ListExtra[u->Extra].Sprite = -1;
         const S32 lx = (S32)(u->ToX - cx), lz = (S32)(u->ToZ - cz);
         if (!crab && CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
@@ -14712,6 +14720,14 @@ static void Guards(S32 now, int driving, S32 dt) {
             if (!CarAt(who, &x, &y, &z)) continue;
             if (who < 0) Log_Info("[racemod] a thrown thing comes down %.0f from Twinsen's car, %.0f up or down", sqrt((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ)), fabs(y - u->ToY));
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > RACE_THROWN_REACH * RACE_THROWN_REACH || fabs(y - u->ToY) > 1400) continue;
+            // (a barrel: caught, not a hit -- Twinsen's is worth a coin, an opponent's nothing)
+            if (barrel) {
+                if (who >= 0) continue;
+                if (MONEY_ZLITOS) NbZlitosPieces++; else NbGoldPieces++;
+                Message("+100");
+                Log_Info("[racemod] Twinsen's car catches a monkey's barrel: +100, and a coin");
+                continue;
+            }
             Log_Info("[racemod] a thrown thing hits %s's car", CarName(who));
             GuardStrikes(who, now, "a thrown thing", RACE_THROWN_STUN);
             struck = 1;
@@ -19487,7 +19503,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_leafBorder = -1; s_nbSpills = 0; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_barrelModel = -1; s_monkeyThrows = 0; s_leafBorder = -1; s_nbSpills = 0; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");

@@ -16,7 +16,7 @@ internal static partial class RaceTrackStory
 {
     private const int ElevatorChapter = 8, PlatformScene = 120, ElevatorTexts = 3 + 10, MonsterActor = 2, WanniesArrival = 98;
 
-    internal enum ElevatorLine { LyraArrival, Ring, Baldino, Monster1, Monster2, Monster3, ZoeSneaked, Monster4, Again, ZoeCage, Go, Lost, Won1, Won2, LyraDown }
+    internal enum ElevatorLine { LyraArrival, Ring, Baldino, Monster1, Monster2, Monster3, ZoeSneaked, Monster4, Again, ZoeCage, Go, Lost, Won1, Won2, LyraDown, MonsterFast, LyraKong }
     internal static readonly string[][] ElevatorLines =
     {
         new[]
@@ -146,6 +146,25 @@ internal static partial class RaceTrackStory
             "L'ascensore è tuo. Si scende!",
             "O elevador é teu. Vamos descer!",
         },
+        // (the easter eggs, RaceTrackStory.Eggs.Elevator.cs: beaten by ten seconds; and Lyra on the barrels)
+        new[]
+        {
+            "*thump* *thump* Blue one FAST.",
+            "*boum* *boum* Bleu RAPIDE.",
+            "*bumm* *bumm* Blauer SCHNELL.",
+            "*pum* *pum* Azul RÁPIDO.",
+            "*bum* *bum* Blu VELOCE.",
+            "*pum* *pum* Azul RÁPIDO.",
+        },
+        new[]
+        {
+            "Lyra: Watch out for his little ones on the deck below. They throw crates, and now and then a barrel. He calls it Monkey Kong. I don't ask.",
+            "Lyra : Attention à ses petits sur le pont du dessous. Ils lancent des caisses, et de temps en temps un tonneau. Il appelle ça Monkey Kong. Je ne pose pas de questions.",
+            "Lyra: Pass auf seine Kleinen auf dem Deck darunter auf. Sie werfen Kisten und ab und zu ein Fass. Er nennt es Monkey Kong. Ich frage nicht.",
+            "Lyra: Cuidado con sus pequeños en la cubierta de abajo. Lanzan cajas, y de vez en cuando un barril. Él lo llama Monkey Kong. Yo no pregunto.",
+            "Lyra: Attento ai suoi piccoli sul ponte di sotto. Lanciano casse, e ogni tanto un barile. Lui lo chiama Monkey Kong. Io non faccio domande.",
+            "Lyra: Cuidado com os pequenos dele no convés de baixo. Atiram caixotes, e de vez em quando um barril. Ele chama-lhe Monkey Kong. Eu não pergunto.",
+        },
     };
 
     // Group B's islands of chapters 8-10 (RaceTrackService.Story): the island's own beats, before its retelling
@@ -236,6 +255,7 @@ void comportement_1()
             message({Say(ElevatorLine.Monster3)});
             message_zoe({Say(ElevatorLine.ZoeSneaked)});
             message({Say(ElevatorLine.Monster4)});
+            message({Say(ElevatorLine.LyraKong)});
         }}
     }}
     swif (1 == action())
@@ -272,6 +292,10 @@ void comportement_1()
         set_var_game({RaceDoneB}, 0);
         if ({ElevatorChapter} < chapter())
         {{
+            if (1 == var_game({EggMonster}))
+            {{
+                {speaker}{Say(ElevatorLine.MonsterFast)});
+            }}
             {speaker}{Say(ElevatorLine.Won1)});
             {speaker}{Say(ElevatorLine.Won2)});
             message({Say(ElevatorLine.LyraDown)});

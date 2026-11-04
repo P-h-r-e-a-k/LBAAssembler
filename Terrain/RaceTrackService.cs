@@ -202,6 +202,8 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? CrystalShardModels = null,
         // CrabModel: the crab Felix fishes up, in OBJFIX.HQR (RACEMOD.CPP guard_crab=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? CrabModel = null,
+        // BarrelModel: the Elevator Platform's monkeys' barrel, in OBJFIX.HQR (RACEMOD.CPP guard_barrel=; an easter egg, RaceTrackStory.Eggs.Elevator.cs)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? BarrelModel = null,
         // JetSignals: the steam jets' signals in BODY.HQR, safe and dangerous (RaceTrackPipes.InstallSignals; RACEMOD.CPP jet_signals=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? JetSignals = null,
         // JetSignalPlaces: where they stand (RaceTrackReport.JetSignalPlaces; RACEMOD.CPP jet_signal=)
@@ -636,7 +638,7 @@ internal static class RaceTrackService
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel, GravyBall;
         public int[]? CrystalShardModels, Footballs;
-        public int? CrabModel;
+        public int? CrabModel, BarrelModel;
         public int[]? JetSignals;
         public int[]? WindowSmash;
         // FunFrock's car empty: its BODY.HQR entry and the racer's driving animation (TrackInfo.ChaseCar)
@@ -951,7 +953,7 @@ internal static class RaceTrackService
         }
         // ... and the people in the cars' way twice their size (RaceTrackGuards), when a track has them
         // (whether this report has any or not: a twin's are in its own report, Citadel 2's Felix was left without his crab)
-        if (!session.GuardBodies) { log.AddRange(RaceTrackGuards.Install(gameDirectory)); session.CrabModel = RaceTrackGuards.InstallCrab(gameDirectory); session.GuardBodies = true; }
+        if (!session.GuardBodies) { log.AddRange(RaceTrackGuards.Install(gameDirectory)); session.CrabModel = RaceTrackGuards.InstallCrab(gameDirectory); session.BarrelModel = RaceTrackStory.InstallBarrel(gameDirectory); session.GuardBodies = true; }
         if (report.Jets.Any(j => j.Length >= 10) && session.JetSignals is null) session.JetSignals = RaceTrackPipes.InstallSignals(gameDirectory);
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
         if (!session.SmallCars)
@@ -1062,7 +1064,7 @@ internal static class RaceTrackService
     {
         // (the models the session installed, the same for every track it builds)
         TrackInfo WithModels(TrackInfo t) => t with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall,
-            LaserModels = session.LaserModels, LavaBallModel = options.Island == RaceTrackIsland.Harvest ? session.GravyBall : session.LavaBallModel, CrystalShardModels = options.Island == RaceTrackIsland.Harvest ? session.Footballs : session.CrystalShardModels, CrabModel = session.CrabModel, JetSignals = report.Jets.Count > 0 ? session.JetSignals : null };
+            LaserModels = session.LaserModels, LavaBallModel = options.Island == RaceTrackIsland.Harvest ? session.GravyBall : session.LavaBallModel, CrystalShardModels = options.Island == RaceTrackIsland.Harvest ? session.Footballs : session.CrystalShardModels, CrabModel = session.CrabModel, BarrelModel = options.Island == RaceTrackIsland.Elevator ? session.BarrelModel : null, JetSignals = report.Jets.Count > 0 ? session.JetSignals : null };
         var info = WithModels(Info(report, options, scenes)) with { Story = story, Dream = dream,
             ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null };
         // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)
