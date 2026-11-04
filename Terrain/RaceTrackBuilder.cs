@@ -1388,7 +1388,7 @@ internal static class RaceTrackBuilder
         // (the game's own islands, and one that asks: the Temple of Bu, the palace and the like are built of pieces that hold each other up in
         // ways this doesn't see, and 288 of the Temple's went)
         // (a shared track's copy of one of the game's islands too)
-        if (!options.Island.Created || options.Island.SharedFrom is not null || plan.ClearFloaters) ClearFloaters(island, floating, ownDecors, report);
+        if (!options.Island.Created || options.Island.SharedFrom is not null || plan.ClearFloaters) ClearFloaters(island, floating, ownDecors, keepBodies, report);
         Relight(island, index, plan.RoadLight);
         if (planned) SeaEverywhere(island, main, report);
         ShoreFills(island, plan, report);
@@ -1443,12 +1443,16 @@ internal static class RaceTrackBuilder
             }
     }
 
-    private static void ClearFloaters(IslandFile island, HashSet<IslandDecor> before, HashSet<IslandDecor> own, RaceTrackReport report)
+    // (what the plan keeps stays, held up or not: a kept decor's collision box is cut down to end under a raised road that passes over it
+    // (ClearDecors), and what stood on that box -- the Elevator Platform's lift shaft and towers on its deck, their lamps on top -- looked held
+    // up by nothing and went: the user, 2026-11-04, "the actual elevator appears to be removed by our track script")
+    private static void ClearFloaters(IslandFile island, HashSet<IslandDecor> before, HashSet<IslandDecor> own, int[]? keepBodies, RaceTrackReport report)
     {
+        var kept = keepBodies?.ToHashSet() ?? new HashSet<int>();
         var gone = new Dictionary<int, int>();
         foreach (var (cx, cz, d) in IslandFloaters.Find(island))
         {
-            if (before.Contains(d) || !own.Contains(d) || island.CubeAt(cx, cz) is not { } cube) continue;
+            if (before.Contains(d) || !own.Contains(d) || kept.Contains(d.Body & 0xFFFF) || island.CubeAt(cx, cz) is not { } cube) continue;
             cube.Decors.Remove(d);
             report.Removed.Add((cx, cz, d.Body & 0xFFFF, "floating"));
             report.DecorsRemoved++;
