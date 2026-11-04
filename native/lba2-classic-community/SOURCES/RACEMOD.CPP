@@ -639,6 +639,32 @@ static int s_place = 0, s_racers = 0;      // the player's place when he finishe
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
 static int s_finishSet[2 * RACE_MAX_SETS], s_nbFinishSet = 0;
+// The story's easter eggs (the user, 2026-11-04, of the proposal's picks: "Let's make all those changes" -- LBA Assembler's
+// RaceTrackStory.Eggs.cs names their game variables). Each sets its variable only upwards (SetAtLeast): what was found stays found.
+//   lap_record=<ms> <var> <value>   a lap of the race under <ms> -- Bù's lap record on the Desert, 1:02
+//   margin_win=<ms> <var> <value>   won with every other car at least <ms> from the line (MarginAhead) -- the Elevator Platform's monster
+//                                   beaten by ten seconds
+//   no_hit=<var> <value>            the race finished without one of Island CX's missiles hitting Twinsen's car (Baldino's grey paint)
+//   weather_var=<var>               from the grid to the finish, the variable's 1 rain and 2 snow on the race (the Weather Wizard's
+//                                   encore on the town circuit: COMMON.H RAIN_FALLS, SNOW.CPP SnowFalls)
+//   tortoise=<s> <opponent> <text>  Twinsen not off his grid spot <s> seconds after GO: the opponent (1 the first) trundles past him at
+//                                   a walk, the text is said and the race starts again (TortoiseWatch) -- the Francos' Tortoise and the Hare
+static S32 s_lapRecordMs = 0, s_marginMs = 0;
+static int s_lapRecordVar = -1, s_lapRecordValue = 0, s_marginVar = -1, s_marginValue = 0;
+static int s_noHitVar = -1, s_noHitValue = 0, s_heroMissileHits = 0;
+static int s_weatherVar = -1;
+static S32 s_tortoiseMs = 0, s_tortoiseAt = 0;
+static int s_tortoiseOpp = -1, s_tortoiseText = -1, s_tortoiseArmed = 0;
+static double s_tortoiseX = 0, s_tortoiseZ = 0;
+#define RACE_TORTOISE_PACE 0.12            // her pace, the jet-pack's factor: a walk
+#define RACE_TORTOISE_BEHIND (3 * 512.0)   // put this far behind him on her line, out of sight behind the camera
+#define RACE_TORTOISE_MS 9000              // she passes him, then the moral and the race again
+#define RACE_TORTOISE_MOVED (2 * 512.0)    // Twinsen this far from his grid spot has set off
+static void SetAtLeast(int var, int value, const char *why) {
+    if (var < 0 || var > 255 || ListVarGame[var] >= value) return;
+    ListVarGame[var] = (S16)value;
+    Log_Info("[racemod] %s: game variable %d = %d", why, var, value);
+}
 // The race game's Story Mode (2026-10-29, the user: "Let's gate different cars to be unlocked by completing different island tracks in
 // story mode"): the cars a story track's win unlocks (unlock_win=<id>), or beating its time to beat (unlock_beat=<id>) -- RACEGAME.CPP
 // RaceGame_StoryUnlock keeps them; said on the display once the race's own word is over (s_sayNext)
@@ -2661,6 +2687,15 @@ static int s_nbSpills = 0;
 // leaves=<z> <colour> <colour> <colour> (the Long Table's, 2026-11-02): the snowfall (SNOW.CPP) on a race's island, falling leaves in those colours while Twinsen is north
 // of island z <z>, snow when he is south of it: October and November
 static int s_leafBorder = -1, s_leaf[3];
+// weather_var= (the Weather Wizard's encore, the user, 2026-11-04): the weather a variable picks for the race, from the grid (the count-down
+// running) to the finish -- 1 rain, 2 snow, else the island's own; on its outside scenes only
+static int WeatherChoice(void) {
+    if (s_weatherVar < 0 || s_weatherVar > 255 || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return 0;
+    if (!s_goAt || s_place || (s_phase != PHASE_GRID && s_phase != PHASE_RACE)) return 0;
+    return ListVarGame[s_weatherVar];
+}
+S32 RaceMod_RainChoice(void) { return WeatherChoice() == 1; }
+S32 RaceMod_SnowChoice(void) { return WeatherChoice() == 2; }
 S32 RaceMod_Leaves(void) { return s_leafBorder >= 0; }
 S32 RaceMod_LeafColour(S32 i) {
     if (s_leafBorder < 0 || ListObjet[NUM_PERSO].Obj.Z + CurrentCubeY * 32768.0 >= s_leafBorder) return -1;
@@ -4457,6 +4492,15 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
         else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
+        else if (!strcmp(key, "lap_record")) { if (sscanf(v, "%d %d %d", &s_lapRecordMs, &s_lapRecordVar, &s_lapRecordValue) != 3) s_lapRecordVar = -1; }
+        else if (!strcmp(key, "margin_win")) { if (sscanf(v, "%d %d %d", &s_marginMs, &s_marginVar, &s_marginValue) != 3) s_marginVar = -1; }
+        else if (!strcmp(key, "no_hit")) { if (sscanf(v, "%d %d", &s_noHitVar, &s_noHitValue) != 2) s_noHitVar = -1; }
+        else if (!strcmp(key, "weather_var")) { if (sscanf(v, "%d", &s_weatherVar) != 1) s_weatherVar = -1; }
+        else if (!strcmp(key, "tortoise")) {
+            int s = 0;
+            if (sscanf(v, "%d %d %d", &s, &s_tortoiseOpp, &s_tortoiseText) == 3 && s > 0 && s_tortoiseOpp >= 1 && s_tortoiseOpp <= RACE_MAX_OPPONENTS) { s_tortoiseMs = s * 1000; s_tortoiseOpp--; }
+            else s_tortoiseOpp = -1;
+        }
         else if (!strcmp(key, "clovers_fill")) { int var; if (sscanf(v, "%d", &var) == 1 && var >= 0 && var < MAX_FLAGS) s_cloversFill = var; }
         else if (!strcmp(key, "unlock_win")) sscanf(v, "%23s", s_unlockWin);
         else if (!strcmp(key, "unlock_beat")) sscanf(v, "%23s", s_unlockBeat);
@@ -4923,6 +4967,7 @@ static int FinishPlace(int laps, int *racers) {
 
 static double PlayerProgress(void);
 static double OpponentProgress(const T_RACE_OPPONENT *o);
+static S32 MarginAhead(void);
 static void SprintOver(S32 now, int crossed);
 static void RaceFromGrid(void);
 static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot);
@@ -5084,6 +5129,8 @@ void RaceMod_Lap(S32 x, S32 z) {
                 Message(text);
             }
         }
+        // (an easter egg's lap record, lap_record=: under it, its variable -- no word of it here, the rune tablet says so)
+        if (s_lapRecordVar >= 0 && s_phase == PHASE_RACE && s_lastLap < s_lapRecordMs) SetAtLeast(s_lapRecordVar, s_lapRecordValue, "the lap record beaten");
         // the race's last lap: the player's place, and a win's variables
         if (s_raceLaps > 0 && s_phase == PHASE_RACE && s_nbOrder > 0 && !s_place && s_laps == s_raceLaps) {
             int racers;
@@ -5124,6 +5171,17 @@ void RaceMod_Lap(S32 x, S32 z) {
                      mainOn ? (s_beatMain ? ", ahead of the main opponent" : ", behind the main opponent") : "");
             if (total > 0) Log_Info("[racemod] Twinsen finishes the race: %.2f s from GO", total / 1000.0);
             if (s_beatMain) { ApplySets(s_winSet, s_nbWinSet); ApplySets(s_wonSet, s_nbWonSet); StoryUnlock(s_unlockWin); }
+            // (the easter eggs' results: before finish='s, which the after-race lines wait for)
+            if (s_marginVar >= 0 && s_beatMain && place == 1) {
+                const S32 margin = MarginAhead();
+                Log_Info("[racemod] won by %.2f s (margin_win= wants %.2f s)", margin / 1000.0, s_marginMs / 1000.0);
+                if (margin >= s_marginMs) SetAtLeast(s_marginVar, s_marginValue, "won by a margin");
+            }
+            // (a win's only: the trooper's word follows the win, and a lost race without a hit before it isn't the one he saw)
+            if (s_noHitVar >= 0) {
+                Log_Info("[racemod] missiles that hit Twinsen's car this race: %d", s_heroMissileHits);
+                if (!s_heroMissileHits && s_beatMain) SetAtLeast(s_noHitVar, s_noHitValue, "won without one missile hit");
+            }
             ApplySets(s_finishSet, s_nbFinishSet);
         }
         if (s_phase == PHASE_QUALIFYING) {
@@ -6600,6 +6658,7 @@ static void FormGrid(S32 now) {
     }
     s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0; s_heldAt = 0;
     s_place = 0;
+    s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_gridAt = now;
     s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
     s_phase = PHASE_GRID;
@@ -12837,6 +12896,7 @@ static void Projectiles(S32 now, int driving) {
             double x, y, z;
             if (!CarAt(who, &x, &y, &z)) continue;
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > reach * reach || fabs(y - u->ToY) > 1400) continue;
+            if (u->Kind == SHOT_MISSILE && who < 0) s_heroMissileHits++;      // (no_hit=: Baldino's grey paint)
             if (u->Kind == SHOT_MISSILE) CarStruck(who, now, "missile", "an Island CX gun");
             else if (u->Kind == SHOT_FIREBALL) CarStruckFor(who, now, "fire ball", "a flying gas monster", RACE_FIREBALL_STUN, NULL);
             else if (u->Kind == SHOT_WITCHFIRE) CarStruckFor(who, now, "fire ball", "a witch", RACE_FIREBALL_STUN, NULL);
@@ -17052,10 +17112,12 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
 // (the console's isoview holds a place on the island, whichever cube the car has gone on to)
 S32 CameraForceWorld[2];
 extern S32 CameraForced, CameraForce[6];
+static void TortoiseWatch(S32 now);
 void RaceMod_Frame(void) {
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
+    TortoiseWatch(TimerRefHR);
     DeckLiftFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -17483,6 +17545,61 @@ static double PlayerProgressAt(const T_RACE_OPPONENT *o, double wx, double wy, d
 static double OpponentProgress(const T_RACE_OPPONENT *o) {
     if (o->Laps == 0) return o->S > o->Length / 2 ? o->S - o->Length : o->S;
     return (o->Laps - 1) * o->Length + o->S;
+}
+
+// tortoise= (the Island of the Francos: its De La Fontaine is named after Jean de La Fontaine, whose fable of the Tortoise and the Hare
+// ends "Rien ne sert de courir; il faut partir a point" -- an easter egg, the user, 2026-11-04): at GO, where Twinsen's car stands is
+// kept (armed, 1); driven RACE_TORTOISE_MOVED off it, nothing more this race (2). Still there s_tortoiseMs after GO: the opponent -- Moya,
+// the turtle -- is put RACE_TORTOISE_BEHIND behind him on her own line at a walk (a jet-pack's factor under 1, RACE_TORTOISE_PACE) and
+// passes him; RACE_TORTOISE_MS later the race starts again from the grid, the moral said as a loss's line is (s_pendLose).
+static void TortoiseWatch(S32 now) {
+    if (s_tortoiseOpp < 0 || !s_goAt || s_place) return;
+    T_RACE_OPPONENT *o = &s_opp[s_tortoiseOpp];
+    if (!o->Count || !o->Scenes || o->Length <= 0) return;
+    if (s_tortoiseAt) {
+        if (now - s_tortoiseAt < RACE_TORTOISE_MS) return;
+        o->JetUntil = 0; o->JetFactor = 1;
+        s_tortoiseAt = 0; s_tortoiseArmed = 0;
+        if (s_tortoiseText >= 0) s_pendLose = s_tortoiseText;
+        Log_Info("[racemod] tortoise: %s has passed Twinsen sitting on the grid -- the moral (text %d), and the race again", o->Name, s_tortoiseText);
+        RaceFromGrid();
+        return;
+    }
+    if (s_phase != PHASE_RACE || now < s_goAt || s_tortoiseArmed == 2 || Comportement != C_BUGGY) return;
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    const double wx = h->Obj.X + CurrentCubeX * 32768.0, wz = h->Obj.Z + CurrentCubeY * 32768.0;
+    if (!s_tortoiseArmed) { s_tortoiseArmed = 1; s_tortoiseX = wx; s_tortoiseZ = wz; return; }
+    if ((wx - s_tortoiseX) * (wx - s_tortoiseX) + (wz - s_tortoiseZ) * (wz - s_tortoiseZ) > RACE_TORTOISE_MOVED * RACE_TORTOISE_MOVED) { s_tortoiseArmed = 2; return; }
+    if (now - s_goAt < s_tortoiseMs) return;
+    int best = -1;
+    double bd = 1e30;
+    for (int i = 0; i < o->Count; i++) {
+        const double d = LineDistance(o, i, wx, h->Obj.Y, wz);
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0) { s_tortoiseArmed = 2; return; }
+    double s = o->Cum[best] - RACE_TORTOISE_BEHIND;
+    if (s < 0) s += o->Length;
+    o->S = s; o->Speed = 0; o->MergeLeft = 0; o->HitUntil = 0; o->SkidUntil = 0;
+    o->JetFactor = RACE_TORTOISE_PACE; o->JetUntil = now + RACE_TORTOISE_MS + 5000;
+    s_tortoiseAt = now;
+    Log_Info("[racemod] tortoise: Twinsen still on the grid %.0f s after GO -- %s comes by at a walk", (now - s_goAt) / 1000.0, o->Name);
+}
+
+// As Twinsen crosses the finish line, how long the nearest other car will take to get there, ms (margin_win=): each one's way still to go
+// along its own line at its own lap's pace (its skill's planned lap) -- 0 when one is there already. No cars racing: as good as forever.
+static S32 MarginAhead(void) {
+    double least = 1e9;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        const T_RACE_OPPONENT *o = &s_opp[n];
+        if (!o->Count || !o->Scenes || o->Length <= 0) continue;
+        if (o->Laps > s_raceLaps) return 0;
+        const double left = s_raceLaps * o->Length - OpponentProgress(o);
+        const double speed = o->PlannedLap > 0 ? o->Length / o->PlannedLap : 0;   // (units a second)
+        const double ms = speed > 0 ? left / speed * 1000 : 1e9;
+        if (ms < least) least = ms;
+    }
+    return least >= 1e9 ? 0x7FFFFFFF : (S32)least;
 }
 
 static void Time(char *out, size_t size, S32 ms) {
@@ -19400,6 +19517,7 @@ static void ResetTrack(void) {
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
+    s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_unlockWin[0] = s_unlockBeat[0] = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;

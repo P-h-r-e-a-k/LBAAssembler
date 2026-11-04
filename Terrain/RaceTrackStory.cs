@@ -943,7 +943,10 @@ void comportement_1()
         });
 
         // 8. the new story's beats, chapters 1 and 2 (RaceTrackStory.Chapters.cs)
-        Chapters(new StoryParts(store, originals, storm, town, scenes, townScenes, log, Edit, Add, Say, Id));
+        var parts = new StoryParts(store, originals, storm, town, scenes, townScenes, log, Edit, Add, Say, Id);
+        Chapters(parts);
+        // 9. the island's easter eggs (RaceTrackStory.Eggs.Citadel.cs)
+        CitadelEggs(parts, gameDirectory);
 
         store.SaveMany(models.Select(m => new SceneChange(m.Key, m.Value, null)).ToList(), allowErrors: true);
         log.Add($"the race-track mode: Mr. Paul's gloves gate the storm track (variable {GlovesSlot}), Raph's time beaten sets {BeatVar}; the town circuit opens once {DayVar} is {Rested}, " +

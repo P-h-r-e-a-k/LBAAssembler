@@ -26,6 +26,8 @@ internal static partial class RaceTrackStory
     {
         Ringing, BaldinoRadio, LyraWelcome, LyraGate, LyraOpen, ZoeNo, MechanicSpare, ZoeRadio, TwinsenMind, ZoeWillMind, MechanicLeave,
         MechanicWorking, HalThanks, HalRadio, BaldinoBeaten, LyraZeelich, HalLog, ZoeLaugh,
+        // (the eggs': RaceTrackStory.Eggs.Emerald.cs)
+        HalDaisy, HalDiagnostic, BowlerUp, BowlerTuesday,
     }
     private static readonly string[][] MoonLines =
     {
@@ -191,6 +193,43 @@ internal static partial class RaceTrackStory
             "Chi lascia la propria risata in archivio?",
             "Quem é que deixa a gargalhada em arquivo?",
         },
+        // (HAL's song: Daisy Bell, as 2001 has him sing it -- and as its dubs did: Au clair de la lune, Hänschen klein, Giro giro tondo)
+        new[]
+        {
+            "Daisy... Daisy... give me your answer do... I'm... half... crazy...",
+            "Au clair... de la lune... mon ami... Pierrot... prête-moi... ta plume...",
+            "Hänschen klein... ging allein... in die weite... Welt... hinein...",
+            "Daisy... Daisy... dame tu respuesta... estoy... medio... loco...",
+            "Giro giro... tondo... casca... il mondo... casca... la terra...",
+            "Daisy... Daisy... dá-me a tua resposta... estou... meio... louco...",
+        },
+        new[]
+        {
+            "Excuse me. A diagnostic.",
+            "Excuse-moi. Un diagnostic.",
+            "Entschuldige. Eine Diagnose.",
+            "Perdona. Un diagnóstico.",
+            "Scusami. Una diagnostica.",
+            "Desculpa. Um diagnóstico.",
+        },
+        new[]
+        {
+            "In this gravity my boules never come down. I threw one on Tuesday.",
+            "Avec cette gravité, mes boules ne retombent jamais. J'en ai lancé une mardi.",
+            "Bei dieser Schwerkraft kommen meine Kugeln nie wieder runter. Eine habe ich am Dienstag geworfen.",
+            "Con esta gravedad mis bolas nunca bajan. Lancé una el martes.",
+            "Con questa gravità le mie bocce non scendono mai. Ne ho lanciata una martedì.",
+            "Com esta gravidade as minhas bolas nunca caem. Lancei uma na terça-feira.",
+        },
+        new[]
+        {
+            "Tuesday's.",
+            "Celle de mardi.",
+            "Die vom Dienstag.",
+            "La del martes.",
+            "Quella di martedì.",
+            "A de terça-feira.",
+        },
     };
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -265,7 +304,7 @@ internal static partial class RaceTrackStory
             }}
             else
             {{
-                message({Say(MoonLine.HalThanks)});
+{HalDaisy(Say(MoonLine.HalThanks), Say(MoonLine.HalDaisy), Say(MoonLine.HalDiagnostic))}
             }}", 2500));
                 var mechanics = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(MechanicSpot.X, MechanicSpot.Y, MechanicSpot.Z, 4), Talker(moon, $@"            if ({RadioLent} > var_game({QHal}) && 0 < var_game({Radio}))
             {{
@@ -325,6 +364,9 @@ void comportement_1()
             };
             return scripts => { foreach (var e in edits) e(scripts); };
         });
+
+        // the eggs: petanque in low gravity (RaceTrackStory.Eggs.Emerald.cs)
+        MoonPetanque(b, report, Say(MoonLine.BowlerUp), Say(MoonLine.BowlerTuesday));
 
         b.Save();
         log.Add($"the Emerald Moon's race file: gate={QHal} {HalMended} (HAL mended), win={QHal} {HalWon}");

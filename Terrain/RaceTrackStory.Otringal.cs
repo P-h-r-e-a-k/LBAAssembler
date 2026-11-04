@@ -15,8 +15,8 @@ namespace LBAAssembler.Terrain;
 //   - Won (win=217 3): out of the car -- Lyra and the Fragment of the Sups (item 32), a Dark Monk priest's word, Zoe (Q_FEE 4); Johnny
 //     Rocket at the space port (a copy of the game's, scene 81's actor 3, by the shuttles' pads in scene 92): the black car took the
 //     shuttle to Celebration Island, and he flies them there (inc_chapter: 6; change_cube(95), the souvenir seller's stall on Celebration Island, where the lava lake's chapter begins).
-// Not built: Rick at his piano (optional in the walkthrough) and the priest standing in the crowd at the palace bend (his line is said
-// with the others after the race).
+// Rick (optional in the walkthrough) is by the Casino's bar, with the eggs (RaceTrackStory.Eggs.Otringal.cs); not at a piano.
+// Not built: the priest standing in the crowd at the palace bend (his line is said with the others after the race).
 internal static partial class RaceTrackStory
 {
     // Q_FEE: 1 Lyra has told (the 10 zlitos given), 2 the Travel Token bought, 3 the race won, 4 Lyra and the priest have spoken, 5 Johnny
@@ -31,6 +31,8 @@ internal static partial class RaceTrackStory
     {
         Ringing, BaldinoRadio, LyraZeelich, LyraFee, LyraOpen, StewardFee, StewardShort, StewardAsk, Yes, No, StewardToken, StewardOnGrid,
         ZoeDont, TwinsenLittle, LyraWin, Priest, ZoeCharming, JohnnyCar, JohnnyFly, JohnnyBusy,
+        // (the eggs': RaceTrackStory.Eggs.Otringal.cs)
+        RickCup, RickTracks, RickKid, LyraNine, LyraEight,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -189,6 +191,51 @@ internal static partial class RaceTrackStory
             "Johnny Rocket, a tu servicio. Gana primero tu carrera, chaval, y luego hablamos.",
             "Johnny Rocket, al tuo servizio. Vinci prima la tua gara, ragazzo, poi parliamo.",
             "Johnny Rocket, ao teu dispor. Ganha primeiro a tua corrida, miúdo, depois falamos.",
+        },
+        new[]
+        {
+            "The Cup? I'll play you something fast for it.",
+            "La Coupe ? Je vais te jouer quelque chose de rapide pour l'occasion.",
+            "Der Pokal? Dafür spiele ich dir etwas Schnelles.",
+            "¿La Copa? Te tocaré algo rápido para la ocasión.",
+            "La Coppa? Ti suono qualcosa di veloce per l'occasione.",
+            "A Taça? Vou tocar-te uma coisa rápida para a ocasião.",
+        },
+        new[]
+        {
+            "Of all the race tracks in all the towns in all the worlds, you drive into mine.",
+            "De tous les circuits de toutes les villes de tous les mondes, c'est dans le mien que tu débarques.",
+            "Von allen Rennstrecken in allen Städten auf allen Welten fährst du ausgerechnet in meine.",
+            "De todos los circuitos de todas las ciudades de todos los mundos, tenías que entrar en el mío.",
+            "Di tutte le piste di tutte le città di tutti i mondi, proprio nella mia dovevi entrare.",
+            "De todas as pistas de todas as cidades de todos os mundos, logo na minha é que entras.",
+        },
+        new[]
+        {
+            "Here's looking at you, kid. Now go and win.",
+            "À la tienne, petit. Maintenant, va gagner.",
+            "Ich schau dir in die Augen, Kleiner. Und jetzt geh und gewinn.",
+            "Brindo por ti, chaval. Y ahora ve y gana.",
+            "Alla tua salute, ragazzo. Ora va' e vinci.",
+            "À tua, miúdo. Agora vai e ganha.",
+        },
+        new[]
+        {
+            "Nine point five. You lose half a point for the splash.",
+            "Neuf et demi. Tu perds un demi-point pour les éclaboussures.",
+            "Neun Komma fünf. Einen halben Punkt Abzug für das Spritzen.",
+            "Nueve coma cinco. Pierdes medio punto por la salpicadura.",
+            "Nove e mezzo. Perdi mezzo punto per gli schizzi.",
+            "Nove vírgula cinco. Perdes meio ponto pelo salpico.",
+        },
+        new[]
+        {
+            "Eight. You're showing off.",
+            "Huit. Tu frimes.",
+            "Acht. Du gibst an.",
+            "Ocho. Te estás luciendo.",
+            "Otto. Ti stai mettendo in mostra.",
+            "Oito. Estás a exibir-te.",
         },
     };
 
@@ -380,6 +427,10 @@ void comportement_1()
             else log.Add("Johnny Rocket left out: no room off the road by the space port's pad");
         }
         else log.Add("Johnny Rocket left out: no Johnny in the hotel (scene 81's actor 3), or no space port scene");
+
+        // the eggs: Rick in the Casino, Lyra by the hotel's pool (RaceTrackStory.Eggs.Otringal.cs)
+        RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid));
+        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight));
 
         b.Save();
         log.Add($"Otringal's race file: gate={QFee} {FeePaid} (the Travel Token), win={QFee} {FeeWon}");

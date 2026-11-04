@@ -406,10 +406,12 @@ void RaceMod_OpenWall(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 // rain (LM_PLUIE) anywhere. The original used TEMPETE_ACTIVE, which also rains
 // on other islands during chapters 0-1; play cannot leave Citadel then, but a
 // debug cube warp can. (Never in the race-track mode's fine weather, as TEMPETE_ACTIVE: Citadel Island's town circuit, weather=fine.)
+// (And the race-track mode's weather_var= rain, the Weather Wizard's encore on a race: RaceMod_RainChoice.)
+S32 RaceMod_RainChoice(void), RaceMod_SnowChoice(void);
 #ifdef	LBA_EDITOR
-#define	RAIN_FALLS	(!RaceMod_FineWeather() AND ((Island==0 AND ListVarGame[FLAG_CHAPTER].Value<2) OR FlagRain))
+#define	RAIN_FALLS	(RaceMod_RainChoice() OR (!RaceMod_FineWeather() AND ((Island==0 AND ListVarGame[FLAG_CHAPTER].Value<2) OR FlagRain)))
 #else
-#define	RAIN_FALLS	(!RaceMod_FineWeather() AND ((Island==0 AND ListVarGame[FLAG_CHAPTER]<2) OR FlagRain))
+#define	RAIN_FALLS	(RaceMod_RainChoice() OR (!RaceMod_FineWeather() AND ((Island==0 AND ListVarGame[FLAG_CHAPTER]<2) OR FlagRain)))
 #endif
 
 #define	INV_MAX_VALUE	100	// Capacité des objets inventaires VALUE (conque)

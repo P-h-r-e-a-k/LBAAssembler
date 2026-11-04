@@ -32,4 +32,41 @@ internal static partial class RaceTrackStory
     // the clover boxes of the LBA1 rooms: the sewers' secret room (Citadel 1), the Tavern's cellar (Citadel 2): 1 taken
     public const int EggSewerClover = 153, EggCellarClover = 154;
     // spare: 155
+
+    // ---- the race file's keys for the eggs (RaceCarEngineFile, in the story) ----------------------------------------------------------
+    // Bù's lap record, 1:02 (the Desert's tablet); the monster beaten by ten seconds; not one of Island CX's missiles; the Wizard's weather
+    // on the town circuit; and the Tortoise and the Hare on the Island of the Francos: Twinsen still on the grid TortoiseSeconds after GO,
+    // De La Fontaine -- the race's one to beat, in his tanker, and the fable's own teller -- comes by at a walk, says its moral (EggText),
+    // and the race starts again. (Moya the turtle isn't in the Francos' line-up: De La Fontaine is.)
+    public const int BuRecordMs = 62000, MonsterMarginMs = 10000, TortoiseSeconds = 30;
+    private const string TortoiseDriver = "De La Fontaine";
+    internal static IEnumerable<string> EggRaceKeys(RaceTrackIsland island, bool town, RaceTrackService.StoryInfo? story, IList<string> opponents)
+    {
+        if (island == RaceTrackIsland.Desert) yield return $"lap_record={BuRecordMs} {EggBu} {BuBeaten}";
+        if (island == RaceTrackIsland.Elevator) yield return $"margin_win={MonsterMarginMs} {EggMonster} 1";
+        if (island == RaceTrackIsland.CxTowerMk2 || island == RaceTrackIsland.CxTower) yield return $"no_hit={EggGrey} 1";
+        if (town) yield return $"weather_var={EggWeather}";
+        if (island == RaceTrackIsland.Knartas && story is { EggText: >= 0 } s && opponents.IndexOf(TortoiseDriver) is var k and >= 0)
+            yield return $"tortoise={TortoiseSeconds} {k + 1} {s.EggText}";
+    }
+
+    // The eggs' part of an island's story (RaceTrackService.Story, after the island's own): what the race file needs to know of them, or null
+    private static readonly string[][] TortoiseMoral =
+    {
+        new[]
+        {
+            "De La Fontaine trundles past in his tanker: \"Rien ne sert de courir; il faut partir à point.\" No use running, Twinsen, if you never set off!",
+            "De La Fontaine passe tranquillement dans sa citerne : « Rien ne sert de courir ; il faut partir à point. » Inutile de courir, Twinsen, si tu ne pars jamais !",
+            "De La Fontaine zuckelt in seinem Tankwagen vorbei: \"Rien ne sert de courir; il faut partir à point.\" Rennen nützt nichts, Twinsen, wenn man nie losfährt!",
+            "De La Fontaine pasa despacito en su camión cisterna: \"Rien ne sert de courir; il faut partir à point.\" ¡De nada sirve correr, Twinsen, si nunca sales!",
+            "De La Fontaine passa piano piano con la sua cisterna: \"Rien ne sert de courir; il faut partir à point.\" Non serve correre, Twinsen, se non parti mai!",
+            "De La Fontaine passa devagarinho no seu camião-cisterna: \"Rien ne sert de courir; il faut partir à point.\" De nada serve correr, Twinsen, se nunca partes!",
+        },
+    };
+    internal static RaceTrackService.StoryInfo? EggInfo(string gameDirectory, RaceTrackIsland island, List<string> log)
+    {
+        if (island != RaceTrackIsland.Knartas) return null;
+        var moral = GroupB.AddLines(gameDirectory, 3 + island.IslandByte, TortoiseMoral, log, "the Tortoise and the Hare's moral (tortoise=):");
+        return new RaceTrackService.StoryInfo(-1, -1, EggText: moral);
+    }
 }

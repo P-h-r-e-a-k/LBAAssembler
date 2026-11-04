@@ -308,7 +308,8 @@ internal static class RaceTrackService
     // (Seller: Celebration Island's lava lake, whose race the souvenir seller has to lose: RaceTrackStory.ApplyCelebration)
     // (RaphTime: Raph's line with the time to beat in it, RACEMOD.CPP beat_text=; RaphPark: where his car stands once he has stopped lapping
     // the storm track, [scene, x, y, z, turn] -- RaceTrackStory)
-    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null, int RaphYell = -1, int RaphEntity = -1);
+    // (EggText: an island's easter egg's line for the race file -- the Island of the Francos' Tortoise and the Hare, RaceTrackStory.EggInfo)
+    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null, int RaphYell = -1, int RaphEntity = -1, int EggText = -1);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the
@@ -902,9 +903,11 @@ internal static class RaceTrackService
         late.AddRange(RaceTrackStory.ApplyMiddle(gameDirectory, report, options.Island, scenes));
         // (chapters 3-5 and 7's: the Desert, the Emerald Moon, Otringal, the Island of the Francos -- RaceTrackStory.Desert/Emerald.cs)
         late.AddRange(RaceTrackStory.ApplyGroupA(gameDirectory, report, options.Island, scenes));
+        // (the island's easter eggs' part for the race file: RaceTrackStory.Eggs.cs)
+        var eggs = RaceTrackStory.EggInfo(gameDirectory, options.Island, late);
         foreach (var (island, lines, name) in retold)
-            if (options.Island == island) return (late.Concat(IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name)).ToList(), null);
-        return (late, null);
+            if (options.Island == island) return (late.Concat(IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name)).ToList(), eggs);
+        return (late, eggs);
     }
 
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),

@@ -29,10 +29,19 @@ static S32 SnowScene = -2, SnowHere = FALSE;
 
 extern S32 SceneSnows(S32 scene); // EXTFUNC.CPP
 extern S32 RaceMod_Leaves(void), RaceMod_LeafColour(S32 i); // RACEMOD.CPP leaves=: a race's falling leaves
+extern S32 RaceMod_SnowChoice(void);                          // RACEMOD.CPP weather_var=: a race's snow
 
 S32 SnowFalls(void) {
     if (CubeMode != CUBE_EXTERIEUR) return FALSE;
     if (RaceMod_Leaves()) return RainEnable;
+    // (the race-track mode's weather_var= snow: the Weather Wizard's encore on a race -- RACEMOD.CPP RaceMod_SnowChoice)
+    // (its flakes scattered through the box round the camera as it starts, as a scene's snow is: InitSnow)
+    static S32 choiceSnowing = FALSE;
+    if (RaceMod_SnowChoice()) {
+        if (!choiceSnowing) { InitSnow(); choiceSnowing = TRUE; }
+        return RainEnable;
+    }
+    choiceSnowing = FALSE;
     if (NumCube != SnowScene) {
         SnowScene = NumCube;
         SnowHere = SceneSnows(NumCube);

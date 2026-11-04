@@ -25,7 +25,12 @@ internal static partial class RaceTrackStory
     // the game's Franco guard (the Emerald Moon's scene 23, entity 57) and the survivor (Celebration Island's scene 95, entity 213)
     private const int MoonGuards = 23, FrancoGuard = 57;
 
-    private enum CLine { Arrive, Ring, Baldino, Trooper, Survivor, Traded, ZoeEvidence, Won, Note, Palace }
+    private enum CLine
+    {
+        Arrive, Ring, Baldino, Trooper, Survivor, Traded, ZoeEvidence, Won, Note, Palace,
+        // (the easter eggs' -- RaceTrackStory.Eggs.CX.cs: the staff passage's door, Baldino's grey paint)
+        StaffLocked, StaffOpen, GreyTrooper, GreyBaldino,
+    }
     private static readonly string[][] CxLines =
     {
         new[]
@@ -118,6 +123,42 @@ internal static partial class RaceTrackStory
             "Il palazzo! Il trasporto dei soldati parte adesso, e noi ci siamo sopra.",
             "O palácio! O transporte dos soldados parte agora, e nós vamos nele.",
         },
+        new[]
+        {
+            "A narrow door. \"STAFF ONLY.\" It's locked.",
+            "Une porte étroite. « RÉSERVÉ AU PERSONNEL. » Elle est fermée à clé.",
+            "Eine schmale Tür. »NUR FÜR PERSONAL.« Sie ist verschlossen.",
+            "Una puerta estrecha. «SOLO PERSONAL AUTORIZADO.» Está cerrada con llave.",
+            "Una porta stretta. «RISERVATO AL PERSONALE.» È chiusa a chiave.",
+            "Uma porta estreita. «SÓ PESSOAL AUTORIZADO.» Está trancada.",
+        },
+        new[]
+        {
+            "A narrow door. \"STAFF ONLY. TO THE EMPEROR'S PALACE.\" It's open.",
+            "Une porte étroite. « RÉSERVÉ AU PERSONNEL. VERS LE PALAIS DE L'EMPEREUR. » Elle est ouverte.",
+            "Eine schmale Tür. »NUR FÜR PERSONAL. ZUM PALAST DES KAISERS.« Sie ist offen.",
+            "Una puerta estrecha. «SOLO PERSONAL AUTORIZADO. AL PALACIO DEL EMPERADOR.» Está abierta.",
+            "Una porta stretta. «RISERVATO AL PERSONALE. AL PALAZZO DELL'IMPERATORE.» È aperta.",
+            "Uma porta estreita. «SÓ PESSOAL AUTORIZADO. PARA O PALÁCIO DO IMPERADOR.» Está aberta.",
+        },
+        new[]
+        {
+            "Not one hit! I never saw you. Is that grey paint?",
+            "Pas une seule touche ! Je ne t'ai même pas vu. C'est de la peinture grise ?",
+            "Nicht ein Treffer! Ich habe dich nie gesehen. Ist das graue Farbe?",
+            "¡Ni un impacto! No te he visto en ningún momento. ¿Eso es pintura gris?",
+            "Neanche un colpo! Non ti ho mai visto. È vernice grigia, quella?",
+            "Nem um tiro certeiro! Nunca te vi. Isso é tinta cinzenta?",
+        },
+        new[]
+        {
+            "Baldino, on the radio: Science!",
+            "Baldino, à la radio : La science !",
+            "Baldino, über Funk: Wissenschaft!",
+            "Baldino, por la radio: ¡Ciencia!",
+            "Baldino, alla radio: Scienza!",
+            "Baldino, pelo rádio: Ciência!",
+        },
     };
 
     public static List<string> ApplyCx(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes)
@@ -140,6 +181,7 @@ internal static partial class RaceTrackStory
             var survivorAt = s.Near(model, 8, 3) ?? throw new NotTheGames("no room by the start line for the survivor");
             var noteAt = s.Near(model, 2, 4) ?? throw new NotTheGames("no room by the start line for the note");
             Place(trooper, model, trooperAt); Place(survivor, model, survivorAt);
+            var trooperIndex = model.Actors.Count;      // (Baldino's grey paint: he speaks -- Eggs.CX.cs)
             edits.Add(s.Add(model, trooper, Talker(when, $@"            message({Id(CLine.Trooper)});
             if ({KeyTrooper} > var_game({QCxKey}))
             {{
@@ -203,8 +245,12 @@ internal static partial class RaceTrackStory
     }}
 ")));
             edits.Add(s.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), LateStory.RadioCall(CxChapter, Id(CLine.Ring), Id(CLine.Baldino))));
+            // (the easter egg: Baldino's grey paint, after Lyra's won line -- Eggs.CX.cs)
+            edits.Add(CxGreyPaint(s, model, trooperAt, trooperIndex, Id(CLine.GreyTrooper), Id(CLine.GreyBaldino)));
             return scripts => { foreach (var e in edits) e(scripts); };
         });
+        // (the easter egg: the staff passage from the halls to the palace's dungeon -- Eggs.CX.cs)
+        CxStaffPassage(s, Id(CLine.StaffLocked), Id(CLine.StaffOpen));
         s.Save();
         s.Log.Add($"chapter 12: Q_CXKEY is variable {QCxKey} (the race's gate at {KeyTraded}, a win {KeyWon}); the gazogem (item {GazoGem}) traded for the key (item {PassageKey})");
         return s.Log;

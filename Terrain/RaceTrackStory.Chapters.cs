@@ -1150,7 +1150,8 @@ void comportement_1()
     // (CitadelLighthouse.AddTelescope); Action facing it: the game's "For 3 Kashes, do you want to use the telescope?" -- paid, the cow's
     // field (scene 47): Twinsen out of sight, the camera on the Wizard behind Rosa (her zone 11, facing her) hopping as Twinsen does
     // (CitadelLighthouse.Hop) -- the fourth hop and she gives her clover (her own script, var_cube 11 past 3) -- and back up the lighthouse.
-    // (ScopeVar: 1 at the cow's, 2 on the way back. Twinsen's track labels 160-163 in scene 46 are new.)
+    // (ScopeVar: 1 at the cow's, 2 on the way back. Twinsen's track labels 160-163 in scene 46 are new.) In chapter 1 -- the night after the
+    // spell -- the telescope shows the Esmers' ship coming down over the sea instead (an easter egg: RaceTrackStory.Eggs.Citadel.cs, StormLook).
     public const int ScopeVar = 227;
     private const int CowScene = 47, LighthouseTop = 60, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
@@ -1215,8 +1216,15 @@ void comportement_1()
                         if (2 < nb_gold_pieces())
                         {{
                             give_gold_pieces(3);
-                            set_var_game({ScopeVar}, 1);
-                            change_cube({CowScene});
+                            if (1 == chapter())
+                            {{
+                                set_var_cube({StormLook}, 1);
+                            }}
+                            else
+                            {{
+                                set_var_game({ScopeVar}, 1);
+                                change_cube({CowScene});
+                            }}
                         }}
                         else
                         {{

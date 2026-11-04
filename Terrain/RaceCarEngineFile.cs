@@ -331,6 +331,9 @@ internal static class RaceCarEngineFile
         if (story && info is not null && RaceTrackStory.RaceKeysA(RaceTrackIsland.ByName(info.Island)) is { } keysA) text.Append(keysA);
         // chapters 8-10's (the Elevator Platform, Wannies Island's glove, Mosquibees Island's ring: RaceTrackStory.StoryRaceKeysB)
         if (story && info is not null) text.Append(RaceTrackStory.StoryRaceKeysB(RaceTrackIsland.ByName(info.Island)));
+        // the easter eggs' (Bù's lap record, the monster's margin, the grey paint, the Wizard's weather, the tortoise: RaceTrackStory.EggRaceKeys)
+        if (story && info is not null)
+            foreach (var key in RaceTrackStory.EggRaceKeys(RaceTrackIsland.ByName(info.Island), town, info.Story, opponents.Select(o => o.Name).ToList())) text.Append(key).Append('\n');
         // a race over laps of its own, when no story or dream has set them: the Temple of Bú's five
         if (track?.Dream is null && !town && !lava && info is not null && RaceTrackIsland.ByName(info.Island).RaceLaps is int ownLaps and > 0) text.Append($"race_laps={ownLaps}\n");
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
