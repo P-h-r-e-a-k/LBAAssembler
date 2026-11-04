@@ -271,6 +271,10 @@ public partial class MainWindow
         options.Audio = EditorSettings.Current.Lba2Audio;      // (Launch writes the volumes to the engine's cfg and mutes it when asked)
         options.KeepFocus = true;                              // the game sits in the editor's window and must keep running while the side panel has the focus
         options.Commands = PlayCommandsBox.Text;
+        // (exploring on foot -- the race car window's third way to start: neither on the line nor a new game -- in the story's chapter it
+        // says, game variable 253, before the play commands)
+        if (options.RaceCarFile is not null && !options.NewGame && !EditorSettings.Current.RaceCar.StartAtLine && EditorSettings.Current.RaceCar.ExploreChapter >= 0)
+            options.Commands = $"vargame 253 {EditorSettings.Current.RaceCar.ExploreChapter}" + (options.Commands.Trim().Length > 0 ? ";" + options.Commands : "");
         options.Spawn = spawn;
         options.ZoneMask = ZoneMask();
         options.Paths = pathsVisible;

@@ -22,7 +22,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox opponent = new() { Content = "Race the opponents" };
     // the track's drivers, each raced unless left out (RaceCarSetup.LeftOut)
     private readonly WrapPanel drivers = new() { Margin = new Thickness(18, 2, 0, 0) };
-    private readonly CheckBox newGame = new() { Content = "Play the story from a new game, every track raced where and when the game is", ToolTip = "Twinsen starts in his house. Citadel Island's storm track is raced in the rain, its town circuit once the storm is over and Twinsen has slept; each other island's track on its island." };
+    private readonly RadioButton newGame = new() { GroupName = "start", Content = "A new game: the story from its start, every track raced where and when the game is", ToolTip = "Twinsen starts in his house. Citadel Island's storm track is raced in the rain, its town circuit once the storm is over and Twinsen has slept; each other island's track on its island." };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     // the race's level on a track with levels (RaceCarSetup.Difficulty: the Temple of Bú's), and what the chosen one does
     private readonly ComboBox difficulty = new() { Width = 140 };
@@ -38,7 +38,17 @@ internal sealed class RaceCarWindow : Window
     // the race track window built it to race -- null for any other track, where the setup says
     private readonly bool? trackWeather;
     private readonly CheckBox hideRaceSky = new() { Content = "Hide the sky during races (it comes back when the race ends)" };
-    private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
+    private readonly RadioButton startAtLine = new() { GroupName = "start", Content = "Race: start beside the car on the start/finish straight, with the editor's markings hidden" };
+    // the third way: the scene open in the editor, on foot, the story's tracks where and when the game is (RaceCarSetup.ExploreChapter)
+    private readonly RadioButton explore = new() { GroupName = "start", Content = "Explore on foot: the scene open in the editor, every track raced where and when the game is (for testing the story)" };
+    private readonly ComboBox exploreChapter = new() { Width = 300, Margin = new Thickness(18, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+    // (the story's chapters, game variable 253: docs/LBRA_STORY_SCRIPT.md)
+    private static readonly string[] Chapters =
+    {
+        "0: the dream (Polar Island)", "1: Citadel Island, the storm", "2: Citadel Island, the aliens land", "3: the Desert", "4: the Emerald Moon",
+        "5: Otringal", "6: Celebration Island, the lava lake", "7: the Island of the Francos", "8: the Elevator Platform", "9: Wannies Island",
+        "10: Mosquibees Island", "11: Volcano Island", "12: Island CX", "13: the Emperor's palace", "14: the final, round the statue",
+    };
     // each track's best setup in place of the top speed, acceleration and steering sliders (RaceCarSetup.UseTrackSetups): what it gives
     // for the tracks told (TracksTold), the rows it overrides (greyed, their values kept), and a word on the gearbox tab
     private readonly CheckBox trackSetups = new()
@@ -212,11 +222,16 @@ internal sealed class RaceCarWindow : Window
 
         // ---- how Play starts, and what is on screen
         play.Children.Add(Section("Starting", first: true));
-        startAtLine.Checked += (_, _) => setup.StartAtLine = true;
-        startAtLine.Unchecked += (_, _) => setup.StartAtLine = false;
+        startAtLine.Checked += (_, _) => { setup.StartAtLine = true; setup.NewGame = false; exploreChapter.IsEnabled = false; };
         play.Children.Add(startAtLine);
-        newGame.Checked += (_, _) => setup.NewGame = true;
-        newGame.Unchecked += (_, _) => setup.NewGame = false;
+        explore.Checked += (_, _) => { setup.StartAtLine = false; setup.NewGame = false; exploreChapter.IsEnabled = true; };
+        explore.Margin = new Thickness(0, 4, 0, 0);
+        play.Children.Add(explore);
+        exploreChapter.Items.Add(new ComboBoxItem { Content = "The chapter the game is in", Tag = -1 });
+        for (var c = 0; c < Chapters.Length; c++) exploreChapter.Items.Add(new ComboBoxItem { Content = "Chapter " + Chapters[c], Tag = c });
+        exploreChapter.SelectionChanged += (_, _) => { if (!updating && exploreChapter.SelectedItem is ComboBoxItem { Tag: int c }) setup.ExploreChapter = c; };
+        play.Children.Add(exploreChapter);
+        newGame.Checked += (_, _) => { setup.NewGame = true; setup.StartAtLine = false; exploreChapter.IsEnabled = false; };
         newGame.Margin = new Thickness(0, 4, 0, 0);
         play.Children.Add(newGame);
         fineWeather.Checked += (_, _) => { if (trackWeather is null) setup.FineWeather = true; };
@@ -240,7 +255,7 @@ internal sealed class RaceCarWindow : Window
         play.Children.Add(showCheckpoints);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         play.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, showCheckpoints, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, newGame, trackSetups }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, showCheckpoints, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, explore, newGame, trackSetups }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         foreach (var (header, page) in new[] { ("Car", car), ("Gearbox", gearbox), ("Opponents", race), ("Play", play) })
             tabs.Items.Add(new TabItem
@@ -274,6 +289,10 @@ internal sealed class RaceCarWindow : Window
         askBeforePlay.IsChecked = setup.AskBeforePlay;
         opponent.IsChecked = setup.Opponent;
         newGame.IsChecked = setup.NewGame;
+        startAtLine.IsChecked = setup.StartAtLine && !setup.NewGame;
+        explore.IsChecked = !setup.StartAtLine && !setup.NewGame;
+        exploreChapter.SelectedItem = exploreChapter.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int c && c == setup.ExploreChapter) ?? exploreChapter.Items[0];
+        exploreChapter.IsEnabled = explore.IsChecked == true;
         powerUps.IsChecked = setup.PowerUps;
         penguinsWalk.IsChecked = setup.PenguinsWalk;
         fightBack.IsChecked = setup.OpponentsFightBack;
@@ -282,7 +301,6 @@ internal sealed class RaceCarWindow : Window
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
         hideRaceSky.IsChecked = setup.HideRaceSky;
-        startAtLine.IsChecked = setup.StartAtLine;
         driveAs.SelectedItem = driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int g && g == setup.DriveAs) ?? driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault();
         trackSetups.IsChecked = setup.UseTrackSetups;
         foreach (var r in refresh) r();

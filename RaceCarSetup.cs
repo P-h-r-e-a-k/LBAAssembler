@@ -68,6 +68,11 @@ public sealed partial class RaceCarSetup
     // Play starts a new game -- the story from its start, Twinsen in his house -- instead (the folder's tracks each raced where and when the
     // game is: RaceCarEngineFile.WriteStorySet).
     public bool NewGame { get; set; }
+    // Neither (the window's third way to start, "Explore on foot": the scene open, Twinsen on foot, the story's tracks where and when the
+    // game is -- the user, 2026-11-03: "update the "Play" on LBAAssembler, so we can either play by starting a race, or have the option of
+    // exploring an island on foot to help in testing story mode"): the story's chapter to be in (game variable 253), or -1 the one the
+    // game has.
+    public int ExploreChapter { get; set; } = -1;
     // The car Twinsen drives: -1 the track's own -- his buggy, or the car a track has for him (the Temple of Bú's pumpkin F1, since
     // 2026-10-17: Terrain.RaceTrackCharacterCars.TrackCar) --, -4 his buggy on every track, -2 or -3 his buggy firing green or red lasers out
     // of its gun (his laser cars), else a race car by its number -- the racer entity's bodies (RaceTrackScenes.RacerEntity: the retail racer's
