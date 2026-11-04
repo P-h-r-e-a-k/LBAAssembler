@@ -687,6 +687,7 @@ void comportement_1()
         Thief(p);
         StormPeople(p);
         Lighthouse(p);
+        LighthouseClimb(p);
         HiddenPages(p);
         TownPeople(p);
         Yard(p);
@@ -1137,6 +1138,270 @@ void comportement_1()
         set_var_game({DayVar}, {Tired});");
         scripts.SetText(0, ScriptKind.Life, hero);
     });
+
+    // ---- the lighthouse's door, its top and the telescope there; the Wizard and the cow (scenes 46, 47) --------------------------------
+    // The user, 2026-11-03: "let's allow Twinsen to enter the door and get to the top ... add in some binoculars like the ones already on
+    // Citadel island to the top of the lighthouse - the same area Twinsen stands in the scripted segment. If Twinsen uses the telescope let's
+    // have a small scripted cut scene of the weather wizard standing behind the cow and using Twinsen's hop forward with the 'x' key
+    // animation and the cow producing clovers the same as it does when Twinsen does this"; "this should only be after Raph has already
+    // unlocked it and not before". Once the spell is cast (KeeperPlot 5: Raph unlocked the door and they went up), Action at the door (its
+    // zone, sceneric 0, facing it: the game's "It's locked." until then) takes Twinsen up to where the spell's scene has him (track point
+    // 5), and Action there facing the lamp room back down to the door (point 6). The island's telescope stands beside him there
+    // (CitadelLighthouse.AddTelescope); Action facing it: the game's "For 3 Kashes, do you want to use the telescope?" -- paid, the cow's
+    // field (scene 47): Twinsen out of sight, the camera on the Wizard behind Rosa (her zone 11, facing her) hopping as Twinsen does
+    // (CitadelLighthouse.Hop) -- the fourth hop and she gives her clover (her own script, var_cube 11 past 3) -- and back up the lighthouse.
+    // (ScopeVar: 1 at the cow's, 2 on the way back. Twinsen's track labels 160-163 in scene 46 are new.)
+    public const int ScopeVar = 227;
+    private const int CowScene = 47, LighthouseTop = 60, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
+    private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
+    private const int Hops = 40, HopLabel = 10, Hopped = 11, Watch = 12, Watched = 13, HeroWatching = 20;
+    private static readonly (int X, int Y, int Z) WizardAtCow = (22600, 8700, 23552), DoorStep = (16600, 3300, 11152);
+    private const int TopClear = 80, CowCamera = 70, RosaEntity = 119;
+    // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
+    private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
+    // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
+    private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 5000, 8 };
+    private static void LighthouseClimb(StoryParts p)
+    {
+        p.Edit(LighthouseScene, "the lighthouse's door once the spell is cast: up to its top and down, and the telescope there", model =>
+        {
+            if (model.TrackPoints.Count <= Math.Max(TopPoint, DoorPoint)) throw new NotTheGames("the lighthouse's track points");
+            var top = model.TrackPoints[TopPoint];
+            // (where he comes up and goes down to: the spell's places, each off the tower's collision -- point 5 on its top, 7628, and point 6
+            // in the door's recess inside its box -- or the engine puts him back on whichever side he came from)
+            var arrive = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint(top.X, top.Y + TopClear, top.Z));
+            model.TrackPoints.Add(new SceneTrackPoint(DoorStep.X, DoorStep.Y, DoorStep.Z));
+            int upTo = arrive, downTo = arrive + 1;
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LighthouseTop, X0 = top.X - 300, X1 = top.X + 400, Z0 = top.Z - 350, Z1 = top.Z + 400, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
+            var scope = RaceTrackScenes.InvisibleHelper(Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY + 900, Citadel.CitadelLighthouse.ScopeZ, 9);
+            var index = model.Actors.Count;
+            var life = p.Add(model, scope, $@"void comportement_0()
+{{
+    if (2 == var_game({ScopeVar}))
+    {{
+        set_var_game({ScopeVar}, 0);
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj(0, label_{Up});
+        set_comportement(comportement_2);
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if (4 < var_game({KeeperPlot}) && {Driving} != comportement_hero())
+        {{
+            if (0 == zone_obj(0) && 2560 < beta_obj(0) && 3584 > beta_obj(0))
+            {{
+                set_dir_obj(0, NO_MOVE);
+                set_track_obj(0, label_{Up});
+                set_comportement(comportement_2);
+            }}
+            else if ({LighthouseTop} == zone_obj(0))
+            {{
+                if (2560 < beta_obj(0) && 3584 > beta_obj(0))
+                {{
+                    add_choice({ScopeNo});
+                    add_choice({ScopeYes});
+                    ask_choice_obj({index}, {ScopeAsk});
+                    if ({ScopeYes} == choice())
+                    {{
+                        if (2 < nb_gold_pieces())
+                        {{
+                            give_gold_pieces(3);
+                            set_var_game({ScopeVar}, 1);
+                            change_cube({CowScene});
+                        }}
+                        else
+                        {{
+                            message_obj(0, {NoKashes});
+                        }}
+                    }}
+                }}
+                else if (512 < beta_obj(0) && 1536 > beta_obj(0))
+                {{
+                    set_dir_obj(0, NO_MOVE);
+                    set_track_obj(0, label_{Down});
+                    set_comportement(comportement_2);
+                }}
+            }}
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({UpDone} == l_track_obj(0) || {DownDone} == l_track_obj(0))
+    {{
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }}
+}}
+");
+            return scripts =>
+            {
+                life(scripts);
+                scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $@"
+
+label({Up});
+pos_point({upTo});
+beta(3072);
+
+label({UpDone});
+stop();
+
+label({Down});
+pos_point({downTo});
+beta(1024);
+
+label({DownDone});
+stop();
+");
+            };
+        });
+
+        var wizard = Copy(p.Originals, LighthouseScene, LighthouseWizard);
+        if (wizard is null || wizard.Entity != Citadel.CitadelLighthouse.Wizard) { p.Log.Add("the Wizard at the cow's left out: the lighthouse's Wizard (scene 46) not found"); return; }
+        p.Edit(CowScene, "through the lighthouse's telescope: the Wizard hops behind Rosa, and she gives her clover", model =>
+        {
+            // (Rosa where the game has her -- and, in the weather whose road runs through her pasture, where the build put her aside
+            // (RaceTrackScenes' ActorsAt, RACEMOD.CPP actor_at=: the town circuit's, CITABAU) -- the Wizard as far behind her in each)
+            var cow = model.Actors.FindIndex(a => a.Entity == RosaEntity);
+            if (cow < 1) throw new NotTheGames("Rosa the cow");
+            var rosa = model.Actors[cow];
+            (int X, int Y, int Z) behind = (WizardAtCow.X - RosaAt.X, WizardAtCow.Y - RosaAt.Y, WizardAtCow.Z - RosaAt.Z);
+            (int X, int Y, int Z) here = (rosa.X + behind.X, rosa.Y + behind.Y, rosa.Z + behind.Z);
+            var aside = (p.Scenes.ActorsAt ?? p.TownScenes.ActorsAt ?? new List<string>())
+                .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .FirstOrDefault(f => f.Length == 6 && f[1] == CowScene.ToString() && f[2] == cow.ToString());
+            (int X, int Y, int Z)? there = aside is null ? null : (int.Parse(aside[3]) + behind.X, int.Parse(aside[4]) + behind.Y, int.Parse(aside[5]) + behind.Z);
+            // (the weather the put-aside place is for: WeatherVar 1 while CITABAU is shown)
+            var asideWeather = aside is not null && aside[0].Equals("citabau", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            void Shot(int num, (int X, int Y, int Z) at, (int X, int Y, int Z) her)
+            {
+                var info = (int[])CowShot.Clone();
+                (info[0], info[1], info[2]) = ((at.X + her.X) / 2 / 512, her.Y / 256, (at.Z + her.Z) / 2 / 512);
+                model.Zones.Add(new SceneZoneModel { Type = 1, Num = num, X0 = at.X - 400, X1 = at.X + 400, Y0 = at.Y - 1500, Y1 = at.Y + 1500, Z0 = at.Z - 500, Z1 = at.Z + 500, Info = info });
+            }
+            Shot(CowCamera, here, (rosa.X, rosa.Y, rosa.Z));
+            var therePoint = -1;
+            if (there is { } t)
+            {
+                Shot(CowCamera + 1, t, (int.Parse(aside![3]), int.Parse(aside[4]), int.Parse(aside[5])));
+                therePoint = model.TrackPoints.Count;
+                model.TrackPoints.Add(new SceneTrackPoint(t.X, t.Y, t.Z));
+            }
+            wizard.X = here.X; wizard.Y = here.Y; wizard.Z = here.Z; wizard.Beta = rosa.Beta + 72;
+            wizard.Anim = 0;
+            var moveThere = therePoint < 0 ? "" : $@"        if ({asideWeather} == var_game({WeatherVar}))
+        {{
+            pos_point({therePoint});
+        }}
+";
+            var cameraOn = therePoint < 0 ? $"set_camera({CowCamera}, 1);" : $@"if ({asideWeather} == var_game({WeatherVar}))
+        {{
+            set_camera({CowCamera + 1}, 1);
+        }}
+        else
+        {{
+            set_camera({CowCamera}, 1);
+        }}";
+            var life = p.Add(model, wizard, $@"void comportement_0()
+{{
+    if (1 == var_game({ScopeVar}))
+    {{
+{moveThere}        set_var_cube({Hops}, 0);
+        set_track(label_{HopLabel});
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        invisible(1);
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+    if ({Hopped} == l_track())
+    {{
+        add_var_cube(11, 1);
+        add_var_cube({Hops}, 1);
+        if (3 < var_cube({Hops}))
+        {{
+            set_track(label_{Watch});
+            set_comportement(comportement_2);
+        }}
+        else
+        {{
+            set_track(label_{HopLabel});
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({Watched} == l_track())
+    {{
+        set_var_game({ScopeVar}, 2);
+        change_cube({LighthouseScene});
+    }}
+}}
+");
+            var w = model.Actors.Count - 1;
+            return scripts =>
+            {
+                life(scripts);
+                scripts.SetText(w, ScriptKind.Track, $@"label(0);
+anim(0);
+stop();
+
+label({HopLabel});
+anim({Citadel.CitadelLighthouse.Hop});
+wait_anim();
+anim(0);
+wait_nb_dizieme(4);
+
+label({Hopped});
+stop();
+
+label({Watch});
+anim(0);
+wait_nb_second(4);
+
+label({Watched});
+stop();
+");
+                var hero = scripts.GetText(0, ScriptKind.Life);
+                hero = Loose(hero, "if (6 == var_game(83))", $@"if (1 == var_game({ScopeVar}))
+    {{
+        invisible(1);
+        set_dir(NO_MOVE);
+        cinema_mode(1);
+        {cameraOn}
+        cam_follow({w});
+        set_comportement(comportement_{HeroWatching});
+    }}
+    else if (6 == var_game(83))");
+                scripts.SetText(0, ScriptKind.Life, hero.TrimEnd() + $@"
+
+void comportement_{HeroWatching}()
+{{
+    if (0 == var_game({ScopeVar}))
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+");
+            };
+        });
+    }
 
     // ---- the slate's hidden pages (scenes 15, 9, 22) ---------------------------------------------------------------------------------
     private static void HiddenPages(StoryParts p)

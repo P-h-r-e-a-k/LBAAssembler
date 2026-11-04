@@ -395,6 +395,9 @@ internal static class SceneZoneDump
             var z = scene.Zones[i];
             Console.WriteLine($"zone {i}: type {z.Type} num {z.Num} x {z.X0}..{z.X1} y {z.Y0}..{z.Y1} z {z.Z0}..{z.Z1} info {string.Join(",", z.Info)}");
         }
+        // (and its track points, with "points")
+        if (args.Contains("points"))
+            for (var i = 0; i < scene.TrackPoints.Count; i++) Console.WriteLine($"point {i}: {scene.TrackPoints[i]}");
         return 0;
     }
 }

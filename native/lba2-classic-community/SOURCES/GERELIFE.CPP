@@ -823,7 +823,6 @@ void DoLife(U8 numobj) {
             // tomber (parametre 2)
             case 2:
                 if (ptrobj->WorkFlags & FALLING) {
-                    ptrobj->WorkFlags &= ~FALLING;
                     InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, numobj);
                 }
             case 0:
@@ -1785,8 +1784,16 @@ void DoLife(U8 numobj) {
                 ptrobj->CarryBy = -1;
             }
 
-            if (numobj == NUM_PERSO)
+            if (numobj == NUM_PERSO) {
                 StartYFalling = 0;
+                // (race mod: the hero put at a point is put there -- not moved there: the frame's collision measured the
+                // move from where he was, the decors' boxes on the way putting him back on one axis, and standing on a decor's
+                // top kept him at its height, carried by it -- a story's door up a lighthouse, RaceTrackStory LighthouseClimb)
+                ptrobj->OldPosX = ptrobj->Obj.X;
+                ptrobj->OldPosY = ptrobj->Obj.Y;
+                ptrobj->OldPosZ = ptrobj->Obj.Z;
+                ptrobj->CarryBy = -1;
+            }
         } break;
 
             //---------------------------------------------------------------------------

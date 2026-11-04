@@ -1170,6 +1170,8 @@ internal static class RaceTrackBuilder
                                                         .Select(h => h.Dist).DefaultIfEmpty(1e9).Min();
         report.InTheWay = (x, z, lo, hi) => index.Near(x, z, 14, 4).Any(h => h.Dist <= RoadEdge(h) + 1 && hi >= h.H - 400 && lo <= h.H + RaceTrackReport.RoadHeadroom);
         var startIndex = roads.Count > 1 ? pitMiddle : planned && plan.Start is { } startPoint ? PlanPoint(plan, main, startPoint) : -1;
+        // (Citadel Island's telescope, before the old track and the road clear it: a copy on the lighthouse's balcony after -- RaceTrackStory.Chapters' LighthouseClimb)
+        var telescope = Citadel.CitadelLighthouse.Telescope(island);
         ClearOldTrack(island, options, report);
         DropDecors(island, options, report);
         var adrift = AdriftDecors(island);
@@ -1278,6 +1280,7 @@ internal static class RaceTrackBuilder
         // 7,000 onto the start of the raised road round the rocky peak)
         ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through);
         ClearAdrift(island, adrift, report, through);
+        Citadel.CitadelLighthouse.AddTelescope(island, telescope, report);
         // (the pipes after the clearing: they stand over the road, out of its way)
         // (the steam jets out of the gantries' uprights where there are some: with them)
         var jetRuns = planned && plan.SteamJets is { Length: > 0 } jets
