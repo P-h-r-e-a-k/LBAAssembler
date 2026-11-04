@@ -11,7 +11,7 @@ namespace LBAAssembler.Terrain;
 //   - the honey-pot Mosquibee (scene 103's actor 6, copied) by the start: the Queen never loses at home;
 //   - the hide-out's Mosquibee (scene 105's actor 8, copied) hiding beside the road a way down the lap: the Dissidents' Ring (item 16;
 //     Q_PASS 3);
-//   - the race (finish= 237, win= chapter 11). Won: the Queen's "Hmph.", Lyra, the Fragment of the Mosquibees (item 33), the dissidents'
+//   - the race (finish= 246, win= chapter 11). Won: the Queen's "Hmph.", Lyra, the Fragment of the Mosquibees (item 33), the dissidents'
 //     message, and to the Island under Celebration (scene 130).
 internal static partial class RaceTrackStory
 {

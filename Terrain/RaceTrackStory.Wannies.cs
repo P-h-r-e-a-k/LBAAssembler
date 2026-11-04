@@ -12,7 +12,7 @@ namespace LBAAssembler.Terrain;
 //     The race-track mode's frog opens and shuts on its own clock, which no script can read: the glove is there whether the mouth is open
 //     or not (the engine would need to give the mouth's state to the scripts, a game variable, for "grab it while it's open");
 //   - the miner again: his glove back, to the grid (item 11 0; Q_GLOVE 4: the start line's gate, RaceCarEngineFile);
-//   - the race (finish= 237, win= chapter 10). Won: Lyra, the Fragment of the Wannies (item 34), the old Wannie's clue, and the tunnel to
+//   - the race (finish= 246, win= chapter 10). Won: Lyra, the Fragment of the Wannies (item 34), the old Wannie's clue, and the tunnel to
 //     Mosquibees Island (scene 102).
 internal static partial class RaceTrackStory
 {

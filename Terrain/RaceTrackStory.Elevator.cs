@@ -10,7 +10,7 @@ namespace LBAAssembler.Terrain;
 //   - the monkey monster on foot where the game has him (scene 120's actor 2, a copy: the build takes the game's own off for his script),
 //     out of sight while Twinsen drives: as Twinsen comes near, his four lines and Zoe's; Action again, "Race! Now!"; Twinsen in his car
 //     the first time a visit, Zoe off to the lift cage and his "RAAARGH! Go!";
-//   - the race (RaceCarEngineFile: finish= sets 237, win= the chapter to 9): lost, his laugh; won, his clue and Lyra's, and down the
+//   - the race (RaceCarEngineFile: finish= sets 246, win= the chapter to 9): lost, his laugh; won, his clue and Lyra's, and down the
 //     elevator to Wannies Island (scene 98).
 internal static partial class RaceTrackStory
 {

@@ -12,14 +12,15 @@ namespace LBAAssembler.Terrain;
 //   - the four Dark Monk statuettes beside the lap, found in turn (Q_STALL 3-6), Zoe's word at the fourth;
 //   - won (ApplyCelebration's after-race controller): what he saw on Island CX (the game's 171/172, retold: IslandRetell), Zoe, Twinsen,
 //     Lyra, inc_chapter (7) and the ship to the Francos (scene 257).
-// Group B's islands (chapters 6, 8, 9, 10) share: var 236, the chapter whose radio call has been answered; var 237, a group B race just
+// Group B's islands (chapters 6, 8, 9, 10) share: var 243, the chapter whose radio call has been answered; var 246, a group B race just
 // finished (finish=, RaceCarEngineFile); a race won moves the chapter on (win=253, the next chapter).
 internal static partial class RaceTrackStory
 {
     // Q_STALL: 1 Lyra's word heard, 2 the seller told of his stall, 3-6 the statuettes found (one to four), 7 his "all four"
     public const int QStall = 218, StallTold = 2, AllFound = 6, StallDone = 7;
     // group B's shared variables (docs above)
-    public const int RadioAnswered = 236, RaceDoneB = 237;
+    // (not 236 and 237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF2/3 -- 2026-11-04)
+    public const int RadioAnswered = 243, RaceDoneB = 246;
     private const int LavaChapter = 6, FrancosStart = 257, FrancosDock = 109, ShipSwitch = 236;
 
     // The lava lake's new lines, after the seller's own (SellerLines) at the end of Celebration Island's texts (file 8)

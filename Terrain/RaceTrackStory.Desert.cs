@@ -23,7 +23,8 @@ internal static partial class RaceTrackStory
     // Q_PAGES (docs/LBRA_STORY_PLAN.md 3.1): 1 Flick has told, 2 the Dean has, 3-5 the pages found, 6 the diploma, 7 the race won, 8 told
     public const int QPages = 215, PagesWon = 7, PagesDone = 8;
     // the group's two spare game variables: the chapter whose radio call was answered, and the chapter whose ringing was shown
-    public const int RadioAnsweredA = 234, RadioRangA = 235;
+    // (not 235-237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF -- 2026-11-04)
+    public const int RadioAnsweredA = 234, RadioRangA = 240;
     private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2, MoonStart = 229;
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
