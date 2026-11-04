@@ -19,6 +19,9 @@ internal static class AnimStudy
             var pts = world.Skip(start).Take(p.Bones[b].Count).ToList();
             var pivot = b == 0 ? System.Numerics.Vector3.Zero : world[p.Bones[b].Pivot];
             Console.WriteLine($"  bone {b}: parent {p.Bones[b].Parent} pivot {pivot} points {pts.Count}" + (pts.Count > 0 ? $" y {pts.Min(v => v.Y):0}..{pts.Max(v => v.Y):0} centre ({pts.Average(v => v.X):0},{pts.Average(v => v.Y):0},{pts.Average(v => v.Z):0})" : ""));
+            // (ANIMSTUDY_POINTS=<bone>: that bone's points as the body stands)
+            if (Environment.GetEnvironmentVariable("ANIMSTUDY_POINTS") == b.ToString())
+                for (var i = 0; i < pts.Count; i++) Console.WriteLine($"    point {start + i}: ({pts[i].X:0},{pts[i].Y:0},{pts[i].Z:0})");
         }
         foreach (var a in args.Skip(3))
         {

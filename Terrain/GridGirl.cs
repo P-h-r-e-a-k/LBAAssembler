@@ -99,7 +99,48 @@ internal static class GridGirl
             for (var k = 0; k < 4; k++) e.Quad(upper[k], upper[(k + 1) % 4], shinTop[(k + 1) % 4], shinTop[k], Shade | Skin, outward: true);
             e.Cap(upper, Shade | Skin, up: true);
         }
+        // ---- the back of her head: the game only ever showed her face on in the bathroom (her reflection showed her back), so her head is
+        // a face, a neck's front and a shell of hair, open under the hair's back edge (1045 high, 136 behind) down to her shoulders: from
+        // behind, the picture went through to the sky (the user, 2026-11-03: "The back of her head in some angles is transparent"). A
+        // core of hair inside her head, on its bone, from her shoulders up into the hair -- behind her face and the front of her neck
+        // (its front 50 forward, the neck's 51 and more), within the hair's sides (161 and 195 across) -- fills it.
+        var hair = HairColour(p, Head);
+        var core = new[] { 1010f, 1300f }.Select(y => e.Add(Head, Enumerable.Range(0, Around).Select(k =>
+        {
+            var a = k * 2 * Math.PI / Around;
+            return new Vector3((float)(120 * Math.Sin(a)), y, (float)(-30 + 80 * Math.Cos(a)));
+        }).ToArray())).ToArray();
+        for (var k = 0; k < Around; k++)
+            e.Quad(core[0][k], core[0][(k + 1) % Around], core[1][(k + 1) % Around], core[1][k], hair, outward: true);
+        // (its bottom: a fan to its middle, facing down -- a polygon has four points at most)
+        var underneath = e.Add(Head, new[] { new Vector3(0, 1010, -30) })[0];
+        for (var k = 0; k < Around; k++) e.Tri(core[0][k], core[0][(k + 1) % Around], underneath, hair | 2 << 20, outward: false);
+        // (and its top, facing up: the hair's shell is open behind there too, and showed the core's dark inside)
+        var above = e.Add(Head, new[] { new Vector3(0, 1300, -30) })[0];
+        for (var k = 0; k < Around; k++) e.Tri(core[1][k], core[1][(k + 1) % Around], above, hair | 1 << 20, outward: false);
         return e.Finish();
+    }
+
+    private const int Head = 4;
+
+    // The colour of her hair: that of the head's polygon furthest behind (the hair's back), as the game gives it
+    private static int HairColour(PalaceTorturers.Parts p, int head)
+    {
+        var world = p.World();
+        int first = p.StartOf(head), last = first + p.Bones[head].Count;
+        var best = (Z: float.MaxValue, Colour: Shade | Red);
+        foreach (var (type, records) in p.Blocks)
+        {
+            var n = (type & 0x8000) != 0 ? 4 : 3;
+            foreach (var r in records)
+            {
+                var points = Enumerable.Range(0, n).Select(k => (int)BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(k * 2))).ToArray();
+                if (!points.All(i => i >= first && i < last)) continue;
+                var z = points.Average(i => world[i].Z);
+                if (z < best.Z) best = ((float)z, BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(8)));
+            }
+        }
+        return best.Colour;
     }
 
     private static int Shades(int colour, int to) => (colour & 0xFF00) | to;

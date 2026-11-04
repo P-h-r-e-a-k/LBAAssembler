@@ -57,7 +57,7 @@ internal static class TempleMarshal
     // torso's, how many bones the body has before the flags'; how many times as big she stands
     internal sealed record Rig(string Who, int Entity, int Retail, int Body, int Plinth, int Ready, int Raise, int Drop, int Wave,
         int GreenUpper, int GreenFore, int GreenHand, int CheckUpper, int CheckFore, int CheckHand, int Torso, int Own, double Scale,
-        Func<byte[], byte[]>? Remodel = null)
+        Func<byte[], byte[]>? Remodel = null, bool Upright = false)
     {
         public int GreenPole => Own;
         public int CheckPole => Own + 3;
@@ -67,7 +67,7 @@ internal static class TempleMarshal
         GreenUpper, GreenFore, GreenHand, CheckUpper, CheckFore, CheckHand, Torso, Own, Scale);
     // every other track's: the Imperial Hotel's Sup in her bikini (GridGirl), as big as she is and a little more -- seen from the cars
     public static readonly Rig GridGirlRig = new("the Imperial Hotel's Sup in her bikini", GridGirl.Entity, GridGirl.Retail, Body, Plinth, Ready, Raise, Drop, Wave,
-        8, 9, 10, 5, 6, 7, 3, 20, 1.15, GridGirl.Remodel);
+        8, 9, 10, 5, 6, 7, 3, 20, 1.15, GridGirl.Remodel, Upright: true);
     // The flag marshal a track's island has: the Temple's own, Twinsun's three tracks' the same, every other's the Sup
     public static Rig For(RaceTrackIsland island)
     {
@@ -151,6 +151,13 @@ internal static class TempleMarshal
     private const double GroundBelow = 700, GroundUneven = 260;
     // (a start line on a raised road, no floor beside it: she stands on its edge, this far out from the road's middle past its asphalt)
     private const double EdgeOut = 0.45;
+    // (a lap's ground road: to its curbs' outer edge, the builder's CurbHalfWidth as most tracks have it)
+    private const double GroundHalf = 4.5;
+    // (how tall the plinth stands, world units, for InTheWay)
+    private const double PlinthTall = 260;
+    // (how far out past the road's edge her plinth is looked for: InTheWay keeps it a cell past the road's real edge, its curbs and verge,
+    // which on a ground lap can be further out than the line's middle tells)
+    private const double FarthestOut = 6;
 
     // Where the flag marshal stands (above): on her plinth beside the road by the start line, on the crypt's floor, and -- with the grid's
     // columns `gridSide` cells either side of the road's middle and pole `gridFirst` behind the line (RaceTrackOptions) -- in the road's
@@ -171,6 +178,10 @@ internal static class TempleMarshal
         var PlinthHalf = SlabHalf * r.Scale / 512.0;
         Func<double, double, double, double?> floors = temple ? FloorsOf(gameDirectory, r) : (x, z, near) =>
             report.GroundAfter?.Invoke(x, z) is { } g && g <= near + 200 && g >= near - GroundBelow ? g : null;
+        // (a point's half width, cells: its own -- and a strip beside it, a pit lane, as far out as it goes; where the lap is on the ground,
+        // not raised, the list has it 0 wide, and its ground road reaches GroundHalf: the lava lake's start, where her plinth stood on the
+        // asphalt between the curbs, the user, 2026-11-03: "The platform she stands on needs moving off of the road")
+        static double Half(int[] p) => Math.Max(p[3] > 0 ? p[3] / 512.0 : GroundHalf, p.Length >= 7 ? Math.Max(Math.Abs(p[5]), Math.Abs(p[6])) / 512.0 : 0);
         // (the roads: the raised road's pieces, world units -- a gap of more than 3 cells between two points is a branch's start, not a piece)
         var pieces = new List<(Vector3 A, Vector3 B, double HalfA, double HalfB)>();
         for (var i = 0; i + 1 < report.Raised.Count; i++)
@@ -179,7 +190,7 @@ internal static class TempleMarshal
             if (a.Length < 4 || b.Length < 4) continue;
             var pa = new Vector3(a[0] / 512f, a[2], a[1] / 512f); var pb = new Vector3(b[0] / 512f, b[2], b[1] / 512f);
             if (Math.Abs(pa.X - pb.X) + Math.Abs(pa.Z - pb.Z) > 3) continue;
-            pieces.Add((pa, pb, a[3] / 512.0, b[3] / 512.0));
+            pieces.Add((pa, pb, Half(a), Half(b)));
         }
         // (how far a place is from the nearest road's edge -- negative on it -- of the roads at about its height; a lap on the ground: from its
         // middle line, past its widest half)
@@ -210,6 +221,10 @@ internal static class TempleMarshal
                 if (f is null || floor is { } other && Math.Abs(other - f.Value) > (temple ? 1 : GroundUneven)) return null;
                 floor = temple ? floor ?? f : Math.Max(floor ?? f.Value, f.Value);
                 if (Clear(px, pz, line.Y) < RoadGap) return null;
+                // (and the build's own word on it -- every road there at the plinth's height, ground or raised, to its real edge and a cell
+                // more: the lava lake's start is on the ground, which the raised road's pieces above don't have, and her plinth stood
+                // between its curbs)
+                if (!temple && report.InTheWay(px, pz, f.Value, f.Value + PlinthTall)) return null;
             }
             return report.Pits.Any(p => Math.Sqrt((p.X - x) * (p.X - x) + (p.Z - z) * (p.Z - z)) < PitGap + PlinthHalf) ? null : floor;
         }
@@ -222,7 +237,7 @@ internal static class TempleMarshal
         foreach (var side in new[] { first, -first })
         {
             for (var back = Before; back <= FarthestBack && found is null; back += 0.25)
-                for (var o = half + RoadGap + PlinthHalf; o <= half + RoadGap + PlinthHalf + 3 && found is null; o += 0.25)
+                for (var o = half + RoadGap + PlinthHalf; o <= half + RoadGap + PlinthHalf + FarthestOut && found is null; o += 0.25)
                     if (Spot(-back, side, o) is { } floor) found = (-back, side, o, floor);
             if (found is not null) break;
         }
@@ -574,6 +589,10 @@ internal static class TempleMarshal
     {
         var r = rig ?? TempleRig;
         var basis = PalaceTorturers.ReadFrames(retailIdle, body.Bones.Count)[0].Bones;
+        // (Upright: her body as it stands, each bone's kind as the game's standing has it -- the Sup's standing is a lean over the hotel's
+        // basin, her hips 205 back and 61 down, her back bent 30 degrees, her knees 54: the user, 2026-11-03, "She looks hunched over instead
+        // of standing up straight")
+        if (r.Upright) basis = basis.Select(b => (b.Type, 0.0, 0.0, 0.0)).ToArray();
         Anim Of(int loop, int[] ms, params Pose[] poses)
         {
             var anim = new Anim { Game = 2, LoopFrame = loop };
