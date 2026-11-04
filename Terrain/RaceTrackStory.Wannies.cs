@@ -21,7 +21,8 @@ internal static partial class RaceTrackStory
     private const int WanniesChapter = 9, WanniesTexts = 3 + 6, WannieGlove = 11, WanniesFragment = 34, MosquibeesArrival = 102;
     private const int WannieScene = 96, MinerActor = 2, OldWannieActor = 3;
 
-    internal enum WanniesLine { LyraArrival, Ring, Baldino, Miner, ZoeGloves, OldWannie, MinerThanks, LyraFragment, OldWannieClue }
+    // (the last three: the easter eggs' -- kiss the frog, heigh-ho: RaceTrackStory.Eggs.Wannies)
+    internal enum WanniesLine { LyraArrival, Ring, Baldino, Miner, ZoeGloves, OldWannie, MinerThanks, LyraFragment, OldWannieClue, KissShould, KissDare, OffToWork }
     internal static readonly string[][] WanniesLines =
     {
         new[]
@@ -97,6 +98,33 @@ internal static partial class RaceTrackStory
             "Il pilota della macchina nera ci ha pagati per scavargli un tunnel fino all'isola dei Moschibei. Pagati con monete con la faccia di Dark Monk. Il tunnel è finito: tanto vale che tu lo usi.",
             "O piloto do carro preto pagou-nos para lhe cavarmos um túnel até à ilha dos Mosquibees. Pagou com moedas com a cara de Dark Monk. O túnel está acabado: mais vale usá-lo.",
         },
+        new[]
+        {
+            "Should I...?",
+            "Est-ce que je devrais... ?",
+            "Soll ich...?",
+            "¿Debería...?",
+            "Dovrei...?",
+            "Será que devia...?",
+        },
+        new[]
+        {
+            "Don't you dare.",
+            "N'y pense même pas.",
+            "Wehe dir.",
+            "Ni se te ocurra.",
+            "Non ci provare nemmeno.",
+            "Nem te atrevas.",
+        },
+        new[]
+        {
+            "Off to work. Somebody has to dig the next tunnel.",
+            "Au boulot. Il faut bien que quelqu'un creuse le prochain tunnel.",
+            "Ab zur Arbeit. Irgendwer muss ja den nächsten Tunnel graben.",
+            "A trabajar. Alguien tiene que cavar el próximo túnel.",
+            "Al lavoro. Qualcuno dovrà pur scavare il prossimo tunnel.",
+            "Ao trabalho. Alguém tem de cavar o próximo túnel.",
+        },
     };
 
     private static List<string> ApplyWannies(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -115,13 +143,15 @@ internal static partial class RaceTrackStory
             set_var_game({WanniesFragment}, 1);
             message({Say(WanniesLine.OldWannieClue)});
             change_cube({MosquibeesArrival});";
+        // (heigh-ho, an easter egg: in the miners' scene the tunnel waits for their walk -- RaceTrackStory.Eggs.Wannies)
+        var heighHo = HeighHoPlace(gameDirectory, store, originals, island, report, log);
         for (var s = island.FirstScene; s <= island.LastScene; s++)
             GroupB.EditScene(store, s, log, "Lyra's word on arrival (Q_GLOVE 1), Baldino's call on the radio, and after the race won the fragment, the old Wannie's clue and the tunnel", model =>
             {
                 var arrival = GroupB.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9),
                     GroupB.Arrival(when, WanniesChapter, $"0 == var_game({QGlove})", $"set_var_game({QGlove}, 1);", Say(WanniesLine.LyraArrival), Say(WanniesLine.Ring), Say(WanniesLine.Baldino)));
                 var after = GroupB.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, oldWannie?.CoulObj ?? 9),
-                    GroupB.AfterRace(WanniesChapter, won));
+                    GroupB.AfterRace(WanniesChapter, HeighHoWon(won, heighHo, s)));
                 return scripts => { arrival(scripts); after(scripts); };
             });
 
@@ -155,6 +185,9 @@ internal static partial class RaceTrackStory
             }}"));
             });
         else log.Add("the Wannie miner left out: no room off the road by the start line");
+        // (the easter eggs: heigh-ho's miners, and kiss the frog -- RaceTrackStory.Eggs.Wannies)
+        HeighHo(store, originals, heighHo, Say(WanniesLine.OffToWork), log);
+        KissTheFrog(store, island, report, when, Say(WanniesLine.KissShould), Say(WanniesLine.KissDare), log);
 
         // the frog: the glove at its mouth, the old Wannie on the ground under it
         if (report.Frogs.Count == 0) { log.Add("the glove and the old Wannie left out: no frog on the lap"); return log; }

@@ -6,7 +6,7 @@ namespace LBAAssembler.Terrain;
 // end of that island's lines; what they share is here: the game variables that keep what was found from chapter to chapter.
 //
 // The variables: game variables no script of the built game uses and the engine doesn't (checked 2026-11-04 with scriptgrep2 on a full
-// build of the fifteen story islands, and the engine source for ListVarGame[...]): 196-199, 210, 212, 225, 226, 247, 250, and 153-155.
+// build of the fifteen story islands, and the engine source for ListVarGame[...]): 196-199, 210, 225, 226, 247, 250, and 153-155.
 // (235-237 are the videos seen, PLAYACF.CPP FLAG_ACF; 251-254 the engine's; 52, 58, 75, 96, 106, 114, 118, 172 are free too, kept spare.)
 internal static partial class RaceTrackStory
 {
@@ -20,7 +20,7 @@ internal static partial class RaceTrackStory
     // the fifth Dark Monk statuette: 1 found on the lava lake, 2 shown to the seller (and sitting on the statue's ring in the final)
     public const int EggStatuette = 210, StatuetteFound = 1, StatuetteShown = 2;
     // the Brune sisters: 1 all four spoken to in the palace dungeon (they're in the final's crowd with Mrs. Brune)
-    public const int EggSisters = 212;
+    public const int EggSisters = 155;
     // the Elevator Platform's monster beaten by ten seconds (the race-track mode's margin_win=): 1 (his "BLUE ONE" sign in the final's crowd)
     public const int EggMonster = 225;
     // Island CX's race finished without one cannon hit (the race-track mode's no_hit=): 1, 2 once the trooper and Baldino have said so
@@ -31,7 +31,7 @@ internal static partial class RaceTrackStory
     public const int EggWeather = 250, WeatherSun = 0, WeatherRain = 1, WeatherSnow = 2;
     // the clover boxes of the LBA1 rooms: the sewers' secret room (Citadel 1), the Tavern's cellar (Citadel 2): 1 taken
     public const int EggSewerClover = 153, EggCellarClover = 154;
-    // spare: 155
+    // (212 is the race file's: RaceTrackFrog.DecorVar hides Wannies' still frog -- the sisters took 155)
 
     // ---- the race file's keys for the eggs (RaceCarEngineFile, in the story) ----------------------------------------------------------
     // Bù's lap record, 1:02 (the Desert's tablet); the monster beaten by ten seconds; not one of Island CX's missiles; the Wizard's weather

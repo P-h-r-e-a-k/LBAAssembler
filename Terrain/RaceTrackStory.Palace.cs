@@ -257,6 +257,8 @@ void comportement_1()
             edits.Add(s.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), LateStory.RadioCall(PalaceChapter, Id(PLine.Ring), Id(PLine.Baldino))));
             return scripts => { foreach (var e in edits) e(scripts); };
         });
+        // (the dungeon's easter eggs: the Brune sisters and the ninth portrait -- RaceTrackStory.Eggs.Palace)
+        PalaceDungeonEggs(s);
         s.Save();
         s.Log.Add($"chapter 13: Q_EMPEROR is variable {QEmperor} (the race's gate at {StanReady}); the four Fragments (items 31-34) open the gate, the Ferryman's Song (item {FerrymanSong}) the bedroom, the Emperor's Sword is item {Sword}");
         return s.Log;

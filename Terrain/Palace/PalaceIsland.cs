@@ -554,6 +554,7 @@ internal static class PalaceIsland
         var dungeonBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();
         Dictionary<string, object>? dungeonLayout = null;
         (int X0, int Z0, int X1, int Z1, int Floor)? vault = null;
+        (double WallX, double MiddleZ, double FloorY)? wanted = null;     // (world units: the ninth portrait's place, PalaceWanted)
         int t159 = TileOf(DungeonUnder), t163 = TileOf(DungeonNorth);
         var fire159 = furnished ? pieces.FirstOrDefault(p => p.Kind == PalaceFurniture.Kind.Fireplace && p.Tile == t159) : null;
         if (furnished && t159 >= 0 && t163 >= 0 && fire159 is not null)
@@ -644,6 +645,10 @@ internal static class PalaceIsland
             Put(PalaceFurniture.Up.Suspended, fx1 - 1.7, fz0 + 7.75, 0, 1, 0.6, 1.4, DungeonDepth, solid: false);
             Put(PalaceFurniture.Up.Hanging, fx1 - 2.0, fz0 + 13.25, 0, 1, 0.6, 0.8, DungeonDepth, solid: false);
             Put(PalaceFurniture.Up.Suspended, fx0 + 1.7, fz0 + 15.75, 0, -1, 0.6, 1.4, DungeonDepth, solid: false);
+            // (their places, for the story's easter egg -- the Brune sisters, RaceTrackStory.Eggs.Palace -- and the ninth portrait's on the
+            // east wall behind the iron maiden: PalaceWanted)
+            var captives = dungeonPieces.Where(p => p.Kind is PalaceFurniture.Up.Hanging or PalaceFurniture.Up.Suspended).Select(p => (p.X, p.Z)).ToList();
+            wanted = (x0 + (fx1 - minX) * U, z0 + (fz0 + PalaceWanted.Along - minZ) * U, WY(fy));
             // (its way out: a fireplace in the north wall's middle, looking south; nothing in its way)
             Put(PalaceFurniture.Up.Fireplace, mid, fz0 + 0.3, 0, 1, 0.6, 2.4, 4, solid: false);
             foreach (var (cx, cz, h) in cages) Put(PalaceFurniture.Up.Straw, cx, cz, 1, 0, 2 * h * 0.85, 2 * h * 0.85, 1, solid: false);
@@ -681,6 +686,9 @@ internal static class PalaceIsland
                 ["arrive"] = new[] { I(mid), J(fz1 - 1.5) }, ["exit"] = new[] { I(mid), J(fz0) },
                 // (the torturers' posts: each [x, z, and the way he looks: x, z] -- island cells)
                 ["torturers"] = torturers.Select(t => new[] { Math.Round(I(t.X), 2), Math.Round(J(t.Z), 2), t.Fx, t.Fz }).ToList(),
+                // (the captives hung from the ceiling, each [x, z]; the ninth portrait's middle, [x, z, its foot's height] -- island cells)
+                ["captives"] = captives.Select(c => new[] { Math.Round(I(c.Item1), 2), Math.Round(J(c.Item2), 2) }).ToList(),
+                ["wanted"] = new[] { Math.Round(I(fx1), 2), Math.Round(J(fz0 + PalaceWanted.Along), 2), WY(fy) + PalaceWanted.FootOver },
             };
         }
         else if (furnished) log.Add($"WARNING: no dungeon: rooms {DungeonUnder} and {DungeonNorth} or {DungeonUnder}'s fireplace not found");
@@ -1019,6 +1027,7 @@ internal static class PalaceIsland
                     $"{island.ObjectPages.Count}), {stoneBodies} bodies");
         }
         else if (dungeonStones.Count > 0) log.Add("WARNING: the dungeon's stone: no object page left -- its faces left out");
+        if (wanted is { } ninth) log.Add(PalaceWanted.Hang(gameDirectory, island, Nearest, ninth.WallX, ninth.MiddleZ, ninth.FloorY, newBodies, next, Cap));
 
         // ---- the outside: Otringal's palace on the sixteen rooms' roof, its arch in front of its porch, a wing of towers on the long hall's
         var outsideBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();

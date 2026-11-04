@@ -413,6 +413,7 @@ void comportement_1()
 }}
 "));
             edits.Add(s.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), LateStory.RadioCall(FinalChapter, Id(FLine.Ring), Id(FLine.Baldino), here)));
+            edits.AddRange(FinalBruneSisters(s, model, At, here));      // (an easter egg: RaceTrackStory.Eggs.Palace)
             return scripts => { foreach (var e in edits) e(scripts); };
         });
         s.Save();
