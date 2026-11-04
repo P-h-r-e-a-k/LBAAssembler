@@ -875,6 +875,9 @@ internal static class RaceTrackService
             // (then everyone else on the island retold for the story: IslandRetell)
             var story = RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes);
             story.Log.AddRange(IslandRetell.Apply(gameDirectory, 0, IslandRetell.Citadel, "Citadel Island"));
+            // (the island's two postcards, chapters 1 and 2 -- after the story's scenes are saved: RaceTrackStory.Eggs.Postcards.cs)
+            story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, report, scenes, 1));
+            story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, town.Report, townScenes, 2));
             return story;
         }
         // (each island's people retold for the story, after its own story: IslandRetell -- once a build, whichever of an island's tracks
@@ -883,6 +886,7 @@ internal static class RaceTrackService
         {
             var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes, report);
             seller.AddRange(IslandRetell.Apply(gameDirectory, options.Island.IslandByte, IslandRetell.Celebration, "Celebration Island"));
+            seller.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
             return (seller, new StoryInfo(-1, -1, true));
         }
         var retold = new (RaceTrackIsland Island, (int Retail, string[] Words)[] Lines, string Name)[]
@@ -907,6 +911,7 @@ internal static class RaceTrackService
         late.AddRange(RaceTrackStory.ApplyGroupA(gameDirectory, report, options.Island, scenes));
         // (the island's easter eggs' part for the race file: RaceTrackStory.Eggs.cs)
         var eggs = RaceTrackStory.EggInfo(gameDirectory, options.Island, late);
+        late.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
         foreach (var (island, lines, name) in retold)
             if (options.Island == island) return (late.Concat(IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name)).ToList(), eggs);
         return (late, eggs);

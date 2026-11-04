@@ -46,6 +46,8 @@ internal static partial class RaceTrackStory
         if (island == RaceTrackIsland.Elevator) yield return $"margin_win={MonsterMarginMs} {EggMonster} 1";
         if (island == RaceTrackIsland.CxTowerMk2 || island == RaceTrackIsland.CxTower) yield return $"no_hit={EggGrey} 1";
         if (town) yield return $"weather_var={EggWeather}";
+        // (the final's: the seller's reward for the thirteen postcards -- RaceTrackStory.Eggs.Postcards.cs)
+        if (island == RaceTrackIsland.Celebration) yield return $"unlock_at={EggLastCard} {PostcardsRewarded} {PostcardUnlock}";
         if (island == RaceTrackIsland.Knartas && story is { EggText: >= 0 } s && opponents.IndexOf(TortoiseDriver) is var k and >= 0)
             yield return $"tortoise={TortoiseSeconds} {k + 1} {s.EggText}";
     }

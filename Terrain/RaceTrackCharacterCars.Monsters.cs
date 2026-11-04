@@ -42,8 +42,8 @@ internal static partial class RaceTrackCharacterCars
     public static readonly Car Broomstick = new("The witch's broomstick", "the witch", TwinsenBody, WitchGeneric, (_, racer) => BuildBroomstick(racer), TempleOfBu);
     public static readonly Car Hearse = new("The zombie's hearse", "the zombie", TwinsenBody, ZombieGeneric, (_, racer) => BuildHearse(racer), TempleOfBu);
     // (and the Long Table's two, made and installed as these are: RaceTrackCharacterCars.Harvest)
-    public static Car[] Monsters => new[] { Coffin, Broomstick, Hearse, TurkeyCar, GooseCar };
-    private static int MonsterNumber(Car car) => car == Coffin ? VampireNumber : car == Broomstick ? WitchNumber : car == Hearse ? ZombieNumber : car == TurkeyCar ? TurkeyNumber : GooseNumber;
+    public static Car[] Monsters => new[] { Coffin, Broomstick, Hearse, TurkeyCar, GooseCar, GoldCar };
+    private static int MonsterNumber(Car car) => car == Coffin ? VampireNumber : car == Broomstick ? WitchNumber : car == Hearse ? ZombieNumber : car == TurkeyCar ? TurkeyNumber : car == GoldCar ? GoldCarNumber : GooseNumber;
 
     // The broomstick's bob over its line (RaceDriver.Hover, RACEMOD.CPP opponent_hover=): up and down this far (units), once in this long (ms).
     public const int WitchBob = 45, WitchBobMs = 1600;
@@ -797,7 +797,8 @@ internal static partial class RaceTrackCharacterCars
         {
             var number = MonsterNumber(car);
             Body body;
-            try { body = car.Build(racer, racer); }
+            // (the gold car is FunFrock's, his body at its wheel: RaceTrackCharacterCars.Gold)
+            try { body = car.Build(car == GoldCar ? Body.Read(HqrArchive.Open(bodyPath).Read(car.Character), 2) : racer, racer); }
             catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { log.Add($"{car.Name}: not made -- {e.Message}"); continue; }
             var bytes = body.Write();
             if (MonsterBox(car) is { } box)

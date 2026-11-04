@@ -653,6 +653,10 @@ static S32 s_lapRecordMs = 0, s_marginMs = 0;
 static int s_lapRecordVar = -1, s_lapRecordValue = 0, s_marginVar = -1, s_marginValue = 0;
 static int s_noHitVar = -1, s_noHitValue = 0, s_heroMissileHits = 0;
 static int s_weatherVar = -1;
+// unlock_at=<var> <value> <id>: once the variable reaches the value, the race game's story unlock <id> (RaceGame_StoryUnlock) -- the
+// Little Big Postcards' gold car, given in the final (an easter egg, the user, 2026-11-04)
+static int s_unlockAtVar = -1, s_unlockAtValue = 0, s_unlockAtDone = 0;
+static char s_unlockAt[24] = "";
 static S32 s_tortoiseMs = 0, s_tortoiseAt = 0;
 static int s_tortoiseOpp = -1, s_tortoiseText = -1, s_tortoiseArmed = 0;
 static double s_tortoiseX = 0, s_tortoiseZ = 0;
@@ -4502,6 +4506,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "margin_win")) { if (sscanf(v, "%d %d %d", &s_marginMs, &s_marginVar, &s_marginValue) != 3) s_marginVar = -1; }
         else if (!strcmp(key, "no_hit")) { if (sscanf(v, "%d %d", &s_noHitVar, &s_noHitValue) != 2) s_noHitVar = -1; }
         else if (!strcmp(key, "weather_var")) { if (sscanf(v, "%d", &s_weatherVar) != 1) s_weatherVar = -1; }
+        else if (!strcmp(key, "unlock_at")) { if (sscanf(v, "%d %d %23s", &s_unlockAtVar, &s_unlockAtValue, s_unlockAt) != 3) s_unlockAtVar = -1; s_unlockAtDone = 0; }
         else if (!strcmp(key, "tortoise")) {
             int s = 0;
             if (sscanf(v, "%d %d %d", &s, &s_tortoiseOpp, &s_tortoiseText) == 3 && s > 0 && s_tortoiseOpp >= 1 && s_tortoiseOpp <= RACE_MAX_OPPONENTS) { s_tortoiseMs = s * 1000; s_tortoiseOpp--; }
@@ -17134,6 +17139,11 @@ void RaceMod_Frame(void) {
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
     TortoiseWatch(TimerRefHR);
+    if (s_unlockAtVar >= 0 && s_unlockAtVar < 256 && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
+        s_unlockAtDone = 1;
+        Log_Info("[racemod] game variable %d at %d: the story unlock %s", s_unlockAtVar, (int)ListVarGame[s_unlockAtVar], s_unlockAt);
+        StoryUnlock(s_unlockAt);
+    }
     DeckLiftFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -19533,7 +19543,7 @@ static void ResetTrack(void) {
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
-    s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
+    s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_unlockWin[0] = s_unlockBeat[0] = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
