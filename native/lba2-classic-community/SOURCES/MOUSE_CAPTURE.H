@@ -47,7 +47,9 @@ void MouseCapture_RequestOrbit(void);
  * one: with no orbit under way it does nothing. */
 void MouseCapture_CarryOrbit(void);
 
-/* Once per presented frame: decide and apply what changed. */
+/* Once per presented frame: decide and apply what changed. The first call also arranges for the mouse to be given back when
+ * the program exits (MOUSE_CAPTURE.CPP ReleaseAtExit). Inside LBA Assembler's Play (LBA2_WINDOW_POS) the window never
+ * counts as full screen for mouse_confine. */
 void MouseCapture_Update(void);
 
 T_MOUSE_CAPTURE MouseCapture_Current(void);

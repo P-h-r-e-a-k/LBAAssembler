@@ -386,12 +386,49 @@ internal sealed class EmbeddedGameHost : HwndHost
 
     private void Release()
     {
+        var area = PlayArea();
         focusTimer.Stop();
         resizeDebounce.Stop();
         game = IntPtr.Zero;
         wantsKeyboard = false;
         UnwatchOwner();
         CloseFullScreen();
+        FreeCursor(area);
+    }
+
+    // ---- the cursor given back: a cursor clip is the desktop's, not a window's, and outlives the window and the program that set it.
+    // The engine gives it back itself as it exits (MOUSE_CAPTURE.CPP ReleaseAtExit), but an engine that crashed, or was ended here by
+    // Stop, can't: SDL clips the cursor to its window while it confines the mouse or the camera orbits, and with the editor's window in
+    // front all along nothing else ever changes the clip -- the cursor stays shut in the corner of the screen the game had. (The user,
+    // 2026-11-03, after a game over in Play: "my mouse was trapped inside the game viewport even though the game had seemingly ended".)
+    // Only a clip inside the play area is lifted: one another program has set is left alone.
+    [DllImport("user32.dll")] private static extern bool GetClipCursor(out RECT rect);
+    [DllImport("user32.dll")] private static extern bool ClipCursor(IntPtr rect);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    private const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
+
+    // Where the game could have clipped the cursor to, in screen pixels: this control's window, full screen's, and the game's own (SDL's
+    // popup, should it have stepped out of them). Null when none of them is there.
+    private RECT? PlayArea()
+    {
+        RECT? area = null;
+        foreach (var window in new[] { host, fullScreenHwnd, game })
+        {
+            if (window == IntPtr.Zero || !GetWindowRect(window, out var r) || r.Right <= r.Left || r.Bottom <= r.Top) continue;
+            area = area is { } a ? new RECT { Left = Math.Min(a.Left, r.Left), Top = Math.Min(a.Top, r.Top), Right = Math.Max(a.Right, r.Right), Bottom = Math.Max(a.Bottom, r.Bottom) } : r;
+        }
+        return area;
+    }
+
+    private static void FreeCursor(RECT? area)
+    {
+        if (area is not { } a || !GetClipCursor(out var clip)) return;
+        // (not clipped: the clip is the whole of the desktop)
+        int x = GetSystemMetrics(SM_XVIRTUALSCREEN), y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        if (clip.Left <= x && clip.Top <= y && clip.Right >= x + GetSystemMetrics(SM_CXVIRTUALSCREEN) && clip.Bottom >= y + GetSystemMetrics(SM_CYVIRTUALSCREEN)) return;
+        if (clip.Left < a.Left || clip.Top < a.Top || clip.Right > a.Right || clip.Bottom > a.Bottom) return;
+        ClipCursor(IntPtr.Zero);
+        DebugLog.Log($"EmbeddedGameHost: the cursor was still shut in the game's area ({clip.Left},{clip.Top})-({clip.Right},{clip.Bottom}) as it ended: freed");
     }
 
     // ---- full screen (F11 while playing, MainWindow.Play.cs): the game's window moved into a window of its own over the whole of the
@@ -462,6 +499,7 @@ internal sealed class EmbeddedGameHost : HwndHost
     {
         var engine = process;
         process = null;
+        var area = PlayArea();
         Release();
         if (engine is null) return;
         try
@@ -474,5 +512,7 @@ internal sealed class EmbeddedGameHost : HwndHost
         }
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception) { DebugLog.Log($"EmbeddedGameHost: stopping the engine: {error.Message}"); }
         finally { engine.Dispose(); }
+        // (again once it is gone: killed, it had no chance to give the cursor back, and until then it could still clip it)
+        FreeCursor(area);
     }
 }
