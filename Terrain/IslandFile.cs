@@ -46,6 +46,8 @@ internal sealed class IslandCube
 {
     public const int Cells = 64, Vertices = 65;
     public const int InfoAlphaLight = 0, InfoBetaLight = 1, InfoNbDecors = 2, InfoSkyY = 3, InfoStartZFog = 4, InfoClipZFar = 5;
+    // (the four places in the ground page the engine animates the sea, lava and gas in: words 6 to 9, RaceTrackTextures.AnimatedBlocks)
+    public const int InfoOffsetAniPoly1 = 6;
     public const int InfoSize = 10;
 
     public int Id { get; init; }

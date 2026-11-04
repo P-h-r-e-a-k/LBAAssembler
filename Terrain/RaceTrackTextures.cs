@@ -173,11 +173,15 @@ internal static class RaceTrackTextures
     {
         var page = island.GroundTexture;
         int R(int x, int y) => to[page[y * 256 + x] * 3]; int G(int x, int y) => to[page[y * 256 + x] * 3 + 1]; int B(int x, int y) => to[page[y * 256 + x] * 3 + 2];
+        // (none of them from a square the engine animates its lava or sea in: what is there changes four times a second, and the start
+        // line drawn from it flashed -- AnimatedBlocks)
+        var animated = AnimatedBlocks(island);
         (int X, int Y) asphalt = (0, 0); var best = double.MaxValue;
         const int size = 16;
         for (var y = 0; y + size <= 256; y += 4)
         for (var x = 0; x + size <= 256; x += 4)
         {
+            if (Animated(animated, x, y, size, size)) continue;
             double sum = 0, sq = 0, sat = 0; var n = size * size;
             for (var v = y; v < y + size; v++)
             for (var u = x; u < x + size; u++)
@@ -195,6 +199,7 @@ internal static class RaceTrackTextures
         for (var y = 1; y < 255; y++)
         for (var x = 1; x < 255; x++)
         {
+            if (Animated(animated, x - 1, y - 1, 3, 3)) continue;
             double score = 0;
             for (var v = y - 1; v <= y + 1; v++)
             for (var u = x - 1; u <= x + 1; u++)
@@ -219,6 +224,7 @@ internal static class RaceTrackTextures
                     int u0 = int.MaxValue, v0 = int.MaxValue;
                     for (var k = 0; k < 3; k++) { u0 = Math.Min(u0, t[p.TextureIndex * 6 + k * 2] >> 8); v0 = Math.Min(v0, t[p.TextureIndex * 6 + k * 2 + 1] >> 8); }
                     var key = (Math.Min(224, u0 / 32 * 32), Math.Min(224, v0 / 32 * 32));
+                    if (Animated(animated, key.Item1, key.Item2, 32, 32)) continue;
                     counts[key] = counts.GetValueOrDefault(key) + 1;
                 }
         }
@@ -269,16 +275,60 @@ internal static class RaceTrackTextures
                 for (var u = u0 / 256; u <= Math.Min(255, u1 / 256); u++) used[u, v] = true;
             }
         }
+        // (and never a block the engine animates: one the road repaints the last of its sea or lava over is no longer read, but the
+        // animation is still copied into it four times a second -- AnimatedBlocks)
+        var animated = AnimatedBlocks(island);
         var free = new bool[32, 32];
         for (var by = 0; by < 32; by++)
         for (var bx = 0; bx < 32; bx++)
         {
-            var any = false;
+            var any = animated[bx, by];
             for (var y = by * 8; y < by * 8 + 8 && !any; y++)
             for (var x = bx * 8; x < bx * 8 + 8 && !any; x++) any = used[x, y];
             free[bx, by] = !any;
         }
         return free;
+    }
+
+    // The 8 x 8 blocks of the island's ground page the engine draws its animated sea, lava and gas into. Each cube's INF names up to
+    // four 32 x 32 squares of the page (its words 6 to 9, offsets into it), and while a triangle whose game code is an animated one is in
+    // sight (CodeJeu 12 to 15: TERRAIN.CPP, "hihi je suis un polygone animé") the engine copies the next frame of its sea animation over
+    // each of those squares four times a second (DoAnimatedPolys) -- whatever else reads a pixel there changes colour with it. The road's
+    // own tiles must never be read from one: Celebration Island's page is full, so its road borrows its whitest pixel for the start line
+    // (Borrowed), and the whitest the page had was in the lava's square -- the start line cycled lilac, beige and grey, once a quarter of
+    // a second (the user, 2026-11-03: "I've noticed the start line on celebrat.ile flashing, we should make sure no start lines flash").
+    // As the engine reads them: the first two offsets name a square unless they are -1 (0 is the page's corner), the last two unless
+    // 0 or -1 (LOADISLE.CPP); an island with no animated triangle animates nothing (the old moon's cubes all say 0).
+    public static bool[,] AnimatedBlocks(IslandFile island)
+    {
+        var blocks = new bool[32, 32];
+        var cubes = island.Cubes.Values.Where(c => c.HasPolygons).ToList();
+        var anyAnimated = cubes.Any(c => c.Polygons.Any(p => (new IslandPolygon(p).CodeJeu & 12) == 12));
+        if (!anyAnimated) return blocks;
+        foreach (var cube in cubes)
+            for (var k = 0; k < 4; k++)
+            {
+                var offset = cube.Info[IslandCube.InfoOffsetAniPoly1 + k];
+                if (offset < 0 || (k >= 2 && offset == 0) || offset >= 256 * 256) continue;
+                // (32 rows of 32 pixels from the offset, a row 256 on: one past the page's right edge runs on into the next row's start, as
+                // the engine's copy does)
+                for (var row = 0; row < 32; row++)
+                for (var i = 0; i < 32; i++)
+                {
+                    var at = offset + row * 256 + i;
+                    if (at < 256 * 256) blocks[at % 256 / 8, at / 256 / 8] = true;
+                }
+            }
+        return blocks;
+    }
+
+    // Whether a rectangle of the ground page touches a block the engine animates (AnimatedBlocks).
+    private static bool Animated(bool[,] animated, int x, int y, int w, int h)
+    {
+        for (var by = Math.Max(0, y) / 8; by <= Math.Min(255, y + h - 1) / 8; by++)
+        for (var bx = Math.Max(0, x) / 8; bx <= Math.Min(255, x + w - 1) / 8; bx++)
+            if (animated[bx, by]) return true;
+        return false;
     }
 
     // Takes a free run of blocks wide and tall enough for a tile, and marks it used.
