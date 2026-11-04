@@ -27,6 +27,8 @@ internal static partial class RaceTrackStory
     {
         Ringing, BaldinoRadio, LyraArrive, LyraWait, LyraOpen, FontaineBusiness, SlickTwinsen, SlickZoe, KurtzSample, KurtzWait, NurseGlasses,
         KurtzHead, FontaineKnow, FontaineRace, LyraFragment, FontaineMasked, FontaineConvoy, SlickGone,
+        // (the easter egg's: RaceTrackStory.Eggs.Francos.cs)
+        KurtzHorror, KurtzCooking,
     }
     private static readonly string[][] FrancosLines =
     {
@@ -192,6 +194,24 @@ internal static partial class RaceTrackStory
             "Ormai solo una macchia scura per terra.",
             "Agora é só uma mancha escura no chão.",
         },
+        new[]
+        {
+            "The horror... the horror...",
+            "L'horreur... l'horreur...",
+            "Das Grauen... das Grauen...",
+            "El horror... el horror...",
+            "L'orrore... l'orrore...",
+            "O horror... o horror...",
+        },
+        new[]
+        {
+            "No, wait, that's the nurse's cooking. The fuel's fine.",
+            "Non, attends, ça, c'est la cuisine de l'infirmière. Le carburant n'a rien.",
+            "Nein, warte, das ist die Küche der Krankenschwester. Mit dem Treibstoff ist alles in Ordnung.",
+            "No, espera, eso es la comida de la enfermera. El combustible está bien.",
+            "No, aspetta, questa è la cucina dell'infermiera. Il carburante va bene.",
+            "Não, espera, isso é a comida da enfermeira. O combustível está bom.",
+        },
     };
 
     private static List<string> ApplyFrancos(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -321,7 +341,7 @@ void comportement_1()
         else log.Add("the slick left out: no room off the road past the start line");
         Person("Mr. Kurtz: the sample, his glasses (Q_FUEL 3), read with the nurse's word (5)", Copy(b.Originals, VillageScene, KurtzActor), 8, 1, $@"            if ({FuelNurse} == var_game({QFuel}))
             {{
-                message({Say(FrancosLine.KurtzHead)});
+{KurtzHorror(Say)}                message({Say(FrancosLine.KurtzHead)});
                 set_var_game({QFuel}, {FuelRead});
             }}
             else if ({FuelCan} == var_game({QFuel}))

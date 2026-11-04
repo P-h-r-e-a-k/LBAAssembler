@@ -37,7 +37,12 @@ internal static partial class RaceTrackStory
     // the boat's change-cube zone's switch (Info4: set_change_cube)
     private const int FerrySwitch = 215;
 
-    private enum VLine { Arrive, Ring, Baldino, Ask, Slabs, Slab, ZoeTakes, Sealed, Won, Reveal, ZoeDream, TwinsenKnows, BaldinoFunFrock, Ferry, FerryAfter, NotYet }
+    private enum VLine
+    {
+        Arrive, Ring, Baldino, Ask, Slabs, Slab, ZoeTakes, Sealed, Won, Reveal, ZoeDream, TwinsenKnows, BaldinoFunFrock, Ferry, FerryAfter, NotYet,
+        // (the easter egg's: RaceTrackStory.Eggs.Volcano.cs)
+        RingZoe, RingTwinsen,
+    }
     private static readonly string[][] VolcanoLines =
     {
         new[]
@@ -183,6 +188,24 @@ internal static partial class RaceTrackStory
             "¿El islote CX? Después de la carrera, chico. Gánala primero.",
             "L'isolotto CX? Dopo la corsa, ragazzo. Prima vincila.",
             "A Ilhota CX? Depois da corrida, rapaz. Ganha-a primeiro.",
+        },
+        new[]
+        {
+            "Twinsen. We still need that.",
+            "Twinsen. On en a encore besoin.",
+            "Twinsen. Den brauchen wir noch.",
+            "Twinsen. Todavía lo necesitamos.",
+            "Twinsen. Ci serve ancora.",
+            "Twinsen. Ainda precisamos disso.",
+        },
+        new[]
+        {
+            "...Right. Sorry. It felt like the thing to do.",
+            "...C'est vrai. Pardon. Ça m'a semblé être la chose à faire.",
+            "...Stimmt. Entschuldige. Es kam mir irgendwie richtig vor.",
+            "...Cierto. Perdona. Me pareció lo que había que hacer.",
+            "...Giusto. Scusa. Mi sembrava la cosa da fare.",
+            "...Pois é. Desculpa. Pareceu-me a coisa certa a fazer.",
         },
     };
 
@@ -386,9 +409,13 @@ void comportement_1()
     }}
 ")));
             edits.Add(s.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), LateStory.RadioCall(VolcanoChapter, Id(VLine.Ring), Id(VLine.Baldino))));
+            // the easter egg: the Dissidents' Ring used at the lava's edge (RaceTrackStory.Eggs.Volcano.cs)
+            edits.Add(NotThatRing(s, model, Id(VLine.RingZoe), Id(VLine.RingTwinsen)));
             _ = mIndex;
             return scripts => { foreach (var e in edits) e(scripts); };
         });
+        // the easter egg: the statue's feet over a crack in the cave's roof (RaceTrackStory.Eggs.Volcano.cs)
+        StatueFeet(s);
         s.Save();
         s.Log.Add($"chapter 11: Q_SLABS is variable {QSlabs} (the race's gate at {SlabsSealed}, a win {SlabsWon}), the slabs found {LateSlabsFound}, the radio answered {LateRadioAnswered}");
         return s.Log;

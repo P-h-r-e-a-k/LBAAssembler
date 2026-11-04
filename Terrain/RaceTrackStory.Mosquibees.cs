@@ -20,7 +20,12 @@ internal static partial class RaceTrackStory
     private const int MosquibeesChapter = 10, MosquibeesTexts = 3 + 7, DissidentsRing = 16, MosquibeesFragment = 33, VolcanoArrival = 130;
     private const int ThroneScene = 104, VentActor = 5, HoneyScene = 103, HoneyActor = 6, HideScene = 105, HideActor = 8;
 
-    internal enum MosquibeesLine { LyraArrival, Ring, Baldino, VentNo, VentQuiet, HoneyPot, HideRing, VentRing, QueenHmph, LyraFragment, HideMessage }
+    internal enum MosquibeesLine
+    {
+        LyraArrival, Ring, Baldino, VentNo, VentQuiet, HoneyPot, HideRing, VentRing, QueenHmph, LyraFragment, HideMessage,
+        // (the easter eggs': RaceTrackStory.Eggs.Mosquibees.cs)
+        QueenManners, QueenJelly, HoneyWaggle, ZoeShortCut,
+    }
     internal static readonly string[][] MosquibeesLines =
     {
         new[]
@@ -114,6 +119,42 @@ internal static partial class RaceTrackStory
             "Ecco il nostro messaggio: una mappa. L'officina della macchina nera è sull'isolotto CX, ma il suo pilota si nasconde sotto l'isola del vulcano, nel vulcano. Il nostro rifugio è lì. Ti ci porteremo.",
             "Eis a nossa mensagem: um mapa. A oficina do carro preto fica na Ilhota CX, mas o piloto esconde-se debaixo da ilha do vulcão, dentro do vulcão. O nosso esconderijo é lá. Nós levamos-te.",
         },
+        new[]
+        {
+            "At last, a racer with manners.",
+            "Enfin, un pilote qui a des manières.",
+            "Endlich ein Fahrer mit Manieren.",
+            "Por fin, un piloto con modales.",
+            "Finalmente, un pilota con le buone maniere.",
+            "Finalmente, um piloto com boas maneiras.",
+        },
+        new[]
+        {
+            "Have some royal jelly from my own table: your life and your magic, restored.",
+            "Prends un peu de gelée royale de ma table : ta vie et ta magie, restaurées.",
+            "Nimm etwas Gelée Royale von meiner Tafel: deine Lebenskraft und deine Magie, wiederhergestellt.",
+            "Toma un poco de jalea real de mi mesa: tu vida y tu magia, restauradas.",
+            "Prendi un po' di pappa reale dalla mia tavola: la tua vita e la tua magia, ripristinate.",
+            "Toma um pouco de geleia real da minha mesa: a tua vida e a tua magia, restauradas.",
+        },
+        new[]
+        {
+            "That's the way to the honey. Turn left at the deck, and if you're brave, don't.",
+            "C'est le chemin du miel. Tourne à gauche à la plateforme, et si tu es courageux, ne tourne pas.",
+            "Das ist der Weg zum Honig. Bieg an der Plattform links ab, und wenn du mutig bist, lass es.",
+            "Ese es el camino a la miel. Gira a la izquierda en la plataforma y, si eres valiente, no lo hagas.",
+            "È la strada per il miele. Gira a sinistra alla piattaforma e, se sei coraggioso, non farlo.",
+            "É o caminho para o mel. Vira à esquerda na plataforma e, se fores corajoso, não vires.",
+        },
+        new[]
+        {
+            "Twinsen, she's showing us a short cut.",
+            "Twinsen, elle nous montre un raccourci.",
+            "Twinsen, sie zeigt uns eine Abkürzung.",
+            "Twinsen, nos está enseñando un atajo.",
+            "Twinsen, ci sta mostrando una scorciatoia.",
+            "Twinsen, ela está a mostrar-nos um atalho.",
+        },
     };
 
     private static List<string> ApplyMosquibees(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -182,7 +223,8 @@ internal static partial class RaceTrackStory
             GroupB.EditScene(store, h.Scene, log, $"the honey-pot Mosquibee at cell ({h.At.X:0.#}, {h.At.Z:0.#})", model =>
             {
                 Place(honey, model, h.At);
-                return GroupB.Add(model, honey, Talker(when, $"            message({Say(MosquibeesLine.HoneyPot)});"));
+                // (her word, then the waggle dance's hint: RaceTrackStory.Eggs.Mosquibees.cs)
+                return HoneyDance(model, honey, when, Say);
             });
         else log.Add("the honey-pot Mosquibee left out: no room off the road by the start line");
 
@@ -204,6 +246,9 @@ internal static partial class RaceTrackStory
                 });
             else log.Add("the hide-out's Mosquibee left out: no room off the road down the lap");
         }
+
+        // the Queen's bow, in her throne room (RaceTrackStory.Eggs.Mosquibees.cs)
+        QueenBow(store, log, Say);
         return log;
     }
 }
