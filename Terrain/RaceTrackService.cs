@@ -495,6 +495,10 @@ internal static class RaceTrackService
                 made.AddRange(LBAAssembler.Demo96.Demo96Rooms.Install(gameDirectory, demo, LBAAssembler.Demo96.Demo96Rooms.Sewers, LBAAssembler.Demo96.Demo96Rooms.SewerTexts));
             }
             else made.Add("The School of Magic and the sewers: the game's own (no converted 1996 demo -- LBA2_DEMO96, or File > Open the 1996 demo)");
+            // (Citadel Island's easter eggs' LBA1 rooms -- the sewers' secret room, its doorway cut in the demo's sewers' wall, and the
+            // Tavern's cellar -- from LBA1's own scenes, before the story, which puts their props and lines in: Citadel/CitadelLba1Rooms)
+            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Citadel.IleFile))
+                made.AddRange(LBAAssembler.Terrain.Citadel.CitadelLba1Rooms.Install(gameDirectory, Lba1Folder()));
             if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
             if (islands.Contains(RaceTrackIsland.Palace))
@@ -912,6 +916,8 @@ internal static class RaceTrackService
         // (the island's easter eggs' part for the race file: RaceTrackStory.Eggs.cs)
         var eggs = RaceTrackStory.EggInfo(gameDirectory, options.Island, late);
         late.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
+        // (the Polar dream's easter eggs, chapter 0: RaceTrackStory.Eggs.Polar.cs)
+        late.AddRange(RaceTrackStory.PolarEggs(gameDirectory, report, options.Island));
         foreach (var (island, lines, name) in retold)
             if (options.Island == island) return (late.Concat(IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name)).ToList(), eggs);
         return (late, eggs);

@@ -44,4 +44,36 @@ internal static partial class RaceTrackStory
         m.Cap(loops[0], m.P(0, new Vector3(0, -5, 0)), BarrelEnd, inside);
         return m.ToBody(header);
     }
+
+    // ---- the monster's fan sign in the final (EggMonster: beaten by ten seconds on the Elevator Platform) ----------------------------
+    // The monkey monster (the game's own, scene 120's actor 2) by the final's crowd with a sign (a sheet of paper, SPRITES.HQR 238, held up
+    // beside him): Action -- "BLUE ONE", and his word.
+    private static readonly string[][] MonsterFanLines =
+    {
+        new[]
+        {
+            "The monkey monster holds up a sign: \"BLUE ONE\". \"Hrrm. Blue one FAST. Blue one WIN.\"",
+            "Le monstre singe brandit une pancarte : « BLEU ». « Hrrm. Bleu RAPIDE. Bleu GAGNE. »",
+            "Das Affenmonster hält ein Schild hoch: \"BLAUER\". \"Hrrm. Blauer SCHNELL. Blauer GEWINNT.\"",
+            "El monstruo mono levanta un cartel: \"AZUL\". \"Hrrm. Azul RÁPIDO. Azul GANA.\"",
+            "Il mostro scimmia alza un cartello: \"BLU\". \"Hrrm. Blu VELOCE. Blu VINCE.\"",
+            "O monstro macaco ergue um cartaz: \"AZUL\". \"Hrrm. Azul RÁPIDO. Azul GANHA.\"",
+        },
+    };
+    private static List<Action<LbaScript.SceneScripts>> FinalMonsterFan(LateStory s, Scenes.SceneModel model, Func<double, double, (double X, double Z, double Y, int Beta)> at, string here)
+    {
+        var edits = new List<Action<LbaScript.SceneScripts>>();
+        var monster = Copy(s.Originals, PlatformScene, MonsterActor);
+        if (monster is null) { s.Log.Add("the monster's fan sign in the final left out: the game's monkey monster (scene 120's actor 2) not found"); return edits; }
+        var first = s.Texts(FinalTexts, MonsterFanLines, "the monster's fan sign in the final (an easter egg)");
+        var when = $"{here} && 1 == var_game({EggMonster})";
+        var place = at(10, -3);
+        Place(monster, model, place);
+        edits.Add(s.Add(model, monster, Talker(when, $"            message({first});", 2500)));
+        // (his sign: beside him, a little higher than his head)
+        var sign = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(place.X + 0.6, model.CubeX), (int)Math.Round(place.Y) + 1800, RaceTrackScenes.CubeLocal(place.Z, model.CubeY), RaceTrackScenes.PaperSprite, 9);
+        edits.Add(s.Add(model, sign, $"void comportement_0()\n{{\n    if ({when})\n    {{\n        set_comportement(comportement_1);\n    }}\n    else\n    {{\n        suicide();\n    }}\n}}\n\nvoid comportement_1()\n{{\n}}\n"));
+        s.Log.Add($"the monster's fan sign in the final (an easter egg): the monkey monster and his sign by the crowd while variable {EggMonster} is 1, text {first}");
+        return edits;
+    }
 }

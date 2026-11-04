@@ -414,10 +414,13 @@ void comportement_1()
 "));
             edits.Add(s.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), LateStory.RadioCall(FinalChapter, Id(FLine.Ring), Id(FLine.Baldino), here)));
             edits.AddRange(FinalBruneSisters(s, model, At, here));      // (an easter egg: RaceTrackStory.Eggs.Palace)
+            edits.AddRange(FinalMonsterFan(s, model, At, here));        // (an easter egg: RaceTrackStory.Eggs.Elevator)
             return scripts => { foreach (var e in edits) e(scripts); };
         });
         s.Save();
         s.Log.Add($"chapter 14: the final's steps are variable {FinalStep} (a win {FinalWon}), a race run sets {QEmperor} to {FinalRaced}; the wish granted takes the statue away (variable {StatueRisen} 0)");
+        // (the easter eggs on the ring round the statue's head: RaceTrackStory.Eggs.Celebration.cs)
+        s.Log.AddRange(FinalEggs(gameDirectory, report, scenes.StartScene));
         return s.Log;
     }
 }

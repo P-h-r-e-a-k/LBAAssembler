@@ -204,6 +204,11 @@ internal static class Program
             "islandheights" => IslandHeightsCommand.Run(args),
             "decorpoints" => DecorPointsCommand.Run(args),
             "sceneactors" => SceneActorsCommand.Run(args),
+            // lba2scene <game folder> <scene> <out.png> [crop=x,y,w,h] [mark=x,y,z]...: an interior scene's grid, its actors and zones marked (CitadelRoomsCommand)
+            "lba2scene" => CitadelRoomsCommand.Scene(args),
+            "libstats" => CitadelRoomsCommand.LibStats(args),
+            "lba1port" => CitadelRoomsCommand.Port(args),
+            "cellinfo" => CitadelRoomsCommand.CellInfo(args),
             "itemdiff" => ItemDiffCommand.Run(args),
             "cellprobe" => CellProbeCommand.Run(args),
             "holopic" => HoloPicCommand.Run(args),

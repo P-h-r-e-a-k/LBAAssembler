@@ -526,6 +526,8 @@ void comportement_1()
         store.SaveMany(changes, allowErrors: true);
         // (chapter 6's arrival, radio and statuettes in scene 95)
         log.AddRange(LavaLakeBeats(gameDirectory, report, lava));
+        // (the fifth statuette, an easter egg: RaceTrackStory.Eggs.Celebration.cs)
+        log.AddRange(FifthStatuette(gameDirectory, report, lava));
         return log;
     }
 

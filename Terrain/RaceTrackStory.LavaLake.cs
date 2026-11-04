@@ -24,7 +24,7 @@ internal static partial class RaceTrackStory
     private const int LavaChapter = 6, FrancosStart = 257, FrancosDock = 109, ShipSwitch = 236;
 
     // The lava lake's new lines, after the seller's own (SellerLines) at the end of Celebration Island's texts (file 8)
-    internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo, LavaNever }
+    internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo, LavaNever, Statuette5, SellerFive, ZoeLooking }
     internal static readonly string[][] LavaLines =
     {
         new[]
@@ -127,6 +127,34 @@ internal static partial class RaceTrackStory
             "La lava nunca es la respuesta, Twinsen.",
             "La lava non è mai la risposta, Twinsen.",
             "A lava nunca é a resposta, Twinsen.",
+        },
+        // (Statuette5, SellerFive, ZoeLooking: the fifth statuette, an easter egg -- RaceTrackStory.Eggs.Celebration.cs)
+        new[]
+        {
+            "A fifth Dark Monk statuette, right on the lip of the jump. The seller only lost four...",
+            "Une cinquième statue de Dark Monk, juste au bord du tremplin. Le vendeur n'en a perdu que quatre...",
+            "Eine fünfte Statuette von Dark Monk, direkt an der Kante der Schanze. Der Verkäufer hat doch nur vier verloren...",
+            "Una quinta estatuilla de Dark Monk, justo en el borde del salto. El vendedor solo perdió cuatro...",
+            "Una quinta statuetta di Dark Monk, proprio sul bordo del trampolino. Il venditore ne aveva perse solo quattro...",
+            "Uma quinta estatueta de Dark Monk, mesmo na beira do salto. O vendedor só perdeu quatro...",
+        },
+        new[]
+        {
+            "Five? I only ever made four.",
+            "Cinq ? Je n'en ai jamais fait que quatre.",
+            "Fünf? Ich habe immer nur vier gemacht.",
+            "¿Cinco? Yo solo hice cuatro.",
+            "Cinque? Io ne ho fatte solo quattro.",
+            "Cinco? Eu só fiz quatro.",
+        },
+        new[]
+        {
+            "Twinsen, put it down. It's looking at me.",
+            "Twinsen, pose ça. Elle me regarde.",
+            "Twinsen, leg das weg. Sie sieht mich an.",
+            "Twinsen, suéltala. Me está mirando.",
+            "Twinsen, mettila giù. Mi sta guardando.",
+            "Twinsen, pousa isso. Está a olhar para mim.",
         },
     };
     // the tourist kangaroo of scene 95 (BODY.HQR 308: entity 214), whose own line (185, retold by IslandRetell) waits for after the race

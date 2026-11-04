@@ -693,6 +693,8 @@ void comportement_1()
         Yard(p);
         StartLine(p);
         PackageLevers(p);
+        // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
+        Lba1Rooms(p);
     }
 
     // ---- the package centre's hidden room (scene 16): its three levers ------------------------------------------------------------

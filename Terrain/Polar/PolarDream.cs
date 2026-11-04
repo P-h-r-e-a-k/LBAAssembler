@@ -100,6 +100,18 @@ internal static class PolarDream
         "Twinsen! Twinsen, acorda! Andaste às voltas a noite toda. Estavas outra vez a sonhar com o FunFrock?",
     };
 
+    // Sendell's word, fading with the white as Twinsen wakes, when he drove through her light on the dream's loop (an easter egg, the user,
+    // 2026-11-04 -- RaceTrackStory.Eggs.Polar.cs, EggSendell): said before Zoe's wake line, the text after it
+    private static readonly string[] SendellWake =
+    {
+        "A voice, fading with the white: \"You found me again, Twinsen. You always do.\"",
+        "Une voix, qui s'efface avec le blanc : « Tu m'as encore trouvée, Twinsen. Tu me trouves toujours. »",
+        "Eine Stimme, die mit dem Weiß verblasst: \"Du hast mich wieder gefunden, Twinsen. Das tust du immer.\"",
+        "Una voz, que se apaga con el blanco: \"Me has vuelto a encontrar, Twinsen. Siempre lo haces.\"",
+        "Una voce, che svanisce col bianco: \"Mi hai ritrovata, Twinsen. Lo fai sempre.\"",
+        "Uma voz, a desvanecer-se com o branco: \"Encontraste-me outra vez, Twinsen. Encontras sempre.\"",
+    };
+
     // The island's own texts after its name, in a language (a language this doesn't know: the English).
     public static IEnumerable<(int Id, string Text)> IslandTexts(int language)
     {
@@ -127,6 +139,7 @@ internal static class PolarDream
             var lines = Lba2TextBank.Load(text, lang, CitadelTexts);
             var attribute = lines.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute;
             lines.Texts.Add(new Lba2TextBank.Text { Id = id, Attribute = attribute, Bytes = Dos.GetBytes(Wake[lang < Wake.Length ? lang : 0]) });
+            lines.Texts.Add(new Lba2TextBank.Text { Id = id + 1, Attribute = attribute, Bytes = Dos.GetBytes(SendellWake[lang < SendellWake.Length ? lang : 0]) });
             hqr = lines.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
@@ -233,6 +246,10 @@ stop();
 {{
     if (1 == var_game({DreamVar}) && 161 == l_track())
     {{
+        if (1 == var_game({RaceTrackStory.EggSendell}))
+        {{
+            message({wake + 1});
+        }}
         message({wake});
         set_var_game({DreamVar}, 2);
         set_track(label_162);

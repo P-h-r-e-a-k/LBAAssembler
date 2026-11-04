@@ -223,6 +223,8 @@ void comportement_1()
     {
         Ringing, BaldinoRadio, FlickShut, FlickPages, FlickOpen, DeanShut, ZoePages, ZoeWhere, Page1, Page2, Page3, DeanAll,
         BaldinoTuned, BaldinoRacing, FlickWon, RacerNext, MoyaOil, ZoeOil, BaldinoRocket,
+        // (the easter eggs: RaceTrackStory.Eggs.Desert.cs)
+        PageEgg, DeanNotMine, FlickNoIdea, FlickBox, RunesUnread, RunesRecord, RunesExcept, DeanBu,
     }
     private static readonly string[][] DesertLines =
     {
@@ -397,6 +399,79 @@ void comportement_1()
             "Ti credi veloce? Sulla luna ho un modulo d'atterraggio che lascerebbe la tua macchina ferma. Vieni a sfidarmi lassù. Il mio razzo parte adesso, c'è posto per tre.",
             "Achas que és rápido? Na lua tenho um módulo de alunagem que deixava o teu carro parado. Vem correr contra mim lá em cima. O meu foguetão parte agora, há lugar para três.",
         },
+        // (the easter eggs, from PageEgg on: RaceTrackStory.Eggs.Desert.cs)
+        new[]
+        {
+            "A page: How to Pass Your Exams Without Studying. Step 1: let racing cars blow everyone else's papers away.",
+            "Une page : Comment réussir ses examens sans réviser. Étape 1 : laisser les voitures de course emporter les copies des autres.",
+            "Eine Seite: Wie man Prüfungen besteht, ohne zu lernen. Schritt 1: Rennwagen die Blätter aller anderen wegwehen lassen.",
+            "Una página: Cómo aprobar los exámenes sin estudiar. Paso 1: dejar que los coches de carreras se lleven los papeles de los demás.",
+            "Una pagina: Come superare gli esami senza studiare. Passo 1: lasciare che le auto da corsa portino via i fogli di tutti gli altri.",
+            "Uma página: Como passar nos exames sem estudar. Passo 1: deixar os carros de corrida levar os papéis de todos os outros.",
+        },
+        new[]
+        {
+            "That's not one of mine. ...Whose is it? Flick!",
+            "Ce n'est pas une des miennes. ...À qui est-elle ? Flick !",
+            "Das ist keine von meinen. ...Wem gehört die? Flick!",
+            "Esa no es mía. ...¿De quién es? ¡Flick!",
+            "Questa non è mia. ...Di chi è? Flick!",
+            "Essa não é minha. ...De quem é? Flick!",
+        },
+        new[]
+        {
+            "I have no idea what you mean.",
+            "Je ne vois pas du tout de quoi tu parles.",
+            "Ich habe keine Ahnung, wovon du sprichst.",
+            "No tengo ni idea de qué me hablas.",
+            "Non ho idea di cosa tu stia parlando.",
+            "Não faço ideia do que estás a falar.",
+        },
+        new[]
+        {
+            "...Here. A clover box. For nothing at all. Nothing happened.",
+            "...Tiens. Une boîte à trèfle. Pour rien du tout. Il ne s'est rien passé.",
+            "...Hier. Eine Kleeblattbox. Einfach so. Es ist nichts passiert.",
+            "...Toma. Una caja de trébol. Por nada en especial. Aquí no ha pasado nada.",
+            "...Tieni. Una scatola per quadrifogli. Per niente. Non è successo niente.",
+            "...Toma. Uma caixa de trevo. Por nada. Não aconteceu nada.",
+        },
+        new[]
+        {
+            "Twinsen can't read the runes. If only he still had the Book of Bù.",
+            "Twinsen ne sait pas lire les runes. S'il avait encore le Livre de Bù...",
+            "Twinsen kann die Runen nicht lesen. Hätte er nur noch das Buch von Bù.",
+            "Twinsen no sabe leer las runas. Si aún tuviera el Libro de Bù...",
+            "Twinsen non sa leggere le rune. Se solo avesse ancora il Libro di Bù...",
+            "O Twinsen não consegue ler as runas. Se ao menos ainda tivesse o Livro de Bù...",
+        },
+        new[]
+        {
+            "Here raced the chariot of Bù. Lap record: 1 minute 2 seconds. Nobody will ever beat it.",
+            "Ici courut le char de Bù. Record du tour : 1 minute 2 secondes. Nul ne le battra jamais.",
+            "Hier fuhr der Streitwagen von Bù. Rundenrekord: 1 Minute 2 Sekunden. Niemand wird ihn je schlagen.",
+            "Aquí corrió el carro de Bù. Récord de vuelta: 1 minuto 2 segundos. Nadie lo batirá jamás.",
+            "Qui corse il carro di Bù. Record sul giro: 1 minuto e 2 secondi. Nessuno lo batterà mai.",
+            "Aqui correu o carro de Bù. Recorde da volta: 1 minuto e 2 segundos. Ninguém o vai bater.",
+        },
+        new[]
+        {
+            "...except Twinsen.",
+            "...sauf Twinsen.",
+            "...außer Twinsen.",
+            "...excepto Twinsen.",
+            "...tranne Twinsen.",
+            "...exceto o Twinsen.",
+        },
+        new[]
+        {
+            "A lap in under a minute and two seconds? Bù's own record! The School owes you 50 kashes.",
+            "Un tour en moins d'une minute et deux secondes ? Le record de Bù lui-même ! L'École vous doit 50 kashes.",
+            "Eine Runde in weniger als einer Minute und zwei Sekunden? Bùs eigener Rekord! Die Schule schuldet dir 50 Kashes.",
+            "¿Una vuelta en menos de un minuto y dos segundos? ¡El récord del mismísimo Bù! La Escuela te debe 50 kashes.",
+            "Un giro in meno di un minuto e due secondi? Il record di Bù in persona! La Scuola ti deve 50 kashes.",
+            "Uma volta em menos de um minuto e dois segundos? O recorde do próprio Bù! A Escola deve-te 50 kashes.",
+        },
     };
 
     private static List<string> ApplyDesert(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -423,7 +498,7 @@ void comportement_1()
         message({Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});
         message({Say(DesertLine.BaldinoRocket)});
-        if (4 > chapter())
+{BuAfterRace(Say)}        if (4 > chapter())
         {{
             inc_chapter();
         }}
@@ -432,7 +507,7 @@ void comportement_1()
 ")));
 
         // Flick at her plinth: the track shut (Q_PAGES 1), still shut, open
-        MarshalA(b, report, desert, $@"            if (0 == var_game({QPages}))
+        MarshalA(b, report, desert, FlickEggs(Say) + $@"            if (0 == var_game({QPages}))
             {{
                 message({Say(DesertLine.FlickShut)});
                 set_var_game({QPages}, 1);
@@ -453,7 +528,7 @@ void comportement_1()
         if (Copy(b.Store, DeanScene, deanActor) is { } dean)
         {
             b.Hide(DeanScene, deanActor, desert, "Dean");
-            b.Edit(DeanScene, "the Dean: the three pages (Q_PAGES 2), the Wizard's Diploma (item 30, Q_PAGES 6)", model => IslandBeatsA.Add(model, dean, Talker(desert, $@"            if (5 == var_game({QPages}))
+            b.Edit(DeanScene, "the Dean: the three pages (Q_PAGES 2), the Wizard's Diploma (item 30, Q_PAGES 6)", model => IslandBeatsA.Add(model, dean, Talker(desert, DeanEggs(Say) + $@"            if (5 == var_game({QPages}))
             {{
                 message({Say(DesertLine.DeanAll)});
                 found_object({Diploma});
@@ -548,7 +623,7 @@ void comportement_1()
         message_obj({moya}, {Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});
         message_obj({bal}, {Say(DesertLine.BaldinoRocket)});
-        if (4 > chapter())
+{BuAfterRace(Say)}        if (4 > chapter())
         {{
             inc_chapter();
         }}
@@ -560,6 +635,8 @@ void comportement_1()
             return scripts => { foreach (var e in edits) e(scripts); };
         });
 
+        // (the easter eggs: the fourth page, Bù's stone -- RaceTrackStory.Eggs.Desert.cs)
+        DesertEggs(b, report, Say, desert);
         b.Save();
         log.Add($"the Desert's race file: gate={QPages} 6 (the diploma), win={QPages} {PagesWon}");
         return log;
