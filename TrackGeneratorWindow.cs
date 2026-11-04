@@ -361,7 +361,10 @@ internal sealed class TrackGeneratorWindow : Window
         if (kind != SketchKind.None)
         {
             var (r, g, b) = TrackSketch.Colour(kind);
-            row.Children.Add(new Border { Width = 14, Height = 14, Background = new SolidColorBrush(Color.FromRgb(r, g, b)), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            // (a letter on the colour too, and each kind drawn with its own pattern on the map -- not told apart by colour alone: the user,
+            // 2026-11-04, track making "more accessible")
+            row.Children.Add(new Border { Width = 16, Height = 16, Background = new SolidColorBrush(Color.FromRgb(r, g, b)), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock { Text = PenLetter(kind), FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
         }
         row.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap, MaxWidth = 250 });
         var radio = new RadioButton { Content = row, GroupName = "tool", IsChecked = which == Tool.Road, Margin = new Thickness(0, 2, 0, 2) };
@@ -370,6 +373,18 @@ internal sealed class TrackGeneratorWindow : Window
         tools.Add(radio);
         bar.Children.Add(radio);
     }
+
+    private static string PenLetter(SketchKind kind) => kind switch { SketchKind.Road => "R", SketchKind.Jump => "J", SketchKind.Loop => "L", SketchKind.Pit => "P", _ => "" };
+
+    // Each pen's pattern on the map, darker pixels over its colour: the road solid, a jump dotted, a loop hatched one way, the pit lane
+    // striped across -- seen without telling the colours apart
+    private static bool PenPattern(SketchKind kind, int x, int y) => kind switch
+    {
+        SketchKind.Jump => x % 4 == 0 && y % 4 == 0,
+        SketchKind.Loop => (x - y + 1024) % 6 == 0,
+        SketchKind.Pit => y % 5 == 0,
+        _ => false,
+    };
 
     // the overlay: what is drawn, in the pens' colours, over the map
     private void Redraw(int x0, int y0, int x1, int y1)
@@ -386,6 +401,7 @@ internal sealed class TrackGeneratorWindow : Window
                 var k = drawn[i];
                 if (k == SketchKind.None) continue;
                 var (r, g, b) = TrackSketch.Colour(k);
+                if (PenPattern(k, x0 + x, y0 + y)) { r = (byte)(r * 0.45); g = (byte)(g * 0.45); b = (byte)(b * 0.45); }
                 // (in the air: lighter, with white stripes across -- the profile and the 3D view say how high)
                 if (!float.IsNaN(drawnHeight[i]))
                 {

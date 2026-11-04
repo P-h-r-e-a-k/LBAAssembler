@@ -151,9 +151,9 @@ internal sealed class RaceTrackWindow : Window
         progressBar.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
         foreach (var box in new TextBox[] { planPath, log })
         {
-            box.SetResourceReference(BackgroundProperty, "ThemeFieldBrush");
-            box.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
-            box.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
+            box.SetResourceReference(Control.BackgroundProperty, "ThemeFieldBrush");
+            box.SetResourceReference(Control.ForegroundProperty, "ThemeTextBrush");
+            box.SetResourceReference(Control.BorderBrushProperty, "ThemeBorderBrush");
         }
         foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
@@ -188,7 +188,17 @@ internal sealed class RaceTrackWindow : Window
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
-        root.Children.Add(intro);
+        // (the short of it first, the long of it folded away -- the user, 2026-11-04: track making "more accessible and user friendly")
+        var summary = new TextBlock { TextWrapping = TextWrapping.Wrap, Text =
+            "Builds the race tracks of the islands you tick into the game folder, so Play races them. The first build keeps the original files, and " +
+            "\"Put the original files back\" restores them. To make a track of your own, use Build > Race track (or File > New track): it races your track " +
+            "in a scratch copy and shares it for LBRA without this window." };
+        summary.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        root.Children.Add(summary);
+        var more = new Expander { Header = "What the build does, island by island", Content = intro, Margin = new Thickness(0, 6, 0, 0) };
+        intro.Margin = new Thickness(0, 4, 0, 0);
+        more.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        root.Children.Add(more);
         root.Children.Add(new TextBlock { Text = $"Game folder: {gameRoot}", Margin = new Thickness(0, 8, 0, 8), TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextBrush") });
 
         root.Children.Add(Section("The islands"));
@@ -214,8 +224,12 @@ internal sealed class RaceTrackWindow : Window
         ToolTipService.SetShowOnDisabled(filePlan, true);
         filePlan.ToolTip = "Tick an island first: a plan file is the track of one of the islands ticked (the others are built with their own)";
 
-        root.Children.Add(Section("The scenes"));
-        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
+        // (the scenes' choices: rarely changed, folded away)
+        var scenes = new StackPanel();
+        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) { c.Margin = new Thickness(0, 2, 0, 2); scenes.Children.Add(c); }
+        var scenesFold = new Expander { Header = "The scenes: actors, zones, cameras, story (as they are is right for most tracks)", Content = scenes, Margin = new Thickness(0, 12, 0, 0) };
+        scenesFold.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        root.Children.Add(scenesFold);
 
         root.Children.Add(status);
         root.Children.Add(progressBar);
@@ -271,13 +285,15 @@ internal sealed class RaceTrackWindow : Window
         }
     }
 
-    // The shared track's name, as the race game lists it; null: cancelled
-    private string? AskName(string suggested)
+    // The shared track's name, as the race game lists it; null: cancelled (also asked by the 3D view's track pieces: MainWindow.TrackPieces)
+    private string? AskName(string suggested) => AskName(this, suggested);
+
+    internal static string? AskName(Window owner, string suggested)
     {
         var box = new TextBox { Text = suggested.Length > RaceTrackShare.MaxName ? suggested[..RaceTrackShare.MaxName] : suggested, MaxLength = RaceTrackShare.MaxName, Padding = new Thickness(3), Margin = new Thickness(0, 6, 0, 0) };
-        box.SetResourceReference(BackgroundProperty, "ThemeFieldBrush");
-        box.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
-        box.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
+        box.SetResourceReference(Control.BackgroundProperty, "ThemeFieldBrush");
+        box.SetResourceReference(Control.ForegroundProperty, "ThemeTextBrush");
+        box.SetResourceReference(Control.BorderBrushProperty, "ThemeBorderBrush");
         var ok = new Button { Content = "OK", Padding = new Thickness(18, 3, 18, 3), IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(12, 3, 12, 3), IsCancel = true };
         var text = new TextBlock { Text = "The track's name, as the race game lists it:", TextWrapping = TextWrapping.Wrap };
@@ -286,8 +302,8 @@ internal sealed class RaceTrackWindow : Window
         buttons.Children.Add(ok); buttons.Children.Add(cancel);
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(text); panel.Children.Add(box); panel.Children.Add(buttons);
-        var ask = new Window { Title = "Share for LBRA", Content = panel, Owner = this, Width = 400, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        ask.SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
+        var ask = new Window { Title = "Share for LBRA", Content = panel, Owner = owner, Width = 400, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        ask.SetResourceReference(Window.BackgroundProperty, "ThemeWindowBrush");
         ok.Click += (_, _) => { if (box.Text.Trim().Length > 0) ask.DialogResult = true; else box.Focus(); };
         ask.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
         return ask.ShowDialog() == true ? box.Text.Trim() : null;

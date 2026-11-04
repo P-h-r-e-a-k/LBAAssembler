@@ -51,6 +51,9 @@ public partial class MainWindow
     private (double X, double Z, double Y)? trackFlag;
     private bool trackFlagArmed, trackFlagDragging;
     private Button? trackTestButton;
+    // the track's check (TrackPieceSet.Check), listed in the panel; its problems' places, marked red in the view
+    private StackPanel? trackChecks;
+    private List<(double X, double Z, double Y)> trackProblemSpots = new();
     private Slider? trackWidthSlider;
     private TextBlock? trackWidthLabel;
     private bool trackWidthSyncing;
@@ -98,9 +101,18 @@ public partial class MainWindow
             b.Click += (_, _) => { click(); Keyboard.Focus(this); };
             return b;
         }
+        // (each piece's button with its shape drawn on it, seen from above -- the user, 2026-11-04: track making "more accessible")
         var pieces = new WrapPanel { Margin = new Thickness(0, 0, 0, 0) };
         foreach (var section in Section.Laid)
-            pieces.Children.Add(Btn(section.Name, section.Tip, () => ArmTrackPiece(section)));
+        {
+            var b = Btn(section.Name, section.Tip, () => ArmTrackPiece(section));
+            var face = new StackPanel { Orientation = Orientation.Horizontal };
+            face.Children.Add(TrackPieceIcon(section));
+            face.Children.Add(new TextBlock { Text = section.Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) });
+            b.Content = face;
+            System.Windows.Automation.AutomationProperties.SetName(b, section.Name);
+            pieces.Children.Add(b);
+        }
         root.Children.Add(pieces);
         var row = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         row.Children.Add(Btn("Turn left (Q)", "Turn the piece being laid, or the one or the section selected, 15 degrees", () => TurnTrackPiece(-1)));
@@ -141,6 +153,16 @@ public partial class MainWindow
         DockPanel.SetDock(widthText, Dock.Left); DockPanel.SetDock(trackWidthLabel, Dock.Right);
         widthRow.Children.Add(widthText); widthRow.Children.Add(trackWidthLabel); widthRow.Children.Add(trackWidthSlider);
         root.Children.Add(widthRow);
+        // (a track to start from, laid in the middle of the view, and the pieces that bring the road's end round to its start)
+        var starters = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
+        var starterBox = new ComboBox { MinWidth = 150, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(4, 3, 4, 3), ToolTip = "A ready-made track to begin from, laid in the middle of the view" };
+        foreach (var s in TrackPieceSet.Starters) starterBox.Items.Add(new ComboBoxItem { Content = s.Name, ToolTip = s.Tip });
+        starterBox.SelectedIndex = 0;
+        System.Windows.Automation.AutomationProperties.SetName(starterBox, "Starter track");
+        starters.Children.Add(starterBox);
+        starters.Children.Add(Btn("Start from it", "Lay the starter track in the middle of the view (the pieces laid already are replaced, after asking)", () => LayStarterTrack(TrackPieceSet.Starters[Math.Max(0, starterBox.SelectedIndex)].Name)));
+        starters.Children.Add(Btn("Close the lap", "Add the pieces (four at most, a Ramp first where the heights differ) that take the road's end round to its start", CloseTrackLap));
+        root.Children.Add(starters);
         var edit = new WrapPanel();
         edit.Children.Add(Btn("Delete (Del)", "Take the selected piece away", DeleteTrackPiece));
         edit.Children.Add(Btn("Undo (Ctrl+Z)", "Take back the last change to the pieces", () => StepTrackHistory(undo: true)));
@@ -151,19 +173,31 @@ public partial class MainWindow
             RememberTrackPieces("clear all"); trackPieces.Pieces.Clear(); trackSelected = null; trackGroup = null; trackFlag = null; TrackPiecesChanged();
         }));
         root.Children.Add(edit);
-        var make = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        // (the track as it is, checked on every change: what's fine, what to know, what stops it -- each with its sign as well as its colour)
+        var trackHeading = Text("The track", 0, false);
+        trackHeading.FontWeight = FontWeights.SemiBold;
+        root.Children.Add(trackHeading);
+        trackChecks = new StackPanel { Margin = new Thickness(0, 2, 0, 4) };
+        System.Windows.Automation.AutomationProperties.SetName(trackChecks, "Track check");
+        root.Children.Add(trackChecks);
+        // (race it: the main thing to do, first -- in a scratch copy, the game folder untouched; from the flag if there is one)
+        var test = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        trackTestButton = Btn("▶ Race it", "Build the track into a scratch copy of the game folder (yours isn't changed) and race it: from the chequered flag if you placed one " +
+                                            "(to the road's end or once round a lap; a flag at the road's end drives it the other way), else the whole track from its start", TestTrackFromFlag);
+        trackTestButton.FontWeight = FontWeights.SemiBold;
+        trackTestButton.Padding = new Thickness(14, 5, 14, 5);
+        System.Windows.Automation.AutomationProperties.SetName(trackTestButton, "Race it");
+        test.Children.Add(trackTestButton);
+        test.Children.Add(Btn("Place the test start", "Optional: then click on the road, and Race it starts there (drag the chequered flag along the road to move it)", ArmTrackFlag));
+        test.Children.Add(Btn("Remove the test start", "Take the chequered flag off the road: Race it races the whole track", RemoveTrackFlag));
+        root.Children.Add(test);
+        var make = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
         make.Children.Add(Btn("Make the track", "Follow the pieces into a race track plan: the road's middle, its heights, jumps, loops and pit lane", MakeTrackFromPieces));
-        trackBuildButton = Btn("Build it…", "The plan to the race track window, to build into the game folder (or share for LBRA from there)", BuildTrackFromPieces);
+        trackBuildButton = Btn("Build into the game…", "The track to the race track window, to build into the game folder itself", BuildTrackFromPieces);
         trackBuildButton.IsEnabled = false;
         make.Children.Add(trackBuildButton);
+        make.Children.Add(Btn("Share for LBRA…", "Save the track as a file to send to friends: Little Big Racing Adventure builds it from their own game (Racing > Shared tracks)", ShareTrackFromPieces));
         root.Children.Add(make);
-        var test = new WrapPanel();
-        test.Children.Add(Btn("Place the test start", "Then click on the road: a test race starts there (or drag the chequered flag along the road)", ArmTrackFlag));
-        trackTestButton = Btn("Test from the flag", "Build the road into the game folder and race it in Play from the flag -- Twinsen's car on the flag, to the road's end or once round a lap; " +
-                                                    "a flag at the road's end drives it the other way", TestTrackFromFlag);
-        test.Children.Add(trackTestButton);
-        test.Children.Add(Btn("Remove the test start", "Take the chequered flag off the road", RemoveTrackFlag));
-        root.Children.Add(test);
         trackStatus = Text("", 6, false);
         root.Children.Add(trackStatus);
         // (how it works, under the pieces: the buttons first, where they are seen)
@@ -172,6 +206,9 @@ public partial class MainWindow
                                "Q and E turn it, PgUp and PgDn raise and lower it, R and F tilt a Ramp, Esc stops laying. Drag a piece to move it, or Shift+drag " +
                                "to move the whole section it's part of; Delete takes the selected one away. Ctrl+Z undoes, Ctrl+Y redoes. " +
                                "Drag the ground (Rotate/tilt with mouse) or right drag to turn the view, middle drag to pan it.", 10));
+        // (Race it and the check first, where a short panel shows them; the pieces after)
+        foreach (var top in new UIElement[] { test, trackChecks, trackHeading }) { root.Children.Remove(top); root.Children.Insert(0, top); }
+        test.Margin = new Thickness(0, 4, 0, 8);
         return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
     }
 
@@ -182,6 +219,7 @@ public partial class MainWindow
         TrackPanelHost.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on && TrackPanelHost.Content is null) TrackPanelHost.Content = TrackPanel();
         if (on && !string.Equals(trackKey, TrackKey, StringComparison.OrdinalIgnoreCase)) LoadTrackPieces();
+        if (on) UpdateTrackChecks();
         if (!on) { trackArmed = null; trackGhost = null; trackDragging = null; }
         else RunTrackPiecesTest();
         if (on)
@@ -352,8 +390,146 @@ public partial class MainWindow
         // underlying track is removed")
         if (trackFlag is { } f && !TrackFlagOnRoad(f)) { trackFlag = null; trackFlagDragging = false; SetTrackStatus("The test start went with the road under it."); }
         SaveTrackPieces();
+        UpdateTrackChecks();
         DrawTrackOverlay();
-        if (trackArmed is null) SetTrackStatus($"{trackPieces.Pieces.Count} piece(s). Make the track when they are one road.");
+        if (trackArmed is null) SetTrackStatus($"{trackPieces.Pieces.Count} piece(s).");
+    }
+
+    // A starter track (TrackPieceSet.Starters) laid in the middle of the view, on the ground there, heading east
+    private void LayStarterTrack(string name)
+    {
+        if (!TrackPiecesActive || TrackIslandOfView() is null) { SetTrackStatus("Open one of the race tracks' islands first."); return; }
+        if (trackPieces.Pieces.Count > 0
+            && MessageBox.Show(this, $"Replace the {trackPieces.Pieces.Count} piece(s) laid with the {name}? (Ctrl+Z brings them back.)", "Race track", MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
+        DisarmTrackPiece();
+        double cx = targetX / 512, cz = targetZ / 512;
+        var ground = SceneGround();
+        var y = Math.Max(300.0, ground is not null ? IslandOps.Altitude(ground, targetX, targetZ) ?? 0 : 0);
+        RememberTrackPieces($"start from the {name}");
+        trackPieces.Pieces.Clear(); trackSelected = null; trackGroup = null; trackFlag = null;
+        trackPieces.Pieces.AddRange(TrackPieceSet.Starter(name, cx - 15, cz - 12, y, 0));
+        trackPlanPath = null;
+        if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
+        TrackPiecesChanged();
+        SetTrackStatus($"The {name} is laid in the middle of the view: change it as you like (drag a piece, Delete, lay more), then Race it.");
+    }
+
+    // The pieces that take the road's end round to its start (TrackPieceSet.CloseLap), added
+    private void CloseTrackLap()
+    {
+        if (!TrackPiecesActive) return;
+        if (trackPieces.CloseLap(out var why) is not { } closing) { SetTrackStatus(why); return; }
+        DisarmTrackPiece();
+        RememberTrackPieces("close the lap");
+        trackPieces.Pieces.AddRange(closing);
+        trackPlanPath = null;
+        if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
+        TrackPiecesChanged();
+        SetTrackStatus($"The lap is closed with {string.Join(", ", closing.Select(c => c.Section.Name))}.");
+    }
+
+    // The track's check, listed: a sign and a colour for each (✓ fine, • to know, ✗ stops it), the problems' places kept to mark in the view
+    private void UpdateTrackChecks()
+    {
+        if (trackChecks is null) return;
+        trackChecks.Children.Clear();
+        var items = trackPieces.Check();
+        trackProblemSpots = items.Where(i => i.Kind == TrackPieceSet.CheckKind.Problem).SelectMany(i => i.Spots).ToList();
+        foreach (var item in items)
+        {
+            var (sign, brush) = item.Kind switch
+            {
+                TrackPieceSet.CheckKind.Ok => ("✓", "ThemeSuccessBrush"),
+                TrackPieceSet.CheckKind.Note => ("•", "ThemeTextMuted2Brush"),
+                _ => ("✗", "ThemeErrorBrush"),
+            };
+            var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
+            var mark = new TextBlock { Text = sign, Width = 16, FontWeight = FontWeights.Bold };
+            if (TryFindResource(brush) is Brush) mark.SetResourceReference(TextBlock.ForegroundProperty, brush);
+            else mark.Foreground = item.Kind == TrackPieceSet.CheckKind.Ok ? Brushes.SeaGreen : item.Kind == TrackPieceSet.CheckKind.Problem ? Brushes.IndianRed : Brushes.Gray;
+            DockPanel.SetDock(mark, Dock.Left);
+            var text = new TextBlock { Text = item.Text, TextWrapping = TextWrapping.Wrap };
+            text.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+            System.Windows.Automation.AutomationProperties.SetName(row, (item.Kind == TrackPieceSet.CheckKind.Problem ? "Problem: " : item.Kind == TrackPieceSet.CheckKind.Ok ? "Fine: " : "Note: ") + item.Text);
+            row.Children.Add(mark); row.Children.Add(text);
+            trackChecks.Children.Add(row);
+        }
+    }
+
+    // A piece's shape seen from above, for its button: its middle line, fitted into a small square (a climb drawn darker as it goes up)
+    private static FrameworkElement TrackPieceIcon(Section section)
+    {
+        const double size = 22;
+        var line = new TrackPiece(section, 0, 0, 0, -Math.PI / 2).Line();
+        double x0 = line.Min(p => p.X), x1 = line.Max(p => p.X), z0 = line.Min(p => p.Z), z1 = line.Max(p => p.Z);
+        var scale = (size - 6) / Math.Max(1e-6, Math.Max(x1 - x0, z1 - z0));
+        double ox = (size - (x1 - x0) * scale) / 2 - x0 * scale, oz = (size - (z1 - z0) * scale) / 2 - z0 * scale;
+        var canvas = new Canvas { Width = size, Height = size };
+        Brush Of(SketchKind k) => k switch { SketchKind.Jump => Brushes.HotPink, SketchKind.Loop => Brushes.DeepSkyBlue, SketchKind.Pit => Brushes.Orange, _ => Brushes.Gray };
+        for (var i = 1; i < line.Count; i++)
+        {
+            var kind = line[i].Kind;
+            // (a jump's gap left open: no road drawn over it)
+            if (kind == SketchKind.Jump) continue;
+            canvas.Children.Add(new System.Windows.Shapes.Line
+            {
+                X1 = line[i - 1].X * scale + ox, Y1 = line[i - 1].Z * scale + oz, X2 = line[i].X * scale + ox, Y2 = line[i].Z * scale + oz,
+                Stroke = Of(kind), StrokeThickness = 3, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            });
+        }
+        // (a loop: its ring stood up, a circle on the road)
+        if (section.Parts.Any(p => p.Kind == SketchKind.Loop))
+            canvas.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Stroke = Brushes.DeepSkyBlue, StrokeThickness = 2, Margin = new Thickness(size / 2 - 4.5, size / 2 - 4.5, 0, 0) });
+        // (its start: a dot where it begins)
+        canvas.Children.Add(new System.Windows.Shapes.Ellipse { Width = 5, Height = 5, Fill = Brushes.LimeGreen, Margin = new Thickness(line[0].X * scale + ox - 2.5, line[0].Z * scale + oz - 2.5, 0, 0) });
+        // (a climb or a drop: an arrow up or down beside it)
+        if (Math.Abs(section.Rise) > 0 || section.Tilts)
+            canvas.Children.Add(new TextBlock { Text = section.Tilts ? "↕" : section.Rise > 0 ? "↑" : "↓", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Brushes.Goldenrod, Margin = new Thickness(size - 8, -3, 0, 0) });
+        return canvas;
+    }
+
+    // The track to a file to send to friends (RaceTrackShare: Little Big Racing Adventure's Racing > Shared tracks builds it) -- from where
+    // it's laid, not by way of the race track window's plan file (the user, 2026-11-04: make track making "more accessible and user friendly")
+    private void ShareTrackFromPieces()
+    {
+        if (TrackIslandOfView() is not { } island) { SetTrackStatus("Open one of the race tracks' islands first."); return; }
+        // (a map's island: a copy of one of the game's islands shares as that island's track -- the same ground, cell for cell; a new island
+        // of its own can't be yet, LBRA builds shared tracks on the game's islands)
+        if (island.CustomMap is { } map)
+        {
+            var from = map.TrackFrom
+                ?? (System.Text.RegularExpressions.Regex.Match(map.Description ?? "", @"^A race track on a copy of ([A-Z0-9_]+)\.") is { Success: true } m ? m.Groups[1].Value : null);
+            var game = from is null ? null : RaceTrackIsland.BuiltIn.FirstOrDefault(i =>
+                string.Equals(i.IleFile, from + ".ILE", StringComparison.OrdinalIgnoreCase) || string.Equals(i.TwinIleFile, from + ".ILE", StringComparison.OrdinalIgnoreCase));
+            if (game is null)
+            {
+                SetTrackStatus("A track on an island of its own can't be shared yet: Little Big Racing Adventure builds shared tracks on the game's islands. " +
+                               "Lay it on a copy of one of them (File > New track, \"A copy of one of the islands\") to share it.");
+                return;
+            }
+            if (game.Scale > 1)
+            {
+                SetTrackStatus($"{game.Shown} is built bigger for its tracks than the copy you laid on: lay the track on {game.Shown} itself (open it, Build > Race track) to share it.");
+                return;
+            }
+            island = game;
+        }
+        if (trackPlanPath is null) MakeTrackFromPieces();
+        if (trackPlanPath is not { } plan) return;
+        if (RaceTrackWindow.AskName(this, $"{island.Shown} by me") is not { } name) return;
+        var safe = new string(name.Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Share the track for LBRA", Filter = "LBRA shared track (*.lbrtrack)|*.lbrtrack", FileName = safe + RaceTrackShare.Extension };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            RaceTrackShare.Write(dialog.FileName, name, island, plan);
+            SetTrackStatus($"\"{name}\" is saved as {dialog.FileName}. Send it to whoever you race: in Little Big Racing Adventure, Racing > Shared tracks > " +
+                           "Add or remove tracks, then this file (or put it in the shared tracks folder). To race online, both of you add the same tracks.");
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            SetTrackStatus($"The track can't be shared: {error.Message}");
+        }
     }
 
     // ---- kept for the island ------------------------------------------------------------------------------------------------------------
@@ -720,7 +896,8 @@ public partial class MainWindow
     // (each island's as it was, this island's the test), and raced in Play -- the race car setup asked first, as Play asks
     private async void TestTrackFromFlag()
     {
-        if (trackFlag is not { } flag) { SetTrackStatus("Place the test start first (Place the test start, then click on the road), or drag the chequered flag onto it."); return; }
+        // (no flag: the whole track from its start -- the user, 2026-11-04: track making "more accessible and user friendly")
+        var flag = trackFlag;
         if (TrackIslandOfView() is not { } island || TrackIslandAsBuilt(island) is not { } ground) { SetTrackStatus("Open one of the race tracks' islands first."); return; }
         DisarmTrackPiece();
         var result = trackPieces.MakePlan(ground, flag, out var gridRoom);
@@ -733,7 +910,7 @@ public partial class MainWindow
             catch (Exception e) when (e is IOException or InvalidDataException) { SetTrackStatus($"The map's island can't be read back: {e.Message}"); return; }
         }
         var answer = MessageBox.Show(this,
-            $"Build the test -- {island.Shown} from the flag, {string.Join(", ", result.Notes.Take(2))} -- and race it?\n\n" +
+            $"Build the test -- {island.Shown} {(flag is null ? "from its start" : "from the flag")}, {string.Join(", ", result.Notes.Take(2))} -- and race it?\n\n" +
             "It's built into a scratch copy of the game folder: the game folder's own islands and tracks aren't changed.",
             "Test race", MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
@@ -857,7 +1034,8 @@ public partial class MainWindow
     private static readonly Pen TrackLoopLeg = FrozenPen(Color.FromArgb(245, 50, 120, 56), 5), TrackFlagPole = FrozenPen(Color.FromRgb(30, 30, 30), 2.5),
         TrackFlagEdge = FrozenPen(Color.FromRgb(20, 20, 20), 1);
     private static readonly Pen TrackPier = FrozenPen(Color.FromArgb(200, 120, 120, 130), 3), TrackFlight = FrozenPen(Color.FromArgb(230, 255, 80, 200), 2, dashed: true),
-        TrackGhostEdge = FrozenPen(Color.FromArgb(230, 255, 255, 255), 1.5, dashed: true), TrackRing = FrozenPen(Color.FromRgb(255, 220, 40), 2.5);
+        TrackGhostEdge = FrozenPen(Color.FromArgb(230, 255, 255, 255), 1.5, dashed: true), TrackRing = FrozenPen(Color.FromRgb(255, 220, 40), 2.5),
+        TrackProblem = FrozenPen(Color.FromRgb(235, 40, 40), 3);
     private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     private static Pen FrozenPen(Color c, double width, bool dashed = false)
     {
@@ -880,6 +1058,8 @@ public partial class MainWindow
     {
         public readonly List<(double Depth, Point[] Points, Brush? Fill, Pen? Pen)> Faces = new();
         public readonly List<Point> Rings = new();
+        // the track check's problems: a red ring with a cross, seen as well as by its colour
+        public readonly List<Point> Problems = new();
         // the test start's chequered flag: its foot on the road, the top of its pole
         public (Point Foot, Point Top)? Flag;
         protected override void OnRender(DrawingContext dc)
@@ -897,6 +1077,12 @@ public partial class MainWindow
                 dc.DrawGeometry(fill, pen, g);
             }
             foreach (var r in Rings) dc.DrawEllipse(null, TrackRing, r, 7, 7);
+            foreach (var r in Problems)
+            {
+                dc.DrawEllipse(null, TrackProblem, r, 11, 11);
+                dc.DrawLine(TrackProblem, new Point(r.X - 6, r.Y - 6), new Point(r.X + 6, r.Y + 6));
+                dc.DrawLine(TrackProblem, new Point(r.X - 6, r.Y + 6), new Point(r.X + 6, r.Y - 6));
+            }
             if (Flag is { } f)
             {
                 dc.DrawLine(TrackFlagPole, f.Foot, f.Top);
@@ -923,7 +1109,7 @@ public partial class MainWindow
             trackCanvas.Children.Add(trackDrawing);
         }
         if (trackCanvas is null || trackDrawing is null) return;
-        trackDrawing.Faces.Clear(); trackDrawing.Rings.Clear(); trackDrawing.Flag = null;
+        trackDrawing.Faces.Clear(); trackDrawing.Rings.Clear(); trackDrawing.Problems.Clear(); trackDrawing.Flag = null;
         trackDrawing.Width = TerrainViewport.ActualWidth; trackDrawing.Height = TerrainViewport.ActualHeight;
         if (!TrackPiecesActive || cameraModel is not { } model || !nativeViewActive || interiorSceneActive) { trackDrawing.InvalidateVisual(); return; }
         var ground = SceneGround();
@@ -1075,6 +1261,8 @@ public partial class MainWindow
         if (trackGhost is { } g) Piece(g, false, true);
         foreach (var e in trackPieces.OpenEnds().Concat(trackPieces.OpenStarts()))
             if (model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) trackDrawing.Rings.Add(ToWidget(model, u, v));
+        foreach (var e in trackProblemSpots)
+            if (model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) trackDrawing.Problems.Add(ToWidget(model, u, v));
         // (the test start: a pole 900 high on the road)
         if (trackFlag is { } flag && model.Project(flag.X * 512, flag.Y, flag.Z * 512, out var fu, out var fv) && model.Project(flag.X * 512, flag.Y + 900, flag.Z * 512, out var tu, out var tv))
             trackDrawing.Flag = (ToWidget(model, fu, fv), ToWidget(model, tu, tv));

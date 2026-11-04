@@ -12,6 +12,13 @@ internal static class TrackPiecesCommand
     public static int Run(string[] args)
     {
         var (island, _) = TrackSketchCommand.Map(args[1], args[2].ToUpperInvariant(), TrackSketchCommand.MapScale);
+        // ("starter:<name>@x,z,lift,degrees": one of the 3D view's starter tracks, laid there)
+        if (args[3].StartsWith("starter:", StringComparison.Ordinal))
+        {
+            var parts = args[3]["starter:".Length..].Split('@');
+            var v = parts[1].Split(',').Select(t => double.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            args[3] = $"{parts[1]}|" + string.Join("|", TrackPieceSet.Starters.First(st => st.Name == parts[0]).Pieces);
+        }
         var items = args[3].Split('|');
         double Ground(double x, double z) => Math.Max(0.0, IslandOps.Altitude(island, x * 512, z * 512) ?? 0);
         (double X, double Z, double Lift, double Heading) Spot(string s)
@@ -70,6 +77,15 @@ internal static class TrackPiecesCommand
             var near = set.Pieces.Where(p => !p.IsPit).SelectMany(p => p.Line()).MinBy(q => Math.Pow(q.X - fv[0], 2) + Math.Pow(q.Z - fv[1], 2));
             flag = (near.X, near.Z, near.Y);
         }
+        // (TRACKPIECES_CLOSE=1: the pieces that close the lap added, as the 3D view's Close the lap adds them)
+        if (Environment.GetEnvironmentVariable("TRACKPIECES_CLOSE") == "1")
+        {
+            var closing = set.CloseLap(out var why);
+            if (closing is null) Console.WriteLine("close the lap: " + why);
+            else { set.Pieces.AddRange(closing); Console.WriteLine($"close the lap: {string.Join(", ", closing.Select(c => c.Section.Name + (c.Tilt != 0 ? $"~{c.Tilt:0}" : "")))}"); }
+        }
+        // (the check the 3D view lists as the pieces are laid)
+        foreach (var c in set.Check()) Console.WriteLine($"  check {c.Kind}: {c.Text}{(c.Spots.Count > 0 ? " at " + string.Join("; ", c.Spots.Select(q => $"({q.X:0}, {q.Z:0}, y {q.Y:0})")) : "")}");
         var result = set.MakePlan(island, flag, out var gridRoom);
         if (flag is not null) Console.WriteLine($"a test from the flag at ({flag.Value.X:0.0}, {flag.Value.Z:0.0}): {(gridRoom ? "a grid behind it" : "Twinsen's car alone on it")}");
         foreach (var n in result.Notes) Console.WriteLine("  note: " + n);

@@ -57,6 +57,18 @@ from the source never updates itself. In a folder that can't be written to, it o
 
 ### Laying a race track in the 3D view
 
+The quickest way in: **Tools > Lay a track in the 3D view**, or **File > New track…** for a track of its own. At the top of the panel:
+- **▶ Race it** builds the track into a scratch copy of the game folder and races it. Your folder isn't changed. It starts at the
+  chequered flag if you placed one (**Place the test start**), else at the track's start.
+- **The track** checks the track as you lay it: ✓ fine, • worth knowing, ✗ stops it. The problems are marked in the view with a red
+  ring and a cross: pieces not joined to the road, decks too close where the road passes over itself, a lap whose ends are at
+  different heights, a road too short to race.
+
+**Start from it** lays a ready-made track in the middle of the view (an Oval, an Oval with jumps, an Oval with loops, a Spiral
+climb) to change as you like. **Close the lap** adds the pieces (four at most, with a Ramp first where the heights differ) that take
+the road's end back round to its start. **Share for LBRA…** saves the track as a `.lbrtrack` file to send to friends, straight from
+the panel. A track on a map's copy of one of the game's islands shares as that island's.
+
 **Build > Race track** lays a track on the open island in the 3D view, from the race track generator's pieces (straights, bends,
 hairpins, jumps, loops, the pit lane, the Ramp and spirals), true to size and at any height. Choose a piece, then click on
 the island: it goes on from the nearest open end (the yellow rings) at that end's height and way, or onto the ground under the
@@ -89,6 +101,10 @@ open road's far end drives the road the other way, and a test with no road behin
 **Remove the test start** button (or Delete with nothing selected) takes the flag away.
 
 ### Sharing a track with Little Big Racing Adventure
+
+**Share for LBRA…** in Build > Race track's panel shares the track laid there. Players without LBA Assembler can make tracks too:
+Little Big Racing Adventure's **Racing > Shared tracks > Add or remove tracks… > Make a track…** is a track maker of its own, with the
+same pieces, starter tracks, Close the lap and check, on the island's map seen from above.
 
 In **Tools > LBA2: race track**, with **A plan file** chosen (one you wrote, saved from the built-in track, drawn in the race track
 generator or laid in the 3D view) and the island it's the track of, **Share for LBRA...** asks for the track's name and saves a

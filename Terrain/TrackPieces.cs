@@ -450,4 +450,158 @@ internal sealed class TrackPieceSet
         Widen(second.Plan, island);
         return second;
     }
+
+    // ---- starter tracks and closing a lap (the user, 2026-11-04: make track making "more accessible and user friendly"): a track to begin
+    // from rather than an empty island, and the pieces that bring a road's end back round to its start
+
+    // The starters: a name, a tip, and their pieces in turn, each on from the last one's end ("Piece~climb": the Ramp tilted so)
+    public static readonly (string Name, string Tip, string[] Pieces)[] Starters =
+    {
+        ("Oval", "Two straights and two hairpins: a short lap on the ground to change as you like",
+            new[] { "Long straight", "Hairpin right", "Long straight", "Hairpin right" }),
+        ("Oval with jumps", "An oval whose straights each leap a gap",
+            new[] { "Jump", "Hairpin right", "Jump", "Hairpin right" }),
+        ("Oval with loops", "An oval with a vertical loop on each straight",
+            new[] { "Loop", "Hairpin right", "Loop", "Hairpin right" }),
+        ("Spiral climb", "Up a spiral, along a raised road and down another spiral: a lap that passes over itself",
+            new[] { "Long straight", "Spiral up right", "Long straight", "Long straight", "Right 90°", "Long straight", "Long straight", "Spiral down right", "Long straight", "Long straight", "Right 90°", "Long straight" }),
+    };
+
+    // A starter's pieces from (x, z) at height y (its first piece's start), its way `heading`: each one on from the last one's end
+    public static List<TrackPiece> Starter(string name, double x, double z, double y, double heading)
+    {
+        var pieces = new List<TrackPiece>();
+        var starter = Starters.First(s => s.Name == name);
+        (double X, double Z, double Y, double Heading) at = (x, z, y, heading);
+        foreach (var item in starter.Pieces)
+        {
+            var parts = item.Split('~');
+            if (Section.Named(parts[0], out var tilt) is not { } section) continue;
+            if (parts.Length > 1) tilt = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+            var piece = new TrackPiece(section, at.X, at.Z, at.Y, at.Heading, tilt);
+            pieces.Add(piece);
+            at = piece.End;
+        }
+        return pieces;
+    }
+
+    // The pieces (four at most, and a Ramp first when the ends are at different heights) that take the road's end round to its start, ending
+    // near it heading its way; null and why not when none do -- or it's a lap already, or there's no road
+    public List<TrackPiece>? CloseLap(out string why)
+    {
+        var chain = Chain(out var closed, out _, out var order);
+        if (chain is null || order.Count == 0) { why = "Lay some road first."; return null; }
+        if (closed) { why = "The road is a lap already."; return null; }
+        var end = order[^1].End; var start = order[0];
+        var rise = start.Y - end.Y;
+        if (Math.Abs(rise) > TrackPiece.TiltMost * 2) { why = $"The road's end is {Math.Abs(rise):0} {(rise < 0 ? "above" : "below")} its start: more than two Ramps can make up -- lay a spiral to bring it {(rise < 0 ? "down" : "up")} first."; return null; }
+        var flat = new[] { "Straight", "Long straight", "Left 45°", "Right 45°", "Left 90°", "Right 90°", "Hairpin left", "Hairpin right" }
+            .Select(n => Section.Named(n, out _)!).ToArray();
+        static double Turned(double a, double b) => Math.Abs(Math.IEEERemainder(a - b, 2 * Math.PI));
+        List<TrackPiece>? best = null; var bestScore = double.MaxValue;
+        // (the climb or drop first: one Ramp, or two, tilted to make up the difference)
+        var lead = new List<TrackPiece>();
+        var at = end;
+        if (Math.Abs(rise) >= 200)
+        {
+            var ramps = Math.Abs(rise) > TrackPiece.TiltMost ? 2 : 1;
+            for (var r = 0; r < ramps; r++)
+            {
+                var ramp = new TrackPiece(Section.Ramp, at.X, at.Z, at.Y, at.Heading, rise / ramps);
+                lead.Add(ramp); at = ramp.End;
+            }
+        }
+        void Search(List<TrackPiece> so, (double X, double Z, double Y, double Heading) from, int depth)
+        {
+            var gap = Gap((from.X, from.Z, from.Y), (start.X, start.Z, start.Y));
+            var turn = Turned(from.Heading, start.Heading);
+            if (so.Count > 0 && gap < CloseCells / 2 && turn < 20 * Math.PI / 180)
+            {
+                var score = gap + turn * 10 + so.Count * 2;
+                if (score < bestScore) { bestScore = score; best = so.ToList(); }
+            }
+            if (depth == 0 || gap > 4 * 30 + 10) return;
+            foreach (var s in flat)
+            {
+                var piece = new TrackPiece(s, from.X, from.Z, from.Y, from.Heading);
+                so.Add(piece);
+                Search(so, piece.End, depth - 1);
+                so.RemoveAt(so.Count - 1);
+            }
+        }
+        Search(new List<TrackPiece>(), at, 4);
+        if (best is null) { why = "No four pieces bring the end round to its start from here: lay a few towards it first (the yellow rings), then try again."; return null; }
+        why = "";
+        return lead.Concat(best).ToList();
+    }
+
+    // ---- the check as the pieces are laid (the user, 2026-11-04: make track making "more accessible and user friendly"): what the track
+    // is and what stops it, worked out from the pieces alone -- no tracing, quick enough for every change -- each with where it is (island
+    // cells), to be marked in the view. Ok: good as it is; Note: worth knowing, nothing wrong; Problem: the track can't be made so.
+    public enum CheckKind { Ok, Note, Problem }
+    public sealed record CheckItem(CheckKind Kind, string Text, List<(double X, double Z, double Y)> Spots);
+
+    public List<CheckItem> Check()
+    {
+        var items = new List<CheckItem>();
+        CheckItem Item(CheckKind kind, string text, List<(double X, double Z, double Y)>? spots = null) { var i = new CheckItem(kind, text, spots ?? new()); items.Add(i); return i; }
+        var roads = Pieces.Where(p => !p.IsPit).ToList();
+        if (roads.Count == 0)
+        {
+            Item(CheckKind.Problem, Pieces.Count == 0 ? "No pieces yet: choose a piece and click on the island." : "Only a pit lane: lay some road first.");
+            return items;
+        }
+        var line = Chain(out var closed, out var left, out var order) ?? new();
+        double length = 0;
+        for (var k = 1; k < line.Count; k++) length += Math.Sqrt(Math.Pow(line[k].X - line[k - 1].X, 2) + Math.Pow(line[k].Z - line[k - 1].Z, 2));
+        // (pieces left out of the road: each one's middle)
+        if (left > 0)
+        {
+            var apart = roads.Where(r => !order.Contains(r)).Select(r => { var l = r.Line(); var m = l[l.Count / 2]; return (m.X, m.Z, m.Y); }).ToList();
+            Item(CheckKind.Problem, $"{left} piece{(left > 1 ? "s aren't" : " isn't")} joined to the road (marked in red): join {(left > 1 ? "them" : "it")} on, or delete {(left > 1 ? "them" : "it")}.", apart);
+        }
+        else Item(CheckKind.Ok, $"{order.Count} piece{(order.Count > 1 ? "s" : "")}, one road.");
+        // (a lap, or a sprint -- and a sprint whose ends nearly meet, but at different heights)
+        if (closed) Item(CheckKind.Ok, "A lap: the road comes back round to its start.");
+        else
+        {
+            var s = order[0]; var e = order[^1].End;
+            var across = Gap((e.X, e.Z, e.Y), (s.X, s.Z, s.Y));
+            if (order.Count > 1 && across < CloseCells && Math.Abs(e.Y - s.Y) >= SnapHeight)
+                Item(CheckKind.Problem, $"The road's end is over its start but {Math.Abs(e.Y - s.Y):0} {(e.Y > s.Y ? "higher" : "lower")}: tilt a Ramp the other way for a lap.", new() { (e.X, e.Z, e.Y), (s.X, s.Z, s.Y) });
+            else Item(CheckKind.Note, "A sprint: its two ends (the yellow rings) don't meet. Join them for a lap, or race it as it is.");
+        }
+        if (length < ShortestTry) Item(CheckKind.Problem, $"Only {length:0} cells of road: {ShortestTry:0} at least to race (a start, room to get going, a finish).");
+        else Item(CheckKind.Ok, $"{length:0} cells of road.");
+        // (where the road passes over or across itself: room for a car between the decks, or a crossroads the build jumps)
+        const double deckRoom = 1600, apartAlong = 30;
+        var cumulative = new double[line.Count];
+        for (var k = 1; k < line.Count; k++) cumulative[k] = cumulative[k - 1] + Math.Sqrt(Math.Pow(line[k].X - line[k - 1].X, 2) + Math.Pow(line[k].Z - line[k - 1].Z, 2));
+        var tight = new List<(double X, double Z, double Y)>();
+        var crossroads = new List<(double X, double Z, double Y)>();
+        var overs = 0;
+        bool Near(List<(double X, double Z, double Y)> spots, double x, double z) => spots.Any(p => (p.X - x) * (p.X - x) + (p.Z - z) * (p.Z - z) < 100);
+        for (var i = 0; i < line.Count; i += 2)
+            for (var j = i + 2; j < line.Count; j += 2)
+            {
+                var along = cumulative[j] - cumulative[i];
+                if (along < apartAlong || (closed && length - along < apartAlong)) continue;
+                double dx = line[i].X - line[j].X, dz = line[i].Z - line[j].Z;
+                if (dx * dx + dz * dz > 9) continue;
+                var gap = Math.Abs(line[i].Y - line[j].Y);
+                var spot = ((line[i].X + line[j].X) / 2, (line[i].Z + line[j].Z) / 2, Math.Max(line[i].Y, line[j].Y));
+                if (gap < 250) { if (!Near(crossroads, spot.Item1, spot.Item2)) crossroads.Add(spot); }
+                else if (gap < deckRoom) { if (!Near(tight, spot.Item1, spot.Item2)) tight.Add(spot); }
+                else overs++;
+            }
+        if (tight.Count > 0)
+            Item(CheckKind.Problem, $"Where the road passes over itself ({tight.Count} place{(tight.Count > 1 ? "s" : "")}, marked in red) there's no room for a car between the decks: {deckRoom:0} apart at least (PgUp raises a piece by 250).", tight);
+        else if (overs > 0) Item(CheckKind.Ok, "It passes over itself with room for a car underneath.");
+        if (crossroads.Count > 0)
+            Item(CheckKind.Note, $"The road crosses itself at the same height ({crossroads.Count} place{(crossroads.Count > 1 ? "s" : "")}): the build puts a jump there.", crossroads);
+        // (the pit lane: optional)
+        if (Pieces.Any(p => p.IsPit)) Item(CheckKind.Ok, "A pit lane.");
+        else Item(CheckKind.Note, "No pit lane (it's optional: lay one beside a straight on the ground).");
+        return items;
+    }
 }

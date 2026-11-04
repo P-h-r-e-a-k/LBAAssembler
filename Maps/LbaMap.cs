@@ -76,6 +76,9 @@ internal sealed class LbaMap
     public byte[]? Obl { get; set; }
     // An island's weather, or null: "snow" -- snow falls on it (the engine's SNOW.CPP; MAP.TXT's weather =, ISLANDS.TXT's weather lines)
     public string? Weather { get; set; }
+    // A race track's map that is a copy of one of the game's islands (File > New track): that island's file name (DESERT), or null -- its
+    // track is shared for LBRA as that island's (MAP.TXT's copy of =)
+    public string? TrackFrom { get; set; }
     // An island's cliffs, or null: walls, as the game's islands' (but in a jump); "drop": they can be walked or ridden off, as LBA1's
     // ledges can (the engine's EXTFUNC.CPP DropLedgesHere; MAP.TXT's ledges =, ISLANDS.TXT's ledges lines; 2026-10-23)
     public string? Ledges { get; set; }
@@ -210,6 +213,7 @@ internal sealed class LbaMap
         if (ile is not null) t.Append($"ile = {ile}\r\n");
         if (obl is not null) t.Append($"obl = {obl}\r\n");
         if (Weather is { Length: > 0 } weather) t.Append($"weather = {Line(weather)}\r\n");
+        if (TrackFrom is { Length: > 0 } from) t.Append($"copy of = {Line(from)}\r\n");
         if (Ledges is { Length: > 0 } ledges) t.Append($"ledges = {Line(ledges)}\r\n");
         if (comments is not null) t.Append($"comments = {comments}\r\n");
         if (text is not null) t.Append($"text = {text}\r\n");
@@ -307,6 +311,7 @@ internal sealed class LbaMap
             map.CharacterEntities = EntriesOf(Part("character entities"));
         }
         map.Weather = Value("weather");
+        map.TrackFrom = Value("copy of");
         map.Ledges = Value("ledges");
         if (Value("ile") is { } ile) map.IslandFile = Path.GetFileNameWithoutExtension(ile).ToUpperInvariant();
         foreach (var (_, file) in scenes)
