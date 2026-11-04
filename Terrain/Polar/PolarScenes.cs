@@ -106,6 +106,7 @@ internal static class PolarScenes
         if (missing.Count > 0) throw new InvalidOperationException($"Cubes with land but no scene in PolarScenes.SceneCubes: {string.Join(", ", missing)}.");
         var largest = BinaryPrimitives.ReadInt32LittleEndian(hqr.Read(0));
         var zones = 0;
+        var dino = OnIsland(layout, terrain, PolarLayout.FortressDocks, PolarDinofly.Lba1X, PolarDinofly.Lba1Y, PolarDinofly.Lba1Z);
         foreach (var (cx, cz) in cubes.OrderBy(c => SceneOf(c.Cx, c.Cz)))
         {
             var model = source.Clone();
@@ -141,6 +142,14 @@ internal static class PolarScenes
                         log.Add($"scene {SceneOf(cx, cz)}: the grobo with the digger's key at {g}");
                     }
                 }
+            }
+            // (the Dino-Fly, where LBA1 has him on Fortress Island's docks: PolarDinofly)
+            if ((cx, cz) == (dino.Cx, dino.Cz))
+            {
+                // (on the nearest flat ground to LBA1's place: the docks' water and planks there aren't ground)
+                var at = NearestGround(layout, terrain, cx, cz, dino.X, dino.Z) ?? (dino.X, dino.Y, dino.Z);
+                PolarDinofly.AddActor(model, at.X, at.Y, at.Z, 0);
+                log.Add($"scene {SceneOf(cx, cz)}: the Dino-Fly at ({at.X},{at.Y},{at.Z}), nearest ground to LBA1's place on Fortress Island's docks");
             }
             hero.Beta = 0;
             // the edges it shares: east (x + 1), west, south (z + 1), north
@@ -242,6 +251,20 @@ internal static class PolarScenes
         return best;
     }
 
+    // The flat land in a cube nearest a place in it (scene units), standing on it; null when the cube has none.
+    private static (int X, int Y, int Z)? NearestGround(PolarLayout layout, PolarTerrain.Result terrain, int cx, int cz, int x, int z)
+    {
+        (int X, int Y, int Z)? best = null; var bestD = double.MaxValue;
+        for (var lz = 0; lz < 64; lz++)
+        for (var lx = 0; lx < 64; lx++)
+        {
+            if (Ground(layout, terrain, cx * 64 + lx, cz * 64 + lz) is not { } surface) continue;
+            double dx = lx * 512 + 256 - x, dz = lz * 512 + 256 - z, d = dx * dx + dz * dz;
+            if (d < bestD) { bestD = d; best = (lx * 512 + 256, surface, lz * 512 + 256); }
+        }
+        return best;
+    }
+
     // An island cell's ground height when it is flat land with nothing standing on it, or null.
     private static int? Ground(PolarLayout layout, PolarTerrain.Result terrain, int gx, int gz)
     {
@@ -319,7 +342,7 @@ internal static class PolarScenes
         if (text.Count < Languages * RetailFiles * 2) throw new InvalidDataException($"TEXT.HQR has {text.Count} entries, fewer than the game's {Languages * RetailFiles * 2}.");
         for (var lang = 0; lang < Languages; lang++)
         {
-            var (ids, data) = Bank(PolarDream.IslandTexts(lang).Concat(PolarGrobo.IslandTexts(lang)).Prepend((0, "Polar Island")).OrderBy(t => t.Item1).ToList());
+            var (ids, data) = Bank(PolarDream.IslandTexts(lang).Concat(PolarGrobo.IslandTexts(lang)).Concat(PolarDinofly.IslandTexts(lang)).Prepend((0, "Polar Island")).OrderBy(t => t.Item1).ToList());
             foreach (var (k, payload) in new[] { (0, ids), (1, data) })
             {
                 var at = TextEntry(lang) + k;

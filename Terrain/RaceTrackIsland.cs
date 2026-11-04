@@ -300,6 +300,8 @@ internal sealed record RaceTrackIsland(
         Roster = RaceDriver.Polar, Dream = true, Title = "Polar Island: the dream race to Sendell (LBA1's island, added when missing)",
         // (the grobo with the digger's key, on the dock: Twinsen's car outside a race asks for it -- Polar.PolarGrobo)
         StartPerson = LBAAssembler.Terrain.Polar.PolarGrobo.Entity,
+        // (the Dino-Fly on Fortress Island's docks, where LBA1 has him -- Polar.PolarDinofly)
+        StoryEntities = new[] { LBAAssembler.Terrain.Polar.PolarDinofly.Entity },
         // (FunFrock himself beside his car on pole, talking to Twinsen before he gets in: the game's own, scene 95's actor 14)
         ChaseDriver = (95, 14, 217),
     };

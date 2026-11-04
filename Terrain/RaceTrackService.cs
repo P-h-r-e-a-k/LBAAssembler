@@ -1401,17 +1401,19 @@ internal static class RaceTrackService
             // grobo in its start scene are this version's)
             var ile = IslandFile.Load(Original(LBAAssembler.Terrain.Polar.PolarTerrain.IleFile));
             if (ile.CubeAt(LBAAssembler.Terrain.Polar.PolarTerrain.CubeX0, LBAAssembler.Terrain.Polar.PolarTerrain.CubeZ0) is null) return false;
+            // (and, since 2026-11-04, the Dino-Fly on Fortress Island's docks -- Polar.PolarDinofly -- in one of its scenes, those past 254 too)
             bool? numbered = null;
-            var grobo = false;
-            for (var n = island.FirstScene; n <= island.LastScene && n + 1 < count; n++)
+            bool grobo = false, dinofly = false;
+            foreach (var n in Enumerable.Range(island.FirstScene, island.LastScene - island.FirstScene + 1).Concat(island.MoreScenes).Where(n => n + 1 < count))
             {
                 var record = scenes.Read(n + 1);
                 if (record.Length == 0 || record[0] != island.IslandByte) continue;
                 var model = LBAAssembler.Scenes.SceneSerializer.Parse(LBAAssembler.Scenes.SceneGame.Lba2, record);
-                numbered ??= LBAAssembler.Terrain.Polar.PolarScenes.SceneOf(model.CubeX, model.CubeY) == n;
+                if (n <= island.LastScene) numbered ??= LBAAssembler.Terrain.Polar.PolarScenes.SceneOf(model.CubeX, model.CubeY) == n;
                 grobo |= model.Actors.Any(a => a.Entity == LBAAssembler.Terrain.Polar.PolarGrobo.Entity);
+                dinofly |= model.Actors.Any(a => a.Entity == LBAAssembler.Terrain.Polar.PolarDinofly.Entity);
             }
-            return numbered == true && grobo;
+            return numbered == true && grobo && dinofly;
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { }
         return false;
