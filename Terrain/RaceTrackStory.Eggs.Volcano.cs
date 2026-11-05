@@ -160,7 +160,7 @@ void comportement_1()
             roof.Flags = 0x1000 | 0x80000; roof.Body = RoofDark; roof.Anim = 0; roof.Beta = beta; roof.Armor = 51; roof.LifePoints = -1;
             return s.Add(model, roof, $@"void comportement_0()
 {{
-    if (1 == var_game({StatueRisen}) || {FinalChapter} < chapter())
+    if (0 < var_game({StatueRisen}) || {FinalChapter} < chapter())
     {{
         body({RoofRisen});
     }}

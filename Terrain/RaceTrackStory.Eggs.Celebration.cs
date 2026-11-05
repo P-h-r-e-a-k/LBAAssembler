@@ -173,7 +173,9 @@ void comportement_2()
         if (startScene < 0 || report.LapY.Length != report.LapX.Length || report.LapX.Length < 10) { log.Add("the final's eggs left out: no track"); return log; }
         var first = GroupB.AddLines(gameDirectory, FinalTexts, FinalEggLines, log, "the final's eggs (the Dark Monk's nose):");
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
-        var here = $"{FinalChapter} == chapter() && 1 == var_game({StatueRisen})";
+        // (the statue risen: var 79 1 from the landing, or 2 had the game's FunFrock on the dock said his "Adieu!!!" -- retired in the story,
+        // RaceTrackStory.Retired.cs, but either is risen)
+        var here = $"{FinalChapter} == chapter() && 0 < var_game({StatueRisen})";
         // the ring round the head: the lap's highest level stretch (with the end of the spiral's last corner before it and the bridge's
         // first cells after); its middle from three points well inside it (a quarter, half and three quarters along)
         var top = report.LapY.Max();
@@ -192,7 +194,7 @@ void comportement_2()
             if (!RaceTrackScenes.InCube(model, sx, sz) || !RaceTrackScenes.InCube(model, NoseX, NoseZ)) throw new NotTheGames("the ring isn't in the scene's cube");
             var statuette = GroupB.Add(model, RoadSprite(RaceTrackScenes.CubeLocal(sx, model.CubeX), (int)Math.Round(top), RaceTrackScenes.CubeLocal(sz, model.CubeY), RaceTrackScenes.MonkStatuetteSprite), $@"void comportement_0()
 {{
-    if (0 == var_game({EggStatuette}) || {FinalChapter} != chapter() || 1 != var_game({StatueRisen}))
+    if (0 == var_game({EggStatuette}) || {FinalChapter} != chapter() || 0 == var_game({StatueRisen}))
     {{
         suicide();
     }}

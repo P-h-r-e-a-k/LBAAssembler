@@ -163,7 +163,9 @@ internal static partial class RaceTrackStory
         }
         var empress = Person(EmpressEntity, EmpressStand);
         var emperor = Person(EmperorEntity, EmperorStand);
-        var fragments = string.Join(" && ", Enumerable.Range(31, 4).Select(f => $"0 < var_game({f})"));
+        // (or the four merged into one, as the game does when the fourth is found: var 55 1, items 32-34 0 -- the game's own pickups that
+        // do it are shut in the story, RaceTrackStory.Retired.cs, but a Fragment that got merged is still the four)
+        var fragments = "(1 == var_game(55) || (" + string.Join(" && ", Enumerable.Range(31, 4).Select(f => $"0 < var_game({f})")) + "))";
 
         s.Edit(scenes.StartScene, "chapter 13: Lyra and the sealed gate, the radio, the Empress, the bedroom's song, the Emperor's sword, Stan", model =>
         {

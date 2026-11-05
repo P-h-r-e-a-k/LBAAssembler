@@ -881,6 +881,8 @@ internal static class RaceTrackService
         {
             // (then everyone else on the island retold for the story: IslandRetell)
             var story = RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes);
+            // (the game's own quests kept out of the story's reach, before the retelling: RaceTrackStory.Retired.cs)
+            story.Log.AddRange(RaceTrackStory.RetireQuests(gameDirectory, RaceTrackIsland.Citadel));
             story.Log.AddRange(IslandRetell.Apply(gameDirectory, 0, IslandRetell.Citadel, "Citadel Island"));
             // (the island's two postcards, chapters 1 and 2 -- after the story's scenes are saved: RaceTrackStory.Eggs.Postcards.cs)
             story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, report, scenes, 1));
@@ -892,6 +894,7 @@ internal static class RaceTrackService
         if (options.Island == RaceTrackIsland.CelebrationLava)
         {
             var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes, report);
+            seller.AddRange(RaceTrackStory.RetireQuests(gameDirectory, options.Island));
             seller.AddRange(IslandRetell.Apply(gameDirectory, options.Island.IslandByte, IslandRetell.Celebration, "Celebration Island"));
             seller.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
             return (seller, new StoryInfo(-1, -1, true));
@@ -921,6 +924,8 @@ internal static class RaceTrackService
         late.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
         // (the Polar dream's easter eggs, chapter 0: RaceTrackStory.Eggs.Polar.cs)
         late.AddRange(RaceTrackStory.PolarEggs(gameDirectory, report, options.Island));
+        // (the game's own quests kept out of the story's reach, island by island, before the retelling: RaceTrackStory.Retired.cs)
+        late.AddRange(RaceTrackStory.RetireQuests(gameDirectory, options.Island));
         foreach (var (island, lines, name) in retold)
             if (options.Island == island) return (late.Concat(IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name)).ToList(), eggs);
         return (late, eggs);

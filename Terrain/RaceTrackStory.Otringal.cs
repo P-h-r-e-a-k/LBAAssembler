@@ -372,9 +372,15 @@ void comportement_1()
             b.Edit(stewardScene, $"the steward beside the start line at cell ({at.X:0.#}, {at.Z:0.#}): 30 zlitos for a Travel Token (item {TravelToken}, Q_FEE 2)", model =>
             {
                 Place(steward, model, at);
+                // (no token sold before Lyra has told of the fee, Q_FEE 1: zlitos from selling things on Zeelich would otherwise buy it
+                // first, and Lyra's welcome -- the Esmers' 10 zlitos -- would never be said; the price only, until then)
                 return IslandBeatsA.Add(model, steward, Talker(otringal, $@"            if ({FeePaid} <= var_game({QFee}) || 0 < var_game({TravelToken}))
             {{
                 message({Say(OtringalLine.StewardOnGrid)});
+            }}
+            else if (0 == var_game({QFee}))
+            {{
+                message({Say(OtringalLine.StewardFee)});
             }}
             else if ({Fee} > nb_gold_pieces())
             {{
