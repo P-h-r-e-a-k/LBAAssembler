@@ -2000,6 +2000,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_THE_END:
+            STORYLOG("THE_END%s", ""); // (the game's end: the run stops here -- a playthrough's last step expects it)
             FlagTheEnd = 1; // credits
             flag = -1;
             break;
