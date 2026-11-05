@@ -19748,6 +19748,15 @@ void RaceMod_Island(S32 island) {
         }
     // (the same track goes on -- unless its race is over: coming back to it is a race afresh)
     if (want ? s_ownTrack && !strcmp(want, s_loaded) && !s_place : !s_ownTrack) { HoldVars(); return; }
+    // (and a race just over whose end isn't followed up yet -- RaceMod_Story at s_endAt: the waking, the race again -- goes on too, here or
+    // on whatever track the island would load: the Emperor's palace's sprint, won, flew the car out of the round window into the next
+    // cube for its wake_flight=, and the file read again on the way cleared the waiting wake -- Twinsen never woke on Celebration's dock,
+    // left in his car in scene 269; the scripted playthrough, 2026-11-05. The end's own reading of the race file follows.)
+    if (s_ownTrack && s_place && s_endAt) {
+        Log_Info("[racemod] island %d: the race's end is still to come -- its track kept", (int)island);
+        HoldVars();
+        return;
+    }
     const char *base = getenv("LBA2_RACETRACK_FILE");
     char path[260];
     snprintf(path, sizeof(path), "%s", want ? want : base ? base : "");
