@@ -290,8 +290,12 @@ internal static partial class RaceTrackStory
         for (var scene = 0; scene < count; scene++)
         {
             if (!store.SceneExists(scene)) continue;
-            var record = store.LoadRecord(scene);
-            var had = originals.SceneExists(scene) ? originals.LoadRecord(scene) : null;
+            byte[] record;
+            try { record = store.LoadRecord(scene); }
+            catch (InvalidDataException e) { log.Add($"WARNING: the story's travels: scene {scene} can't be read ({e.Message})"); continue; }
+            byte[]? had;
+            try { had = originals.SceneExists(scene) ? originals.LoadRecord(scene) : null; }
+            catch (InvalidDataException e) { log.Add($"WARNING: the story's travels: the original scene {scene} can't be read ({e.Message})"); had = null; }
             if (had is not null && had.AsSpan().SequenceEqual(record)) continue;
             looked++;
             var model = store.Load(scene);

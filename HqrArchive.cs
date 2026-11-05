@@ -57,7 +57,9 @@ internal sealed class HqrArchive
 
     public bool IsValid(int index)
     {
-        if ((uint)index >= offsets.Length || offsets[index] == 0 || offsets[index] > data.Length - 10) return false;
+        // (past the file's real slots, Slots, an "offset" is the first record's own bytes and can look like a record: a scene a build
+        // added past the game's last read "from" the original SCENE.HQR -- the story's travel check, a two-island build, 2026-11-05)
+        if ((uint)index >= (uint)Slots || offsets[index] == 0 || offsets[index] > data.Length - 10) return false;
         var offset = (int)offsets[index];
         var compressedSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4));
         return compressedSize <= data.Length - offset - 10;
