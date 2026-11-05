@@ -584,6 +584,10 @@ internal static class RaceTrackService
                     where = $"{options.Island.Name}'s track in the storm ({options.Island.IleFile}) starts in scene {scenes.StartScene}, its track once the storm is over ({options.Island.TwinIleFile}) in scene {fine.StartScene}.";
                 if (where.Length > 0) starts.Add(where);
             }
+            // (the story's doors past scene 255, once every scene they go into is built, and the look over its travels: RaceTrackStory.Travels)
+            var travels = RaceTrackStory.Travels(gameDirectory, session.Travels, session.StoryIslands);
+            if (travels.Count > 0 && tracks.Count > 1) log.Add("==== The story's travels ====");
+            log.AddRange(travels);
             // (the palace dungeon's torturers' body and animations after every track's: Finish)
             if (session.Torturers) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
             // (Twinsen's pumpkin F1, the Temple of Bú's own car and anyone's to drive, after every track's bodies: no body before it moves)
@@ -652,6 +656,11 @@ internal static class RaceTrackService
         public int[]? FunFrockEmpty;
         public int[]? LaserModels;
         public List<TrackInfo> Tracks { get; } = new();
+        // the story's doors past scene 255, asked for by each island's story and put in once every track is built (RaceTrackStory.Travels)
+        public List<RaceTrackStory.PendingTravel> Travels { get; } = new();
+        // the build's islands with the story (RaceTrackStory.Travels then looks over the finished folder's ways between scenes, and shuts
+        // the game's own that would skip a chapter on those islands)
+        public HashSet<RaceTrackIsland> StoryIslands { get; } = new();
         // where the track being built has got to (the part of it done, 0..1, and what it is doing), for Build's progress; null: no one asks
         public Action<double, string>? Progress;
         public void Step(double done, string doing) => Progress?.Invoke(done, doing);
@@ -737,8 +746,12 @@ internal static class RaceTrackService
         if (!copiedFirst && RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } added) extra.Add(added);
         var scenes = RaceTrackScenes.Apply(gameDirectory, report, options, own is null ? null : (own.Report, own.Options));
         session.Step(0.98, "the story and the race's settings");
-        var story = Story(gameDirectory, report, options, own, scenes);
+        var story = Story(gameDirectory, report, options, own, scenes, session.Travels);
         extra.AddRange(story.Log);
+        if (options.Story) session.StoryIslands.Add(options.Island);
+        // (the story's doors past scene 255 and the look over its travels: once every track of a build is built -- Build -- or now, for a
+        // track built alone)
+        if (!session.Together) extra.AddRange(RaceTrackStory.Travels(gameDirectory, session.Travels, session.StoryIslands));
         // (a dreamt sprint's texts, and where it ends; or the Emperor's palace's, its end the Dark Monk's teleporter to Celebration Island)
         DreamInfo? dream = null;
         if (options.Island.Sprint && report.FinishLine is { } end)
@@ -874,7 +887,10 @@ internal static class RaceTrackService
     // The mod's story, on the island that has one (Citadel Island: RaceTrackStory, its storm track and its town circuit). After the scenes,
     // which it adds to.
     // Celebration Island's lava lake has one too: the souvenir seller tells what he knows once Twinsen has beaten him there.
-    public static (List<string> Log, StoryInfo? Info) Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes)
+    // `travels`: the build's doors past scene 255, which the islands' stories ask for and Build puts in once every track is built
+    // (RaceTrackStory.Travels.cs).
+    public static (List<string> Log, StoryInfo? Info) Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes,
+        List<RaceTrackStory.PendingTravel>? travels = null)
     {
         if (!options.Story) return (new List<string>(), null);
         if (options.Island.IleFile == RaceTrackIsland.Citadel.IleFile && town is { Own: true } && scenes.Twin is { } townScenes)
@@ -893,7 +909,7 @@ internal static class RaceTrackService
         // comes first)
         if (options.Island == RaceTrackIsland.CelebrationLava)
         {
-            var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes, report);
+            var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes, report, travels);
             seller.AddRange(RaceTrackStory.RetireQuests(gameDirectory, options.Island));
             seller.AddRange(IslandRetell.Apply(gameDirectory, options.Island.IslandByte, IslandRetell.Celebration, "Celebration Island"));
             seller.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
@@ -914,7 +930,7 @@ internal static class RaceTrackService
             // (the Emperor's palace is island 4, Otringal's: its people are Otringal's retelling)
         };
         // (chapters 11-14's own story, before the island's retelling: the volcano, Island CX, the palace, the final -- RaceTrackStory.ApplyLate)
-        var late = RaceTrackStory.ApplyLate(gameDirectory, report, options.Island, scenes);
+        var late = RaceTrackStory.ApplyLate(gameDirectory, report, options.Island, scenes, travels);
         // (chapters 8-10's: the Elevator Platform, Wannies Island, Mosquibees Island -- RaceTrackStory.Elevator/Wannies/Mosquibees.cs)
         late.AddRange(RaceTrackStory.ApplyMiddle(gameDirectory, report, options.Island, scenes));
         // (chapters 3-5 and 7's: the Desert, the Emerald Moon, Otringal, the Island of the Francos -- RaceTrackStory.Desert/Emerald.cs)

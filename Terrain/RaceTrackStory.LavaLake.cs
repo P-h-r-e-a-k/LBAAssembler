@@ -200,8 +200,8 @@ internal static partial class RaceTrackStory
             change_cube({(store.SceneExists(FrancosStart) ? CelebrationScene : FrancosDock)});";
 
     // Scene 95's beats (after ApplyCelebration has saved the seller): Lyra's word and the radio, and the four statuettes. `lava`: the first
-    // of LavaLines' ids.
-    internal static List<string> LavaLakeBeats(string gameDirectory, RaceTrackReport? report, int lava)
+    // of LavaLines' ids. `travels`: the build's doors put in once every track is built (null: the ship's door put in now).
+    internal static List<string> LavaLakeBeats(string gameDirectory, RaceTrackReport? report, int lava, List<PendingTravel>? travels = null)
     {
         var log = new List<string>();
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
@@ -229,23 +229,31 @@ internal static partial class RaceTrackStory
             };
         });
         // the ship to the Francos: a change_cube names a scene up to 255 only, so the won race brings Twinsen back to scene 95's start, where
-        // a change-cube zone round it into the Francos' start (scene 257, the Island of the Francos' build) is switched on in chapter 7
+        // a change-cube zone round it into the Francos' start (scene 257, the Island of the Francos' build) is switched on in chapter 7. The
+        // zone itself is put in once every track is built (`travels`: RaceTrackStory.Travels.cs) -- the statue track, built after this one,
+        // clears scene 95's doors off its road, and took this one for a door under it (allstory14, 2026-11-05: Twinsen stuck on Celebration
+        // Island in chapter 7)
         if (store.SceneExists(FrancosStart))
         {
             var to = store.Load(FrancosStart).Hero;
+            // (round the scene's start as it is once every track is built: the statue track, built after this one, puts its grid there)
+            // (from the ground there all the way up: the scene's start is in the air over the dock, Twinsen comes down onto it; he comes
+            // out as high over the Francos' start as he stood over the zone's floor)
+            (SceneZoneModel Zone, (int X, int Y, int Z) Offset) Door(SceneModel model)
+            {
+                int x = model.Hero.X, z = model.Hero.Z;
+                var floor = report?.GroundAfter is { } g ? (int)Math.Round(g(model.CubeX * 64 + x / 512.0, model.CubeY * 64 + z / 512.0)) - 300 : 0;
+                return DoorRound(x, z, 1536, floor, 25000, FrancosStart, ShipSwitch, 0);
+            }
             GroupB.EditScene(store, CelebrationScene, log, $"the ship to the Francos: a door round the scene's start into scene {FrancosStart}, open in chapter 7 once the seller has told", model =>
             {
-                const int Reach = 1536;
-                int x = model.Hero.X, z = model.Hero.Z;
-                static int Clamp(int v) => Math.Clamp(v, 0, IslandFile.CubeSize - 1);
-                // (from the ground there all the way up: the scene's start is in the air over the dock, Twinsen comes down onto it; he comes
-                // out as high over the Francos' start as he stood over the zone's floor)
-                var floor = report?.GroundAfter is { } g ? (int)Math.Round(g(model.CubeX * 64 + x / 512.0, model.CubeY * 64 + z / 512.0)) - 300 : 0;
-                model.Zones.Add(new SceneZoneModel
+                if (travels is not null) travels.Add(new(CelebrationScene, FrancosStart, ShipSwitch, "the lava lake's ship to the Francos (chapter 7)", Door));
+                else
                 {
-                    Type = 0, Num = FrancosStart, X0 = Clamp(x - Reach), X1 = Clamp(x + Reach), Z0 = Clamp(z - Reach), Z1 = Clamp(z + Reach), Y0 = floor, Y1 = 25000,
-                    Info = new[] { to.X - (x - Clamp(x - Reach)), to.Y, to.Z - (z - Clamp(z - Reach)), 0, ShipSwitch, 0, 0, 0 },
-                });
+                    var (door, offset) = Door(model);
+                    door.Info[0] = to.X + offset.X; door.Info[1] = to.Y + offset.Y; door.Info[2] = to.Z + offset.Z;
+                    model.Zones.Add(door);
+                }
                 return GroupB.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), $@"void comportement_0()
 {{
     if ({LavaChapter + 1} == chapter() && 2 == var_game({SellerBeaten}))
@@ -588,11 +596,16 @@ void comportement_1()
             return null;
         }
 
-        // An after-race controller (in each of an island's outside scenes): Twinsen out of his car after a race of the island (var 237), and
-        // the race won -- its win moved the chapter on -- `won` is said and done
+        // An after-race controller (in each of an island's outside scenes): Twinsen out of his car after a race of the island (var 246), and
+        // the race won -- its win moved the chapter on -- `won` is said and done. There in the chapter, and in the next while the finish
+        // is still to be answered (var 246 1): the race's win raises the chapter at the line, so a scene entered again before Twinsen got
+        // out of the car -- over a cube's edge, a saved game loaded -- found the chapter moved on and went without its prize and its way on
+        // (findings_rest 10-1, 2026-11-05)
+        public static string AfterRaceHere(int chapter) => $"({chapter} == chapter() || ({chapter + 1} == chapter() && 1 == var_game({RaceDoneB})))";
+
         public static string AfterRace(int chapter, string won) => $@"void comportement_0()
 {{
-    if ({chapter} == chapter())
+    if ({AfterRaceHere(chapter)})
     {{
         set_comportement(comportement_1);
     }}

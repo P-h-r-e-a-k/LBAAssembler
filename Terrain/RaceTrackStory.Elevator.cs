@@ -197,6 +197,9 @@ internal static partial class RaceTrackStory
         var originals = RaceTrackService.OriginalScenes(store);
         var monster = originals.SceneExists(PlatformScene) ? originals.Load(PlatformScene).Actors.ElementAtOrDefault(MonsterActor)?.Clone() : null;
         var when = $"{ElevatorChapter} == chapter()";
+        // (the monster and the after-race controller: there in the next chapter too while the race's finish is still to be answered --
+        // GroupB.AfterRaceHere: the win raises the chapter at the line -- his lines before the race in chapter 8 alone)
+        var after = GroupB.AfterRaceHere(ElevatorChapter);
         GroupB.EditScene(store, PlatformScene, log, "Lyra's word, Baldino's call, the monkey monster on foot before the race and his lines after it", model =>
         {
             var edits = new List<Action<SceneScripts>>();
@@ -222,7 +225,7 @@ internal static partial class RaceTrackStory
                     monsterIndex = model.Actors.Count;
                     edits.Add(GroupB.Add(model, monster, $@"void comportement_0()
 {{
-    if ({when})
+    if ({after})
     {{
         set_comportement(comportement_1);
     }}
@@ -237,7 +240,7 @@ void comportement_1()
     if ({Driving} == comportement_hero())
     {{
         invisible(1);
-        if (0 == var_cube(46))
+        if (0 == var_cube(46) && {when})
         {{
             set_var_cube(46, 1);
             message_zoe({Say(ElevatorLine.ZoeCage)});
@@ -247,7 +250,7 @@ void comportement_1()
     else
     {{
         invisible(0);
-        if (0 == var_cube(47) && 4500 > distance(0))
+        if (0 == var_cube(47) && 4500 > distance(0) && {when})
         {{
             set_var_cube(47, 1);
             message({Say(ElevatorLine.Monster1)});
@@ -275,7 +278,7 @@ void comportement_1()
             var speaker = monsterIndex >= 0 ? $"message_obj({monsterIndex}, " : "message(";
             edits.Add(GroupB.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), $@"void comportement_0()
 {{
-    if ({when})
+    if ({after})
     {{
         set_comportement(comportement_1);
     }}

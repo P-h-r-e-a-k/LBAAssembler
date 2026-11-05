@@ -136,6 +136,7 @@ internal static partial class RaceTrackStory
         {
             var edits = new List<Action<SceneScripts>>();
             var last = model.Actors.Count + h.Miners.Length - 1;
+            // (there whenever the after-race controller is -- GroupB.AfterRaceHere: their walk ends in the tunnel, the way on)
             for (var i = 0; i < h.Miners.Length; i++)
             {
                 var m = miner.Clone();
@@ -147,7 +148,7 @@ internal static partial class RaceTrackStory
                 var whistle = i == 0 ? $"sample({WhistleSample});\n" : "";
                 edits.Add(AddWithTrack(model, m, $@"void comportement_0()
 {{
-    if ({WanniesChapter} == chapter())
+    if ({GroupB.AfterRaceHere(WanniesChapter)})
     {{
         set_comportement(comportement_1);
     }}
@@ -188,7 +189,7 @@ stop();
                 RaceTrackScenes.CubeLocal(h.Miners[0].Z, model.CubeY), 9);
             edits.Add(AddWithTrack(model, clock, $@"void comportement_0()
 {{
-    if ({WanniesChapter} == chapter())
+    if ({GroupB.AfterRaceHere(WanniesChapter)})
     {{
         set_comportement(comportement_1);
     }}

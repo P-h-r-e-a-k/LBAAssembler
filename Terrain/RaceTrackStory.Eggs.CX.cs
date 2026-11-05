@@ -51,20 +51,18 @@ void comportement_1()
     // corridor of cages, a lift at each end, its kashes and its clover box (var 244) as the game has them. Built:
     //   - the door: in the halls, by the road's inner curb on the long straight past the gas monsters, against the control room's south
     //     wall (Island CX Mk2's scene of the cube that holds StaffDoor -- the start scene), one of Island CX's sliding door panels
-    //     (SPRITES.HQR 159, the game's scene 181's) standing there, its sign read with Action: before chapter 12's race is won "STAFF
-    //     ONLY." and locked; won (Q_CXKEY 4 on, so also once the note is read and after), the sign says where it goes and Twinsen goes
-    //     through: change_cube(180), at the scene's start -- on its east lift, at the foot;
+    //     (SPRITES.HQR 159, the game's scene 181's) standing there, its sign read with Action: before FunFrock's note is read "STAFF
+    //     ONLY." and locked; read (Q_CXKEY 5 on: chapter 13), the sign says where it goes and Twinsen goes through: change_cube(180), at
+    //     the scene's start -- on its east lift, at the foot. (Until 2026-11-05 it opened with the race won, Q_CXKEY 4: through it before
+    //     the note, Twinsen was in the palace a chapter early -- findings_rest 9-3);
     //   - scene 180's two ways up to the game's scene 181 (its lifts' tops, zones of type 0) now its ends: the west one into the palace's
     //     dungeon -- where the race's warp through room 159's fireplace comes out (PALACE.JSON's dungeon "arrive"), its scene the palace
     //     cube's that holds it -- and the east one back out in front of the door in the halls (zones, so scenes past 255 are named);
     //   - and the way back from the dungeon: another of Island CX's door panels against the dungeon's south wall, behind where one
     //     comes in, its sign "STAFF ONLY. TO ISLAND CX." (the palace's texts, Otringal's file), and a zone in front of it into scene 180
     //     at the foot of its west lift.
-    // The way back is there so that the palace reached early breaks nothing: through the door between the race won and the note read
-    // (Q_CXKEY 4, chapter 12) Twinsen is in the palace a chapter early -- its people only there in chapter 13 (RaceTrackStory.Palace.cs:
-    // each a Talker on 13 == chapter(), nothing set before), its race shut until Stan's (gate=224 6) -- and he walks back to read the note.
-    // In chapter 13 the same way back takes him to Island CX, where nobody is any more, and back again. Island CX's own track (scene 300)
-    // has no halls of this size: no passage there.
+    // The door opens in chapter 13 only, so the palace is never reached early; the way back takes him to Island CX, where nobody is any
+    // more, and back again. Island CX's own track (scene 300) has no halls of this size: no passage there.
     private const int StaffPassage = 180, PassageSprite = 159;
     // the door: island cells (Island CX Mk2's, found in the built game, 2026-11-04: on the straight at z 542 the hall's floor is at -10332,
     // and on foot the road's inner curb is as far as Twinsen goes -- past it, at z 533.2, the island's rock over the halls stands up to
@@ -107,10 +105,10 @@ void comportement_1()
         int doorCubeX = (int)Math.Floor(StaffDoor.X / 64), doorCubeZ = (int)Math.Floor(StaffDoor.Z / 64);
 
         // the door in the halls
-        s.Edit(doorScene, "the staff passage: a narrow door in the halls, \"STAFF ONLY.\" -- once the race is won, into scene 180", model =>
+        s.Edit(doorScene, "the staff passage: a narrow door in the halls, \"STAFF ONLY.\" -- once FunFrock's note is read (chapter 13), into scene 180", model =>
         {
             var door = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(StaffDoor.X, model.CubeX), HallFloor, RaceTrackScenes.CubeLocal(StaffDoor.Z, model.CubeY), PassageSprite, 9);
-            return s.Add(model, door, Talker($"{CxChapter} <= chapter()", $@"            if ({KeyWon} <= var_game({QCxKey}))
+            return s.Add(model, door, Talker($"{CxChapter} <= chapter()", $@"            if ({KeyNote} <= var_game({QCxKey}))
             {{
                 message({open});
                 change_cube({StaffPassage});
@@ -156,7 +154,7 @@ void comportement_1()
             return s.Add(model, door, Talker("0 <= chapter()", $"            message({sign});", 1500));
         });
         s.Log.Add($"the staff passage: the door in scene {doorScene}, scene {StaffPassage} (var 244 its clover box, as the game's), out in the palace's dungeon in scene {palaceScene}; " +
-                  $"open once Q_CXKEY ({QCxKey}) is {KeyWon} or more; the way back from the dungeon's south wall");
+                  $"open once Q_CXKEY ({QCxKey}) is {KeyNote} or more (the note read, chapter 13); the way back from the dungeon's south wall");
     }
 
     // The palace dungeon's landing (PALACE.JSON, PalaceIsland's layout: where the race's warp through room 159's fireplace comes out, island

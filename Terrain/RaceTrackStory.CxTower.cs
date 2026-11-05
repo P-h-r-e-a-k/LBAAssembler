@@ -161,9 +161,9 @@ internal static partial class RaceTrackStory
         },
     };
 
-    public static List<string> ApplyCx(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes)
+    public static List<string> ApplyCx(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes, List<PendingTravel>? travels = null)
     {
-        var s = new LateStory(gameDirectory, report, island, scenes.StartScene);
+        var s = new LateStory(gameDirectory, report, island, scenes.StartScene, travels);
         if (!s.Ready("Island CX")) return s.Log;
         var first = s.Texts(CxTexts, CxLines, "Island CX");
         int Id(CLine line) => first + (int)line;
@@ -171,7 +171,8 @@ internal static partial class RaceTrackStory
         var trooper = CopyOf(s.Originals, MoonGuards, FrancoGuard);
         var survivor = CopyOf(s.Originals, CelebrationScene, SellerEntity);
         if (trooper is null || survivor is null) { s.Log.Add("chapter 12 left out: the game's Franco guard (scene 23) or the survivor (scene 95) not found"); return s.Log; }
-        var (palaceScene, palaceAt) = s.Landing(LBAAssembler.Terrain.Palace.PalaceTrack.FirstScene + StartCubeOfPalace());
+        // (the palace race's start scene, Twinsen's place on its grid once its track is built: LateStory.Travel)
+        var palaceScene = LBAAssembler.Terrain.Palace.PalaceTrack.FirstScene + StartCubeOfPalace();
 
         s.Edit(scenes.StartScene, "chapter 12: Lyra, the radio, the trooper, the survivor's key for the gazogem, the note and the transport to the palace", model =>
         {
@@ -224,8 +225,7 @@ internal static partial class RaceTrackStory
         invisible(1);
     }}
 ")));
-            if (palaceScene >= 0) s.Travel(model, noteAt, palaceScene, palaceAt, TransportSwitch);
-            else s.Log.Add("chapter 12: no palace race scene in the folder: the soldiers' transport goes nowhere");
+            s.Travel(scenes.StartScene, model, noteAt, palaceScene, TransportSwitch, "the soldiers' transport from Island CX to the palace (chapter 13)");
             edits.Add(s.Add(model, lyra, Talker(when, $@"            if ({KeyWon} <= var_game({QCxKey}))
             {{
                 message({Id(CLine.Won)});

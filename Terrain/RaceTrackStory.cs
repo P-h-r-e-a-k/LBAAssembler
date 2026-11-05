@@ -413,7 +413,8 @@ internal static partial class RaceTrackStory
 
     // `scenes`: what the lava lake's scenes were given (its start scene, 223, is its race's). Returns lines for the log.
     // (`report`: the lava lake's track, for chapter 6's statuettes beside it -- RaceTrackStory.LavaLake.cs)
-    public static List<string> ApplyCelebration(string gameDirectory, RaceTrackScenes.Result scenes, RaceTrackReport? report = null)
+    // (`travels`: the build's doors past scene 255, put in once every track is built -- RaceTrackStory.Travels.cs)
+    public static List<string> ApplyCelebration(string gameDirectory, RaceTrackScenes.Result scenes, RaceTrackReport? report = null, List<PendingTravel>? travels = null)
     {
         var log = new List<string>();
         if (scenes.StartScene < 0) { log.Add("no story: the lava lake's track has no start scene"); return log; }
@@ -525,7 +526,7 @@ void comportement_1()
         }
         store.SaveMany(changes, allowErrors: true);
         // (chapter 6's arrival, radio and statuettes in scene 95)
-        log.AddRange(LavaLakeBeats(gameDirectory, report, lava));
+        log.AddRange(LavaLakeBeats(gameDirectory, report, lava, travels));
         // (the fifth statuette, an easter egg: RaceTrackStory.Eggs.Celebration.cs)
         log.AddRange(FifthStatuette(gameDirectory, report, lava));
         return log;

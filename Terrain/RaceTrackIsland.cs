@@ -364,7 +364,8 @@ internal sealed record RaceTrackIsland(
     // the fuel is made (the user, 2026-10-07).
     public bool FuelAlways { get; init; }
     // Game variables the race-track mode holds at a value while it runs (the car file's vargame=): travel cutscenes kept from playing --
-    // Otringal's square island's Dino-Fly landing, which holds Twinsen at its pad while variable 83 is under 2 (2026-10-08).
+    // Otringal's square island's Dino-Fly landing, which holds Twinsen at its pad while variable 83 is under 2 (2026-10-08; held at 4 since
+    // 2026-11-05).
     public (int Var, int Value)[] HeldVars { get; init; } = Array.Empty<(int, int)>();
     // Shuttles the race-track mode flies (the car file's shuttle=): a scene's actor (its index and entity in the game's scene) and the pad
     // on the road it comes down onto (cube-local x and z) -- Otringal's spaceship on the square island hovers over the road, lands on it a
@@ -488,8 +489,12 @@ internal sealed record RaceTrackIsland(
         // (55.5 frames a second at 848 x 480 to 60.4 at the island's own 41,200, 2026-11-02)
         View = (200000, 150000),
         NewCubes = new[] { (6, 9, 264, 87) },
-        // (Twinsen has arrived on Otringal: the square island's Dino-Fly landing doesn't play when the car flies into it off the jump)
-        HeldVars = new[] { (83, 3) },
+        // (Twinsen has arrived on Otringal: the square island's Dino-Fly landing doesn't play when the car flies into it off the jump --
+        // 2 or more. At 4: at 3 the space port's guard (scene 92's actor 4) took Twinsen in on every visit, to the arrest in scene 86 and the
+        // prison, whose way out needs 5, which the hold undid (findings_island4 #1, 2026-11-05); at 4 the guard is gone, the halls' doors 10
+        // and 11 stay shut (scene 92's Twinsen: open at 5) and scene 86 skips the arrest. The prison still starts Twinsen in his cell at 4:
+        // the story takes its doors out of the town -- RaceTrackStory.Travels.cs)
+        HeldVars = new[] { (83, 4) },
         // (its spaceships: scene 92's actor 2, on its pad on the road along the square island's north side -- its script's own pos_point(1)
         // -- and actor 3, parked on the other pad, beside the road along its east side: the ground-level road runs into it, so it flies too)
         Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },

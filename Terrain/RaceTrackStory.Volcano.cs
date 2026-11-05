@@ -209,11 +209,12 @@ internal static partial class RaceTrackStory
         },
     };
 
-    // Chapters 11-14's stories, by the island built (RaceTrackService.Story, before the island's retelling). Lines for the log.
-    public static List<string> ApplyLate(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes)
+    // Chapters 11-14's stories, by the island built (RaceTrackService.Story, before the island's retelling). Lines for the log. `travels`:
+    // the build's doors past scene 255 (the ferryman's boat, the soldiers' transport), put in once every track is built (Travels.cs).
+    public static List<string> ApplyLate(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes, List<PendingTravel>? travels = null)
     {
-        if (island == RaceTrackIsland.Volcano) return ApplyVolcano(gameDirectory, report, island, scenes);
-        if (island == RaceTrackIsland.CxTowerMk2 || island == RaceTrackIsland.CxTower) return ApplyCx(gameDirectory, report, island, scenes);
+        if (island == RaceTrackIsland.Volcano) return ApplyVolcano(gameDirectory, report, island, scenes, travels);
+        if (island == RaceTrackIsland.CxTowerMk2 || island == RaceTrackIsland.CxTower) return ApplyCx(gameDirectory, report, island, scenes, travels);
         if (island == RaceTrackIsland.Palace) return ApplyPalace(gameDirectory, report, island, scenes);
         if (island == RaceTrackIsland.Celebration) return ApplyFinal(gameDirectory, report, island, scenes);
         return new List<string>();
@@ -252,9 +253,9 @@ internal static partial class RaceTrackStory
     private const int StartProtection = 1, StartSuperJet = 4;
 
     // `report`: the Volcano track's build; `island`: its RaceTrackIsland; `scenes`: what its scenes were given. Lines for the log.
-    public static List<string> ApplyVolcano(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes)
+    public static List<string> ApplyVolcano(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes, List<PendingTravel>? travels = null)
     {
-        var s = new LateStory(gameDirectory, report, island, scenes.StartScene);
+        var s = new LateStory(gameDirectory, report, island, scenes.StartScene, travels);
         if (!s.Ready("the Island under Celebration")) return s.Log;
         var first = s.Texts(VolcanoTexts, VolcanoLines, "the Island under Celebration");
         int Id(VLine line) => first + (int)line;
@@ -264,8 +265,9 @@ internal static partial class RaceTrackStory
         var mosquibee = Copy(s.Originals, HideOut, HideOutMosquibee);
         var ferryman = Copy(s.Originals, FerryScene132, Ferryman);
         if (dissident is null || mosquibee is null || ferryman is null) { s.Log.Add("chapter 11 left out: the game's dissident, Mosquibee (scene 129) or ferryman (scene 132) not found"); return s.Log; }
-        // (the CX track's start scene and Twinsen's place on its grid: the boat's landing)
-        var (cxScene, cxAt) = s.Landing(RaceTrackIsland.CxTowerMk2.FirstScene + RaceTrackIsland.CxTowerMk2.MoreScenes.Length);
+        // (the CX track's start scene and Twinsen's place on its grid: the boat's landing -- the scene Island CX Mk2's own build makes, which
+        // may come after this one: LateStory.Travel)
+        var cxScene = RaceTrackIsland.CxTowerMk2.FirstScene + RaceTrackIsland.CxTowerMk2.MoreScenes.Length;
 
         s.Edit(scenes.StartScene, "chapter 11: Lyra, the radio, the dissident, the hide-out's Mosquibee, three lava slabs, the reveal and the ferryman's boat to Island CX", model =>
         {
@@ -385,8 +387,7 @@ void comportement_1()
 }}
 "));
             // (the boat: a change-cube zone round the ferryman into Island CX's start scene, off until he takes Twinsen)
-            if (cxScene >= 0) s.Travel(model, ferryAt, cxScene, cxAt, FerrySwitch);
-            else s.Log.Add("chapter 11: no Island CX start scene in the folder: the ferryman's boat goes nowhere");
+            s.Travel(scenes.StartScene, model, ferryAt, cxScene, FerrySwitch, "the volcano ferryman's boat to Island CX (chapter 12)");
             // Lyra, the radio and the race's end
             edits.Add(s.Add(model, lyra, Talker(when, $@"            if ({SlabsWon} <= var_game({QSlabs}))
             {{
@@ -430,11 +431,13 @@ void comportement_1()
         public readonly string Game; public readonly List<string> Log = new();
         public readonly SceneStore Store, Originals;
         public readonly RaceTrackReport Report; public readonly RaceTrackIsland Island; public readonly int StartScene;
+        // (the build's doors past scene 255, put in once every track is built -- Travels.cs; null: put in at once, where the scene is there)
+        private readonly List<PendingTravel>? travels;
         private readonly Dictionary<int, SceneModel> models = new();
 
-        public LateStory(string game, RaceTrackReport report, RaceTrackIsland island, int startScene)
+        public LateStory(string game, RaceTrackReport report, RaceTrackIsland island, int startScene, List<PendingTravel>? travels = null)
         {
-            Game = game; Report = report; Island = island; StartScene = startScene;
+            Game = game; Report = report; Island = island; StartScene = startScene; this.travels = travels;
             Store = new SceneStore(SceneGame.Lba2, game);
             Originals = RaceTrackService.OriginalScenes(Store);
             givers = new();         // (Citadel Island's search zones: not this island's)
@@ -557,27 +560,20 @@ void comportement_1()
             return (x, z, h.Y, RaceTrackMath.Turn(Math.Atan2(hx - x, hz - z)));
         }
 
-        // a scene's start (Twinsen's place in it) in this folder: (-1, ...) when it isn't there
-        public (int Scene, (int X, int Y, int Z) At) Landing(int scene)
+        // A change-cube zone in scene `inScene` (`model`) round a place (island cells) into `scene`'s start, off until
+        // set_change_cube(`zoneSwitch`, 1): the way the story travels to a scene past 255, which a script's change_cube (a byte) can't name.
+        // Put in once every track of the build is built (Travels.cs): `scene` may be one a later track's build makes, and its start is
+        // where that track puts it.
+        public void Travel(int inScene, SceneModel model, (double X, double Z, double Y, int Beta) round, int scene, int zoneSwitch, string what)
         {
-            if (!Store.SceneExists(scene)) return (-1, default);
-            var hero = Store.Load(scene).Hero;
-            return (scene, (hero.X, hero.Y, hero.Z));
-        }
-
-        // A change-cube zone round a place (island cells) into `scene` at `at`, off until set_change_cube(`zoneSwitch`, 1): the way the
-        // story travels to a scene past 255, which a script's change_cube (a byte) can't name.
-        public void Travel(SceneModel model, (double X, double Z, double Y, int Beta) round, int scene, (int X, int Y, int Z) at, int zoneSwitch)
-        {
-            const int Reach = 1536;
             int x = RaceTrackScenes.CubeLocal(round.X, model.CubeX), z = RaceTrackScenes.CubeLocal(round.Z, model.CubeY), y = (int)Math.Round(round.Y);
-            static int Clamp(int v) => Math.Clamp(v, 0, IslandFile.CubeSize - 1);
-            model.Zones.Add(new SceneZoneModel
-            {
-                Type = 0, Num = scene, X0 = Clamp(x - Reach), X1 = Clamp(x + Reach), Z0 = Clamp(z - Reach), Z1 = Clamp(z + Reach), Y0 = y - 1000, Y1 = y + 3000,
-                // (Twinsen comes out where he stood in the zone, from its corner: so the zone's corner is put that far before the place)
-                Info = new[] { at.X - (x - Clamp(x - Reach)), at.Y + 200, at.Z - (z - Clamp(z - Reach)), 0, zoneSwitch, 0, 0, 0 },
-            });
+            // (Twinsen comes out where he stood in the zone, from its corner: so the zone's corner is put that far before the place)
+            var made = DoorRound(x, z, 1536, y - 1000, y + 3000, scene, zoneSwitch, 200);
+            if (travels is not null) { travels.Add(new(inScene, scene, zoneSwitch, what, _ => (made.Zone.Clone(), made.Offset))); return; }
+            if (!Store.SceneExists(scene)) { Log.Add($"WARNING: {what}: no scene {scene} in the folder, the door goes nowhere"); return; }
+            var at = Store.Load(scene).Hero;
+            made.Zone.Info[0] += at.X; made.Zone.Info[1] += at.Y; made.Zone.Info[2] += at.Z;
+            model.Zones.Add(made.Zone);
         }
 
         // Baldino's call on arrival: with the radio, "the radio is ringing" once a visit until it is answered from the inventory; then his
