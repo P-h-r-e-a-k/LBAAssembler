@@ -107,6 +107,9 @@ static const T_CLI_FLAG CliFlags[] = {
     {"--exec-at", 2, 0, 0, 1, NULL, "<tick> <cmds>", "run console commands at tick <tick>; repeatable.\n"
                                                      "Use this when a command depends on a scene change\n"
                                                      "having settled, which --exec cannot wait for."},
+    {"--exec-at-file", 1, 0, 0, 1, NULL, "<file>", "--exec-at's from a file: a line each, \"<tick> <cmds>\"\n"
+                                                   "(# comments). For a run of more commands than\n"
+                                                   "a command line holds: a scripted playthrough."},
     /* Same command bus again, but open-ended: --exec and --exec-at need the whole
        plan before boot, and a probe loop whose next step depends on the last one
        cannot be written that way. Requires a build with LBA2_CONTROL_SERVER. */

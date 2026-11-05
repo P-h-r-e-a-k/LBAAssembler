@@ -62,14 +62,70 @@ static char s_exec[CONTROL_EXEC_MAX];
    --exec cannot express "after the scene has settled": it fires on the first tick, and a
    `cube` change only applies on the NEXT frame, so `--exec "cube 154; teleport actor 3"`
    teleports the hero in the OLD cube and the pending change then resets him. Silently. */
-#define CONTROL_EXEC_AT_MAX 128 /* (16 was too few for a lap of screenshots: the race-track pictures) */
+/* (16 was too few for a lap of screenshots; 128 too few for a chained playthrough of the story -- the table grows as it fills) */
 typedef struct {
     long tick;
     int fired;
     char cmds[CONTROL_EXEC_MAX];
 } T_CONTROL_EXEC_AT;
-static T_CONTROL_EXEC_AT s_exec_at[CONTROL_EXEC_AT_MAX];
-static int s_exec_at_count = 0;
+static T_CONTROL_EXEC_AT *s_exec_at = NULL;
+static int s_exec_at_count = 0, s_exec_at_room = 0;
+
+static void copy_arg(char *dst, size_t cap, const char *src);
+
+/* one more scheduled command: 0 if out of memory */
+static int control_add_exec_at(long tick, const char *cmds) {
+    if (s_exec_at_count == s_exec_at_room) {
+        int room = s_exec_at_room ? s_exec_at_room * 2 : 128;
+        T_CONTROL_EXEC_AT *more = (T_CONTROL_EXEC_AT *)realloc(s_exec_at, (size_t)room * sizeof(T_CONTROL_EXEC_AT));
+        if (!more)
+            return 0;
+        s_exec_at = more;
+        s_exec_at_room = room;
+    }
+    s_exec_at[s_exec_at_count].tick = tick;
+    s_exec_at[s_exec_at_count].fired = 0;
+    copy_arg(s_exec_at[s_exec_at_count].cmds, sizeof(s_exec_at[s_exec_at_count].cmds), cmds);
+    s_exec_at_count++;
+    return 1;
+}
+
+/* --exec-at-file <file>: a line each "<tick> <cmds>"; blank lines and # comments skipped. Exits on a file it can't read or a bad
+   line, as --exec-at does on a bad value: a scripted run that drops commands in silence is the failure to avoid. */
+static void control_read_exec_at_file(const char *path) {
+    FILE *f = fopen(path, "r");
+    char line[CONTROL_EXEC_MAX + 32];
+    int n = 0;
+    if (!f) {
+        fprintf(stderr, "[control] --exec-at-file: cannot read '%s'\n", path);
+        exit(2);
+    }
+    while (fgets(line, sizeof(line), f)) {
+        char *p = line, *end = NULL;
+        long t;
+        size_t len;
+        n++;
+        while (*p == ' ' || *p == '\t')
+            p++;
+        len = strlen(p);
+        while (len > 0 && (p[len - 1] == '\n' || p[len - 1] == '\r'))
+            p[--len] = '\0';
+        if (!*p || *p == '#')
+            continue;
+        t = strtol(p, &end, 10);
+        if (end == p || t < 0 || (*end != ' ' && *end != '\t')) {
+            fprintf(stderr, "[control] --exec-at-file: %s line %d: not \"<tick> <cmds>\"\n", path, n);
+            exit(2);
+        }
+        while (*end == ' ' || *end == '\t')
+            end++;
+        if (!control_add_exec_at(t, end)) {
+            fprintf(stderr, "[control] --exec-at-file: out of memory at %s line %d\n", path, n);
+            exit(2);
+        }
+    }
+    fclose(f);
+}
 
 /* The attract/demo reel: the menu enters it at cube 193 (GAMEMENU.CPP) and the authored
    demo copies run to 221 (docs/SCENES.md). Used only to warn that --demo is a no-op
@@ -223,18 +279,17 @@ void Control_ParseArgs(int *argc, char *argv[]) {
             if (end == argv[read + 1] || *end != '\0' || t < 0) {
                 fprintf(stderr, "[control] --exec-at: invalid tick '%s' (skipping)\n",
                         argv[read + 1]);
-            } else if (s_exec_at_count >= CONTROL_EXEC_AT_MAX) {
-                fprintf(stderr, "[control] --exec-at: at most %d entries (skipping '%s')\n",
-                        CONTROL_EXEC_AT_MAX, argv[read + 2]);
-            } else {
-                s_exec_at[s_exec_at_count].tick = t;
-                s_exec_at[s_exec_at_count].fired = 0;
-                copy_arg(s_exec_at[s_exec_at_count].cmds,
-                         sizeof(s_exec_at[s_exec_at_count].cmds), argv[read + 2]);
-                s_exec_at_count++;
+            } else if (!control_add_exec_at(t, argv[read + 2])) {
+                fprintf(stderr, "[control] --exec-at: out of memory (skipping '%s')\n", argv[read + 2]);
             }
             s_active = 1;
             read += 3;
+            continue;
+        }
+        if (!strcmp(a, "--exec-at-file") && has_val) {
+            control_read_exec_at_file(argv[read + 1]);
+            s_active = 1;
+            read += 2;
             continue;
         }
         if (!strcmp(a, "--listen") && has_val) {

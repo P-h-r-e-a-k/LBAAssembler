@@ -4797,11 +4797,15 @@ void RaceMod_ResetGear(void) {
     s_lastZ = CheckKey(K_Z) ? 1 : 0;
 }
 
+static int s_auto = 0; // (the test pilot, autodrive: RaceMod_AutoDrive below)
+
 void RaceMod_UpdateGear(S32 speed) {
     const int x = CheckKey(K_X) ? 1 : 0, z = CheckKey(K_Z) ? 1 : 0;
     const S32 was = s_gear;
     const T_RACE_CAR *car = PlayerCar();
-    if (s_car.Automatic) {
+    // (the test pilot -- autodrive -- changes gear as the automatic box would, on a hand-changed one too: the story's cars have one, and
+    // the pilot left in first crawled round at 11 km/h -- the scripted playthrough, 2026-11-05)
+    if (s_car.Automatic || s_auto) {
         // up at the gear's top speed, down when the car has slowed well into the gear below's range
         if (s_gear < car->Gears && speed >= car->GearTop[s_gear - 1] - 40) s_gear++;
         else if (s_gear > 1 && speed < car->GearTop[s_gear - 2] * 7 / 10) s_gear--;
@@ -4812,7 +4816,7 @@ void RaceMod_UpdateGear(S32 speed) {
     s_lastX = x;
     s_lastZ = z;
     // (every change in the log, with what made it: the keys are the game window's keyboard, so a key typed while it has the focus counts)
-    if (s_gear != was) Log_Info("[racemod] gear %d (%s)", (int)s_gear, s_car.Automatic ? "automatic" : s_gear > was ? "X" : "Z");
+    if (s_gear != was) Log_Info("[racemod] gear %d (%s)", (int)s_gear, s_car.Automatic ? "automatic" : s_auto ? "the pilot" : s_gear > was ? "X" : "Z");
 }
 
 static void Message(const char *text) {
@@ -5716,7 +5720,7 @@ S32 RaceMod_NewGameScene(S32 scene) {
 // line -- the bearing to a point s_autoLook ahead of the car's place on the line, steered to when the heading is more than a little off it,
 // and the line's own speed (the build planned it for the reference car), braked down to when the car is quicker. For headless tests of a
 // whole lap; nothing turns it on in play.
-static int s_auto = 0, s_autoIndex = -1;
+static int s_autoIndex = -1;
 static double s_autoLook = 5 * 512;
 static double s_autoSide = 0;              // how far to the side of the line it drives (to the left of the way it runs, x east, z south)
 static double s_autoPace = 100;            // how fast (percent of the line's speed: a slower driver than the line's perfect one, the race's

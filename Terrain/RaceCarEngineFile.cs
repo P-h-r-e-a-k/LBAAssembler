@@ -338,6 +338,11 @@ internal static class RaceCarEngineFile
             foreach (var key in RaceTrackStory.EggRaceKeys(RaceTrackIsland.ByName(info.Island), town, info.Story, opponents.Select(o => o.Name).ToList())) text.Append(key).Append('\n');
         // a race over laps of its own, when no story or dream has set them: the Temple of Bú's five
         if (track?.Dream is null && !town && !lava && info is not null && RaceTrackIsland.ByName(info.Island).RaceLaps is int ownLaps and > 0) text.Append($"race_laps={ownLaps}\n");
+        // and every other story race the story's three laps: without race_laps= the race-track mode counts laps for ever and its win=
+        // never comes (the scripted playthrough of 2026-11-05: the Desert, the Moon, Otringal, the Francos, the Elevator, Wannies and
+        // the Mosquibees raced on and on, and their chapters could not end) -- a sprint (race_laps=1), the dream, the town circuit and
+        // the lava lake have theirs already; the storm track is Raph's time to beat, lapped till it's beaten (beat=)
+        else if (story && !storm && track?.Dream is null && !text.ToString().Contains("\nrace_laps=")) text.Append($"race_laps={RaceTrackStory.RaceLaps}\n");
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
         // (and all of the other weather's track's: that isn't the island the game draws)
         var parked = car.Parked(track);
