@@ -1313,11 +1313,13 @@ his start, lost and won lines (the race's own, as the other tracks' mains have);
    - **"The statue gone, and FunFrock with it."**
      > **The Esmer:** "Granted."
 
-     The statue goes (var 79 = 0) and `change_cube(95)` shows Celebration as it was. FunFrock is gone with it.
+     The statue goes (var 79 = 0) and `change_cube(95)` shows Celebration as it was. FunFrock is gone with it. The dock's lines
+     below wait for the scene loaded again (a scene variable set with the wish, cleared by the reload).
    - **"Another race. Right now."**
      > **FunFrock:** "Ha! You'll regret that."
 
-     The race again, then the same choice. Choosing this a second time ends on FunFrock's laugh and the credits.
+     The race again, then the same choice. Choosing this a second time ends on FunFrock's laugh and the credits. (Asked once is
+     game variable 52, which no race sets: the race's end sets Q_EMPEROR 224 back to 7, finish=224 7, over its 8.)
 6. **The dock, after.**
    > **Zoe:** "Home, Twinsen?"
    >

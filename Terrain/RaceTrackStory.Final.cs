@@ -16,8 +16,13 @@ namespace LBAAssembler.Terrain;
 //   - The race: a loss (finish=224 7: Q_EMPEROR is done with after the palace) -- FunFrock's "again?", and the race again (the scene
 //     again: the race-track mode starts a finished race afresh on re-entry). A win (win=239 2): Lyra, FunFrock, and the Esmer's wish
 //     (ask_choice): "the statue gone, and FunFrock with it" -- granted, var 79 0, scene 95 again as it was (239 3), and the dock after:
-//     Zoe, Raph, Baldino, the Esmer; inc_chapter (15) and the_end(). "Another race" -- FunFrock's "you'll regret that" and the race again
-//     (224 8); chosen a second time, his laugh and the_end().
+//     Zoe, Raph, Baldino, the Esmer; inc_chapter (15) and the_end(). The dock after waits for the scene again: change_cube only asks
+//     for the change, and the script goes on in the same pass -- the granted wish's set_var_cube(Once1) holds the closing lines off
+//     until the scene is loaded again, the statue gone (its scene variables cleared: OBJECT.CPP ClearScene); they came before it and
+//     the credits followed, the statue never seen gone (the scripted playthrough, 2026-11-05). "Another race" -- FunFrock's "you'll
+//     regret that" and the race again (224 8, and FinalAskedAgain 1); chosen a second time, his laugh and the_end(). A loss is the race's
+//     end (224 7) before a win (239 0 or 1): with the wish granted (239 3) the 7 the race left read as a loss, and the dock after
+//     began with "Again? I have all day." and the scene once more.
 // Not built: the super jet-pack in the item box at the start (the race file has no start_item= key: RACEMOD.CPP would need one); the
 // slate's last page; Flick seen.
 internal static partial class RaceTrackStory
@@ -26,6 +31,10 @@ internal static partial class RaceTrackStory
     public const int FinalStep = 239, FinalSpoke = 1, FinalWon = 2, FinalGranted = 3;
     // the race run (finish=224 7) and another race asked for once (224 8)
     public const int FinalRaced = 7, FinalAgain = 8;
+    // another race asked for once, kept where the race's end can't reach it: Q_EMPEROR's 8 doesn't last -- the next race's end sets 224
+    // to 7 again (finish=, a plain set), so the second "Another race" never saw the 8 and the laugh ending never came (the scripted
+    // playthrough, 2026-11-05). A game variable no script of the built game uses (RaceTrackStory.Eggs.cs: kept spare).
+    public const int FinalAskedAgain = 52;
     private const int FinalChapter = 14, FinalTexts = 3 + 5, StatueRisen = 79;
     // the game's: FunFrock (entity 217, his body's generic 154), Baldino (entity 93); their standing: their generic animation 0 (ANIM.HQR 1440, 715)
     private const int FunFrockEntity = 217, FunFrockBody = 154, FunFrockStand = 0, BaldinoEntity = 93, BaldinoStand = 0;
@@ -363,7 +372,7 @@ void comportement_1()
         set_var_game({QEmperor}, {StanReady});
         inc_chapter();
     }}
-    if ({when} && {FinalWon} != var_game({FinalStep}) && {FinalRaced} == var_game({QEmperor}) && {Driving} != comportement_hero())
+    if ({when} && {FinalWon} > var_game({FinalStep}) && {FinalRaced} == var_game({QEmperor}) && {Driving} != comportement_hero())
     {{
         set_var_game({QEmperor}, {StanReady});
         message_obj({ff}, {Id(FLine.Again)});
@@ -378,7 +387,7 @@ void comportement_1()
         ask_choice_obj({es}, {Id(FLine.EsmerAsk)});
         if ({Id(FLine.AnotherRace)} == choice())
         {{
-            if ({FinalAgain} == var_game({QEmperor}))
+            if (1 == var_game({FinalAskedAgain}))
             {{
                 message_obj({ff}, {Id(FLine.Laugh)});
                 set_var_game({FinalStep}, {FinalSpoke});
@@ -387,6 +396,7 @@ void comportement_1()
             else
             {{
                 message_obj({ff}, {Id(FLine.Regret)});
+                set_var_game({FinalAskedAgain}, 1);
                 set_var_game({QEmperor}, {FinalAgain});
                 set_var_game({FinalStep}, {FinalSpoke});
                 change_cube({CelebrationScene});
@@ -397,6 +407,7 @@ void comportement_1()
             message_obj({es}, {Id(FLine.Granted)});
             set_var_game({StatueRisen}, 0);
             set_var_game({FinalStep}, {FinalGranted});
+            set_var_cube({Once1}, 1);
             change_cube({CelebrationScene});
         }}
     }}

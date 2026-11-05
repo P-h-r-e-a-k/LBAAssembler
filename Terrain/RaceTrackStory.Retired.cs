@@ -29,7 +29,8 @@ namespace LBAAssembler.Terrain;
 //     for him only then; the chest in scene 80 isn't opened with a little key (its Fragment, see below). The steward's token: RaceTrackStory
 //     .Otringal.cs (not before Lyra has told of the fee).
 //   - Celebration Island (chapters 6, 7, 13, 14): the game's FunFrock on the dock (scene 95's actor 12, while var 79 is 1: the statue risen,
-//     as the story's landing has it too) and his "Adieu!!!" that sets var 79 2 under the story's own FunFrock; the two armed guards on
+//     as the story's landing has it too) and his "Adieu!!!" that sets var 79 2 under the story's own FunFrock, with Twinsen's own hold
+//     for that cutscene (his scene start on the rocks at the statue's foot, NO_MOVE, while var 79 is 1); the two armed guards on
 //     the dock (actors 8, 9, the game's own till chapter 9); and the statue's inside -- the door up in the statue into scene 185, the game's
 //     ending without the final's race -- taken out (its change-cube zone).
 //   - Wannies Island (chapter 9): the end of the game's chain to the Ferryman's Song (chapter 11's prize) -- the housemaid who gives it (scene
@@ -286,6 +287,13 @@ internal static partial class RaceTrackStory
     private static (List<Retirement>, List<ClosedDoor>) CelebrationRetired() => (new List<Retirement>
     {
         new(95, 12, @"set_var_game\(79, 2\)", "the game's FunFrock on the dock (\"At last we meet again\", \"Adieu!!!\", var 79 2) gone once the statue rises in the story (chapter 13)", Gone("12 < chapter()")),
+        // (and Twinsen's own part of that cutscene: with var 79 1 the game's scene start held him for it -- save_hero, NO_MOVE, pos_point(10)
+        // on the rocks at the statue's foot, for FunFrock's "Adieu!!!" to let go (restore_hero, 79 2). With that FunFrock gone the story's
+        // landing left him there all the final, unable to walk or press Action (the scripted playthrough, 2026-11-05). In the story he lands
+        // where the scene starts, behind his car on pole, the cameras as the game has them once the statue has risen (its 79 2))
+        new(95, 0, @"1 == var_game\(79\)\)\s*\{\s*save_hero\(\);\s*set_dir\(NO_MOVE\);\s*pos_point\(10\)", "Twinsen not held on the rocks at the statue's foot for the game's statue cutscene (var 79 1): in the story he lands free, by his car",
+            All(Swap("if (1 == var_game(79))", "if (13 > chapter() && 1 == var_game(79))"),
+                Swap("if (1 < var_game(79))", "if (0 < var_game(79))"))),
         new(95, 8, @"set_var_game\(112, 1\)", "the dock's armed guard (\"After him!!\") gone from the lava lake's chapter", Gone($"{LavaChapter - 1} < chapter()")),
         new(95, 9, @"1 == var_cube\(1\) \|\| 2000 > cone_view\(0\)", "the dock's second armed guard (\"Halt!!\") gone from the lava lake's chapter", Gone($"{LavaChapter - 1} < chapter()")),
     }, new List<ClosedDoor>
