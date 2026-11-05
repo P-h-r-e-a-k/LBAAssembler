@@ -8895,33 +8895,49 @@ static int SafeLine(const T_RACE_OPPONENT *o) {
 
 // A place on the line with a loop's foot just ahead is no place to start from standing: the Emerald Moon's loop 4 (the scripted
 // playthrough, 2026-11-05), the car stuck past it and put back 2 points before its foot, went in at 19 km/h (it takes 22), fell off,
-// was put back there again -- seven times, the lap 152 s instead of 70. So the car is put back further, with RACE_RESCUE_RUNUP points
-// of road before the loop, as far as the line stays on the ground in this scene.
-#define RACE_RESCUE_RUNUP 16               // line points (a cell each)
-static int LoopAhead(const T_RACE_OPPONENT *o, int i, int ahead) {
-    const int n = o->Count;
-    for (int k = 0; k <= ahead; k++) {
-        const int j = s_sprint ? (i + k < n ? i + k : n - 1) : (i + k) % n;
-        for (int l = 0; l < s_nbLoops; l++) {
-            const double dx = o->X[j] - (s_loops[l].CubeX * 32768.0 + s_loops[l].X), dz = o->Z[j] - (s_loops[l].CubeZ * 32768.0 + s_loops[l].Z);
-            if (dx * dx + dz * dz < 768.0 * 768.0) return k;
-        }
+// was put back there again -- seven times, the lap 152 s instead of 70. So the car is put back further, with RACE_RESCUE_RUNUP of road
+// before the loop, as far as the line stays on the ground in this scene.
+// (A line point going into a loop: just short of its foot along the loop's way, and across it no further than the road steps sideways
+// under the ring -- the Moon's line runs half a Shift, 2304, to one side of the foot. The points coming out, past the foot, aren't.)
+#define RACE_RESCUE_RUNUP (12 * 512.0)     // units of road before a loop's foot
+static double LineStep(const T_RACE_OPPONENT *o, int a, int b) { return hypot((double)o->X[b] - o->X[a], (double)o->Z[b] - o->Z[a]); }
+static int Prev(const T_RACE_OPPONENT *o, int j) { return s_sprint ? (j > 0 ? j - 1 : 0) : (j - 1 + o->Count) % o->Count; }
+static int IntoLoop(const T_RACE_OPPONENT *o, int j) {
+    for (int l = 0; l < s_nbLoops; l++) {
+        const T_RACE_LOOP *lp = &s_loops[l];
+        const double dx = o->X[j] - (lp->CubeX * 32768.0 + lp->X), dz = o->Z[j] - (lp->CubeZ * 32768.0 + lp->Z);
+        const double along = dx * lp->DirX + dz * lp->DirZ, across = fabs(dz * lp->DirX - dx * lp->DirZ);
+        if (along > -1536 && along < -128 && across < fabs(lp->Shift) / 2 + 1024) return l;
     }
     return -1;
 }
 
 static int RunUp(const T_RACE_OPPONENT *o, int i) {
     if (i < 0 || !s_nbLoops) return i;
-    const int k = LoopAhead(o, i, RACE_RESCUE_RUNUP);
-    if (k < 0) return i;
-    int j = i, back = 0;
-    for (; back < RACE_RESCUE_RUNUP - k; back++) {
-        const int p = s_sprint ? (j > 0 ? j - 1 : 0) : (j - 1 + o->Count) % o->Count;
-        if (p == j || !LineOnGround(o, p)) break;
-        j = p;
+    // (a loop's way in within RACE_RESCUE_RUNUP ahead of the place?)
+    double ahead = 0;
+    int j = i, loop = -1;
+    for (int k = 0; k < 64 && ahead < RACE_RESCUE_RUNUP; k++) {
+        if ((loop = IntoLoop(o, j)) >= 0) break;
+        const int nx = s_sprint ? (j + 1 < o->Count ? j + 1 : j) : (j + 1) % o->Count;
+        if (nx == j) break;
+        ahead += LineStep(o, j, nx);
+        j = nx;
     }
-    if (back) Log_Info("[racemod] back on the road: a loop's foot %d line points ahead -- put back %d more for a run-up", k, back);
-    return j;
+    if (loop < 0) return i;
+    // (... back from the place till there's that much road before it)
+    double back = 0;
+    int b = i, n = 0;
+    while (ahead + back < RACE_RESCUE_RUNUP && n < 64) {
+        const int p = Prev(o, b);
+        if (p == b || !LineOnGround(o, p)) break;
+        back += LineStep(o, p, b);
+        b = p;
+        n++;
+    }
+    if (n) Log_Info("[racemod] back on the road: loop %d's way in %.1f cells ahead -- put back %d line points (%.1f cells) more for a run-up", loop + 1,
+                    ahead / 512, n, back / 512);
+    return b;
 }
 
 // The car put back in the safe place's scene: on the line there, or with no line on the ground there where it was last on the road.
