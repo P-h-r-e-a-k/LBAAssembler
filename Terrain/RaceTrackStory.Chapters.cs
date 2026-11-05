@@ -1151,10 +1151,23 @@ stop();
         // visit, while the thief is somewhere ahead -- that he went through to the far tunnel (the game's 237, retold so); and the far
         // tunnel's door (actor 17, a key's in the game) opens for the chase
         if (demoSewers)
-            p.Edit(Sewers, "the demo's sewers' painter: the thief gone through to the far halls while he is ahead, then his own line", _ => scripts =>
+            p.Edit(Sewers, "the demo's sewers' painter: his own line, then -- asked again while the thief is ahead -- the thief gone through to the far halls", _ => scripts =>
             {
+                // the demo's: `if (1 == chapter()) { message(thief); } message(own);` -- both at once, the thief's first. The walkthrough
+                // (and the game's own painter below): his own line first, the thief's when Twinsen asks again (var_cube Once1).
                 var painter = scripts.GetText(DemoPainterActor, ScriptKind.Life);
-                scripts.SetText(DemoPainterActor, ScriptKind.Life, Loose(painter, "if (1 == chapter())", $"if ({ThiefDown} == var_game({QThief}))"));
+                var m = Regex.Match(painter, @"if\s*\(1 == chapter\(\)\)\s*\{\s*(message\(\d+\);)\s*\}\s*(message\(\d+\);)");
+                if (!m.Success) throw new NotTheGames("the demo painter's two lines");
+                painter = painter[..m.Index] + $@"if (1 == var_cube({Once1}) && {ThiefDown} == var_game({QThief}))
+            {{
+                {m.Groups[1].Value}
+            }}
+            else
+            {{
+                {m.Groups[2].Value}
+                set_var_cube({Once1}, 1);
+            }}" + painter[(m.Index + m.Length)..];
+                scripts.SetText(DemoPainterActor, ScriptKind.Life, painter);
             });
         else
         p.Edit(Sewers, "the sewers' painter: his own line, then the thief gone through to the far tunnel; the far tunnel's door opens once the thief is down", _ => scripts =>

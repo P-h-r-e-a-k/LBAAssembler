@@ -36,6 +36,16 @@ extern S32 InvSelect; // INVENT.CPP
             Log_Info("[story] obj=%d " fmt, (int)numobj, __VA_ARGS__); \
     } while (0)
 
+// (every line a script says, counted -- said or hushed while racing, not a dead object's: the console's `when said N` / `until said N`,
+// CONTROL.CPP)
+#define STORY_SAID_MAX 16384
+static U16 StorySaid[STORY_SAID_MAX];
+static void StoryLog_Said(S32 dial) {
+    if (dial >= 0 && dial < STORY_SAID_MAX && StorySaid[dial] < 0xFFFF)
+        StorySaid[dial]++;
+}
+S32 StoryLog_SaidCount(S32 dial) { return (dial >= 0 && dial < STORY_SAID_MAX) ? StorySaid[dial] : 0; }
+
 void StoryLog_Vars(S32 who) {
     static S16 game[MAX_VARS_GAME];
     static U8 cube[MAX_VARS_CUBE];
@@ -1304,6 +1314,7 @@ void DoLife(U8 numobj) {
             num = *PtrPrg++;
             STORYLOG("MESSAGE_OBJ %d dial=%d%s", (int)num, (int)*(S16 *)PtrPrg, ListObjet[num].LifePoint > 0 ? "" : " (dead: not said)");
             if (ListObjet[num].LifePoint > 0) {
+                StoryLog_Said(*(S16 *)PtrPrg);
 #ifdef CDROM
                 NumObjSpeak = num;
 #endif
@@ -1322,6 +1333,7 @@ void DoLife(U8 numobj) {
             num = *PtrPrg++;
             STORYLOG("MESSAGE_OBJ %d dial=%d%s", (int)num, (int)*(S16 *)PtrPrg, ListObjet[num].LifePoint > 0 ? "" : " (dead: not said)");
             if (ListObjet[num].LifePoint > 0) {
+                StoryLog_Said(*(S16 *)PtrPrg);
 #ifdef CDROM
                 NumObjSpeak = num;
 #endif
@@ -1347,6 +1359,7 @@ void DoLife(U8 numobj) {
 
             LIFETRACE_ACT("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
             STORYLOG("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
+            StoryLog_Said(*(S16 *)PtrPrg);
             if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line, and no one stops a car in a race: RACEMOD.CPP)
             PtrPrg += 2;
             break;
@@ -1354,6 +1367,7 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_ADD_MESSAGE:
             STORYLOG("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
+            StoryLog_Said(*(S16 *)PtrPrg);
 #ifdef CDROM
             NumObjSpeak = numobj;
 #endif
@@ -1369,6 +1383,7 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_MESSAGE_ZOE:
             STORYLOG("MESSAGE_ZOE dial=%d", (int)*(S16 *)PtrPrg);
+            StoryLog_Said(*(S16 *)PtrPrg);
 #ifdef CDROM
             NumObjSpeak = numobj;
 #endif

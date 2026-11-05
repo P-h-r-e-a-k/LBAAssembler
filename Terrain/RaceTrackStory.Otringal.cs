@@ -429,6 +429,29 @@ void comportement_1()
 }}
 "));
 
+        // ... and its slot machines never leave Twinsen too broke for the fee: the pull that spends his last zlito, the Travel Token not yet
+        // bought, stops every reel on Money (25 zlitos). The game's odds (a win about one pull in eight, from the Esmers' 10) left one player
+        // in four with nothing and the Cup closed to him (the scripted playthrough, 2026-11-05: 35 pulls, one win, 0 zlitos). Each reel's
+        // pick is its own scene variable, set after the game's forced key (a pull is paid before the reels spin: hero comportements 10-12).
+        b.Edit(CasinoScene, "the Casino's slot machines: the last zlito's pull pays, while the Travel Token is still to buy", _ => scripts =>
+        {
+            var reel = new System.Text.RegularExpressions.Regex(@"if \(0 == var_cube\(37\) && \(20 < var_cube\(38\) \|\| 4 <= var_cube\(13\)\)\)\s*\{\s*set_var_cube\((\d+), 3\);\s*\}");
+            var reels = 0;
+            for (var a = 0; a < scripts.ActorCount; a++)
+            {
+                var life = scripts.GetText(a, ScriptKind.Life);
+                if (!life.Contains("switch (rnd(27))") || reel.Match(life) is not { Success: true } m) continue;
+                scripts.SetText(a, ScriptKind.Life, life[..(m.Index + m.Length)] + $@"
+    if ({otringal} && 0 == nb_gold_pieces() && {FeePaid} > var_game({QFee}))
+    {{
+        set_var_cube({m.Groups[1].Value}, 4);
+    }}" + life[(m.Index + m.Length)..]);
+                reels++;
+            }
+            if (reels == 0) throw new NotTheGames("the Casino's slot machine reels");
+            log.Add($"the Casino: {reels} slot machine reels pay the last zlito's pull");
+        });
+
         // Johnny Rocket by the space port's pad: the black car's shuttle, and he flies them to Celebration Island
         if (Copy(b.Originals, HotelScene, JohnnyActor) is { } johnny && b.Store.SceneExists(SpacePort))
         {

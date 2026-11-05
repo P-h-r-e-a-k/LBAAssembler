@@ -342,6 +342,7 @@ extern S32 DbgCubeTrace;          // console `cubetrace`: log every cube transit
 extern S32 DbgConsoleLoad;        // console `load` / `loadbug`: a load the console asked for, not yet taken up (PERSO.CPP clears FlagLoadGame then)
 extern S32 DbgStoryLog;           // console `storylog`: log every script's lines, choices, items, cube changes and var changes
 extern void StoryLog_Vars(S32 who); // (GERELIFE.CPP) log the game and scene vars changed since the last call, as `who`'s doing
+extern S32 StoryLog_SaidCount(S32 dial); // (GERELIFE.CPP) how many times a script has said line `dial` (the console's `when said N`)
 extern S32 DbgCamNudgeBeta;       // console `camnudge`: orbit units to inject per frame (stick/mouse stand-in)
 extern S32 DbgCamNudgeAlpha;      // console `camnudge`: elevation units to inject per frame
 extern S32 DbgCamNudgeFrames;     // console `camnudge`: frames of injection left

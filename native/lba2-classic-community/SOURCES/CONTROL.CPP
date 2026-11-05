@@ -1050,7 +1050,8 @@ static T_CONTROL_WATCH *s_watch = NULL;
 static int s_watch_count = 0, s_watch_room = 0;
 static long s_watch_tick = 0;
 
-/* what: 0 the scene, 1 a game variable n, 2 a scene variable n; op: 0 = 1 != 2 < 3 > 4 <= 5 >=. 0 if out of memory. */
+/* what: 0 the scene, 1 a game variable n, 2 a scene variable n, 3 line n said (since now: op and v are set here); op: 0 = 1 != 2 < 3 >
+   4 <= 5 >=. 0 if out of memory. */
 int Control_AddWatch(int until, int what, int n, int op, int v, int every, int max, const char *cmds) {
     if (s_watch_count == s_watch_room) {
         int room = s_watch_room ? s_watch_room * 2 : 32;
@@ -1062,6 +1063,7 @@ int Control_AddWatch(int until, int what, int n, int op, int v, int every, int m
     }
     T_CONTROL_WATCH *w = &s_watch[s_watch_count++];
     w->until = until; w->what = what; w->n = n; w->op = op; w->v = v;
+    if (what == 3) { w->op = 3; w->v = StoryLog_SaidCount(n); } /* (said once more than it had been) */
     w->every = every > 0 ? every : 1; w->left = max > 0 ? max : 0; w->done = 0;
     w->next = s_watch_tick; /* (until: the first try now) */
     copy_arg(w->cmds, sizeof(w->cmds), cmds);
@@ -1072,6 +1074,7 @@ static int control_watch_holds(const T_CONTROL_WATCH *w) {
     S32 have;
     if (w->what == 0) have = NumCube;
     else if (w->what == 1) have = (w->n >= 0 && w->n < MAX_VARS_GAME) ? ListVarGame[w->n] : 0;
+    else if (w->what == 3) have = StoryLog_SaidCount(w->n);
     else have = (w->n >= 0 && w->n < MAX_VARS_CUBE) ? ListVarCube[w->n] : 0;
     switch (w->op) {
     case 0: return have == w->v;

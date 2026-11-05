@@ -8893,11 +8893,42 @@ static int SafeLine(const T_RACE_OPPONENT *o) {
     return -1;
 }
 
+// A place on the line with a loop's foot just ahead is no place to start from standing: the Emerald Moon's loop 4 (the scripted
+// playthrough, 2026-11-05), the car stuck past it and put back 2 points before its foot, went in at 19 km/h (it takes 22), fell off,
+// was put back there again -- seven times, the lap 152 s instead of 70. So the car is put back further, with RACE_RESCUE_RUNUP points
+// of road before the loop, as far as the line stays on the ground in this scene.
+#define RACE_RESCUE_RUNUP 16               // line points (a cell each)
+static int LoopAhead(const T_RACE_OPPONENT *o, int i, int ahead) {
+    const int n = o->Count;
+    for (int k = 0; k <= ahead; k++) {
+        const int j = s_sprint ? (i + k < n ? i + k : n - 1) : (i + k) % n;
+        for (int l = 0; l < s_nbLoops; l++) {
+            const double dx = o->X[j] - (s_loops[l].CubeX * 32768.0 + s_loops[l].X), dz = o->Z[j] - (s_loops[l].CubeZ * 32768.0 + s_loops[l].Z);
+            if (dx * dx + dz * dz < 768.0 * 768.0) return k;
+        }
+    }
+    return -1;
+}
+
+static int RunUp(const T_RACE_OPPONENT *o, int i) {
+    if (i < 0 || !s_nbLoops) return i;
+    const int k = LoopAhead(o, i, RACE_RESCUE_RUNUP);
+    if (k < 0) return i;
+    int j = i, back = 0;
+    for (; back < RACE_RESCUE_RUNUP - k; back++) {
+        const int p = s_sprint ? (j > 0 ? j - 1 : 0) : (j - 1 + o->Count) % o->Count;
+        if (p == j || !LineOnGround(o, p)) break;
+        j = p;
+    }
+    if (back) Log_Info("[racemod] back on the road: a loop's foot %d line points ahead -- put back %d more for a run-up", k, back);
+    return j;
+}
+
 // The car put back in the safe place's scene: on the line there, or with no line on the ground there where it was last on the road.
 static void RescueAt(const T_RACE_OPPONENT *o) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     // (SafeLine, finding no ground behind a place, looks ahead of it: 37 cells past Polar's checkpoint 3, missed again, put back again, for ever)
-    const int i = s_missExact ? s_safeIndex : SafeLine(o);
+    const int i = s_missExact ? s_safeIndex : RunUp(o, SafeLine(o));
     if (s_missExact) { s_missIndex = -1; s_missAt = i; }   // (there: missed again, said and put back again)
     s_missExact = 0;
     const double age = (TimerRefHR - s_safeAt) / 1000.0;

@@ -2139,7 +2139,7 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
     }
     char *bar = strchr(line, '|');
     if (!bar) {
-        Console_Print("%s <cond> %s| cmd | cmd ...  (cond: cube N | notcube N | var N op V | varcube N op V)", until ? "until" : "when",
+        Console_Print("%s <cond> %s| cmd | cmd ...  (cond: cube N | notcube N | var N op V | varcube N op V | said N)", until ? "until" : "when",
                       until ? "[every T] [max M] " : "");
         return;
     }
@@ -2156,6 +2156,8 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
     static const char *const ops[] = {"=", "!=", "<", ">", "<=", ">="};
     if (nt >= 2 && (!strcasecmp(tok[0], "cube") || !strcasecmp(tok[0], "notcube"))) {
         what = 0; op = strcasecmp(tok[0], "cube") ? 1 : 0; v = atoi(tok[1]); used = 2;
+    } else if (nt >= 2 && !strcasecmp(tok[0], "said")) {
+        what = 3; n = atoi(tok[1]); used = 2; /* (a line said from now on: Control_AddWatch) */
     } else if (nt >= 4 && (!strcasecmp(tok[0], "var") || !strcasecmp(tok[0], "varcube"))) {
         what = strcasecmp(tok[0], "var") ? 2 : 1; n = atoi(tok[1]); v = atoi(tok[3]); used = 4;
         op = -1;
@@ -2164,7 +2166,7 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
                 op = k;
     }
     if (what < 0 || op < 0) {
-        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V)", until ? "until" : "when");
+        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V | said N)", until ? "until" : "when");
         return;
     }
     for (int k = used; k + 1 < nt; k += 2) {
