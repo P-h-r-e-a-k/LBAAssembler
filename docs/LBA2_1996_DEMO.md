@@ -193,6 +193,11 @@ magic scenes". Every race-track build now puts the demo's School (its scenes 27 
   the gate). So the welcome waited for the chest, not for Twinsen coming in. The story now has it said 0.7 s after Twinsen comes in
   while 61 is 0 and sets 61 to 1 there, and 62 to 3 (the Dino-Fly's errand: the School found) as the greeting did (the gate and the greeter gone on later visits, the upper door open, as the demo has them after
   the chest); the chest still opens the gate on that first visit (`RaceTrackStory.Desert.cs`).
+  The way to the Dean on foot, checked in the engine (the playthrough's ch03 `08_school_hall.step`): shut, the gate (a sprite door
+  between the lamp pillars at x 23808, its opening z 3072-4096) stops Twinsen on the stairs up to it (x 24314); open, he walks through
+  it at its middle (z 3584 -- a path nearer z 3072 catches on the pillar, grid cell (46, 5), which looked like a gate that never
+  opened), along the walkway, up the stairs (x 19968-21504, slopes) to the bench floor, and jumps (sporty) the one-brick step onto the
+  Dean's tier (the demo's Dean walked down to Twinsen instead; the story's stands on his dais).
 
 Checked (a build of all 15 islands, E:\dump\TEMP\allstory4): the halls drawn as in the demo, the Dean and his assistant in the demo's
 bodies; the Dean's beats (Q_PAGES 1 -> 2, 5 -> 6 and the diploma); the door to the desert (28 -> 61); the training room's door shut at that
