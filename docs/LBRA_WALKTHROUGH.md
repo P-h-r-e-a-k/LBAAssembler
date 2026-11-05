@@ -109,6 +109,12 @@ that umbrella back. Not that I've anywhere to put it."
 
 The arrow points at the harbour.
 
+Talking to Tim again while the thief is still about (and once the umbrella is back):
+
+**Tim:** "And don't ask me for a drink, Twinsen: the mayor's banned the stuff while there's a race track on the island. No drinking
+and driving, he says. Funny, though... Luc's vanished, and the Tavern's bottles with him, and there's drumming coming out of the
+Tralu's cave by the Wizard's tent. Not my business. I'm a waiter, not a caveman."
+
 **5. The harbour.** The thief is lurking behind the warehouse. As Twinsen comes close:
 
 **The thief:** "Can't catch me!"
@@ -176,6 +182,36 @@ The same ladder brings Twinsen up onto the quay.
   **The neighbour:** "Somebody pushed this under my door the night they built the storm track. Drawings, I think, but the rain got to
   it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the pharmacy's
   waiting for its delivery."
+
+**The secret tavern (optional, any time this chapter).** With the Tavern gone and the mayor's ban on drink, the regulars have moved
+into the Tralu's cave. By the Weather Wizard's tent, the mushroom man has heard them (once a visit, after his line about the rain):
+
+**The mushroom man:** "Hear that? Drums, under the cliff. Ever since the mayor banned drink, half the Tavern creeps into the Tralu's
+cave of an evening. They think nobody notices. The mushrooms notice."
+
+The cave's mouth is in the cliff below the tent. In the first hall inside, Luc stands behind a bar of two crates where the tunnel
+comes in, the drunk rabbibunny is propped against a stalagmite, Pat and Fab of Raph's band are by the west wall, a visitor from the
+Tavern stands across from them, and the Tralu glowers from the far corner. Each talks when Twinsen walks up to them and presses Action:
+
+**Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Tralu's Rest: the only bar on Citadel the mayor doesn't know about.
+Two crates and the Tavern's last bottles... it's not much, but it's dry. Well, drier. And if you're racing today, it's lemonade for
+you."
+
+**The drunk rabbibunny:** "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm... hiding. With a
+mug. [hic!] Don't tell the mayor."
+
+**Pat:** "No Tavern, no stage... so we brought the band underground. Listen to that echo! Every beat comes back three times. Raph's
+meant to be playing with us, but he won't come off that track."
+
+**Fab:** "And the big fellow in the corner hasn't eaten anybody yet. I think he likes us."
+
+**The visitor:** "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, next to a
+monster. I love this island."
+
+**The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and
+now the whole Tavern's moved in, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts."
+
+The Tralu doesn't fight: he only grumbles.
 
 **9. The race.** Back at the start line, Raph has his time ready.
 
@@ -265,6 +301,10 @@ If Twinsen gave the umbrella back: **Tim:** "And that umbrella you brought back 
 it. Exactly as it was."
 
 If he didn't: **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
+
+(The regulars are back in the Tavern, and the Tralu's cave is empty but for the Tralu, glad of the quiet: **The Tralu:** "Ahhh... quiet
+at last. The aliens put the Tavern back, and the drums went home with it. Mind you, now they want me in their race. A Tralu in a car!
+Whatever next?")
 
 **4. The yard.** In the yard north of Twinsen's house, where the cars park, Luc, the Tavern's boss, stands beside his car: a beer
 barrel on wheels, with one back wheel missing. Zoe is already lying under it with a spanner.

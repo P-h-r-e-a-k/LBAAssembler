@@ -520,6 +520,13 @@ void comportement_3()
 **Afterwards (built):** Raph to the lighthouse, the spell, the Esmers land. The Esmer's thanks gains: "...and tomorrow we open a Cup for
 both your worlds." The bed sets DAY = 2, and also CHAPTER = 2.
 
+**A side detail (built 2026-11-05): the secret tavern.** The Tralu's cave had dropped out of the story (Raph is at the race track, and
+there's no travel in chapter 1), so: the mayor has banned drink while the island has a race track, and the Tavern's regulars drink in
+secret in the cave (scene 2). Tim on the doorstep (asked again) and the mushroom man by the Wizard's tent hint at it; in the cave's first
+hall, Luc behind a bar of crates, the drunk rabbibunny, Pat and Fab drumming, the visitor from the Tavern, and the Tralu -- the game's
+own, no longer the boss -- grumbling in the corner that his quiet cave has got too noisy. In chapter 2 they are back in the rebuilt
+Tavern and the Tralu is glad of the quiet. (`RaceTrackStory.TraluTavern.cs`; the lines are in the walkthrough.)
+
 ---
 
 ### Chapter 2: Citadel 2, the town circuit
