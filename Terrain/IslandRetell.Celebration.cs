@@ -26,12 +26,12 @@ internal static partial class IslandRetell
         }),
         (5, new[]
         {
-            "Are you the one who went to Island CX and made it back? They say you've seen every car there is.",
-            "C'est vous qui êtes allé jusqu'à l'îlot CX et qui en êtes revenu vivant ? On dit que vous avez vu toutes les voitures qui existent.",
-            "Sind Sie der, der zum Eiland CX gefahren und zurückgekehrt ist? Man sagt, Sie hätten jeden Wagen gesehen, den es gibt.",
-            "¿Usted es el que fue al islote CX y regresó? Dicen que ha visto todos los coches que existen.",
-            "E' lei quello che è andato fino all'isolotto CX ed è tornato? Dicono che abbia visto tutte le macchine che esistono.",
-            "Foi você que foi até a Ilhota CX e voltou? Dizem que você já viu todos os carros que existem.",
+            "Are you the souvenir seller? They say you've seen every car there is.",
+            "C'est vous, le vendeur de souvenirs ? On dit que vous avez vu toutes les voitures qui existent.",
+            "Sind Sie der Souvenirverkäufer? Man sagt, Sie hätten jeden Wagen gesehen, den es gibt.",
+            "¿Es usted el vendedor de recuerdos? Dicen que ha visto todos los coches que existen.",
+            "E' lei il venditore di souvenir? Dicono che abbia visto tutte le macchine che esistono.",
+            "Você é o vendedor de lembranças? Dizem que você já viu todos os carros que existem.",
         }),
         (7, new[]
         {
@@ -68,6 +68,17 @@ internal static partial class IslandRetell
             "Voy a la línea de salida a correr contra Funfrock. ¡Mientras tanto, marchaos! ¡¡Decidle a Baldino, en el muelle, que me prepare el coche!! Para esta carrera voy a necesitar todo lo que tenga.",
             "Vado alla linea di partenza a sfidare Funfrock. Intanto, andate via! Dite a Baldino, al porto, di preparare la mia macchina!! Per questa corsa avrò bisogno di tutto quello che ha.",
             "Vou para a linha de largada correr contra Funfrock. Enquanto isso, vá embora! Diga ao Baldino no cais para preparar o meu carro!! Vou precisar de tudo o que ele tiver para esta corrida.",
+        }),
+        // (Twinsen with a Fragment used at the statue's foot (scene 93), short of the four -- in the story the Fragments open the Emperor's
+        // gate, not anything here, and in chapter 14 he holds all four: the sweep of 2026-11-05)
+        (21, new[]
+        {
+            "Nothing happens. The Fragments are for the Emperor's gate, not for this.",
+            "Il ne se passe rien. Les Fragments sont pour la porte de l'Empereur, pas pour ça.",
+            "Nichts passiert. Die Fragmente sind für das Tor des Kaisers, nicht hierfür.",
+            "No pasa nada. Los Fragmentos son para la puerta del Emperador, no para esto.",
+            "Non succede niente. I Frammenti sono per il portone dell'Imperatore, non per questo.",
+            "Não acontece nada. Os Fragmentos são para o portão do Imperador, não para isto.",
         }),
         (150, new[]
         {

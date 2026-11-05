@@ -371,6 +371,13 @@ void comportement_1()
                 message({Say(FrancosLine.NurseGlasses)});
             }}");
 
+        // De La Fontaine's kin in scene 175 (the game's: "Roger de la Fontaine, he's my brother"): Twinsen's "But I beat him, you know,
+        // your brother! On his own track!!!" only once he has (the race won, Q_FUEL 7) -- the game's said it with the Francos' Fragment or
+        // the four joined held, and the game's own dig in the village hands that Fragment over before the race: the sweep of 2026-11-05
+        b.Edit(FontaineScene, "De La Fontaine's brother's line: \"But I beat him\" only once the race is won", _ => scripts =>
+            scripts.SetText(FontaineActor, ScriptKind.Life, Loose(scripts.GetText(FontaineActor, ScriptKind.Life),
+                "if (0 == var_game(55) && 0 == var_game(31))", $"if ({FuelWon} > var_game({QFuel}) || (0 == var_game(55) && 0 == var_game({FragmentFrancos})))")));
+
         b.Save();
         log.Add($"the Island of the Francos' race file: gate={QFuel} {FuelOpen} (De La Fontaine told), win={QFuel} {FuelWon}");
         return log;

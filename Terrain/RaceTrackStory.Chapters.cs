@@ -111,7 +111,7 @@ internal static partial class RaceTrackStory
         ZoeMorning, TwinsenComing, EsmerCup, Quetch, Grobo, Rabbibunny, RaphParked, RaphPolish, TimTavern, TimHook, TimNoHook, ZoeDoor,
         LucWheel, ZoeFitIt, BobWheel, WheelSeen, ZoeGoodAsOld, LucRound, ZoeRadio, ZoePitBox, LucToast, HeraldWelcome, HeraldSlate,
         HeraldLeads, FlickTown, PaulSix, ZoeSlate, CopyOnto, BloopCopied, GallicPrice, GallicThere, GallicComeBack, ZoeTwoTracks, ZoeCrew,
-        Brune,
+        Brune, PharmacyFerry, MushroomWon, DinoFlySun,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -575,6 +575,35 @@ internal static partial class RaceTrackStory
             "Un biglietto per il Deserto... e la signorina viaggia gratis, dice che fa parte della squadra.",
             "Um bilhete para o Deserto... e a menina viaja de graça, diz que é da equipa.",
         },
+        // (the game's people's lines put right for the story's days -- RetoldGates: the pharmacist in chapter 2, the mushroom man the
+        // evening of the race won, the Dino-Fly in the fine weather)
+        new[]
+        {
+            "The morning ferry brought my deliveries at last. Half the drivers on the island have been in for hand cream.",
+            "Le ferry du matin m'a enfin apporté mes livraisons. La moitié des pilotes de l'île sont passés acheter de la crème pour les mains.",
+            "Die Morgenfähre hat endlich meine Lieferung gebracht. Die Hälfte der Fahrer auf der Insel war schon hier, wegen Handcreme.",
+            "El ferry de la mañana me ha traído por fin los pedidos. La mitad de los pilotos de la isla ha venido a por crema de manos.",
+            "Il traghetto del mattino mi ha finalmente portato le consegne. Metà dei piloti dell'isola è passata a prendere crema per le mani.",
+            "O ferry da manhã trouxe-me finalmente as encomendas. Metade dos pilotos da ilha já cá veio buscar creme para as mãos.",
+        },
+        new[]
+        {
+            "You beat Raph's time? In this rain? The mushrooms and I watched the whole thing from here.",
+            "Tu as battu le temps de Raph ? Sous cette pluie ? Mes champignons et moi, on a tout vu d'ici.",
+            "Du hast Raphs Zeit geschlagen? Bei diesem Regen? Meine Pilze und ich haben alles von hier aus gesehen.",
+            "¿Has batido el tiempo de Raph? ¿Con esta lluvia? Mis setas y yo lo hemos visto todo desde aquí.",
+            "Hai battuto il tempo di Raph? Con questa pioggia? Io e i miei funghi abbiamo visto tutto da qui.",
+            "Bateste o tempo do Raph? Com esta chuva? Eu e os meus cogumelos vimos tudo daqui.",
+        },
+        new[]
+        {
+            "Sunshine at last! But I'm saving my wings for the Desert race.",
+            "Enfin du soleil ! Mais je garde mes ailes pour la course du Désert.",
+            "Endlich Sonne! Aber meine Flügel spare ich mir für das Rennen in der Wüste auf.",
+            "¡Por fin sol! Pero me guardo las alas para la carrera del Desierto.",
+            "Finalmente il sole! Ma tengo le ali per la gara del Deserto.",
+            "Finalmente sol! Mas guardo as asas para a corrida do Deserto.",
+        },
     };
 
     // The new lines into a language's bank from `first` on (`words`: their column), the pharmacist's price in the game's own words there.
@@ -701,8 +730,59 @@ void comportement_1()
         Yard(p);
         StartLine(p);
         PackageLevers(p);
+        RetoldGates(p);
         // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
         Lba1Rooms(p);
+    }
+
+    // ---- the game's own lines put right for the story's days (the sweep of 2026-11-05) -------------------------------------------------
+    // IslandRetell gives the game's people the story's words, text by text; where a line is right one day and wrong the next, or comes
+    // with a holomap arrow or a variable of the game's own quests, it is put right here, in the scripts (each its own edit: one the game's
+    // script doesn't have is logged and left out, the others stand):
+    //   - the pharmacy (scene 22) in chapter 2: Twinsen no longer asks for something for his hands (the gloves were found in the storm),
+    //     and the pharmacist's chapter 2 is the morning ferry's delivery -- not "try again after the storm" and her customer's healing
+    //     wizard on the Desert, with the Desert's arrow and the game's variable 62, which sets Ker'aooc's people talking of the Dino-Fly;
+    //   - Mr. Paul on the quay (43): no more word from his missus about Ker'aooc curing the Dino-Fly (the same arrow, the same variable);
+    //   - the attic's transmitter (1): Baldino's call in chapter 2 only, the morning the radio comes on the ferry (IslandRetell's text 31),
+    //     and no arrow to his house on the Desert (the game's said it the evening of the race won too, the island still in the storm);
+    //   - Zoe at home, the morning of the storm (0): no arrow to the pharmacy after "found your gloves yet?" -- the Wizard's, from her
+    //     opening, stays;
+    //   - the mushroom man by the Wizard's tent (45), the race won: the race, not the Esmers, who land the next morning;
+    //   - the Dino-Fly in the yard (49): the storm in chapter 1, the sunshine in chapter 2.
+    // (the attic is RaceTrackStory.cs's Attic, the yard by the carport its CarScene)
+    private const int Transmitter = 5, Pharmacist = 3, QuayPaul = 4, WizardTentOutside = 45, MushroomMan = 4, DinoFlyActor = 3;
+    private static void RetoldGates(StoryParts p)
+    {
+        void Gate(int scene, int actor, string what, string from, string to) => p.Edit(scene, what, _ => scripts =>
+            scripts.SetText(actor, ScriptKind.Life, Loose(scripts.GetText(actor, ScriptKind.Life), from, to)));
+
+        Gate(Pharmacy, 0, "the pharmacy in chapter 2: Twinsen no longer asks for something for his hands",
+            "if (0 == var_game(42))\n{\nmessage(252);\n}", "");
+        Gate(Pharmacy, Pharmacist, "the pharmacist in chapter 2: the morning ferry's delivery (no healing wizard, no arrow to the Desert)",
+            "if (0 == var_game(42))\n{\nmessage(246);\nclr_holo_pos(22);\nif (0 == var_game(62))\n{\nmessage(18);\nset_holo_pos(35);\nset_var_game(62, 1);\n}\n}",
+            $"message({p.Say(ChapterLine.PharmacyFerry)});\nclr_holo_pos(22);");
+        Gate(Harbour, QuayPaul, "Mr. Paul on the quay: no word of Ker'aooc and the Dino-Fly (no arrow to the Desert)",
+            "if (0 == var_game(62))\n{\nmessage(950);\nset_holo_pos(35);\nset_var_game(62, 1);\n}", "");
+        Gate(Attic, Transmitter, "the attic's transmitter: Baldino's call in chapter 2 only, no arrow to his house",
+            "if (3 > chapter() && 0 == var_game(26) && 2 < var_game(51))\n{\nmessage(31);\nset_holo_pos(38);",
+            "if (2 == chapter() && 0 == var_game(26) && 2 < var_game(51))\n{\nmessage(31);");
+        Gate(OpeningScene, Zoe, "Zoe's \"found your gloves yet?\": no arrow to the pharmacy",
+            "message_obj(0, 303);\nset_holo_pos(22);", "message_obj(0, 303);");
+        Gate(WizardTentOutside, MushroomMan, "the mushroom man, the race won: the race, not the Esmers",
+            "default:\nmessage(343);", $"default:\nmessage({p.Say(ChapterLine.MushroomWon)});");
+        Gate(CarScene, DinoFlyActor, "the Dino-Fly: the storm in chapter 1, the sunshine in chapter 2",
+            "else if (0 == var_game(42))\n{\nset_anim_dial(337);\nmessage(216);\n}", $@"else if (0 == var_game(42))
+        {{
+            set_anim_dial(337);
+            if (2 > chapter())
+            {{
+                message(216);
+            }}
+            else
+            {{
+                message({p.Say(ChapterLine.DinoFlySun)});
+            }}
+        }}");
     }
 
     // ---- the package centre's hidden room (scene 16): its three levers ------------------------------------------------------------

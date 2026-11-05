@@ -348,14 +348,16 @@ internal static partial class IslandRetell
             "Successe molto tempo fa... il nostro Dio Dark Monk ci condannò, popolo di Zeelich, a vivere all'infinito sul nostro pianeta, che poi trasformò in inferno perché la condanna sembrasse più vera. Ognuna delle quattro razze ricevette un frammento di chiave. Ora la Coppa ne ha fatto i suoi premi, uno per la corsa di ogni isola, e all'ultima corsa saranno riuniti. E il desiderio del vincitore, dicono i fedeli di Dark Monk, lo farà tornare per liberarci dalla maledizione e restituire a Zeelich il suo aspetto originale. Twinsen, non osare immischiarti negli affari religiosi del nostro popolo. Né in quella corsa.",
             "Faz muito tempo, nosso deus, Dark Monk, condenou a nós, o povo de Zeelich, a viver para sempre nesse planeta que ele então transformou num inferno, para que a condenação parecesse ainda mais real. Cada uma das quatro raças recebeu uma parte da chave. Agora a Taça fez delas os seus prêmios, uma para a corrida de cada ilha, e na última corrida elas serão reunidas. E o desejo do vencedor, dizem os fiéis de Dark Monk, o trará de volta para nos livrar da maldição e devolver a Zeelich a sua aparência original. Twinsen, não ouse se envolver com as práticas religiosas do nosso povo. Nem com aquela corrida.",
         }),
+        // (the Monk's last word -- the game's sent Twinsen to the housemaid for the ferryman's call, its chain to the Ferryman's Song,
+        // which is chapter 11's prize in the story; and the Wannies' own tunnel takes him on, to Mosquibees: the sweep of 2026-11-05)
         (557, new[]
         {
-            "Then race, and go. The Cup will move on soon enough. The ferryman provides the only communication between the islands and the under-gas. Go see my housemaid. She shall tell you how to call him.",
-            "Alors cours, et va-t'en. La Coupe repartira bien assez tôt. Le passeur assure la seule communication entre les îles du sous-gaz. Va trouver mon employée de maison, elle te dira comment l'appeler.",
-            "Dann fahr dein Rennen, und geh. Der Pokal zieht schon bald weiter. Der Fährmann ist die einzige Verbindung zwischen den Inseln unter der Gaswolke. Geh zu meinem Hausmädchen. Sie wird dir sagen, wie du ihn rufen kannst.",
-            "Entonces corre, y vete. La Copa seguirá su camino muy pronto. El barquero es el único que comunica las islas del sub-gas. Vete a buscar a mi asistenta. Ella te dirá cómo llamarlo.",
-            "Allora corri, e vai. La Coppa ripartirà presto. Solo il traghettatore assicura la comunicazione tra le isole e il sotto-gas. Vai a trovare la mia donna di servizio e ti dirà come chiamarlo.",
-            "Então corra, e vá embora. A Taça logo seguirá adiante. O barqueiro garante a única comunicação entre as ilhas e o sub-gás. Vá encontrar minha empregada doméstica. Ela te dirá como chamá-lo.",
+            "Then race, and go. The Cup will move on soon enough, and you with it.",
+            "Alors cours, et va-t'en. La Coupe repartira bien assez tôt, et toi avec.",
+            "Dann fahr dein Rennen, und geh. Der Pokal zieht schon bald weiter, und du mit ihm.",
+            "Entonces corre, y vete. La Copa seguirá su camino muy pronto, y tú con ella.",
+            "Allora corri, e vai. La Coppa ripartirà presto, e tu con lei.",
+            "Então corra, e vá embora. A Taça logo seguirá adiante, e você com ela.",
         }),
         (558, new[]
         {

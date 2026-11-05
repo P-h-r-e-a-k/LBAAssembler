@@ -629,7 +629,7 @@ void comportement_1()
         {
             var zoe = scripts.GetText(Zoe, ScriptKind.Life);
             if (!zoe.Contains("message(0);") || !zoe.Contains("set_holo_pos(22);")) throw new NotTheGames("Zoe's opening");
-            // (only the opening's arrow: her later reminder -- "did you find something to cure the Dino-Fly?" -- keeps pointing at the pharmacy)
+            // (only the opening's arrow: her later reminder -- "found your gloves yet?" -- loses its arrow to the pharmacy in Chapters.cs, RetoldGates)
             var said = zoe.IndexOf("message(0);", StringComparison.Ordinal);
             var arrow = zoe.IndexOf("set_holo_pos(22);", said, StringComparison.Ordinal);
             zoe = zoe[..arrow] + $"set_holo_pos({WizardArrow});" + zoe[(arrow + "set_holo_pos(22);".Length)..];

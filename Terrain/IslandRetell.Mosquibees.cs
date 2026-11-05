@@ -42,14 +42,16 @@ internal static partial class IslandRetell
             "Sono venuto a sfidare la vostra Regina!",
             "Vim correr contra a sua rainha!",
         }),
+        // (the game's last sentence, throwing the fire balls back with the hands, was the glove's -- the Wannie miner's, given back in
+        // chapter 9: gone, the sweep of 2026-11-05)
         (510, new[]
         {
-            "Ah, Twinsen!! The Queen's never lost a race on her own island. But with that masked driver about, I am afraid our fragment might fall into the wrong hands. By the way, if you know how to throw back the balls of fire with your hands, try to grab some.",
-            "Ah Twinsen !! La Reine n'a jamais perdu une course sur sa propre île. Mais avec ce pilote masqué dans les parages, j'ai peur que notre fragment tombe entre de mauvaises mains. Au fait, si tu sais comment renvoyer les boules de feu avec tes mains, essaie de t'en emparer.",
-            "Ah, Twinsen!! Die Königin hat noch nie ein Rennen auf ihrer eigenen Insel verloren. Aber mit diesem maskierten Fahrer hier fürchte ich, unser Fragment könnte in die falschen Hände fallen. Übrigens, wenn du weißt, wie man die Feuerkugeln mit den Händen zurückwirft, dann versuche, ein paar zu fangen.",
-            "¡¡Ah, Twinsen!! La Reina nunca ha perdido una carrera en su propia isla. Pero con ese piloto enmascarado rondando, temo que nuestro fragmento caiga en malas manos. Por cierto, si sabes cómo devolver las bolas de fuego con las manos, intenta cogerlas.",
-            "Ah, Twinsen!! La Regina non ha mai perso una corsa sulla sua isola. Ma con quel pilota mascherato in giro, temo che il nostro frammento cada nelle mani sbagliate. A proposito, se sai come rilanciare le palle di fuoco con le mani, cerca di impadronirtene.",
-            "Ah, Twinsen!! A Rainha nunca perdeu uma corrida na sua própria ilha. Mas com aquele piloto mascarado por aí, tenho medo que nossa parte da chave caia em mãos erradas. Aliás, se você sabe como devolver as bolas de fogo com suas mãos, tente pegar algumas.",
+            "Ah, Twinsen!! The Queen's never lost a race on her own island. But with that masked driver about, I am afraid our fragment might fall into the wrong hands.",
+            "Ah Twinsen !! La Reine n'a jamais perdu une course sur sa propre île. Mais avec ce pilote masqué dans les parages, j'ai peur que notre fragment tombe entre de mauvaises mains.",
+            "Ah, Twinsen!! Die Königin hat noch nie ein Rennen auf ihrer eigenen Insel verloren. Aber mit diesem maskierten Fahrer hier fürchte ich, unser Fragment könnte in die falschen Hände fallen.",
+            "¡¡Ah, Twinsen!! La Reina nunca ha perdido una carrera en su propia isla. Pero con ese piloto enmascarado rondando, temo que nuestro fragmento caiga en malas manos.",
+            "Ah, Twinsen!! La Regina non ha mai perso una corsa sulla sua isola. Ma con quel pilota mascherato in giro, temo che il nostro frammento cada nelle mani sbagliate.",
+            "Ah, Twinsen!! A Rainha nunca perdeu uma corrida na sua própria ilha. Mas com aquele piloto mascarado por aí, tenho medo que nossa parte da chave caia em mãos erradas.",
         }),
         (511, new[]
         {

@@ -24,6 +24,8 @@ internal static partial class RaceTrackStory
     public const int QFee = 217, FeePaid = 2, FeeWon = 3, FeeTold = 4, FeeDone = 5;
     private const int TravelToken = 24, FragmentSups = 32, Fee = 30, StarterZlitos = 10, CasinoScene = 135, Doorman = 8, HotelScene = 81,
                       JohnnyActor = 3, SpacePort = 92, SellerStall = 95;
+    // the translator (the game's item), and the Lower City's gazogem seller (scene 89's actor 3)
+    private const int Translator = 29, LowerCity = 89, GazogemSeller = 3;
     // the space port's pad (scene 92's own spaceship, actor 2, at its pos_point: RaceTrackIsland.Otringal's Shuttles)
     private static readonly (int X, int Z) Pad = (19200, 9472);
 
@@ -33,6 +35,8 @@ internal static partial class RaceTrackStory
         ZoeDont, TwinsenLittle, LyraWin, Priest, ZoeCharming, JohnnyCar, JohnnyFly, JohnnyBusy,
         // (the eggs': RaceTrackStory.Eggs.Otringal.cs)
         RickCup, RickTracks, RickKid, LyraNine, LyraEight,
+        // (the sweep of 2026-11-05)
+        LyraTranslator,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -237,6 +241,16 @@ internal static partial class RaceTrackStory
             "Otto. Ti stai mettendo in mostra.",
             "Oito. Estás a exibir-te.",
         },
+        // (the sweep of 2026-11-05: the translator, with Lyra's welcome)
+        new[]
+        {
+            "And this, from the Esmers too: a translator. The people here don't all speak Twinsunian.",
+            "Et ceci, de la part des Esmers aussi : un traducteur. Les gens d'ici ne parlent pas tous le twinsunien.",
+            "Und das hier, auch von den Esmeriern: ein Übersetzer. Hier sprechen nicht alle Twinsunisch.",
+            "Y esto, también de parte de los Esmers: un traductor. Aquí no todo el mundo habla twinsuniano.",
+            "E questo, sempre da parte degli Esmers: un traduttore. Qui non tutti parlano il twinsuniano.",
+            "E isto, também da parte dos Esmers: um tradutor. Aqui nem toda a gente fala twinsuniano.",
+        },
     };
 
     // The nearest place to an island cell clear of every road of a track by `clear` cells, on its ground: searched outward ring by ring
@@ -302,12 +316,21 @@ void comportement_1()
                 return scripts => { foreach (var e in edits) e(scripts); };
             });
 
-        // Lyra at her plinth: the fee and the Esmers' 10 zlitos (Q_FEE 1), the steward, the token
+        // Lyra at her plinth: the fee and the Esmers' 10 zlitos (Q_FEE 1), the steward, the token. And the translator (item 29), which the
+        // control tower's staff and the space port's mechanic answer only to: the game gives it in Baldino's old cell on the moon, which
+        // the story doesn't open (the sweep of 2026-11-05)
         MarshalA(b, report, otringal, $@"            if (0 == var_game({QFee}))
             {{
                 message({Say(OtringalLine.LyraZeelich)});
                 add_gold_pieces({StarterZlitos});
                 set_var_game({QFee}, 1);
+                if (0 == var_game({Translator}))
+                {{
+                    message({Say(OtringalLine.LyraTranslator)});
+                    found_object({Translator});
+                    set_var_game({Translator}, 1);
+                    set_used_inventory({Translator});
+                }}
             }}
             else if ({FeePaid} > var_game({QFee}))
             {{
@@ -427,6 +450,13 @@ void comportement_1()
             else log.Add("Johnny Rocket left out: no room off the road by the space port's pad");
         }
         else log.Add("Johnny Rocket left out: no Johnny in the hotel (scene 81's actor 3), or no space port scene");
+
+        // the gazogem seller in the Lower City: sold out to a fellow in a black car (IslandRetell's 245), and that's all -- not the game's
+        // arrow to the Francos' refinery, nor its variable 123, which puts "The island of the Francos" on the taxis' list (the sweep of
+        // 2026-11-05)
+        b.Edit(LowerCity, "the gazogem seller: no arrow to the Francos' refinery, no taxi there", _ => scripts =>
+            scripts.SetText(GazogemSeller, ScriptKind.Life, Loose(scripts.GetText(GazogemSeller, ScriptKind.Life),
+                "message(245);\nset_holo_pos(140);\nset_var_cube(0, 0);\nset_var_game(123, 1);", "message(245);\nset_var_cube(0, 0);")));
 
         // the eggs: Rick in the Casino, Lyra by the hotel's pool (RaceTrackStory.Eggs.Otringal.cs)
         RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid));

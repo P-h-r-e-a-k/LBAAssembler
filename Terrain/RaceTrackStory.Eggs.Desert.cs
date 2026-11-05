@@ -17,7 +17,9 @@ namespace LBAAssembler.Terrain;
 //     ever beat it.' Beat that time in a Desert race and the tablet gains a line: '...except Twinsen.' 50 kashes from the Dean."): a standing
 //     stone (the game's, the lava's: entity 218, BODY 316) off the road where it passes the Temple of Bù's door, read with Action; the lap
 //     beaten is EggBu 1 (the race-track mode's lap_record=, set by the engine), and the Dean pays once (EggBu 2): after the race won, among
-//     the lines out of the car, or in the School if the race was lost.
+//     the lines out of the car, or in the School if the race was lost. The runes are clear to him from the Wizard's Diploma on (Q_PAGES 6),
+//     not from the win: the win takes him off to the moon there and then, so they were never read (the sweep of 2026-11-05). And the
+//     fourth page is the Dean's only once he has asked for his three (Q_PAGES 2): met first with it, his first words were the egg's.
 internal static partial class RaceTrackStory
 {
     // the Temple of Bù's first scene (its door is a cube-change zone of the Desert's outside scene there, 67), the standing stone (entity,
@@ -36,7 +38,7 @@ internal static partial class RaceTrackStory
                 add_gold_pieces({BuReward});
                 set_var_game({EggBu}, {BuPaid});
             }}
-            else if ({PageFound} == var_game({EggPage}))
+            else if ({PageFound} == var_game({EggPage}) && 2 <= var_game({QPages}))
             {{
                 message_obj(0, {say(DesertLine.PageEgg)});
                 message({say(DesertLine.DeanNotMine)});
@@ -111,7 +113,7 @@ internal static partial class RaceTrackStory
         {
             var stone = SceneOps.BlankActor(SceneGame.Lba2, RaceTrackScenes.CubeLocal(at.X, model.CubeX), (int)Math.Round(at.Y), RaceTrackScenes.CubeLocal(at.Z, model.CubeY), TabletEntity);
             stone.Body = StoneBody; stone.Beta = at.Beta; stone.CoulObj = 9;
-            return IslandBeatsA.Add(model, stone, Talker("0 <= chapter()", $@"            if ({PagesWon} > var_game({QPages}))
+            return IslandBeatsA.Add(model, stone, Talker("0 <= chapter()", $@"            if ({PagesDiploma} > var_game({QPages}))
             {{
                 message({say(DesertLine.RunesUnread)});
             }}

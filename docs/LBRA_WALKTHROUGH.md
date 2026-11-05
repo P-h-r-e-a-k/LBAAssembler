@@ -31,11 +31,15 @@ Island, the Island under Celebration, Island CX, the Emperor's palace and Celebr
 **1. The dock.** The game opens in a dream. Twinsen stands on the dock of a snowy island beside his car. FunFrock is already in his own
 car, a big black one, revving the engine.
 
-**FunFrock:** "Still dreaming of beating me, Twinsen? Dream on. I'll even give you a head start... no, on second thoughts, I'll take it!"
+**FunFrock:** "You'll never catch me! Whoever makes it to the Sendells first will get all of their magical powers!"
 
-FunFrock's car pulls away up the island. A grobo comes running up the dock.
+FunFrock's car pulls away up the island.
 
-**The grobo:** "He went that way! The big man in the big car! Take the digger key, quick!"
+**Twinsen:** "No, FunFrock, come back! What am I going to do? I need to stop him!"
+
+A grobo comes up the dock to him.
+
+**The grobo:** "Quick, Twinsen, take my vehicle! The fate of the world rests upon your shoulders!"
 
 **Found:** the digger's key (the race's own item).
 
@@ -45,21 +49,13 @@ the jumps, to a ramp that leaps onto the rocky peak.
 *Tip:* FunFrock takes the loop wide. Stay on the inside and use the digger key on the straight after it.
 
 **3. The peak.** The race is run once. Whoever reaches the peak first, the dream ends there: as Twinsen's car leaves the lip of the
-ramp, everything turns white.
-
-If Twinsen caught FunFrock:
-
-**FunFrock** (fading): "Impossible! Nobody catches me... nobody..."
-
-**A voice** (Sendell, unseen): "Two worlds will race, Twinsen. And at the end of it, he will be waiting."
-
-If FunFrock got there first:
-
-**FunFrock** (fading, laughing): "Too slow, Twinsen! Always one step behind!"
-
-**A voice:** "Two worlds will race, Twinsen. You will have your chance again. And at the end of it, he will be waiting."
+ramp (or as FunFrock's takes the jump ahead of him, Twinsen watching), everything turns white. Nobody speaks: the dream just ends.
+(Sendell's prophecy, "Two worlds will race, Twinsen. And at the end of it, he will be waiting.", isn't said in the game: the race
+file has no line for a dream's end.)
 
 **4. Waking up.** Twinsen is in his bed at home. Zoe shakes him awake and kisses him.
+
+**Zoe:** "Twinsen! Twinsen, wake up!"
 
 If he caught FunFrock in the dream: **Zoe:** "You were smiling in your sleep. And steering."
 
@@ -77,7 +73,8 @@ If he didn't: **Zoe:** "You were shouting in your sleep. Something about a big m
 
 **Zoe:** "Oh, and your driving gloves were on the washing line this morning. Now they're gone! Somebody's been light-fingered again."
 
-Talking to Zoe again: **Zoe:** "The Wizard has his tent past the harbour road. Take a coat. Actually, take two."
+Talking to Zoe again: **Zoe:** "Tell me, Twinsen, have you found your gloves yet?" **Twinsen:** "Not yet. But I'll find whoever took
+them."
 
 **2. The Weather Wizard's tent.** Twinsen goes out of the house, down the path and along the road to the Wizard's tent.
 
@@ -153,7 +150,10 @@ The same ladder brings Twinsen up onto the quay.
 
 - **The museum.** Twinsen takes the lift up the rampart and goes into the museum. Miss Bloop, the curator, is in the hall.
 
-  **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
+  **Miss Bloop:** "You showed up at the right time. The door at the top of the stairs is jammed, and your old tunic is up there. Free
+  the door, and you can have it back: wear it for luck at the races."
+
+  Once the door is free: **Miss Bloop:** "Thank you for freeing the door, Twinsen. Wear your tunic at the races: it brings luck."
 
   In the polar room, a cardboard file sticks out from under the ice-fishing case. Twinsen pulls it out (Action).
 
@@ -171,7 +171,7 @@ The same ladder brings Twinsen up onto the quay.
 
 - **The neighbour.** Next door to Twinsen's house, the neighbour sits at his table with a sheet of paper and a magnifying glass.
 
-  **The neighbour:** "Hello neighbour."
+  **Twinsen:** "Hello neighbour."
 
   **The neighbour:** "Somebody pushed this under my door the night they built the storm track. Drawings, I think, but the rain got to
   it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the pharmacy's
@@ -416,15 +416,20 @@ The magic slate shows its icon: a new page, the Desert track.
 **2. The start line.** Twinsen and Zoe follow the road to the start by the Temple of Bù. Flick is there.
 
 **Flick:** "Twinsen! Good to see you again. Bad news: my Dean has shut the track. The engines blew his students' exam papers all over
-the island. Three pages. He's at the School's gate, and he's in a mood."
+the island. Three pages. He's at the School, and he's in a mood."
 
-**3. The School of Magic.** The Dean stands at the School's gate.
+Talking to her again (or meeting her after the Dean): **Flick:** "Twinsen! No flag yet, I'm afraid: the track stays shut till the
+Dean at the School of Magic has his three pages back. He means it."
+
+**3. The School of Magic.** In the School's hall, the first time Twinsen comes in, the Dean's people: "Welcome to the School of Magic! Mind
+your step: we're still picking up after the Dean's exam papers." The Dean is in the hall.
 
 **The Dean:** "Shut it is! Three pages, gone with the wind of your engines. Bring them back, and I'll think about it."
 
 **Zoe:** "The pages blew along the road. If we drive the course we'll find them, and learn the bends while we're at it."
 
-Talking to Zoe again: **Zoe:** "One by the first dunes, one past the Temple, one near the last bend. Check your slate if you get lost."
+Talking to the Dean again: **The Dean:** "Shut it is! ..." and **Zoe:** "One by the first dunes, one past the Temple, one near the last
+bend. Drive the lap the way the race goes."
 
 **4. The three pages.** Twinsen drives the course (or walks it) and picks up each page lying beside the road.
 
@@ -443,8 +448,11 @@ to your head."
 
 **6. Baldino's house.** Baldino is at his workbench, surrounded by parts.
 
-**Baldino:** "Twinsen! My radio works then. Sand filters, fitted. A longer top gear for the long straights. And a word of advice: the
-champion brakes late at the Temple bend. Brake later."
+**Baldino:** "Twinsen! My radio works then." (If Twinsen never answered the radio: "Twinsen! You never answered my call. Never mind:
+you found the house.")
+
+**Baldino:** "Sand filters, fitted. A longer top gear for the long straights. And a word of advice: the champion brakes late at the
+Temple bend. Brake later."
 
 **Baldino:** "I'm racing too, of course. I need to see how my work goes against my work."
 
@@ -455,27 +463,23 @@ Zoe is in the pit lane.
 
 **Zoe** (at a pit stop): "In, out, fuel's in. Go!"
 
-**8. Won.**
+**8. Won.** Out of the car by the start line, one after another:
 
 **Flick:** "The Desert champion, beaten by a ferry-ticket driver! The Cup goes on, to the Emerald Moon."
 
 **The racer:** "Next year, Twinsen."
 
-Moya the turtle is resting by the last bend.
-
-**Moya:** "There was oil on the last bend this morning. That wasn't there yesterday. A black car came through at night, slow, like it
-was looking for something."
+**Moya** (the turtle, who raced too): "There was oil on the last bend this morning. That wasn't there yesterday. A black car came
+through at night, slow, like it was looking for something."
 
 **Zoe:** "Looking for something on a race track... or putting something on one."
-
-The black car is past the finish again, and drives off as Twinsen comes near.
 
 **9. To the moon.**
 
 **Baldino:** "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. My
 rocket leaves now, room for three."
 
-Baldino's rocket takes them to the Emerald Moon.
+Baldino's rocket takes them to the Emerald Moon, there and then.
 
 ---
 
@@ -555,6 +559,10 @@ The Esmers' ship takes them to Otringal, on the planet Zeelich.
 money to start you off."
 
 **Found:** 10 zlitos.
+
+**Lyra:** "And this, from the Esmers too: a translator. The people here don't all speak Twinsunian."
+
+**Found:** Translator (the control tower's staff and the space port's mechanic only talk to Twinsen with it).
 
 A new page on the slate: Otringal.
 
@@ -1163,6 +1171,7 @@ The credits roll.
 | 3 | Three exam pages | beside the Desert road | the Dean |
 | 3 | Wizard's Diploma | the Dean | the Desert track opened |
 | 5 | 10 zlitos | Lyra, from the Esmers | the entry fee (with the Casino's help) |
+| 5 | Translator | Lyra, from the Esmers | the control tower's staff, the space port's mechanic |
 | 5 | Travel Token | the steward, for 30 zlitos | the Otringal grid |
 | 5 | Fragment of the Sups | the stewards, the prize | the palace gate |
 | 6 | Four Dark Monk statuettes | round Celebration Island | the seller |

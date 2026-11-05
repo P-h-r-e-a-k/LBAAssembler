@@ -15,6 +15,18 @@ internal static partial class IslandRetell
             "Cerco una macchina nera con un pilota mascherato. Mi può aiutare a trovarla?",
             "Estou procurando um carro preto com um piloto mascarado. Você pode me ajudar a encontrá-lo?",
         }),
+        // (Twinsen to the gazogem seller in the Lower City (scene 89) -- his answer, 245: a fellow in a black car bought the lot. The
+        // game's asked to buy some for a journey; a racer asks for his car. His answer's arrow and its taxi to the Francos are gone:
+        // RaceTrackStory.Otringal.cs)
+        (6, new[]
+        {
+            "Got any gazogem? My car could use a top-up before the race.",
+            "Vous auriez du gazogem ? Ma voiture en a bien besoin avant la course.",
+            "Haben Sie GazoGem? Mein Wagen könnte vor dem Rennen etwas gebrauchen.",
+            "¿Tiene gazogem? A mi coche no le vendría mal antes de la carrera.",
+            "Ha del gazogem? Alla mia macchina farebbe comodo prima della gara.",
+            "Você tem gasógeno? Meu carro está precisando antes da corrida.",
+        }),
         (7, new[]
         {
             "I'm trying to find a black car with a masked driver.",
@@ -89,12 +101,12 @@ internal static partial class IslandRetell
         }),
         (45, new[]
         {
-            "This control panel's been modified. I'd better not touch it: the Esmers' ship is our ride, not this.",
-            "Ce tableau de commande a été transformé. Mieux vaut ne pas y toucher : c'est le vaisseau des Esmers qui nous emmène, pas celui-ci.",
-            "Dieses Cockpit wurde verändert. Ich fasse es lieber nicht an: wir fliegen mit dem Schiff der Esmerier, nicht mit diesem hier.",
-            "Han modificado este cuadro de mandos. Mejor no lo toco: nuestro transporte es la nave de los esmeres, no ésta.",
-            "Questo quadro di comando è stato modificato. Meglio non toccarlo: il nostro passaggio è la nave degli Esmers, non questa.",
-            "Esse painel de controle foi alterado. É melhor não mexer: quem nos leva é a nave dos Esmers, não esta.",
+            "This control panel's been modified. I'd better not touch it: our ride off Zeelich is Johnny Rocket's, not this.",
+            "Ce tableau de commande a été transformé. Mieux vaut ne pas y toucher : pour quitter Zeelich, c'est Johnny Rocket qui nous emmène, pas ceci.",
+            "Dieses Cockpit wurde verändert. Ich fasse es lieber nicht an: von Zeelich weg fliegen wir mit Johnny Rocket, nicht hiermit.",
+            "Han modificado este cuadro de mandos. Mejor no lo toco: para salir de Zeelich nos lleva Johnny Rocket, no esto.",
+            "Questo quadro di comando è stato modificato. Meglio non toccarlo: per lasciare Zeelich ci porta Johnny Rocket, non questo.",
+            "Esse painel de controle foi alterado. É melhor não mexer: quem nos tira de Zeelich é o Johnny Rocket, não isto.",
         }),
         (46, new[]
         {
@@ -386,12 +398,12 @@ internal static partial class IslandRetell
         }),
         (285, new[]
         {
-            "Hmmm... Nobody wants to talk about that car these days, it's way too risky. They say it came up out of the gas. Try the Captain, he's the old nut at the very end of the pier. He's the only one who'd tell you!",
-            "Humm... Plus personne ne veut parler de cette voiture aujourd'hui, c'est bien trop risqué. Y paraît qu'elle est sortie du gaz. Essayez Le Capitaine, c'est le vieux fou tout au bout du quai. Y'a que lui pour vous en parler !!",
-            "Hmmm ... Über diesen Wagen will heutzutage keiner reden, das ist viel zu gefährlich. Angeblich ist er aus der Gaswolke heraufgekommen. Versuchen Sie es mal beim Kapitän, das ist der älteste von diesen Verrückten ganz am Ende des Hafens. Nur der würde es Ihnen sagen!",
-            "Humm... Estos días nadie quiere hablar de ese coche, es demasiado peligroso. Dicen que salió del gas. Inténtelo con el Capitán, es el viejo chiflado que está en el otro extremo del muelle. ¡¡Únicamente él se lo contará!!",
-            "Ehm... Nessuno vuole parlare di quella macchina di questi tempi, è troppo rischioso. Dicono che sia uscita dal gas. Provi dal Capitano, è il vecchio pazzo in fondo alla banchina. Solo lui glielo direbbe!",
-            "Humm... Ninguém mais quer falar desse carro hoje em dia, é muito arriscado. Dizem que ele saiu do gás. Tente O Capitão, é o velho doido bem no fundo do cais. Só ele vai te contar!",
+            "Hmmm... Nobody wants to talk about that car these days, it's way too risky. They say it came in on the moon ship. If anyone saw where it went, it's the space port crowd.",
+            "Humm... Plus personne ne veut parler de cette voiture aujourd'hui, c'est bien trop risqué. Y paraît qu'elle est arrivée par le vaisseau de la lune. Si quelqu'un a vu où elle est allée, c'est les gens du spatioport.",
+            "Hmmm ... Über diesen Wagen will heutzutage keiner reden, das ist viel zu gefährlich. Angeblich kam er mit dem Mondschiff. Wenn einer gesehen hat, wo er hin ist, dann die Leute vom Raumhafen.",
+            "Humm... Estos días nadie quiere hablar de ese coche, es demasiado peligroso. Dicen que llegó en la nave de la luna. Si alguien vio adónde fue, es la gente del puerto espacial.",
+            "Ehm... Nessuno vuole parlare di quella macchina di questi tempi, è troppo rischioso. Dicono che sia arrivata con la nave della luna. Se qualcuno ha visto dov'è andata, è la gente dello spazioporto.",
+            "Humm... Ninguém mais quer falar desse carro hoje em dia, é muito arriscado. Dizem que ele chegou na nave da lua. Se alguém viu para onde ele foi, é o pessoal do espaçoporto.",
         }),
         (286, new[]
         {
@@ -674,12 +686,12 @@ internal static partial class IslandRetell
         }),
         (435, new[]
         {
-            "The time is near. The Cup will bring the four Fragments of the four Zeelichian peoples together. And the winner's wish will be ours. And Dark Monk will rise again. Race all you like, little racer: the Cup's last race is already won.",
-            "Le temps est proche désormais. La Coupe réunira les quatre Fragments de nos quatre races zeelichiennes. Et le voeu du vainqueur sera le nôtre. Et Dark Monk renaîtra. Cours tant que tu veux, petit pilote : la dernière course de la Coupe est déjà gagnée.",
-            "Die Zeit naht! Der Pokal wird die vier Fragmente der vier zeelicher Völker zusammenführen. Und der Wunsch des Siegers wird unser sein. Und Dark Monk wird wieder auferstehen. Fahr nur, soviel du willst, kleiner Rennfahrer: das letzte Rennen des Pokals ist schon gewonnen.",
-            "Ya se acerca el momento. La Copa reunirá los cuatro Fragmentos de los cuatro pueblos zeelichianos. Y el deseo del ganador será nuestro. Y Dark Monk volverá a alzarse. Corre cuanto quieras, pequeño piloto: la última carrera de la Copa ya está ganada.",
-            "E' giunta l'ora. La Coppa riunirà i quattro Frammenti dei quattro popoli zeelichiani. E il desiderio del vincitore sarà nostro. E Dark Monk risorgerà. Corri quanto vuoi, piccolo pilota: l'ultima corsa della Coppa è già vinta.",
-            "Está quase na hora. A Taça reunirá as quatro partes de chave dos quatro povos zeelichianos. E o desejo do vencedor será nosso. E Dark Monk se erguerá de novo. Corra o quanto quiser, pilotinho: a última corrida da Taça já está ganha.",
+            "The time is near, little racer. Race all you like: the Cup's last race is already won.",
+            "Le temps est proche, petit pilote. Cours tant que tu veux : la dernière course de la Coupe est déjà gagnée.",
+            "Die Zeit naht, kleiner Rennfahrer. Fahr nur, soviel du willst: das letzte Rennen des Pokals ist schon gewonnen.",
+            "Se acerca el momento, pequeño piloto. Corre cuanto quieras: la última carrera de la Copa ya está ganada.",
+            "L'ora si avvicina, piccolo pilota. Corri quanto vuoi: l'ultima corsa della Coppa è già vinta.",
+            "Está quase na hora, pilotinho. Corra o quanto quiser: a última corrida da Taça já está ganha.",
         }),
         (445, new[]
         {
@@ -773,12 +785,12 @@ internal static partial class IslandRetell
         }),
         (495, new[]
         {
-            "You can't climb to the upper city, sir. The elevators are closed while the race is on.",
-            "Vous ne pouvez pas monter jusqu'à la ville haute monsieur. Les ascenseurs sont arrêtés pendant la course.",
-            "Sie kommen nicht in die Oberstadt, mein Herr. Die Aufzüge stehen still, solange das Rennen läuft.",
-            "No puede subir a la ciudad alta, señor. Los ascensores están cerrados mientras dure la carrera.",
-            "Non può salire fino alla città alta, signore. Gli ascensori sono chiusi durante la corsa.",
-            "Você não poderá subir até a cidade alta, senhor. Os elevadores estão fechados durante a corrida.",
+            "Mind the gap, sir. And mind the racers at the top: the road runs right past the lift.",
+            "Attention à la marche, monsieur. Et attention aux pilotes en haut : la route passe juste devant l'ascenseur.",
+            "Vorsicht, Stufe, mein Herr. Und Vorsicht vor den Rennfahrern oben: die Straße führt direkt am Aufzug vorbei.",
+            "Cuidado con el escalón, señor. Y cuidado con los pilotos de arriba: la carretera pasa justo delante del ascensor.",
+            "Attenzione al gradino, signore. E attenzione ai piloti in cima: la strada passa proprio davanti all'ascensore.",
+            "Cuidado com o degrau, senhor. E cuidado com os pilotos lá em cima: a estrada passa bem na frente do elevador.",
         }),
         (496, new[]
         {
@@ -836,12 +848,12 @@ internal static partial class IslandRetell
         }),
         (545, new[]
         {
-            "@ By no means! @  @ You shouldn't leave Zeelich without witnessing the unique, the incomparable, the one and only Two Worlds Cup!!! @  @ From the tunnels of Otringal to the great statue of Celebration, its racers will write the history of two worlds in letters of fire!",
-            "@ Mais non ! @  @ Vous ne pourrez pas quitter Zeelich sans avoir vu la seule, l'unique et incomparable Coupe des Deux Mondes !!! @  @ Des tunnels d'Otringal à la grande statue de la Célébration, ses pilotes écriront en lettres de feu l'histoire de deux mondes !",
-            "@ Aber nein! @  @ Sie können Zeelich doch unmöglich verlassen, ohne den einzigartigen und unvergleichlichen Pokal der zwei Welten gesehen zu haben!!! @  @ Von den Tunneln Otringals bis zur großen Statue auf dem Eiland der Feste werden seine Rennfahrer die Geschichte zweier Welten in Buchstaben aus Feuer schreiben!",
-            "@ ¡¡De ningún modo!! @  @ ¡¡¡No podrán irse de Zeelich sin haber presenciado la única, la exclusiva, la incomparable Copa de los Dos Mundos!!! @  @ ¡Desde los túneles de Otringal hasta la gran estatua de la Celebración, sus pilotos escribirán en letras de fuego la historia de dos mundos!",
-            "@ Ma no! @  @ Non potrete partire da Zeelich senza aver visto l'unica, l'incomparabile, la sola Coppa dei Due Mondi!!! @  @ Dai tunnel di Otringal alla grande statua della Celebrazione, i suoi piloti scriveranno con lettere di fuoco la storia di due mondi!",
-            "@ De jeito nenhum! @  @ Você não pode sair de Zeelich sem ter visto a única, a incomparável, a inigualável Taça dos Dois Mundos!!! @  @ Dos túneis de Otringal à grande estátua da Celebração, seus pilotos escreverão com letras de fogo a história de dois mundos!",
+            "@ By no means! @  @ You shouldn't leave Zeelich without witnessing the unique, the incomparable, the one and only Two Worlds Cup!!! @  @ From the tunnels of Otringal to the last race of the Cup, its racers will write the history of two worlds in letters of fire!",
+            "@ Mais non ! @  @ Vous ne pourrez pas quitter Zeelich sans avoir vu la seule, l'unique et incomparable Coupe des Deux Mondes !!! @  @ Des tunnels d'Otringal à la dernière course de la Coupe, ses pilotes écriront en lettres de feu l'histoire de deux mondes !",
+            "@ Aber nein! @  @ Sie können Zeelich doch unmöglich verlassen, ohne den einzigartigen und unvergleichlichen Pokal der zwei Welten gesehen zu haben!!! @  @ Von den Tunneln Otringals bis zum letzten Rennen des Pokals werden seine Rennfahrer die Geschichte zweier Welten in Buchstaben aus Feuer schreiben!",
+            "@ ¡¡De ningún modo!! @  @ ¡¡¡No podrán irse de Zeelich sin haber presenciado la única, la exclusiva, la incomparable Copa de los Dos Mundos!!! @  @ ¡Desde los túneles de Otringal hasta la última carrera de la Copa, sus pilotos escribirán en letras de fuego la historia de dos mundos!",
+            "@ Ma no! @  @ Non potrete partire da Zeelich senza aver visto l'unica, l'incomparabile, la sola Coppa dei Due Mondi!!! @  @ Dai tunnel di Otringal all'ultima corsa della Coppa, i suoi piloti scriveranno con lettere di fuoco la storia di due mondi!",
+            "@ De jeito nenhum! @  @ Você não pode sair de Zeelich sem ter visto a única, a incomparável, a inigualável Taça dos Dois Mundos!!! @  @ Dos túneis de Otringal à última corrida da Taça, seus pilotos escreverão com letras de fogo a história de dois mundos!",
         }),
         (571, new[]
         {

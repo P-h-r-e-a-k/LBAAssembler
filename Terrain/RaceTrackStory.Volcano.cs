@@ -290,6 +290,8 @@ internal static partial class RaceTrackStory
                     set_var_game({QSlabs}, {SlabsAsked});
                 }}
             }}")));
+            // (the Mosquibee says where the slabs are from Lyra's word on, Q_SLABS 1: asked before the dissident, she said it and they stayed
+            // hidden -- the sweep of 2026-11-05)
             edits.Add(s.Add(model, mosquibee, Talker(when, $@"            if (6 == var_game({QSlabs}))
             {{
                 message({Id(VLine.Sealed)});
@@ -302,7 +304,7 @@ internal static partial class RaceTrackStory
             else
             {{
                 message({Id(VLine.Slabs)});
-                if ({SlabsAsked} <= var_game({QSlabs}) && {SlabsWhere} > var_game({QSlabs}))
+                if ({SlabsTold} <= var_game({QSlabs}) && {SlabsWhere} > var_game({QSlabs}))
                 {{
                     set_var_game({QSlabs}, {SlabsWhere});
                 }}

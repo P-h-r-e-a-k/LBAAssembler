@@ -195,6 +195,18 @@ internal static partial class IslandRetell
             "Uhm... ehm... non ne parli, per favore. E' solo una piccola esperienza personale. Un meteo tutto per me.",
             "Hum... bem... não comente, por favor. É apenas uma pequena experiência pessoal. Um clima só para mim.",
         }),
+        // (Baldino's call on the attic's transmitter -- the game's: drop by for a portable radio, and his proto-pack, with the holomap's
+        // arrow to his house on the Desert. In the story he is on the Desert already, and the radio comes to Citadel on the morning
+        // ferry for Zoe to hand over in the yard: the call is chapter 2's only, its arrow gone -- RaceTrackStory.Chapters.cs, RetoldGates)
+        (31, new[]
+        {
+            "Hello? Twinsen? Baldino here, on the Desert! Looks like this transmitter works! I've put something for you on the morning ferry: Zoe will have it. Over.",
+            "Allô ? Twinsen ? Ici Baldino, sur le Désert ! On dirait que cet émetteur fonctionne ! Je t'ai envoyé quelque chose par le ferry du matin : Zoe l'aura. Terminé.",
+            "Hallo, Twinsen? Hier spricht Baldino, aus der Wüste! Anscheinend funktioniert dieser Sender! Ich habe dir etwas mit der Morgenfähre geschickt: Zoe hat es. Ende.",
+            "¿Twinsen? ¡Baldino al habla, desde el Desierto! ¡Parece que esta emisora funciona! Te he mandado algo en el ferry de la mañana: lo tendrá Zoe. Corto.",
+            "Pronto? Twinsen? Qui Baldino, dal Deserto! Sembra che questo trasmettitore funzioni! Ti ho spedito qualcosa col traghetto del mattino: ce l'ha Zoe. Passo e chiudo.",
+            "Alô? Twinsen? Aqui é o Baldino, no Deserto! Parece que este transmissor funciona! Mandei uma coisa para você na barca da manhã: a Zoe vai entregar. Câmbio e desligo.",
+        }),
         (32, new[]
         {
             "My car's ready to go. Now, where are my driving gloves?",
@@ -802,14 +814,28 @@ internal static partial class IslandRetell
             "Dimmi, è vero che hai battuto il tempo di Raph? Con quella tempesta? Grazia ti sia resa, e che i Sendell tengano le tue ruote sulla strada!",
             "Fala aí, você bateu mesmo o tempo do Raph? Naquela tempestade? Salve, e que os Sendell mantenham suas rodas na estrada!",
         }),
+        // (Twinsen's answer to Zoe at home, the morning of the storm -- "Tell me, Twinsen, have you found your gloves yet?" (916): the only
+        // place it is said, scene 0, chapter 1. The game's was about the Dino-Fly's cure; the sweep of 2026-11-05 found it retold as a
+        // mechanic's line, Zoe's own words in Twinsen's mouth)
         (303, new[]
         {
-            "I'm still looking for the right spanner. Don't worry, the car will be ready.",
-            "Je cherche toujours la bonne clé. Ne t'inquiète pas, la voiture sera prête.",
-            "Ich suche immer noch den richtigen Schraubenschlüssel. Keine Sorge, der Wagen wird fertig.",
-            "Sigo buscando la llave inglesa adecuada. No te preocupes, el coche estará listo.",
-            "Sto ancora cercando la chiave inglese giusta. Non preoccuparti, la macchina sarà pronta.",
-            "Ainda estou procurando a chave inglesa certa. Não se preocupe, o carro vai ficar pronto.",
+            "Not yet. But I'll find whoever took them.",
+            "Pas encore. Mais je retrouverai celui qui les a prises.",
+            "Noch nicht. Aber ich finde den, der sie genommen hat.",
+            "Todavía no. Pero encontraré a quien se los llevó.",
+            "Non ancora. Ma troverò chi li ha presi.",
+            "Ainda não. Mas eu vou encontrar quem as levou.",
+        }),
+        // (Twinsen to the pharmacist's customer, in the pharmacy (scene 22) and outside it (48) -- the game's asked her to treat his injured
+        // Dino-Fly, who isn't hurt in the story: Zoe has gone off to watch the races on him)
+        (309, new[]
+        {
+            "Excuse me, miss: could you help me? Somebody's stolen my driving gloves.",
+            "Excusez-moi, mademoiselle : vous pourriez m'aider ? On m'a volé mes gants de pilote.",
+            "Entschuldigen Sie, Fräulein: Können Sie mir helfen? Jemand hat meine Fahrhandschuhe gestohlen.",
+            "Perdone, señorita: ¿podría ayudarme? Alguien me ha robado los guantes de piloto.",
+            "Mi scusi, signorina: potrebbe aiutarmi? Qualcuno mi ha rubato i guanti da pilota.",
+            "Com licença, moça: você poderia me ajudar? Alguém roubou minhas luvas de piloto.",
         }),
         (316, new[]
         {
@@ -1018,14 +1044,16 @@ internal static partial class IslandRetell
             "Le serve un biglietto per il traghetto, signor Twinsen. Vinca la corsa, ed è suo.",
             "Você precisa de um bilhete para entrar na barca, senhor Twinsen. Vença a corrida, e ele é seu.",
         }),
+        // (Raph's fiancée at the lighthouse once its lamp is lit -- in the story that is chapter 2, the morning after the spell, and Raph is
+        // out by the Tavern and racing the Esmers' cars, not back at the lighthouse: the sweep of 2026-11-05)
         (417, new[]
         {
-            "My Raph is back at his lighthouse, and the storm is going! Oh, thank you, Mr. Twinsen!!",
-            "Mon Raph est revenu à son phare, et l'orage s'en va ! Oh merci monsieur Twinsen !!",
-            "Mein Raph ist wieder bei seinem Leuchtturm, und der Sturm zieht ab! Oh, danke, Herr Twinsen!!",
-            "¡Mi Raph ha vuelto a su faro, y la tormenta se va! ¡¡Oh, mil gracias, señor Twinsen!!",
-            "Il mio Raph è tornato al suo faro, e la tempesta se ne va! Oh, grazie signor Twinsen!!",
-            "Meu Raph voltou para o farol, e a tempestade está indo embora! Oh, obrigada, senhor Twinsen!!",
+            "The storm's gone, and my Raph's off racing the aliens' cars! Oh, thank you, Mr. Twinsen!!",
+            "L'orage est parti, et mon Raph est allé faire la course avec les voitures des extraterrestres ! Oh merci monsieur Twinsen !!",
+            "Der Sturm ist weg, und mein Raph fährt Rennen gegen die Wagen der Außerirdischen! Oh, danke, Herr Twinsen!!",
+            "¡La tormenta se ha ido, y mi Raph se ha ido a correr contra los coches de los extraterrestres! ¡¡Oh, mil gracias, señor Twinsen!!",
+            "La tempesta se n'è andata, e il mio Raph corre contro le macchine degli alieni! Oh, grazie signor Twinsen!!",
+            "A tempestade foi embora, e o meu Raph foi correr contra os carros dos alienígenas! Oh, obrigada, senhor Twinsen!!",
         }),
         (426, new[]
         {
@@ -1047,12 +1075,12 @@ internal static partial class IslandRetell
         }),
         (437, new[]
         {
-            "Our buddy Raph's back at his lighthouse, the Tavern's back on its spot, and there are aliens in the car park. Some week!",
-            "Notre copain Raph est de retour au phare, la Taverne est revenue à sa place, et y'a des extraterrestres sur le parking. Quelle semaine !",
-            "Unser Kumpel Raph ist wieder bei seinem Leuchtturm, die Kneipe steht wieder an ihrem Platz, und auf dem Parkplatz stehen Außerirdische. Was für 'ne Woche!",
-            "Nuestro colega Raph ha vuelto al faro, el bar está otra vez en su sitio y hay extraterrestres en el aparcamiento. ¡Menuda semana!",
-            "Il nostro amico Raph è di ritorno al faro, la Taverna è tornata al suo posto, e ci sono alieni nel parcheggio. Che settimana!",
-            "Nosso amigo Raph voltou para o farol, a Taberna voltou para o lugar dela, e tem alienígenas no estacionamento. Que semana!",
+            "Our buddy Raph's out racing again, the Tavern's back on its spot, and there are aliens in the car park. Some week!",
+            "Notre copain Raph est reparti faire la course, la Taverne est revenue à sa place, et y'a des extraterrestres sur le parking. Quelle semaine !",
+            "Unser Kumpel Raph fährt wieder Rennen, die Kneipe steht wieder an ihrem Platz, und auf dem Parkplatz stehen Außerirdische. Was für 'ne Woche!",
+            "Nuestro colega Raph vuelve a correr, el bar está otra vez en su sitio y hay extraterrestres en el aparcamiento. ¡Menuda semana!",
+            "Il nostro amico Raph è di nuovo in pista, la Taverna è tornata al suo posto, e ci sono alieni nel parcheggio. Che settimana!",
+            "Nosso amigo Raph voltou a correr, a Taberna voltou para o lugar dela, e tem alienígenas no estacionamento. Que semana!",
         }),
         (455, new[]
         {
@@ -1116,6 +1144,16 @@ internal static partial class IslandRetell
             "¿Has visto a un ladrón con unos guantes de conducir?",
             "Hai visto un ladro con un paio di guanti da guida?",
             "Você viu um ladrão com um par de luvas de condução?",
+        }),
+        // (Twinsen to Raph's fiancée at the lighthouse while he hunts the thief: Raph is out at the race track, and she says so)
+        (535, new[]
+        {
+            "Is Raph still out at the track, miss?",
+            "Raph est encore sur le circuit, mademoiselle ?",
+            "Ist Raph immer noch auf der Rennstrecke, Fräulein?",
+            "Señorita, ¿Raph sigue en el circuito?",
+            "Signorina, Raph è ancora in pista?",
+            "Moça, o Raph ainda está na pista?",
         }),
         (605, new[]
         {

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using LBAAssembler.LbaScript;
 using LBAAssembler.Scenes;
 
@@ -21,11 +22,14 @@ namespace LBAAssembler.Terrain;
 internal static partial class RaceTrackStory
 {
     // Q_PAGES (docs/LBRA_STORY_PLAN.md 3.1): 1 Flick has told, 2 the Dean has, 3-5 the pages found, 6 the diploma, 7 the race won, 8 told
-    public const int QPages = 215, PagesWon = 7, PagesDone = 8;
+    public const int QPages = 215, PagesDiploma = 6, PagesWon = 7, PagesDone = 8;
     // the group's two spare game variables: the chapter whose radio call was answered, and the chapter whose ringing was shown
     // (not 235-237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF -- 2026-11-04)
     public const int RadioAnsweredA = 234, RadioRangA = 240;
     private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2, MoonStart = 229;
+    // the game's own: the variable of its Dino-Fly's cure (1 sent to Ker'aooc, 2 his assistant has answered, 3 the School's hall seen)
+    // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
+    private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113;
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
 
@@ -225,6 +229,8 @@ void comportement_1()
         BaldinoTuned, BaldinoRacing, FlickWon, RacerNext, MoyaOil, ZoeOil, BaldinoRocket,
         // (the easter eggs: RaceTrackStory.Eggs.Desert.cs)
         PageEgg, DeanNotMine, FlickNoIdea, FlickBox, RunesUnread, RunesRecord, RunesExcept, DeanBu,
+        // (the sweep of 2026-11-05)
+        HallWelcome, BaldinoRadioWorks, BaldinoNoCall,
     }
     private static readonly string[][] DesertLines =
     {
@@ -257,12 +263,12 @@ void comportement_1()
         },
         new[]
         {
-            "Still no flag, I'm afraid. Three pages, and the Dean at the School of Magic. He means it.",
-            "Toujours pas de drapeau, désolée. Trois pages, et le Doyen à l'École de Magie. Il ne plaisante pas.",
-            "Immer noch keine Flagge, leider. Drei Seiten, und der Dekan in der Zauberschule. Er meint es ernst.",
-            "Todavía no hay bandera, lo siento. Tres páginas, y el Decano en la Escuela de Magia. Va en serio.",
-            "Ancora niente bandiera, mi spiace. Tre pagine, e il Rettore alla Scuola di Magia. Fa sul serio.",
-            "Ainda não há bandeira, lamento. Três páginas, e o Reitor na Escola de Magia. Ele não está a brincar.",
+            "Twinsen! No flag yet, I'm afraid: the track stays shut till the Dean at the School of Magic has his three pages back. He means it.",
+            "Twinsen ! Pas encore de drapeau, désolée : le circuit reste fermé tant que le Doyen de l'École de Magie n'a pas récupéré ses trois pages. Il ne plaisante pas.",
+            "Twinsen! Noch keine Flagge, leider: Die Strecke bleibt gesperrt, bis der Dekan der Zauberschule seine drei Seiten zurückhat. Er meint es ernst.",
+            "¡Twinsen! Todavía no hay bandera, lo siento: el circuito sigue cerrado hasta que el Decano de la Escuela de Magia recupere sus tres páginas. Va en serio.",
+            "Twinsen! Ancora niente bandiera, mi spiace: la pista resta chiusa finché il Rettore della Scuola di Magia non riavrà le sue tre pagine. Fa sul serio.",
+            "Twinsen! Ainda não há bandeira, lamento: a pista fica fechada até o Reitor da Escola de Magia ter as três páginas de volta. Ele não está a brincar.",
         },
         new[]
         {
@@ -338,12 +344,12 @@ void comportement_1()
         },
         new[]
         {
-            "Twinsen! My radio works then. Sand filters, fitted. A longer top gear for the long straights. And a word of advice: the champion brakes late at the Temple bend. Brake later.",
-            "Twinsen ! Ma radio marche, alors. Filtres à sable, posés. Une dernière vitesse plus longue pour les grandes lignes droites. Et un conseil : le champion freine tard au virage du Temple. Freine plus tard.",
-            "Twinsen! Mein Funkgerät funktioniert also. Sandfilter, eingebaut. Ein längerer höchster Gang für die langen Geraden. Und ein Rat: Der Champion bremst spät in der Tempelkurve. Brems später.",
-            "¡Twinsen! Así que mi radio funciona. Filtros de arena, puestos. Una marcha larga más larga para las rectas. Y un consejo: el campeón frena tarde en la curva del Templo. Frena más tarde.",
-            "Twinsen! Allora la mia radio funziona. Filtri per la sabbia, montati. Una marcia alta più lunga per i rettilinei. E un consiglio: il campione frena tardi alla curva del Tempio. Frena più tardi.",
-            "Twinsen! Então o meu rádio funciona. Filtros de areia, montados. Uma mudança de cima mais longa para as retas. E um conselho: o campeão trava tarde na curva do Templo. Trava mais tarde.",
+            "Sand filters, fitted. A longer top gear for the long straights. And a word of advice: the champion brakes late at the Temple bend. Brake later.",
+            "Filtres à sable, posés. Une dernière vitesse plus longue pour les grandes lignes droites. Et un conseil : le champion freine tard au virage du Temple. Freine plus tard.",
+            "Sandfilter, eingebaut. Ein längerer höchster Gang für die langen Geraden. Und ein Rat: Der Champion bremst spät in der Tempelkurve. Brems später.",
+            "Filtros de arena, puestos. Una marcha larga más larga para las rectas. Y un consejo: el campeón frena tarde en la curva del Templo. Frena más tarde.",
+            "Filtri per la sabbia, montati. Una marcia alta più lunga per i rettilinei. E un consiglio: il campione frena tardi alla curva del Tempio. Frena più tardi.",
+            "Filtros de areia, montados. Uma mudança de cima mais longa para as retas. E um conselho: o campeão trava tarde na curva do Templo. Trava mais tarde.",
         },
         new[]
         {
@@ -472,6 +478,35 @@ void comportement_1()
             "Un giro in meno di un minuto e due secondi? Il record di Bù in persona! La Scuola ti deve 50 kashes.",
             "Uma volta em menos de um minuto e dois segundos? O recorde do próprio Bù! A Escola deve-te 50 kashes.",
         },
+        // (the sweep of 2026-11-05: the 1996 demo's School hall greets Twinsen with a text the game's Desert file hasn't (11); Baldino's
+        // greeting, as the radio call was answered or not -- his tune, BaldinoTuned, after it)
+        new[]
+        {
+            "Welcome to the School of Magic! Mind your step: we're still picking up after the Dean's exam papers.",
+            "Bienvenue à l'École de Magie ! Attention où vous mettez les pieds : on ramasse encore les copies d'examen du Doyen.",
+            "Willkommen in der Zauberschule! Pass auf, wo du hintrittst: Wir sammeln immer noch die Prüfungsblätter des Dekans auf.",
+            "¡Bienvenido a la Escuela de Magia! Cuidado dónde pisas: todavía estamos recogiendo los exámenes del Decano.",
+            "Benvenuto alla Scuola di Magia! Attento a dove metti i piedi: stiamo ancora raccogliendo i compiti d'esame del Rettore.",
+            "Bem-vindo à Escola de Magia! Cuidado onde pões os pés: ainda estamos a apanhar os exames do Reitor.",
+        },
+        new[]
+        {
+            "Twinsen! My radio works then.",
+            "Twinsen ! Ma radio marche, alors.",
+            "Twinsen! Mein Funkgerät funktioniert also.",
+            "¡Twinsen! Así que mi radio funciona.",
+            "Twinsen! Allora la mia radio funziona.",
+            "Twinsen! Então o meu rádio funciona.",
+        },
+        new[]
+        {
+            "Twinsen! You never answered my call. Never mind: you found the house.",
+            "Twinsen ! Tu n'as jamais répondu à mon appel. Peu importe : tu as trouvé la maison.",
+            "Twinsen! Du bist nie an mein Funkgerät gegangen. Egal: Du hast das Haus gefunden.",
+            "¡Twinsen! Nunca contestaste a mi llamada. No importa: has encontrado la casa.",
+            "Twinsen! Non hai mai risposto alla mia chiamata. Non importa: hai trovato la casa.",
+            "Twinsen! Nunca atendeste a minha chamada. Não faz mal: encontraste a casa.",
+        },
     };
 
     private static List<string> ApplyDesert(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -484,11 +519,14 @@ void comportement_1()
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Desert, log);
         const string desert = "4 > chapter()";
 
-        // the radio, on every outside scene: arriving from Citadel Island (the game still at chapter 2, the town circuit's) is chapter 3
+        // the radio, on every outside scene: arriving from Citadel Island (the game still at chapter 2, the town circuit's) is chapter 3.
+        // (And the game's variable 62 back to 0, its arrow to Ker'aooc's house cleared: on Citadel the game's people sent Twinsen to the
+        // healing wizard for the Dino-Fly -- the pharmacist's customer, the umbrella's owner, Mr. Paul's missus -- setting it to 1, and at
+        // 1 the people of Port-Ludo's plaza (scene 60) talk of nothing else. The sweep of 2026-11-05.)
         foreach (var scene in b.OutsideScenes.ToList())
             b.Edit(scene, scene == scenes.StartScene ? "the radio rings in chapter 3: Baldino's call" : "the radio rings in chapter 3: Baldino's call; after a win out of the car here, the after-race lines and the rocket",
                 model => IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 4),
-                RadioController(3, Say(DesertLine.Ringing), new[] { Say(DesertLine.BaldinoRadio) }, "    if (2 == chapter())\n    {\n        inc_chapter();\n    }\n",
+                RadioController(3, Say(DesertLine.Ringing), new[] { Say(DesertLine.BaldinoRadio) }, $"    if (2 == chapter())\n    {{\n        inc_chapter();\n        if (1 == var_game({CuredDinoFly}))\n        {{\n            set_var_game({CuredDinoFly}, 0);\n            clr_holo_pos({KeraoocArrow});\n        }}\n    }}\n",
                     // (out of the car after a win away from the start scene: the same lines, said without their speakers' voices)
                     scene == scenes.StartScene ? "" : $@"    if ({PagesWon} == var_game({QPages}) && {Driving} != comportement_hero())
     {{
@@ -553,6 +591,29 @@ void comportement_1()
         }
         else log.Add($"the Dean left out: no actor {deanActor} in scene {DeanScene}");
 
+        // The game's people of the School and the town, put right (the sweep of 2026-11-05): in the School's hall, the 1996 demo's greeting
+        // on Twinsen's first visit (its text 11, which the game's Desert file hasn't: the story's welcome) and Twinsen's third "hello" (102,
+        // none either: the game's 100), and the student's "he's in a terrible mood about his exam papers" (69) no longer once the diploma is
+        // given (the game's variable 61 stays at 1 after the first visit); in Ker'aooc's house, the umbrella shown to his assistant is not
+        // hers (IslandRetell's 286) and stays with Twinsen; in the Pearl of Incandescence's cave, Twinsen's second look round is the game's
+        // 337 (it said 327, which is no text: the game's own slip).
+        b.Edit(DeanScene, "the School's hall: the demo's greeting and Twinsen's hello in the game's texts, the student quiet about the exam papers once the diploma is given", _ => scripts =>
+        {
+            for (var a = 0; a < scripts.ActorCount; a++)
+            {
+                string life;
+                try { life = scripts.GetText(a, ScriptKind.Life); } catch (InvalidOperationException) { continue; }
+                var now = life.Replace("message(11);", $"message({Say(DesertLine.HallWelcome)});").Replace("message(102);", "message(100);");
+                now = Regex.Replace(now, @"if \(2 > var_game\(61\)\)(\s*\{\s*message\(69\);)", $"if (2 > var_game(61) && {PagesDiploma} > var_game({QPages}))$1");
+                if (now != life) scripts.SetText(a, ScriptKind.Life, now);
+            }
+        });
+        b.Edit(KeraoocHouse, "Ker'aooc's assistant: the umbrella isn't hers, Twinsen keeps it", _ => scripts =>
+            scripts.SetText(KeraoocAssistant, ScriptKind.Life, Loose(scripts.GetText(KeraoocAssistant, ScriptKind.Life),
+                "oneif (1 == use_inventory(20))\n{\nset_var_game(20, 0);\nmessage(286);", "oneif (1 == use_inventory(20))\n{\nmessage(286);")));
+        b.Edit(PearlCave, "the Pearl of Incandescence's cave: Twinsen's look round is a text of the game's (337, not 327)", _ => scripts =>
+            scripts.SetText(0, ScriptKind.Life, Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);")));
+
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in lap order
         var pages = new[] { (0.30, DesertLine.Page1), (0.55, DesertLine.Page2), (0.80, DesertLine.Page3) };
         for (var k = 0; k < pages.Length; k++)
@@ -586,12 +647,21 @@ void comportement_1()
 "));
         }
 
-        // Baldino at his house: a copy of the game's own, the car's tune and his tip
+        // Baldino at his house: a copy of the game's own, the car's tune and his tip -- his greeting as his radio call was answered or not
+        // (the sweep of 2026-11-05: "My radio works then" whether it was or not)
         if (Copy(b.Originals, BaldinoHouse, BaldinoActor) is { } baldino)
         {
             b.Hide(BaldinoHouse, BaldinoActor, desert, "Baldino");
-            b.Edit(BaldinoHouse, "Baldino at his workbench: the sand filters, his tip, and he races too", model => IslandBeatsA.Add(model, baldino, Talker(desert,
-                $"            message({Say(DesertLine.BaldinoTuned)});\n            message({Say(DesertLine.BaldinoRacing)});")));
+            b.Edit(BaldinoHouse, "Baldino at his workbench: the sand filters, his tip, and he races too", model => IslandBeatsA.Add(model, baldino, Talker(desert, $@"            if (3 == var_game({RadioAnsweredA}))
+            {{
+                message({Say(DesertLine.BaldinoRadioWorks)});
+            }}
+            else
+            {{
+                message({Say(DesertLine.BaldinoNoCall)});
+            }}
+            message({Say(DesertLine.BaldinoTuned)});
+            message({Say(DesertLine.BaldinoRacing)});")));
         }
         else log.Add($"Baldino left out: no actor {BaldinoActor} in scene {BaldinoHouse}");
 

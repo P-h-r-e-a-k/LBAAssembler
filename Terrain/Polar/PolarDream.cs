@@ -90,14 +90,17 @@ internal static class PolarDream
         "Depressa, Twinsen, leva o meu veículo! O destino do mundo está nos teus ombros!",
     };
 
+    // (Zoe's wake line; what she saw of the dream follows it where the story is built -- smiling and steering, or shouting about a big
+    // man in a big car (RaceTrackStory.Chapters.cs ZoeSmiling, ZoeShouting). Until the sweep of 2026-11-05 it asked "were you dreaming
+    // about FunFrock again?", which those lines then answered as if she hadn't asked)
     private static readonly string[] Wake =
     {
-        "Twinsen! Twinsen, wake up! You were tossing and turning all night. Were you dreaming about FunFrock again?",
-        "Twinsen ! Twinsen, réveille-toi ! Tu t'es agité toute la nuit. Tu rêvais encore de FunFrock ?",
-        "Twinsen! Twinsen, wach auf! Du hast dich die ganze Nacht hin und her gewälzt. Hast du wieder von FunFrock geträumt?",
-        "¡Twinsen! ¡Twinsen, despierta! Te has pasado la noche dando vueltas. ¿Estabas soñando otra vez con FunFrock?",
-        "Twinsen! Twinsen, svegliati! Ti sei agitato tutta la notte. Stavi di nuovo sognando FunFrock?",
-        "Twinsen! Twinsen, acorda! Andaste às voltas a noite toda. Estavas outra vez a sonhar com o FunFrock?",
+        "Twinsen! Twinsen, wake up!",
+        "Twinsen ! Twinsen, réveille-toi !",
+        "Twinsen! Twinsen, wach auf!",
+        "¡Twinsen! ¡Twinsen, despierta!",
+        "Twinsen! Twinsen, svegliati!",
+        "Twinsen! Twinsen, acorda!",
     };
 
     // Sendell's word, fading with the white as Twinsen wakes, when he drove through her light on the dream's loop (an easter egg, the user,

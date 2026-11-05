@@ -98,12 +98,12 @@ internal static partial class IslandRetell
         }),
         (30, new[]
         {
-            "You know, I wonder if they might have brought her round, actually... what with all the racers and Esmers hanging around the Hacienda these days...",
-            "Vous savez, je me demande s'ils ne l'auraient pas déménagée par ici... avec tous ces pilotes et ces Esmers qui fréquentent l'Hacienda ces temps-ci...",
-            "Wissen Sie, ich frage mich, ob sie die Schule vielleicht hierher verlegt haben... bei den vielen Rennfahrern und Esmeriern, die derzeit auf der Hacienda ein- und ausgehen...",
-            "¿Sabe? Me pregunto si no la habrán traído por aquí... con tantos pilotos y esmeres por la hacienda estos días...",
-            "Sa, mi chiedo se per caso non l'hanno traslocata da queste parti... visto il numero di piloti e di Esmers che frequentano l'Hacienda in questi ultimi tempi...",
-            "Sabe, eu me pergunto se eles não a trouxeram para cá, na verdade... com tantos pilotos e Esmers frequentando a Fazenda esses dias...",
+            "The School of Magic? Couldn't tell you, Mr. Twinsen. Since the Esmers came, the only place I can find is the bar.",
+            "L'Ecole de Magie ? Aucune idée, m'sieur Twinsen. Depuis que les Esmers sont là, le seul endroit que je trouve, c'est le bar.",
+            "Die Zauberschule? Keine Ahnung, Herr Twinsen. Seit die Esmerier da sind, finde ich nur noch den Weg zur Bar.",
+            "¿La Escuela de Magia? Ni idea, don Twinsen. Desde que llegaron los esmeres, el único sitio que encuentro es el bar.",
+            "La Scuola di Magia? Non saprei, signor Twinsen. Da quando sono arrivati gli Esmers, l'unico posto che trovo è il bar.",
+            "A Escola de Magia? Não faço ideia, senhor Twinsen. Desde que os Esmers chegaram, o único lugar que eu encontro é o bar.",
         }),
         (32, new[]
         {
@@ -179,12 +179,12 @@ internal static partial class IslandRetell
         }),
         (63, new[]
         {
-            "I don't know where they went, but they can't be far. The wind blows everything towards the Temple of Bù.",
-            "Je ne sais pas où elles sont parties, mais elles ne doivent pas être loin. Le vent pousse tout vers le Temple de Bù.",
-            "Ich weiß nicht, wo sie hin sind, aber weit können sie nicht sein. Der Wind weht alles in Richtung Bù-Tempel.",
-            "No sé adónde han ido, pero no deben de andar lejos. El viento lo empuja todo hacia el templo de Bú.",
-            "Non so dove siano finite, ma non possono essere lontane. Il vento spinge tutto verso il Tempio di Bù.",
-            "Eu não sei para onde elas foram, mas não devem estar longe. O vento sopra tudo em direção ao Templo de Bu.",
+            "Looking for the School of Magic? Ask the marshal at the start line, by the Temple of Bù. Me, I only come here to sweat.",
+            "Vous cherchez l'Ecole de Magie ? Demandez à la commissaire, sur la ligne de départ, près du Temple de Bù. Moi, je viens juste suer ici.",
+            "Sie suchen die Zauberschule? Fragen Sie die Kommissarin an der Startlinie, beim Bù-Tempel. Ich komme nur zum Schwitzen her.",
+            "¿Busca la Escuela de Magia? Pregunte a la comisaria en la línea de salida, junto al templo de Bú. Yo sólo vengo aquí a sudar.",
+            "Cerca la Scuola di Magia? Chieda alla commissaria sulla linea di partenza, vicino al Tempio di Bù. Io vengo qui solo a sudare.",
+            "Procurando a Escola de Magia? Pergunte à comissária na linha de largada, perto do Templo de Bu. Eu só venho aqui para suar.",
         }),
         (69, new[]
         {
@@ -224,12 +224,12 @@ internal static partial class IslandRetell
         }),
         (104, new[]
         {
-            "There's a piece missing here, something disc-shaped. I guess it lets the rocket take off.",
-            "Il manque un objet à cet endroit, une sorte de disque. Je suppose que c'est lui qui permet à la fusée de décoller.",
-            "Hier fehlt etwas, eine Art Scheibe. Anscheinend kann die Rakete nur damit starten.",
-            "Aquí falta una pieza, una especie de disco. Supongo que es lo que permite que el cohete despegue.",
-            "Manca un pezzo qui, una specie di disco. Immagino che permetta al razzo di decollare.",
-            "Está faltando uma peça aqui, uma coisa em forma de disco. Acho que é ela que faz o foguete decolar.",
+            "There's a piece missing here, something disc-shaped. Without it, this shuttle isn't going anywhere.",
+            "Il manque un objet à cet endroit, une sorte de disque. Sans lui, cette navette n'ira nulle part.",
+            "Hier fehlt etwas, eine Art Scheibe. Ohne sie fliegt diese Raumfähre nirgendwohin.",
+            "Aquí falta una pieza, una especie de disco. Sin ella, esta lanzadera no va a ninguna parte.",
+            "Manca un pezzo qui, una specie di disco. Senza, questa navetta non va da nessuna parte.",
+            "Está faltando uma peça aqui, uma coisa em forma de disco. Sem ela, esta nave não vai a lugar nenhum.",
         }),
         (107, new[]
         {
@@ -359,12 +359,12 @@ internal static partial class IslandRetell
         }),
         (286, new[]
         {
-            "Ah, thank you. I don't need it any more, but it was kind of you to bring it back.",
-            "Ah merci, je n'en ai plus besoin mais c'est gentil de me l'avoir rapporté.",
-            "Oh, danke. Ich brauche ihn nicht mehr, aber es ist trotzdem nett, daß Sie ihn mir zurückgebracht haben.",
-            "Ah, gracias. Ya no lo necesito, pero ha sido muy amable trayéndomelo.",
-            "Ah grazie, non ne ho più bisogno, ma è gentile da parte sua avermelo riportato.",
-            "Ah, obrigado. Eu não preciso mais, mas foi gentileza sua trazer de volta.",
+            "That's not mine... A Citadel umbrella? Out here? Keep it for the sun.",
+            "Ce n'est pas le mien... Un parapluie de la Citadelle ? Ici ? Gardez-le pour le soleil.",
+            "Das ist nicht meiner... Ein Schirm von der Zitadelleninsel? Hier draußen? Behalten Sie ihn für die Sonne.",
+            "Ese no es mío... ¿Un paraguas de la Ciudadela? ¿Aquí? Guárdelo para el sol.",
+            "Non è mio... Un ombrello della Cittadella? Qui? Lo tenga per il sole.",
+            "Esse não é meu... Um guarda-chuva da Cidadela? Aqui? Guarde para o sol.",
         }),
         (287, new[]
         {
@@ -465,14 +465,16 @@ internal static partial class IslandRetell
             "Non so dove sono, Twinsen. Ma percorri il circuito e le troverai: il vento soffia sempre verso la strada.",
             "Eu não sei onde elas estão, Twinsen. Mas percorra o circuito e você as encontrará: o vento sempre sopra em direção à estrada.",
         }),
+        // (Twinsen in Ker'aooc's house before her first answer (variable 62 under 2) -- any time in chapter 3, before Flick has said a word
+        // of the Dean or the track shut: the sweep of 2026-11-05. Her answer, 8: the healer is away at the race, try the School of Magic)
         (402, new[]
         {
-            "I'm looking for the School of Magic's Dean. He's shut the race track.",
-            "Je cherche le Grand Recteur de l'Ecole de Magie. Il a fermé le circuit.",
-            "Ich suche den Rektor der Zauberschule. Er hat die Rennstrecke gesperrt.",
-            "Busco al rector de la Escuela de Magia. Ha cerrado el circuito.",
-            "Cerco il Gran Rettore della Scuola di Magia. Ha chiuso la pista.",
-            "Eu procuro o Reitor da Escola de Magia. Ele fechou a pista de corrida.",
+            "Hello? Is anyone in? I'm here for the race.",
+            "Bonjour ? Il y a quelqu'un ? Je suis là pour la course.",
+            "Hallo? Ist jemand da? Ich bin wegen des Rennens hier.",
+            "¿Hola? ¿Hay alguien? Vengo por la carrera.",
+            "Permesso? C'è qualcuno? Sono qui per la gara.",
+            "Olá? Tem alguém aí? Eu vim para a corrida.",
         }),
         (422, new[]
         {
@@ -528,14 +530,16 @@ internal static partial class IslandRetell
             "Uhm... devono essere i piani della macchina sotto il telone. Un razzo! Baldino ci andrà sulla Luna di Smeraldo.",
             "Humm, devem ser as plantas da máquina debaixo daquela lona. Um foguete! O Baldino vai para a Lua de Esmeralda com ele.",
         }),
+        // (Ker'aooc's assistant, asked where the School of Magic is after her first answer sent Twinsen there: the game's said only the
+        // initiated know -- against her own "try the School of Magic" and Flick's directions; the sweep of 2026-11-05)
         (511, new[]
         {
-            "Only the wizards and the initiated know where she is. All I know is that she's hiding somewhere on the island, away from the engines.",
-            "Seuls les mages et les initiés savent où elle se trouve. Tout ce que je sais, c'est qu'elle est cachée quelque part sur l'île, loin des moteurs.",
-            "Nur Magier und Eingeweihte wissen, wo sie sich befindet. Ich weiß nur, daß sie irgendwo auf der Insel versteckt ist, weit weg von den Motoren.",
-            "Sólo los magos y los iniciados saben dónde se encuentra. Yo sólo sé que está escondida en algún lugar de la isla, lejos de los motores.",
-            "Solo i maghi e gli iniziati sanno dove si trova. Tutto quello che so è che è nascosta da qualche parte sull'isola, lontano dai motori.",
-            "Só os magos e os iniciados sabem onde ela fica. Tudo o que eu sei é que está escondida em algum lugar da ilha, longe dos motores.",
+            "The School? Ask the race marshal by the Temple of Bù. She's the School's own assistant: she'll know where the Dean hides from the engines.",
+            "L'Ecole ? Demandez à la commissaire de course près du Temple de Bù. C'est l'assistante de l'Ecole : elle saura où le Doyen se cache des moteurs.",
+            "Die Schule? Fragen Sie die Rennkommissarin beim Bù-Tempel. Sie ist die Assistentin der Schule: sie weiß, wo sich der Dekan vor den Motoren versteckt.",
+            "¿La Escuela? Pregunte a la comisaria de carrera junto al templo de Bú. Es la asistente de la Escuela: sabrá dónde se esconde el Decano de los motores.",
+            "La Scuola? Chieda alla commissaria di gara vicino al Tempio di Bù. È l'assistente della Scuola: saprà dove si nasconde il Rettore dai motori.",
+            "A Escola? Pergunte à comissária da corrida perto do Templo de Bu. Ela é a assistente da Escola: vai saber onde o Reitor se esconde dos motores.",
         }),
         (512, new[]
         {
@@ -611,12 +615,12 @@ internal static partial class IslandRetell
         }),
         (551, new[]
         {
-            "I'm unclear on the details, but a customer told me about an old wise man who knows all the island's secrets. He lives near the Hacienda. Maybe he's seen your pages.",
-            "Je ne sais pas trop, mais un client m'a parlé d'un vieux sage qui connaît tous les secrets de l'île. Il vit du côté de l'Hacienda. Il a peut-être vu vos feuilles.",
-            "Ich weiß nichts Genaues, aber ein Kunde hat mir von einem alten Weisen erzählt, der alle Geheimnisse der Insel kennt. Er lebt neben der Hacienda. Vielleicht hat er Ihre Blätter gesehen.",
-            "No conozco los detalles, pero un cliente me habló de un viejo sabio que conoce todos los secretos de la isla. Vive cerca de la hacienda. Quizá haya visto sus hojas.",
-            "Non conosco i dettagli, ma un cliente mi ha parlato di un vecchio saggio che conosce tutti i segreti dell'isola. Abita vicino all'Hacienda. Forse ha visto le sue pagine.",
-            "Não sei bem os detalhes, mas um cliente me falou de um velho sábio que conhece todos os segredos da ilha. Ele mora perto da Fazenda. Talvez ele tenha visto suas páginas.",
+            "I'm unclear on the details, but a customer told me about an old wise man who knows all the island's secrets. He lives near the Hacienda.",
+            "Je ne sais pas trop, mais un client m'a parlé d'un vieux sage qui connaît tous les secrets de l'île. Il vit du côté de l'Hacienda.",
+            "Ich weiß nichts Genaues, aber ein Kunde hat mir von einem alten Weisen erzählt, der alle Geheimnisse der Insel kennt. Er lebt neben der Hacienda.",
+            "No conozco los detalles, pero un cliente me habló de un viejo sabio que conoce todos los secretos de la isla. Vive cerca de la hacienda.",
+            "Non conosco i dettagli, ma un cliente mi ha parlato di un vecchio saggio che conosce tutti i segreti dell'isola. Abita vicino all'Hacienda.",
+            "Não sei bem os detalhes, mas um cliente me falou de um velho sábio que conhece todos os segredos da ilha. Ele mora perto da Fazenda.",
         }),
         (565, new[]
         {

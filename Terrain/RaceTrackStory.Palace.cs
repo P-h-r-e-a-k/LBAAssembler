@@ -29,7 +29,7 @@ internal static partial class RaceTrackStory
     // Empress's made for her, PalaceEmpress)
     private const int StanScene = 158, StanActor = 6, EmperorEntity = 330, EmperorStand = 0, EmpressEntity = PalaceEmpress.Entity, EmpressStand = PalaceEmpress.Stand;
 
-    private enum PLine { Arrive, Fragments, NoFragments, Ring, Baldino, Empress, Sing, ZoeWorse, Locked, Emperor, Stan }
+    private enum PLine { Arrive, Fragments, NoFragments, Ring, Baldino, Empress, Sing, ZoeWorse, Locked, Emperor, Stan, EmpressThanks }
     private static readonly string[][] PalaceLines =
     {
         new[]
@@ -131,6 +131,15 @@ internal static partial class RaceTrackStory
             "La finestra? In fondo alla lunga sala. Ho cronometrato quel percorso da questa scrivania più volte di quante abbia letto questi libri. Sfidami.",
             "A janela? Ao fundo do grande salão. Já cronometrei esse percurso desta secretária mais vezes do que li estes livros. Corre contra mim.",
         },
+        new[]
+        {
+            "Thank you, Twinsen. Now go: the window, before FunFrock gets there!",
+            "Merci, Twinsen. Maintenant, va : la fenêtre, avant que FunFrock n'y arrive !",
+            "Danke, Twinsen. Und jetzt geh: zum Fenster, bevor FunFrock dort ist!",
+            "Gracias, Twinsen. Ahora ve: la ventana, ¡antes de que llegue FunFrock!",
+            "Grazie, Twinsen. Ora va': la finestra, prima che ci arrivi FunFrock!",
+            "Obrigada, Twinsen. Agora vai: a janela, antes que o FunFrock lá chegue!",
+        },
     };
 
     // (the Empress's own animations all have her in bed: she stands with PalaceEmpress's, put on again by her script)
@@ -165,7 +174,15 @@ internal static partial class RaceTrackStory
             Place(empress, model, At(2, -8)); Place(stan, model, At(-3, -8));
             var door = At(6, -11);
             Place(emperor, model, At(8, -11));
-            edits.Add(s.Add(model, empress, StandUp(Talker(when, $@"            message({Id(PLine.Empress)});
+            // (her husband locked in until the song opens the door; then her thanks -- the sweep of 2026-11-05: "locked in his bedroom" after)
+            edits.Add(s.Add(model, empress, StandUp(Talker(when, $@"            if ({BedroomOpen} <= var_game({QEmperor}))
+            {{
+                message({Id(PLine.EmpressThanks)});
+            }}
+            else
+            {{
+                message({Id(PLine.Empress)});
+            }}
             if ({GateOpen} <= var_game({QEmperor}) && {EmpressTold} > var_game({QEmperor}))
             {{
                 set_var_game({QEmperor}, {EmpressTold});
