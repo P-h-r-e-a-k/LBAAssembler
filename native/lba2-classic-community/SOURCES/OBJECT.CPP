@@ -6333,6 +6333,8 @@ startaffscene:
         // by console warps or menu loads, so those don't clobber the autosave.
         if (NumCube != NUM_CUBE_PHANTOM) {
             AutoSaveGame();
+            // ... and the race game's Story Mode its own place, story.lba, the file its Continue resumes after a game over (RACEGAME.CPP)
+            { extern void RaceGame_SceneEntered(void); RaceGame_SceneEntered(); }
         }
 
         FlagChgCube = 0;

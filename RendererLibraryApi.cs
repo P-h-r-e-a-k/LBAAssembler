@@ -143,6 +143,16 @@ internal sealed class RendererLibraryApi : IDisposable
         // paths are statically linked and have no non-system dependencies,
         // but pointing this at a real MSYS2 install is harmless either way.
         SetDllDirectory("C:\\msys64\\ucrt64\\bin");
+        // The renderer's own fault log on always, beside the editor's log (the user's editor vanished on 2026-11-04 picking a scene,
+        // a native fault inside LoadInteriorScene that 1,500 loads of every scene couldn't make happen again): its vectored handler
+        // writes each hardware or C++ exception's module-relative stack to the file and lets it go on as it would (RENDERER_API.CPP
+        // RendererCrashLogHandler, 400 at most a session) -- the next one says where. The last session's kept as .prev.
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LBA2_RENDERER_CRASHLOG")))
+        {
+            var crashLog = Path.Combine(Path.GetDirectoryName(DebugLog.LogFile) ?? AppContext.BaseDirectory, "renderer_crash.log");
+            try { if (File.Exists(crashLog)) File.Move(crashLog, crashLog + ".prev", true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            Environment.SetEnvironmentVariable("LBA2_RENDERER_CRASHLOG", crashLog);
+        }
         try { handle = NativeLibrary.Load(path); } catch { handle = IntPtr.Zero; }
         if (handle == IntPtr.Zero) return;
         version = Marshal.GetDelegateForFunctionPointer<VersionFn>(NativeLibrary.GetExport(handle, "lba2_renderer_version"));

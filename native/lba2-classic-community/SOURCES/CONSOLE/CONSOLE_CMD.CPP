@@ -2272,6 +2272,14 @@ static void cmd_skipmodals(int argc, const char *argv[]) {
     Console_Print("skipmodals: %s", DbgSkipModals ? "ON" : "OFF");
 }
 
+/* storymode <0|1>: the run played as the race game's Story Mode story, as if its menu had started it (RACEGAME.CPP
+   RaceGame_StoryTest) -- a headless run has no menu to choose it from. Its scene changes then keep story.lba. */
+static void cmd_storymode(int argc, const char *argv[]) {
+    const int on = argc >= 2 ? atoi(argv[1]) : 1;
+    RaceGame_StoryTest(on);
+    Console_Print("storymode: %s", on ? "ON" : "OFF");
+}
+
 /* zonelist [type]: list the current cube's scene zones (ListZone) -- box, type, Num and Info fields.
    Zones are invisible to --dump-state (which only reports NbZones), yet they are what drives a
    walkthrough: type 2 (scenaric) sets the hero's ZoneSce, which his Life script reads via
@@ -3134,6 +3142,10 @@ void Console_RegisterAll(void) {
                               "skipmodals <0|1>",
                               "Aborts dialogue modals immediately so a headless run does not hang on a "
                               "give/talk dialog; the script continues past it.");
+    Console_RegisterCommandEx("storymode", cmd_storymode, "Race game test: play the run as Story Mode's story",
+                              "storymode <0|1>",
+                              "As if the race game's Story Mode had started the game: each scene entered keeps "
+                              "story.lba, the save its Continue resumes (RACEGAME.CPP). For headless tests.");
     Console_RegisterCommandEx("input", cmd_input, "Inject hero input (drive movement/actions)",
                               "input <flags> [ticks] | input seq <t:flags:dur/...> | input fseq <f:flags:dur/...> | input trace <0|1> | input off",
                               "Holds input bits (up/down/left/right/action/search/throw/esquive/inventory/"

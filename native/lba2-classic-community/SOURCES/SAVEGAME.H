@@ -38,6 +38,8 @@ extern S32 Save_AutoDisabled(void);
 extern void AutoSaveGame(void);
 /*--------------------------------------------------------------------------*/
 extern void CurrentSaveGame(void);
+/* The same save, written to `filename` in the saves' folder instead of current.lba. */
+extern void CurrentSaveGameTo(const char *filename);
 /*--------------------------------------------------------------------------*/
 /* TRUE when the whole save reached the file. */
 extern S32 SaveGame(S32 flagmess);

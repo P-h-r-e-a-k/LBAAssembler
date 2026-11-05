@@ -29,6 +29,18 @@ internal static class InteriorAllTest
         var archive = HqrArchive.Open(System.IO.Path.Combine(sandbox, "SCENE.HQR"));
         int loaded = 0, skipped = 0;
         for (var round = 0; round < rounds; round++)
+        {
+            // (INTERIORALL_REBUILD=<island name>: after the first round the island's track built again into the folder, the renderer
+            // still loaded -- the editor's own case, 2026-11-04: a track rebuilt from the race track window, then an interior picked, and
+            // a native crash in LoadInteriorScene; the build writes SCENE.HQR, BODY.HQR, ANIM.HQR and RESS.HQR under the renderer)
+            if (round == 1 && Environment.GetEnvironmentVariable("INTERIORALL_REBUILD") is { Length: > 0 } rebuild)
+            {
+                var island = LBAAssembler.Terrain.RaceTrackIsland.BuiltIn.First(i => i.Name == rebuild);
+                var built = LBAAssembler.Terrain.RaceTrackService.Build(sandbox, new List<LBAAssembler.Terrain.RaceTrackService.TrackBuild>
+                    { new(LBAAssembler.Terrain.RaceTrackPlan.Built(island), LBAAssembler.Terrain.RaceTrackOptions.For(island)) });
+                Console.WriteLine($"\nrebuilt {rebuild}: {built.Ok}");
+                archive = HqrArchive.Open(System.IO.Path.Combine(sandbox, "SCENE.HQR"));
+            }
             for (var scene = first; scene <= last; scene++)
             {
                 // (the scene box only hands interiors to the interior renderer: the scene record's sixth byte, CubeMode, is 0)
@@ -44,6 +56,7 @@ internal static class InteriorAllTest
                 finally { handle.Free(); }
                 loaded++;
             }
+        }
         Console.WriteLine($"\ninteriorall: {loaded} scenes loaded and drawn, {skipped} not interiors, in {rounds} round(s)");
         return 0;
     }

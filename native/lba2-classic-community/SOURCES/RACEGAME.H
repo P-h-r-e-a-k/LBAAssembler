@@ -30,5 +30,7 @@ void RaceGame_SharedKeys(void);            // ... and after
 void RaceGame_GhostChosen(int mode);       // RACEMOD.CPP: the ghost raced now, kept as the one chosen last
 S32 RaceGame_RaceSkyOff(void);              // RACEMOD.CPP: Options has the sky off in races
 void RaceGame_TestKeys(int down);           // (tests: player 2's keys as if down, -1 the keyboard's)
+void RaceGame_SceneEntered(void);           // OBJECT.CPP: a scene entered (the autosave's moment) -- Story Mode's story.lba kept there
+void RaceGame_StoryTest(int on);            // (tests: the run played as Story Mode's story, the console's `storymode`)
 
 #endif

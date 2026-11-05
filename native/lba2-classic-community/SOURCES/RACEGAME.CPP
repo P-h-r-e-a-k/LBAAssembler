@@ -108,6 +108,7 @@
 #include "INPUT.H"
 #include "JOYSTICK.H"
 #include "RACEGAME.H"
+#include "SAVEGAME.H"
 #include "BOOT_EXIT.H"
 #include "RACEMOD.H"
 #include "RACEUPDATE.H"
@@ -2963,6 +2964,30 @@ static void KeepStory(void) {
     if (ExistsFileOrDir(cur) && CopyWhole(cur, story)) Log_Info("[racegame] the story kept: %s", story);
 }
 
+// The story's place kept as each scene is entered (OBJECT.CPP AffScene, beside the game's own autosave), the retail game's checkpoint for
+// the story too. Until 2026-11-05 story.lba was written by KeepStory alone, as the menu opened with Esc, and a scene change wrote only
+// autosave.lba -- which Continue never reads: a game over in Citadel Island's sewers and Continue the story put Twinsen back in his
+// house, where the menu had last been opened (the user's log: "game over (... cube 17)" and the story continued from the save kept at
+// cube 1). Now it is the scene last entered, as the retail game's autosave is.
+// Not in a race or a time trial of the race game's (StartRace clears s_storyOn: their scenes are not the story's), nor while Twinsen is
+// at the wheel on a story island's track (RaceMod_CarRacing): the scenes a lap drives through are the race's, and a save made on its way
+// round would put him back in his car mid-lap with nothing of the race. Nor with the run's autosaves off (--no-autosave), nor once he is
+// dead: a game over keeps the scene before.
+void RaceGame_SceneEntered(void) {
+    if (!s_storyOn || Save_AutoDisabled() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
+    char story[ADELINE_MAX_PATH];
+    StorySave(story);
+    CurrentSaveGameTo(RG_STORY_SAVE);
+    Log_Info("[racegame] the story kept as scene %d was entered: %s", (int)NumCube, story);
+}
+
+// (tests: the run played as Story Mode's story -- the console's `storymode` -- as if the menu had started it: its scene changes keep
+// story.lba, RaceGame_SceneEntered. A headless run has no menu to choose Story Mode from.)
+void RaceGame_StoryTest(int on) {
+    s_storyOn = on ? 1 : 0;
+    Log_Info("[racegame] tests: the story %s", s_storyOn ? "played (Story Mode)" : "not played");
+}
+
 // The story's set as the engine reads it: STORY_NOW.TXT in the user's folder, each track= line's file copied beside it (STORY_TRACK<n>.TXT)
 // with the files it names found beside the game's data (CopyResolved) and the camera's view the player chose. Non-zero: written, its
 // path in `out`.
@@ -5058,8 +5083,10 @@ S32 RaceGame_Menu(S32 inGame) {
 
 static S32 GameMenu(S32 inGame) {
     Read();
-    // (the story played: its place kept, the game having saved it in current.lba as the menu opened)
-    if (inGame && s_storyOn) KeepStory();
+    // (the story played: its place kept, the game having saved it in current.lba as the menu opened -- when it did: with SavingEnable off,
+    // Twinsen dead or out of sight or the phantom scene, GAMEMENU.CPP leaves current.lba as it was, perhaps a race's, and the story keeps
+    // the scene it last entered, RaceGame_SceneEntered)
+    if (inGame && s_storyOn && SavingEnable) KeepStory();
     // (the sum of best played back: a track's best lap over -- the next track's straight on, no menu)
     if (s_watchNext && s_watchListN > 0) {
         s_watchNext = 0;

@@ -376,6 +376,16 @@ void AutoSaveGame() {
 
 /*──────────────────────────────────────────────────────────────────────────*/
 void CurrentSaveGame() {
+    CurrentSaveGameTo(CURRENTSAVE_FILENAME);
+}
+
+/* The current save written to another file of the saves' folder, the same save in every
+   other way: CURRENTSAVE_NAME inside it, so it can be copied over current.lba and resumed
+   from as the menu's Resume resumes current.lba. The race game's Story Mode keeps its own
+   place this way (RACEGAME.CPP RaceGame_SceneEntered, story.lba): its Continue copies that
+   file over current.lba and resumes it, and the races played between keep current.lba for
+   themselves. */
+void CurrentSaveGameTo(const char *filename) {
     U8 memonumversion = NumVersion;
     char memoplayername[MAX_SIZE_PLAYER_NAME + 1];
     char memogamepathname[ADELINE_MAX_PATH];
@@ -388,7 +398,7 @@ void CurrentSaveGame() {
     strcpy(memoplayername, PlayerName);
     strcpy(memogamepathname, GamePathname);
 
-    GetSavePath(GamePathname, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
+    GetSavePath(GamePathname, ADELINE_MAX_PATH, filename);
     strcpy(PlayerName, CURRENTSAVE_NAME);
 
 #ifdef DEBUG_TOOLS
