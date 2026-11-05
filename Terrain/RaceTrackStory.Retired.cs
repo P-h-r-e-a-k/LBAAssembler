@@ -236,6 +236,13 @@ internal static partial class RaceTrackStory
         // Tim's MOVE_FOLLOW 4 and the regular's message_obj(4, 71) are the game's own with the rabbibunny gone, as on var 51)
         new(3, 4, @"1 == var_game\(51\) \|\| 4 == chapter\(\)", "the Tavern's drunk rabbibunny not in the Tavern in chapter 2 (he's round the Esmers' landing)", Gone("2 == chapter()")),
         new(3, 5, @"set_dir_obj\(6, MOVE_FOLLOW, 5\)", "Luc not behind the Tavern's bar in chapter 2 (he's in the yard by his barrel car)", Gone("2 == chapter()")),
+        // (the game's Zoe in the yard: from chapter 2 the story's own Zoe is there and follows Twinsen; the game's ran up to him with the
+        // healing wizard's helper (951, var 62 and the holomap's arrow) -- the scripted playthrough of 2026-11-05)
+        new(49, 4, @"0 < var_game\(42\) \|\| 3 == var_game\(74\)", "the game's Zoe in the yard gone from chapter 2 (the story's Zoe is there; the game's told of Ker'aooc's helper, var 62)", Gone("1 < chapter()")),
+        // (Twinsen at the carport: his "where are my driving gloves?" (retail 32, retold) while he hasn't the gloves (item 7), not while
+        // the game's var 74 is under 2 -- the story never sets it, so he asked for the gloves he was wearing)
+        new(49, 0, @"2 > var_game\(74\) && 4 == zone\(\)", "Twinsen asks for his driving gloves at the carport only without them (item 7)",
+            Swap("2 > var_game(74) && 4 == zone()", $"0 == var_game({GlovesSlot}) && 4 == zone()")),
     }, new List<ClosedDoor>());
 
     private static (List<Retirement>, List<ClosedDoor>) DesertRetired() => (new List<Retirement>

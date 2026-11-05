@@ -4552,6 +4552,14 @@ S32 AskChoice_QueuedCount(void) { return s_choice_count - s_choice_next; }
 void GameAskChoice(S32 nummess) {
     S32 n;
 
+    // (headless with the dialogues skipped -- `skipmodals` -- and no answer queued: the first, as Esc takes it; the menu itself waited
+    // for a key no one would press, and the run hung -- the scripted playthrough, 2026-11-05)
+    if (s_choice_next >= s_choice_count && DbgSkipModals) {
+        MyDial(nummess);
+        GameChoice = GameListChoice[0];
+        Log_Info("[story] choose: none queued, the first of %d -> dial %d (skipmodals)", (int)GameNbChoices, (int)GameChoice);
+        return;
+    }
     if (s_choice_next < s_choice_count) {
         S32 pick = s_choice_queue[s_choice_next++];
         MyDial(nummess);
