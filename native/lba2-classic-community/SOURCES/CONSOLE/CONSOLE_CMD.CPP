@@ -2114,6 +2114,26 @@ static void cmd_cubetrace(int argc, const char *argv[]) {
     Console_Print("cubetrace: %s", DbgCubeTrace ? "ON" : "OFF");
 }
 
+/* storylog <0|1>: log what every script does that a scripted playthrough checks -- lines said (by whom), choices, objects found,
+   cube changes, and the game and scene variables each object's Life changed ("[story] ..." lines; GERELIFE.CPP StoryLog_Vars). */
+static void cmd_storylog(int argc, const char *argv[]) {
+    if (argc >= 2)
+        DbgStoryLog = atoi(argv[1]) ? 1 : 0;
+    Console_Print("storylog: %s", DbgStoryLog ? "ON" : "OFF");
+}
+
+/* choose <i> [j ...] | clear: the answers (0 the first) the next questions take, in turn, without their menu (GAMEMENU.CPP). */
+extern void AskChoice_Queue(S32 pick);
+extern S32 AskChoice_QueuedCount(void);
+static void cmd_choose(int argc, const char *argv[]) {
+    if (argc >= 2 && !strcasecmp(argv[1], "clear"))
+        AskChoice_Queue(-1);
+    else
+        for (int a = 1; a < argc; a++)
+            AskChoice_Queue(atoi(argv[a]));
+    Console_Print("choose: %d answers queued", (int)AskChoice_QueuedCount());
+}
+
 /* mouse_capture: what the window is doing with the mouse right now (free, confined or
    relative). Read-only; mouse_confine is the setting. */
 static void cmd_mouse_capture(int argc, const char *argv[]) {
@@ -3109,6 +3129,15 @@ void Console_RegisterAll(void) {
                               "mouse_capture",
                               "Prints free, confined (cursor kept in the window, see mouse_confine) or "
                               "relative (the mouse camera is orbiting).");
+    Console_RegisterCommandEx("storylog", cmd_storylog, "Log every script's lines, choices, items, cube and var changes",
+                              "storylog <0|1>",
+                              "For a scripted playthrough: \"[story] obj=N ...\" lines for MESSAGE, MESSAGE_OBJ, MESSAGE_ZOE, "
+                              "ASK_CHOICE (the choices and the one taken), FOUND_OBJECT, CHANGE_CUBE, and each game or scene "
+                              "variable an object's Life changed (obj -1: changed outside a Life).");
+    Console_RegisterCommandEx("choose", cmd_choose, "Queue the answers the next questions take",
+                              "choose <i> [j ...] | choose clear",
+                              "The next questions (ask_choice) take answer i (0 the first), then j, ... without opening "
+                              "their menu; a question with nothing queued opens it as ever.");
     Console_RegisterCommandEx("cubetrace", cmd_cubetrace, "Log every cube transition",
                               "cubetrace <0|1>",
                               "Logs island + from -> to cube on each ChangeCube, tracing the game's "

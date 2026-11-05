@@ -4531,8 +4531,35 @@ void AskChoice_RequestDrive(U32 pickScancode, U32 pressScancode) {
     s_askchoice_press_key = pressScancode;
 }
 
+/* console `choose <i> [j ...]`: the answers (0 the first choice) the next questions take, in turn, without the menu -- a
+   scripted playthrough's answers; `choose clear` forgets them. A question with none queued opens the menu as ever. */
+static S32 s_choice_queue[64];
+static S32 s_choice_count = 0, s_choice_next = 0;
+
+void AskChoice_Queue(S32 pick) {
+    if (pick < 0) {
+        s_choice_count = s_choice_next = 0;
+        return;
+    }
+    if (s_choice_next == s_choice_count)
+        s_choice_count = s_choice_next = 0;
+    if (s_choice_count < (S32)(sizeof(s_choice_queue) / sizeof(s_choice_queue[0])))
+        s_choice_queue[s_choice_count++] = pick;
+}
+
+S32 AskChoice_QueuedCount(void) { return s_choice_count - s_choice_next; }
+
 void GameAskChoice(S32 nummess) {
     S32 n;
+
+    if (s_choice_next < s_choice_count) {
+        S32 pick = s_choice_queue[s_choice_next++];
+        MyDial(nummess);
+        GameChoice = GameListChoice[(pick >= 0 && pick < GameNbChoices) ? pick : 0];
+        Log_Info("[story] choose: answer %d of %d -> dial %d%s", (int)pick, (int)GameNbChoices, (int)GameChoice,
+                 (pick >= 0 && pick < GameNbChoices) ? "" : " (no such answer: the first)");
+        return;
+    }
 
     GameChoiceMenu[0] = 0;
     GameChoiceMenu[1] = GameNbChoices;

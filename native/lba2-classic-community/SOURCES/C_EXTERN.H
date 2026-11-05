@@ -339,6 +339,8 @@ extern S32 DbgUseItemInjectN;     // console `useitem`: frames to inject over
 extern S32 DbgUseItemInjectDelay; // console `useitem`: frames to wait before injecting
 extern S32 DbgUseItemTrace;       // console `useitem trace`: log each LF_USE_INVENTORY result
 extern S32 DbgCubeTrace;          // console `cubetrace`: log every cube transition
+extern S32 DbgStoryLog;           // console `storylog`: log every script's lines, choices, items, cube changes and var changes
+extern void StoryLog_Vars(S32 who); // (GERELIFE.CPP) log the game and scene vars changed since the last call, as `who`'s doing
 extern S32 DbgCamNudgeBeta;       // console `camnudge`: orbit units to inject per frame (stick/mouse stand-in)
 extern S32 DbgCamNudgeAlpha;      // console `camnudge`: elevation units to inject per frame
 extern S32 DbgCamNudgeFrames;     // console `camnudge`: frames of injection left

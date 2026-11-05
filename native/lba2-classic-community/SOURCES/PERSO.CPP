@@ -1745,6 +1745,9 @@ restartloop:
             DoAnimatedPolys();
         }
 
+        // (storylog: vars changed outside any Life since the last frame -- the race game, the console, a zone -- as obj -1's)
+        StoryLog_Vars(-1);
+
         ptrobj = ListObjet;
         for (i = 0; i < NbObjets; i++, ptrobj++) {
             if (ptrobj->WorkFlags & OBJ_DEAD)
@@ -1848,6 +1851,8 @@ restartloop:
 
             if (ptrobj->OffsetLife != -1 && !ScriptBreakpoint_IsPaused()) {
                 DoLife(i);
+                if (DbgStoryLog)
+                    StoryLog_Vars(i); // (storylog: the vars this object's Life changed)
             }
 
             // objtrace: where this object ended up after track, animation and life ran. The clock

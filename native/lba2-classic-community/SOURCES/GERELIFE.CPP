@@ -27,6 +27,43 @@ extern S32 InvSelect; // INVENT.CPP
             Log_Info("[life] obj=%d " fmt, (int)numobj, __VA_ARGS__); \
     } while (0)
 
+// storylog (console `storylog 1`): what every object's script does that a playthrough checks -- the lines said (by whom), the
+// choices asked, the objects found, the cube changes -- and, after each object's Life (PERSO.CPP), the game and scene variables
+// that changed. One line each, "[story] ...", for a scripted playthrough to read back (E:\dump\TEMP\play).
+#define STORYLOG(fmt, ...)                                         \
+    do {                                                           \
+        if (DbgStoryLog)                                           \
+            Log_Info("[story] obj=%d " fmt, (int)numobj, __VA_ARGS__); \
+    } while (0)
+
+void StoryLog_Vars(S32 who) {
+    static S16 game[MAX_VARS_GAME];
+    static U8 cube[MAX_VARS_CUBE];
+    static S32 primed = 0, lastCube = -2;
+    if (!DbgStoryLog) {
+        primed = 0;
+        return;
+    }
+    if (!primed || lastCube != NumCube) {
+        // (a new scene's own scene variables are its start, not anyone's doing)
+        if (!primed)
+            memcpy(game, ListVarGame, sizeof(game));
+        memcpy(cube, ListVarCube, sizeof(cube));
+        primed = 1;
+        lastCube = NumCube;
+    }
+    for (S32 n = 0; n < MAX_VARS_GAME; n++)
+        if (game[n] != ListVarGame[n]) {
+            Log_Info("[story] obj=%d var_game[%d] %d -> %d (cube %d)", (int)who, (int)n, (int)game[n], (int)ListVarGame[n], (int)NumCube);
+            game[n] = ListVarGame[n];
+        }
+    for (S32 n = 0; n < MAX_VARS_CUBE; n++)
+        if (cube[n] != ListVarCube[n]) {
+            Log_Info("[story] obj=%d var_cube[%d] %d -> %d (cube %d)", (int)who, (int)n, (int)cube[n], (int)ListVarCube[n], (int)NumCube);
+            cube[n] = ListVarCube[n];
+        }
+}
+
 #define CONE_VIEW 1024
 
 /*══════════════════════════════════════════════════════════════════════════*
@@ -1265,6 +1302,7 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_MESSAGE_OBJ:
             num = *PtrPrg++;
+            STORYLOG("MESSAGE_OBJ %d dial=%d%s", (int)num, (int)*(S16 *)PtrPrg, ListObjet[num].LifePoint > 0 ? "" : " (dead: not said)");
             if (ListObjet[num].LifePoint > 0) {
 #ifdef CDROM
                 NumObjSpeak = num;
@@ -1282,6 +1320,7 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_ADD_MESSAGE_OBJ:
             num = *PtrPrg++;
+            STORYLOG("MESSAGE_OBJ %d dial=%d%s", (int)num, (int)*(S16 *)PtrPrg, ListObjet[num].LifePoint > 0 ? "" : " (dead: not said)");
             if (ListObjet[num].LifePoint > 0) {
 #ifdef CDROM
                 NumObjSpeak = num;
@@ -1307,12 +1346,14 @@ void DoLife(U8 numobj) {
             Palette(PtrPal);
 
             LIFETRACE_ACT("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
+            STORYLOG("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
             if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line, and no one stops a car in a race: RACEMOD.CPP)
             PtrPrg += 2;
             break;
 
             //---------------------------------------------------------------------------
         case LM_ADD_MESSAGE:
+            STORYLOG("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
 #ifdef CDROM
             NumObjSpeak = numobj;
 #endif
@@ -1327,6 +1368,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_MESSAGE_ZOE:
+            STORYLOG("MESSAGE_ZOE dial=%d", (int)*(S16 *)PtrPrg);
 #ifdef CDROM
             NumObjSpeak = numobj;
 #endif
@@ -1568,6 +1610,7 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_FOUND_OBJECT:
             LIFETRACE_ACT("FOUND_OBJECT item=%d", (int)*PtrPrg);
+            STORYLOG("FOUND_OBJECT item=%d", (int)*PtrPrg);
             SaveTimer();
             DoFoundObj(*PtrPrg++);
             RestoreTimer();
@@ -1625,6 +1668,7 @@ void DoLife(U8 numobj) {
         case LM_CHANGE_CUBE:
             // (a race: not indoors, whatever the script says -- RACEMOD.CPP RaceMod_CarKeptOut)
             { extern S32 RaceMod_CarKeptOut(S32 scene, const char *how); if (RaceMod_CarKeptOut(*PtrPrg, "a script")) { PtrPrg++; break; } }
+            STORYLOG("CHANGE_CUBE %d", (int)*PtrPrg);
             NewCube = *PtrPrg++;
             FlagChgCube = 2;
             break;
@@ -1847,7 +1891,15 @@ void DoLife(U8 numobj) {
                 // au cas ou l'on soit appelé pendant un eclair
                 Palette(PtrPal);
 
+                if (DbgStoryLog) {
+                    char list[160] = "";
+                    for (S32 c = 0; c < GameNbChoices && strlen(list) < sizeof(list) - 8; c++)
+                        sprintf(list + strlen(list), "%s%d", c ? "," : "", (int)GameListChoice[c]);
+                    STORYLOG("ASK_CHOICE dial=%d choices=%s", (int)*(S16 *)PtrPrg, list);
+                }
                 if (!RaceMod_Hush(*(S16 *)PtrPrg)) GameAskChoice(*(S16 *)PtrPrg);
+                if (DbgStoryLog)
+                    STORYLOG("CHOSE %d", (int)GameChoice);
                 GameNbChoices = 0;
                 PtrPrg += 2;
                 RestoreTimer();
@@ -1867,7 +1919,15 @@ void DoLife(U8 numobj) {
                     // au cas ou l'on soit appelé pendant un eclair
                     Palette(PtrPal);
 
+                    if (DbgStoryLog) {
+                        char list[160] = "";
+                        for (S32 c = 0; c < GameNbChoices && strlen(list) < sizeof(list) - 8; c++)
+                            sprintf(list + strlen(list), "%s%d", c ? "," : "", (int)GameListChoice[c]);
+                        STORYLOG("ASK_CHOICE %d dial=%d choices=%s", (int)num, (int)*(S16 *)PtrPrg, list);
+                    }
                     if (!RaceMod_Hush(*(S16 *)PtrPrg)) GameAskChoice(*(S16 *)PtrPrg);
+                    if (DbgStoryLog)
+                        STORYLOG("CHOSE %d", (int)GameChoice);
                     GameNbChoices = 0;
                     RestoreTimer();
                     AffScene(AFF_ALL_FLIP);
