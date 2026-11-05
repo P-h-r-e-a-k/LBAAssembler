@@ -22,6 +22,8 @@ internal static partial class RaceTrackStory
     // (not 236 and 237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF2/3 -- 2026-11-04)
     public const int RadioAnswered = 243, RaceDoneB = 246;
     private const int LavaChapter = 6, FrancosStart = 257, FrancosDock = 109, ShipSwitch = 236;
+    // (how near Twinsen takes a statuette: past its picture's box, which stops him 1274 from its place on two sides)
+    private const int StatuetteTake = 1600;
 
     // The lava lake's new lines, after the seller's own (SellerLines) at the end of Celebration Island's texts (file 8)
     internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo, LavaNever, Statuette5, SellerFive, ZoeLooking }
@@ -265,19 +267,42 @@ internal static partial class RaceTrackStory
             });
         }
         else log.Add($"the ship to the Francos: no scene {FrancosStart} yet (the Island of the Francos isn't built before the lava lake): the won race takes Twinsen to the Francos' dock, scene {FrancosDock}");
-        // the statuettes: on the lap's middle at a fifth, two fifths... of the way round (invisible: a car or Twinsen on foot within reach
-        // picks it up), each only once the one before is found
+        // the statuettes: on the ground by the lap at a fifth, two fifths... of the way round (invisible: Twinsen on foot within reach
+        // picks it up), each only once the one before is found -- in the order he walks to them from the dock. Scene 95 is played with
+        // no track in chapter 6 (the lava lake races in scene 223 only), so its raised road isn't a floor there: each is on the ground
+        // nearest that point of the lap that Twinsen can walk to from the dock, clear of the lava (the play-through of 2026-11-05: the
+        // first was over the lava at the raised road's height, the others 1900-2200 over the ground, out of distance()'s reach). The
+        // statuette's picture is solid (SPRITES.HQR 250's box in RESS.HQR's sprite boxes: 0 to 1024 across, -1024 to 0 deep, 2560 up):
+        // walking into its box from the north or the east Twinsen stops 1274 from its place, so it is taken within StatuetteTake of
+        // it, from any side (within 1200, 2026-11-05, he could take it only from the south or the west)
         if (report is null || report.LapX.Length < 10) { log.Add("the lava lake's statuettes left out: no lap"); return log; }
-        GroupB.EditScene(store, CelebrationScene, log, "four Dark Monk statuettes beside the lap, found in turn (Q_STALL 3-6), Zoe's word at the fourth", model =>
+        IslandFile ile;
+        try { ile = IslandFile.Load(Path.Combine(gameDirectory, RaceTrackIsland.CelebrationLava.IleFile)); }
+        catch (Exception e) when (e is IOException or InvalidDataException) { log.Add($"the lava lake's statuettes left out: {e.Message}"); return log; }
+        GroupB.EditScene(store, CelebrationScene, log, "four Dark Monk statuettes on the ground by the lap, found in turn (Q_STALL 3-6), Zoe's word at the fourth", model =>
         {
+            // (from the dock: the lap's start line, where Twinsen arrives -- the scene's own start is the statue track's, built after this)
+            var dock = report.StartLine.Count > 0 ? (report.StartLine[0].X, report.StartLine[0].Z) : (model.CubeX * 64 + model.Hero.X / 512.0, model.CubeY * 64 + model.Hero.Z / 512.0);
+            var walk = new StatuetteGround(ile, model, dock.Item1, dock.Item2);
+            if (walk.Reached == 0) throw new NotTheGames("no ground to walk on at the dock");
             var edits = new List<Action<SceneScripts>>();
+            var placed = new List<(double X, double Z)>();
+            var spots = new List<(double X, double Z, double Y, int Lap)>();
+            for (var n = 0; n < 4; n++)
+            {
+                var i = (int)((n + 1) * report.LapX.Length / 5.0) % report.LapX.Length;
+                if (walk.Nearest(report.LapX[i], report.LapZ[i], placed) is not { } at) throw new NotTheGames($"no ground Twinsen can walk to by the lap's point {i}");
+                placed.Add((at.X, at.Z));
+                spots.Add((at.X, at.Z, at.Y, i));
+            }
+            // (found in the order he walks to them from the dock: the nearest first, the one furthest up the hill last)
+            spots = spots.OrderBy(s => walk.Walk(s.X, s.Z)).ToList();
             for (var k = 0; k < 4; k++)
             {
-                var i = (int)((k + 1) * report.LapX.Length / 5.0) % report.LapX.Length;
-                double x = report.LapX[i], z = report.LapZ[i], y = report.LapY.Length > i ? report.LapY[i] : report.GroundAfter?.Invoke(x, z) ?? 0;
+                var (x, z, y, i) = spots[k];
                 var spot = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(y), RaceTrackScenes.CubeLocal(z, model.CubeY), RaceTrackScenes.MonkStatuetteSprite, 9);
                 spot.Flags |= RaceTrackScenes.InvisibleFlag;       // (seen only once it is the one to find)
-                log.Add($"statuette {k + 1} at cell ({x:0.#}, {z:0.#}), {y:0}");
+                log.Add($"statuette {k + 1} at cell ({x:0.#}, {z:0.#}), {y:0} on the ground, {Math.Sqrt((x - report.LapX[i]) * (x - report.LapX[i]) + (z - report.LapZ[i]) * (z - report.LapZ[i])):0.#} cells from the lap's point {i}, a walk of {walk.Walk(x, z)} cells from the dock");
                 edits.Add(GroupB.Add(model, spot, $@"void comportement_0()
 {{
     if ({before} && {StallTold + k + 1} > var_game({QStall}))
@@ -296,7 +321,7 @@ void comportement_1()
     {{
         invisible(0);
     }}
-    if ({StallTold + k} == var_game({QStall}) && 1200 > distance(0))
+    if ({StallTold + k} == var_game({QStall}) && {StatuetteTake} > distance(0))
     {{
         message({Say(LavaLine.Statuette)});
         set_var_game({QStall}, {StallTold + k + 1});
@@ -308,6 +333,115 @@ void comportement_1()
             return scripts => { foreach (var e in edits) e(scripts); };
         });
         return log;
+    }
+
+    // The ground of a scene's cube Twinsen can walk to from a place, cell by cell (island cells): a cell is ground to walk on if it is
+    // over the sea's height, neither of its triangles is water, lava, gas, electric or a wall (Col, but for the cars' walls), its sides
+    // rise no more than RiseMost, no decor's box stands on it, and no deadly cell touches it; he goes from a cell to the next (across a
+    // side) where their heights are within StepMost. Each statuette goes on such a cell with nothing deadly within ClearCells (the pickup
+    // reaches StatuetteTake, Twinsen comes from any side) and ActorGap from the scene's people. (The heights from walks up the lava
+    // lake's SW hill, 2026-11-05: up 450 a cell he walks, into a side rising 640 a cell he stuck.)
+    private sealed class StatuetteGround
+    {
+        private const double StepMost = 500, RiseMost = 560, ClearCells = 3, Apart = 8, DecorGap = 0.3, ActorGap = 3;
+        private static readonly HashSet<int> Deadly = new() { 1, 2, 8, 9, 11, 13, 14, 15 };
+        private readonly IslandFile ile;
+        private readonly int x0, z0;
+        private readonly double[,] height = new double[64, 64];
+        private readonly bool[,] deadly = new bool[64, 64], walkable = new bool[64, 64];
+        private readonly (int X, int Z)?[,] from = new (int, int)?[64, 64];
+        private readonly int[,] steps = new int[64, 64];
+        public int Reached { get; }
+
+        private readonly List<(double X, double Z, int Y)> people;
+
+        public StatuetteGround(IslandFile ile, SceneModel model, double fromX, double fromZ)
+        {
+            this.ile = ile;
+            (x0, z0) = (model.CubeX * 64, model.CubeY * 64);
+            // (the scene's actors: a statuette isn't put in anyone's lap -- the kangaroo's spot by the temple was the nearest to one)
+            people = model.Actors.Skip(1).Select(a => (x0 + a.X / 512.0, z0 + a.Z / 512.0, a.Y)).ToList();
+            var cube = ile.CubeAt(model.CubeX, model.CubeY);
+            var boxes = cube?.Decors.Where(d => d.YMax > d.YMin).Select(d => (X0: d.XMin / 512.0, Z0: d.ZMin / 512.0, X1: d.XMax / 512.0, Z1: d.ZMax / 512.0, d.YMin, d.YMax)).ToList()
+                        ?? new();
+            for (var z = 0; z < 64; z++)
+                for (var x = 0; x < 64; x++)
+                {
+                    var h = IslandOps.Altitude(ile, (x0 + x + 0.5) * 512, (z0 + z + 0.5) * 512) ?? 0;
+                    height[x, z] = h;
+                    var code = cube is { HasPolygons: true } ? new[] { 0, 1 }.Select(half => new IslandPolygon(cube.Polygon(x, z, half))).ToArray() : Array.Empty<IslandPolygon>();
+                    deadly[x, z] = h < 200 || code.Any(p => Deadly.Contains(p.CodeJeu));
+                    // (a bank walled for the cars only is open to Twinsen on foot: MAPTOOLS.CPP GiveTerrainCol, CJ_CAR_WALL)
+                    var wall = code.Any(p => p.Col && p.CodeJeu != RaceTrackBuilder.CarWall)
+                               || boxes.Any(b => x + 0.5 > b.X0 - DecorGap && x + 0.5 < b.X1 + DecorGap && z + 0.5 > b.Z0 - DecorGap && z + 0.5 < b.Z1 + DecorGap
+                                                 && b.YMax > h + 100 && b.YMin < h + 1500);
+                    // (the steepest of its sides and diagonals, a cell's width along)
+                    var corners = new[] { (0, 0), (1, 0), (0, 1), (1, 1) }.Select(c => (double)(ile.HeightAt(x0 + x + c.Item1, z0 + z + c.Item2) ?? 0)).ToArray();
+                    var rise = Math.Max(Math.Max(Math.Abs(corners[0] - corners[1]), Math.Abs(corners[2] - corners[3])), Math.Max(Math.Abs(corners[0] - corners[2]), Math.Abs(corners[1] - corners[3])));
+                    rise = Math.Max(rise, Math.Max(Math.Abs(corners[0] - corners[3]), Math.Abs(corners[1] - corners[2])) / Math.Sqrt(2));
+                    walkable[x, z] = !wall && rise <= RiseMost;
+                }
+            for (var z = 0; z < 64; z++)
+                for (var x = 0; x < 64; x++)
+                    walkable[x, z] &= x >= 2 && x < 62 && z >= 2 && z < 62 && !DeadlyWithin(x, z, 1);
+            // (from the dock, or the nearest ground to walk on)
+            int hx = Math.Clamp((int)Math.Floor(fromX) - x0, 0, 63), hz = Math.Clamp((int)Math.Floor(fromZ) - z0, 0, 63);
+            (int X, int Z)? start = null;
+            for (var r = 0; r <= 6 && start is null; r++)
+                for (var dz = -r; dz <= r && start is null; dz++)
+                    for (var dx = -r; dx <= r; dx++)
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) == r && In(hx + dx, hz + dz) && walkable[hx + dx, hz + dz]) { start = (hx + dx, hz + dz); break; }
+            if (start is not { } s) return;
+            var queue = new Queue<(int X, int Z)>();
+            from[s.X, s.Z] = s;
+            queue.Enqueue(s);
+            Reached = 1;
+            while (queue.Count > 0)
+            {
+                var (cx, cz) = queue.Dequeue();
+                foreach (var (dx, dz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    int nx = cx + dx, nz = cz + dz;
+                    if (!In(nx, nz) || !walkable[nx, nz] || from[nx, nz] is not null || Math.Abs(height[nx, nz] - height[cx, cz]) > StepMost) continue;
+                    from[nx, nz] = (cx, cz);
+                    steps[nx, nz] = steps[cx, cz] + 1;
+                    queue.Enqueue((nx, nz));
+                    Reached++;
+                }
+            }
+        }
+
+        private static bool In(int x, int z) => x >= 0 && x < 64 && z >= 0 && z < 64;
+
+        private bool DeadlyWithin(int x, int z, double r)
+        {
+            var n = (int)Math.Ceiling(r);
+            for (var dz = -n; dz <= n; dz++)
+                for (var dx = -n; dx <= n; dx++)
+                    if (dx * dx + dz * dz <= r * r + 1 && In(x + dx, z + dz) && deadly[x + dx, z + dz]) return true;
+            return false;
+        }
+
+        // The cell nearest an island cell that Twinsen walks to, clear of anything deadly and Apart from those `placed`: its middle and height
+        public (double X, double Z, double Y)? Nearest(double x, double z, List<(double X, double Z)> placed)
+        {
+            (double X, double Z, double Y)? best = null;
+            var bestD = double.MaxValue;
+            for (var cz = 0; cz < 64; cz++)
+                for (var cx = 0; cx < 64; cx++)
+                {
+                    if (from[cx, cz] is null || DeadlyWithin(cx, cz, ClearCells)) continue;
+                    double px = x0 + cx + 0.5, pz = z0 + cz + 0.5, d = (px - x) * (px - x) + (pz - z) * (pz - z);
+                    if (d >= bestD || placed.Any(p => (p.X - px) * (p.X - px) + (p.Z - pz) * (p.Z - pz) < Apart * Apart)) continue;
+                    var y = IslandOps.Altitude(ile, px * 512, pz * 512) ?? height[cx, cz];
+                    if (people.Any(p => (p.X - px) * (p.X - px) + (p.Z - pz) * (p.Z - pz) < ActorGap * ActorGap && Math.Abs(p.Y - y) < 2000)) continue;
+                    (bestD, best) = (d, (px, pz, y));
+                }
+            return best;
+        }
+
+        // How many cells' walk from the place it was asked from (island cells)
+        public int Walk(double x, double z) => steps[(int)Math.Floor(x) - x0, (int)Math.Floor(z) - z0];
     }
 
     // ---- the dive into the lava (the user, 2026-11-03: "For celebrat.ile we have a jump over the lava, and inside the imperial hotel
