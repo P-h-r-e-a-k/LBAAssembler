@@ -74,13 +74,19 @@ internal static partial class IslandRetell
                 string life;
                 try { life = sceneScripts.GetText(a, ScriptKind.Life); }
                 catch (InvalidOperationException) { continue; }
+                var choices = new HashSet<int>();
                 var now = Says.Replace(life, m =>
                 {
                     var id = int.Parse(m.Groups[3].Value);
                     if (!retold.TryGetValue(id, out var to)) { said.Add(id); return m.Value; }
                     replaced++;
+                    if (m.Groups[1].Value == "add_choice") choices.Add(id);
                     return $"{m.Groups[1].Value}({m.Groups[2].Value}{to})";
                 });
+                // (a choice offered under its new number is answered under it too: choice() returns the text chosen, so the script's
+                // `N == choice()` and a `switch (choice())`'s `case N:` are retold with it -- the sweep of 2026-11-05 found Citadel's
+                // umbrella man offering 1140 and testing 107, his answer never said)
+                if (choices.Count > 0) now = RetellChoices(now, choices, retold);
                 if (now == life) continue;
                 sceneScripts.SetText(a, ScriptKind.Life, now);
                 changed = true; scripts++;
@@ -122,6 +128,47 @@ internal static partial class IslandRetell
         log.Add($"{name}'s people retold: {lines.Length} of the game's lines as {added.Count} new texts ({first}-{first + added.Count - 1}), " +
                 $"{replaced} lines in {scripts} scripts of {scenes} scenes; {emptied.Count} of the game's texts no script says any more emptied");
         return log;
+    }
+
+    // A script's tests of the choices it offers, retold as the add_choice lines were: `N == choice()`, `choice() == N`, and each
+    // `case N:` at the top level of a `switch (choice())` block (only there: another switch's cases are numbers of something else).
+    private static readonly Regex ChoiceTest = new(@"\b(\d+)(\s*==\s*choice\(\))|(choice\(\)\s*==\s*)(\d+)\b");
+    private static readonly Regex ChoiceSwitch = new(@"switch\s*\(\s*choice\(\)\s*\)\s*\{");
+    private static readonly Regex CaseLabel = new(@"\bcase\s+(\d+)\s*:");
+
+    internal static string RetellChoices(string life, HashSet<int> offered, IReadOnlyDictionary<int, int> retold)
+    {
+        int To(int id) => offered.Contains(id) && retold.TryGetValue(id, out var to) ? to : id;
+        life = ChoiceTest.Replace(life, m => m.Groups[1].Success
+            ? $"{To(int.Parse(m.Groups[1].Value))}{m.Groups[2].Value}"
+            : $"{m.Groups[3].Value}{To(int.Parse(m.Groups[4].Value))}");
+        var text = new StringBuilder(life);
+        foreach (Match sw in ChoiceSwitch.Matches(life).Cast<Match>().Reverse())
+        {
+            // (the switch's block: from its brace to the brace that closes it; its own cases at depth 1)
+            int open = sw.Index + sw.Length - 1, depth = 0, close = -1;
+            for (var i = open; i < life.Length; i++)
+            {
+                if (life[i] == '{') depth++;
+                else if (life[i] == '}' && --depth == 0) { close = i; break; }
+            }
+            if (close < 0) continue;
+            var labels = new List<Match>();
+            depth = 0;
+            for (var i = open; i < close; i++)
+            {
+                if (life[i] == '{') depth++;
+                else if (life[i] == '}') depth--;
+                else if (depth == 1 && CaseLabel.Match(life, i) is { Success: true } c && c.Index == i) labels.Add(c);
+            }
+            foreach (var c in Enumerable.Reverse(labels))
+            {
+                var id = int.Parse(c.Groups[1].Value);
+                if (To(id) == id) continue;
+                text.Remove(c.Groups[1].Index, c.Groups[1].Length).Insert(c.Groups[1].Index, To(id).ToString());
+            }
+        }
+        return text.ToString();
     }
 
     private static Encoding Dos
