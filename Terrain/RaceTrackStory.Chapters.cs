@@ -154,12 +154,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "A fellow ran past with gloves in one hand and a customer's umbrella in the other. Towards the harbour! If you catch him, I want that umbrella back. Not that I've anywhere to put it.",
-            "Un type est passé en courant, des gants dans une main et le parapluie d'un client dans l'autre. Vers le port ! Si tu l'attrapes, je veux récupérer ce parapluie. Pas que j'aie un endroit où le mettre.",
-            "Ein Kerl ist vorbeigerannt, Handschuhe in der einen Hand und den Regenschirm eines Gastes in der anderen. Zum Hafen! Wenn du ihn erwischst, will ich den Schirm zurück. Nicht, dass ich wüsste, wohin damit.",
-            "Un tipo pasó corriendo con unos guantes en una mano y el paraguas de un cliente en la otra. ¡Hacia el puerto! Si lo pillas, quiero ese paraguas de vuelta. Aunque no tenga dónde ponerlo.",
-            "Un tizio è passato di corsa con dei guanti in una mano e l'ombrello di un cliente nell'altra. Verso il porto! Se lo prendi, rivoglio quell'ombrello. Non che sappia dove metterlo.",
-            "Um tipo passou a correr com umas luvas numa mão e o guarda-chuva de um cliente na outra. Para o porto! Se o apanhares, quero esse guarda-chuva de volta. Não que tenha onde o pôr.",
+            "A fellow ran past with gloves in one hand and an umbrella in the other -- the one he snatched at the pharmacy, from one of my regulars. Towards the harbour! If you catch him, bring me that umbrella: I'll keep it for her.",
+            "Un type est passé en courant, des gants dans une main et un parapluie dans l'autre -- celui qu'il a chipé à la pharmacie, à une de mes habituées. Vers le port ! Si tu l'attrapes, rapporte-moi ce parapluie : je le lui garderai.",
+            "Ein Kerl ist vorbeigerannt, Handschuhe in der einen Hand und einen Regenschirm in der anderen -- den er in der Apotheke einer meiner Stammgäste weggeschnappt hat. Zum Hafen! Wenn du ihn erwischst, bring mir den Schirm: ich bewahre ihn für sie auf.",
+            "Un tipo pasó corriendo con unos guantes en una mano y un paraguas en la otra -- el que le quitó en la farmacia a una de mis clientas de siempre. ¡Hacia el puerto! Si lo pillas, tráeme ese paraguas: se lo guardaré.",
+            "Un tizio è passato di corsa con dei guanti in una mano e un ombrello nell'altra -- quello che ha soffiato in farmacia a una mia cliente abituale. Verso il porto! Se lo prendi, portami quell'ombrello: glielo terrò da parte.",
+            "Um tipo passou a correr com umas luvas numa mão e um guarda-chuva na outra -- o que ele surripiou na farmácia a uma das minhas clientes. Para o porto! Se o apanhares, traz-me esse guarda-chuva: eu guardo-lho.",
         },
         new[]
         {
@@ -181,12 +181,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Our customer's umbrella! I'd stand you a drink on the house, if I still had a house. Here.",
-            "Le parapluie de notre client ! Je t'offrirais bien un verre aux frais de la maison, si j'avais encore une maison. Tiens.",
-            "Der Schirm unseres Gastes! Ich würde dir ja einen auf Kosten des Hauses ausgeben, wenn ich noch ein Haus hätte. Hier.",
-            "¡El paraguas de nuestro cliente! Te invitaría a una copa a cuenta de la casa, si aún tuviera casa. Toma.",
-            "L'ombrello del nostro cliente! Ti offrirei da bere a spese della casa, se avessi ancora una casa. Tieni.",
-            "O guarda-chuva do nosso cliente! Pagava-te uma bebida por conta da casa, se ainda tivesse casa. Toma.",
+            "My regular's umbrella, from the pharmacy! I'll keep it for her. I'd stand you a drink on the house, if I still had a house. Here.",
+            "Le parapluie de mon habituée, celui de la pharmacie ! Je le lui garderai. Je t'offrirais bien un verre aux frais de la maison, si j'avais encore une maison. Tiens.",
+            "Der Schirm meines Stammgastes, aus der Apotheke! Ich bewahre ihn für sie auf. Ich würde dir ja einen auf Kosten des Hauses ausgeben, wenn ich noch ein Haus hätte. Hier.",
+            "¡El paraguas de mi clienta, el de la farmacia! Se lo guardaré. Te invitaría a una copa a cuenta de la casa, si aún tuviera casa. Toma.",
+            "L'ombrello della mia cliente, quello della farmacia! Glielo terrò da parte. Ti offrirei da bere a spese della casa, se avessi ancora una casa. Tieni.",
+            "O guarda-chuva da minha cliente, o da farmácia! Eu guardo-lho. Pagava-te uma bebida por conta da casa, se ainda tivesse casa. Toma.",
         },
         new[]
         {
@@ -334,21 +334,21 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And that umbrella you brought back is on its hook by the door. The customer never came for it. Exactly as it was.",
-            "Et ce parapluie que tu as rapporté est à son crochet près de la porte. Le client n'est jamais venu le chercher. Exactement comme avant.",
-            "Und der Schirm, den du zurückgebracht hast, hängt an seinem Haken neben der Tür. Der Gast hat ihn nie abgeholt. Genau wie vorher.",
-            "Y ese paraguas que trajiste está en su gancho junto a la puerta. El cliente nunca vino a buscarlo. Exactamente como estaba.",
-            "E quell'ombrello che hai riportato è al suo gancio vicino alla porta. Il cliente non è mai venuto a prenderlo. Esattamente com'era.",
-            "E aquele guarda-chuva que trouxeste está no gancho ao pé da porta. O cliente nunca o veio buscar. Exatamente como estava.",
+            "And that umbrella you brought back is on its hook by the door. She never came for it. Exactly as it was.",
+            "Et ce parapluie que tu as rapporté est à son crochet près de la porte. Elle n'est jamais venue le chercher. Exactement comme avant.",
+            "Und der Schirm, den du zurückgebracht hast, hängt an seinem Haken neben der Tür. Sie hat ihn nie abgeholt. Genau wie vorher.",
+            "Y ese paraguas que trajiste está en su gancho junto a la puerta. Ella nunca vino a buscarlo. Exactamente como estaba.",
+            "E quell'ombrello che hai riportato è al suo gancio vicino alla porta. Lei non è mai venuta a prenderlo. Esattamente com'era.",
+            "E aquele guarda-chuva que trouxeste está no gancho ao pé da porta. Ela nunca o veio buscar. Exatamente como estava.",
         },
         new[]
         {
-            "And if you ever find that customer's umbrella, there's a hook by the door waiting for it.",
-            "Et si jamais tu retrouves le parapluie de ce client, il y a un crochet près de la porte qui l'attend.",
-            "Und falls du je den Schirm dieses Gastes findest: Neben der Tür wartet ein Haken auf ihn.",
-            "Y si alguna vez encuentras el paraguas de ese cliente, hay un gancho junto a la puerta esperándolo.",
-            "E se mai trovi l'ombrello di quel cliente, c'è un gancio vicino alla porta che lo aspetta.",
-            "E se alguma vez encontrares o guarda-chuva desse cliente, há um gancho ao pé da porta à espera dele.",
+            "And if you ever find my regular's umbrella, there's a hook by the door waiting for it.",
+            "Et si jamais tu retrouves le parapluie de mon habituée, il y a un crochet près de la porte qui l'attend.",
+            "Und falls du je den Schirm meines Stammgastes findest: Neben der Tür wartet ein Haken auf ihn.",
+            "Y si alguna vez encuentras el paraguas de mi clienta, hay un gancho junto a la puerta esperándolo.",
+            "E se mai trovi l'ombrello della mia cliente, c'è un gancio vicino alla porta che lo aspetta.",
+            "E se alguma vez encontrares o guarda-chuva da minha cliente, há um gancho ao pé da porta à espera dele.",
         },
         new[]
         {

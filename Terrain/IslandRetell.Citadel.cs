@@ -663,6 +663,19 @@ internal static partial class IslandRetell
             "Se un articolo vi interessa, mettetevi proprio davanti e spingete il tasto \"AZIONE\".",
             "Se você se interessar por alguma coisa, posicione-se em frente e clique em \"AÇÃO\".",
         }),
+        // (Twinsen's own question to the pharmacist -- the game's asked for a cure for his injured Dino-Fly, who isn't hurt in the mod's
+        // story: Zoe has gone off to watch the races on him. The user, 2026-11-04: the scene should make sense with the story. Without the
+        // driving gloves the thief took, he has Raph's time to beat bare-handed: the pharmacist has nothing for it, her customer will help if he
+        // brings back her umbrella -- which the thief walks in and takes, as in the game, Twinsen held still while he does)
+        (252, new[]
+        {
+            "Have you anything to protect my hands? Somebody stole my driving gloves, and I have to beat Raph's time on the track today.",
+            "Vous auriez quelque chose pour protéger mes mains ? On m'a volé mes gants de pilote, et je dois battre le temps de Raph sur le circuit aujourd'hui.",
+            "Haben Sie etwas, um meine Hände zu schützen? Jemand hat meine Fahrhandschuhe gestohlen, und ich muß heute Raphs Zeit auf der Rennstrecke schlagen.",
+            "¿Tiene algo para protegerme las manos? Alguien me ha robado los guantes de piloto, y hoy tengo que batir el tiempo de Raph en el circuito.",
+            "Ha qualcosa per proteggermi le mani? Qualcuno mi ha rubato i guanti da pilota, e oggi devo battere il tempo di Raph sulla pista.",
+            "Você tem alguma coisa para proteger as minhas mãos? Alguém roubou minhas luvas de piloto, e hoje eu preciso bater o tempo do Raph na pista.",
+        }),
         (253, new[]
         {
             "I have nothing for that, but my customer here might be able to help you.",
