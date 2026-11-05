@@ -1008,7 +1008,7 @@ his start, lost and won lines (the race's own, as the other tracks' mains have);
 |---|---|---|
 | Lyra | the marshal, on the deck's edge | the start |
 | The Wannie miner | the game's (BODY 342) | by his bulldozer |
-| The old Wannie | the game's (BODY 386) | near the frog |
+| The old Wannie | the game's (BODY 386) | by the miner, watching the frog |
 | The glove | Wannie's glove (item 11) | just inside the frog's mouth |
 | Zoe | the companion | |
 | The masked driver | the black car | past the finish |

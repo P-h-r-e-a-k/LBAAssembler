@@ -19720,8 +19720,21 @@ static void ResetTrack(void) {
 // An outside scene of `island` is loading (EXTFUNC.CPP InitGrilleExt, before the island's file is chosen): with a set of tracks (track=),
 // the one raced there now -- in this weather, with the statue or without it -- is loaded in place of the one before; on an island with
 // none, the car alone.
+// The held variables (vargame=) set as the scene loads, before any of its scripts first runs: RaceMod_Frame holds them only after a frame's
+// life, and that first frame was enough for a script to read the game's own value. Wannies Island's scene 98 read variable 107 at 0 and
+// played the elevator's ride down (save_hero, no_body, cinema), and by the time it ended in scene 123 the hold had set 107 to 1, so the
+// hall's script skipped its restore_hero: Twinsen bodiless, his Action answered by no one (the scripted playthrough, chapter 9, 2026-11-05).
+static void HoldVars(void) {
+    for (int i = 0; i < s_nbHeld; i++)
+        if (ListVarGame[s_held[i][0]] != s_held[i][1]) {
+            ListVarGame[s_held[i][0]] = (S16)s_held[i][1];
+            Log_Info("[racemod] game variable %d held at %d (as the scene loads)", s_held[i][0], s_held[i][1]);
+        }
+}
+
 void RaceMod_Island(S32 island) {
-    if (!RaceMod_Active() || !s_nbTracks) return;
+    if (!RaceMod_Active()) return;
+    if (!s_nbTracks) { HoldVars(); return; }
     const int fine = ListVarGame[FLAG_CHAPTER] >= 2 || s_setFine, risen = ListVarGame[FLAG_CELEBRATION] != 0;
     const char *want = NULL;
     // (a track raced in scenes of its own before one raced in any of the island's: the set lists them in the order they were built, and
@@ -19734,12 +19747,13 @@ void RaceMod_Island(S32 island) {
             if (t->When == 0 || (t->When == 1 && !fine) || (t->When == 2 && fine) || (t->When == 3 && risen) || (t->When == 4 && !risen)) want = t->Path;
         }
     // (the same track goes on -- unless its race is over: coming back to it is a race afresh)
-    if (want ? s_ownTrack && !strcmp(want, s_loaded) && !s_place : !s_ownTrack) return;
+    if (want ? s_ownTrack && !strcmp(want, s_loaded) && !s_place : !s_ownTrack) { HoldVars(); return; }
     const char *base = getenv("LBA2_RACETRACK_FILE");
     char path[260];
     snprintf(path, sizeof(path), "%s", want ? want : base ? base : "");
     ResetTrack();
     Load(path, want ? 0 : 1);
+    HoldVars();
     if (want) Log_Info("[racemod] island %d%s: its track, %s", (int)island, island == 0 ? (fine ? " (fine weather)" : " (storm)") : "", path);
     else Log_Info("[racemod] island %d: no track -- the car alone", (int)island);
 }

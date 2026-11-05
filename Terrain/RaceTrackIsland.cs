@@ -367,6 +367,11 @@ internal sealed record RaceTrackIsland(
     // Otringal's square island's Dino-Fly landing, which holds Twinsen at its pad while variable 83 is under 2 (2026-10-08; held at 4 since
     // 2026-11-05).
     public (int Var, int Value)[] HeldVars { get; init; } = Array.Empty<(int, int)>();
+    // ... of them, the ones the story leaves to the game's own scripts (not held in the story's car file, RaceCarEngineFile): Wannies
+    // Island's 107, so that Twinsen, come down from the Elevator Platform, rides the game's elevator down into its foot (scene 98's
+    // save_hero and no_body, the ride, scene 123's restore_hero and 107 set to 1) and walks out onto the deck. Held, it skipped the ride's
+    // end in 123 and he stayed bodiless, his Action answered by no one (the scripted playthrough, chapter 9, 2026-11-05).
+    public int[] StoryUnheldVars { get; init; } = Array.Empty<int>();
     // Shuttles the race-track mode flies (the car file's shuttle=): a scene's actor (its index and entity in the game's scene) and the pad
     // on the road it comes down onto (cube-local x and z) -- Otringal's spaceship on the square island hovers over the road, lands on it a
     // while and rises straight up again, over and over (the user, 2026-10-08).
@@ -415,7 +420,7 @@ internal sealed record RaceTrackIsland(
             SharedFrom = from, SharedIndex = index,
             // (Citadel Island's: the town circuit's line-up, the track a plan for it is)
             Crossing = from.Crossing, Roster = from.RacesTwin && from.TwinRoster is { } town ? town : from.Roster, View = from.View, Look = from.Look, KeepOffRoadActors = from.KeepOffRoadActors,
-            OwnRimsAt = from.OwnRimsAt, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars,
+            OwnRimsAt = from.OwnRimsAt, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars, StoryUnheldVars = from.StoryUnheldVars,
             RailHeld = from.RailHeld, Title = $"{name} (shared, on {from.Shown})",
         };
     }
@@ -534,6 +539,8 @@ internal sealed record RaceTrackIsland(
         // foot -- while it's 0, and above 1 the cinema of his way back up)
         // (and the frog's still copy among the decor -- the editor's -- hidden: the race-track mode draws the frog, RaceTrackFrog.AddDecor)
         HeldVars = new[] { (107, 1), (RaceTrackFrog.DecorVar, 1) },
+        // (the story's Twinsen does come down in the elevator, on foot: the game's ride and its end in scene 123 play)
+        StoryUnheldVars = new[] { 107 },
         // (the pier's east post, body 33: the pit lane runs over the pier there, low since the road came down -- 2026-10-15)
         DropDecors = new[] { (8, 7, 19712, 17664) },
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do

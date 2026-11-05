@@ -864,7 +864,7 @@ snapping at me."
 
 **Zoe:** "Gloves again. Everyone on these islands loses their gloves."
 
-**4. The old Wannie.** She's near the frog.
+**4. The old Wannie.** She's on the deck by the miner, watching the frog across the lava.
 
 **The old Wannie:** "The frog opens its mouth every few seconds. Your glove's just inside. Be quick, dear."
 

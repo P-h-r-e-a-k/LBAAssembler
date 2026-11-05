@@ -90,7 +90,10 @@ internal static class RaceCarEngineFile
         // (the Island of the Francos: every car on Gazogem fuel all race, none from a mushroom)
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { FuelAlways: true }) text.Append("fuel_always=1\n");
         // (game variables held while it races: travel cutscenes kept from playing -- Otringal's Dino-Fly landing)
-        if (info is not null) foreach (var (n, value) in RaceTrackIsland.ByName(info.Island).HeldVars) text.Append($"vargame={n} {value}\n");
+        // (the story's file: not those the story leaves to the game's own scripts -- Wannies Island's elevator ride, StoryUnheldVars)
+        if (info is not null && RaceTrackIsland.ByName(info.Island) is { } heldOn)
+            foreach (var (n, value) in heldOn.HeldVars)
+                if (!(story && heldOn.StoryUnheldVars.Contains(n))) text.Append($"vargame={n} {value}\n");
         // the pipes over the road: their steam and the oil they drip onto it
         foreach (var steam in track?.Steam ?? new()) text.Append($"steam={string.Join(' ', steam)}\n");
         foreach (var drip in track?.Drips ?? new()) text.Append($"drip={string.Join(' ', drip)}\n");

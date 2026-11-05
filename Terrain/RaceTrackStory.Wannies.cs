@@ -7,7 +7,8 @@ namespace LBAAssembler.Terrain;
 // scene 98):
 //   - arrival: Lyra's word (Q_GLOVE 1), then Baldino's call on the radio (GroupB.Arrival, in every outside scene: var 236 9);
 //   - the Wannie miner (a Wannie of the game's, scene 96's actor 2, copied) by the start: no glove, no driving (Q_GLOVE 2), Zoe's word;
-//   - the old Wannie (scene 96's actor 3, copied) on the ground under the frog: the glove's just inside its mouth;
+//   - the old Wannie (scene 96's actor 3, copied) on the ground by the miner, watching the frog across the lava: the glove's just inside
+//     its mouth;
 //   - the glove (Wannie's glove, item 11) at the frog's mouth on the lap: Twinsen, on foot or driving, within reach of it (Q_GLOVE 3).
 //     The race-track mode's frog opens and shuts on its own clock, which no script can read: the glove is there whether the mouth is open
 //     or not (the engine would need to give the mouth's state to the scripts, a game variable, for "grab it while it's open");
@@ -160,7 +161,8 @@ internal static partial class RaceTrackStory
         var arrival = originals.Load(WanniesArrival);
         double ax = arrival.CubeX * 64 + arrival.Hero.X / 512.0, az = arrival.CubeY * 64 + arrival.Hero.Z / 512.0;
         var miner = Copy(originals, WannieScene, MinerActor);
-        if (miner is not null && GroupB.SpotAt(store, island, report, ax + 2, az + 2, arrival.Hero.Y, ax, az) is { } m)
+        var minerSpot = GroupB.SpotAt(store, island, report, ax + 2, az + 2, arrival.Hero.Y, ax, az);
+        if (miner is not null && minerSpot is { } m)
             GroupB.EditScene(store, m.Scene, log, $"the Wannie miner at cell ({m.At.X:0.#}, {m.At.Z:0.#}): no glove, no driving; his glove back (Q_GLOVE 2, 4)", model =>
             {
                 Place(miner, model, m.At);
@@ -222,13 +224,30 @@ void comportement_1()
 ");
             });
         else log.Add("Wannie's glove left out: the frog is in no outside scene");
-        if (oldWannie is not null && GroupB.Spot(store, island, report, frog.X - frog.Tx * 3, frog.Z - frog.Tz * 3, frog.X, frog.Z, 1.5, 16) is { } w)
-            GroupB.EditScene(store, w.Scene, log, $"the old Wannie under the frog at cell ({w.At.X:0.#}, {w.At.Z:0.#}): the glove's just inside its mouth", model =>
+        if (oldWannie is not null && OldWannieSpot(store, island, report, minerSpot, frog) is { } w)
+            GroupB.EditScene(store, w.Scene, log, $"the old Wannie on the deck by the miner at cell ({w.At.X:0.#}, {w.At.Z:0.#}), watching the frog: the glove's just inside its mouth", model =>
             {
                 Place(oldWannie, model, w.At);
                 return GroupB.Add(model, oldWannie, Talker(when, $"            message({Say(WanniesLine.OldWannie)});"));
             });
-        else log.Add("the old Wannie left out: no room off the road under the frog");
+        else log.Add("the old Wannie left out: no room off the road by the miner");
         return log;
+    }
+
+    // The old Wannie's place: on the ground by the miner, where Twinsen walks off the elevator, looking out across the lava at the frog.
+    // (Under the frog, where she stood first, no one could reach her: the lap passes over scene 96 only at the frog's height, 3000 and more
+    // above her, Twinsen can't get out of his car outside scene 98 -- his car's own actor is there -- and on foot scene 98's west edge into
+    // 96 is lava: the scripted playthrough, chapter 9, 2026-11-05.) Two cells and more from the miner, in his scene.
+    private static (int Scene, (double X, double Z, double Y, int Beta) At)? OldWannieSpot(SceneStore store, RaceTrackIsland island,
+        RaceTrackReport report, (int Scene, (double X, double Z, double Y, int Beta) At)? minerSpot, FrogInfo frog)
+    {
+        if (minerSpot is not { } m) return null;
+        foreach (var (dx, dz) in new[] { (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0), (3.0, 0.0), (-3.0, 3.0), (-3.0, -3.0), (3.0, 3.0), (3.0, -3.0) })
+        {
+            if (GroupB.SpotAt(store, island, report, m.At.X + dx, m.At.Z + dz, m.At.Y, frog.X, frog.Z, 1, 2) is not { } w) continue;
+            if (w.Scene != m.Scene || Math.Pow(w.At.X - m.At.X, 2) + Math.Pow(w.At.Z - m.At.Z, 2) < 2 * 2) continue;
+            return w;
+        }
+        return null;
     }
 }

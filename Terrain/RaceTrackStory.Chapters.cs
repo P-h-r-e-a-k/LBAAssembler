@@ -1324,6 +1324,10 @@ void comportement_1()
         message_obj({LighthouseKeeper}, {p.Say(ChapterLine.RaphBed)});
         message_zoe({p.Say(ChapterLine.ZoeLights)});
         set_var_game({DayVar}, {Tired});");
+        // (his body back as he leaves: the spell's cutscene took it -- no_body, comportement_4 -- and the game gave it back in scene 42's
+        // landing cutscene, restore_hero, which chapter 2 starts; the chapter stays 1 now, so in 42 he stood bodiless, no walking, no one
+        // answering him: the scripted playthrough, chapter 1, 2026-11-05)
+        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(0);\n        comportement_hero(0);\n        change_cube(42);");
         scripts.SetText(0, ScriptKind.Life, hero);
     });
 
