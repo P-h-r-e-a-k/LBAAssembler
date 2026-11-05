@@ -231,6 +231,11 @@ internal static partial class RaceTrackStory
                     $"if (2 > chapter())\n{{\nmessage({storm.Groups[1].Value});\n}}\nelse\n{{\nmessage(314);\nmessage_obj(0, 311);\nmessage(310);\n}}"))(life);
         }),
         new(42, 5, @"set_var_game\(70, 1\)", "the Esmer of the game's landing not on the quay the night before they land (chapter 1)", Gone("2 > chapter()")),
+        // (the Tavern's own Luc and drunk rabbibunny: in chapter 2 the story has Luc in the yard by his barrel car and the rabbibunny round
+        // the Esmers' landing -- RaceTrackStory.Chapters.cs, Yard and TownPeople -- so not in the Tavern too; back behind the bar after.
+        // Tim's MOVE_FOLLOW 4 and the regular's message_obj(4, 71) are the game's own with the rabbibunny gone, as on var 51)
+        new(3, 4, @"1 == var_game\(51\) \|\| 4 == chapter\(\)", "the Tavern's drunk rabbibunny not in the Tavern in chapter 2 (he's round the Esmers' landing)", Gone("2 == chapter()")),
+        new(3, 5, @"set_dir_obj\(6, MOVE_FOLLOW, 5\)", "Luc not behind the Tavern's bar in chapter 2 (he's in the yard by his barrel car)", Gone("2 == chapter()")),
     }, new List<ClosedDoor>());
 
     private static (List<Retirement>, List<ClosedDoor>) DesertRetired() => (new List<Retirement>
