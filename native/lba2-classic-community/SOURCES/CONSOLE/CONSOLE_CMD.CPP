@@ -2124,6 +2124,62 @@ static void cmd_storylog(int argc, const char *argv[]) {
     Console_Print("storylog: %s", DbgStoryLog ? "ON" : "OFF");
 }
 
+/* when <cond> | cmd | cmd ...   and   until <cond> [every <ticks>] [max <tries>] | cmd | cmd ...
+   <cond>: cube <n> | notcube <n> | var <n> <op> <v> | varcube <n> <op> <v>, op one of = != < > <= >=. The commands after the bars
+   (';' already splits a console line, so '|' here) run once as the condition holds (when), or every <ticks> until it does (until:
+   default every 30, no limit). For scripted runs (CONTROL.CPP Control_AddWatch). */
+static void cmd_watch(int until, int argc, const char *argv[]) {
+    char line[1024] = "", cmds[1024];
+    for (int a = 1; a < argc; a++) {
+        if (strlen(line) + strlen(argv[a]) + 2 >= sizeof(line))
+            break;
+        if (a > 1)
+            strcat(line, " ");
+        strcat(line, argv[a]);
+    }
+    char *bar = strchr(line, '|');
+    if (!bar) {
+        Console_Print("%s <cond> %s| cmd | cmd ...  (cond: cube N | notcube N | var N op V | varcube N op V)", until ? "until" : "when",
+                      until ? "[every T] [max M] " : "");
+        return;
+    }
+    *bar = '\0';
+    snprintf(cmds, sizeof(cmds), "%s", bar + 1);
+    for (char *p = cmds; *p; p++)
+        if (*p == '|')
+            *p = ';';
+    const char *tok[16];
+    int nt = 0;
+    for (char *t = strtok(line, " \t"); t && nt < 16; t = strtok(NULL, " \t"))
+        tok[nt++] = t;
+    int what = -1, n = 0, op = 0, v = 0, used = 0, every = 30, max = 0;
+    static const char *const ops[] = {"=", "!=", "<", ">", "<=", ">="};
+    if (nt >= 2 && (!strcasecmp(tok[0], "cube") || !strcasecmp(tok[0], "notcube"))) {
+        what = 0; op = strcasecmp(tok[0], "cube") ? 1 : 0; v = atoi(tok[1]); used = 2;
+    } else if (nt >= 4 && (!strcasecmp(tok[0], "var") || !strcasecmp(tok[0], "varcube"))) {
+        what = strcasecmp(tok[0], "var") ? 2 : 1; n = atoi(tok[1]); v = atoi(tok[3]); used = 4;
+        op = -1;
+        for (int k = 0; k < 6; k++)
+            if (!strcmp(tok[2], ops[k]) || (k == 0 && !strcmp(tok[2], "==")))
+                op = k;
+    }
+    if (what < 0 || op < 0) {
+        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V)", until ? "until" : "when");
+        return;
+    }
+    for (int k = used; k + 1 < nt; k += 2) {
+        if (!strcasecmp(tok[k], "every")) every = atoi(tok[k + 1]);
+        else if (!strcasecmp(tok[k], "max")) max = atoi(tok[k + 1]);
+    }
+    if (!Control_AddWatch(until, what, n, op, v, every, max, cmds)) {
+        Console_Print("%s: out of memory", until ? "until" : "when");
+        return;
+    }
+    Console_Print("%s: set (%s)", until ? "until" : "when", cmds);
+}
+static void cmd_when(int argc, const char *argv[]) { cmd_watch(0, argc, argv); }
+static void cmd_until(int argc, const char *argv[]) { cmd_watch(1, argc, argv); }
+
 /* choose <i> [j ...] | clear: the answers (0 the first) the next questions take, in turn, without their menu (GAMEMENU.CPP). */
 extern void AskChoice_Queue(S32 pick);
 extern S32 AskChoice_QueuedCount(void);
@@ -3136,6 +3192,12 @@ void Console_RegisterAll(void) {
                               "For a scripted playthrough: \"[story] obj=N ...\" lines for MESSAGE, MESSAGE_OBJ, MESSAGE_ZOE, "
                               "ASK_CHOICE (the choices and the one taken), FOUND_OBJECT, CHANGE_CUBE, and each game or scene "
                               "variable an object's Life changed (obj -1: changed outside a Life).");
+    Console_RegisterCommandEx("when", cmd_when, "Run commands once a condition holds",
+                              "when <cube N | notcube N | var N op V | varcube N op V> | cmd | cmd ...",
+                              "For scripted runs: the commands after the bars run once, the first tick the condition holds.");
+    Console_RegisterCommandEx("until", cmd_until, "Run commands again and again until a condition holds",
+                              "until <cube N | notcube N | var N op V | varcube N op V> [every T] [max M] | cmd | cmd ...",
+                              "For scripted runs: the commands run now and every T ticks (30) until the condition holds, or M tries.");
     Console_RegisterCommandEx("choose", cmd_choose, "Queue the answers the next questions take",
                               "choose <i> [j ...] | choose clear",
                               "The next questions (ask_choice) take answer i (0 the first), then j, ... without opening "

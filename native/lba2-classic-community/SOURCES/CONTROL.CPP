@@ -1036,6 +1036,79 @@ static void control_run_exec_at(long tick) {
     }
 }
 
+/* --- Watches: console `when` / `until` ------------------------------------------------------------------------------------------
+   A scripted run's commands on what the game does, not on a tick: `when <cond> | cmds` runs them once as the condition holds; `until
+   <cond> every <n> | cmds` runs them every n ticks until it does (a door walked into again till the scene changes). Conditions: the
+   scene (NumCube), a game variable, a scene variable. For the scripted playthrough (E:\dump\TEMP\play, 2026-11-05): a race a few
+   seconds slower, a line a little longer, no longer throws a step's later commands off. */
+typedef struct {
+    int until, what, n, op, v, every, left, done;
+    long next;
+    char cmds[CONTROL_EXEC_MAX];
+} T_CONTROL_WATCH;
+static T_CONTROL_WATCH *s_watch = NULL;
+static int s_watch_count = 0, s_watch_room = 0;
+static long s_watch_tick = 0;
+
+/* what: 0 the scene, 1 a game variable n, 2 a scene variable n; op: 0 = 1 != 2 < 3 > 4 <= 5 >=. 0 if out of memory. */
+int Control_AddWatch(int until, int what, int n, int op, int v, int every, int max, const char *cmds) {
+    if (s_watch_count == s_watch_room) {
+        int room = s_watch_room ? s_watch_room * 2 : 32;
+        T_CONTROL_WATCH *more = (T_CONTROL_WATCH *)realloc(s_watch, (size_t)room * sizeof(T_CONTROL_WATCH));
+        if (!more)
+            return 0;
+        s_watch = more;
+        s_watch_room = room;
+    }
+    T_CONTROL_WATCH *w = &s_watch[s_watch_count++];
+    w->until = until; w->what = what; w->n = n; w->op = op; w->v = v;
+    w->every = every > 0 ? every : 1; w->left = max > 0 ? max : 0; w->done = 0;
+    w->next = s_watch_tick; /* (until: the first try now) */
+    copy_arg(w->cmds, sizeof(w->cmds), cmds);
+    return 1;
+}
+
+static int control_watch_holds(const T_CONTROL_WATCH *w) {
+    S32 have;
+    if (w->what == 0) have = NumCube;
+    else if (w->what == 1) have = (w->n >= 0 && w->n < MAX_VARS_GAME) ? ListVarGame[w->n] : 0;
+    else have = (w->n >= 0 && w->n < MAX_VARS_CUBE) ? ListVarCube[w->n] : 0;
+    switch (w->op) {
+    case 0: return have == w->v;
+    case 1: return have != w->v;
+    case 2: return have < w->v;
+    case 3: return have > w->v;
+    case 4: return have <= w->v;
+    default: return have >= w->v;
+    }
+}
+
+static void control_run_watches(long tick) {
+    char cmds[CONTROL_EXEC_MAX];
+    s_watch_tick = tick;
+    for (int i = 0; i < s_watch_count; i++) {
+        if (s_watch[i].done)
+            continue;
+        if (control_watch_holds(&s_watch[i])) {
+            s_watch[i].done = 1;
+            if (!s_watch[i].until) {
+                Log_Info("[control] when: holds at tick %ld -- %s", tick, s_watch[i].cmds);
+                snprintf(cmds, sizeof(cmds), "%s", s_watch[i].cmds);
+                control_run_commands(cmds); /* (may add watches: s_watch can move) */
+            } else
+                Log_Info("[control] until: holds at tick %ld", tick);
+        } else if (s_watch[i].until && tick >= s_watch[i].next) {
+            s_watch[i].next = tick + s_watch[i].every;
+            if (s_watch[i].left > 0 && --s_watch[i].left == 0) {
+                s_watch[i].done = 1;
+                Log_Warn("[control] until: gave up at tick %ld (its tries used) -- %s", tick, s_watch[i].cmds);
+            }
+            snprintf(cmds, sizeof(cmds), "%s", s_watch[i].cmds);
+            control_run_commands(cmds);
+        }
+    }
+}
+
 static void control_console_echo(const char *line) {
     printf("[control] %s\n", line);
 }
@@ -1505,6 +1578,7 @@ void Control_TickHook(void) {
     if (s_hook_calls == 1)
         control_run_exec();
     control_run_exec_at(s_hook_calls - 1);
+    control_run_watches(s_hook_calls - 1); /* (console `when` / `until`) */
 
     /* --demo only drives an authored demo scene (the reel the menu enters at cube 193,
        GAMEMENU.CPP; see docs/SCENES.md). On a normal scene it silently does nothing, so a

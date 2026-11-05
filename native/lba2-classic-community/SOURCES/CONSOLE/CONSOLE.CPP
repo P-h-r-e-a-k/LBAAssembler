@@ -31,9 +31,9 @@
  * while the documentation went on describing them. The drop was reported all
  * along, but only on a boot-time stderr line, which is why it went unseen; it
  * now also lands in the scrollback, beside the `cmdlist` that shows the gap. */
-#define CONSOLE_MAX_CMDS 96
+#define CONSOLE_MAX_CMDS 160 /* (90 by 2026-11-05: room to grow) */
 #define CONSOLE_MAX_CVARS 96
-#define CONSOLE_MAX_ARGV 16
+#define CONSOLE_MAX_ARGV 48 /* (`when` / `until` carry their commands: 16 cut them short) */
 #define CONSOLE_KEY_QUEUE_SIZE 32
 /* Sentinel scancode for a queued text-input character (vs a physical key). */
 #define CONSOLE_TEXT_CHAR (-1)
