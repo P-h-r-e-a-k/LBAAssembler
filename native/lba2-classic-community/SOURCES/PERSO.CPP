@@ -1745,6 +1745,14 @@ restartloop:
             DoAnimatedPolys();
         }
 
+        // (a load the console asked for -- `load`, `loadbug` -- never passes `restartloop`, where the menu's load clears FlagLoadGame;
+        // left set, the next door Twinsen took was handled as a load: he was put at the scene's start point -- scene 49's is in the sea
+        // -- not where the door leads. Cleared once ChangeCube has taken the load up, before this frame's objects, as the menu's is.)
+        if (DbgConsoleLoad && NewCube == -1) {
+            FlagLoadGame = FALSE;
+            DbgConsoleLoad = 0;
+        }
+
         // (storylog: vars changed outside any Life since the last frame -- the race game, the console, a zone -- as obj -1's)
         StoryLog_Vars(-1);
 

@@ -219,6 +219,7 @@ static void cmd_load(int argc, const char *argv[]) {
 
     Console_Close();
     FlagLoadGame = TRUE;
+    DbgConsoleLoad = 1; /* (cleared once the load is taken up: PERSO.CPP) */
     LoadGameNumCube();
     Console_Print("Loading save: %s", targetName);
 }
@@ -251,6 +252,7 @@ static void cmd_loadbug(int argc, const char *argv[]) {
 
     Console_Close();
     FlagLoadGame = TRUE;
+    DbgConsoleLoad = 1; /* (cleared once the load is taken up: PERSO.CPP) */
     LoadGameNumCube();
     Console_Print("Loading bug save: %s", safeName);
 }

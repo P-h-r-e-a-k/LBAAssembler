@@ -335,6 +335,7 @@ S32 DbgUseItemTrace = 0;
 // so a playthrough or the demo reel traces out the game's cube-to-cube flow. No gameplay effect.
 S32 DbgCubeTrace = 0;
 S32 DbgStoryLog = 0;
+S32 DbgConsoleLoad = 0;
 // Console `camnudge <dBeta> [dAlpha] [frames]`: inject a manual camera nudge for the next N frames
 // through the same path the mouse drag and the gamepad right stick use, so the analog camera can be
 // driven without a device. Counts down to 0 and stops. No gameplay effect.
