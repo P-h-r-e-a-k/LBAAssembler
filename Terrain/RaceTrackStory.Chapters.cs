@@ -20,7 +20,7 @@ namespace LBAAssembler.Terrain;
 //       (item 7), and he drops the umbrella (item 20) as he climbs out, up a ladder that brings Twinsen out on the quay (Q_THIEF 5). The
 //       umbrella back to Tim: ten kashes (Q_THIEF 6). (The sewers are the 1996 demo's where the build put
 //       them in, Demo96Rooms.Sewers: the hatch lands where the demo starts Twinsen, the thief cornered beside its far halls' lift.)
-//     - the museum's blueprints (Q_BLUEPRINT 1, under a case in scene 15) and the neighbour's design sheet (Q_SHEET 1, scene 9): seen now,
+//     - the museum's blueprints (Q_BLUEPRINT 1, in a display case in scene 15) and the neighbour's design sheet (Q_SHEET 1, scene 9): seen now,
 //       copied in chapter 2.
 //     - the spell at the lighthouse no longer moves the game on to chapter 2 (the game's own script set chapter() there): the Wizard says
 //       the sun comes in the morning, Raph goes to bed, Zoe saw lights over the clouds, and Twinsen is tired (DayVar Tired, everyone's
@@ -82,8 +82,16 @@ internal static partial class RaceTrackStory
     private static readonly (int X, int Y, int Z) DemoSewerArrival = (20357, 1536, 15140), DemoDeadEnd = (12800, 3072, 2300);
     private const int DemoPainterActor = 7;
     private const int HatchSwitch = 213, LadderSwitch = 214;
-    // the museum's blueprints: under a case by the hall's displays (an invisible actor Action is pressed by)
+    // the museum's blueprints: by the hall's displays, in a display case of their own -- the game's glass case for Twinsen's tunic (actor
+    // 10 of the scene, entity 62, in the room beyond), copied empty (its body 96, the one it changes to once the tunic is taken: the user,
+    // 2026-11-04, the blueprints in a display case instead of just on the floor), the paper inside it, read through the glass (until then
+    // a sheet on the floor beside the low cases)
     private static readonly (int X, int Y, int Z) BlueprintFile = (17920, 768, 23296);
+    private const int TunicCase = 10, EmptyCaseBody = 96;
+    // (its body hangs from its place: 1537 tall, the game's stands on a pedestal of bricks; this one on the floor. The paper on its shelf,
+    // the ring the tunic stands on, and put where its picture -- drawn to one side of its place -- is in the middle of the glass)
+    private const int CaseHeight = 1537, CaseShelf = 660;
+    private static readonly (int X, int Z) PaperShift = (-265, 265);
     // the island's places (cells): the harbour's quay below the warehouses (the thief, the hatch further along it -- a straight run on its
     // paving: from behind the warehouses he ran into their walls), the scrap on the quay, the Tavern's doorstep (outside scene 42's door
     // zone into scene 3; the Tavern's front either side of it is a search zone, see Givers), the yard by the carport (RaceTrackIsland's CarHome)
@@ -1416,11 +1424,18 @@ void comportement_{HeroWatching}()
     // ---- the slate's hidden pages (scenes 15, 9, 22) ---------------------------------------------------------------------------------
     private static void HiddenPages(StoryParts p)
     {
-        // the museum: the blueprints under a case (Action there): seen (Q_BLUEPRINT 1) -- Miss Bloop (actor 9), asked, tells whose they
+        // the museum: the blueprints in a display case (Action by it): seen (Q_BLUEPRINT 1) -- Miss Bloop (actor 9), asked, tells whose they
         // were -- and with the slate copied onto it (2), Miss Bloop's word on it
-        p.Edit(Museum, "the blueprints of the dream's track under a case: seen, and copied onto the slate; Miss Bloop tells whose they were", model =>
+        p.Edit(Museum, "the blueprints of the dream's track in a display case: seen, and copied onto the slate; Miss Bloop tells whose they were", model =>
         {
-            var file = RaceTrackScenes.SpriteProp(BlueprintFile.X, BlueprintFile.Y, BlueprintFile.Z, RaceTrackScenes.PaperSprite, 9);
+            var glass = Copy(p.Originals, Museum, TunicCase) ?? throw new NotTheGames("the tunic's case");
+            if (glass.Entity != 62) throw new NotTheGames("the tunic's case");
+            glass.X = BlueprintFile.X; glass.Y = BlueprintFile.Y + CaseHeight; glass.Z = BlueprintFile.Z; glass.Body = EmptyCaseBody;
+            // (Twinsen bumps into it, as into the game's, but it doesn't test what it touches itself: with the paper inside it, the game's
+            // CHECK_OBJ_COL pushed the case off it, a cell aside)
+            glass.Flags &= ~1u;
+            var caseLife = p.Add(model, glass, "void comportement_0()\n{\n}\n");
+            var file = RaceTrackScenes.SpriteProp(BlueprintFile.X + PaperShift.X, BlueprintFile.Y + CaseShelf, BlueprintFile.Z + PaperShift.Z, RaceTrackScenes.PaperSprite, 9);
             var life = p.Add(model, file, Talker("4 > chapter()", $@"            if (2 > var_game({QBlueprint}) && 0 < var_game({Slate}))
             {{
                 if (0 == var_game({QBlueprint}))
@@ -1440,9 +1455,10 @@ void comportement_{HeroWatching}()
                     message_obj(0, {p.Say(ChapterLine.BlueprintDream)});
                     set_var_game({QBlueprint}, 1);
                 }}
-            }}", 1000));
+            }}"));
             return scripts =>
             {
+                caseLife(scripts);
                 life(scripts);
                 var bloop = scripts.GetText(9, ScriptKind.Life);
                 if (!bloop.Contains("message(8);")) throw new NotTheGames("Miss Bloop's");

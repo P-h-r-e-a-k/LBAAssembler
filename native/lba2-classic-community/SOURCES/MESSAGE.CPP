@@ -1989,8 +1989,16 @@ void InitWhoSpeak(S32 numobj) {
 
     PtrWhoSpeak = &ListObjet[WhoSpeak];
 
-    if (PtrWhoSpeak->Flags & SPRITE_3D)
+    // A sprite has no talking animation, so the picture is held as it is -- as for someone who can't be animated below. Returning
+    // without that left the frame's dirty boxes live: the dialogue loop's first BoxUpdate cleaned them from the background, which has
+    // no actors in it, and nothing drew them again -- everyone moving near the sprite vanished while it spoke. A race-track story's
+    // props are sprites that talk (RaceTrackScenes.SpriteProp: the museum's blueprints, 2026-11-04, "Twinsen momentarily vanishes,
+    // only a white crescent is left on the floor" -- the crescent the speech bubble over the paper, which was gone too)
+    if (PtrWhoSpeak->Flags & SPRITE_3D) {
+        CopyScreen(Log, Screen);
+        BoxReset();
         return;
+    }
 
     XSpeak = X0 = PtrWhoSpeak->Obj.X;
     YSpeak = Y0 = PtrWhoSpeak->Obj.Y;
