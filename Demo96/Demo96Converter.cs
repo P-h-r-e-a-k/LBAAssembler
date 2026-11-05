@@ -16,7 +16,7 @@ namespace LBAAssembler.Demo96;
 //                FILE3D.HQR's entries, one an entity (retail: one table, RESS 44); there are skies for Citadel Island (11, and 26 after
 //                the storm) and Desert Island (13), none for Otringal
 //   LBA_BKG.HQR  a 14-byte header without the retail one's four buffer sizes (the grids, block libraries and bricks are the retail
-//                format: a demo brick is byte for byte retail brick 198)
+//                format: a demo brick is byte for byte retail brick 198), but for the blocks' floor codes, which are LBA1's (BlockCode)
 //   ANIM.HQR     the retail format but for the keyframes' times: 1/50 s, retail ms
 //   the islands (.ILE), SPRITES.HQR, SPRIRAW.HQR   the retail format, copied
 //
@@ -28,7 +28,8 @@ internal static class Demo96Converter
     // The file a converted folder carries (MarkerFile): what it is, the converter's version and the demo folder it was made from, then each
     // demo scene's retail counterpart ("scene <demo> <retail>", -1 for none): the editor names the demo's scenes by them.
     public const string MarkerFile = "LBA2-1996-DEMO.TXT";
-    public const int Version = 4;   // (3: the scripts translated into the retail bytecode, Demo96Scripts; 4: the animations' times in ms)
+    public const int Version = 5;   // (3: the scripts translated into the retail bytecode, Demo96Scripts; 4: the animations' times in ms;
+                                    // 5: the block libraries' floor codes in the retail order, BlockCode)
 
     // Whether `dir` is a converted folder of this version made from `demoDir`.
     public static bool IsConverted(string dir, string demoDir)
@@ -171,8 +172,18 @@ internal static class Demo96Converter
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(20), (uint)bricks);
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(24), (uint)bricks);
             bkg[0] = HqrWriter.StoredEntry(header);
+            // the block libraries' floor codes (BlockCode): every library between the grids' fragments and the bricks
+            int libraries = 0, recoded = 0;
+            for (var i = bll; i < brk && i < bkg.Count; i++)
+            {
+                if (bkg[i] is not { } entry || Unpack(entry) is not { Length: >= 4 } library) continue;
+                recoded += RecodeBlocks(library);
+                bkg[i] = HqrWriter.StoredEntry(library);
+                libraries++;
+            }
             File.WriteAllBytes(Out("LBA_BKG.HQR"), Build(bkg));
-            log.Add($"LBA_BKG.HQR: the retail header (grids from {gri}, libraries from {bll}, {maxBrk} bricks from {brk}; brick buffers {bricks} bytes)");
+            log.Add($"LBA_BKG.HQR: the retail header (grids from {gri}, libraries from {bll}, {maxBrk} bricks from {brk}; brick buffers {bricks} bytes); " +
+                    $"the floor codes of {libraries} block libraries in the retail order ({recoded} block cells)");
         }
 
         // the resources
@@ -410,6 +421,35 @@ internal static class Demo96Converter
 
     // A stored entry's data, uncompressed.
     private static byte[] Unpack(byte[] entry) => HqrArchive.DecodeEntry(entry);
+
+    // A block cell's floor code (its second byte: shape, code, brick + 1) from the demo's order into the retail game's. The retail engine
+    // takes the high half for the game code (GRILLE.CPP WorldCodeBrick, OBJECT.CPP: 1 water, 2 electrified, 3-6 the moving walkways, 7
+    // the dome's maze, 8 nowhere to stand, 9 lava, 11 gas, 15 animated water) and the low half for the footstep sound (FICHE.CPP: sample
+    // 60 + it inside); the demo has them LBA1's way (LBA2DEMO.EXE, disassembled 2026-11-05: its drowning test at 0x32402 takes the low
+    // half for the game code when the high half is all ones, 0xF?, and its footstep at 0x1D9D4 plays 60 + the low half unless it is;
+    // its CopyMapToCube at 0x282EA leaves out the maze's blocks by the low half). So the demo's 0xF0 -- the plain floor, 170 of the 202
+    // blocks of the library its Citadel interiors are drawn with, the sewers' and the School's -- read as retail is 15, animated water:
+    // Twinsen drowned on the stone floors all over the sewers. 0xF1 is the sewers' water (retail library 1 has the same blocks, the same
+    // bricks, as 0x10), 0xF7 the maze (retail 0x7D), 0xF3-0xF6 the walkways (retail 0x32-0x62); a code under 0xF0 is a footstep sound
+    // (0x04: retail's 0x04, a step and no game code).
+    public static byte BlockCode(byte demo) => (demo & 0xF0) == 0xF0 ? (byte)((demo & 0x0F) << 4) : (byte)(demo & 0x0F);
+
+    // A block library's cells (a U32 offset a block, then each block's size, 3 bytes, and 4 bytes a cell) through BlockCode, in place;
+    // the number of cells.
+    private static int RecodeBlocks(byte[] library)
+    {
+        var blocks = (int)(BinaryPrimitives.ReadUInt32LittleEndian(library) / 4);
+        var cells = 0;
+        for (var b = 0; b < blocks && b * 4 + 4 <= library.Length; b++)
+        {
+            var at = (int)BinaryPrimitives.ReadUInt32LittleEndian(library.AsSpan(b * 4));
+            if (at + 3 > library.Length) continue;
+            var count = library[at] * library[at + 1] * library[at + 2];
+            for (var c = 0; c < count && at + 3 + c * 4 + 4 <= library.Length; c++, cells++)
+                library[at + 3 + c * 4 + 1] = BlockCode(library[at + 3 + c * 4 + 1]);
+        }
+        return cells;
+    }
 
     // An animation's keyframe times (U16 frames, U16 bones, U16 loop frame, U16, then per frame U16 time, three S16 steps and 8 bytes a
     // bone) from 1/50 s to ms, in place; false for an entry that isn't one.

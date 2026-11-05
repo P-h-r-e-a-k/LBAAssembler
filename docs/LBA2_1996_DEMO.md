@@ -91,6 +91,13 @@ fixed point), converted to the middle of each pixel. Without it the ground textu
 - from the retail game: the memory sizes, inventory pictures, 3DS animations, flows and impacts.
 
 **`LBA_BKG.HQR`**: a 7-number header against the retail 6 numbers and 4 sizes; rewritten, with the brick buffer sizes worked out.
+The block libraries' floor codes (each block cell's second byte) are LBA1's way round (converter version 5, `Demo96Converter.BlockCode`):
+the retail engine takes the high half for the game code (1 water, 2 electrified, 3-6 the moving walkways, 7 the dome's maze, 9 lava, 11
+gas, 15 animated water) and the low half for the footstep sound; the demo's engine (`LBA2DEMO.EXE`: its drowning test at 0x32402, its
+footsteps at 0x1D9D4, its maze blocks at 0x282EA) takes the low half for the game code when the high half is all ones, and the low half
+for the footstep otherwise. The demo's plain floor is 0xF0 (170 of the 202 blocks of its library 1, the Citadel interiors'): read as
+retail, 15, animated water -- Twinsen drowned on the dry stone of the sewers and the School. Now 0xF? is (low half) << 4, the game code
+alone (0xF1, the sewers' water, is 0x10 as retail library 1 has the same blocks), and any other code is its low half, a footstep.
 
 **From the retail game folder** (the demo has none of them; they are only copied into the converted folder): `ANIM3DS.HQR`, `LBA2.HQR`,
 `HOLOMAP.HQR`, and an empty `video\VIDEO.HQR` the engine needs to start.
@@ -167,7 +174,10 @@ magic scenes". Every race-track build now puts the demo's School (its scenes 27 
   a build again adds nothing).
 - **The people**: the demo's characters as new entities, their bodies and animations the demo's (its scripts name its generic numbers, and
   its skeletons aren't retail's): the Dean (demo entity 62), his assistant (63), the students (64), the props (11) and entity 34. Twinsen and
-  the Meca-penguin slot (demo 9, retail 14) are retail's.
+  the Meca-penguin slot (demo 9, retail 14) are retail's. Twinsen's animations in the demo's scripts are put in the retail numbers
+  (`Demo96Rooms.HeroAnims`): 0-22 are the same, but from 25 on retail put in more of them before the ones the two have alike (the demo's
+  25 is retail's 27, 34 is 48, 37 is 51, 39-43 are 54-58 -- matched keyframe by keyframe, the demo's entity 0 against retail's). The
+  hall's animation 34 (ANIM.HQR 14 in both: retail's 48) played as retail's 34, the skates backwards.
 - **The scene**: the slot's header (light, ambience, music), the demo's actors, zones and track points. Doors: the demo's scene numbers
   as retail's; the hall's door into the training room (retail scene 33, which the demo shut) as retail's hall has it.
 - **Sounds**: demo samples 35 and 41 are retail 617 and 501 byte for byte; 122 (the flow points') is retail's 441, as its hall plays there.
@@ -205,3 +215,14 @@ Checked (a build of all 15 islands from the package, E:\dump\TEMP\allstory10): t
 after 500 ticks; in the far halls the thief is cornered (213 3 -> 4), Action beside him gives back the gloves and the umbrella (213 5,
 items 7 and 20), and the ladder brings him out on the harbour's quay; the doors from 21, 34, 42, 48 and the cellar land where listed;
 10400/10400 scripts round-trip. The lifts (the cellar's, 42's, 48's) weren't ridden: a headless test can't work a lift.
+
+Two bugs found in Story Mode (2026-11-05), both fixed above:
+- **Drowning on dry land all over the sewers** (and the School): the demo's floor codes read as retail's, 0xF0 as animated water. Of the
+  top surfaces of the rooms' grids, 529 dry ones in scene 17, 557 in 18, 330 in 27 and 112 in 28 drowned Twinsen; now only the water does
+  (1,992 cells in 17 and 892 in 18, the block the retail library has as water too). Checked in the engine by teleporting Twinsen onto every
+  dry cell with head room in the four rooms and LBA1's secret room (scene 226, made from LBA1's own codes: it had none to begin with)
+  and standing him there (`ScriptRoundTrip`-made Citadel build, E:\dump\TEMP\agent_sewers): before, every sampled dry cell drowned him
+  (14 of 14); after, none of the swept cells did, and the water still does.
+- **Stuck coming in from the Weather Wizard's house** (scene 21 into 17, zone 12): the demo walks Twinsen through the door with its
+  animation 37 (the step-through walk, retail's 51); retail's 37 is a punch with the left glove, which doesn't move him, so his
+  `goto_point(13)` never got there and he punched on for ever. With `HeroAnims` he walks in, reaches the point and is free to walk.

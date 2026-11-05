@@ -58,6 +58,41 @@ internal static class Demo96Rooms
     private const int DemoMecaPenguin = 9, MecaPenguin = 14;
     private static readonly Regex SampleCall = new(@"\b(sample|sample_rnd|sample_always|stop_sample|repeat_sample)\((\d+)", RegexOptions.Compiled);
 
+    // Twinsen's generic animations, the demo's numbers as the game's. The rooms' Twinsen is the game's (entity 0, its animations), but the
+    // demo's scripts name his animations by the demo's generic numbers, and from 25 on they aren't the game's: the game put in more of
+    // them (the sabre and drawing it, 23 and 24, the gloves' punches, 36 and 37 ...) before the ones the two have alike. Matched
+    // 2026-11-05 by the animations themselves -- the demo's entity 0 against the game's, keyframe by keyframe (their times, steps and
+    // loop frame), most of them the same entry of ANIM.HQR in both (the demo's 37 is entry 24 as the game's 51 is, 38 entry 29 byte for
+    // byte as 52 is). 0-22 are the same numbers. Read as the game's, the sewers' door from the Weather Wizard's house (scene 21 into 17,
+    // zone 12) walked Twinsen in with the demo's 37, the stepping-through-a-door walk, which for the game's Twinsen is 37, a punch with
+    // the left glove: it doesn't move him, so his goto_point(13) never got there and he punched on for ever; and the School hall's 34
+    // (ANIM.HQR 14 in both, the game's 48) was the game's 34, the skates backwards.
+    private static readonly Dictionary<int, int> HeroAnims = new()
+    {
+        [25] = 27, [27] = 29, [28] = 30, [29] = 31, [31] = 33, [32] = 34, [33] = 35,
+        [34] = 48, [35] = 49, [36] = 50, [37] = 51, [38] = 52, [39] = 54, [40] = 55, [41] = 56, [42] = 57, [43] = 58,
+    };
+    // (Twinsen's own scripts: anim(n), anim_set(n), set_anim_dial(n), his anim() in a test; anyone's anim_obj(0, n) and anim_obj(0) tests)
+    private static readonly Regex HeroAnimCall = new(@"\b(anim|anim_set|set_anim_dial)\((\d+)\)", RegexOptions.Compiled);
+    private static readonly Regex HeroAnimTest = new(@"\b(\d+)(\s*(?:==|!=)\s*anim\(\))|\b(anim\(\)\s*(?:==|!=)\s*)(\d+)\b", RegexOptions.Compiled);
+    private static readonly Regex HeroAnimObj = new(@"\b(anim_obj\(0,\s*)(\d+)\)", RegexOptions.Compiled);
+    private static readonly Regex HeroAnimObjTest = new(@"\b(\d+)(\s*(?:==|!=)\s*anim_obj\(0\))|\b(anim_obj\(0\)\s*(?:==|!=)\s*)(\d+)\b", RegexOptions.Compiled);
+
+    private static string HeroAnim(string n) => HeroAnims.TryGetValue(int.Parse(n), out var g) ? g.ToString() : n;
+
+    // A script's text with Twinsen's animations the game's (HeroAnims): `hero` for his own scripts (actor 0's).
+    public static string WithHeroAnims(string text, bool hero)
+    {
+        string Test(Match m) => m.Groups[1].Success ? HeroAnim(m.Groups[1].Value) + m.Groups[2].Value : m.Groups[3].Value + HeroAnim(m.Groups[4].Value);
+        if (hero)
+        {
+            text = HeroAnimCall.Replace(text, m => $"{m.Groups[1].Value}({HeroAnim(m.Groups[2].Value)})");
+            text = HeroAnimTest.Replace(text, Test);
+        }
+        text = HeroAnimObj.Replace(text, m => $"{m.Groups[1].Value}{HeroAnim(m.Groups[2].Value)})");
+        return HeroAnimObjTest.Replace(text, Test);
+    }
+
     // The converted demo a build takes the rooms from: LBA2_DEMO96 (a converted folder, or the demo's own: converted into the scratch
     // folder, with what it lacks from `gameDirectory`), else the package the program carries (Pack: the repo's Demo96\rooms.zip, embedded
     // by LBAAssembler.csproj and LBRA's installer as PackageResource -- the user, 2026-11-03: "We should ship the demo school packaged
@@ -243,6 +278,8 @@ internal static class Demo96Rooms
                         mapped = MessageCall.Replace(mapped, m => m.Groups[1].Success
                             ? $"{m.Groups[1].Value}({texts.GetValueOrDefault(int.Parse(m.Groups[2].Value), int.Parse(m.Groups[2].Value))})"
                             : $"{m.Groups[3].Value}({m.Groups[4].Value}, {texts.GetValueOrDefault(int.Parse(m.Groups[5].Value), int.Parse(m.Groups[5].Value))})");
+                    // (and Twinsen's animations the game's: HeroAnims)
+                    mapped = WithHeroAnims(mapped, a == 0);
                     if (mapped != text) scripts.SetText(a, kind, mapped);
                 }
             var built = scripts.Build();
