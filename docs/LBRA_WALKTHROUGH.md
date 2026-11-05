@@ -462,7 +462,8 @@ Talking to her again (or meeting her after the Dean): **Flick:** "Twinsen! No fl
 Dean at the School of Magic has his three pages back. He means it."
 
 **3. The School of Magic.** In the School's hall, the first time Twinsen comes in, the Dean's people: "Welcome to the School of Magic! Mind
-your step: we're still picking up after the Dean's exam papers." The Dean is in the hall.
+your step: we're still picking up after the Dean's exam papers." The Dean is in the hall, up on his dais; the gate up to it opens when
+Twinsen opens the chest at the hall's far wall (Action, facing it), and stays open on later visits.
 
 **The Dean:** "Shut it is! Three pages, gone with the wind of your engines. Bring them back, and I'll think about it."
 

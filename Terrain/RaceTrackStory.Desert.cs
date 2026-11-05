@@ -591,6 +591,60 @@ void comportement_1()
         }
         else log.Add($"the Dean left out: no actor {deanActor} in scene {DeanScene}");
 
+        // The School hall's welcome the first time Twinsen comes in (the walkthrough's). The 1996 demo's greeter (actor 10 of the hall) said it
+        // only once the switch at the far wall (actor 7: the chest Twinsen opens with Action in zone 5, facing it) had been worked, and in
+        // the same breath opened the gate (actor 8) up to the Dean's floor and set the game's variable 61 to 1 (which unlocks the entrance
+        // hall's upper door too) -- the welcome waited for the chest, not for Twinsen coming in (the sweep of 2026-11-05, ch03
+        // 08_school_hall). Now it is said 0.7 s after coming in while 61 is 0, and that first visit is done there (61 = 1: the gate and the
+        // greeter gone on the next one, the upper door open, as the demo has them after the chest), with the game's variable 62 at 3 (the
+        // Dino-Fly's errand: the School found, which the greeting set too); the chest still opens the gate this time.
+        b.Edit(DeanScene, "the School's hall: the welcome as Twinsen first comes in, the hall's switch still opening the gate to the Dean", _ => scripts =>
+        {
+            var greeter = Enumerable.Range(0, scripts.ActorCount).Where(a =>
+            {
+                try { var t = scripts.GetText(a, ScriptKind.Life); return t.Contains("l_track_obj(7)") && t.Contains("message(11);"); }
+                catch (InvalidOperationException) { return false; }
+            }).ToList();
+            if (greeter.Count != 1) throw new NotTheGames($"the demo's greeter: {greeter.Count} actors say the welcome when the switch is worked");
+            var life = scripts.GetText(greeter[0], ScriptKind.Life);
+            life = Loose(life, @"if (100 == l_track_obj(7))
+        {
+            set_track(label_0);
+            set_comportement(comportement_1);
+        }", @"set_track(label_0);
+        set_comportement(comportement_1);");
+            life = Loose(life, @"if (1 == l_track())
+    {
+        if (3 > var_game(62))
+        {
+            set_var_game(62, 3);
+        }
+        set_var_game(61, 1);
+        set_track_obj(8, label_0);
+        message(11);
+        suicide();
+    }", $@"if (1 == l_track())
+    {{
+        if (3 > var_game(62))
+        {{
+            set_var_game(62, 3);
+        }}
+        set_var_game(61, 1);
+        message({Say(DesertLine.HallWelcome)});
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if (100 == l_track_obj(7))
+    {{
+        set_track_obj(8, label_0);
+        suicide();
+    }}");
+            scripts.SetText(greeter[0], ScriptKind.Life, life);
+        });
+
         // The game's people of the School and the town, put right (the sweep of 2026-11-05): in the School's hall, the 1996 demo's greeting
         // on Twinsen's first visit (its text 11, which the game's Desert file hasn't: the story's welcome) and Twinsen's third "hello" (102,
         // none either: the game's 100), and the student's "he's in a terrible mood about his exam papers" (69) no longer once the diploma is

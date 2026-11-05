@@ -186,6 +186,13 @@ magic scenes". Every race-track build now puts the demo's School (its scenes 27 
   666 -- the retail line is shown.
 - **The story**: the Desert's Dean (chapter 3) is copied from the hall as the build has it -- the actor at the Dean's place -- and the
   game's hidden.
+- **The hall's welcome** (2026-11-05): in the demo the greeter (the hall's actor 10) said its line (demo text 11, the story's welcome)
+  only once Twinsen had opened the chest at the far wall (actor 7: Action in zone 5, facing it -- the hero's own script plays the pull
+  and sets the chest's track; punching it from the floor doesn't reach), and with it opened the gate (actor 8) up to the Dean's floor
+  and set the game's variable 61 to 1 (which also unlocks the entrance hall's upper door, scene 28's actor 4, onto the Dean's side of
+  the gate). So the welcome waited for the chest, not for Twinsen coming in. The story now has it said 0.7 s after Twinsen comes in
+  while 61 is 0 and sets 61 to 1 there, and 62 to 3 (the Dino-Fly's errand: the School found) as the greeting did (the gate and the greeter gone on later visits, the upper door open, as the demo has them after
+  the chest); the chest still opens the gate on that first visit (`RaceTrackStory.Desert.cs`).
 
 Checked (a build of all 15 islands, E:\dump\TEMP\allstory4): the halls drawn as in the demo, the Dean and his assistant in the demo's
 bodies; the Dean's beats (Q_PAGES 1 -> 2, 5 -> 6 and the diploma); the door to the desert (28 -> 61); the training room's door shut at that
