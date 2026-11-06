@@ -7455,23 +7455,23 @@ static int CubeScene(int qx, int qz) {
         for (int a = 0; a < 16; a++) for (int b = 0; b < 16; b++) s_islandScene[a][b] = -1;
         char path[ADELINE_MAX_PATH];
         GetResPath(path, ADELINE_MAX_PATH, SCENE_HQR_NAME);
-        U32 first = 0, biggest = 0;
+        U32 first = 0;
         FILE *f = fopen(path, "rb");
         if (f) { if (fread(&first, 4, 1, f) != 1) first = 0; fclose(f); }
-        // (the HQR's entry 0: the biggest scene's size)
-        U8 head[64];
-        if (Load_HQR(path, head, 0)) memcpy(&biggest, head, 4);
-        U8 *buffer = first >= 8 && biggest > 0 && biggest < 4 * 1024 * 1024 ? (U8 *)malloc(biggest + 4096) : NULL;
+        // (each scene read into a buffer its own size -- LoadMalloc_HQR: until 2026-11-06 into one the size of the HQR's entry 0, the
+        // biggest scene's size as the game wrote it, which a story build's bigger scenes outgrew -- and entry 0 itself into 64 bytes.
+        // On a build of only Citadel's islands, driving from the yard into 42 overran the buffer: an access violation here)
         int found = 0;
-        for (U32 i = 1; buffer && i < first / 4; i++) {
-            if (!Load_HQR(path, buffer, (S32)i)) continue;
+        for (U32 i = 1; first >= 8 && i < first / 4; i++) {
+            U8 *buffer = (U8 *)LoadMalloc_HQR(path, (S32)i);
+            if (!buffer) continue;
             const int island = buffer[0], x = (S8)buffer[1], y = (S8)buffer[2], mode = buffer[5], scene = (int)i - 1;
+            Free(buffer);
             if (mode != CUBE_EXTERIEUR || island != Island || x < 0 || y < 0 || x >= 16 || y >= 16) continue;
             S16 *at = &s_islandScene[x][y];
             if (*at < 0) found++;
             if (*at < 0 || abs(scene - (S32)NumCube) < abs(*at - (S32)NumCube)) *at = (S16)scene;
         }
-        free(buffer);
         if (CubeMode == CUBE_EXTERIEUR && CurrentCubeX >= 0 && CurrentCubeY >= 0 && CurrentCubeX < 16 && CurrentCubeY < 16)
             s_islandScene[CurrentCubeX][CurrentCubeY] = (S16)NumCube;
         Log_Info("[racemod] island %d: the scenes of %d of its cubes read from %s", (int)Island, found, path);
