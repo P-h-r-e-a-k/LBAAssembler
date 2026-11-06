@@ -15,6 +15,25 @@ internal static class MuseumStudy
             foreach (var line in LBAAssembler.Terrain.Citadel.CitadelMuseum.Install(args[1])) Console.WriteLine(line);
             return 0;
         }
+        if (args[2] == "enc")
+        {
+            // enc <brick>...: each brick's bytes against its picture encoded again (CitadelMuseum.EncodeBrick), and its lines' runs
+            foreach (var n in args.Skip(3).Select(int.Parse))
+            {
+                var data = b.Brick(n)!;
+                var again = LBAAssembler.Terrain.Citadel.CitadelMuseum.EncodeBrick(LBAAssembler.Assets.GphImage.Decode(data));
+                Console.WriteLine($"brick {n}: {data[0]}x{data[1]} hot {(sbyte)data[2]},{(sbyte)data[3]}, {data.Length} bytes; again {again.Length} bytes, same {data.AsSpan().SequenceEqual(again)}");
+                var at = 4;
+                var runs = new List<int>();
+                for (var line = 0; line < data[1]; line++)
+                {
+                    int r = data[at++]; runs.Add(r);
+                    for (var k = 0; k < r; k++) { var c = data[at++]; var cnt = (c & 0x3F) + 1; at += (c >> 6) switch { 0 => 0, 1 => cnt, _ => 1 }; }
+                }
+                Console.WriteLine($"  runs a line: {string.Join(",", runs)}");
+            }
+            return 0;
+        }
         if (args[2] == "pal")
         {
             for (var r = 0; r < 16; r++)

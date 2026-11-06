@@ -166,7 +166,7 @@ internal static class CitadelMuseum
         var info = GridPaint.Info(library, block)!.Value;
         var entries = GridPaint.Entries(library, block).ToList();
         var bricks = entries.Select(e => e.Brick).ToArray();
-        foreach (var (pos, image) in painted.OrderBy(p => p.Key)) bricks[pos] = AddBrick(bkg, header, image.Encode());
+        foreach (var (pos, image) in painted.OrderBy(p => p.Key)) bricks[pos] = AddBrick(bkg, header, EncodeBrick(image));
         var count = GridPaint.BlockCount(library);
         for (var b = 1; b <= count; b++)
         {
@@ -190,5 +190,50 @@ internal static class CitadelMuseum
         bkg.InsertAt(header.Brk + header.MaxBrk, bytes);
         header.MaxBrk += 1;
         return header.MaxBrk - 1;
+    }
+
+    // A brick's bytes as the engine draws them (GRAPH.CPP AffGraph): every line's runs cover the brick's whole width, the transparent
+    // pixels at its end too -- the engine steps to the next line by the width less what the runs moved it. (GphImage.Encode leaves a
+    // line's trailing transparent pixels out: a brick written so drew each line further left than the last, in the game a smear of a
+    // few lines and nothing else; the editor's own drawing starts each line afresh and showed it right.)
+    internal static byte[] EncodeBrick(GphImage image)
+    {
+        var output = new List<byte> { (byte)image.Width, (byte)image.Height, (byte)image.OffsetX, (byte)image.OffsetY };
+        int w = image.Width;
+        for (var y = 0; y < image.Height; y++)
+        {
+            var runs = new List<byte[]>();
+            var x = 0;
+            bool Opaque(int at) => image.Opaque[y * w + at];
+            byte Pixel(int at) => image.Pixels[y * w + at];
+            while (x < w)
+            {
+                if (!Opaque(x))
+                {
+                    var n = 0;
+                    while (x + n < w && !Opaque(x + n) && n < 64) n++;
+                    runs.Add(new[] { (byte)(n - 1) });
+                    x += n;
+                    continue;
+                }
+                // (three or more of a colour: a repeat run; else the pixels as they are, up to the next three of a colour)
+                var same = 1;
+                while (x + same < w && Opaque(x + same) && Pixel(x + same) == Pixel(x) && same < 64) same++;
+                if (same >= 3) { runs.Add(new[] { (byte)(0x80 | (same - 1)), Pixel(x) }); x += same; continue; }
+                var copy = new List<byte>();
+                while (x < w && Opaque(x) && copy.Count < 64)
+                {
+                    var ahead = 1;
+                    while (x + ahead < w && Opaque(x + ahead) && Pixel(x + ahead) == Pixel(x) && ahead < 3) ahead++;
+                    if (ahead >= 3 && copy.Count > 0) break;
+                    copy.Add(Pixel(x)); x++;
+                }
+                runs.Add(new[] { (byte)(0x40 | (copy.Count - 1)) }.Concat(copy).ToArray());
+            }
+            if (runs.Count > 255) throw new InvalidDataException("A brick's line needs more than 255 runs.");
+            output.Add((byte)runs.Count);
+            foreach (var run in runs) output.AddRange(run);
+        }
+        return output.ToArray();
     }
 }
