@@ -110,6 +110,8 @@ extern void Dial(S32 text, S32 drawscene);
    is set so Dial exits cleanly without waiting for input.  Pass NULL or
    "" to disarm.  Used by the console "ui dialog <text-id> <path>" verb. */
 extern void Dial_RequestCapture(const char *path);
+/* The same for the next dialogue a script opens, after `steps` steps and with its own speaker (console "dialshot <path> [steps]"). */
+extern void Dial_RequestCaptureNext(const char *path, S32 steps);
 extern S32 MyDial(S32 nummess);
 /*	GetMultiText() copies up to 255 bytes of the entry and always terminates at
     dst[255] when the entry is that long, so a destination is 256 bytes or it

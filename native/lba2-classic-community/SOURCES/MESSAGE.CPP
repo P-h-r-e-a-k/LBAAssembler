@@ -2059,6 +2059,7 @@ void ClearWhoSpeak() {
    at Dial_RequestCapture() below. */
 static char s_dial_capture_path[ADELINE_MAX_PATH] = "";
 static int s_dial_capture_countdown = 0;
+static int s_dial_capture_live = 0; /* Dial_RequestCaptureNext: the dialogue's own speaker kept */
 
 void SpeakAnimation() {
     S32 saveyclip;
@@ -2130,6 +2131,18 @@ void Dial_RequestCapture(const char *path) {
     strncpy(s_dial_capture_path, path, ADELINE_MAX_PATH - 1);
     s_dial_capture_path[ADELINE_MAX_PATH - 1] = '\0';
     s_dial_capture_countdown = 60; /* iterations -- ~1 game-second at dt 16 */
+    s_dial_capture_live = 0;
+}
+
+/* The next dialogue a script opens, as it is (console `dialshot`): its picture after `steps` steps of the typewriter (or at the end of its
+   page) -- the speaker the script gave it, not the harness's stand-in; `skipmodals` lets it run on to that step and ends it there. To see who is on screen while someone speaks (the
+   museum's blueprints, read through a helper's message: Twinsen vanished while a sprite spoke, 5bae8ba). */
+void Dial_RequestCaptureNext(const char *path, S32 steps) {
+    Dial_RequestCapture(path);
+    if (path && path[0]) {
+        s_dial_capture_countdown = steps > 0 ? steps : 1;
+        s_dial_capture_live = 1;
+    }
 }
 
 void Dial(S32 text, S32 drawscene) {
@@ -2148,7 +2161,7 @@ void Dial(S32 text, S32 drawscene) {
        speaker's portrait/bubble follows whatever NumObjDial happened to be
        at save-load time), and Palette(PtrPal) restores the palette in case
        the save's state had an eclair-effect palette active. */
-    if (s_dial_capture_path[0]) {
+    if (s_dial_capture_path[0] && !s_dial_capture_live) {
         NumObjDial = NUM_PERSO;
         Palette(PtrPal);
     }
@@ -2250,6 +2263,7 @@ void Dial(S32 text, S32 drawscene) {
                 SavePNG(s_dial_capture_path, Log, (S32)ModeDesiredX,
                         (S32)ModeDesiredY, PtrPal);
                 s_dial_capture_path[0] = '\0';
+                s_dial_capture_live = 0;
                 flagabort = 1;
                 break;
             }
@@ -2282,7 +2296,8 @@ void Dial(S32 text, S32 drawscene) {
         // Esc, so a headless run does not hang. This exits the whole typewriter loop on the first
         // iteration (the loop otherwise depends on TimerRefHR, which is frozen while a modal spins
         // under --fixed-dt) without changing quest state -- the script continues past the dialog.
-        if (MyKey == K_ESC OR Input & I_MENUS OR DbgSkipModals)
+        // (a `dialshot` waiting for its step: the dialogue runs on to it, and ends there)
+        if (MyKey == K_ESC OR Input & I_MENUS OR (DbgSkipModals AND !s_dial_capture_live))
             flagabort = 1;
 
         if (((ret == 0) AND(!TestSpeak())) // Tout fini

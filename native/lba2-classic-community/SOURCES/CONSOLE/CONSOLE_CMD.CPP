@@ -2352,6 +2352,19 @@ static void cmd_skipmodals(int argc, const char *argv[]) {
     Console_Print("skipmodals: %s", DbgSkipModals ? "ON" : "OFF");
 }
 
+/* dialshot <path> [steps]: a picture of the next dialogue a script opens, `steps` steps of its typewriter in (8; or at its page's end),
+   its speaker the script's -- who is on the screen while someone speaks. With skipmodals on, the dialogue runs on to the picture and ends
+   there. */
+static void cmd_dialshot(int argc, const char *argv[]) {
+    if (argc < 2) {
+        Console_Print("usage: dialshot <path.png> [steps]");
+        return;
+    }
+    const S32 steps = argc >= 3 ? (S32)atoi(argv[2]) : 8;
+    Dial_RequestCaptureNext(argv[1], steps);
+    Console_Print("dialshot: the next dialogue, %d steps in -> %s", (int)steps, argv[1]);
+}
+
 /* storymode <0|1>: the run played as the race game's Story Mode story, as if its menu had started it (RACEGAME.CPP
    RaceGame_StoryTest) -- a headless run has no menu to choose it from. Its scene changes then keep story.lba. */
 static void cmd_storymode(int argc, const char *argv[]) {
@@ -3237,6 +3250,11 @@ void Console_RegisterAll(void) {
                               "skipmodals <0|1>",
                               "Aborts dialogue modals immediately so a headless run does not hang on a "
                               "give/talk dialog; the script continues past it.");
+    Console_RegisterCommandEx("dialshot", cmd_dialshot, "Picture of the next dialogue a script opens",
+                              "dialshot <path.png> [steps]",
+                              "Saves the screen a few steps into the next dialogue (8, or its page's end), its "
+                              "speaker the script's own (who is on screen while someone speaks); with skipmodals "
+                              "on the dialogue runs on to the picture and ends there.");
     Console_RegisterCommandEx("storymode", cmd_storymode, "Race game test: play the run as Story Mode's story",
                               "storymode <0|1>",
                               "As if the race game's Story Mode had started the game: each scene entered keeps "
