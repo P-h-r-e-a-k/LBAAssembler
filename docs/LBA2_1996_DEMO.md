@@ -238,3 +238,25 @@ Two bugs found in Story Mode (2026-11-05), both fixed above:
 - **Stuck coming in from the Weather Wizard's house** (scene 21 into 17, zone 12): the demo walks Twinsen through the door with its
   animation 37 (the step-through walk, retail's 51); retail's 37 is a punch with the left glove, which doesn't move him, so his
   `goto_point(13)` never got there and he punched on for ever. With `HeroAnims` he walks in, reaches the point and is free to walk.
+
+## In the race mod: the Tralu's caves' third hall
+
+The user, 2026-11-06: "replace scene '20: Citadel Island, Tralu 3rd scene (room #22)' with the one from the 96 demo, this should be a
+like for like drop in replacement". The demo's scene 20 (the same hall: the lower floor from the cave's first hall, the ladder up to the
+back walk, the lever on its platform that opens the walk's gate, the brick landing with the door on to the second hall; the demo's own
+creatures) goes into the game's slot 20 on every race-track build, after the sewers (`Demo96Rooms.TraluCave`, the same package and block
+library; a package without the demo's scene 20 leaves the game's own hall). Its doors to the first hall (2) and the second (19) are the
+game's, and land where the game's do; the game's doors into it from 2 and 19 land where the demo's do (the same places). The game's own
+20 has Joe the elf by the door to 19 in chapter 1 (var 161); the demo's hasn't, and no line of the story uses him.
+
+- **The ladder's foot**: in the demo the ladder up to the back walk stands in a pool of water a layer under the floor (cells x 44-46,
+  z 48-50, layer 4: the demo's water 0xF1, the game's 0x10), so it could only be reached through the water, and Twinsen drowned at its
+  foot (headless: dropped on the pool's cells, drowned). The game's hall has paving there; the install paves those cells as the row in
+  front of them is paved (`Demo96Rooms.Paving`, layer 5) and empties the pool under it.
+- **The hero's animations**: the hero's walk to the lever and its pull (the demo's `anim(34)`, the game's 48 through `HeroAnims`) end
+  as they should: the lever toggles the gate (var_cube 0) from its platform.
+
+Checked headless on a Citadel story build: in from scene 2's door, up the ladder from the paving (anim 15, to the back walk), the gate
+shut (stopped short of it), the lever from its platform (var_cube 0 0 -> 1), along the walk through the gate and into the door to 19;
+19's door back lands on the brick landing, and the door back down to 2 works. Twinsen stood on 331 of the hall's floor cells (one in
+three): none drowned; the four hurts are the demo's spike zones, as the game's hall has them.

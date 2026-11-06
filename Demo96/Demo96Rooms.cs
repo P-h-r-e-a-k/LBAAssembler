@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text.RegularExpressions;
 using LBAAssembler.Characters;
 using LBAAssembler.Grids;
+using LBAAssembler.Lba1;
 using LBAAssembler.LbaScript;
 using LBAAssembler.Maps;
 using LBAAssembler.Scenes;
@@ -25,8 +26,13 @@ namespace LBAAssembler.Demo96;
 //                  bytes (Samples). Texts: the demo's School lines are the game's Desert texts under the same numbers, in every language.
 internal static class Demo96Rooms
 {
-    // (Arrival: where a door of the game's into the slot lands Twinsen when the demo has no door from that place -- its own way in)
-    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null);
+    // (Arrival: where a door of the game's into the slot lands Twinsen when the demo has no door from that place -- its own way in;
+    // Pave: cells of the demo's grid paved over -- Paving)
+    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null, Paving? Pave = null);
+
+    // The cells x X0-X1, z Z0-Z1 floored at `Layer` as the row z `Like` is there, cell for cell (its blocks and places), and emptied under
+    // it down to `Under`
+    public sealed record Paving(int X0, int X1, int Z0, int Z1, int Layer, int Like, int Under);
 
     public static readonly Room[] School =
     {
@@ -43,6 +49,20 @@ internal static class Demo96Rooms
     {
         new(17, 17, "the sewers", (20357, 1536, 15140)),
         new(18, 18, "the sewers' far halls"),
+    };
+
+    // The Tralu's caves' third hall (the user, 2026-11-06: "replace scene '20: Citadel Island, Tralu 3rd scene (room #22)' with the one
+    // from the 96 demo, this should be a like for like drop in replacement"): the demo's 20 in the game's slot 20 -- the same hall, its
+    // own creatures and the lever that opens its door; its doors to the cave's first hall (2) and second (19) the game's, as the game's
+    // doors from those halls land where the demo's do. (The game's own 20 has Joe the elf by the door to 19 in chapter 1, var 161, the
+    // demo's hasn't: no story line uses him.)
+    // The ladder up to the hall's back walk (the way on to the second hall, 19) stands in the demo in a pool of water a layer under the
+    // floor (cells x 44-46, z 48-50, layer 4: the demo's water, 0xF1, the game's 0x10): from the floor it can only be reached through the
+    // water, and Twinsen drowned at its foot (headless, 2026-11-06). The game's own hall has paving there; so has this one now, the floor's
+    // (layer 5) as the row in front of it has it.
+    public static readonly Room[] TraluCave =
+    {
+        new(20, 20, "the Tralu's caves' third hall", Pave: new Paving(44, 46, 48, 50, 5, 51, 4)),
     };
 
     // The sewers' lines in the demo's Citadel texts, as the game's: Twinsen's greetings to the painter (the demo's 6, 100-102: the game's
@@ -116,6 +136,13 @@ internal static class Demo96Rooms
     }
 
     public const string PackageResource = "Demo96/rooms.zip";
+
+    // Whether a converted demo (or a package of it) has the rooms' scenes: a package made before a room was added to it hasn't
+    public static bool Carries(string converted, IReadOnlyList<Room> rooms)
+    {
+        var store = new SceneStore(SceneGame.Lba2, converted);
+        return rooms.All(r => store.SceneExists(r.DemoScene));
+    }
 
     // The package the program carries, unpacked into a scratch folder named by its contents' hash (unpacked once), or null.
     private static string? Carried()
@@ -222,6 +249,20 @@ internal static class Demo96Rooms
             var (library, fragments) = MapBricks.Install(map, bkg);
             var grid = (byte[])map.Grid!.Clone();
             grid[0] = (byte)library; grid[1] = map.Fragments is null ? oldFragments[r.Slot] : (byte)fragments;
+            if (r.Pave is { } pave)
+            {
+                var shape = Lba2GridBackend.ToLba1Shape(grid);
+                var edits = new List<Lba1GridCell>();
+                for (var z = pave.Z0; z <= pave.Z1; z++)
+                    for (var x = pave.X0; x <= pave.X1; x++)
+                    {
+                        var like = Lba1GridEdit.Get(shape, x, pave.Layer, pave.Like);
+                        edits.Add(new Lba1GridCell(x, pave.Layer, z, like.Block, like.Pos));
+                        for (var y = pave.Under; y < pave.Layer; y++) edits.Add(new Lba1GridCell(x, y, z, 0, 0));
+                    }
+                grid = Lba2GridBackend.FromLba1Shape(grid, Lba1GridEdit.SetCells(shape, edits));
+                log.Add($"  scene {r.Slot}: cells x {pave.X0}-{pave.X1}, z {pave.Z0}-{pave.Z1} paved at layer {pave.Layer} as row z {pave.Like} is");
+            }
             var header = bkg.Read(0);
             int gri = BinaryPrimitives.ReadUInt16LittleEndian(header);
             bkg.SetStored(gri + gridOf[r.Slot], grid);

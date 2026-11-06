@@ -499,8 +499,12 @@ internal static class RaceTrackService
                 made.AddRange(LBAAssembler.Demo96.Demo96Rooms.Install(gameDirectory, demo, LBAAssembler.Demo96.Demo96Rooms.School));
                 // (and Citadel Island's sewers, the painter at his signs: the story's thief runs down into them)
                 made.AddRange(LBAAssembler.Demo96.Demo96Rooms.Install(gameDirectory, demo, LBAAssembler.Demo96.Demo96Rooms.Sewers, LBAAssembler.Demo96.Demo96Rooms.SewerTexts));
+                // (and the Tralu's caves' third hall, on the back way into the regulars' secret bar)
+                if (LBAAssembler.Demo96.Demo96Rooms.Carries(demo, LBAAssembler.Demo96.Demo96Rooms.TraluCave))
+                    made.AddRange(LBAAssembler.Demo96.Demo96Rooms.Install(gameDirectory, demo, LBAAssembler.Demo96.Demo96Rooms.TraluCave));
+                else made.Add("The Tralu's caves' third hall: the game's own (the 1996 demo's package hasn't its scene 20)");
             }
-            else made.Add("The School of Magic and the sewers: the game's own (no converted 1996 demo -- LBA2_DEMO96, or File > Open the 1996 demo)");
+            else made.Add("The School of Magic, the sewers and the Tralu's caves' third hall: the game's own (no converted 1996 demo -- LBA2_DEMO96, or File > Open the 1996 demo)");
             // (Citadel Island's easter eggs' LBA1 rooms -- the sewers' secret room, its doorway cut in the demo's sewers' wall, and the
             // Tavern's cellar -- from LBA1's own scenes, before the story, which puts their props and lines in: Citadel/CitadelLba1Rooms)
             // (and the museum's displays the story adds, in its own bricks: Citadel/CitadelMuseum)
