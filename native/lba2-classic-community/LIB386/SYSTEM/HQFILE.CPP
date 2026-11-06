@@ -56,8 +56,22 @@ U32 HQF_Init(const char *name, S32 index) {
         goto error;
     }
 
-    Seek(HQF_File, index, SEEK_FROM_START);
-    Read(HQF_File, (void *)&HQF_header, sizeof(HQF_header));
+    // (no record there: a slot pointing at or past the file's end, or a header whose method or sizes don't fit in the file -- read as
+    // one, its sizes were garbage and ExpandLZ read out of bounds. LBA Assembler's partial builds (some islands only) leave such slots
+    // in SCENE.HQR; the race mod's scan of every scene's head (RACEMOD.CPP CubeScene) crashed on one, 2026-11-06)
+    {
+        const U32 length = FileSize(name);
+        if (length && (U32)index + sizeof(HQF_header) > length) {
+            goto error;
+        }
+        Seek(HQF_File, index, SEEK_FROM_START);
+        Read(HQF_File, (void *)&HQF_header, sizeof(HQF_header));
+        const U32 stored = HQF_header.CompressMethod ? HQF_header.CompressedSizeFile : HQF_header.SizeFile;
+        if (HQF_header.CompressMethod < 0 || HQF_header.CompressMethod > 2
+                || (length && (U64)index + sizeof(HQF_header) + stored > length)) {
+            goto error;
+        }
+    }
 
     return HQF_header.SizeFile;
 }
