@@ -811,6 +811,7 @@ void comportement_1()
         HiddenPages(p);
         TownPeople(p);
         Yard(p);
+        YardZoeLeaves(p);
         StartLine(p);
         PackageLevers(p);
         RetoldGates(p);
@@ -1880,6 +1881,84 @@ void comportement_{HeroWatching}()
             return scripts => { lucLife(scripts); zoeLife(scripts); };
         });
     }
+
+    // ---- the game's Zoe in the yard, the morning of the storm (scene 49) ---------------------------------------------------------------
+    // The user, 2026-11-06: "Zoe still tells Twinsen that she's off to watch the race practice, but then goes to the dinofly." The game's
+    // Zoe (actor 4) comes out of the door after Twinsen (var 40 2: her place by the door, then comportement_9) with "I'm off to watch the
+    // race practice..." (the game's 212, retold), or out of the door once he is away from it (var 40 1: comportement_5), and walks the
+    // game's way to the Dino-Fly (track labels 2-13: var 40 3-13, 14 there), where she stays the chapter. In chapter 1 she goes the way
+    // she says: north up the path out of the yard, towards the storm track (two points of her own: past the door, and the yard's north
+    // edge, where the path goes into the storm track's scene), and is gone there; var 40 is 14 from her first step, as the game's
+    // walk ends, so the house and the island's other scenes go on as they did, and the yard has no Zoe in chapter 1 after it (var 40
+    // 3-14). Chapter 2's yard has the story's own Zoe (Yard; the game's gone there, RaceTrackStory.Retired.cs).
+    private static readonly (int X, int Y, int Z) YardPath = (18816, 250, 4400), YardNorthEdge = (18816, 250, 400);
+    private const int YardZoe = 4, ZoeOff = 40, ZoeGone = 41, ZoeOffComportement = 11;
+    private static void YardZoeLeaves(StoryParts p) => p.Edit(CarScene, "the game's Zoe in the yard in chapter 1: off up the path to the race practice she speaks of, not to the Dino-Fly", model =>
+    {
+        var first = model.TrackPoints.Count;
+        model.TrackPoints.Add(new SceneTrackPoint(YardPath.X, YardPath.Y, YardPath.Z));
+        model.TrackPoints.Add(new SceneTrackPoint(YardNorthEdge.X, YardNorthEdge.Y, YardNorthEdge.Z));
+        return scripts =>
+        {
+            var life = scripts.GetText(YardZoe, ScriptKind.Life);
+            if (!life.Contains("set_track(label_51);") || !life.Contains("message(212);")) throw new NotTheGames("the yard's Zoe");
+            // (gone as the yard starts once she has left: before the game's own start, which the retirements' gate finds as it was)
+            life = Loose(life, "void comportement_0()\n{", $@"void comportement_0()
+{{
+    if (2 > chapter() && 2 < var_game(40) && 15 > var_game(40))
+    {{
+        suicide();
+    }}");
+            // (by the door, her line said: off north; the game's walk to the Dino-Fly from chapter 2 on -- where it never comes, she's
+            // gone from the yard then)
+            life = Loose(life, "set_comportement(comportement_1);\nset_dir_obj(0, MOVE_MANUAL);\nset_track(label_2);", $@"set_dir_obj(0, MOVE_MANUAL);
+        if (2 > chapter())
+        {{
+            set_var_game(40, 14);
+            set_track(label_{ZoeOff});
+            set_comportement(comportement_{ZoeOffComportement});
+        }}
+        else
+        {{
+            set_comportement(comportement_1);
+            set_track(label_2);
+        }}");
+            // (out of the door after him, once he is away: the same way)
+            life = Loose(life, "set_var_game(40, 3);\nset_track(label_2);\nset_comportement(comportement_1);", $@"if (2 > chapter())
+            {{
+                set_var_game(40, 14);
+                set_track(label_{ZoeOff});
+                set_comportement(comportement_{ZoeOffComportement});
+            }}
+            else
+            {{
+                set_var_game(40, 3);
+                set_track(label_2);
+                set_comportement(comportement_1);
+            }}");
+            life = life.TrimEnd() + $@"
+
+void comportement_{ZoeOffComportement}()
+{{
+    if ({ZoeGone} == l_track())
+    {{
+        suicide();
+    }}
+}}
+";
+            scripts.SetText(YardZoe, ScriptKind.Life, life);
+            scripts.SetText(YardZoe, ScriptKind.Track, scripts.GetText(YardZoe, ScriptKind.Track).TrimEnd() + $@"
+
+label({ZoeOff});
+anim(89);
+goto_point({first});
+goto_point({first + 1});
+
+label({ZoeGone});
+stop();
+");
+        };
+    });
 
     // ---- the town circuit's start line (its start scene) ------------------------------------------------------------------------------
     // The Esmer herald beside the line: the Two Worlds Cup, and the magic slate (item 28); Mr. Paul: six cars; and Flick at her place.

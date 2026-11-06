@@ -76,7 +76,11 @@ If he didn't: **Zoe:** "You were shouting in your sleep. Something about a big m
 Talking to Zoe again: **Zoe:** "Tell me, Twinsen, have you found your gloves yet?" **Twinsen:** "Not yet. But I'll find whoever took
 them."
 
-**2. The Weather Wizard's tent.** Twinsen goes out of the house, down the path and along the road to the Wizard's tent.
+**2. The Weather Wizard's tent.** Twinsen goes out of the house. Zoe comes out after him:
+
+**Zoe:** "I'm off to watch the race practice. Don't forget that you can change the view by pressing "ENTER"."
+
+She goes off up the path towards the storm track. Twinsen goes down the path and along the road to the Wizard's tent.
 
 **The Weather Wizard:** "I was going to clear the rain, but I need to do it from the top of the lighthouse, and that rascal Raph is too
 busy at the race track and refuses to let me."

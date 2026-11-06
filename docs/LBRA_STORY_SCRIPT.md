@@ -280,6 +280,12 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    > again."
 
    Q_THIEF = 1. The attic shelf shows the darts again, not the gloves.
+
+   In the yard, Zoe comes out of the door after him (the game's, scene 49 actor 4):
+   > **Zoe:** "I'm off to watch the race practice. Don't forget that you can change the view by pressing "ENTER"."
+
+   and goes off up the path north, towards the storm track, out of the yard (not the game's walk to the Dino-Fly; she isn't in the
+   yard again this chapter: var 40 14 -- RaceTrackStory.Chapters.cs, YardZoeLeaves).
 2. **The Wizard's tent.** (built)
    > **The Weather Wizard:** "I was going to clear the rain, but I need to do it from the top of the lighthouse, and that rascal Raph
    > is too busy at the race track and refuses to let me."
