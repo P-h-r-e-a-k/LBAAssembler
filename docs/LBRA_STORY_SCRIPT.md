@@ -252,7 +252,8 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 - Twinsen's house (scene 0)
 - the Weather Wizard's tent (scene 21)
 - the storm track's start, where the Tavern stood (scene 42): the Tavern was taken down to make room for the track (its two buildings are
-  gone from the Citadel 1 build, and Raph's car parks on its old spot)
+  gone from the Citadel 1 build; Tim stands on its doorstep, and Raph's car parks across the road from him, past the line by the sea,
+  out of earshot of Tim, Mr. Paul and Flick -- parked beside Tim, Raph's lines came when Twinsen talked to Tim)
 - the harbour (scene 43)
 - the sewers under the harbour (the 1996 demo's sewers, scenes 17 and 18: see [The 1996 demo's sewers](#the-1996-demos-sewers) below)
 - the lighthouse (scene 46)

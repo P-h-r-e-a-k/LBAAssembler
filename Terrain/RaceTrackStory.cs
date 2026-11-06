@@ -326,6 +326,10 @@ internal static partial class RaceTrackStory
 
     // Where a person stands by a start line: `back` cells before it along the lap, off the roads to one side (the first of `sides` with
     // ground there near the road's height, `clear` cells past every road's verge), facing the line. Null when neither side has room.
+    // (cells between Raph's parked car, which he talks from, and anyone else who talks by the storm track's start line: his reach and
+    // theirs end to end -- 1500 each, Flick's 1800 -- and a little more)
+    private const double RaphApart = 6.5;
+
     private static (double X, double Z, double Y, int Beta)? Beside(RaceTrackReport report, (double X, double Z, double Y, double DirX, double DirZ) s, double back, double clear, int[] sides)
     {
         foreach (var side in sides)
@@ -718,8 +722,38 @@ void comportement_1()
                     Z0 = Local(corners.Min(c => c.Z), model.CubeY), Z1 = Local(corners.Max(c => c.Z), model.CubeY),
                     Y0 = (int)Math.Round(start.Y) - 500, Y1 = (int)Math.Round(start.Y) + 1500,
                 });
-                // (his car's place once he has stopped lapping: beside the road a little past the start line, along it)
-                if (Beside(storm, start, -5, 1.5, sides) is { } c)
+                // (his car's place once he has stopped lapping: beside the road by the start line, along it -- and out of reach of the others
+                // who talk there (Tim on the Tavern's doorstep, Mr. Paul, Flick at her plinth): Raph talks from his car, unseen, to anyone
+                // within 1500 of it, so beside Tim -- where five cells past the line put it, three steps from him -- Action at Tim had Raph
+                // say "beat my time ... I'll come with you to the lighthouse" too, and it read as the waiter's (the user, 2026-11-06). The
+                // first place, past the line or before it, either side of the road, in the start line's scene, RaphApart or more from each
+                // of them: no one within reach of two of them)
+                var others = new List<(double X, double Z)> { (p.X, p.Z) };
+                if (OffRoad(storm, TavernDoor.X, TavernDoor.Z, 1) is { } timAt) others.Add((timAt.X, timAt.Z));
+                if (storm.Marshal is { Length: >= 10 } flag) others.Add((flag[6] / 512.0, flag[7] / 512.0));
+                // (and clear of the scene's doors by three cells: east of the line, past it, the car stood in the mouth of the sewers' lift)
+                bool InScene((double X, double Z, double Y, int Beta) at)
+                {
+                    if (at.X < model.CubeX * 64 + 1 || at.X > model.CubeX * 64 + 63 || at.Z < model.CubeY * 64 + 1 || at.Z > model.CubeY * 64 + 63) return false;
+                    double lx = (at.X - model.CubeX * 64) * 512, lz = (at.Z - model.CubeY * 64) * 512;
+                    return model.Zones.Where(z => z.Type == 0).All(z =>
+                        Math.Max(Math.Max(z.X0 - lx, lx - z.X1), 0) is var ox && Math.Max(Math.Max(z.Z0 - lz, lz - z.Z1), 0) is var oz && Math.Sqrt(ox * ox + oz * oz) >= 3 * 512);
+                }
+                (double X, double Z, double Y, int Beta)? parkAt = null;
+                foreach (var back in new[] { -5.0, -7, -9, -11, 5, 7, 9 })
+                {
+                    foreach (var side in sides)
+                        if (Beside(storm, start, back, 1.5, new[] { side }) is { } at && InScene(at)
+                            && others.All(o => Math.Sqrt((at.X - o.X) * (at.X - o.X) + (at.Z - o.Z) * (at.Z - o.Z)) >= RaphApart))
+                        {
+                            parkAt = at;
+                            break;
+                        }
+                    if (parkAt is not null) break;
+                }
+                parkAt ??= Beside(storm, start, -5, 1.5, sides);
+                if (parkAt is { } park) log.Add($"scene {scenes.StartScene}: Raph's car parks at cell ({park.X:0.0}, {park.Z:0.0}), {others.Min(o => Math.Sqrt((park.X - o.X) * (park.X - o.X) + (park.Z - o.Z) * (park.Z - o.Z))):0.0} cells from the nearest who talks there");
+                if (parkAt is { } c)
                 {
                     raphPark = new[] { scenes.StartScene, RaceTrackScenes.CubeLocal(c.X, model.CubeX), (int)Math.Round(c.Y), RaceTrackScenes.CubeLocal(c.Z, model.CubeY),
                                        RaceTrackMath.Turn(Math.Atan2(start.DirX, start.DirZ)) };
