@@ -599,7 +599,12 @@ void Control_ParseArgs(int *argc, char *argv[]) {
                 exit(EXIT_FAILURE);
             }
             s_headless = 1;
-            s_no_audio = 1;
+            /* LBA2_AUDIO_CAPTURE (a video recorded headless, FRAMEDUMP.CPP): the sound kept, on no device -- its streams pulled
+               by the dump on the game's clock, so the run stays as reproducible as without it */
+            {
+                const char *cap = getenv("LBA2_AUDIO_CAPTURE");
+                s_no_audio = (cap && *cap && *cap != '0') ? 0 : 1;
+            }
             read += 1;
             continue;
         }

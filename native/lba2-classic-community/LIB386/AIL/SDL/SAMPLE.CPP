@@ -385,6 +385,13 @@ void Sample_CaptureEnd(void) {
 
 /* The next numFrames stereo frames of the effects' mix (44100 Hz, S16) into out; 0 when there is no mixer. */
 S32 Sample_CaptureMix(S16 *out, S32 numFrames) {
+#ifndef LBA2_USE_SDL2
+    if (AILAudio_Capturing()) {
+        /* every stream, the music and the voices with the effects (AUDIO_DEVICE.CPP) */
+        AILAudio_CaptureMix(out, numFrames);
+        return 1;
+    }
+#endif
     if (!sampleStream) {
         memset(out, 0, (size_t)numFrames * 2 * sizeof(S16));
         return 0;
@@ -425,6 +432,7 @@ static void SDLCALL SampleStreamCallback(void *userdata, AILAudioStream *stream,
             frames = MIX_CHUNK_FRAMES;
         if (frames <= 0)
             break;
+#ifdef LBA2_USE_SDL2
         if (silent && captureActive) {
             memset(mixChunkBuf, 0, (size_t)frames * 2 * sizeof(S16));
             AILAudio_Put(stream, mixChunkBuf, frames * 2 * (int)sizeof(S16));
@@ -434,6 +442,11 @@ static void SDLCALL SampleStreamCallback(void *userdata, AILAudioStream *stream,
         MixVoices(mixChunkBuf, frames);
         if (silent)
             memset(mixChunkBuf, 0, (size_t)frames * 2 * sizeof(S16));
+#else
+        /* (SDL3 with LBA2_AUDIO_CAPTURE: the stream is on no device -- only the dump pulls it, AILAudio_CaptureMix) */
+        (void)silent;
+        MixVoices(mixChunkBuf, frames);
+#endif
         mixedFrames += (U32)frames;
         AILAudio_Put(stream, mixChunkBuf, frames * 2 * (int)sizeof(S16));
         bytesLeft -= frames * 2 * (int)sizeof(S16);

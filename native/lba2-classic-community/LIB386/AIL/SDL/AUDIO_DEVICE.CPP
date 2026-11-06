@@ -299,10 +299,98 @@ int AILAudio_TestConvertedBytes(AILAudioStream *stream) {
 
 #else
 
-AILAudioStream *AILAudio_Open(const SDL_AudioSpec *spec, AILAudioCallback callback, void *userdata) {
-    return SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, spec, callback, userdata);
+/* Capture (LBA2_AUDIO_CAPTURE, a video recorded from inside the game: SOURCES/FRAMEDUMP.CPP; 2026-11-06, the user: "record a
+   video of the game being played end to end"): every stream -- the effects' mixer, the music, the voices -- opened on no device
+   at all, so nothing is heard and nothing drains them by the wall clock; the dump pulls each one's next frames itself
+   (AILAudio_CaptureMix), on the game's clock, so the music and the voices are in the video in step with the picture, and a
+   headless run has them too. */
+namespace {
+struct CaptureEntry {
+    AILAudioStream *stream;
+    bool playing;
+};
+const int CAPTURE_MAX = 32;
+CaptureEntry s_capture[CAPTURE_MAX];
+int s_captureMode = -1; // -1: the environment not read yet
+SDL_Mutex *s_captureMutex = NULL;
+
+bool CaptureMode() {
+    if (s_captureMode < 0) {
+        const char *e = SDL_getenv("LBA2_AUDIO_CAPTURE");
+        s_captureMode = (e && *e && *e != '0') ? 1 : 0;
+        if (s_captureMode)
+            s_captureMutex = SDL_CreateMutex();
+    }
+    return s_captureMode == 1;
 }
-void AILAudio_Destroy(AILAudioStream *stream) { SDL_DestroyAudioStream(stream); }
+
+CaptureEntry *CaptureFind(AILAudioStream *stream) {
+    for (int i = 0; i < CAPTURE_MAX; ++i)
+        if (s_capture[i].stream == stream)
+            return &s_capture[i];
+    return NULL;
+}
+} // namespace
+
+bool AILAudio_Capturing(void) { return CaptureMode(); }
+
+/* The next frames of every playing stream, mixed (44100 Hz stereo S16) into out: what the device would have played. */
+void AILAudio_CaptureMix(Sint16 *out, int frames) {
+    SDL_memset(out, 0, (size_t)frames * 2 * sizeof(Sint16));
+    if (!CaptureMode())
+        return;
+    float mix[2048], part[2048];
+    SDL_LockMutex(s_captureMutex);
+    for (int done = 0; done < frames;) {
+        const int n = SDL_min(frames - done, 1024);
+        SDL_memset(mix, 0, sizeof(float) * 2 * (size_t)n);
+        for (int i = 0; i < CAPTURE_MAX; ++i) {
+            if (!s_capture[i].stream || !s_capture[i].playing)
+                continue;
+            const int got = SDL_GetAudioStreamData(s_capture[i].stream, part, (int)sizeof(float) * 2 * n);
+            for (int k = 0; k < got / (int)sizeof(float); ++k)
+                mix[k] += part[k];
+        }
+        for (int k = 0; k < 2 * n; ++k) {
+            float v = mix[k] * 32767.0f;
+            out[done * 2 + k] = (Sint16)(v > 32767.0f ? 32767 : v < -32768.0f ? -32768 : (int)v);
+        }
+        done += n;
+    }
+    SDL_UnlockMutex(s_captureMutex);
+}
+
+AILAudioStream *AILAudio_Open(const SDL_AudioSpec *spec, AILAudioCallback callback, void *userdata) {
+    if (!CaptureMode())
+        return SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, spec, callback, userdata);
+    const SDL_AudioSpec dst = {SDL_AUDIO_F32, 2, 44100};
+    AILAudioStream *stream = SDL_CreateAudioStream(spec, &dst);
+    if (!stream) {
+        AudioError();
+        return NULL;
+    }
+    if (callback)
+        SDL_SetAudioStreamGetCallback(stream, callback, userdata);
+    SDL_LockMutex(s_captureMutex);
+    CaptureEntry *slot = CaptureFind(NULL);
+    if (slot) {
+        slot->stream = stream;
+        slot->playing = false; // paused until resumed, as a device stream opens
+    }
+    SDL_UnlockMutex(s_captureMutex);
+    if (!slot)
+        SDL_LogError(SDL_LOG_CATEGORY_AUDIO, "AIL capture: more than %d streams, one not in the video", CAPTURE_MAX);
+    return stream;
+}
+void AILAudio_Destroy(AILAudioStream *stream) {
+    if (CaptureMode()) {
+        SDL_LockMutex(s_captureMutex);
+        if (CaptureEntry *e = CaptureFind(stream))
+            e->stream = NULL;
+        SDL_UnlockMutex(s_captureMutex);
+    }
+    SDL_DestroyAudioStream(stream);
+}
 void AILAudio_Lock(AILAudioStream *stream) {
     if (!SDL_LockAudioStream(stream))
         AudioError();
@@ -324,8 +412,23 @@ int AILAudio_Queued(AILAudioStream *stream) {
 bool AILAudio_Gain(AILAudioStream *stream, float gain) {
     return SDL_SetAudioStreamGain(stream, gain) || AudioError();
 }
-bool AILAudio_Resume(AILAudioStream *stream) { return SDL_ResumeAudioStreamDevice(stream) || AudioError(); }
-bool AILAudio_Pause(AILAudioStream *stream) { return SDL_PauseAudioStreamDevice(stream) || AudioError(); }
+static bool CaptureSetPlaying(AILAudioStream *stream, bool playing) {
+    SDL_LockMutex(s_captureMutex);
+    if (CaptureEntry *e = CaptureFind(stream))
+        e->playing = playing;
+    SDL_UnlockMutex(s_captureMutex);
+    return true;
+}
+bool AILAudio_Resume(AILAudioStream *stream) {
+    if (CaptureMode())
+        return CaptureSetPlaying(stream, true);
+    return SDL_ResumeAudioStreamDevice(stream) || AudioError();
+}
+bool AILAudio_Pause(AILAudioStream *stream) {
+    if (CaptureMode())
+        return CaptureSetPlaying(stream, false);
+    return SDL_PauseAudioStreamDevice(stream) || AudioError();
+}
 bool AILAudio_LoadWAV(const char *path, SDL_AudioSpec *spec, Uint8 **data, Uint32 *bytes) {
     return SDL_LoadWAV(path, spec, data, bytes);
 }

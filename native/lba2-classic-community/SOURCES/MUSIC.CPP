@@ -494,6 +494,8 @@ void FadeOutVolumeMusic(void) {
     SaveTimer();
 
     timer = TimerRefHR;
+    U32 fadeLastRef = TimerRefHR;
+    S32 fadeStill = 0;
 
     startjvol = oldjvol = jvolume = GetVolumeStream();
 
@@ -508,6 +510,15 @@ void FadeOutVolumeMusic(void) {
                        jvolume > 0) {
         Timer_FixedDtPump(); // non-presenting wait: step the virtual clock under fixed-dt
         ManageTime();
+        // (a clock that never moves -- fixed-dt before the main loop's first tick steps nothing, a new game's first cube with the
+        // sound on, 2026-11-06 -- would hold the fade for ever: given up, the volume set at its end below)
+        if (Timer_FixedDtActive() && TimerRefHR == fadeLastRef) {
+            if (++fadeStill > 1000)
+                break;
+        } else {
+            fadeLastRef = TimerRefHR;
+            fadeStill = 0;
+        }
 #ifdef CDROM
         // volume du CD
         cdvolume = BoundRegleTrois(startcdvol, 0, FADE_MUSIC_TIME, TimerRefHR - timer);
@@ -551,6 +562,8 @@ void FadeInVolumeMusic(void) {
     SaveTimer();
 
     timer = TimerRefHR;
+    U32 fadeLastRef = TimerRefHR;
+    S32 fadeStill = 0;
 
 #ifdef CDROM
     startcdvol = oldcdvol = cdvolume = GetVolumeCD();
@@ -565,6 +578,15 @@ void FadeInVolumeMusic(void) {
                        jvolume < JingleVolume) {
         Timer_FixedDtPump(); // non-presenting wait: step the virtual clock under fixed-dt
         ManageTime();
+        // (a clock that never moves -- fixed-dt before the main loop's first tick steps nothing, a new game's first cube with the
+        // sound on, 2026-11-06 -- would hold the fade for ever: given up, the volume set at its end below)
+        if (Timer_FixedDtActive() && TimerRefHR == fadeLastRef) {
+            if (++fadeStill > 1000)
+                break;
+        } else {
+            fadeLastRef = TimerRefHR;
+            fadeStill = 0;
+        }
 #ifdef CDROM
         // volume du CD
         cdvolume = BoundRegleTrois(startcdvol, CDVolume, FADE_MUSIC_TIME, TimerRefHR - timer);
