@@ -90,9 +90,11 @@ internal static class PolarGrobo
         actor.Beta = beta;
         SceneOps.AddActor(model, actor);
         var index = model.Actors.Count - 1;
+        // (once: spoken to before the key is his -- the race game's story opening gives it, and says the line, unless Twinsen talked to
+        // him first: RACEMOD.CPP ChaseOpening. Not again after: Action at the car, a cell from him, said it once more, the user, 2026-11-06)
         var life = $@"void comportement_0()
 {{
-    if (1 == action() && 1500 > distance(0))
+    if (1 == action() && 1500 > distance(0) && 0 == var_game({KeyVar}))
     {{
         message({PolarDream.ChaseGroboText});
         set_var_game({KeyVar}, 1);

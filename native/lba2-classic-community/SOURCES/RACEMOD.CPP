@@ -5479,6 +5479,14 @@ static void ChaseOpening(S32 now) {
         break;
     case 4: {
         const int actor = s_chaseHelper <= -1000 ? -1000 - s_chaseHelper : -1;
+        // (Twinsen talked to him first, while the opening was still going -- his own script's line, the key given -- and perhaps got into
+        // his car since: nothing more to say. The user, 2026-11-06, a new game: "the grobo told me twice to take his vehicle, once before
+        // I was in it, and once after I was in it")
+        if (s_chaseVar >= 0 && s_chaseVar < MAX_VARS_GAME && ListVarGame[s_chaseVar]) {
+            Log_Info("[racemod] chase: the helper (actor %d) gave the key already (game variable %d): his line not said again", actor, s_chaseVar);
+            s_chaseStep = 5;
+            break;
+        }
         NumObjDial = (U8)(actor > 0 && actor < NbObjets ? actor : NUM_PERSO);
         Log_Info("[racemod] chase: the helper (actor %d) says text %d and gives the key (game variable %d)", actor, s_chaseText[2], s_chaseVar);
         if (s_chaseText[2] >= 0) Dial(s_chaseText[2], TRUE);
