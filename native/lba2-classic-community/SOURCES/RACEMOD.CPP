@@ -619,6 +619,10 @@ static int s_paradeFlip = 0;               // (the next frame drawn whole: RaceM
 // variable set: his gloves) -- and where it stops (along its line, and to the side of it), how hard it brakes, and when its step began;
 // a quiet stop (s_pullQuiet: at its park, step 7) says nothing and screeches no tyres
 static int s_paradeStopText = -1, s_paradeTalker = -1, s_paradeGoVar = -1, s_pull = 0, s_pullSay = 0, s_pullQuiet = 0;
+// (the driver's yell up -- its text box a modal whose frames run the race's frame too, AffScene: the parade held still under it,
+// its wait to be talked to counted from the box closing, not from the car pulling up -- the user's player reading the yell 3.5 s
+// or more found Raph gone as it closed; seen in the end-to-end video's paced dialogues, 2026-11-06)
+static int s_paradeYelling = 0;
 static double s_pullS = 0, s_pullLat = 0, s_pullAcc = 0, s_pullFrom = 0, s_pullAway = 0;
 static S32 s_pullAt = 0, s_pullX = 0, s_pullY = 0, s_pullZ = 0, s_pullBeta = 0;
 #define RACE_PULL_BRAKE (14 * 512.0)       // it brakes this far before Twinsen
@@ -5614,7 +5618,9 @@ void RaceMod_Story(void) {
         if (heard) {
             NumObjDial = (U8)s_paradeActorNow;
             Log_Info("[racemod] parade: the driver yells text %d at the walker (actor %d)", s_walkerText, s_walker);
+            s_paradeYelling = 1;
             Dial(s_walkerText, TRUE);
+            s_paradeYelling = 0;
             s_wantFlip = 1;
         } else
             Log_Info("[racemod] parade: the driver yells at the walker (actor %d), out of Twinsen's hearing", s_walker);
@@ -5632,7 +5638,9 @@ void RaceMod_Story(void) {
         } else {
             NumObjDial = (U8)(s_paradeActorNow > 0 && s_paradeActorNow < NbObjets ? s_paradeActorNow : NUM_PERSO);
             Log_Info("[racemod] parade: the driver says text %d", s_paradeStopText);
+            s_paradeYelling = 1;
             Dial(s_paradeStopText, TRUE);
+            s_paradeYelling = 0;
             s_wantFlip = 1;
             s_pullAt = TimerRefHR;
         }
@@ -6515,6 +6523,7 @@ static void ParadeScreech(void);
 // this scene's copy of his car while the variable is below the value, then parked (parade_park=) or out of sight.
 static double Pull(double speed);
 static void ParadeStep(S32 now, S32 dt) {
+    if (s_paradeYelling) return;
     s_paradeActorNow = -1;
     if (s_paradeOpp < 0 || s_paradeVar < 0 || s_paradeVar > 255) return;
     const T_RACE_OPPONENT *o = &s_opp[s_paradeOpp];

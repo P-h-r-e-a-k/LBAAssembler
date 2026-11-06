@@ -26,6 +26,7 @@
 #include <SYSTEM/KEYBOARD_KEYS.H>
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/STRING.H>
+#include <SYSTEM/TIMER.H>
 
 #include <dirent.h>
 #include <stdint.h>
@@ -1840,6 +1841,49 @@ void InitEndPage() {
     NbLineDial = 0;
 }
 /*-------------------------------------------------------------------------*/
+/* `skipmodals 2` -- a video's pace (the end-to-end video, 2026-11-06: with `skipmodals 1` every line of the story went by in a
+   frame): the dialogue runs as the player sees it, each page held long enough to read it and turned without a key, as the
+   1996 demo's slide show turned them (DemoSlide). The modal's time is its own (SaveTimer/RestoreTimer round the dialogue), so
+   the game after it is as it would have been. */
+static S32 DialVideoPaced(void) { return DbgSkipModals == 2; }
+
+/* The modal's clock kept moving: an iteration that presented nothing (no one to animate) stepped by hand, so a hold on the
+   clock always ends and the recording's frames and sound go on */
+static void DialPacedTick(void) {
+    const U32 before = TimerSystemHR;
+    ManageTime();
+    if (TimerSystemHR == before) {
+        Timer_FixedDtPump();
+        ManageTime();
+    }
+}
+
+/* The game's clock put back where the dialogue found it. Dial's own SaveTimer/RestoreTimer does that only when no one outside
+   holds the clock already: nested in another's (the race mod's parade yell, said from its step), the dialogue's time stayed on
+   the clock until that one let it go, then was taken back -- 6.5 s on and back, and the parade car's 3.5 s wait to be talked to
+   was over as the yell closed (a page skipped at once had cost nothing) */
+// (and held inside a LockTimer window -- the race mod's step -- the span was banked at the next unlocked ManageTime: the clock
+// went on 5.2 s, the car drove on, and back. `since`: the clock's reading the span is counted from, moved on to now)
+static void DialPacedRestore(U32 ref, U32 *since) {
+    if (DialVideoPaced()) {
+        ManageTime();
+        Timer_ForgetSpan(TimerSystemHR - *since);
+        *since = TimerSystemHR;
+        TimerRefHR = ref;
+    }
+}
+
+/* A page held: a second, and more for each line on it */
+static void DialPacedHold(void) {
+    const U32 start = TimerSystemHR;
+    const U32 hold = 1000 + (U32)DialNbLine * 1200;
+    while (TimerSystemHR - start < hold) {
+        TestSpeak();
+        SpeakAnimation();
+        DialPacedTick();
+    }
+}
+
 S32 NextDialCar() {
     static S32 savetimer;
     static S32 flagnewpage = TRUE;
@@ -2204,6 +2248,8 @@ void Dial(S32 text, S32 drawscene) {
     DialNbLine = 0; //  pour la démo le 02/08/96
 
     SaveTimer();
+    const U32 pacedRef = TimerRefHR;
+    U32 pacedSince = TimerSystemHR;
 
     TestCoulDial(ListObjet[NumObjDial].CoulObj);
 
@@ -2229,8 +2275,17 @@ void Dial(S32 text, S32 drawscene) {
 
         InitWhoSpeak(NumObjDial);
 
-        while ((TestSpeak())AND(MyKey != K_ESC) AND !(Input & I_MENUS) AND !DbgSkipModals) {
-            SpeakAnimation();
+        {
+            const U32 voiceStart = TimerSystemHR;
+            while ((TestSpeak())AND(MyKey != K_ESC) AND !(Input & I_MENUS) AND DbgSkipModals != 1) {
+                SpeakAnimation();
+                // (paced: a voice no recording drains given up after a minute)
+                if (DialVideoPaced()) {
+                    DialPacedTick();
+                    if (TimerSystemHR - voiceStart > 60000)
+                        break;
+                }
+            }
         }
         StopSpeak();
         ClearWhoSpeak();
@@ -2239,6 +2294,7 @@ void Dial(S32 text, S32 drawscene) {
         InitWaitNoKey();
         InitWaitNoInput(I_FIRE | I_ACTION | I_MENUS);
         RestoreTimer();
+        DialPacedRestore(pacedRef, &pacedSince);
         return;
     }
     //-----
@@ -2247,11 +2303,14 @@ void Dial(S32 text, S32 drawscene) {
 
     OpenDial(text);
 
+    const U32 dialStart = TimerSystemHR;
     while (TRUE) {
         ret = NextDialCar();
 
         TestSpeak();
         SpeakAnimation();
+        if (DialVideoPaced())
+            DialPacedTick();
 
         /* Harness one-shot capture.  Read Log (back buffer), not Screen --
            Dial's typewriter renders into Log via the dialogue compositor
@@ -2269,7 +2328,12 @@ void Dial(S32 text, S32 drawscene) {
             }
         }
 
-        if (ret == 2 && !DbgSkipModals) /*      Attente de Touche       */
+        if (ret == 2 && DialVideoPaced()) {
+            // (paced: the page held and turned, no key waited for -- nor its release: a harness's held input is let go only by
+            // the main loop's tick, which a modal never reaches)
+            DialPacedHold();
+            DialNbLine = 0;
+        } else if (ret == 2 && !DbgSkipModals) /*      Attente de Touche       */
         {
             while (MyKey OR Input) {
                 TestSpeak(); // Tu relaches ?
@@ -2297,12 +2361,15 @@ void Dial(S32 text, S32 drawscene) {
         // iteration (the loop otherwise depends on TimerRefHR, which is frozen while a modal spins
         // under --fixed-dt) without changing quest state -- the script continues past the dialog.
         // (a `dialshot` waiting for its step: the dialogue runs on to it, and ends there)
-        if (MyKey == K_ESC OR Input & I_MENUS OR (DbgSkipModals AND !s_dial_capture_live))
+        if (MyKey == K_ESC OR Input & I_MENUS OR (DbgSkipModals == 1 AND !s_dial_capture_live))
             flagabort = 1;
 
         if (((ret == 0) AND(!TestSpeak())) // Tout fini
             OR(flagabort))
             break; // Ou Abort by player
+        // (paced: the text all out and a voice no recording drains -- given up after a minute)
+        if (ret == 0 && DialVideoPaced() && TimerSystemHR - dialStart > 60000)
+            break;
     }
 
     StopSpeak();
@@ -2315,21 +2382,26 @@ void Dial(S32 text, S32 drawscene) {
     ) {
         ManageTime();
 
-        while (MyKey OR Input) {
-            SpeakAnimation();
+        if (DialVideoPaced()) {
+            // (paced: the last page held, no key waited for)
+            DialPacedHold();
+        } else {
+            while (MyKey OR Input) {
+                SpeakAnimation();
+            }
+
+            if (DemoSlide) {
+                S32 endtimer = TimerRefHR + DialNbLine * 1000;
+
+                while (TimerRefHR < endtimer
+                                        AND !MyKey AND !Input) {
+                    SpeakAnimation();
+                }
+            } else
+                while (!MyKey AND !Input) {
+                    SpeakAnimation();
+                }
         }
-
-        if (DemoSlide) {
-            S32 endtimer = TimerRefHR + DialNbLine * 1000;
-
-            while (TimerRefHR < endtimer
-                                    AND !MyKey AND !Input) {
-                SpeakAnimation();
-            }
-        } else
-            while (!MyKey AND !Input) {
-                SpeakAnimation();
-            }
     }
 
     RestoreClip();
@@ -2344,6 +2416,7 @@ void Dial(S32 text, S32 drawscene) {
         CopyScreen(ScreenAux, Log);
         BoxStaticAdd(0, 0, ModeDesiredX, ModeDesiredY);
         RestoreTimer();
+        DialPacedRestore(pacedRef, &pacedSince);
         SaveTimer();
         AffScene(AFF_OBJETS_NO_FLIP);
         FixeCinemaMode(FALSE);
@@ -2355,6 +2428,7 @@ void Dial(S32 text, S32 drawscene) {
     InitWaitNoInput(I_FIRE | I_ACTION | I_MENUS);
 
     RestoreTimer();
+    DialPacedRestore(pacedRef, &pacedSince);
 }
 /*──────────────────────────────────────────────────────────────────────────*/
 S32 MyDial(S32 nummess) // attends une touche si autre page sinon continue

@@ -79,6 +79,10 @@ void Timer_FixedDtPump();
 // measured as a recording that replayed in under a minute before and had not reached its
 // first progress line after one.
 void Timer_FixedDtPumpPolled();
+// A span of the clock given to something outside the game (a dialogue paced for a video: MESSAGE.CPP `skipmodals 2`) kept off
+// the game's clock: inside a LockTimer window the span would otherwise be banked into TimerRefHR at the next unlocked
+// ManageTime(). The caller puts TimerRefHR back itself.
+void Timer_ForgetSpan(U32 span);
 // Hold the pinned clock to real time: every step the clock hands out costs a step of wall
 // time, wherever it is handed out from. Off by default, which is what a batch run wants --
 // the point of --fixed-dt for the harness is to finish sooner than real time. A player

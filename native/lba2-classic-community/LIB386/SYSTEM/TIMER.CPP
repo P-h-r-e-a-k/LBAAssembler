@@ -253,6 +253,11 @@ void Timer_FixedDtPumpPolled() {
     }
 }
 
+void Timer_ForgetSpan(U32 span) {
+    if (TimerLock)
+        LastTime += span;
+}
+
 void Timer_FixedDtPump() {
     Timer_FixedDtPumpPolled();
     /* Only for a loop that does not poll. A loop that does gets a fresh reading from the

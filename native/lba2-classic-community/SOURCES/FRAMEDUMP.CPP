@@ -223,3 +223,9 @@ void FrameDump_Stop(void) {
 int FrameDump_Active(void) {
     return s_wav != NULL;
 }
+
+// the recording's own time so far (its frames written): where in the video the game is -- a dialogue's modal time in it too,
+// which the game's ticks leave out (`skipmodals 2`)
+double FrameDump_Seconds(void) {
+    return s_fps ? (double)s_frames / s_fps : 0.0;
+}

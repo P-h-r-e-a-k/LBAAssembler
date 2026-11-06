@@ -8,3 +8,4 @@ void FrameDump_Frame(const U32 *pixels, U32 pitch, U32 w, U32 h);
 void FrameDump_Stop(void);
 int FrameDump_At(double seconds, const char *cmd);
 int FrameDump_Active(void);
+double FrameDump_Seconds(void);

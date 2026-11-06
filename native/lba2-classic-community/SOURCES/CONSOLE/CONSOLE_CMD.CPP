@@ -2344,12 +2344,13 @@ static void cmd_inputflow(int argc, const char *argv[]) {
                   (unsigned)InputFlow.ActionEdgesSkipped);
 }
 
-/* skipmodals <0|1>: abort dialogue modals immediately so a headless run does not hang on a
+/* skipmodals <0|1|2>: abort dialogue modals immediately so a headless run does not hang on a
    give/talk dialog (a modal spins waiting for a keypress while the main tick loop is stalled). */
 static void cmd_skipmodals(int argc, const char *argv[]) {
     if (argc >= 2)
-        DbgSkipModals = atoi(argv[1]) ? 1 : 0;
-    Console_Print("skipmodals: %s", DbgSkipModals ? "ON" : "OFF");
+        DbgSkipModals = atoi(argv[1]) == 2 ? 2 : (atoi(argv[1]) ? 1 : 0);
+    Console_Print("skipmodals: %s", DbgSkipModals == 2 ? "PACED (each page held to be read, turned without a key)"
+                                                       : DbgSkipModals ? "ON" : "OFF");
 }
 
 /* dialshot <path> [steps]: a picture of the next dialogue a script opens, `steps` steps of its typewriter in (8; or at its page's end),
@@ -2724,7 +2725,11 @@ static void cmd_framedump(int argc, const char *argv[]) {
         FrameDump_Stop();
         Console_Print("framedump: stopped");
     } else {
-        Console_Print("framedump: %s", FrameDump_Active() ? "recording" : "idle");
+        extern double FrameDump_Seconds(void);
+        if (FrameDump_Active())
+            Console_Print("framedump: recording, %.3f s in", FrameDump_Seconds());
+        else
+            Console_Print("framedump: idle");
     }
 }
 /* autopass <0|1> [cells]: the test pilot takes a car close ahead in its lane on the side the other leaves (RACEMOD.CPP). */
@@ -3247,9 +3252,10 @@ void Console_RegisterAll(void) {
                               "Feeds the same per-frame nudge the gamepad right stick and the mouse "
                               "drag feed, so the analog camera can be driven headlessly.");
     Console_RegisterCommandEx("skipmodals", cmd_skipmodals, "Auto-advance dialogue modals (headless)",
-                              "skipmodals <0|1>",
+                              "skipmodals <0|1|2>",
                               "Aborts dialogue modals immediately so a headless run does not hang on a "
-                              "give/talk dialog; the script continues past it.");
+                              "give/talk dialog; the script continues past it. 2: a video's pace -- every "
+                              "page shown and held to be read, then turned without a key.");
     Console_RegisterCommandEx("dialshot", cmd_dialshot, "Picture of the next dialogue a script opens",
                               "dialshot <path.png> [steps]",
                               "Saves the screen a few steps into the next dialogue (8, or its page's end), its "
