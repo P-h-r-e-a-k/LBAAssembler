@@ -1400,10 +1400,13 @@ static int s_nbTunnels = 0;
 #define RACE_LAVA_FREE 24                  // the little balls only while this many extras are free (the race's own need theirs)
 #define RACE_LAVA_SHADOW 12                // SPRITE_BALLE_SHADOW
 #define RACE_LAVA_SCALE 14                 // the shadow's size where it lands
-#define RACE_LAVA_NEAR (40 * 512)          // shot only while Twinsen is this near the place it will land
+#define RACE_LAVA_NEAR (40 * 512)          // seen (the ball, its shadow, its burst) only while Twinsen is this near the place it lands
 #define RACE_LAVA_REACH 1100               // a car this near the place it lands is caught in its burst
 #define RACE_LAVA_FORCE 20
-typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; int Geyser, Armed, Kind; } T_RACE_LAVA;
+// (Unseen: a ball landing out of Twinsen's sight -- further than RACE_LAVA_NEAR, or out of his scene: no extras, its landing only, which
+// stops the opponents there. Until 2026-11-06 the balls, and the geysers that shower them, went off only near Twinsen, so on Volcano
+// Island he was stopped 5 to 13 times a race and each opponent 1 to 6: the pilot won 7 races of 19 -- the scripted playthrough.)
+typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; int Geyser, Armed, Kind, Unseen; } T_RACE_LAVA;
 static T_RACE_LAVA s_lava[RACE_MAX_LAVA];
 static int s_nbLava = 0;
 // Lava geysers (lavageyser=<x> <y> <z> <from> <to> <every> <phase> <balls>, as lavaball=): every so often (Every ms, give or take a
@@ -12673,13 +12676,15 @@ static void LavaBalls(S32 now, int driving) {
             if (len < 1) continue;
             const double half = (a->Half + (c->Half - a->Half) * t) * 0.6, side = (VentRandom() * 2 - 1) * half;
             b->DstX = a->X + dx * t - dz / len * side; b->DstZ = a->Z + dz * t + dx / len * side; b->DstY = a->Y + (c->Y - a->Y) * t;
-            // (only near Twinsen, and landing in his scene: the extras are the scene's)
-            if ((b->DstX - hx) * (b->DstX - hx) + (b->DstZ - hz) * (b->DstZ - hz) > (double)RACE_LAVA_NEAR * RACE_LAVA_NEAR) continue;
-            if (b->DstX < cx || b->DstX >= cx + 32768 || b->DstZ < cz || b->DstZ >= cz + 32768) continue;
+            // (seen only near Twinsen and landing in his scene -- the extras are the scene's; anywhere else it lands unseen, for the
+            // opponents there)
             const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
             const int shard = b->Kind == RACE_SHARD_KIND;
             b->Dur = 1500 + (S32)(far / 10) + (shard ? RACE_SHARD_SLOW + (S32)(far / 50) : 0);
             b->T0 = now; b->On = 1; b->Trail = now;
+            b->Unseen = (b->DstX - hx) * (b->DstX - hx) + (b->DstZ - hz) * (b->DstZ - hz) > (double)RACE_LAVA_NEAR * RACE_LAVA_NEAR
+                        || b->DstX < cx || b->DstX >= cx + 32768 || b->DstZ < cz || b->DstZ >= cz + 32768;
+            if (b->Unseen) { b->Ball = b->Shadow = -1; continue; }
             b->Ball = LaserExtra(shard && s_shardModel >= 0 ? s_shardModel : s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz));
             b->Shadow = InitExtraAnimSprite(255, (S32)(b->DstX - cx), (S32)b->DstY + 40, (S32)(b->DstZ - cz), RACE_LAVA_SHADOW, RACE_LAVA_SHADOW, b->Dur + 100,
                                             shard ? RACE_SHARD_SHADOW0 : 60, shard ? 0 : 1, 0);
@@ -12715,12 +12720,14 @@ static void LavaBalls(S32 now, int driving) {
         if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW) ListExtra[b->Shadow].Sprite = -1;
         b->Ball = b->Shadow = -1;
         const S32 lx = (S32)(b->DstX - cx), lz = (S32)(b->DstZ - cz), ly = (S32)b->DstY;
-        if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
+        // (seen: in Twinsen's scene, its burst there and Twinsen in it or not; unseen, or Twinsen gone to another scene since: the
+        // opponents only)
+        const int seen = !b->Unseen && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
         const int shard = b->Kind == RACE_SHARD_KIND;
         const S32 reach = shard ? RACE_SHARD_REACH : RACE_LAVA_REACH, hold = shard ? RACE_SHARD_STUN : RACE_PENGUIN_HOLD;
         const char *what = shard ? "a crystal shard" : "a lava ball";
-        if (shard) ShardBurst(lx, ly, lz); else GameLava(lx, ly, lz, 0, 0, 1);
-        if (driving && Near(hero, lx, ly, lz, reach)) {
+        if (seen) { if (shard) ShardBurst(lx, ly, lz); else GameLava(lx, ly, lz, 0, 0, 1); }
+        if (seen && driving && Near(hero, lx, ly, lz, reach)) {
             if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
                 Log_Info("[racemod] %s lands on Twinsen's car: %s", what, now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
             else {
@@ -12737,9 +12744,9 @@ static void LavaBalls(S32 now, int driving) {
             PathAt(op, op->S, &x, &z, &y, &v, &ddx, &ddz);
             if ((x - b->DstX) * (x - b->DstX) + (z - b->DstZ) * (z - b->DstZ) > (double)reach * reach || fabs(y - b->DstY) > 1500) continue;
             if (op->HitUntil < now + hold) op->HitUntil = now + hold;
-            Log_Info("[racemod] %s hit by %s", op->Name, what);
+            Log_Info("[racemod] %s hit by %s%s", op->Name, what, seen ? "" : " (unseen)");
             const int index = OpponentActor(op);
-            if (index < 0) continue;
+            if (index < 0 || !seen) continue;
             T_OBJET *car = &ListObjet[index];
             InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
             InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_LAVA_FORCE);
@@ -12797,7 +12804,8 @@ static void LavaGeysers(S32 now) {
         if (!g->Next) { g->Next = now + g->Phase % g->Every + 1500; continue; }
         if (now < g->Next) continue;
         g->Next = now + g->Every * 3 / 4 + (S32)(VentRandom() * g->Every / 2);
-        if ((g->X - hx) * (g->X - hx) + (g->Z - hz) * (g->Z - hz) > (double)RACE_GEYSER_NEAR * RACE_GEYSER_NEAR) continue;
+        // (anywhere on the island, not only near Twinsen -- out of his sight its shower lands unseen on the opponents there: LavaBalls)
+        const int nearHim = (g->X - hx) * (g->X - hx) + (g->Z - hz) * (g->Z - hz) <= (double)RACE_GEYSER_NEAR * RACE_GEYSER_NEAR;
         // it goes off: the stream, its burst and its sound, and its shower armed -- the stream up past its stretch of road's height
         if (g->Lift <= 0) {
             double top = g->Y;
@@ -12818,8 +12826,8 @@ static void LavaGeysers(S32 now) {
             if (b->Geyser != gi || b->On) continue;
             b->Armed = 1; b->Next = now + RACE_GEYSER_FIRST + nth++ * RACE_GEYSER_SHOWER + (S32)(VentRandom() * 120);
         }
-        Log_Info("[racemod] %s %d goes off (%d %s)", g->Kind == RACE_SHARD_KIND ? "the volcano's crystal shards" : "lava geyser", gi + 1, nth,
-                 g->Kind == RACE_SHARD_KIND ? "shards" : "balls");
+        Log_Info("[racemod] %s %d goes off (%d %s)%s", g->Kind == RACE_SHARD_KIND ? "the volcano's crystal shards" : "lava geyser", gi + 1, nth,
+                 g->Kind == RACE_SHARD_KIND ? "shards" : "balls", nearHim ? "" : ", away from Twinsen");
     }
 }
 
