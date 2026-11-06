@@ -1,91 +1,128 @@
 using LBAAssembler.LbaScript;
 using LBAAssembler.Scenes;
+using LBAAssembler.Terrain.Citadel;
 
 namespace LBAAssembler.Terrain;
 
-// The Tralu's cave as the regulars' secret tavern (the user, 2026-11-05: "The tralu caves no longer form part of the story for Citadel
-// island, given that in Citadel 1 there's no travel let's add a story detail that the mayor has banned alcohol and have the tralu caves as
-// a secret tavern, perhaps with the tralu sitting in a corner moaning that his quiet cave has become too noisy or similar"). In the game
-// the cave (scene 2, its mouth in the cliff by the Weather Wizard's tent, scene 45) is where the Tralu holds Raph; in the story Raph is at
-// the race track and the cave had nothing left in it but the Tralu himself, still the game's boss on the hunt. Now, in chapter 1 -- the
-// storm, the Tavern gone for the storm track, and the mayor's ban on drink while the island has a race track ("no drinking and driving"):
-//   - Tim on the Tavern's old doorstep (StormPeople) tells of the ban, and of Luc gone with the Tavern's bottles and drumming in the Tralu's
-//     cave, asked a second time while the thief is still out there (once a visit) and from the umbrella given back on;
-//   - the mushroom man by the Wizard's tent (scene 45's actor 4, his first line of the day said) hears the drums under the cliff: half the
-//     Tavern creeps in there of an evening (once a visit, Once4);
-//   - in the cave's first hall (the low floor inside its mouth, layer 0: 256), the Tavern's people copied from it (scene 3): Luc behind a
-//     bar of two crates (the game's dark crate, sprite 107, scene 4's -- fixed, not pushed, not a zone's) where the tunnel comes in, the
-//     drunk rabbibunny propped against a stalagmite in the middle, Pat and Fab (Raph's band: the noise) by the west wall, the visitor from
-//     the Tavern ("not from here") across from them; each with a line of their own, said once Twinsen is near and presses Action (Talker:
-//     each far enough from the others that one Action is one of them) -- Pat's, and Fab's after it;
-//   - the Tralu (the game's own, actor 3: its life and track the story's now, no hunt and beyond harm) in the hall's far corner, standing
-//     in the game's own idle animation, grumbles: his quiet cave too noisy.
-// Chapter 2 (the fine weather): the Esmers have put the Tavern back, the regulars and their crates are in it again and gone from the cave
-// (the game's Tavern scene keeps its own), and the Tralu is glad of the quiet -- though the aliens want him in their race (Flick's six cars).
-// None of the regulars stands anywhere else in chapter 1: the Tavern's scene is shut in the storm (its door went with the storm track's
-// road), Luc is in the yard and the rabbibunny round the Esmers' landing only in chapter 2 (TownPeople, Yard), and Tim stays on the doorstep.
+// The Tavern regulars' secret bar (the user, 2026-11-05: "have the tralu caves as a secret tavern, perhaps with the tralu sitting in a
+// corner moaning that his quiet cave has become too noisy"; 2026-11-06: "there's somebody sitting down in mid-air. Let's move the bar
+// scene area to scene '19: Citadel Island, Tralu 2nd scene (room #21)', it's supposed to be a secret easter egg for people to find ...
+// Remove any references to the Tralu's cave", and "Perhaps some very vague hints about the Tavern owner being nowhere to be seen, and
+// perhaps Tim the waiter could be in the new bar area too"). Chapter 1 -- the storm, the Tavern gone for the storm track, and the mayor's
+// ban on drink while the island has a race track ("no drinking and driving"):
+//   - the hints, and only that Luc is nowhere to be seen: Tim on the Tavern's old doorstep (StormPeople: the ban, nobody has seen Luc all
+//     day, nor the Tavern's bottles -- asked a second time while the thief is still out there, once a visit, and from the umbrella given
+//     back on), and the mushroom man by the Wizard's tent (scene 45's actor 4, after his first line of the day, once a visit, Once4):
+//     nobody has seen Luc since the ban, and half his regulars go missing of an evening and come home singing. No place is named.
+//   - the bar: the Back Room, the Tralu's caves' second hall (scene 19), made bigger and furnished by the build (TraluBarRoom: the hall
+//     carried west, the massive old table with its benches, barrels for round tables, candlesticks). The Tavern's people copied from it
+//     (scene 3) -- Luc behind a counter of the game's dark crates (sprite 107, scene 4's, fixed) against the north wall between the
+//     candlesticks; Pat and Fab of Raph's band (the noise) and the visitor from the Tavern ("not from here") sitting on the table's
+//     benches, and the drunk rabbibunny at its far end; Tim serving beside it, once his umbrella is back and till Twinsen is tired (the
+//     doorstep's Tim isn't there then: TimInBar). Each says their line once Twinsen is near and presses Action (Talker: each far enough
+//     from the others that one Action is one of them) -- Pat's, and Fab's after it. The ones who sit sit on the benches: their sitting
+//     animations (the Tavern's own, on its stools and chairs) at the benches' height.
+//   - the hall's own creatures go -- the two that hunt Twinsen for the keys they carry (actors 3 and 6) and the one that drops from the
+//     ceiling by the way to the gate (2) -- and the two barred doors those keys opened between the hall and the way to scene 2 (4 and 5:
+//     the regulars come and go that way, RaceTrackStory.TraluCaves), and the spike zones where the hall is now (its stalagmites the build
+//     took out).
+//   - the Tralu in his own hall in the caves' first scene (scene 2: actor 3, where the game has him; his life and track the story's, no
+//     hunt and beyond harm) grumbles that the whole Tavern has moved in next door, with drums; in chapter 2 he is glad of the quiet.
+// Chapter 2 (the fine weather): the Esmers have put the Tavern back, the regulars are in it again and gone from the bar (the game's Tavern
+// scene keeps its own); the hall keeps its furniture. None of the regulars stands anywhere else in chapter 1: the Tavern's scene is shut
+// in the storm (its door went with the storm track's road), Luc is in the yard and the rabbibunny round the Esmers' landing only in
+// chapter 2 (TownPeople, Yard), and Tim is on the doorstep or in the bar, never both.
 internal static partial class RaceTrackStory
 {
-    // the game's people of the Tavern copied (scene 3): the visitor "not from here", Fab and Pat of Raph's band (TavernRabbibunny and
-    // TavernLuc are Chapters.cs's); the game's Tralu in his cave (actor 3, entity 20) and its crate (scene 4's actor 3: sprite 107)
+    // the game's people of the Tavern copied (scene 3): the visitor "not from here", Fab and Pat of Raph's band (TavernRabbibunny, TavernLuc
+    // and TavernTim are Chapters.cs's); the game's Tralu in his cave (actor 3, entity 20) and its crate (scene 4's actor 3: sprite 107)
     private const int TavernVisitor = 3, TavernFab = 7, TavernPat = 8, CaveTralu = 3, TraluEntity = 20, CrateScene = 4, CrateActor = 3;
     // (the crate: SPRITE_3D, fallable, no shadow, a carrier, the game's square box -- and in the way, CHECK_OBJ_COL and CHECK_BRICK_COL;
     // without the game's PUSHABLE and CHECK_ZONE)
     private const uint CrateFlags = 0xDC03;
-    // the hall inside the cave's mouth (cells x 43-55, z 47-62 of its grid; the mouth's corridor comes in from the east along z 44-50):
-    // its floor (layer 0's top) and where each stands -- Luc against its north wall (z 46) where the corridor comes in, his crates a bar in
-    // front of him, the rabbibunny by the stalagmite at (49, 51), Pat and Fab by the stalagmites along the west wall (x 42), the visitor
-    // across from them, and the Tralu in the north-west corner, facing them all: the hall's back corner as the camera sees it (one by its
-    // south or east walls is behind them, the walls nearest the camera)
-    private const int CaveFloor = 256;
-    private static readonly (int X, int Z) LucAt = (26675, 24320), RabbibunnyAt = (24883, 25702), PatAt = (23040, 27136), FabAt = (23650, 27545),
-                                           VisitorAt = (25090, 27900), TraluAt = (22477, 24525), HallMiddle = (24576, 27136);
-    private static readonly (int X, int Z)[] Crates = { (26300, 24830), (27050, 24830) };
-    // how near Twinsen comes to talk: the regulars' (Luc's across his bar), the Tralu's (a big fellow)
-    private const int RegularReach = 750, LucReach = 1400, TraluReach = 1500;
+    // the bar's hall (scene 19) and the game's actors in it that go: the ceiling's creature, the two key-carrying hunters, the two barred doors
+    private const int BarHall = 19;
+    private static readonly int[] HallGone = { 2, 3, 4, 5, 6 };
+    private static readonly (int Entity, int Sprite)[] HallGoneAre = { (64, -1), (65, -1), (-1, 186), (-1, 186), (65, -1) };
+    // where each is (TraluBarRoom's cells: the table x 36-37, z 40-51, its benches x 35 and 38): Luc against the north wall (z 34) between
+    // the candlesticks, his counter of crates in front of him; Pat and Fab on the west bench, the visitor and the rabbibunny on the east,
+    // Tim beside the east bench, facing the table
+    private static int Cell(double c) => (int)Math.Round(c * 512);
+    private static readonly (int X, int Z) LucAt = (Cell(33.3), Cell(35.7)), PatAt = (Cell(35.5), Cell(42.5)), FabAt = (Cell(35.5), Cell(44.5)),
+                                           VisitorAt = (Cell(38.5), Cell(41.5)), RabbibunnyAt = (Cell(38.5), Cell(48.5)), TimAt = (Cell(39.6), Cell(45.0)),
+                                           HallMiddle = (Cell(36.5), Cell(45.5));
+    private static readonly (int X, int Z)[] Crates = { (Cell(31.85), Cell(37.1)), (Cell(33.3), Cell(37.1)), (Cell(34.75), Cell(37.1)) };
+    // the benches' seat: the height each one's sitting animation sits at above it (the Tavern's: the stools and chairs they sit on there)
+    private const int BenchTop = TraluBarRoom.FloorY + 512;
+    // the Tralu, in his own hall (the game's place for him) facing its gate
+    private static readonly (int X, int Y, int Z, int Beta) TraluHome = (4096, 1792, 18048, 2048);
+    // how near Twinsen comes to talk: the regulars' (Luc's across his counter), the Tralu's (a big fellow)
+    private const int RegularReach = 750, LucReach = 1600, TraluReach = 1500;
 
     private static int Face((int X, int Z) from, (int X, int Z) to) => RaceTrackMath.Turn(Math.Atan2(to.X - from.X, to.Z - from.Z));
 
     private static void TraluTavern(StoryParts p)
     {
-        p.Edit(TraluCave, "the Tralu's cave, the regulars' secret tavern in the storm: Luc's bar of crates, the band, the drunk rabbibunny, the visitor, and the Tralu grumbling in his corner (glad of the quiet in chapter 2)", model =>
+        if (!TraluBarRoom.Built(p.Store.Directory)) p.Log.Add("the secret bar left out: the build didn't make scene 19's hall (TraluBarRoom)");
+        else p.Edit(BarHall, "the Tavern regulars' secret bar in the storm: Luc behind his counter, Pat and Fab, the visitor and the drunk rabbibunny at the massive table, Tim serving once his umbrella is back; the hall's creatures and barred doors gone", model =>
         {
-            if (model.Actors.ElementAtOrDefault(CaveTralu) is not { Entity: TraluEntity } tralu) throw new NotTheGames("the cave's Tralu");
+            for (var k = 0; k < HallGone.Length; k++)
+                if (model.Actors.ElementAtOrDefault(HallGone[k]) is not { } a || a.Entity != HallGoneAre[k].Entity || (HallGoneAre[k].Sprite >= 0 && a.Sprite != HallGoneAre[k].Sprite))
+                    throw new NotTheGames($"scene 19's actor {HallGone[k]}");
             var luc = Copy(p.Originals, TavernScene, TavernLuc);
             var bunny = Copy(p.Originals, TavernScene, TavernRabbibunny);
             var pat = Copy(p.Originals, TavernScene, TavernPat);
             var fab = Copy(p.Originals, TavernScene, TavernFab);
             var visitor = Copy(p.Originals, TavernScene, TavernVisitor);
-            if (luc is null || bunny is null || pat is null || fab is null || visitor is null) throw new NotTheGames("the Tavern's people");
-
-            // the Tralu, in his corner facing the hall: no longer the game's hunter (his life and track the story's below), beyond harm
-            (tralu.X, tralu.Y, tralu.Z, tralu.Beta) = (TraluAt.X, CaveFloor, TraluAt.Z, Face(TraluAt, HallMiddle));
-            tralu.Armor = 51;
-            void Stand(SceneActorModel who, (int X, int Z) at, (int X, int Z) facing) => (who.X, who.Y, who.Z, who.Beta) = (at.X, CaveFloor, at.Z, Face(at, facing));
-            Stand(luc, LucAt, HallMiddle);
-            Stand(bunny, RabbibunnyAt, LucAt);
-            Stand(pat, PatAt, VisitorAt);
-            Stand(fab, FabAt, VisitorAt);
-            Stand(visitor, VisitorAt, FabAt);
+            var tim = Copy(p.Originals, TavernScene, TavernTim);
+            if (luc is null || bunny is null || pat is null || fab is null || visitor is null || tim is null) throw new NotTheGames("the Tavern's people");
+            void Place(SceneActorModel who, (int X, int Z) at, int y, (int X, int Z) facing) => (who.X, who.Y, who.Z, who.Beta) = (at.X, y, at.Z, Face(at, facing));
+            Place(luc, LucAt, TraluBarRoom.FloorY, HallMiddle);
+            Place(tim, TimAt, TraluBarRoom.FloorY, (Cell(36.5), TimAt.Z));
+            // (the sitters face across the table)
+            Place(pat, PatAt, BenchTop - 200, (Cell(38.5), PatAt.Z));
+            Place(fab, FabAt, BenchTop - 196, (Cell(38.5), FabAt.Z));
+            Place(visitor, VisitorAt, BenchTop, (Cell(35.5), VisitorAt.Z));
+            Place(bunny, RabbibunnyAt, BenchTop, (Cell(35.5), RabbibunnyAt.Z));
+            // (the spike zones where the hall is now)
+            model.Zones.RemoveAll(z => z.Type == 8 && z.X0 < (TraluBarRoom.East + 1) * 512 && z.X1 > TraluBarRoom.West * 512
+                                       && z.Z0 < (TraluBarRoom.South + 1) * 512 && z.Z1 > TraluBarRoom.North * 512);
 
             var edits = new List<Action<SceneScripts>>();
             const string Storm = "2 > chapter()";
-            edits.Add(p.Add(model, luc, Talker(Storm, $"            message({p.Say(ChapterLine.LucCave)});", LucReach)));
-            edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({p.Say(ChapterLine.RabbibunnyCave)});", RegularReach)));
+            edits.Add(p.Add(model, luc, Talker(Storm, $"            message({p.Say(ChapterLine.LucBar)});", LucReach)));
+            edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({p.Say(ChapterLine.RabbibunnyBar)});", RegularReach)));
             var fabIndex = model.Actors.Count + 1;
-            edits.Add(p.Add(model, pat, Talker(Storm, $"            message({p.Say(ChapterLine.PatCave)});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabCave)});", RegularReach)));
+            edits.Add(p.Add(model, pat, Talker(Storm, $"            message({p.Say(ChapterLine.PatBar)});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabBar)});", RegularReach)));
             edits.Add(p.Add(model, fab, OnlyWhile(Storm)));
-            edits.Add(p.Add(model, visitor, Talker(Storm, $"            message({p.Say(ChapterLine.StrangerCave)});", RegularReach)));
+            edits.Add(p.Add(model, visitor, Talker(Storm, $"            message({p.Say(ChapterLine.StrangerBar)});", RegularReach)));
+            edits.Add(p.Add(model, tim, Talker(TimInBar, $"            message({p.Say(ChapterLine.TimBar)});", RegularReach)));
             foreach (var at in Crates)
                 if (Copy(p.Originals, CrateScene, CrateActor) is { } crate)
                 {
-                    (crate.X, crate.Y, crate.Z, crate.Beta) = (at.X, CaveFloor, at.Z, 0);
+                    (crate.X, crate.Y, crate.Z, crate.Beta) = (at.X, TraluBarRoom.FloorY, at.Z, 0);
                     crate.Flags = CrateFlags;
                     edits.Add(p.Add(model, crate, OnlyWhile(Storm)));
                 }
             return scripts =>
             {
+                foreach (var gone in HallGone)
+                {
+                    scripts.SetText(gone, ScriptKind.Life, "void comportement_0()\n{\n    suicide();\n}\n");
+                    scripts.SetText(gone, ScriptKind.Track, "label(0);\nstop();\n");
+                }
                 foreach (var e in edits) e(scripts);
+            };
+        });
+
+        // the Tralu in his own hall, no longer the game's hunter (his life and track the story's), beyond harm: grumbling at the noise
+        p.Edit(TraluCave, "the Tralu in his own hall, grumbling at the secret bar's noise next door (glad of the quiet in chapter 2)", model =>
+        {
+            if (model.Actors.ElementAtOrDefault(CaveTralu) is not { Entity: TraluEntity } tralu) throw new NotTheGames("the cave's Tralu");
+            (tralu.X, tralu.Y, tralu.Z, tralu.Beta) = TraluHome;
+            tralu.Armor = 51;
+            return scripts =>
+            {
                 scripts.SetText(CaveTralu, ScriptKind.Life, Talker("0 < chapter()", $@"            if (2 > chapter())
             {{
                 message({p.Say(ChapterLine.TraluNoisy)});
@@ -99,14 +136,14 @@ internal static partial class RaceTrackStory
         });
 
         // the mushroom man by the Wizard's tent, before the race is won (the game's StormPlot under 3: his line of the rain and the
-        // mushrooms), the drums under the cliff once a visit
-        p.Edit(WizardTentOutside, "the mushroom man hears drums in the Tralu's cave (once a visit, before the race is won)", _ => scripts =>
+        // mushrooms): nobody has seen Luc, once a visit
+        p.Edit(WizardTentOutside, "the mushroom man: nobody has seen Luc since the ban (once a visit, before the race is won)", _ => scripts =>
             scripts.SetText(MushroomMan, ScriptKind.Life, Loose(scripts.GetText(MushroomMan, ScriptKind.Life), "case 0:\nmessage(378);", $@"case 0:
                 message(378);
                 if (0 == var_cube({Once4}))
                 {{
                     set_var_cube({Once4}, 1);
-                    message({p.Say(ChapterLine.MushroomDrums)});
+                    message({p.Say(ChapterLine.MushroomLuc)});
                 }}")));
     }
 

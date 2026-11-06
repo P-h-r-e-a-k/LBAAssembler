@@ -527,6 +527,10 @@ secret in the cave (scene 2). Tim on the doorstep (asked again) and the mushroom
 hall, Luc behind a bar of crates, the drunk rabbibunny, Pat and Fab drumming, the visitor from the Tavern, and the Tralu -- the game's
 own, no longer the boss -- grumbling in the corner that his quiet cave has got too noisy. In chapter 2 they are back in the rebuilt
 Tavern and the Tralu is glad of the quiet. (`RaceTrackStory.TraluTavern.cs`; the lines are in the walkthrough.)
+Moved 2026-11-06 (the user: "somebody sitting down in mid-air ... move the bar scene area to scene 19 ... a secret easter egg"): the
+bar is the Back Room, the caves' second hall (scene 19) made bigger with a massive old table and barrels for round tables, everyone
+sitting on its benches; the hints say only that Luc is nowhere to be seen; Tim serves there from the umbrella back until Twinsen is
+tired; the Tralu stays in his own hall (scene 2), grumbling at the noise next door.
 
 ---
 

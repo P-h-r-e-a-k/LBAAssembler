@@ -512,6 +512,8 @@ internal static class RaceTrackService
             {
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelLba1Rooms.Install(gameDirectory, Lba1Folder()));
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelMuseum.Install(gameDirectory));
+                // (and the Tavern regulars' secret bar: the Tralu's caves' second hall made bigger and furnished -- Citadel/TraluBarRoom)
+                made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.Install(gameDirectory));
             }
             if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);

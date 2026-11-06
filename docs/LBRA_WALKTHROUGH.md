@@ -120,8 +120,7 @@ The arrow points at the harbour.
 Talking to Tim again while the thief is still about (and once the umbrella is back):
 
 **Tim:** "And don't ask me for a drink, Twinsen: the mayor's banned the stuff while there's a race track on the island. No drinking
-and driving, he says. Funny, though... Luc's vanished, and the Tavern's bottles with him, and there's drumming coming out of the
-Tralu's cave by the Wizard's tent. Not my business. I'm a waiter, not a caveman."
+and driving, he says. Funny, though... nobody's seen Luc all day. Nor the Tavern's bottles. Not my business. I'm only the waiter."
 
 **5. The harbour.** The thief is lurking behind the warehouse. As Twinsen comes close:
 
@@ -195,35 +194,43 @@ The same ladder brings Twinsen up onto the quay.
   it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the pharmacy's
   waiting for its delivery."
 
-**The secret tavern (optional, any time this chapter).** With the Tavern gone and the mayor's ban on drink, the regulars have moved
-into the Tralu's cave. By the Weather Wizard's tent, the mushroom man has heard them (once a visit, after his line about the rain):
+**The secret bar (optional, any time this chapter -- an easter egg nobody points the way to).** With the Tavern gone and the mayor's
+ban on drink, Luc and his regulars have vanished. By the Weather Wizard's tent, the mushroom man has noticed (once a visit, after his
+line about the rain):
 
-**The mushroom man:** "Hear that? Drums, under the cliff. Ever since the mayor banned drink, half the Tavern creeps into the Tralu's
-cave of an evening. They think nobody notices. The mushrooms notice."
+**The mushroom man:** "Have you seen Luc, from the Tavern? Nor has anyone, since the mayor banned drink. And half his regulars go
+missing of an evening, and come home singing. Funny, that. The mushrooms hear everything."
 
-The cave's mouth is in the cliff below the tent. In the first hall inside, Luc stands behind a bar of two crates where the tunnel
-comes in, the drunk rabbibunny is propped against a stalagmite, Pat and Fab of Raph's band are by the west wall, a visitor from the
-Tavern stands across from them, and the Tralu glowers from the far corner. Each talks when Twinsen walks up to them and presses Action:
+They are in the Tralu's caves, the cave's mouth in the cliff below the tent: through its first hall (scene 2), the door at its far end
+into the third hall (scene 20: up the ladder to the back walk, the lever on its platform to open the walk's gate, and the door at its
+end) and so into the second hall (scene 19), made bigger: the Back Room. A massive old wooden table runs down the middle of it with a
+bench along either side, plates, bowls, bottles and an oil lamp on it; old barrels stand round the edge as tall round tables, a bottle
+and a plate on each; two iron candlesticks against the north wall, and between them Luc behind a counter of crates. Pat and Fab of
+Raph's band sit on the far bench, the visitor from the Tavern and the drunk rabbibunny on the near one, and -- once he has his
+customer's umbrella back -- Tim serves at the table. Each talks when Twinsen walks up to them and presses Action:
 
-**Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Tralu's Rest: the only bar on Citadel the mayor doesn't know about.
-Two crates and the Tavern's last bottles... it's not much, but it's dry. Well, drier. And if you're racing today, it's lemonade for
-you."
+**Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Back Room: the only bar on Citadel the mayor doesn't know about. A
+proper table, and the Tavern's last bottles... And if you're racing today, it's lemonade for you."
 
-**The drunk rabbibunny:** "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm... hiding. With a
-mug. [hic!] Don't tell the mayor."
+**The drunk rabbibunny:** "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm... sitting. At a
+table. With a mug. [hic!] Don't tell the mayor."
 
-**Pat:** "No Tavern, no stage... so we brought the band underground. Listen to that echo! Every beat comes back three times. Raph's
+**Pat:** "No Tavern, no stage... so we brought the band down here. Listen to that echo! Every beat comes back three times. Raph's
 meant to be playing with us, but he won't come off that track."
 
-**Fab:** "And the big fellow in the corner hasn't eaten anybody yet. I think he likes us."
+**Fab:** "And the big fellow next door hasn't come round to complain. Yet."
 
-**The visitor:** "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, next to a
-monster. I love this island."
+**The visitor:** "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, at a table
+fit for a giant. I love this island."
+
+**Tim** (from the umbrella given back until Twinsen is tired; his doorstep is empty meanwhile): "There you are, Twinsen! My shift on
+the doorstep's over, so I'm on duty down here. Old habits: I can't sit in a bar without carrying a tray. Lemonade?"
+
+The big fellow next door is the Tralu, in his own hall of the caves (scene 2, past the first hall); he doesn't fight, he only
+grumbles:
 
 **The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and
-now the whole Tavern's moved in, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts."
-
-The Tralu doesn't fight: he only grumbles.
+now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts."
 
 **9. The race.** Back at the start line, Raph has his time ready.
 
@@ -314,7 +321,7 @@ it. Exactly as it was."
 
 If he didn't: **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
 
-(The regulars are back in the Tavern, and the Tralu's cave is empty but for the Tralu, glad of the quiet: **The Tralu:** "Ahhh... quiet
+(The regulars are back in the Tavern, the Back Room's table is empty, and the Tralu is glad of the quiet: **The Tralu:** "Ahhh... quiet
 at last. The aliens put the Tavern back, and the drums went home with it. Mind you, now they want me in their race. A Tralu in a car!
 Whatever next?")
 

@@ -22,9 +22,11 @@ namespace LBAAssembler.Terrain;
 //       them in, Demo96Rooms.Sewers: the hatch lands where the demo starts Twinsen, the thief cornered beside its far halls' lift.)
 //     - the museum's blueprints (Q_BLUEPRINT 1, in a display case in scene 15) and the neighbour's design sheet (Q_SHEET 1, scene 9): seen now,
 //       copied in chapter 2.
-//     - the mayor has banned drink while the island has a race track, and the Tavern's regulars drink in secret in the Tralu's cave (scene
-//       2): Tim and the mushroom man by the Wizard's tent hint at it, Luc keeps a bar of crates in its first hall, Pat and Fab drum, the
-//       drunk rabbibunny and the visitor from the Tavern drink, and the Tralu grumbles in his corner (Citadel/RaceTrackStory.TraluTavern.cs).
+//     - the mayor has banned drink while the island has a race track, and the Tavern's regulars drink in secret in the Back Room, the
+//       Tralu's caves' second hall (scene 19, made bigger: Citadel/TraluBarRoom): Tim and the mushroom man by the Wizard's tent say only
+//       that nobody has seen Luc; Luc keeps the bar, Pat and Fab drum, the drunk rabbibunny and the visitor from the Tavern sit at the
+//       massive table, and Tim serves there once his umbrella is back; Luc tells of the back gate's hidden key, and the Tralu grumbles in
+//       his own hall next door (Citadel/RaceTrackStory.TraluTavern.cs, RaceTrackStory.TraluCaves.cs).
 //     - the spell at the lighthouse no longer moves the game on to chapter 2 (the game's own script set chapter() there): the Wizard says
 //       the sun comes in the morning, Raph goes to bed, Zoe saw lights over the clouds, and Twinsen is tired (DayVar Tired, everyone's
 //       tired line; Tim's line of the lights). His bed: the night (DayVar Night, scene 0 started again in the dark).
@@ -110,8 +112,8 @@ internal static partial class RaceTrackStory
         LucWheel, ZoeFitIt, BobWheel, WheelSeen, ZoeGoodAsOld, LucRound, ZoeRadio, ZoePitBox, LucToast, HeraldWelcome, HeraldSlate,
         HeraldLeads, FlickTown, PaulSix, ZoeSlate, CopyOnto, BloopCopied, GallicPrice, GallicThere, GallicComeBack, ZoeTwoTracks, ZoeCrew,
         Brune, PharmacyFerry, MushroomWon, DinoFlySun,
-        // (the Tralu's cave as the secret tavern of chapter 1: Citadel/RaceTrackStory.TraluTavern.cs)
-        TimBan, MushroomDrums, LucCave, RabbibunnyCave, PatCave, FabCave, StrangerCave, TraluNoisy, TraluQuiet,
+        // (the Tavern regulars' secret bar of chapter 1, in the Tralu's caves' second hall: Citadel/RaceTrackStory.TraluTavern.cs)
+        TimBan, MushroomLuc, LucBar, RabbibunnyBar, PatBar, FabBar, StrangerBar, TraluNoisy, TraluQuiet, LucKey, TimBar,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -606,75 +608,75 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And don't ask me for a drink, Twinsen: the mayor's banned the stuff while there's a race track on the island. No drinking and driving, he says. Funny, though... Luc's vanished, and the Tavern's bottles with him, and there's drumming coming out of the Tralu's cave by the Wizard's tent. Not my business. I'm a waiter, not a caveman.",
-            "Et ne me demande pas à boire, Twinsen : le maire a interdit l'alcool tant qu'il y a un circuit sur l'île. Pas d'alcool au volant, qu'il dit. C'est drôle, quand même... Luc a disparu, les bouteilles de la Taverne avec lui, et on entend des tambours dans la grotte du Tralu, près de la tente du Mage. Ça ne me regarde pas. Je suis serveur, pas homme des cavernes.",
-            "Und frag mich nicht nach einem Drink, Twinsen: Der Bürgermeister hat den Alkohol verboten, solange es auf der Insel eine Rennstrecke gibt. Kein Alkohol am Steuer, sagt er. Komisch ist nur... Luc ist verschwunden, die Flaschen der Taverne mit ihm, und aus der Höhle des Tralu beim Zelt des Magiers kommt Getrommel. Geht mich nichts an. Ich bin Kellner, kein Höhlenmensch.",
-            "Y no me pidas una copa, Twinsen: el alcalde ha prohibido el alcohol mientras haya un circuito en la isla. Si bebes, no conduzcas, dice. Aunque es curioso... Luc ha desaparecido, y las botellas de la Taberna con él, y se oyen tambores en la cueva del Tralu, junto a la tienda del Mago. No es asunto mío. Soy camarero, no cavernícola.",
-            "E non chiedermi da bere, Twinsen: il sindaco ha vietato l'alcol finché c'è una pista sull'isola. Niente alcol al volante, dice. Strano, però... Luc è sparito, e con lui le bottiglie della Taverna, e dalla grotta del Tralu, vicino alla tenda del Mago, arriva un rullo di tamburi. Non sono affari miei. Sono un cameriere, non un cavernicolo.",
-            "E não me peças uma bebida, Twinsen: o presidente da câmara proibiu o álcool enquanto houver uma pista na ilha. Se beber, não conduza, diz ele. Mas é curioso... o Luc desapareceu, e as garrafas da Taberna com ele, e ouvem-se tambores na gruta do Tralu, ao pé da tenda do Mago. Não é da minha conta. Sou empregado de mesa, não homem das cavernas.",
+            "And don't ask me for a drink, Twinsen: the mayor's banned the stuff while there's a race track on the island. No drinking and driving, he says. Funny, though... nobody's seen Luc all day. Nor the Tavern's bottles. Not my business. I'm only the waiter.",
+            "Et ne me demande pas à boire, Twinsen : le maire a interdit l'alcool tant qu'il y a un circuit sur l'île. Pas d'alcool au volant, qu'il dit. C'est drôle, quand même... personne n'a vu Luc de la journée. Ni les bouteilles de la Taverne. Ça ne me regarde pas. Je ne suis que le serveur.",
+            "Und frag mich nicht nach einem Drink, Twinsen: Der Bürgermeister hat den Alkohol verboten, solange es auf der Insel eine Rennstrecke gibt. Kein Alkohol am Steuer, sagt er. Komisch ist nur... Luc hat heute den ganzen Tag niemand gesehen. Die Flaschen der Taverne auch nicht. Geht mich nichts an. Ich bin nur der Kellner.",
+            "Y no me pidas una copa, Twinsen: el alcalde ha prohibido el alcohol mientras haya un circuito en la isla. Si bebes, no conduzcas, dice. Aunque es curioso... nadie ha visto a Luc en todo el día. Ni las botellas de la Taberna. No es asunto mío. Yo solo soy el camarero.",
+            "E non chiedermi da bere, Twinsen: il sindaco ha vietato l'alcol finché c'è una pista sull'isola. Niente alcol al volante, dice. Strano, però... nessuno ha visto Luc per tutto il giorno. Né le bottiglie della Taverna. Non sono affari miei. Io sono solo il cameriere.",
+            "E não me peças uma bebida, Twinsen: o presidente da câmara proibiu o álcool enquanto houver uma pista na ilha. Se beber, não conduza, diz ele. Mas é curioso... ninguém viu o Luc o dia todo. Nem as garrafas da Taberna. Não é da minha conta. Sou só o empregado de mesa.",
         },
         new[]
         {
-            "Hear that? Drums, under the cliff. Ever since the mayor banned drink, half the Tavern creeps into the Tralu's cave of an evening. They think nobody notices. The mushrooms notice.",
-            "Tu entends ? Des tambours, sous la falaise. Depuis que le maire a interdit l'alcool, la moitié de la Taverne se faufile le soir dans la grotte du Tralu. Ils croient que personne ne remarque rien. Les champignons, eux, remarquent.",
-            "Hörst du das? Trommeln, unter der Klippe. Seit der Bürgermeister den Alkohol verboten hat, schleicht sich die halbe Taverne abends in die Höhle des Tralu. Die glauben, das merkt keiner. Die Pilze merken es.",
-            "¿Oyes eso? Tambores, bajo el acantilado. Desde que el alcalde prohibió el alcohol, media Taberna se cuela por las noches en la cueva del Tralu. Creen que nadie se da cuenta. Las setas se dan cuenta.",
-            "Senti? Tamburi, sotto la scogliera. Da quando il sindaco ha vietato l'alcol, mezza Taverna la sera sgattaiola nella grotta del Tralu. Credono che nessuno se ne accorga. I funghi se ne accorgono.",
-            "Ouves isto? Tambores, debaixo da falésia. Desde que o presidente da câmara proibiu o álcool, meia Taberna esgueira-se à noite para a gruta do Tralu. Julgam que ninguém repara. Os cogumelos reparam.",
+            "Have you seen Luc, from the Tavern? Nor has anyone, since the mayor banned drink. And half his regulars go missing of an evening, and come home singing. Funny, that. The mushrooms hear everything.",
+            "Tu as vu Luc, de la Taverne ? Personne ne l'a vu depuis que le maire a interdit l'alcool. Et la moitié de ses habitués disparaissent le soir, et rentrent en chantant. Curieux, non ? Les champignons entendent tout.",
+            "Hast du Luc von der Taverne gesehen? Keiner hat ihn gesehen, seit der Bürgermeister den Alkohol verboten hat. Und die Hälfte seiner Stammgäste verschwindet abends und kommt singend nach Hause. Komisch, was? Die Pilze hören alles.",
+            "¿Has visto a Luc, el de la Taberna? Nadie lo ha visto desde que el alcalde prohibió el alcohol. Y la mitad de sus clientes desaparecen por las noches y vuelven a casa cantando. Curioso, ¿eh? Las setas lo oyen todo.",
+            "Hai visto Luc, quello della Taverna? Nessuno l'ha visto da quando il sindaco ha vietato l'alcol. E metà dei suoi clienti la sera sparisce, e torna a casa cantando. Strano, no? I funghi sentono tutto.",
+            "Viste o Luc, da Taberna? Ninguém o viu desde que o presidente da câmara proibiu o álcool. E metade dos clientes dele desaparece à noite e volta para casa a cantar. Curioso, não? Os cogumelos ouvem tudo.",
         },
         new[]
         {
-            "Shh! Come in, Twinsen, and keep it down. Welcome to the Tralu's Rest: the only bar on Citadel the mayor doesn't know about. Two crates and the Tavern's last bottles... it's not much, but it's dry. Well, drier. And if you're racing today, it's lemonade for you.",
-            "Chut ! Entre, Twinsen, et pas trop fort. Bienvenue au Repos du Tralu : le seul bar de la Citadelle dont le maire n'a jamais entendu parler. Deux caisses et les dernières bouteilles de la Taverne... c'est pas grand-chose, mais c'est au sec. Enfin, plus au sec. Et si tu cours aujourd'hui, ce sera de la limonade pour toi.",
-            "Pst! Komm rein, Twinsen, und sei leise. Willkommen in der Tralu-Ruh: die einzige Bar auf der Zitadelle, von der der Bürgermeister nichts weiß. Zwei Kisten und die letzten Flaschen der Taverne... nicht viel, aber trocken. Na ja, trockener. Und wenn du heute fährst, gibt's für dich Limonade.",
-            "¡Chis! Pasa, Twinsen, y no hagas ruido. Bienvenido al Descanso del Tralu: el único bar de la Ciudadela del que el alcalde no sabe nada. Dos cajas y las últimas botellas de la Taberna... no es gran cosa, pero está seco. Bueno, más seco. Y si hoy corres, para ti, limonada.",
-            "Sst! Entra, Twinsen, e fai piano. Benvenuto al Riposo del Tralu: l'unico bar della Cittadella di cui il sindaco non sa niente. Due casse e le ultime bottiglie della Taverna... non è granché, ma è all'asciutto. Be', più all'asciutto. E se oggi corri, per te c'è la limonata.",
-            "Chiu! Entra, Twinsen, e fala baixo. Bem-vindo ao Descanso do Tralu: o único bar da Cidadela de que o presidente da câmara não sabe nada. Duas caixas e as últimas garrafas da Taberna... não é grande coisa, mas está seco. Bem, mais seco. E se hoje vais correr, para ti é limonada.",
+            "Shh! Come in, Twinsen, and keep it down. Welcome to the Back Room: the only bar on Citadel the mayor doesn't know about. A proper table, and the Tavern's last bottles... And if you're racing today, it's lemonade for you.",
+            "Chut ! Entre, Twinsen, et pas trop fort. Bienvenue à l'Arrière-Salle : le seul bar de la Citadelle dont le maire n'a jamais entendu parler. Une vraie table, et les dernières bouteilles de la Taverne... Et si tu cours aujourd'hui, ce sera de la limonade pour toi.",
+            "Pst! Komm rein, Twinsen, und sei leise. Willkommen im Hinterzimmer: die einzige Bar auf der Zitadelle, von der der Bürgermeister nichts weiß. Ein ordentlicher Tisch und die letzten Flaschen der Taverne... Und wenn du heute fährst, gibt's für dich Limonade.",
+            "¡Chis! Pasa, Twinsen, y no hagas ruido. Bienvenido a la Trastienda: el único bar de la Ciudadela del que el alcalde no sabe nada. Una mesa como Dios manda y las últimas botellas de la Taberna... Y si hoy corres, para ti, limonada.",
+            "Sst! Entra, Twinsen, e fai piano. Benvenuto nel Retrobottega: l'unico bar della Cittadella di cui il sindaco non sa niente. Un tavolo come si deve e le ultime bottiglie della Taverna... E se oggi corri, per te c'è la limonata.",
+            "Chiu! Entra, Twinsen, e fala baixo. Bem-vindo à Sala das Traseiras: o único bar da Cidadela de que o presidente da câmara não sabe nada. Uma mesa a sério e as últimas garrafas da Taberna... E se hoje vais correr, para ti é limonada.",
         },
         new[]
         {
-            "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm... hiding. With a mug. [hic!] Don't tell the mayor.",
-            "Le maire dit pas d'alcool tant qu'y a un shircuit. [hips !] Alors je bois pas. Je me... cache. Avec une chope. [hips !] Le dites pas au maire.",
-            "Der Bürgermeishter shagt, kein Alkohol, sholange esh eine Rennshtrecke gibt. [hick!] Alsho trink ich nich'. Ich... vershteck mich. Mit 'nem Krug. [hick!] Nich' dem Bürgermeishter shagen.",
-            "El alcalde dishe que nada de alcohol mientrash haya un circuito. [¡hip!] Ashí que no bebo. Me... eshcondo. Con una jarra. [¡hip!] No se lo digash al alcalde.",
-            "Il shindaco dice niente alcol finché c'è una pishta. [hic!] Quindi non bevo. Mi... nashcondo. Con un boccale. [hic!] Non ditelo al shindaco.",
-            "O presidente da câmara diz que nada de álcool enquanto houver uma pishta. [hic!] Por isho não bebo. Eshtou... escondido. Com uma caneca. [hic!] Não digam ao presidente.",
+            "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm... sitting. At a table. With a mug. [hic!] Don't tell the mayor.",
+            "Le maire dit pas d'alcool tant qu'y a un shircuit. [hips !] Alors je bois pas. Je suis... assis. À une table. Avec une chope. [hips !] Le dites pas au maire.",
+            "Der Bürgermeishter shagt, kein Alkohol, sholange esh eine Rennshtrecke gibt. [hick!] Alsho trink ich nich'. Ich... shitze. An 'nem Tish. Mit 'nem Krug. [hick!] Nich' dem Bürgermeishter shagen.",
+            "El alcalde dishe que nada de alcohol mientrash haya un circuito. [¡hip!] Ashí que no bebo. Eshtoy... shentado. En una mesa. Con una jarra. [¡hip!] No se lo digash al alcalde.",
+            "Il shindaco dice niente alcol finché c'è una pishta. [hic!] Quindi non bevo. Shono... sheduto. A un tavolo. Con un boccale. [hic!] Non ditelo al shindaco.",
+            "O presidente da câmara diz que nada de álcool enquanto houver uma pishta. [hic!] Por isho não bebo. Eshtou... shentado. A uma mesa. Com uma caneca. [hic!] Não digam ao presidente.",
         },
         new[]
         {
-            "No Tavern, no stage... so we brought the band underground. Listen to that echo! Every beat comes back three times. Raph's meant to be playing with us, but he won't come off that track.",
-            "Plus de Taverne, plus de scène... alors on a emmené le groupe sous terre. Écoute-moi cet écho ! Chaque coup revient trois fois. Raph devait jouer avec nous, mais il ne veut pas lâcher son circuit.",
-            "Keine Taverne, keine Bühne... also haben wir die Band unter die Erde verlegt. Hör dir dieses Echo an! Jeder Schlag kommt dreimal zurück. Raph sollte eigentlich mit uns spielen, aber er kommt nicht von seiner Strecke runter.",
-            "Sin Taberna no hay escenario... así que nos hemos traído la banda bajo tierra. ¡Escucha qué eco! Cada golpe vuelve tres veces. Raph tenía que tocar con nosotros, pero no hay quien lo saque de ese circuito.",
-            "Niente Taverna, niente palco... così abbiamo portato la band sottoterra. Senti che eco! Ogni colpo torna indietro tre volte. Raph doveva suonare con noi, ma non si stacca da quella pista.",
-            "Sem Taberna não há palco... por isso trouxemos a banda para debaixo da terra. Ouve só este eco! Cada batida volta três vezes. O Raph devia estar a tocar connosco, mas não sai daquela pista.",
+            "No Tavern, no stage... so we brought the band down here. Listen to that echo! Every beat comes back three times. Raph's meant to be playing with us, but he won't come off that track.",
+            "Plus de Taverne, plus de scène... alors on a emmené le groupe ici. Écoute-moi cet écho ! Chaque coup revient trois fois. Raph devait jouer avec nous, mais il ne veut pas lâcher son circuit.",
+            "Keine Taverne, keine Bühne... also haben wir die Band hierher verlegt. Hör dir dieses Echo an! Jeder Schlag kommt dreimal zurück. Raph sollte eigentlich mit uns spielen, aber er kommt nicht von seiner Strecke runter.",
+            "Sin Taberna no hay escenario... así que nos hemos traído la banda aquí abajo. ¡Escucha qué eco! Cada golpe vuelve tres veces. Raph tenía que tocar con nosotros, pero no hay quien lo saque de ese circuito.",
+            "Niente Taverna, niente palco... così abbiamo portato la band quaggiù. Senti che eco! Ogni colpo torna indietro tre volte. Raph doveva suonare con noi, ma non si stacca da quella pista.",
+            "Sem Taberna não há palco... por isso trouxemos a banda cá para baixo. Ouve só este eco! Cada batida volta três vezes. O Raph devia estar a tocar connosco, mas não sai daquela pista.",
         },
         new[]
         {
-            "And the big fellow in the corner hasn't eaten anybody yet. I think he likes us.",
-            "Et le gros, là, dans le coin, n'a encore mangé personne. Je crois qu'il nous aime bien.",
-            "Und der große Kerl in der Ecke hat noch niemanden gefressen. Ich glaube, er mag uns.",
-            "Y el grandullón del rincón todavía no se ha comido a nadie. Creo que le caemos bien.",
-            "E il bestione nell'angolo non ha ancora mangiato nessuno. Credo che gli piacciamo.",
-            "E o grandalhão do canto ainda não comeu ninguém. Acho que gosta de nós.",
+            "And the big fellow next door hasn't come round to complain. Yet.",
+            "Et le gros, à côté, n'est pas encore venu se plaindre. Pas encore.",
+            "Und der große Kerl nebenan hat sich noch nicht beschwert. Noch nicht.",
+            "Y el grandullón de al lado todavía no ha venido a quejarse. Todavía.",
+            "E il bestione qui accanto non è ancora venuto a lamentarsi. Non ancora.",
+            "E o grandalhão aqui ao lado ainda não veio queixar-se. Ainda.",
         },
         new[]
         {
-            "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, next to a monster. I love this island.",
-            "Désolé, je ne suis pas d'ici. Chez moi, on boit dans des bars. Ici, on boit dans une grotte, en cachette, pendant une tempête, à côté d'un monstre. J'adore cette île.",
-            "Tut mir leid, ich bin nicht von hier. Bei uns trinkt man in Bars. Hier trinkt man in einer Höhle, heimlich, im Sturm, neben einem Ungeheuer. Ich liebe diese Insel.",
-            "Lo siento, no soy de aquí. En mi tierra bebemos en bares. Aquí se bebe en una cueva, a escondidas, en plena tormenta y al lado de un monstruo. Me encanta esta isla.",
-            "Mi scusi, non sono di qui. Da noi si beve nei bar. Qui si beve in una grotta, di nascosto, durante una tempesta, accanto a un mostro. Adoro quest'isola.",
-            "Desculpe, não sou daqui. Na minha terra bebe-se em bares. Aqui bebe-se numa gruta, às escondidas, numa tempestade, ao lado de um monstro. Adoro esta ilha.",
+            "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, at a table fit for a giant. I love this island.",
+            "Désolé, je ne suis pas d'ici. Chez moi, on boit dans des bars. Ici, on boit dans une grotte, en cachette, pendant une tempête, à une table de géant. J'adore cette île.",
+            "Tut mir leid, ich bin nicht von hier. Bei uns trinkt man in Bars. Hier trinkt man in einer Höhle, heimlich, im Sturm, an einem Tisch für Riesen. Ich liebe diese Insel.",
+            "Lo siento, no soy de aquí. En mi tierra bebemos en bares. Aquí se bebe en una cueva, a escondidas, en plena tormenta y en una mesa de gigantes. Me encanta esta isla.",
+            "Mi scusi, non sono di qui. Da noi si beve nei bar. Qui si beve in una grotta, di nascosto, durante una tempesta, a un tavolo da giganti. Adoro quest'isola.",
+            "Desculpe, não sou daqui. Na minha terra bebe-se em bares. Aqui bebe-se numa gruta, às escondidas, numa tempestade, a uma mesa de gigantes. Adoro esta ilha.",
         },
         new[]
         {
-            "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and now the whole Tavern's moved in, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts.",
-            "Grrrr... Cent ans dans cette grotte, avec les gouttes pour seule compagnie. Puis la pluie, puis ce circuit, et maintenant toute la Taverne s'installe ici, avec des tambours ! Un Tralu ne s'entend même plus grogner. ...Et arrêtez de m'offrir des cacahuètes.",
-            "Grrrr... Hundert Jahre in dieser Höhle, nur die Tropfen als Gesellschaft. Dann der Regen, dann diese Rennstrecke, und jetzt ist die ganze Taverne hier eingezogen, mit Trommeln! Ein Tralu hört sich nicht mal mehr selbst knurren. ...Und hört auf, mir Erdnüsse anzubieten.",
-            "Grrrr... Cien años en esta cueva, sin más compañía que las goteras. Luego la lluvia, luego ese circuito, ¡y ahora toda la Taberna se ha mudado aquí, con tambores! Un Tralu ya no se oye ni gruñir. ...Y dejad de ofrecerme cacahuetes.",
-            "Grrrr... Cent'anni in questa grotta, con le gocce come unica compagnia. Poi la pioggia, poi quella pista, e adesso si è trasferita qui tutta la Taverna, con i tamburi! Un Tralu non si sente più nemmeno ringhiare. ...E smettetela di offrirmi noccioline.",
-            "Grrrr... Cem anos nesta gruta, só com as gotas por companhia. Depois a chuva, depois aquela pista, e agora a Taberna inteira mudou-se para cá, com tambores! Um Tralu já nem se ouve rosnar. ...E parem de me oferecer amendoins.",
+            "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts.",
+            "Grrrr... Cent ans dans cette grotte, avec les gouttes pour seule compagnie. Puis la pluie, puis ce circuit, et maintenant toute la Taverne s'installe à côté, avec des tambours ! Un Tralu ne s'entend même plus grogner. ...Et arrêtez de m'offrir des cacahuètes.",
+            "Grrrr... Hundert Jahre in dieser Höhle, nur die Tropfen als Gesellschaft. Dann der Regen, dann diese Rennstrecke, und jetzt ist die ganze Taverne nebenan eingezogen, mit Trommeln! Ein Tralu hört sich nicht mal mehr selbst knurren. ...Und hört auf, mir Erdnüsse anzubieten.",
+            "Grrrr... Cien años en esta cueva, sin más compañía que las goteras. Luego la lluvia, luego ese circuito, ¡y ahora toda la Taberna se ha mudado aquí al lado, con tambores! Un Tralu ya no se oye ni gruñir. ...Y dejad de ofrecerme cacahuetes.",
+            "Grrrr... Cent'anni in questa grotta, con le gocce come unica compagnia. Poi la pioggia, poi quella pista, e adesso si è trasferita qui accanto tutta la Taverna, con i tamburi! Un Tralu non si sente più nemmeno ringhiare. ...E smettetela di offrirmi noccioline.",
+            "Grrrr... Cem anos nesta gruta, só com as gotas por companhia. Depois a chuva, depois aquela pista, e agora a Taberna inteira mudou-se aqui para o lado, com tambores! Um Tralu já nem se ouve rosnar. ...E parem de me oferecer amendoins.",
         },
         new[]
         {
@@ -684,6 +686,24 @@ internal static partial class RaceTrackStory
             "Ahhh... por fin, silencio. Los extraterrestres han devuelto la Taberna, y los tambores se han ido con ella. Eso sí, ahora quieren que corra en su carrera. ¡Un Tralu en coche! ¿Qué será lo próximo?",
             "Ahhh... finalmente un po' di pace. Gli alieni hanno rimesso a posto la Taverna, e i tamburi se ne sono tornati con lei. Però adesso vogliono che faccia la loro gara. Un Tralu in macchina! E poi che altro?",
             "Ahhh... finalmente, sossego. Os extraterrestres puseram a Taberna no lugar, e os tambores foram com ela. Mas agora querem-me na corrida deles. Um Tralu de carro! O que virá a seguir?",
+        },
+        new[]
+        {
+            "And between us: regulars don't come the long way round. There's a back gate, up from the old hall next door, and a key to it hidden where Sendell keeps an eye on it. You didn't hear that from me.",
+            "Et entre nous : les habitués ne font pas tout le tour. Il y a une porte de derrière, en haut de la vieille salle d'à côté, et sa clé est cachée là où Sendell veille sur elle. Tu ne tiens pas ça de moi.",
+            "Und unter uns: Stammgäste nehmen nicht den langen Weg. Es gibt ein Hintertor, oben über der alten Halle nebenan, und der Schlüssel dazu ist versteckt, wo Sendell ein Auge darauf hat. Von mir hast du das nicht.",
+            "Y entre nosotros: los clientes de la casa no dan toda la vuelta. Hay una puerta trasera, arriba, en la vieja sala de al lado, y su llave está escondida donde Sendell la vigila. No te lo he dicho yo.",
+            "E detto tra noi: i clienti abituali non fanno tutto il giro. C'è un cancello sul retro, in cima alla vecchia sala qui accanto, e la sua chiave è nascosta dove Sendell la tiene d'occhio. Non te l'ho detto io.",
+            "E cá entre nós: os clientes da casa não dão a volta toda. Há um portão das traseiras, lá em cima, na velha sala aqui ao lado, e a chave dele está escondida onde Sendell a vigia. Não ouviste isto de mim.",
+        },
+        new[]
+        {
+            "There you are, Twinsen! My shift on the doorstep's over, so I'm on duty down here. Old habits: I can't sit in a bar without carrying a tray. Lemonade?",
+            "Te voilà, Twinsen ! J'ai fini mon service sur le pas de la porte, alors je suis de service ici. Les vieilles habitudes : je ne sais pas m'asseoir dans un bar sans porter un plateau. Une limonade ?",
+            "Da bist du ja, Twinsen! Mein Dienst an der Tür ist vorbei, also bin ich hier unten im Dienst. Alte Gewohnheit: Ich kann in keiner Bar sitzen, ohne ein Tablett zu tragen. Limonade?",
+            "¡Ahí estás, Twinsen! Se acabó mi turno en la puerta, así que estoy de servicio aquí abajo. La costumbre: no sé sentarme en un bar sin llevar una bandeja. ¿Una limonada?",
+            "Eccoti, Twinsen! Il mio turno sulla soglia è finito, così sono di servizio quaggiù. Vecchie abitudini: non riesco a stare in un bar senza portare un vassoio. Una limonata?",
+            "Aí estás tu, Twinsen! Acabou o meu turno à porta, por isso estou de serviço aqui em baixo. Velhos hábitos: não consigo estar num bar sem levar um tabuleiro. Uma limonada?",
         },
     };
 
@@ -1265,9 +1285,13 @@ void comportement_1()
     // Tim the waiter on the Tavern's old doorstep: the car park, the thief (Q_THIEF 2, the harbour's arrow), the umbrella back for ten
     // kashes (6); tired, the lights over the sea -- said as himself, not as the tired line everyone else says (DayVar is the tired line's
     // variable, RACEMOD.CPP tired=: away from Tired just while he says it -- the message is said there and then). Asked again while the
-    // thief is still out there, the mayor's ban on drink and the drumming in the Tralu's cave (once a visit, Once4; then the thief again),
-    // and that is his word once the umbrella is back: the secret tavern's hint (Citadel/RaceTrackStory.TraluTavern.cs). And Flick the
+    // thief is still out there, the mayor's ban on drink and nobody having seen Luc all day (once a visit, Once4; then the thief again),
+    // and that is his word once the umbrella is back: the secret bar's hint (Citadel/RaceTrackStory.TraluTavern.cs). He is there while
+    // the umbrella isn't back, and again once Twinsen is tired (the lights); from the umbrella back till then he is off duty, serving in
+    // the secret bar (TimInBar) -- never both (the 2026-11-06 report: "Tim the waiter could be in the new bar area too"). And Flick the
     // marshal, at her plinth by the start line (the marshal herself is the race-track mode's, marshal=): no gloves, no flag.
+    private static string TimOnDoorstep => $"2 > chapter() && ({UmbrellaBack} != var_game({QThief}) || {Tired} == var_game({DayVar}))";
+    private static string TimInBar => $"2 > chapter() && {UmbrellaBack} == var_game({QThief}) && {Tired} != var_game({DayVar})";
     private static void StormPeople(StoryParts p)
     {
         var tim = Copy(p.Originals, TavernScene, TavernTim);
@@ -1275,7 +1299,7 @@ void comportement_1()
             p.Edit(scene, $"Tim on the Tavern's old doorstep at cell ({step.X:0.#}, {step.Z:0.#}) in the storm: the thief, the umbrella", model =>
             {
                 Place(tim, model, Facing(step, p.Storm.StartLine[0].X, p.Storm.StartLine[0].Z));
-                return p.Add(model, tim, Talker("2 > chapter()", $@"            if ({Tired} == var_game({DayVar}))
+                return p.Add(model, tim, Talker(TimOnDoorstep, $@"            if ({Tired} == var_game({DayVar}))
             {{
                 set_var_game({DayVar}, 4);
                 message({p.Say(ChapterLine.TimLights)});

@@ -257,6 +257,8 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 - the harbour (scene 43)
 - the sewers under the harbour (the 1996 demo's sewers, scenes 17 and 18: see [The 1996 demo's sewers](#the-1996-demos-sewers) below)
 - the lighthouse (scene 46)
+- the Tralu's caves (scenes 2, 20 and 19; their mouth in the cliff below the Wizard's tent, scene 45): the regulars' secret bar, the
+  Back Room, in the second hall (scene 19); the third hall (20) is the 1996 demo's
 
 **Cast:**
 
@@ -270,6 +272,9 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 | The thief | the game's (BODY 117), copied | behind the harbour warehouse, then the sewers |
 | The sewer painter | the 1996 demo's (demo scene 17 actor 7) | the sewers, repainting the signs |
 | Flick, the marshal | built (the race's); an actor on foot (new) | her plinth by the start line |
+| Luc, Pat, Fab, the visitor, the drunk rabbibunny | the game's Tavern people (scene 3), copied | the secret bar (scene 19): Luc behind his counter of crates, the others sitting at the massive table |
+| Tim, again | the same Tim | serving in the secret bar from the umbrella given back until Twinsen is tired -- off the doorstep meanwhile |
+| The Tralu | the game's (scene 2 actor 3), no longer the boss | his own hall in the caves (scene 2), grumbling |
 
 **Walkthrough:**
 
@@ -367,6 +372,45 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      > pharmacy's waiting for its delivery."
 
      Q_SHEET = 1.
+   - **The secret bar** (built 2026-11-06; an easter egg: nothing points the way). The hints are only that Luc is nowhere to be seen:
+     Tim, asked again on his doorstep (once a visit while the thief is out, and from the umbrella back):
+     > **Tim:** "And don't ask me for a drink, Twinsen: the mayor's banned the stuff while there's a race track on the island. No
+     > drinking and driving, he says. Funny, though... nobody's seen Luc all day. Nor the Tavern's bottles. Not my business. I'm only
+     > the waiter."
+
+     and the mushroom man by the Wizard's tent (once a visit):
+     > **The mushroom man:** "Have you seen Luc, from the Tavern? Nor has anyone, since the mayor banned drink. And half his regulars go
+     > missing of an evening, and come home singing. Funny, that. The mushrooms hear everything."
+
+     The bar is the Tralu's caves' second hall (scene 19), reached through the cave's mouth below the tent, its first hall (2) and the
+     third (20, the 1996 demo's: the ladder, the lever, the gate). The build makes the hall bigger and furnishes it
+     (`Terrain/Citadel/TraluBarRoom.cs`): the long back wall moved out, a massive old wooden table (the caves' own, three end to end)
+     with benches, barrels for round tables, candlesticks; the hall's creatures and its two barred doors go. Luc behind a counter of
+     crates; Pat, Fab, the visitor and the drunk rabbibunny sitting at the table; Tim serving there from the umbrella back until
+     Twinsen is tired (and off his doorstep meanwhile):
+     > **Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Back Room: the only bar on Citadel the mayor doesn't know
+     > about. A proper table, and the Tavern's last bottles... And if you're racing today, it's lemonade for you."
+     >
+     > **The drunk rabbibunny:** "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm...
+     > sitting. At a table. With a mug. [hic!] Don't tell the mayor."
+     >
+     > **Pat:** "No Tavern, no stage... so we brought the band down here. Listen to that echo! Every beat comes back three times.
+     > Raph's meant to be playing with us, but he won't come off that track."
+     >
+     > **Fab:** "And the big fellow next door hasn't come round to complain. Yet."
+     >
+     > **The visitor:** "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, at a
+     > table fit for a giant. I love this island."
+     >
+     > **Tim:** "There you are, Twinsen! My shift on the doorstep's over, so I'm on duty down here. Old habits: I can't sit in a bar
+     > without carrying a tray. Lemonade?"
+
+     Next door, in his own hall (scene 2), the Tralu -- no longer the boss, he doesn't fight:
+     > **The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race
+     > track, and now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me
+     > peanuts."
+
+     In chapter 2 the regulars are back in the Tavern and the Tralu is glad of the quiet.
 8. **The race.** Raph now tells his time (built):
    > **Raph:** "A car and driving gloves: you're all set, Twinsen! My best lap is ## seconds. Beat that, and I'll come with you to the
    > lighthouse."
