@@ -815,6 +815,7 @@ void comportement_1()
         StartLine(p);
         PackageLevers(p);
         RetoldGates(p);
+        PharmacyHold(p);
         // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
         Lba1Rooms(p);
     }
@@ -868,6 +869,24 @@ void comportement_1()
             }}
         }}");
     }
+
+    // ---- the pharmacy's umbrella snatch (scene 22): Twinsen held till the customer is out -------------------------------------------
+    // The user, 2026-11-05: in the retail game "Twinsen can't move while the thief comes in, steals the umbrella, leaves and the customer
+    // follows him outside"; in the story he could. The game's scripts are the story's (only the texts retold), and headless, holding a
+    // movement key all through, the story build and the retail game move him the same, frame for frame: the game's hold (Twinsen's
+    // comportement_1, `oneif (40 == l_track_obj(6))`: MOVE_FOLLOW on the customer, cinema mode, until her label 52) starts only at
+    // the customer's "if you do me a favour" (her label 40) -- the thief is already walking in from the door then, since her label 30
+    // (the pharmacist's answer) -- and ends on her way to the door, before she is out. So he walked about while the thief came in and
+    // while the customer followed him out. Now the hold starts with her label 30, the moment the thief comes in, and ends once she is
+    // out of the door (her label 105: var_cube 3 back to 0 as she goes) -- or if she stops on the way to ask him for the umbrella
+    // (her label 20, then 102: the game's, when he stands within 1350 of her path; held, he could never answer her or walk off).
+    private static void PharmacyHold(StoryParts p) => p.Edit(Pharmacy, "the pharmacy's umbrella snatch: Twinsen held from the thief coming in till the customer has followed him out", _ => scripts =>
+    {
+        var hero = scripts.GetText(0, ScriptKind.Life);
+        hero = Loose(hero, "oneif (40 == l_track_obj(6))\n{\nset_dir(MOVE_FOLLOW, 6);", "oneif (30 == l_track_obj(6))\n    {\n        set_dir(MOVE_FOLLOW, 6);");
+        hero = Loose(hero, "if (52 == l_track_obj(6))\n{\nrestore_hero();", "if (0 == var_cube(3) || 105 == l_track_obj(6) || 102 == l_track_obj(6))\n    {\n        restore_hero();");
+        scripts.SetText(0, ScriptKind.Life, hero);
+    });
 
     // ---- the package centre's hidden room (scene 16): its three levers ------------------------------------------------------------
     // The user, 2026-11-03: "Inside the package centre on Citadel Island there's a hidden room with three levers. Currently if Twinsen
