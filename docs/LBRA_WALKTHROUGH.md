@@ -161,6 +161,9 @@ The same ladder brings Twinsen up onto the quay.
 
   Once the door is free: **Miss Bloop:** "Thank you for freeing the door, Twinsen. Wear your tunic at the races: it brings luck."
 
+  On the hall's north wall, by the corner, hangs a picture of Twinsen holding up a trophy. A visitor walking the halls, spoken to:
+  "Hey!... you know, you look like the guy in the picture! The one with the trophy!"
+
   In the hall, under the window, a display case like the one with the old book beside it: under its glass, a sheet of blueprints
   (Action by the case).
 

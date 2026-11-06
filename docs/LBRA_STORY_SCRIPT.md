@@ -330,6 +330,10 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    - **The museum** (scene 15, by the rampart's lift). Miss Bloop, the curator, in the hall:
      > **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
 
+     On the hall's north wall by the corner, a picture of Twinsen holding up a trophy (a copy of the hall's portrait, its canvas
+     painted again: Citadel/CitadelMuseum) -- the visitor's line (text 21 retold): "you look like the guy in the picture! The one with
+     the trophy!"
+
      In the hall, under the window, a display case like the one with the old book (the museum's own bricks, Citadel/CitadelMuseum):
      under its glass a sheet of blueprints (Action by the case):
      > *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps,

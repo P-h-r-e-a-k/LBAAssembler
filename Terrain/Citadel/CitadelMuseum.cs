@@ -14,6 +14,10 @@ namespace LBAAssembler.Terrain.Citadel;
 //     with an open book under its glass (block StandardCase of the museum's library) -- along the same wall under the window, the book
 //     under its glass a sheet of blueprints: the bricks that draw the book's pages drawn again in blueprint blue, a ruled grid and the
 //     track's loop on it in white.
+//   - the picture of Twinsen with a trophy (a visitor: "you look like the guy in the picture! The one with the trophy!", IslandRetell's
+//     21; the user, 2026-11-06, of the picture that wasn't there: add it): a copy of the hall's portrait on its north wall (the Sup in a
+//     gold frame, block PortraitBlock) on the same wall by the corner, near the tunic's case, its canvas painted again -- Twinsen in his
+//     tunic, a gold cup held up over his head, a chequered flag in a corner of the sky (TrophyPainting, painted onto the wall's slant).
 // The bricks and the block they make go at the ends of LBA_BKG.HQR's bricks and of the museum's block library (the game's own grids,
 // which share that library, don't name them), the case into the grid's empty cells. A build over a folder a build already changed finds
 // its bricks and block there and uses them again (LBA_BKG.HQR isn't one of the files a build puts back first).
@@ -24,6 +28,12 @@ internal static class CitadelMuseum
     public const int StandardCase = 120;
     // the blueprints' case: along the west wall from it, under the window (the chair, z 48, between the two)
     public static readonly (int X, int Y, int Z) BlueprintCase = (23, 3, 44);
+    // the hall's portrait on its north wall (z 38): 2 x 4 x 1 cells, the Sup's, at x 31-32, layers 6-9 -- the wall there is block WallBlock
+    // (3 wide), the portrait in the place of its first two cells
+    public const int PortraitBlock = 101, WallBlock = 2;
+    // the trophy picture: the same wall's first two cells by the corner with the west wall (x 23-24: the wall's own block starts at 23,
+    // as at 31), the tunic's case on its pedestal three cells along
+    public static readonly (int X, int Y, int Z) TrophyPicture = (23, 6, 38);
 
     public static List<string> Install(string gameDirectory)
     {
@@ -60,6 +70,30 @@ internal static class CitadelMuseum
                 shape = Lba1GridEdit.SetCells(shape, cells);
                 log.Add($"The blueprints' case: the museum's standard display case (block {StandardCase}) copied at cells ({x}, {z})-({x}, {z + 2}), " +
                         $"layers {y}-{y + 3}, block {block}, its book's {painted.Count} bricks drawn as blueprints");
+            }
+        }
+
+        // ---- the picture of Twinsen with a trophy
+        if (GridPaint.Info(library, PortraitBlock) is not { Dx: 2, Dy: 4, Dz: 1 })
+            log.Add("The trophy picture left out: the museum's library has no portrait on the north wall (block 101)");
+        else
+        {
+            var palette = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(0);
+            var painted = Repaint(library, PortraitBlock, Brick, TrophyPainting(palette));
+            var block = AddBlock(bkg, header, ref library, PortraitBlock, painted);
+            var (x, y, z) = TrophyPicture;
+            var cells = GridPaint.PlaceCells(library, block, x, y, z)!;
+            var now = cells.Select(c => Lba1GridEdit.Get(shape, c.X, c.Y, c.Z)).ToList();
+            if (now.Zip(cells).All(p => p.First.Block == p.Second.Block && p.First.Pos == p.Second.Pos))
+                log.Add($"The trophy picture: in the museum already (block {block})");
+            // (the wall's cells as the portrait's are: the wall block's first two cells of each layer)
+            else if (now.Zip(cells).Any(p => p.First.Block != WallBlock || p.First.Pos % 3 != (p.Second.X - x)))
+                log.Add("The trophy picture left out: the museum's north wall by the corner isn't the plain wall");
+            else
+            {
+                shape = Lba1GridEdit.SetCells(shape, cells);
+                log.Add($"The trophy picture: the museum's portrait (block {PortraitBlock}) copied on the north wall at cells ({x}-{x + 1}, {z}), " +
+                        $"layers {y}-{y + 3}, block {block}, its canvas's {painted.Count} bricks painted: Twinsen holding up a trophy");
             }
         }
 
@@ -100,6 +134,66 @@ internal static class CitadelMuseum
             if (print) return deep;
             var bright = ramp == 3 ? shade - 8 : shade - 9;
             return bright >= 2 ? light : bright >= 1 ? mid : deep;
+        };
+    }
+
+    // ---- the trophy painting: the portrait's canvas inside its gold frame (in Repaint's picture of the portrait block: x 27-47, its top
+    // edge y 40 + (x - 27) / 2, 30 lines down -- the wall's slant), painted again from the rows below, one character a pixel
+    private static readonly string[] Trophy =
+    {
+        ".....GgyyyyygG...kKkK",
+        ".....GggyyyggG...KkKk",
+        "...gGGgggggggGGg.kKkK",
+        "...g.GgggggggG.g.KkKk",
+        "....gGGgggggGGg......",
+        "......GgggggG........",
+        ".......GgggG.........",
+        "........gGg..........",
+        "......sGgggGs........",
+        "......sGGGGGs........",
+        ".....ss.hhh.ss.......",
+        ".....s.hhhhh.s.......",
+        "....ss.hhhhhh.s......",
+        "....s.hsssssh.s......",
+        "....s.sesssesHs......",
+        "....s.sssssssHH......",
+        "....ss.sSmSs.HH......",
+        ".....st.sss.tsH......",
+        ".....tttTsTttt.......",
+        "....ttttttttttt......",
+        "....tttttttttttT.....",
+        "....TtttttttttT......",
+        "....TttttttttTT......",
+        "....TbbbbbbbbbT......",
+        "....TttttttttttT.....",
+        ".....ttttttttt.......",
+        ".....tttttttttt......",
+        "......lll.lll........",
+        "......lll.lll........",
+        "......lll.lll........",
+    };
+
+    internal static Func<int, int, byte, byte> TrophyPainting(byte[] palette)
+    {
+        // (the sky the game's blue ramp's light end over a grass green, the cup its gold ramp, Twinsen's tunic its blue, his hair the
+        // brown ramp, his trousers light grey)
+        var colours = new Dictionary<char, byte>
+        {
+            ['g'] = Nearest(palette, 227, 175, 83), ['G'] = Nearest(palette, 155, 119, 63), ['y'] = Nearest(palette, 247, 211, 139),
+            ['s'] = Nearest(palette, 207, 167, 131), ['S'] = Nearest(palette, 179, 135, 107), ['e'] = Nearest(palette, 43, 43, 39),
+            ['m'] = Nearest(palette, 179, 43, 39), ['h'] = Nearest(palette, 119, 79, 51), ['H'] = Nearest(palette, 91, 63, 35),
+            ['t'] = Nearest(palette, 39, 135, 167), ['T'] = Nearest(palette, 31, 87, 119), ['b'] = Nearest(palette, 67, 43, 19),
+            ['l'] = Nearest(palette, 211, 211, 203), ['k'] = Nearest(palette, 31, 31, 27), ['K'] = Nearest(palette, 231, 231, 227),
+        };
+        byte sky = Nearest(palette, 131, 183, 215), ground = Nearest(palette, 155, 171, 123);
+        return (x, y, colour) =>
+        {
+            // (the frame: the gold and brown ramps, 6 and 1, kept)
+            if (x < 27 || x > 47 || colour >> 4 is 6 or 1) return colour;
+            int u = x - 27, v = y - 40 - u / 2;
+            if (v < 0 || v >= Trophy.Length) return colour;
+            var c = Trophy[v][u];
+            return colours.TryGetValue(c, out var paint) ? paint : v < 16 ? sky : ground;
         };
     }
 
