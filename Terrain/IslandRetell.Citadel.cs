@@ -1272,5 +1272,26 @@ internal static partial class IslandRetell
             "Grazie Twinsen! La macchina è pronta. Ah, e Baldino ha chiamato: ti manda una radio portatile per le corse.",
             "Obrigada, Twinsen! O carro está pronto. Ah, e o Baldino ligou: ele vai te mandar um rádio portátil para as corridas.",
         }),
+        // (Twinsen's greetings, the game's words but the title: "Miss." as the user wants it, 2026-11-06 -- "'miss' should be capitalised
+        // with a dot after it", "Hello Miss. Bloop."; the other languages' titles are already right, their words the game's.
+        // Last in the table, so that every line before them keeps the text it had)
+        (326, new[]
+        {
+            "Hello Miss.",
+            "Bonjour mademoiselle.",
+            "Guten Tag.",
+            "Buenos días, señorita.",
+            "Buongiorno signorina.",
+            "Bom dia senhorita.",
+        }),
+        (501, new[]
+        {
+            "Hello Miss. Bloop.",
+            "Bonjour mademoiselle Bloop.",
+            "Guten Tag, Mademoiselle Bloop.",
+            "Buenos días señorita Bloop.",
+            "Buongiorno Signorina Bloop.",
+            "Bom dia, senhorita Bloop.",
+        }),
     };
 }
