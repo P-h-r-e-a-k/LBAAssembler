@@ -187,6 +187,13 @@ internal sealed record RaceTrackIsland(
     // The race's levels, easy, medium and hard (RaceDifficulty: the Temple of Bú's, 2026-10-17); null: none -- the race as it is, whatever
     // the car setup's difficulty.
     public RaceLevel[]? Levels { get; init; }
+    // ... and the levels its race files carry: its own, else every track's (RaceDifficulty.Standard, 2026-11-06: the game's difficulty
+    // setting -- the race game's Difficulty page, Story Mode's)
+    public RaceLevel[] RaceLevels => Levels ?? RaceDifficulty.Standard;
+    // Points on every opponent's skill in the story's race, at every level (Wannies Island's, 2026-11-06 -- the user: "The Wannies track
+    // times are currently very hard to beat so we may need to make these easier for story mode only": its opponents time their jumps into
+    // the frog's mouth, Twinsen is thrown back from a shut one). Track select's race is as it is.
+    public int StorySkill { get; init; }
     // The game's own people the story needs, by entity, kept in the island's scenes when the build takes the others off the road (the
     // souvenir seller on Celebration Island: RaceTrackStory.ApplyCelebration).
     public int[]? StoryEntities { get; init; }
@@ -534,7 +541,7 @@ internal sealed record RaceTrackIsland(
     // tools/RaceTrackPlan/wannies_design.py.
     public static readonly RaceTrackIsland Wannies = new("Wannies Island", "PLATFORM.ILE", "PLATFORM.OBL", 6, 96, 99, 33, "RaceTrackPlan.Wannies.json", null)
     {
-        Title = "Wannies Island: through the frog and down the tower", Roster = RaceDriver.Wannies,
+        Title = "Wannies Island: through the frog and down the tower", Roster = RaceDriver.Wannies, StorySkill = -8,
         // (Twinsen has come down in the elevator: scene 98's hero script plays the elevator's cutscene -- and puts him at its point 7, on
         // foot -- while it's 0, and above 1 the cinema of his way back up)
         // (and the frog's still copy among the decor -- the editor's -- hidden: the race-track mode draws the frog, RaceTrackFrog.AddDecor)

@@ -189,14 +189,15 @@ internal sealed class RaceCarWindow : Window
         fightBack.Unchecked += (_, _) => setup.OpponentsFightBack = false;
         fightBack.Margin = new Thickness(0, 4, 0, 0);
         race.Children.Add(fightBack);
-        // (the race's level: the Temple of Bú has them, 2026-10-17 -- the track Play races, or any of the folder's)
+        // (the race's level: the Temple of Bú had them first, 2026-10-17; every track since 2026-11-06 -- the track Play races, or the folder's
+        // first)
         race.Children.Add(Section("Difficulty"));
-        var levelled = raced is null ? Terrain.RaceTrackIsland.All.Where(i => i.Levels is not null).ToList()
-            : Terrain.RaceTrackService.Tracks(raced).Select(t => Terrain.RaceTrackIsland.ByName(t.Island)).Where(i => i.Levels is not null).Distinct().ToList();
-        levels = levelled.FirstOrDefault()?.Levels ?? Terrain.RaceDifficulty.Temple;
-        var where = levelled.Count > 0 ? string.Join(", ", levelled.Select(i => i.Name.StartsWith("The ") ? "the " + i.Name[4..] : i.Name)) : "the Temple of Bú";
-        race.Children.Add(Text($"How hard the race is on {where}: the opponents' skill, how hard they push, the items they take and how they aim them, " +
-                               "and the track's hazards -- your car stays as you set it up. Other tracks race as they are, whatever is chosen here.", new Thickness(0, 0, 0, 4)));
+        var tracks = raced is null ? new List<Terrain.RaceTrackIsland>()
+            : Terrain.RaceTrackService.Tracks(raced).Select(t => Terrain.RaceTrackIsland.ByName(t.Island)).Distinct().ToList();
+        levels = tracks.FirstOrDefault()?.RaceLevels ?? Terrain.RaceDifficulty.Standard;
+        race.Children.Add(Text("How hard a race is: the opponents' skill, how hard they push, the items they take and how they aim them, " +
+                               "and the Temple of Bú's witches -- your car stays as you set it up. The race game's Difficulty page and Story Mode choose their own.",
+                               new Thickness(0, 0, 0, 4)));
         for (var n = Terrain.RaceDifficulty.Easy; n <= Terrain.RaceDifficulty.Hard; n++) difficulty.Items.Add(new ComboBoxItem { Content = Terrain.RaceDifficulty.Name(n), Tag = n });
         difficulty.SelectionChanged += (_, _) => { if (difficulty.SelectedItem is ComboBoxItem { Tag: int n }) { if (!updating) setup.Difficulty = n; ShowDifficulty(); } };
         var difficultyRow = new StackPanel { Orientation = Orientation.Horizontal };

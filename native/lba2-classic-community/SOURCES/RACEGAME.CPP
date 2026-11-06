@@ -27,6 +27,7 @@
  *     qualified=1                         a qualifying lap driven (RaceGame_Qualified): it may be skipped from then on
  *     skip_qualifying=0|1                 the last answer
  *     difficulty=0|1|2                    the difficulty chosen last (LevelPage)
+ *     story_difficulty=0|1|2              Story Mode's: every race of the story (2026-11-06; LevelPage(1), StoryResolved)
  *     updates=auto|ask|off                new versions installed when the game is closed, asked first, or not looked for (auto)
  *     update_check=launch|weekly|manual   when the game checks for a new version (none: launch; updates=off, from before there was a
  *                                         choice: manual)
@@ -178,6 +179,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_GHOST_EXTREME 2370            // the game's Extreme ghost (2026-10-25): after Hard, opened by beating it
 #define RG_ID_RESTART 2371                  // the main menu in a race: the race (or time trial) again from its start, as it was set up
 #define RG_ID_GHOST_OTHER 2372            // the ghost page's "Other": another player's ghost of the track (OthersPage, 2026-10-26)
+#define RG_ID_STORY_LEVEL 2373              // Story Mode's Difficulty row (StoryMode, 2026-11-06)
 #define RG_ID_OTHER_FIRST 2380            // ... its rows: the ghosts, 2380 .. 2384 (RG_OTHERS_SHOWN) ...
 #define RG_ID_GHOST_IMPORT 2385           // ... "Import ghosts..." (the setup's --import-ghosts) ...
 #define RG_ID_GHOST_SHARE 2386            // ... "Share my ghosts..." (the setup's --export-ghosts)
@@ -279,6 +281,10 @@ static int s_lastSp = 0, s_lastTrial = 0;
 static int s_lastTrack = -1;                // the track chosen last (its place in s_sp)
 static int s_level = 1;                     // the difficulty chosen last: 0 easy, 1 medium, 2 hard (RACEGAME_SETTINGS.TXT)
 static const char *const s_levelName[3] = {"Easy", "Medium", "Hard"};
+// The story's difficulty (2026-11-06, the user: "Let's have the game have a difficulty setting that sets how hard each race is to
+// compete"): every race of the story at this level -- written after each story track's own (StoryResolved), the last difficulty= counts
+// (RACEMOD.CPP ApplyDifficulty). Chosen as a new story starts, changed on Story Mode's page (RACEGAME_SETTINGS.TXT story_difficulty=).
+static int s_storyLevel = 1;
 
 static T_RG_TIME s_times[RG_MAX_ENTRIES][RG_MAX_TIMES];    // each special's and track's best laps, the fastest first
 static int s_nbTimes[RG_MAX_ENTRIES];
@@ -579,6 +585,7 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "qualified")) value = &s_qualified;
             else if (!strcmp(line, "skip_qualifying")) value = &s_skipQualifying;
             else if (!strcmp(line, "difficulty")) value = &s_level;
+            else if (!strcmp(line, "story_difficulty")) value = &s_storyLevel;
             else if (!strcmp(line, "minimap")) value = &s_minimap;
             else if (!strcmp(line, "camera")) value = &s_camera;
             else if (!strcmp(line, "race_sky")) value = &s_raceSky;
@@ -630,6 +637,7 @@ static void ReadSettings(void) {
     // (updates=off, before there was a choice of when: the player's no is kept, as Manually, and a check they ask for asks them first, as it did)
     if (s_updates == 2) { s_updates = 1; if (!checkGiven) s_updateCheck = 2; }
     if (s_level < 0 || s_level > 2) s_level = 1;
+    if (s_storyLevel < 0 || s_storyLevel > 2) s_storyLevel = 1;
     s_minimap = s_minimap != 0;
     if (s_camera < 0 || s_camera > 2) s_camera = 2;
     if (s_ghost < 0 || s_ghost > 8 || s_ghost == 2 || s_ghost == 6) s_ghost = 0;
@@ -711,6 +719,7 @@ static void WriteSettings(void) {
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_check=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_checkKey[s_updateCheck], s_updateChecked);
     fprintf(f, "reports=%s\n", s_reportKey[s_reports]);
+    fprintf(f, "story_difficulty=%d\n", s_storyLevel);
     fprintf(f, "minimap=%d\ncamera=%d\nrace_sky=%d\nghost=%d\ntrial_laps=%d\n", s_minimap, s_camera, s_raceSky, s_ghost, s_trialLaps);
     if (s_ghostOther[0]) fprintf(f, "ghost_other=%s\n", s_ghostOther);
     if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
@@ -1306,6 +1315,12 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
+    case RG_ID_STORY_LEVEL: {
+        char row[64];
+        snprintf(row, sizeof(row), "Difficulty: %s", s_levelName[s_storyLevel >= 0 && s_storyLevel <= 2 ? s_storyLevel : 1]);
+        Label(string, row);
+        return 1;
+    }
     case RG_ID_QUIT_NO: Label(string, "No"); return 1;
     case RG_ID_QUIT_YES: Label(string, "Yes"); return 1;
     case RG_ID_ONLINE: Label(string, "Multiplayer"); return 1;
@@ -2934,7 +2949,8 @@ static int TrackSelect(void) {
 // (2026-10-29: LBA2 played as a game, every island's track raced where the story has it -- RACEMOD.CPP's set, story_file= -- behind a
 // code, story_code=)
 
-static U16 s_storyMenu[4 + 2 * 3];
+static U16 s_storyMenu[4 + 2 * 4];
+static int LevelPage(int story);
 static void StorySave(char *path) { GetSavePath(path, ADELINE_MAX_PATH, RG_STORY_SAVE); }
 static int HasStorySave(void) {
     char path[ADELINE_MAX_PATH];
@@ -3019,6 +3035,8 @@ static int StoryResolved(char *out) {
         else {
             CopyResolved(ti, to_f);
             fprintf(to_f, "# the camera's view: 0 inside the car, 1 just behind, 2 further back\ncamera=%d\n", s_camera);
+            // (the story's difficulty, over the track's own: a race against opponents has the levels' numbers -- else it is nothing)
+            fprintf(to_f, "# the story's difficulty (Story Mode): %s\ndifficulty=%d\n", s_levelName[s_storyLevel], s_storyLevel);
         }
         if (ti) fclose(ti);
         if (to_f) fclose(to_f);
@@ -3038,19 +3056,25 @@ static S32 StoryMode(void) {
         s_storyOpen = 1;
     }
     const int saved = HasStorySave();
+    ReadSettings();
     s_storyMenu[0] = (U16)(saved ? 2 : 1);
-    s_storyMenu[1] = 3;
-    s_storyMenu[2] = 300;
+    s_storyMenu[1] = 4;
+    s_storyMenu[2] = 270;
     s_storyMenu[3] = 0;
     SetRow(s_storyMenu, 0, RG_ID_BACK);
     SetRow(s_storyMenu, 1, RG_ID_STORY_NEW);
     SetRow(s_storyMenu, 2, RG_ID_STORY_CONTINUE);
+    SetRow(s_storyMenu, 3, RG_ID_STORY_LEVEL);
     for (;;) {
-        Page("Story Mode", 300 - (56 * 3) / 2 - 50);
-        Text(UI_CENTER_X, 420 + UI_VCENTER_OFS, "Win the islands' races to unlock their cars", RG_GREY);
+        Page("Story Mode", 270 - (56 * 4) / 2 - 50);
+        Text(UI_CENTER_X, 410 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
         const S32 select = Menu(s_storyMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        // (the story's difficulty: its page, then back here -- the row says the level chosen)
+        if (select == RG_ID_STORY_LEVEL) { LevelPage(1); s_storyMenu[0] = 3; continue; }
         if (select != RG_ID_STORY_NEW && select != RG_ID_STORY_CONTINUE) continue;
+        // (a new story: its difficulty first -- the one chosen last first; Esc there is Story Mode's page again)
+        if (select == RG_ID_STORY_NEW && LevelPage(1) < 0) { s_storyMenu[0] = 1; continue; }
         if (select == RG_ID_STORY_CONTINUE) {
             char cur[ADELINE_MAX_PATH], story[ADELINE_MAX_PATH];
             GetSavePath(cur, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
@@ -3327,9 +3351,10 @@ static int GridPage(const char *what, int trial) {
 
 
 // A race's difficulty, on a track with levels: easy, medium or hard -- the one chosen last first -- kept for the next time. The level
-// (0-2), or -1 for Back.
-static int LevelPage(void) {
-    s_levelMenu[0] = (U16)(1 + s_level);
+// (0-2), or -1 for Back. `story`: the story's (s_storyLevel, every race of the story -- 2026-11-06), not the race game's.
+static int LevelPage(int story) {
+    int *const chosen = story ? &s_storyLevel : &s_level;
+    s_levelMenu[0] = (U16)(1 + *chosen);
     s_levelMenu[1] = 4;
     s_levelMenu[2] = 280;
     s_levelMenu[3] = 0;
@@ -3338,17 +3363,17 @@ static int LevelPage(void) {
     SetRow(s_levelMenu, 2, RG_ID_MEDIUM);
     SetRow(s_levelMenu, 3, RG_ID_HARD);
     for (;;) {
-        Page("Difficulty", 280 - (56 * 4) / 2 - 50);
-        // (what the levels do, under the rows)
-        Text(UI_CENTER_X, 400 + UI_VCENTER_OFS, "Easy: slower monsters, fewer items", RG_GREY);
-        Text(UI_CENTER_X, 436 + UI_VCENTER_OFS, "Hard: quicker monsters, aimed attacks", RG_GREY);
+        Page(story ? "Story difficulty" : "Difficulty", 280 - (56 * 4) / 2 - 50);
+        // (what the levels do, under the rows -- every track's since 2026-11-06: opponents, not the Temple's monsters alone)
+        Text(UI_CENTER_X, 400 + UI_VCENTER_OFS, "Easy: slower opponents, fewer items", RG_GREY);
+        Text(UI_CENTER_X, 436 + UI_VCENTER_OFS, "Hard: quicker opponents, aimed attacks", RG_GREY);
         const S32 select = Menu(s_levelMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return -1; }
         if (select < RG_ID_EASY || select > RG_ID_HARD) continue;
-        s_level = select - RG_ID_EASY;
+        *chosen = select - RG_ID_EASY;
         WriteSettings();
-        Log_Info("[racegame] difficulty: %s", s_levelName[s_level]);
-        return s_level;
+        Log_Info("[racegame] %sdifficulty: %s", story ? "the story's " : "", s_levelName[*chosen]);
+        return *chosen;
     }
 }
 
@@ -3559,7 +3584,7 @@ static int ModePage(int sp) {
         int lapsChosen = 0;
         for (;;) {
             int level = -1;
-            if (!trial && s_sp[sp].Levels && (level = LevelPage()) < 0) break;
+            if (!trial && s_sp[sp].Levels && (level = LevelPage(0)) < 0) break;
             // (a time trial: its laps -- a sprint's runs -- then the ghost to race; Esc on the car page is the ghost page again, Esc there
             // the laps page)
             if (trial && !lapsChosen && !(lapsChosen = LapsPage(s_sp[sp].Sprint))) break;

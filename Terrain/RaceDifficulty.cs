@@ -35,6 +35,21 @@ internal static class RaceDifficulty
         new(Skill: 8, CatchUp: 14, Ease: 0, Items: 100, AimMs: 6000, Hazards: 140),
     };
 
+    // Every other track's (2026-11-06, the user: "Let's have the game have a difficulty setting that sets how hard each race is to compete.
+    // We can probably reuse our ghost information for this"), on the ghosts' scale. The game's ghosts to beat were driven at a share of the
+    // line's pace -- Easy at 70 %, Medium at 85 %, Hard at 100 % with the best car and the shortcuts (E:\dump\TEMP\lbra\alltracks\gen.ps1)
+    // -- and an opponent's skill is that same share of its own line's perfect lap (RACEMOD.CPP: "a perfect lap 63.8 s (skill 86%: 74.2 s)").
+    // The races' opponents have driven at 86 %, the Medium ghost's pace: Easy takes them down to the Easy ghost's, Hard up towards the Hard
+    // ghost's (+12, not +15: the Hard ghost's shortcuts are not on an opponent's line). The ghosts' own laps can't be the targets: the race
+    // game's time trials are their tracks' laps, the story's races mostly other ones (Wannies Island's story lap is 64 s, its ghosts' 11.7).
+    public const int GhostEasyPace = 70, GhostMediumPace = 85, GhostHardPace = 100;
+    public static readonly RaceLevel[] Standard =
+    {
+        new(Skill: GhostEasyPace - GhostMediumPace, CatchUp: 0, Ease: 12, Items: 50, AimMs: 0, Hazards: 100),
+        new(Skill: 0, CatchUp: RaceCarSetup.CatchUpPercent, Ease: 0, Items: 100, AimMs: 0, Hazards: 100),
+        new(Skill: 12, CatchUp: 14, Ease: 0, Items: 100, AimMs: 6000, Hazards: 100),
+    };
+
     // What a level does, in a line for the Race car window.
     public static string Describe(RaceLevel l)
     {
@@ -44,7 +59,7 @@ internal static class RaceDifficulty
         if (l.Ease > 0) parts.Add($"easing off up to {l.Ease} % when ahead of you");
         parts.Add(l.Items >= 100 ? "an item from every row of pumpkins" : $"items from {l.Items} % of the rows");
         if (l.AimMs > 0) parts.Add($"holding penguins, oil and magic balls until they would hit you ({l.AimMs / 1000.0:0.#} s at most)");
-        parts.Add(l.Hazards == 100 ? "the witches as ever" : $"the witches {(l.Hazards < 100 ? "less" : "more")} often ({l.Hazards} %)");
+        if (l.Hazards != 100) parts.Add($"the Temple's witches {(l.Hazards < 100 ? "less" : "more")} often ({l.Hazards} %)");
         return string.Join("; ", parts) + ".";
     }
 }

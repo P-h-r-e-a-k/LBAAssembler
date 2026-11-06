@@ -244,7 +244,10 @@ internal static class RaceCarEngineFile
             // (the engine's first opponent is "opponent_", the next "opponent2_" and so on)
             var key = i == 0 ? "opponent" : $"opponent{i + 1}";
             var o = opponents[i];
-            var pace = o.PaceHi > 0 ? $"{Math.Clamp(o.Pace, 10, 300)} {Math.Clamp(o.PaceHi, 10, 300)}" : $"{Math.Clamp(o.Pace, 10, 300)}";
+            // (in the story, the island's own easing: RaceTrackIsland.StorySkill -- not on a time to beat)
+            var easing = story && !o.Ghost && info is not null ? RaceTrackIsland.ByName(info.Island).StorySkill : 0;
+            var pace = o.PaceHi > 0 ? $"{Math.Clamp(o.Pace + easing, 10, 300)} {Math.Clamp(o.PaceHi + easing, 10, 300)}" : $"{Math.Clamp(o.Pace + easing, 10, 300)}";
+            if (easing != 0) text.Append($"# (the story's race on {info!.Island}: every skill {easing:+0;-0} -- RaceTrackIsland.StorySkill)\n");
             text.Append($"# {o.Name}{(o.Main ? " (the one to beat)" : "")}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={pace}\n");
             // (its car at half its size, for the lightning spell: RaceTrackSmallCars)
             if (!o.Bike && o.Body >= 0 && !o.Ghost) text.Append($"{key}_small={RaceTrackSmallCars.SmallOf(o.Body)}\n");
@@ -268,9 +271,10 @@ internal static class RaceCarEngineFile
         // the one to beat, with a car (a race's win is finishing ahead of him)
         var main = opponents.FindIndex(o => o.Main && !o.Ghost);
         if (main >= 0) text.Append($"main={main + 1}\n");
-        // the race's level, on a track with levels raced against opponents (the Temple of Bú's): the one the setup races and every level's
-        // numbers -- the race game's menu adds its own pick after them (RACEMOD.CPP difficulty=, RaceDifficulty)
-        if (opponents.Any(o => !o.Ghost) && info is not null && RaceTrackIsland.ByName(info.Island) is { Levels: { Length: 3 } levels })
+        // the race's level, on every track raced against opponents (the Temple of Bú's own, the others' RaceDifficulty.Standard since
+        // 2026-11-06): the one the setup races and every level's numbers -- the race game's Difficulty page, or Story Mode's, adds its own
+        // pick after them (RACEMOD.CPP difficulty=, RaceDifficulty)
+        if (opponents.Any(o => !o.Ghost) && info is not null && RaceTrackIsland.ByName(info.Island).RaceLevels is { Length: 3 } levels)
         {
             var level = Math.Clamp(car.Difficulty, RaceDifficulty.Easy, RaceDifficulty.Hard);
             text.Append($"# the race's level: {RaceDifficulty.Name(level)} (0 easy, 1 medium, 2 hard)\ndifficulty={level}\n");
