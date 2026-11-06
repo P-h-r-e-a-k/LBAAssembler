@@ -212,6 +212,11 @@ customer's umbrella back -- Tim serves at the table. Each talks when Twinsen wal
 **Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Back Room: the only bar on Citadel the mayor doesn't know about. A
 proper table, and the Tavern's last bottles... And if you're racing today, it's lemonade for you."
 
+**Luc:** "And between us: regulars don't come the long way round. There's a back gate, up from the old hall next door, and a key to it
+hidden where Sendell keeps an eye on it. You didn't hear that from me."
+
+(Talked to again, Luc reminds him of the key until the gate is open, then only welcomes him.)
+
 **The drunk rabbibunny:** "The mayor shays no drinking while there'sh a race track. [hic!] Sho I'm not drinking. I'm... sitting. At a
 table. With a mug. [hic!] Don't tell the mayor."
 
@@ -231,6 +236,13 @@ grumbles:
 
 **The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and
 now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts."
+
+**The back gate.** From the bar, east past the table, steps go up through the stalagmites onto a landing, and from it a corridor runs
+south over the water to a door into the Tralu's hall: Twinsen comes out on a ledge, a barred gate behind him, and goes down the stairs
+along the ledge's side. On the ledge's face is a sign of Sendell (Action: "Aha! a sign from Sendell. They are venerated by all the
+wizards."), and once Luc has told him, Action there turns up the regulars' key (a key jumps out). With it, back up the stairs, the barred
+gate opens to him (the game's key door: the key is used, and the gate stays open for good), and the bar's quick way is open: the cave's
+mouth, its first hall, the Tralu's hall, the stairs and the gate.
 
 **9. The race.** Back at the start line, Raph has his time ready.
 

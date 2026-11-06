@@ -828,6 +828,8 @@ void comportement_1()
         TraluTavern(p);
         // (the cave's mouth: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
         TraluCaveMouth(p);
+        // (the back gate from the Tralu's hall up to the bar: its stairs, its key -- Citadel/RaceTrackStory.TraluCaves.cs)
+        TraluBackGate(p);
         Lighthouse(p);
         LighthouseClimb(p);
         HiddenPages(p);

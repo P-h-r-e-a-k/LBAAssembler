@@ -84,13 +84,30 @@ internal static partial class RaceTrackStory
             Place(fab, FabAt, BenchTop - 196, (Cell(38.5), FabAt.Z));
             Place(visitor, VisitorAt, BenchTop, (Cell(35.5), VisitorAt.Z));
             Place(bunny, RabbibunnyAt, BenchTop, (Cell(35.5), RabbibunnyAt.Z));
-            // (the spike zones where the hall is now)
+            // (the spike zones where the hall is now, and on the steps up to the corridor's landing -- the stalagmites the build took out)
             model.Zones.RemoveAll(z => z.Type == 8 && z.X0 < (TraluBarRoom.East + 1) * 512 && z.X1 > TraluBarRoom.West * 512
                                        && z.Z0 < (TraluBarRoom.South + 1) * 512 && z.Z1 > TraluBarRoom.North * 512);
+            model.Zones.RemoveAll(z => z.Type == 8 && z.X0 < (TraluBarRoom.UpFrom + 4) * 512 && z.X1 > TraluBarRoom.UpFrom * 512
+                                       && z.Z0 < 44 * 512 && z.Z1 > 39 * 512);
 
             var edits = new List<Action<SceneScripts>>();
             const string Storm = "2 > chapter()";
-            edits.Add(p.Add(model, luc, Talker(Storm, $"            message({p.Say(ChapterLine.LucBar)});", LucReach)));
+            // (Luc: his welcome and the back gate's key -- told once, var 60 to 1: RaceTrackStory.TraluCaves -- then the key again till the
+            // gate is open, his welcome after that)
+            edits.Add(p.Add(model, luc, Talker(Storm, $@"            if (0 == var_game({CaveVar}))
+            {{
+                message({p.Say(ChapterLine.LucBar)});
+                message({p.Say(ChapterLine.LucKey)});
+                set_var_game({CaveVar}, {CaveKeyTold});
+            }}
+            else if ({CaveGateOpen} > var_game({CaveVar}))
+            {{
+                message({p.Say(ChapterLine.LucKey)});
+            }}
+            else
+            {{
+                message({p.Say(ChapterLine.LucBar)});
+            }}", LucReach)));
             edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({p.Say(ChapterLine.RabbibunnyBar)});", RegularReach)));
             var fabIndex = model.Actors.Count + 1;
             edits.Add(p.Add(model, pat, Talker(Storm, $"            message({p.Say(ChapterLine.PatBar)});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabBar)});", RegularReach)));

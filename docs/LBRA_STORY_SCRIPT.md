@@ -405,6 +405,20 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      > **Tim:** "There you are, Twinsen! My shift on the doorstep's over, so I'm on duty down here. Old habits: I can't sit in a bar
      > without carrying a tray. Lemonade?"
 
+     Luc, the first time, after his welcome (the cave's var 60 to 1; till the gate is open he says this again, then only his welcome):
+     > **Luc:** "And between us: regulars don't come the long way round. There's a back gate, up from the old hall next door, and a key
+     > to it hidden where Sendell keeps an eye on it. You didn't hear that from me."
+
+     **The back gate** (built 2026-11-06, `Terrain/Citadel/RaceTrackStory.TraluCaves.cs`): the gate from the Tralu's hall (scene 2) to
+     the bar stands on a ledge six layers up, which in the game had no way up (Twinsen came down off it and was stuck: the hall's other
+     way out was the barred door only the Tralu's key opened). The build puts stairs up the ledge's east side (`TraluBarRoom.InstallStairs`);
+     the game's barred door (actor 8) moves onto the ledge across the gate's arch, drawn as scene 19's barred doors were, and the game's own
+     key script opens it (var 60 to 3, gone for good); the way from the first hall into the Tralu's hall is open. The key is under the sign
+     of Sendell on the ledge's face: Action there once Luc has told, while the gate is shut and Twinsen has no key, and a key jumps out.
+     Come from the bar (up four new steps east of the table onto the corridor's landing, the hall's stalagmites there taken out, and
+     south down the corridor: its two barred doors are gone), Twinsen lands on the near side of the gate and goes down the stairs; with
+     the key, the cave's mouth, its first hall, the Tralu's hall, the stairs and the gate are the bar's quick way back.
+
      Next door, in his own hall (scene 2), the Tralu -- no longer the boss, he doesn't fight:
      > **The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race
      > track, and now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me

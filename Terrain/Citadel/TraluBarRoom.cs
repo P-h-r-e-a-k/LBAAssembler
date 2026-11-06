@@ -20,7 +20,10 @@ namespace LBAAssembler.Terrain.Citadel;
 //     and 38), plates, bowls, bottles and an oil lamp on it (blocks 102-110);
 //   - the round tables round the edge: the caves' barrels (block 10, 2 x 2 cells, four layers) stood up as tall round tables, with a
 //     bottle and a plate or a bowl on each -- by the west wall, at the front and by the old room;
-//   - two of the caves' iron candlesticks (block 95) against the north wall, either side of where Luc's counter stands.
+//   - two of the caves' iron candlesticks (block 95) against the north wall, either side of where Luc's counter stands;
+//   - the way from the bar to the back gate (RaceTrackStory.TraluCaves): the corridor over the water to scene 2's gate starts on a landing
+//     (x 55-57, z 39-43, layer 12) the game reached only from its raised walks, behind a thicket of stalagmites (x 53-54); four of the
+//     caves' steps (block 137, rising east) go up to it from the room's floor, x 51-54, z 40-42, the stalagmites in their way taken out.
 // Where the build finds scene 19's grid not the game's (the back wall not where it was), the hall is left as it is and said so.
 internal static class TraluBarRoom
 {
@@ -34,7 +37,7 @@ internal static class TraluBarRoom
     // the massive table: x 36-37, z 40-51 (three tables end to end); its benches at x 35 and 38
     public const int TableX = 36, TableZ0 = 40, TableZ1 = 51, BenchWest = 35, BenchEast = 38;
     // the round tables (barrels): their north-west cells
-    public static readonly (int X, int Z)[] Barrels = { (29, 37), (29, 44), (29, 50), (41, 51), (43, 39) };
+    public static readonly (int X, int Z)[] Barrels = { (29, 37), (29, 44), (29, 50), (41, 51), (43, 36) };
     // what stands on them and on the table: (x, z, block) -- plates 108 109, bowls 102 104, bottles 105 106 107, the oil lamp 110 (the
     // tall ones on the table's near half, x 37: on the far half they hid the sitters on the far bench from the camera)
     private static readonly (int X, int Z, int Block)[] OnTable =
@@ -43,9 +46,12 @@ internal static class TraluBarRoom
     };
     private static readonly (int X, int Z, int Block)[] OnBarrels =
     {
-        (29, 37, 107), (30, 38, 108), (30, 44, 105), (29, 45, 109), (29, 50, 106), (30, 51, 102), (41, 51, 108), (42, 52, 107), (44, 39, 104), (43, 40, 106),
+        (29, 37, 107), (30, 38, 108), (30, 44, 105), (29, 45, 109), (29, 50, 106), (30, 51, 102), (41, 51, 108), (42, 52, 107), (44, 36, 104), (43, 37, 106),
     };
     private static readonly (int X, int Z)[] Candlesticks = { (31, 35), (36, 35) };
+    // the steps up to the corridor's landing: x 51 (layer 9) to 54 (layer 12), z 40-42; the stalagmites cleared, x 53-54, z 39-43
+    public const int UpStep = 137, UpFrom = 51, UpZ0 = 40, UpZ1 = 42, LandingLayer = 12;
+    private static readonly (int X0, int X1, int Z0, int Z1) Thicket = (53, 54, 39, 43);
 
     private const int Size = 64, Height = 25;
 
@@ -56,6 +62,59 @@ internal static class TraluBarRoom
         if (backend.GridOfScene(Scene) is not { } grid) return false;
         var cells = Lba1GridCodec.Decode(backend.LoadGrid(grid));
         return cells[((TableZ0 * Size + TableX) * Height + FloorLayer + 1) * 2] == Table && cells[((North * Size + OldWall) * Height + 13) * 2] == 0;
+    }
+
+    // ---- the back gate's stairs, in the caves' first scene (scene 2) ------------------------------------------------------------------------
+    // The gate into scene 19 (its door zone x 7-8, z 17) stands on a ledge (the stone block with the sign of Sendell on its face, cells x
+    // 6-9, z 16-20, its top layer 12: 3328) six layers over the Tralu's hall (its floor's top layer 6: 1792), with nothing to climb: come
+    // down from 19 into the hall, Twinsen couldn't get back up (the user, 2026-11-06: "In scene 2 there's a soft lock for the top area ...
+    // We'd need to either put a ladder or some stairs there"). Stairs now go up along the block's east face, two cells wide (z 20-21): six
+    // of the caves' steps (block 74, rising towards -x, as the steps in scene 19 do), x 15 (layer 7) to x 10 (layer 12), onto the ledge at
+    // x 9, the cage's bars on that side (x 9, z 19-20, layers 13-17) taken out to let him on. The Sendell sign on the block's front stays
+    // in sight.
+    public const int GateScene = 2;
+    public const int StairsTop = 10, StairsZ0 = 20, StairsZ1 = 21, LedgeX = 9, LedgeLayer = 12, HallLayer = 6;
+    private const int Step = 74, CageBars = 28;
+
+    public static bool StairsBuilt(string gameDirectory)
+    {
+        var backend = new Lba2GridBackend(gameDirectory);
+        if (backend.GridOfScene(GateScene) is not { } grid) return false;
+        var cells = Lba1GridCodec.Decode(backend.LoadGrid(grid));
+        return cells[((StairsZ0 * Size + StairsTop) * Height + LedgeLayer) * 2] == Step;
+    }
+
+    // Into a game folder: the stairs up to the back gate's ledge in scene 2's grid. A line for the build's log.
+    public static string InstallStairs(string gameDirectory)
+    {
+        var bkgPath = Path.Combine(gameDirectory, "LBA_BKG.HQR");
+        var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        if (GateScene * 2 + 1 >= table.Length) return "the back gate's stairs left out: no scene 2";
+        var entry = header.Gri + table[GateScene * 2 + 1];
+        var raw = bkg.Read(entry);
+        var shape = Lba2GridBackend.ToLba1Shape(raw);
+        var cells = Lba1GridCodec.Decode(shape);
+        int At(int x, int y, int z) => ((z * Size + x) * Height + y) * 2;
+        var steps = LedgeLayer - HallLayer;
+        // (the game's: the ledge's top at x 9, z 19-20, its bars over it; the hall's floor under where the stairs go, nothing over it)
+        bool Game() => raw[0] == 1
+            && Enumerable.Range(StairsZ0 - 1, 2).All(z => cells[At(LedgeX, LedgeLayer, z)] != 0 && cells[At(LedgeX, LedgeLayer + 1, z)] == CageBars)
+            && Enumerable.Range(StairsTop, steps).All(x => Enumerable.Range(StairsZ0, StairsZ1 - StairsZ0 + 1).All(z =>
+                cells[At(x, HallLayer, z)] != 0 && Enumerable.Range(HallLayer + 1, Height - HallLayer - 1).All(y => cells[At(x, y, z)] == 0)));
+        if (!Game()) return "the back gate's stairs left out: scene 2's grid isn't the game's there (the ledge at x 9, the hall's floor x 10-15, z 20-21)";
+        var edits = new List<Lba1GridCell>();
+        for (var k = 0; k < steps; k++)
+            for (var z = StairsZ0; z <= StairsZ1; z++)
+                edits.Add(new Lba1GridCell(StairsTop + k, LedgeLayer - k, z, Step, (z - StairsZ0) % 2));
+        for (var z = StairsZ0 - 1; z <= StairsZ0; z++)
+            for (var y = LedgeLayer + 1; y <= LedgeLayer + 5; y++) edits.Add(new Lba1GridCell(LedgeX, y, z, 0, 0));
+        var stored = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
+        bkg.SetStored(entry, stored);
+        if (header.MaxGri < (uint)stored.Length) { header.MaxGri = (uint)stored.Length; bkg.SetStored(0, header.Bytes); }
+        new FileTransaction().Write(bkgPath, bkg.ToBytes()).Commit();
+        return $"the back gate's stairs: scene 2, {steps} steps up the ledge's east face (x {StairsTop + steps - 1} to {StairsTop}, z {StairsZ0}-{StairsZ1}), the cage's bars at x {LedgeX}, z {StairsZ0 - 1}-{StairsZ0} taken out";
     }
 
     // Into a game folder: scene 19's grid made the bar's. A line for the build's log.
@@ -125,6 +184,12 @@ internal static class TraluBarRoom
         foreach (var (x, z, block) in OnBarrels) Item(x, FloorLayer + 5, z, block);
         foreach (var (x, z) in Candlesticks)
             for (var dy = 0; dy < 6; dy++) Set(x, FloorLayer + 1 + dy, z, Candlestick, dy);
+        // the steps up to the corridor's landing, through the stalagmites
+        for (var x = Thicket.X0; x <= Thicket.X1; x++)
+            for (var z = Thicket.Z0; z <= Thicket.Z1; z++)
+                for (var y = FloorLayer + 1; y <= LandingLayer; y++) Set(x, y, z, 0, 0);
+        for (var k = 0; k < LandingLayer - FloorLayer; k++)
+            for (var z = UpZ0; z <= UpZ1; z++) Set(UpFrom + k, FloorLayer + 1 + k, z, UpStep, (z - UpZ0) % 2);
 
         // (a column of the north wall, built as the room's own north wall (z 6) is -- the old back wall's columns are capped for a wall
         // along z, their caps two cells along z, and showed their stones' tops along x: its foot (layers 9-12, block 57, as the back wall's),
