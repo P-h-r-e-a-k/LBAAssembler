@@ -240,10 +240,11 @@ internal static partial class RaceTrackStory
         // (the game's Zoe in the yard: from chapter 2 the story's own Zoe is there and follows Twinsen; the game's ran up to him with the
         // healing wizard's helper (951, var 62 and the holomap's arrow) -- the scripted playthrough of 2026-11-05)
         new(49, 4, @"0 < var_game\(42\) \|\| 3 == var_game\(74\)", "the game's Zoe in the yard gone from chapter 2 (the story's Zoe is there; the game's told of Ker'aooc's helper, var 62)", Gone("1 < chapter()")),
-        // (the game's Zoe on the lighthouse's top, where its chapter 2 starts her after the spell -- the story's Zoe goes with Twinsen from
-        // chapter 2, and that is the very place the lighthouse's door puts him up (track point 5): she stood in it and pushed him out of
-        // the top's zone, where neither the telescope nor the way down answered his Action -- the check of 2026-11-06)
-        new(46, 5, @"2 < chapter\(\) \|\| 4 == var_game\(56\)", "the game's Zoe on the lighthouse's top gone from chapter 2 (the story's Zoe goes with Twinsen; she stood where the climb puts him)", Gone("1 < chapter()")),
+        // (the game's Raph on the lighthouse's top (entity 19, the story's Raph's body), where its chapter 2 starts him after the spell --
+        // the story's Raph is outside the Tavern from chapter 2, and the top is the very place the lighthouse's door puts Twinsen up
+        // (track point 5): Raph stood in it and pushed him out of the top's zone, where neither the telescope nor the way down answered
+        // his Action -- the check of 2026-11-06)
+        new(46, 5, @"2 < chapter\(\) \|\| 4 == var_game\(56\)", "the game's Raph on the lighthouse's top gone from chapter 2 (the story's Raph is at the Tavern; he stood where the climb puts Twinsen)", Gone("1 < chapter()")),
         // (Twinsen at the carport: his "where are my driving gloves?" (retail 32, retold) while he hasn't the gloves (item 7), not while
         // the game's var 74 is under 2 -- the story never sets it, so he asked for the gloves he was wearing)
         new(49, 0, @"2 > var_game\(74\) && 4 == zone\(\)", "Twinsen asks for his driving gloves at the carport only without them (item 7)",
