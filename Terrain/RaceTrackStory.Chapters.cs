@@ -1354,8 +1354,11 @@ void comportement_1()
         set_var_game({DayVar}, {Tired});");
         // (his body back as he leaves: the spell's cutscene took it -- no_body, comportement_4 -- and the game gave it back in scene 42's
         // landing cutscene, restore_hero, which chapter 2 starts; the chapter stays 1 now, so in 42 he stood bodiless, no walking, no one
-        // answering him: the scripted playthrough, chapter 1, 2026-11-05)
-        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(0);\n        comportement_hero(0);\n        change_cube(42);");
+        // answering him: the scripted playthrough, chapter 1, 2026-11-05). And the cutscene's cinema mode off: his "We are ready, Master"
+        // turned it on (comportement_1) and the game turned it off in that same landing cutscene, so in 42 it stayed on the rest of the
+        // chapter -- the black bars, and Enter no longer recentring the camera on him (PERSO.CPP: not in cinema mode), nor the holomap
+        // opening (the user, 2026-11-05: "After the lighthouse scene the camera seems to be broken, enter no longer centres the camera").
+        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(0);\n        comportement_hero(0);\n        cinema_mode(0);\n        cam_follow(0);\n        change_cube(42);");
         scripts.SetText(0, ScriptKind.Life, hero);
     });
 
@@ -1370,7 +1373,9 @@ void comportement_1()
     // (CitadelLighthouse.AddTelescope); Action facing it: the game's "For 3 Kashes, do you want to use the telescope?" -- paid, the cow's
     // field (scene 47): Twinsen out of sight, the camera on the Wizard behind Rosa (her zone 11, facing her) hopping as Twinsen does
     // (CitadelLighthouse.Hop) -- the fourth hop and she gives her clover (her own script, var_cube 11 past 3) -- and back up the lighthouse.
-    // (ScopeVar: 1 at the cow's, 2 on the way back. Twinsen's track labels 160-163 in scene 46 are new.) In chapter 1 -- the night after the
+    // (ScopeVar: 1 at the cow's, 2 on the way back -- the cow's cinema mode off again there, and the camera on Twinsen, not on the
+    // Wizard's number in the cow's scene: neither goes with a change of scene, so Enter never recentred the camera on him again.
+    // Twinsen's track labels 160-163 in scene 46 are new.) In chapter 1 -- the night after the
     // spell -- the telescope shows the Esmers' ship coming down over the sea instead (an easter egg: RaceTrackStory.Eggs.Citadel.cs, StormLook).
     public const int ScopeVar = 227;
     private const int CowScene = 47, LighthouseTop = 60, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
@@ -1402,6 +1407,8 @@ void comportement_1()
     if (2 == var_game({ScopeVar}))
     {{
         set_var_game({ScopeVar}, 0);
+        cinema_mode(0);
+        cam_follow(0);
         set_dir_obj(0, NO_MOVE);
         set_track_obj(0, label_{Up});
         set_comportement(comportement_2);
