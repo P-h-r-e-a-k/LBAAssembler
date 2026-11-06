@@ -10,7 +10,7 @@ namespace LBAAssembler.Terrain;
 // docs/LBRA_STORY_SCRIPT.md). It goes on from the storm plot RaceTrackStory.Apply builds -- Zoe's opening, the Wizard, Raph and Mr. Paul at
 // the storm track, Raph's time, the lighthouse, the town circuit -- and adds:
 //   Chapter 1, the storm (CITADEL.ILE; chapter() 1 all chapter long):
-//     - the driving gloves stolen from the washing line (Zoe's opening; Q_THIEF 1). Tim the waiter on the Tavern's old doorstep (the
+//     - the driving gloves stolen from Twinsen's car, left on its seat under the carport (Zoe's opening; Q_THIEF 1). Tim the waiter on the Tavern's old doorstep (the
 //       Tavern is gone from the storm's island file) saw the thief run to the harbour with them and a customer's umbrella (Q_THIEF 2);
 //       Flick the marshal by her plinth says so too. The thief, the game's umbrella thief copied (scene 48's actor 6), waits on the
 //       harbour's quay, below its warehouses (scene 43): "Can't catch me!", and he runs to a sewer hatch on the quay and down (Q_THIEF 3). The hatch is a
@@ -135,12 +135,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Oh, and your driving gloves were on the washing line this morning. Now they're gone! Somebody's been light-fingered again.",
-            "Ah, et tes gants de pilote étaient sur la corde à linge ce matin. Maintenant, ils ont disparu ! Quelqu'un a encore eu les doigts crochus.",
-            "Ach, und deine Fahrhandschuhe hingen heute Morgen auf der Wäscheleine. Jetzt sind sie weg! Da hat wieder jemand lange Finger gemacht.",
-            "Ah, y tus guantes de conducir estaban esta mañana en el tendedero. ¡Ahora han desaparecido! Alguien ha vuelto a tener la mano larga.",
-            "Ah, e i tuoi guanti da guida stamattina erano stesi sul filo. Adesso sono spariti! Qualcuno ha di nuovo le mani lunghe.",
-            "Ah, e as tuas luvas de condução estavam no estendal esta manhã. Agora desapareceram! Alguém voltou a ter mão leve.",
+            "Oh, and you left your driving gloves on the seat of your car, under the carport. This morning they were gone! Somebody's been light-fingered again.",
+            "Ah, et tu avais laissé tes gants de pilote sur le siège de ta voiture, sous l'abri. Ce matin, ils avaient disparu ! Quelqu'un a encore eu les doigts crochus.",
+            "Ach, und du hattest deine Fahrhandschuhe auf dem Sitz deines Wagens liegen lassen, unterm Carport. Heute Morgen waren sie weg! Da hat wieder jemand lange Finger gemacht.",
+            "Ah, y te dejaste los guantes de conducir en el asiento del coche, bajo el cobertizo. ¡Esta mañana habían desaparecido! Alguien ha vuelto a tener la mano larga.",
+            "Ah, e avevi lasciato i guanti da guida sul sedile della macchina, sotto la tettoia. Stamattina erano spariti! Qualcuno ha di nuovo le mani lunghe.",
+            "Ah, e deixaste as tuas luvas de condução no banco do carro, debaixo do telheiro. Esta manhã tinham desaparecido! Alguém voltou a ter mão leve.",
         },
         new[]
         {

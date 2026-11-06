@@ -71,7 +71,8 @@ If he didn't: **Zoe:** "You were shouting in your sleep. Something about a big m
 
 **Zoe:** "Twinsen, I am sick of all this rain! Go and find the Weather Wizard and get him to fix it!"
 
-**Zoe:** "Oh, and your driving gloves were on the washing line this morning. Now they're gone! Somebody's been light-fingered again."
+**Zoe:** "Oh, and you left your driving gloves on the seat of your car, under the carport. This morning they were gone! Somebody's
+been light-fingered again."
 
 Talking to Zoe again: **Zoe:** "Tell me, Twinsen, have you found your gloves yet?" **Twinsen:** "Not yet. But I'll find whoever took
 them."

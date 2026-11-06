@@ -445,8 +445,9 @@ the spell, the Esmers' thanks, the tired line, the bed.
 
 **The quest: the stolen gloves.**
 
-1. Zoe's opening line gains a second line, `T_ZOE_GLOVES`: "...and Twinsen, your driving gloves were on the washing line this
-   morning. Now they're gone!" Q_THIEF = 1. The attic shelf now shows the darts again (the gloves' attic edit is taken out).
+1. Zoe's opening line gains a second line, `T_ZOE_GLOVES`: "Oh, and you left your driving gloves on the seat of your car, under the
+   carport. This morning they were gone!" Q_THIEF = 1. (The user, 2026-11-06: not a washing line -- gloves drying outside in the rain
+   made no sense; left in the car, and the thief took them from there.) The attic shelf now shows the darts again (the gloves' attic edit is taken out).
 2. Tim at the tavern: `T_TIM` "A fellow ran past with gloves in one hand and a customer's umbrella in the other. Towards the
    harbour!" Q_THIEF = 2, arrow to the harbour.
 3. The thief, behind the harbour warehouse, runs off when Twinsen comes within 3 cells (he uses the game's own thief anims), round
