@@ -500,8 +500,12 @@ internal static class RaceTrackService
             else made.Add("The School of Magic and the sewers: the game's own (no converted 1996 demo -- LBA2_DEMO96, or File > Open the 1996 demo)");
             // (Citadel Island's easter eggs' LBA1 rooms -- the sewers' secret room, its doorway cut in the demo's sewers' wall, and the
             // Tavern's cellar -- from LBA1's own scenes, before the story, which puts their props and lines in: Citadel/CitadelLba1Rooms)
+            // (and the museum's displays the story adds, in its own bricks: Citadel/CitadelMuseum)
             if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Citadel.IleFile))
+            {
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelLba1Rooms.Install(gameDirectory, Lba1Folder()));
+                made.AddRange(LBAAssembler.Terrain.Citadel.CitadelMuseum.Install(gameDirectory));
+            }
             if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
             if (islands.Contains(RaceTrackIsland.Palace))

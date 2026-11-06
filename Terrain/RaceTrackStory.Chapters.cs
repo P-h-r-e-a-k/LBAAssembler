@@ -85,16 +85,11 @@ internal static partial class RaceTrackStory
     private static readonly (int X, int Y, int Z) DemoSewerArrival = (20357, 1536, 15140), DemoDeadEnd = (12800, 3072, 2300);
     private const int DemoPainterActor = 7;
     private const int HatchSwitch = 213, LadderSwitch = 214;
-    // the museum's blueprints: by the hall's displays, in a display case of their own -- the game's glass case for Twinsen's tunic (actor
-    // 10 of the scene, entity 62, in the room beyond), copied empty (its body 96, the one it changes to once the tunic is taken: the user,
-    // 2026-11-04, the blueprints in a display case instead of just on the floor), the paper inside it, read through the glass (until then
-    // a sheet on the floor beside the low cases)
-    private static readonly (int X, int Y, int Z) BlueprintFile = (17920, 768, 23296);
-    private const int TunicCase = 10, EmptyCaseBody = 96;
-    // (its body hangs from its place: 1537 tall, the game's stands on a pedestal of bricks; this one on the floor. The paper on its shelf,
-    // the ring the tunic stands on, and put where its picture -- drawn to one side of its place -- is in the middle of the glass)
-    private const int CaseHeight = 1537, CaseShelf = 660;
-    private static readonly (int X, int Z) PaperShift = (-265, 265);
+    // the museum's blueprints: under the glass of a display case of the hall's own (the user, 2026-11-04, "in a display case instead of
+    // just on the floor"; 2026-11-06, the standard cases, not the tunic's: Citadel/CitadelMuseum, the case and the blueprints in it are
+    // the museum's bricks) -- read with Action by it: an unseen helper on the case's top, as the game's own book's case has one (actor 13)
+    // (Y: the case's top, layer 7)
+    private static readonly (int X, int Y, int Z) BlueprintFile = (Citadel.CitadelMuseum.BlueprintCase.X * 512, 1792, Citadel.CitadelMuseum.BlueprintCase.Z * 512 + 768);
     // the island's places (cells): the harbour's quay below the warehouses (the thief, the hatch further along it -- a straight run on its
     // paving: from behind the warehouses he ran into their walls), the scrap on the quay, the Tavern's doorstep (outside scene 42's door
     // zone into scene 3; the Tavern's front either side of it is a search zone, see Givers), the yard by the carport (RaceTrackIsland's CarHome)
@@ -1623,14 +1618,10 @@ void comportement_{HeroWatching}()
         // were -- and with the slate copied onto it (2), Miss Bloop's word on it
         p.Edit(Museum, "the blueprints of the dream's track in a display case: seen, and copied onto the slate; Miss Bloop tells whose they were", model =>
         {
-            var glass = Copy(p.Originals, Museum, TunicCase) ?? throw new NotTheGames("the tunic's case");
-            if (glass.Entity != 62) throw new NotTheGames("the tunic's case");
-            glass.X = BlueprintFile.X; glass.Y = BlueprintFile.Y + CaseHeight; glass.Z = BlueprintFile.Z; glass.Body = EmptyCaseBody;
-            // (Twinsen bumps into it, as into the game's, but it doesn't test what it touches itself: with the paper inside it, the game's
-            // CHECK_OBJ_COL pushed the case off it, a cell aside)
-            glass.Flags &= ~1u;
-            var caseLife = p.Add(model, glass, "void comportement_0()\n{\n}\n");
-            var file = RaceTrackScenes.SpriteProp(BlueprintFile.X + PaperShift.X, BlueprintFile.Y + CaseShelf, BlueprintFile.Z + PaperShift.Z, RaceTrackScenes.PaperSprite, 9);
+            // (a sprite, unseen: a sprite that speaks has the picture held as it is while it speaks -- MESSAGE.CPP InitWhoSpeak, 5bae8ba --
+            // where a helper of a 3D entity is "animated" and the dialogue redraws round it from the bare background)
+            var file = RaceTrackScenes.SpriteProp(BlueprintFile.X, BlueprintFile.Y, BlueprintFile.Z, RaceTrackScenes.PaperSprite, 9);
+            file.Flags |= RaceTrackScenes.InvisibleFlag;
             var life = p.Add(model, file, Talker("4 > chapter()", $@"            if (2 > var_game({QBlueprint}) && 0 < var_game({Slate}))
             {{
                 if (0 == var_game({QBlueprint}))
@@ -1653,7 +1644,6 @@ void comportement_{HeroWatching}()
             }}"));
             return scripts =>
             {
-                caseLife(scripts);
                 life(scripts);
                 var bloop = scripts.GetText(9, ScriptKind.Life);
                 if (!bloop.Contains("message(8);")) throw new NotTheGames("Miss Bloop's");

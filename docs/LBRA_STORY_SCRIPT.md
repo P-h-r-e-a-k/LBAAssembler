@@ -330,7 +330,8 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    - **The museum** (scene 15, by the rampart's lift). Miss Bloop, the curator, in the hall:
      > **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
 
-     In the polar room, a cardboard file sticks out from under the ice-fishing case (Action on it):
+     In the hall, under the window, a display case like the one with the old book (the museum's own bricks, Citadel/CitadelMuseum):
+     under its glass a sheet of blueprints (Action by the case):
      > *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps,
      > and a ramp leaping onto a rocky peak.*
      >
@@ -340,7 +341,7 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      > **Miss Bloop:** "That old thing? A man with glasses and a very big car left it here years ago. He said it was worth a fortune one
      > day. It's never been worth anything to me, but I keep it, because I keep everything."
 
-     Q_BLUEPRINT = 1. The file goes back under the case.
+     Q_BLUEPRINT = 1.
    - **The neighbour** (next door to Twinsen's house). The game's own neighbour, at his table with a sheet of paper and a magnifying
      glass:
      > **The neighbour:** "Hello neighbour."
@@ -530,7 +531,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Zoe:** "A book of race tracks... Twinsen, didn't you see a track in the museum? And our neighbour's been squinting at some
    > drawings all week."
 
-   - **The museum's blueprints** (any time after step 6). The file under the ice-fishing case again (or for the first time, with
+   - **The museum's blueprints** (any time after step 6). The blueprints' display case again (or for the first time, with
      chapter 1's lines first):
      > **Twinsen:** "Now I've got something to copy it onto."
 
@@ -574,7 +575,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 chapter 2 (the door's cube change picks the CITABAU scene by `chapter()`); the Esmers' landing moved from the lighthouse to the morning,
 with their new lines; the Tavern standing in the Citadel 2 build and its inside (scene 3) reachable again; the islanders' lines; Raph and
 Tim at the Tavern. The hidden pages: the museum (scene 15) reachable in both Citadel builds (the rampart's lift pad does it today), the
-blueprint file under the polar case, Miss Bloop's and the neighbour's new lines, the pharmacy open and selling gallic acid, the purse
+blueprints' display case, Miss Bloop's and the neighbour's new lines, the pharmacy open and selling gallic acid, the purse
 added to Mr. Paul's prize, and the two pages' pictures.
 
 ---

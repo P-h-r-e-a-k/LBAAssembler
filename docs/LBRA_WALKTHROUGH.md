@@ -161,7 +161,8 @@ The same ladder brings Twinsen up onto the quay.
 
   Once the door is free: **Miss Bloop:** "Thank you for freeing the door, Twinsen. Wear your tunic at the races: it brings luck."
 
-  In the polar room, a cardboard file sticks out from under the ice-fishing case. Twinsen pulls it out (Action).
+  In the hall, under the window, a display case like the one with the old book beside it: under its glass, a sheet of blueprints
+  (Action by the case).
 
   *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps, and
   a ramp leaping onto a rocky peak.*
@@ -394,8 +395,8 @@ come before it: the dream's and the storm's. Both can still be found on Citadel.
 **Zoe:** "A book of race tracks... Twinsen, didn't you see a track in the museum? And our neighbour's been squinting at some drawings
 all week."
 
-- **The museum's blueprints** (any time after the herald gives Twinsen the slate). Twinsen goes back to the museum, to the file under
-  the ice-fishing case in the polar room. (If he never found it in chapter 1, he finds it now, with the same lines first.)
+- **The museum's blueprints** (any time after the herald gives Twinsen the slate). Twinsen goes back to the museum, to the blueprints'
+  display case under the hall's window. (If he never found it in chapter 1, he finds it now, with the same lines first.)
 
   **Twinsen:** "Now I've got something to copy it onto."
 
@@ -1207,7 +1208,7 @@ The credits roll.
 | 2 | Magic Slate | the Esmer herald, at the start line | the track maps |
 | 2 | Portable Radio | Zoe, from Baldino | Baldino's calls |
 | 2 | Ferry Ticket and 50 kashes | Mr. Paul, the prize and the Cup's purse | the ferry to the Desert; the gallic acid |
-| 2 | Slate page: Polar Island (optional) | the museum's blueprints, under the ice-fishing case | the magic slate |
+| 2 | Slate page: Polar Island (optional) | the museum's blueprints, in the display case under the hall's window | the magic slate |
 | 2 | Gallic acid (optional) | the pharmacy, 50 kashes | the neighbour's design sheet |
 | 2 | Slate page: Citadel 1 (optional) | the neighbour, once the gallic acid has brought out his sheet | the magic slate |
 | 3 | Three exam pages | beside the Desert road | the Dean |
