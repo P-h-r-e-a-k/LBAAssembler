@@ -93,6 +93,11 @@
  *                                storm track's start line). (2026-11-05) Without <var> set it waits a moment after its line, to be talked
  *                                to, and drives on lapping (the variable put back below the value); and lapping when Twinsen drives with
  *                                <var> set, it laps on to its park and stands there
+ *     parade_walker=<text> <entity>...
+ *                                (2026-11-06) lapping, the car pulls up for one of those entities walking on the road ahead of it (the
+ *                                lanes= room, else near its line), tyres screeching, its driver yells <text> at him -- a text box for
+ *                                Twinsen on foot within RACE_WALKER_HEAR -- and it drives on; not again for RACE_WALKER_REST_MS (Raph and
+ *                                the townsman who roams Citadel's storm track)
  *     parade=<n> <var> <value>   (2026-10-06) opponent n -- the time to beat's -- laps on its own at its skill in the scenes' copies of a
  *                                car (parade_actor=<scene> <actor>, each scene's) while game variable <var> is below <value>, then its
  *                                car stands parked (parade_park=<scene> <x> <y> <z> <turn>) or out of sight (ParadeStep): Raph on
@@ -626,6 +631,18 @@ static S32 s_pullAt = 0, s_pullX = 0, s_pullY = 0, s_pullZ = 0, s_pullBeta = 0;
 #define RACE_PULL_RESUME_MS 3500           // after its driver's line, this long stopped (to be talked to) before it drives on lapping
 #define RACE_PULL_AWAY (5 * 512.0)         // ... back onto its own line over this much of it
 #define RACE_PULL_SKID_USER 0xFD           // the squeal's PlaySample user handle: RACE_SOUND_USER + this
+// parade_walker=<text> <entity>... (2026-11-06): lapping, the car pulls up for one of those walking across its line ahead of it -- the
+// townsman who crosses Citadel's storm track by its start line -- tyres screeching, its driver yells <text> at him and it drives on (the
+// user: "Raph stops and yells at him the same way he yells at Twinsen, then drives on"). The yell is a text box only with Twinsen on
+// foot near enough to hear it; further off the car stops and drives on all the same. s_walker: the one it is stopping for (-1: none)
+#define RACE_MAX_WALKERS 8
+static int s_walkerEnt[RACE_MAX_WALKERS], s_nbWalkers = 0, s_walkerText = -1, s_walker = -1, s_walkerScene = -1;
+static S32 s_walkerRest = 0;
+#define RACE_WALKER_NEAR RACE_PULL_NEAR    // without lanes= to tell the road by: a walker this near its line, across, is on the track
+#define RACE_WALKER_HEAR (12 * 512.0)      // Twinsen on foot this near the car hears the yell
+#define RACE_WALKER_WAIT_MS 2500           // stopped this long after the yell, then on
+#define RACE_WALKER_REST_MS 45000          // and no other stop for a walker for this long after it (the townsman roams along the track:
+                                           // every lap, it was a text box every half minute by the start line)
 static int s_beatSet[2 * RACE_MAX_SETS], s_nbBeatSet = 0;
 static int s_raceLaps = 0;                 // the race's laps (0: laps go on being counted, no finish)
 // A sprint's time trial run again from the start (trial_runs=, the race game's laps page: 1, 3, 5, 10, 0 endless -- 2026-10-25, the user: "In time
@@ -3395,6 +3412,21 @@ static void LoadLanes(const char *path) {
     Log_Info("[racemod] lanes: %d points of road the opponents pass in", count);
 }
 
+// Whether a place (island units) is on the road, by the lanes' room: across the road from its nearest middle point no further than a car's
+// middle may go, and half a car more (its edge). -1: no lanes to tell by. (parade_walker=: someone on the track, not on its verge)
+static int LanesOnRoad(double x, double z) {
+    if (!s_nbLanes) return -1;
+    int at = 0;
+    double bd = 1e30;
+    for (int i = 0; i < s_nbLanes; i++) {
+        const double d = (s_lanes[i].X - x) * (s_lanes[i].X - x) + (s_lanes[i].Z - z) * (s_lanes[i].Z - z);
+        if (d < bd) { bd = d; at = i; }
+    }
+    const T_RACE_LANE *l = &s_lanes[at];
+    const double across = (x - l->X) * l->Nx + (z - l->Z) * l->Nz;
+    return across >= l->Lo - 640 && across <= l->Hi + 640;
+}
+
 static void LoadRaised(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) { Log_Info("[racemod] raised road: %s could not be read", path); return; }
@@ -4586,6 +4618,16 @@ static void Load(const char *path, int carOnly = 0) {
             s_paradeTalker = s_paradeGoVar = -1;
             if (sscanf(v, "%d %d %d", &s_paradeStopText, &s_paradeTalker, &s_paradeGoVar) < 1) s_paradeStopText = -1;
         }
+        else if (!strcmp(key, "parade_walker")) {
+            s_nbWalkers = 0;
+            int used = 0, entity;
+            const char *p = v;
+            if (sscanf(p, "%d%n", &s_walkerText, &used) == 1) {
+                p += used;
+                while (s_nbWalkers < RACE_MAX_WALKERS && sscanf(p, "%d%n", &entity, &used) == 1) { s_walkerEnt[s_nbWalkers++] = entity; p += used; }
+            }
+            if (!s_nbWalkers) s_walkerText = -1;
+        }
         else if (!strcmp(key, "parade_actor")) {
             if (s_nbParade < RACE_MAX_PARADE && sscanf(v, "%d %d", &s_paradeScene[s_nbParade], &s_paradeActor[s_nbParade]) == 2) s_nbParade++;
         }
@@ -5562,6 +5604,22 @@ void RaceMod_Story(void) {
         ListVarGame[FLAG_CLOVER] = NbCloverBox;
         Log_Info("[racemod] clovers_fill: Twinsen's clovers filled to his %d boxes", (int)NbCloverBox);
     }
+    // (the parade car pulled up beside a walker on the track: its driver's yell at him -- parade_walker=; said from the car, a text box
+    // only for Twinsen on foot near enough to hear it)
+    if (s_pullSay && NewCube == -1 && s_walker >= 0) {
+        s_pullSay = 0;
+        const T_OBJET *car = s_paradeActorNow > 0 && s_paradeActorNow < NbObjets ? &ListObjet[s_paradeActorNow] : NULL, *hero = &ListObjet[NUM_PERSO];
+        const int heard = car && Comportement != C_BUGGY
+                          && (double)(car->Obj.X - hero->Obj.X) * (car->Obj.X - hero->Obj.X) + (double)(car->Obj.Z - hero->Obj.Z) * (car->Obj.Z - hero->Obj.Z) < RACE_WALKER_HEAR * RACE_WALKER_HEAR;
+        if (heard) {
+            NumObjDial = (U8)s_paradeActorNow;
+            Log_Info("[racemod] parade: the driver yells text %d at the walker (actor %d)", s_walkerText, s_walker);
+            Dial(s_walkerText, TRUE);
+            s_wantFlip = 1;
+        } else
+            Log_Info("[racemod] parade: the driver yells at the walker (actor %d), out of Twinsen's hearing", s_walker);
+        s_pullAt = TimerRefHR;
+    }
     // (the parade car pulled up beside Twinsen: its driver's line -- parade_stop=; said from the car)
     if (s_pullSay && NewCube == -1) {
         s_pullSay = 0;
@@ -6457,12 +6515,13 @@ static void ParadeScreech(void);
 // this scene's copy of his car while the variable is below the value, then parked (parade_park=) or out of sight.
 static double Pull(double speed);
 static void ParadeStep(S32 now, S32 dt) {
-    (void)now;
     s_paradeActorNow = -1;
     if (s_paradeOpp < 0 || s_paradeVar < 0 || s_paradeVar > 255) return;
     const T_RACE_OPPONENT *o = &s_opp[s_paradeOpp];
     if (!o->Count || o->Length <= 0) return;
     int wanted = ListVarGame[s_paradeVar] < s_paradeValue;
+    // (stopping for a walker when the scene changed -- Twinsen gone, the walker with it: on, lapping)
+    if (s_walker >= 0 && s_walkerScene != (int)NumCube) { s_walker = -1; s_pull = 0; s_pullSay = 0; s_walkerRest = now + RACE_WALKER_REST_MS; }
     double x, z, y, v, dx, dz;
     int here = 0;
     for (int i = 0; i < s_nbParade; i++) if (s_paradeScene[i] == (S32)NumCube && s_paradeActor[i] > 0 && s_paradeActor[i] < NbObjets) here = 1;
@@ -6481,7 +6540,8 @@ static void ParadeStep(S32 now, S32 dt) {
     // (parade_stop=: the variable set with Twinsen on foot where the car parks -- he laps on until he comes up to him; anywhere else, or
     // with no copy of his car there, he is parked. Pulling away from him, the variable is below the value again, and it stays that step
     // until it is back on its line)
-    if (wanted) { if (s_pull != 6) s_pull = 0; }
+    // (stopping for a walker, lapping all the while, it keeps to that stop: parade_walker=)
+    if (wanted) { if (s_pull != 6 && s_walker < 0) s_pull = 0; }
     else if (s_paradeStopText >= 0 && s_pull == 0) {
         s_pull = here && Comportement != C_BUGGY ? 1 : 5;
         s_pullQuiet = 0;
@@ -6551,6 +6611,53 @@ static void ParadeStep(S32 now, S32 dt) {
                 Log_Info("[racemod] parade: the car brakes %.1f cells before Twinsen, at %.0f units a second", ahead / 512, s_paradeSpeed);
             }
         }
+        // (parade_walker=: lapping in a scene with a copy of the car, one of those walking across its line ahead -- on it, at its height,
+        // within its braking -- and it brakes to stop beside him, as for Twinsen, to yell at him)
+        if (s_pull == 0 && wanted && s_walkerText >= 0 && now >= s_walkerRest && s_paradeSpeed > 0 && CubeMode == CUBE_EXTERIEUR && NewCube == -1) {
+            int carHere = 0;
+            for (int i = 0; i < s_nbParade; i++) if (s_paradeScene[i] == (S32)NumCube && s_paradeActor[i] > 0 && s_paradeActor[i] < NbObjets) carHere = 1;
+            int who = -1, whoAt = 0;
+            double whoAhead = 1e30;
+            for (int i = 1; carHere && i < NbObjets; i++) {
+                const T_OBJET *w = &ListObjet[i];
+                int listed = 0;
+                for (int k = 0; k < s_nbWalkers; k++) if (w->IndexFile3D == s_walkerEnt[k]) listed = 1;
+                if (!listed || (w->WorkFlags & OBJ_DEAD) || (w->Flags & INVISIBLE) || w->Obj.Body.Num < 0 || w->Obj.Y <= RACE_OUT_OF_SIGHT_Y) continue;
+                const double wx = w->Obj.X + CurrentCubeX * 32768.0, wz = w->Obj.Z + CurrentCubeY * 32768.0;
+                int at = 0;
+                double bd = 1e30;
+                for (int j = 0; j < o->Count; j++) {
+                    const double d = (o->X[j] - wx) * (o->X[j] - wx) + (o->Z[j] - wz) * (o->Z[j] - wz);
+                    if (d < bd) { bd = d; at = j; }
+                }
+                double ahead = o->Cum[at] - s_paradeS;
+                if (ahead < 0) ahead += o->Length;
+                double px, pz, py, pv, fx, fz;
+                PathAt(o, o->Cum[at], &px, &pz, &py, &pv, &fx, &fz);
+                const int road = LanesOnRoad(wx, wz);
+                if ((road < 0 ? bd < RACE_WALKER_NEAR * RACE_WALKER_NEAR : road) && fabs(py - w->Obj.Y) < RACE_PULL_LEVEL && ahead < RACE_PULL_BRAKE && ahead > 256 && ahead < whoAhead) {
+                    who = i; whoAt = at; whoAhead = ahead;
+                }
+            }
+            if (who >= 0) {
+                const T_OBJET *w = &ListObjet[who];
+                const double wx = w->Obj.X + CurrentCubeX * 32768.0, wz = w->Obj.Z + CurrentCubeY * 32768.0;
+                double px, pz, py, pv, fx, fz;
+                PathAt(o, o->Cum[whoAt], &px, &pz, &py, &pv, &fx, &fz);
+                const double fl = sqrt(fx * fx + fz * fz) > 0 ? sqrt(fx * fx + fz * fz) : 1;
+                const double across = ((wx - px) * fz - (wz - pz) * fx) / fl;
+                s_pullS = o->Cum[whoAt];
+                s_pullLat = fabs(across) >= RACE_PULL_SIDE ? 0 : across + (across >= 0 ? -RACE_PULL_SIDE : RACE_PULL_SIDE);
+                s_pullFrom = whoAhead;
+                s_pullAcc = s_paradeSpeed * s_paradeSpeed / (2 * whoAhead);
+                s_pull = 2;
+                s_pullQuiet = 0;
+                s_walker = who;
+                s_walkerScene = (int)NumCube;
+                ParadeScreech();
+                Log_Info("[racemod] parade: actor %d (entity %d) walks on the track at (%d, %d) -- the car brakes %.1f cells before him", who, (int)w->IndexFile3D, (int)w->Obj.X, (int)w->Obj.Z, whoAhead / 512);
+            }
+        }
         if (s_pull == 2) {
             double ahead = s_pullS - s_paradeS;
             if (ahead < 0) ahead += o->Length;
@@ -6558,10 +6665,12 @@ static void ParadeStep(S32 now, S32 dt) {
             s_paradeSpeed -= s_pullAcc * dt / 1000.0;
             if (ahead <= 16 || s_paradeSpeed <= 0) {
                 s_paradeSpeed = 0; s_paradeS = s_pullS; s_pull = 3; s_pullSay = !s_pullQuiet; s_pullAt = now;
-                Log_Info("[racemod] parade: the car pulls up %s", s_pullQuiet ? "by its park" : "beside Twinsen");
+                Log_Info("[racemod] parade: the car pulls up %s", s_pullQuiet ? "by its park" : s_walker >= 0 ? "beside the walker" : "beside Twinsen");
             }
             target = s_paradeSpeed;
         }
+        // (stopped for a walker, lapping all the while: standing, not gathering speed for when it drives on)
+        if (s_pull == 3) { s_paradeSpeed = 0; target = 0; }
         if (s_paradeSpeed < target) {
             s_paradeSpeed += s_car.Accel * Pull(s_paradeSpeed) * o->Top / 100.0 * o->Pace / 100.0 * dt / 1000.0;
             if (s_paradeSpeed > target) s_paradeSpeed = target;
@@ -6607,7 +6716,21 @@ static void ParadeStep(S32 now, S32 dt) {
             // variable given, a moment after its driver's line; stopped quietly by its park, on into it at once)
             const int goVar = s_paradeGoVar >= 0 && s_paradeGoVar < MAX_VARS_GAME;
             const int go = goVar ? Comportement == C_BUGGY && gloves : now - s_pullAt >= RACE_PULL_WAIT_MS;
-            if (!s_pullSay && (go || s_pullQuiet)) { s_pull = 4; s_pullAt = now; Log_Info("[racemod] parade: the car rolls on to its park"); }
+            if (s_walker >= 0) {
+                // (stopped for a walker: a moment after the yell it drives on, back onto its line, lapping -- the variable left as it is --
+                // and the one who talks for it back where it parks, as when it drives on from Twinsen)
+                if (!s_pullSay && now - s_pullAt >= RACE_WALKER_WAIT_MS) {
+                    s_pull = 6;
+                    s_pullAway = s_paradeS;
+                    s_walker = -1;
+                    s_walkerRest = now + RACE_WALKER_REST_MS;
+                    if (s_paradeTalker >= 0 && s_paradeParkScene == (S32)NumCube)
+                        for (int i = 1; i < NbObjets; i++)
+                            if (ListObjet[i].IndexFile3D == s_paradeTalker && i != index) { ListObjet[i].Obj.X = s_paradeParkX; ListObjet[i].Obj.Y = s_paradeParkY; ListObjet[i].Obj.Z = s_paradeParkZ; }
+                    Log_Info("[racemod] parade: the car drives on past the walker, lapping");
+                }
+            }
+            else if (!s_pullSay && (go || s_pullQuiet)) { s_pull = 4; s_pullAt = now; Log_Info("[racemod] parade: the car rolls on to its park"); }
             else if (!s_pullSay && goVar && !gloves && now - s_pullAt >= RACE_PULL_RESUME_MS) {
                 // (and without his gloves -- nothing to race it for yet -- it drives on after a moment, lapping again: the user, 2026-11-04,
                 // "Raph sometimes stops at random to yell at Twinsen to get off the track; afterwards he should, in most instances, resume
@@ -19738,6 +19861,7 @@ static void ResetTrack(void) {
     s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_cloversFill = -1; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0; s_pullQuiet = 0; s_pullAway = 0;
+    s_nbWalkers = 0; s_walkerText = s_walker = -1; s_walkerRest = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_nbFootRooms = 0; s_footRoom = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;

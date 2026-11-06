@@ -314,7 +314,10 @@ internal static class RaceTrackService
     // (RaphTime: Raph's line with the time to beat in it, RACEMOD.CPP beat_text=; RaphPark: where his car stands once he has stopped lapping
     // the storm track, [scene, x, y, z, turn] -- RaceTrackStory)
     // (EggText: an island's easter egg's line for the race file -- the Island of the Francos' Tortoise and the Hare, RaceTrackStory.EggInfo)
-    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null, int RaphYell = -1, int RaphEntity = -1, int EggText = -1);
+    // (WalkerYell, Walkers: Raph's yell at whoever of those entities walks across the storm track ahead of him, RACEMOD.CPP parade_walker=
+    // -- RaceTrackStory.RaphWalkerLine)
+    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null, int RaphYell = -1, int RaphEntity = -1, int EggText = -1,
+        int WalkerYell = -1, int[]? Walkers = null);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the
@@ -907,7 +910,10 @@ internal static class RaceTrackService
             // (the island's two postcards, chapters 1 and 2 -- after the story's scenes are saved: RaceTrackStory.Eggs.Postcards.cs)
             story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, report, scenes, 1));
             story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, town.Report, townScenes, 2));
-            return story;
+            // (Raph's yell at the townsman on the storm track: its text last of all the island's, so none before it moves)
+            var walker = RaceTrackStory.RaphWalkerLine(gameDirectory, story.Info, scenes);
+            story.Log.AddRange(walker.Log);
+            return (story.Log, walker.Info);
         }
         // (each island's people retold for the story, after its own story: IslandRetell -- once a build, whichever of an island's tracks
         // comes first)

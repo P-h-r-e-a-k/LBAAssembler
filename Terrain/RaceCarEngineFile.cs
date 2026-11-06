@@ -319,6 +319,8 @@ internal static class RaceCarEngineFile
                 // (and stays there, beside him on the road, Raph to be talked to at his car, until Twinsen drives with his gloves on: then to
                 // his park)
                 if (st.RaphYell >= 0) text.Append($"parade_stop={st.RaphYell} {st.RaphEntity} {RaceTrackStory.GlovesSlot}\n");
+                // (and lapping, he pulls up for the townsman who walks across the track ahead of him, yells at him, and drives on)
+                if (st.WalkerYell >= 0 && st.Walkers is { Length: > 0 } walkers) text.Append($"parade_walker={st.WalkerYell} {string.Join(' ', walkers)}\n");
             }
         }
         if (town)

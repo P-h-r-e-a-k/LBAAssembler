@@ -93,6 +93,9 @@ his car. When Twinsen steps onto the start line, Raph screeches to a stop beside
 
 **Raph:** "Hey! Get off the track, Twinsen! Are you trying to get yourself run over?!"
 
+(A townsman wanders along the track too. When Raph comes up behind him, he screeches to a stop and yells at him -- **Raph:** "Hey, you!
+Get off the track! Are you trying to get yourself run over?!" -- then drives on.)
+
 **Raph:** "I'm having too much fun, it can wait. I'll tell you what: if you can beat my time on the track, then I'll come with you to
 the lighthouse. Mind you, you'll need a car and some driving gloves to take part."
 

@@ -295,6 +295,11 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 3. **The storm track.** Raph laps the track in his car until Twinsen stands on the start line. Then he screeches up (built):
    > **Raph:** "Hey! Get off the track, Twinsen! Are you trying to get yourself run over?!"
 
+   Lapping, he does the same for the townsman who roams the track (scene 42's actor 4, entity 101: the race file's parade_walker=,
+   RACEMOD.CPP ParadeStep -- on the road by the lanes' room, ahead within his braking; a text box for Twinsen on foot within 12 cells;
+   not again for 45 s), then drives on (built):
+   > **Raph:** "Hey, you! Get off the track! Are you trying to get yourself run over?!"
+
    Then Raph (built):
    > **Raph:** "I'm having too much fun, it can wait. I'll tell you what: if you can beat my time on the track, then I'll come with you
    > to the lighthouse. Mind you, you'll need a car and some driving gloves to take part."

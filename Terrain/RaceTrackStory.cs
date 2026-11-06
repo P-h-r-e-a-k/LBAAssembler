@@ -229,6 +229,19 @@ internal static partial class RaceTrackStory
             "Ei! Sai da pista, Twinsen! Queres ser atropelado?!",
         },
     };
+    // Raph's yell at the townsman who walks across the storm track while he laps (the race file's parade_walker=, RaphWalkerLine)
+    private static readonly string[] WalkerYellLine =
+    {
+        "Hey, you! Get off the track! Are you trying to get yourself run over?!",
+        "Hé, toi ! Sors de la piste ! Tu veux te faire écraser ?!",
+        "He, du da! Runter von der Strecke! Willst du dich überfahren lassen?!",
+        "¡Eh, tú! ¡Sal de la pista! ¿Quieres que te atropellen?!",
+        "Ehi, tu! Esci dalla pista! Vuoi farti investire?!",
+        "Ei, tu! Sai da pista! Queres ser atropelado?!",
+    };
+    // (the townsman who walks across the storm track by its start line: the game's own, scene 42's actor 4, a Citadel islander)
+    public const int TownsmanEntity = 101;
+
     // the holomap labels: the storm track's start line, the town circuit's
     private static readonly string[][] Labels =
     {
@@ -400,6 +413,38 @@ internal static partial class RaceTrackStory
     // The first id free in a file of TEXT.HQR, in every language (one past the highest any of them has) ...
     private static int NextId(HqrArchive text, int languages, int file) =>
         Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+
+    // Raph's yell at the townsman on the storm track (the user, 2026-11-06: "This guy still walks on the track whilst Raph is driving" --
+    // their choice: Raph stops and yells at him as he yells at Twinsen, then drives on). Its text goes in last of all Citadel Island's
+    // (RaceTrackService.Story: after the island's retelling and its postcards), so no text before it moves; the story's info gets its id
+    // and the townsman's entity for the race file's parade_walker= (RACEMOD.CPP, ParadeStep). The info as it was if the townsman isn't
+    // in the storm track's start scene.
+    public static (List<string> Log, RaceTrackService.StoryInfo? Info) RaphWalkerLine(string gameDirectory, RaceTrackService.StoryInfo? info, RaceTrackScenes.Result scenes)
+    {
+        var log = new List<string>();
+        if (info is null || info.RaphYell < 0) return (log, info);
+        var store = new SceneStore(SceneGame.Lba2, gameDirectory);
+        if (scenes.StartScene < 0 || !store.SceneExists(scenes.StartScene) || store.Load(scenes.StartScene).Actors.All(a => a.Entity != TownsmanEntity))
+        {
+            log.Add($"Raph's yell at the townsman on the track left out: no townsman (entity {TownsmanEntity}) in the storm track's start scene");
+            return (log, info);
+        }
+        var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
+        var text = HqrArchive.Open(textPath);
+        var languages = Lba2TextBank.Languages(textPath);
+        var id = NextId(text, languages, CitadelTexts);
+        var hqr = File.ReadAllBytes(textPath);
+        for (var lang = 0; lang < languages; lang++)
+        {
+            var bank = Lba2TextBank.Load(text, lang, CitadelTexts);
+            var words = lang < WalkerYellLine.Length ? lang : 0;
+            bank.Texts.Add(new Lba2TextBank.Text { Id = id, Attribute = bank.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute, Bytes = Dos.GetBytes(WalkerYellLine[words]) });
+            hqr = bank.WriteInto(hqr);
+        }
+        File.WriteAllBytes(textPath, hqr);
+        log.Add($"Raph's yell at the townsman (entity {TownsmanEntity}) who walks across the storm track while he laps: text {id} of Citadel Island's");
+        return (log, info with { WalkerYell = id, Walkers = new[] { TownsmanEntity } });
+    }
 
     // ... and texts added to a language's bank from it on: each line's words in that language (`words`, its column of `lines`)
     private static void AddTexts(Lba2TextBank bank, int first, byte attribute, string[][] lines, int words)
