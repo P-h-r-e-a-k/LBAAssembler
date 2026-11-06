@@ -37,6 +37,12 @@ internal static class CitadelLighthouse
         if (top.Decors.Any(d => d.X == ScopeX && d.Y == ScopeY && d.Z == ScopeZ)) return;
         var copy = scope.Clone();
         copy.MoveTo(ScopeX, ScopeY, ScopeZ);
+        // (turned half round from the park's: as copied (turn 1024) it faced the wrong way -- the user, 2026-11-05: "we should turn it
+        // around 180 degrees". Its box turned with it: mirrored through its origin, x and z. Twinsen's place to use it, east of it facing
+        // west (track point 5), is beside its post either way: the tube runs north-south, z -717..410 of the post now, 410..-717 before.)
+        copy.Beta = (copy.Beta & ~0xFFFF) | (((copy.Beta & 0xFFFF) + 2048) & 4095);
+        (copy.XMin, copy.XMax) = (2 * copy.X - copy.XMax, 2 * copy.X - copy.XMin);
+        (copy.ZMin, copy.ZMax) = (2 * copy.Z - copy.ZMax, 2 * copy.Z - copy.ZMin);
         top.Decors.Add(copy);
         report.Notes.Add($"the island's telescope (body {scope.Body & 0xFFFF}) on the lighthouse's balcony, cube (7,10) at ({ScopeX}, {ScopeY}, {ScopeZ})");
     }
