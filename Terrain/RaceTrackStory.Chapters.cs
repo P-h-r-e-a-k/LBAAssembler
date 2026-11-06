@@ -806,6 +806,8 @@ void comportement_1()
         StormPeople(p);
         // (the Tralu's cave as the regulars' secret tavern in the storm -- Citadel/RaceTrackStory.TraluTavern.cs)
         TraluTavern(p);
+        // (the cave's mouth: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
+        TraluCaveMouth(p);
         Lighthouse(p);
         LighthouseClimb(p);
         HiddenPages(p);
