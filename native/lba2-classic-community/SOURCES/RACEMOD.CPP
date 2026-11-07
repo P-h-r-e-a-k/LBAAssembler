@@ -5115,6 +5115,7 @@ static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
 static void PackLapLog(int lap);
 static void ChaseStart(void);
+static void ForgetPowerUps(const char *why);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car is put on the grid. Into the cube beside, by no more than RACE_CUBE_STEP --
     // driven over its edge -- where it came from in the new cube's units: a checkpoint runs on over a cube's edge where the road does,
@@ -5338,7 +5339,7 @@ void RaceMod_Lap(S32 x, S32 z) {
         }
     }
     // (no grid, no GO: the race's time from the start line's first crossing)
-    if (s_laps == 0 && !s_goAt && !s_nbSpots && s_phase == PHASE_RACE) { s_goAt = now; StartItem(now); }
+    if (s_laps == 0 && !s_goAt && !s_nbSpots && s_phase == PHASE_RACE) { s_goAt = now; ForgetPowerUps("the race starts"); StartItem(now); }
     s_laps++;
     s_lapStart = now;
     s_halfway = 0;
@@ -11398,6 +11399,14 @@ static void Fakes(S32 now, int driving) {
 // opponents' qualifying times are their planned laps, none of it in them (the user, 2026-10-12: "Remove power ups while a car is driving
 // a qualifying lap"); the race has them all.
 static int Qualifying(void) { return s_phase == PHASE_QUALIFYING; }
+// The mushrooms out: from the grid (its count-down) to the finish -- with no grid, from the start line's first crossing; not before, nor
+// on the qualifying lap. Outside a race Twinsen drove round the track picking one up and carried it into the next race (the user,
+// 2026-11-06, on Citadel: "spawn them only while a race is on"). Every island's tracks, the race game's too.
+static int MushroomsOut(void) {
+    if (s_place) return 0;
+    if (s_nbSpots) return s_phase == PHASE_GRID || (s_phase == PHASE_RACE && s_goAt);
+    return s_goAt || s_laps > 0;
+}
 
 // The item waiting in the second box moved into the item box, once that is empty (its item used, or its own golden Gazogem's
 // time up): ready for the next press, the second box gone again.
@@ -11489,7 +11498,8 @@ static void JetHumFrame(S32 now) {
 
 static void PowerUps(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const int qualifying = Qualifying();
+    // (out of sight while no race is on, the qualifying lap's too -- MushroomsOut)
+    const int qualifying = Qualifying() || !MushroomsOut();
     RaceSoundsRead();
     for (int i = 0; i < s_nbMush; i++) {
         T_RACE_MUSHROOM *m = &s_mush[i];
@@ -17707,6 +17717,9 @@ void RaceMod_Frame(void) {
         s_phase = PHASE_RACE;
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].LapStart = now;
         Log_Info("[racemod] go");
+        // (whatever Twinsen had in his item box before the race -- taken in an earlier one, or a race lost and run again -- gone: each
+        // race starts with an empty box, and the car update's start_item=)
+        ForgetPowerUps("the race starts");
         StartItem(now);
     }
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses (a time trial: its cans of Gazogem alone)
@@ -18212,7 +18225,7 @@ static void DrawFarItems(void) {
     if (CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
     const T_RACE_DRAW kept = DrawKept();
     int drawn = 0;
-    if (s_powerups && !NoItems() && !Qualifying()) {
+    if (s_powerups && !NoItems() && !Qualifying() && MushroomsOut()) {
         if (s_mushBody < 0)
             for (int i = 0; i < s_nbMush && s_mushBody < 0; i++) {
                 const int a = MushroomActor(&s_mush[i]);
