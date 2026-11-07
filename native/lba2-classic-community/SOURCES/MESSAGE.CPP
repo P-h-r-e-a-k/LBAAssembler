@@ -27,6 +27,9 @@
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/STRING.H>
 #include <SYSTEM/TIMER.H>
+#include <SYSTEM/HQFILE.H>
+#include <SYSTEM/N_MALLOC.H>
+#include <SYSTEM/LZ.H>
 
 #include <dirent.h>
 #include <stdint.h>
@@ -1241,6 +1244,30 @@ static S32 TextEntry(S32 file) {
     return (NB_LANGUAGES * MAX_TEXT_LANG * 2) + (((file - MAX_TEXT_LANG) * NB_LANGUAGES + Language) * 2);
 }
 /*-------------------------------------------------------------------------*/
+/* A text entry loaded into its buffer, the buffer made bigger first if the entry wouldn't fit. BufText was a fixed BIG_FILE_DIA (40000
+   bytes and the LZ's RECOVER_AREA, retail's island texts being at most 34 KB), filled by Load_HQR with no check: the race story's
+   Citadel texts grew past it (44.7 KB on 2026-11-06, 46.9 KB the day after, in five or six languages), and every load wrote the rest
+   over whatever followed it on the heap -- crashes later and elsewhere (freeing a race track, a scene change, a screenshot), as often
+   as not, by where the heap's blocks fell (the playthrough's chain, 2026-11-07). */
+static U32 s_bufTextSize = BIG_FILE_DIA, s_bufOrderSize = BIG_FILE_ORD;
+static U32 LoadDialEntry(void **buf, U32 *capacity, S32 index, const char *what) {
+    const U32 size = HQF_Init(FileText, index);
+    if (!size)
+        return 0;
+    if (size + RECOVER_AREA > *capacity) {
+        void *bigger = Malloc(size + RECOVER_AREA);
+        if (!bigger) {
+            HQF_Close();
+            TheEnd(NOT_ENOUGH_MEM, what);
+        }
+        Log_Info("[dial] %s made bigger for text entry %d: %u bytes (was %u)", what, (int)index, (unsigned)(size + RECOVER_AREA), (unsigned)*capacity);
+        Free(*buf);
+        *buf = bigger;
+        *capacity = size + RECOVER_AREA;
+    }
+    return HQF_LoadClose(*buf);
+}
+
 void InitDial(S32 file) {
     NormalWinDial(); //     By Security
 
@@ -1249,9 +1276,9 @@ void InitDial(S32 file) {
     LastFileInit = file;
 
     GetResPath(FileText, ADELINE_MAX_PATH, TEXT_HQR_NAME);
-    MaxText = (U16)(Load_HQR(FileText, BufOrder, TextEntry(file) + 0) / 2);
+    MaxText = (U16)(LoadDialEntry((void **)&BufOrder, &s_bufOrderSize, TextEntry(file) + 0, "BufOrder") / 2);
 
-    Load_HQR(FileText, BufText, TextEntry(file) + 1);
+    LoadDialEntry((void **)&BufText, &s_bufTextSize, TextEntry(file) + 1, "BufText");
 
 #ifdef CDROM
     if (FlagSpeak)
