@@ -836,7 +836,10 @@ added to Mr. Paul's prize, and the two pages' pictures.
    > nose, so you won't flip on the loops. And don't touch HAL, he hates me."
 
    Car update: the Emerald Moon's best setup.
-3. **The base. HAL** (cracked):
+3. **The base. HAL** (cracked): (the way down to the base and back up, the user, 2026-11-06 -- "jumping off the raised track on foot can
+   strand Twinsen": RaceTrackIsland.Ladders, RaceTrackBuilder.Ladders -- a ladder up the road's side in every stretch of walkable ground a
+   jump off the road lands in, where the climb is least, its decor a solid box from the ground to the road's top and a type 6 zone in
+   front of it; 16 on the moon, from 810 to 7,291 high. Stretches no ladder fits: see the build log's "ladders:" line.)
    > **HAL:** "HAL!! ZX81!! HAL!!" *(the game's own 546/545)*
    >
    > **Zoe:** "I think that means no."

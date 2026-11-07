@@ -614,7 +614,8 @@ A new page on the slate: the Emerald Moon.
 **Baldino** (radio): "Twinsen? Baldino, from the pits. Low gravity up here: I've softened your springs and put weight in the nose, so
 you won't flip on the loops. And don't touch HAL, he hates me."
 
-**3. HAL.** In the moon base, beside Baldino's old cell, stands HAL, its screen cracked.
+**3. HAL.** In the moon base, beside Baldino's old cell, stands HAL, its screen cracked. (The road is raised high over the moon:
+Twinsen jumps down off it, and back up by the ladders on its sides -- one in each stretch of ground below it a jump lands in.)
 
 **HAL:** "HAL!! ZX81!! HAL!!"
 

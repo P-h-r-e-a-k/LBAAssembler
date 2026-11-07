@@ -699,6 +699,9 @@ internal sealed class RaceTrackReport
     // take Twinsen down to -- a door zone over each (RaceTrackScenes)
     // ... and where it brings him back up, on the road beside it (island cells)
     public List<(double X, double Z, double Y, int Scene, int ToX, int ToY, int ToZ, double BackX, double BackZ, int Pad)> DeckLifts { get; } = new();
+    // The ladders up to the raised road (RaceTrackIsland.Ladders): each one's climbing zone, world units -- a type 6 zone in the scene of
+    // its cube (RaceTrackScenes) -- and where it stands: its foot (island cells) and the way out from the road it faces
+    public List<(int X0, int Z0, int X1, int Z1, int Y0, int Y1, double FootX, double FootZ, double OutX, double OutZ)> Ladders { get; } = new();
     // The island's doors into inside scenes (RaceTrackOptions.DoorBoxes) whose every piece of decor the road took away -- a lift under the
     // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
     // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
@@ -1366,6 +1369,7 @@ internal static class RaceTrackBuilder
         LiftDecors(island, plan, report);
         FenceLinks(island, plan, options, report);
         PlaceStructures(island, main, crossings, startIndex, options, report, planned);
+        if (options.Island.Ladders) Ladders(island, options, report);
         // (Halloween: its decor about the road; its spooks, whose bodies go into BODY.HQR when the build finishes; its pumpkins)
         if (plan.Halloween is { } halloween)
         {
@@ -4157,6 +4161,157 @@ internal static class RaceTrackBuilder
     public const int LiftZoneHalf = 560;
     // RaceTrackIsland.OwnRimsAt: the ground put back this far past the road's curbs (cells)
     private const double OwnRimClear = 0.75;
+
+    // RaceTrackIsland.Ladders (the Emerald Moon, 2026-11-07; the user: "Add a few ladders around the track ... so he can climb back up from
+    // every pocket he can fall into"). The ground under and beside the raised road is cut into stretches Twinsen can walk about in (cells
+    // whose triangles aren't walls, Col, or the sea, joined edge to edge); a stretch with ground he can land on jumping off the road -- out
+    // past its edge, LadderLandFrom to LadderLandTo cells, the road high over it -- gets one ladder, where the climb is least: against the
+    // road's side, its foot on the stretch (the ground there about level), its climbing zone in one cube and clear of the other decors (a
+    // ladder by a stretch of road that runs at a slant has a box square to the axes round it, a little bigger than it is). A ladder: a decor of its own (two rails and rungs, a solid box from the
+    // ground to the road's top -- the game's climb wants a wall in front of Twinsen, OBJECT.CPP's ladder zone) and a type 6 zone in front
+    // of it to the road's top (report.Ladders: RaceTrackScenes puts it in the scene of its cube).
+    private const double LadderLandFrom = 0.4, LadderLandTo = 4, LadderOut = 0.35, LadderZoneOut = 2.2, LadderZoneAlong = 0.8;
+    private const int LadderHalf = 300, LadderThick = 70, LadderRung = 300, LadderLeast = 800, LadderRail = 45;
+
+    private static void Ladders(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var road = report.Raised.Where(p => p.Length >= 4).Select(p => (X: p[0] / 512.0, Z: p[1] / 512.0, Y: (double)p[2], Half: p[3] / 512.0)).ToList();
+        if (road.Count < 2 || o.NewBodyBase < 0) { report.Notes.Add("ladders: no raised road, or no new bodies here"); return; }
+        var segs = new List<int>();
+        for (var i = 0; i + 1 < road.Count; i++)
+            if (road[i].Half > 0 && road[i + 1].Half > 0 && Math.Abs(road[i].X - road[i + 1].X) + Math.Abs(road[i].Z - road[i + 1].Z) < 4) segs.Add(i);
+        // (the road over a place: the nearest stretch of it, how far out from its middle, its height and half width there)
+        (double D, double Y, double Half)? Over(double x, double z)
+        {
+            (double D, double Y, double Half)? best = null;
+            foreach (var i in segs)
+            {
+                var (a, b) = (road[i], road[i + 1]);
+                double dx = b.X - a.X, dz = b.Z - a.Z, l2 = dx * dx + dz * dz;
+                var t = l2 > 0 ? Math.Clamp(((x - a.X) * dx + (z - a.Z) * dz) / l2, 0, 1) : 0;
+                double px = a.X + t * dx, pz = a.Z + t * dz, d = Math.Sqrt((x - px) * (x - px) + (z - pz) * (z - pz));
+                if (best is null || d - (a.Half + t * (b.Half - a.Half)) < best.Value.D - best.Value.Half)
+                    best = (d, a.Y + t * (b.Y - a.Y), a.Half + t * (b.Half - a.Half));
+            }
+            return best;
+        }
+        int bx0 = (int)road.Min(p => p.X) - 8, bx1 = (int)road.Max(p => p.X) + 8, bz0 = (int)road.Min(p => p.Z) - 8, bz1 = (int)road.Max(p => p.Z) + 8;
+        double Ground(double x, double z) => IslandOps.Altitude(island, x * 512, z * 512) ?? 0;
+        // (and not where a building or a fence of the island's stands on it at a walker's height, any part of the cell: the moon base's
+        // halls and railings -- a railing between two cells closes the way between them)
+        var built = new HashSet<(int, int)>();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors.Where(d => d.YMax >= d.YMin))
+            {
+                int x0 = (int)Math.Floor((cx * IslandFile.CubeSize + d.XMin) / 512.0), x1 = (int)Math.Floor((cx * IslandFile.CubeSize + d.XMax - 1) / 512.0);
+                int z0 = (int)Math.Floor((cz * IslandFile.CubeSize + d.ZMin) / 512.0), z1 = (int)Math.Floor((cz * IslandFile.CubeSize + d.ZMax - 1) / 512.0);
+                if (x1 < bx0 || x0 > bx1 || z1 < bz0 || z0 > bz1 || (x1 - x0 + 1) * (z1 - z0 + 1) > 4096) continue;
+                for (var gz = z0; gz <= z1; gz++)
+                for (var gx = x0; gx <= x1; gx++)
+                {
+                    var g = Ground(gx + 0.5, gz + 0.5);
+                    if (d.YMin < g + 600 && d.YMax > g + 200) built.Add((gx, gz));
+                }
+            }
+        bool Walk(int gx, int gz)
+        {
+            if (gx < 0 || gz < 0 || built.Contains((gx, gz)) || island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) return false;
+            int x = gx % IslandCube.Cells, z = gz % IslandCube.Cells;
+            var a = new IslandPolygon(cube.Polygon(x, z, 0)); var b = new IslandPolygon(cube.Polygon(x, z, 1));
+            return !a.Col && !b.Col && a.CodeJeu != 1 && b.CodeJeu != 1;
+        }
+        // the stretches of walkable ground
+        var region = new Dictionary<(int, int), int>();
+        var regions = 0;
+        for (var gz = bz0; gz <= bz1; gz++)
+        for (var gx = bx0; gx <= bx1; gx++)
+        {
+            if (region.ContainsKey((gx, gz)) || !Walk(gx, gz)) continue;
+            var queue = new Queue<(int, int)>(); queue.Enqueue((gx, gz)); region[(gx, gz)] = regions;
+            while (queue.Count > 0)
+            {
+                var (x, z) = queue.Dequeue();
+                foreach (var (nx, nz) in new[] { (x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1) })
+                    if (nx >= bx0 && nx <= bx1 && nz >= bz0 && nz <= bz1 && !region.ContainsKey((nx, nz)) && Walk(nx, nz)) { region[(nx, nz)] = regions; queue.Enqueue((nx, nz)); }
+            }
+            regions++;
+        }
+        // the stretches he can land in off the road
+        var landing = new Dictionary<int, int>();
+        foreach (var ((gx, gz), r) in region)
+        {
+            if (Over(gx + 0.5, gz + 0.5) is not { } over) continue;
+            var past = over.D - over.Half;
+            if (past < LadderLandFrom || past > LadderLandTo || over.Y - Ground(gx + 0.5, gz + 0.5) < LadderLeast) continue;
+            landing[r] = landing.GetValueOrDefault(r) + 1;
+        }
+        // a ladder for each: the least climb along a straight, axis-square stretch of the road's side over that ground
+        var made = new List<string>();
+        foreach (var r in landing.Keys.OrderByDescending(k => landing[k]))
+        {
+            (double Climb, double FootX, double FootZ, double Ground, double Top, double Tx, double Tz, double Nx, double Nz)? best = null;
+            foreach (var i in segs)
+            {
+                var (a, b) = (road[i], road[i + 1]);
+                double dx = b.X - a.X, dz = b.Z - a.Z, len = Math.Sqrt(dx * dx + dz * dz);
+                if (len < 0.2) continue;
+                double tx = dx / len, tz = dz / len;
+                if (Math.Abs(a.Y - b.Y) > 512 * len) continue;      // (not up a steep ramp)
+                for (var t = 0.0; t <= len; t += 0.25)
+                {
+                    double px = a.X + tx * t, pz = a.Z + tz * t, half = a.Half + (b.Half - a.Half) * t / len, top = a.Y + (b.Y - a.Y) * t / len;
+                    foreach (var side in new[] { 1.0, -1.0 })
+                    {
+                        double nx = -tz * side, nz = tx * side;
+                        double fx = px + nx * (half + LadderOut), fz = pz + nz * (half + LadderOut);
+                        double zx = px + nx * (half + (LadderOut + LadderZoneOut) / 2 + 0.2), zz = pz + nz * (half + (LadderOut + LadderZoneOut) / 2 + 0.2);
+                        if (!region.TryGetValue(((int)Math.Floor(zx), (int)Math.Floor(zz)), out var rz) || rz != r) continue;
+                        if (!region.TryGetValue(((int)Math.Floor(fx), (int)Math.Floor(fz)), out var rf) || rf != r) continue;
+                        var g = Ground(fx, fz);
+                        var heights = new[] { g, Ground(zx, zz), Ground(zx + tx * LadderZoneAlong, zz + tz * LadderZoneAlong), Ground(zx - tx * LadderZoneAlong, zz - tz * LadderZoneAlong) };
+                        if (heights.Max() - heights.Min() > 600) continue;
+                        if (top - g < LadderLeast) continue;
+                        // (the zone in one cube, a cell clear of its edges; nothing else's box where the ladder stands)
+                        double ex0 = Math.Min(fx, px + nx * (half + LadderZoneOut)) - Math.Abs(tx) * LadderZoneAlong, ex1 = Math.Max(fx, px + nx * (half + LadderZoneOut)) + Math.Abs(tx) * LadderZoneAlong;
+                        double ez0 = Math.Min(fz, pz + nz * (half + LadderZoneOut)) - Math.Abs(tz) * LadderZoneAlong, ez1 = Math.Max(fz, pz + nz * (half + LadderZoneOut)) + Math.Abs(tz) * LadderZoneAlong;
+                        if ((int)Math.Floor((ex0 - 1) / IslandCube.Cells) != (int)Math.Floor((ex1 + 1) / IslandCube.Cells) || (int)Math.Floor((ez0 - 1) / IslandCube.Cells) != (int)Math.Floor((ez1 + 1) / IslandCube.Cells)) continue;
+                        if (IslandDecors.Locate(island, fx * 512, fz * 512) is not { } at) continue;
+                        double hx = (Math.Abs(tx) * LadderHalf + Math.Abs(nx) * LadderThick) / 512.0, hz = (Math.Abs(tz) * LadderHalf + Math.Abs(nz) * LadderThick) / 512.0;
+                        int cx = at.X, cz = at.Z;
+                        var clash = at.Cube.Decors.Any(d => d.YMax >= d.YMin && d.YMax > g && d.YMin < top
+                                                            && d.XMax > cx - hx * 512 - 64 && d.XMin < cx + hx * 512 + 64 && d.ZMax > cz - hz * 512 - 64 && d.ZMin < cz + hz * 512 + 64);
+                        if (clash) continue;
+                        var climb = top - g;
+                        if (best is null || climb < best.Value.Climb) best = (climb, fx, fz, g, top, tx, tz, nx, nz);
+                    }
+                }
+            }
+            if (best is not { } l) { made.Add($"stretch {r} ({landing[r]} cells to land on): no place for a ladder"); continue; }
+            if (IslandDecors.Locate(island, l.FootX * 512, l.FootZ * 512) is not { } spot || spot.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { made.Add($"stretch {r}: its cube is full"); continue; }
+            var height = (float)(l.Top - l.Ground);
+            var along = new System.Numerics.Vector3((float)l.Tx, 0, (float)l.Tz); var outward = new System.Numerics.Vector3((float)l.Nx, 0, (float)l.Nz);
+            var pts = new List<System.Numerics.Vector3>(); var faces = new List<LbaBodyStudio.Face>();
+            foreach (var s in new[] { 1f, -1f })
+                RaceTrackPipes.Box(pts, faces, along * s * (LadderHalf - LadderRail), along * LadderRail, outward * LadderRail, 0, height, RaceTrackPipes.SupportLight, RaceTrackPipes.SupportDark, RaceTrackPipes.SupportTop);
+            for (var y = LadderRung; y < height - 60; y += LadderRung)
+                RaceTrackPipes.Box(pts, faces, System.Numerics.Vector3.Zero, along * (LadderHalf - LadderRail), outward * (LadderRail * 0.6f), y, y + 50, RaceTrackPipes.SupportLight, RaceTrackPipes.SupportDark, RaceTrackPipes.SupportTop);
+            var body = o.NewBodyBase + report.NewBodies.Count;
+            report.NewBodies.Add(RaceTrackPipes.Write(pts, faces, true));
+            var decor = IslandDecors.Blank(body, spot.X, (int)Math.Round(l.Ground), spot.Z, 0);
+            int halfX = (int)Math.Round(Math.Abs(l.Tx) * LadderHalf + Math.Abs(l.Nx) * LadderThick), halfZ = (int)Math.Round(Math.Abs(l.Tz) * LadderHalf + Math.Abs(l.Nz) * LadderThick);
+            decor.XMin = spot.X - halfX; decor.XMax = spot.X + halfX; decor.ZMin = spot.Z - halfZ; decor.ZMax = spot.Z + halfZ;
+            decor.YMin = (int)Math.Round(l.Ground); decor.YMax = (int)Math.Round(l.Top);
+            spot.Cube.Decors.Add(decor);
+            // (the zone: from the ladder's face out, along its width, from under its foot to the road's top)
+            double faceX = l.FootX + l.Nx * LadderThick / 512.0, faceZ = l.FootZ + l.Nz * LadderThick / 512.0;
+            double farX = l.FootX + l.Nx * (LadderZoneOut - LadderOut), farZ = l.FootZ + l.Nz * (LadderZoneOut - LadderOut);
+            int zx0 = (int)Math.Round((Math.Min(faceX, farX) - Math.Abs(l.Tx) * LadderZoneAlong) * 512), zx1 = (int)Math.Round((Math.Max(faceX, farX) + Math.Abs(l.Tx) * LadderZoneAlong) * 512);
+            int zz0 = (int)Math.Round((Math.Min(faceZ, farZ) - Math.Abs(l.Tz) * LadderZoneAlong) * 512), zz1 = (int)Math.Round((Math.Max(faceZ, farZ) + Math.Abs(l.Tz) * LadderZoneAlong) * 512);
+            report.Ladders.Add((zx0, zz0, zx1, zz1, (int)Math.Round(l.Ground) - 256, (int)Math.Round(l.Top), l.FootX, l.FootZ, l.Nx, l.Nz));
+            made.Add($"stretch {r} ({landing[r]} cells to land on): a ladder at cell ({l.FootX:0.0}, {l.FootZ:0.0}), from {l.Ground:0} up {l.Top - l.Ground:0} to the road, facing ({l.Nx:0.#}, {l.Nz:0.#})");
+        }
+        report.Notes.Add($"ladders: {regions} stretches of walkable ground about the raised road, {landing.Count} that a jump off it lands on; " + string.Join("; ", made));
+    }
 
     // RaceTrackIsland.GateSill: a gateway walked through again (the White Leaf Desert's School of Magic, 2026-11-07). The gate is the decors
     // whose origin is within a cell of its column and rows; the sill the highest of their origins (where the ground's following left the

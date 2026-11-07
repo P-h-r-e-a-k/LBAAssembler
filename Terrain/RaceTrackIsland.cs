@@ -215,6 +215,9 @@ internal sealed record RaceTrackIsland(
     // its leaves on, every decor of the gate (the lintel too) on that sill, and straight ramps from the sill out to vertex column Out and
     // in to column In -- whose heights stay -- along the passage's rows; nothing by the road lowered
     public (int X, int Z0, int Z1, int Out, int In)? GateSill { get; init; }
+    // Ladders up the raised road's side from the ground under it, one into every stretch of ground Twinsen can land on jumping off it
+    // and walk about without reaching another (RaceTrackBuilder.Ladders): the Emerald Moon's
+    public bool Ladders { get; init; }
     // The lap's longest water crossing a raised deck over the water, humped for a boat to pass under (RaceTrackBuilder.WaterDeck)
     public bool WaterDeck { get; init; }
     // Walls built up under the raised road where it passes over a building cut down for it: island cells x0 z0 x1 z1 and the height they
@@ -298,6 +301,9 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Emerald = new("The Emerald Moon", "EMERAUDE.ILE", "EMERAUDE.OBL", 3, 229, 232, 30, "RaceTrackPlan.Emerald.json", null)
     {
         CopiesScenes = (74, 4), NoHolomap = true, Roster = RaceDriver.Emerald,
+        // (ladders up from the ground under the road: the user, 2026-11-06, "jumping off the raised track on foot can strand Twinsen in low
+        // areas with no way back" -- and the moon base's doors come out on the crater's floor, 5,000 under the road)
+        Ladders = true,
         Title = "The Emerald Moon: over the reactor, round the base",
     };
 
@@ -437,7 +443,7 @@ internal sealed record RaceTrackIsland(
             SharedFrom = from, SharedIndex = index,
             // (Citadel Island's: the town circuit's line-up, the track a plan for it is)
             Crossing = from.Crossing, Roster = from.RacesTwin && from.TwinRoster is { } town ? town : from.Roster, View = from.View, Look = from.Look, KeepOffRoadActors = from.KeepOffRoadActors,
-            OwnRimsAt = from.OwnRimsAt, GateSill = from.GateSill, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars, StoryUnheldVars = from.StoryUnheldVars,
+            OwnRimsAt = from.OwnRimsAt, GateSill = from.GateSill, Ladders = from.Ladders, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars, StoryUnheldVars = from.StoryUnheldVars,
             RailHeld = from.RailHeld, Title = $"{name} (shared, on {from.Shown})",
         };
     }

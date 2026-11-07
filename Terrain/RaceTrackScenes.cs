@@ -1007,6 +1007,16 @@ internal static class RaceTrackScenes
                     SceneOps.DeleteZone(model, z);
                     if (camera) camerasRemoved++; else zonesRemoved++;
                 }
+            // (a ladder up the raised road's side, RaceTrackReport.Ladders: its climbing zone, the game's ladder zone -- type 6, Info1 on)
+            foreach (var t in tracks)
+                foreach (var l in t.Report.Ladders)
+                {
+                    double mx = (l.X0 + l.X1) / 1024.0, mz = (l.Z0 + l.Z1) / 1024.0;
+                    if (!InCube(model, mx, mz)) continue;
+                    int ox = model.CubeX * IslandFile.CubeSize, oz = model.CubeY * IslandFile.CubeSize;
+                    model.Zones.Add(new SceneZoneModel { Type = 6, Num = 0, X0 = l.X0 - ox, X1 = l.X1 - ox, Y0 = l.Y0, Y1 = l.Y1, Z0 = l.Z0 - oz, Z1 = l.Z1 - oz, Info = new[] { 1, 1, 1, 0, 0, 0, 0, 1 } });
+                    log.Add($"scene {scene}: a ladder's zone up to the raised road, x {l.X0 - ox}..{l.X1 - ox} z {l.Z0 - oz}..{l.Z1 - oz} y {l.Y0}..{l.Y1}");
+                }
             // (a lift on the raised road, RaceTrackReport.DeckLifts: a door zone over its pad, into its building's scene)
             // (an island with a file for each weather: each file's lifts its own, and the building's window brings Twinsen up onto the lift of
             // the file shown -- door_to=; the storm's museum lift and the town circuit's, 2026-10-27)
