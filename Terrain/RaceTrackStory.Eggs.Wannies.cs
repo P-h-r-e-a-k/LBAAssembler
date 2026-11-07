@@ -253,6 +253,7 @@ stop();
     private static Action<SceneScripts> AddWithTrack(SceneModel model, SceneActorModel actor, string life, string track)
     {
         actor.Life = new byte[] { 0 }; actor.Track = new byte[] { 0 };
+        GiveVoice(actor);
         var index = SceneOps.AddActor(model, actor);
         return scripts =>
         {

@@ -493,6 +493,7 @@ void comportement_1()
         public Action<SceneScripts> Add(SceneModel model, SceneActorModel actor, string life)
         {
             actor.Life = new byte[] { 0 }; actor.Track = new byte[] { 0 };
+            GiveVoice(actor, Store);
             var index = SceneOps.AddActor(model, actor);
             return scripts =>
             {

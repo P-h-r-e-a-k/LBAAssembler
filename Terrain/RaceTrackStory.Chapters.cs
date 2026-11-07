@@ -287,12 +287,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And today we open a Cup for both your worlds, Twinsun's and Zeelich's. The first race is here, on your new circuit.",
-            "Et aujourd'hui, nous ouvrons une Coupe pour vos deux mondes, celui de Twinsun et celui de Zeelich. La première course a lieu ici, sur votre nouveau circuit.",
-            "Und heute eröffnen wir einen Pokal für Eure beiden Welten, Twinsun und Zeelich. Das erste Rennen findet hier statt, auf Eurem neuen Kurs.",
-            "Y hoy inauguramos una Copa para vuestros dos mundos, Twinsun y Zeelich. La primera carrera es aquí, en vuestro nuevo circuito.",
-            "E oggi apriamo una Coppa per entrambi i vostri mondi, Twinsun e Zeelich. La prima gara è qui, sul vostro nuovo circuito.",
-            "E hoje abrimos uma Taça para os vossos dois mundos, Twinsun e Zeelich. A primeira corrida é aqui, no vosso novo circuito.",
+            "And today we open a Cup for both of our worlds, Twinsun's and Zeelich's. The first race is here, on your new circuit.",
+            "Et aujourd'hui, nous ouvrons une Coupe pour nos deux mondes, celui de Twinsun et celui de Zeelich. La première course a lieu ici, sur votre nouveau circuit.",
+            "Und heute eröffnen wir einen Pokal für unsere beiden Welten, Twinsun und Zeelich. Das erste Rennen findet hier statt, auf Eurem neuen Kurs.",
+            "Y hoy inauguramos una Copa para nuestros dos mundos, Twinsun y Zeelich. La primera carrera es aquí, en vuestro nuevo circuito.",
+            "E oggi apriamo una Coppa per entrambi i nostri mondi, Twinsun e Zeelich. La prima gara è qui, sul vostro nuovo circuito.",
+            "E hoje abrimos uma Taça para os nossos dois mundos, Twinsun e Zeelich. A primeira corrida é aqui, no vosso novo circuito.",
         },
         new[]
         {

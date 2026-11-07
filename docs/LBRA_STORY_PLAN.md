@@ -519,7 +519,7 @@ void comportement_3()
 **Race file:** unchanged (the gloves gate is item 7, as now), plus `gate=212 1 ...`.
 
 **Afterwards (built):** Raph to the lighthouse, the spell, the Esmers land. The Esmer's thanks gains: "...and tomorrow we open a Cup for
-both your worlds." The bed sets DAY = 2, and also CHAPTER = 2.
+both of our worlds." The bed sets DAY = 2, and also CHAPTER = 2.
 
 **A side detail (built 2026-11-05): the secret tavern.** The Tralu's cave had dropped out of the story (Raph is at the race track, and
 there's no travel in chapter 1), so: the mayor has banned drink while the island has a race track, and the Tavern's regulars drink in

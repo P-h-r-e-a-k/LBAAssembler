@@ -453,6 +453,37 @@ internal static partial class RaceTrackStory
             bank.Texts.Add(new Lba2TextBank.Text { Id = first + k, Attribute = attribute, Bytes = Dos.GetBytes(lines[k][words]) });
     }
 
+    // A person the story adds speaks in a colour of their own. Dialogue colour 0 is the palette's first row, which the typewriter cycles
+    // through as a rainbow while the line types out (MESSAGE.CPP TestCoulDial): the game gives it to people who never speak -- the landing
+    // crowd's quetch and grobo copied for the Esmers' landing said their lines in it (the user, 2026-11-06). Such a person is given the
+    // colour the game gives the same entity where it does speak (the commonest, in the scenes as they were before any build; Zoe's, 4,
+    // which the radio's picture goes by, last), or DefaultVoice. `store`: the build's scenes; without them, DefaultVoice.
+    internal const int DefaultVoice = 9, ZoeVoice = 4;
+    private static readonly Dictionary<string, Dictionary<int, int>> voices = new(StringComparer.OrdinalIgnoreCase);
+    internal static void GiveVoice(SceneActorModel actor, SceneStore? store = null)
+    {
+        if (actor.CoulObj is > 0 and < 16) return;
+        actor.CoulObj = store is not null && Voices(store).TryGetValue(actor.Entity, out var own) ? own : DefaultVoice;
+    }
+    private static Dictionary<int, int> Voices(SceneStore store)
+    {
+        if (voices.TryGetValue(store.Directory, out var known)) return known;
+        var originals = RaceTrackService.OriginalScenes(store);
+        var counts = new Dictionary<int, Dictionary<int, int>>();
+        for (var s = 0; s < 256; s++)
+        {
+            SceneModel m;
+            try { if (!originals.SceneExists(s)) continue; m = originals.Load(s); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { continue; }
+            foreach (var a in m.Actors.Skip(1).Where(a => a.CoulObj is > 0 and < 16))
+            {
+                if (!counts.TryGetValue(a.Entity, out var c)) counts[a.Entity] = c = new Dictionary<int, int>();
+                c[a.CoulObj] = c.GetValueOrDefault(a.CoulObj) + 1;
+            }
+        }
+        return voices[store.Directory] = counts.ToDictionary(e => e.Key, e => e.Value.OrderByDescending(c => c.Value).ThenBy(c => c.Key == ZoeVoice ? 1 : 0).ThenBy(c => c.Key).First().Key);
+    }
+
     // An actor stood at a place in island cells, in the scene's cube, with its height and facing.
     private static void Place(SceneActorModel actor, SceneModel model, (double X, double Z, double Y, int Beta) at)
     {
@@ -661,6 +692,7 @@ void comportement_1()
         Action<SceneScripts> Add(SceneModel model, SceneActorModel actor, string life)
         {
             actor.Life = new byte[] { 0 }; actor.Track = new byte[] { 0 };
+            GiveVoice(actor, store);
             var index = SceneOps.AddActor(model, actor);
             return scripts =>
             {

@@ -94,6 +94,7 @@ internal static partial class RaceTrackStory
         public static Action<SceneScripts> Add(SceneModel model, SceneActorModel actor, string life)
         {
             actor.Life = new byte[] { 0 }; actor.Track = new byte[] { 0 };
+            GiveVoice(actor);
             var index = SceneOps.AddActor(model, actor);
             return scripts =>
             {

@@ -533,7 +533,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **The Esmer:** "We saw your little race track in the rain. Brave, but small, and it cost you your Tavern. So last night we built you
    > a bigger one, round your whole town, and we put your Tavern back where it stood, every stone of it."
    >
-   > **The Esmer:** "And today we open a Cup for both your worlds, Twinsun's and Zeelich's. The first race is here, on your new
+   > **The Esmer:** "And today we open a Cup for both of our worlds, Twinsun's and Zeelich's. The first race is here, on your new
    > circuit."
 
    The islanders around (each a line when Twinsen passes; the game's townsfolk bodies):
