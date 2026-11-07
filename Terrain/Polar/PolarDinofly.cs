@@ -8,14 +8,21 @@ namespace LBAAssembler.Terrain.Polar;
 // in LBA1. If Twinsen talks to him, let's have him ask twinsen "Where do you want to go?" The same as the line is for Fortress Island in
 // LBA1, and give Twinsen the list of options Brundle Island, Tippet Island, and if Twinsen selects either dinofly should respond "This is not
 // the game for that Twinsen""; 2026-11-04: "In LBA1 Fortress island connects to polar island, we've ported both in already combined into
-// our current polar island"). LBA1 has him on Fortress Island's docks (scene 100, PolarLayout.FortressDocks: actor 2, cell 17, layer 4,
-// 36.5); here the game's own Dino-Fly (entity 109, his body without Twinsen on his back) stands on the island's ground nearest that cell.
+// our current polar island"). LBA1 has him on Fortress Island's docks (scene 100, PolarLayout.FortressDocks: actor 2, landed by his
+// track on the jetty -- Lba1X); here the game's own Dino-Fly (entity 109, his body without Twinsen on his back) stands there, on the
+// jetty's planks (their decor's top), facing as LBA1's does.
 // Spoken to: "Where do you want to go?", Brundle Island or Tippet Island, and whichever -- "This is not the game for that, Twinsen."
 internal static class PolarDinofly
 {
     public const int Entity = 109, Body = 37;
-    // LBA1's place for him: Fortress Island's docks (scene 100), cell (17, layer 4, 36.5), in LBA1's world units (PolarScenes.OnIsland)
-    public const int Lba1X = 17 * 512, Lba1Y = 4 * 256, Lba1Z = 36 * 512 + 256;
+    // LBA1's place for him: Fortress Island's docks (scene 100), in LBA1's world units (PolarScenes.OnIsland). LBA1's actor 2 starts out
+    // over the open sea at cell (17, layer 4, 36.5), his body hovering; his track flies him from there to its point 1 and lands him (its
+    // label 101: his standing animation, FALLABLE on), so where the player meets him is point 1, (21184, 512, 15168): on the jetty's
+    // planks (LBA1's block 142, layer 1), a cell from its end, facing the way he flew in. (c171ac9 took the actor's own start, over the
+    // water, and stood him on the land nearest it: well off -- the user, 2026-11-06, "put him exactly where LBA1 has him".)
+    public const int Lba1X = 21184, Lba1Y = 512, Lba1Z = 15168;
+    private const int Lba1FromX = 17 * 512, Lba1FromZ = 18704;
+    public static int Beta => (int)Math.Round(Math.Atan2(Lba1X - Lba1FromX, Lba1Z - Lba1FromZ) * 4096 / (2 * Math.PI)) & 4095;
     public const int AskText = 26, BrundleText = 27, TippetText = 28, NotThisGameText = 29;
 
     private static readonly string[] Ask =

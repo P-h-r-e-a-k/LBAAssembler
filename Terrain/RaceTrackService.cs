@@ -1471,7 +1471,9 @@ internal static class RaceTrackService
                 var model = LBAAssembler.Scenes.SceneSerializer.Parse(LBAAssembler.Scenes.SceneGame.Lba2, record);
                 if (n <= island.LastScene) numbered ??= LBAAssembler.Terrain.Polar.PolarScenes.SceneOf(model.CubeX, model.CubeY) == n;
                 grobo |= model.Actors.Any(a => a.Entity == LBAAssembler.Terrain.Polar.PolarGrobo.Entity);
-                dinofly |= model.Actors.Any(a => a.Entity == LBAAssembler.Terrain.Polar.PolarDinofly.Entity);
+                // (since 2026-11-07 where LBA1's track lands him, on the jetty, facing the way he flew in: one facing anywhere else -- an
+                // earlier build's, facing 0 on the land nearest LBA1's actor's start -- has the island made again)
+                dinofly |= model.Actors.Any(a => a.Entity == LBAAssembler.Terrain.Polar.PolarDinofly.Entity && (a.Beta & 4095) == LBAAssembler.Terrain.Polar.PolarDinofly.Beta);
             }
             return numbered == true && grobo && dinofly;
         }

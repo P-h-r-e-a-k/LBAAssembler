@@ -143,13 +143,14 @@ internal static class PolarScenes
                     }
                 }
             }
-            // (the Dino-Fly, where LBA1 has him on Fortress Island's docks: PolarDinofly)
+            // (the Dino-Fly, where LBA1 has him on Fortress Island's docks: PolarDinofly -- on the jetty's planks, their decor's top)
             if ((cx, cz) == (dino.Cx, dino.Cz))
             {
-                // (on the nearest flat ground to LBA1's place: the docks' water and planks there aren't ground)
-                var at = NearestGround(layout, terrain, cx, cz, dino.X, dino.Z) ?? (dino.X, dino.Y, dino.Z);
-                PolarDinofly.AddActor(model, at.X, at.Y, at.Z, 0);
-                log.Add($"scene {SceneOf(cx, cz)}: the Dino-Fly at ({at.X},{at.Y},{at.Z}), nearest ground to LBA1's place on Fortress Island's docks");
+                var deck = FloorTop(terrain.Island, cx, cz, dino.X, dino.Z, dino.Y);
+                var y = deck ?? dino.Y;
+                PolarDinofly.AddActor(model, dino.X, y, dino.Z, PolarDinofly.Beta);
+                log.Add($"scene {SceneOf(cx, cz)}: the Dino-Fly at ({dino.X},{y},{dino.Z}) facing {PolarDinofly.Beta}, where LBA1 lands him on Fortress Island's docks" +
+                        (deck is null ? " (no decor floor there: LBA1's own height)" : " (on the jetty's planks)"));
             }
             hero.Beta = 0;
             // the edges it shares: east (x + 1), west, south (z + 1), north
@@ -252,17 +253,16 @@ internal static class PolarScenes
     }
 
     // The flat land in a cube nearest a place in it (scene units), standing on it; null when the cube has none.
-    private static (int X, int Y, int Z)? NearestGround(PolarLayout layout, PolarTerrain.Result terrain, int cx, int cz, int x, int z)
+    // The top of the island's decor floor under a cube-local place (a box over it whose top is within a layer and a half of `y`: the jetty's
+    // planks under the Dino-Fly), or null
+    private static int? FloorTop(IslandFile island, int cx, int cz, int x, int z, int y)
     {
-        (int X, int Y, int Z)? best = null; var bestD = double.MaxValue;
-        for (var lz = 0; lz < 64; lz++)
-        for (var lx = 0; lx < 64; lx++)
-        {
-            if (Ground(layout, terrain, cx * 64 + lx, cz * 64 + lz) is not { } surface) continue;
-            double dx = lx * 512 + 256 - x, dz = lz * 512 + 256 - z, d = dx * dx + dz * dz;
-            if (d < bestD) { bestD = d; best = (lx * 512 + 256, surface, lz * 512 + 256); }
-        }
-        return best;
+        if (island.CubeAt(cx, cz) is not { } cube) return null;
+        int? top = null;
+        foreach (var d in cube.Decors)
+            if (x >= d.XMin && x <= d.XMax && z >= d.ZMin && z <= d.ZMax && Math.Abs(d.YMax - y) <= 384 && (top is null || d.YMax > top))
+                top = d.YMax;
+        return top;
     }
 
     // An island cell's ground height when it is flat land with nothing standing on it, or null.

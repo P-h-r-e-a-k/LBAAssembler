@@ -48,6 +48,9 @@ the jumps, to a ramp that leaps onto the rocky peak.
 
 *Tip:* FunFrock takes the loop wide. Stay on the inside and use the digger key on the straight after it.
 
+*Aside:* south of the dock, on Fortress Island's docks (LBA1's), the Dino-Fly stands at the end of the wooden jetty, where he lands
+in LBA1. **The Dino-Fly:** "Where do you want to go?" (Brundle Island / Tippet Island) -- "This is not the game for that, Twinsen."
+
 **3. The peak.** The race is run once. Whoever reaches the peak first, the dream ends there: as Twinsen's car leaves the lip of the
 ramp (or as FunFrock's takes the jump ahead of him, Twinsen watching), everything turns white. Nobody speaks: the dream just ends.
 (Sendell's prophecy, "Two worlds will race, Twinsen. And at the end of it, he will be waiting.", isn't said in the game: the race
