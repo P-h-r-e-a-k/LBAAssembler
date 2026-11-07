@@ -1192,6 +1192,10 @@ his start, lost and won lines (the race's own, as the other tracks' mains have);
 
 **Where:** Wannies Island near the elevator (scene 98), the frog and the tower; the city (scene 118).
 
+The elevator comes down into the game's own room at its foot (scene 123), whose laser barriers (actors 10-13) the game has the
+magic ball thrown at their levers to switch off; the story's Twinsen has no ball, so while he has none they are off
+(RaceTrackStory.Wannies.cs ElevatorFoot -- before 2026-11-07 he was shut in the room).
+
 **Cast:**
 
 | Who | Made from | Where |

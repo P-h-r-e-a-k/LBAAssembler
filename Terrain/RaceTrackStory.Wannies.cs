@@ -21,6 +21,9 @@ internal static partial class RaceTrackStory
     public const int QGlove = 220, MinerTold = 2, GloveFound = 3, GloveBack = 4;
     private const int WanniesChapter = 9, WanniesTexts = 3 + 6, WannieGlove = 11, WanniesFragment = 34, MosquibeesArrival = 102;
     private const int WannieScene = 96, MinerActor = 2, OldWannieActor = 3;
+    // the elevator's foot, where the Elevator Platform's elevator comes down (the game's scene), and its four laser barriers
+    private const int ElevatorFoot = 123;
+    private static readonly int[] ElevatorFootBarriers = { 10, 11, 12, 13 };
 
     // (the last three: the easter eggs' -- kiss the frog, heigh-ho: RaceTrackStory.Eggs.Wannies)
     internal enum WanniesLine { LyraArrival, Ring, Baldino, Miner, ZoeGloves, OldWannie, MinerThanks, LyraFragment, OldWannieClue, KissShould, KissDare, OffToWork }
@@ -187,6 +190,16 @@ internal static partial class RaceTrackStory
             }}"));
             });
         else log.Add("the Wannie miner left out: no room off the road by the start line");
+        // the elevator's foot (the game's own room, ElevatorFoot): its laser barriers (actors 10-13) between the elevator's cage and the door
+        // out are switched off by levers behind the guard post's counter, which the game has the magic ball thrown at -- and the story's
+        // Twinsen has no ball (FLAG_BALLE_MAGIQUE, var_game 1): he came down the elevator and was shut in the room (the scripted playthrough
+        // by inputs, 2026-11-07). Without a ball, the barriers are off.
+        GroupB.EditScene(store, ElevatorFoot, log, "the elevator's foot: its laser barriers off while Twinsen has no magic ball to throw at their levers", _ => scripts =>
+        {
+            foreach (var barrier in ElevatorFootBarriers)
+                scripts.SetText(barrier, ScriptKind.Life, Loose(scripts.GetText(barrier, ScriptKind.Life), "void comportement_0()\n{",
+                    "void comportement_0()\n{\n    if (0 == var_game(1))\n    {\n        no_body();\n        end_life();\n    }"));
+        });
         // (the easter eggs: heigh-ho's miners, and kiss the frog -- RaceTrackStory.Eggs.Wannies)
         HeighHo(store, originals, heighHo, Say(WanniesLine.OffToWork), log);
         KissTheFrog(store, island, report, when, Say(WanniesLine.KissShould), Say(WanniesLine.KissDare), log);
