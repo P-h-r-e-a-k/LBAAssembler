@@ -12443,9 +12443,10 @@ static S32 WpFloorAt(int cell, S32 h) {
         if (zn->Type != 0) continue;
         if (x < zn->X0 - 128 || x > zn->X1 + 128 || z < zn->Z0 - 128 || z > zn->Z1 + 128) continue;
         if (s_wpGoalX >= zn->X0 - 256 && s_wpGoalX <= zn->X1 + 256 && s_wpGoalZ >= zn->Z0 - 256 && s_wpGoalZ <= zn->Z1 + 256) continue;
-        // (the one he stands in -- he came in by it -- only right round him: a way out of it, not a way back through it)
-        if (s_wpFromX >= zn->X0 - 64 && s_wpFromX <= zn->X1 + 64 && s_wpFromZ >= zn->Z0 - 64 && s_wpFromZ <= zn->Z1 + 64 &&
-            fabs(x - s_wpFromX) < 400 && fabs(z - s_wpFromZ) < 400) continue;
+        // (nor the one he stands by, within 512 -- he came in by it: the whole zone open, or the planner finds no way off a scene's edge
+        // he arrived at, whose zone runs its length; the chapters' walks were worked out with this, 2026-11-07 -- narrowing it to the
+        // cells round him sent chapter 1's walk out of the house back in through the door by a detour)
+        if (s_wpFromX >= zn->X0 - 512 && s_wpFromX <= zn->X1 + 512 && s_wpFromZ >= zn->Z0 - 512 && s_wpFromZ <= zn->Z1 + 512) continue;
         if (h + WP_STEP >= zn->Y0 - 256 && h <= zn->Y1 + 256) return WP_NONE;
     }
     for (int k = 0; k < s_wpDecN[cell]; k++) {
