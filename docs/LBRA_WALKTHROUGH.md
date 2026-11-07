@@ -338,10 +338,19 @@ Tim is at the door, then behind his bar inside. Twinsen goes in.
 **Tim:** "Twinsen! Look at it! The same bar, the same stools, the same stain on the ceiling... I asked them to leave that out, but they
 said 'exactly as it was'. Come in, come in: the first drink in the new old Tavern is on the house."
 
-If Twinsen gave the umbrella back: **Tim:** "And that umbrella you brought back is on its hook by the door. The customer never came for
-it. Exactly as it was."
+If Twinsen gave the umbrella back: **Tim:** "And that umbrella you brought back is on its hook by the door. She never came for it.
+Take it, if you like: you've earned it, and she'd only lose it again."
 
-If he didn't: **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
+If he didn't: **Tim:** "And if you ever find my regular's umbrella, there's a hook by the door waiting for it."
+
+While Luc's car is still a wheel short: **Tim:** "Luc's not in yet: he's out in the yard by your house with that barrel car of his, a
+wheel short."
+
+The umbrella hangs on its hook just inside the front door. Action by it:
+
+**Twinsen:** "Her umbrella. After yesterday, I'm not going anywhere without one."
+
+**Found:** the umbrella. (Once Luc's car has its wheel, Luc is back behind his bar too.)
 
 (The regulars are back in the Tavern, the Back Room's table is empty, and the Tralu, still at his round table with his tankard, is
 glad of the quiet: **The Tralu:** "Ahhh... quiet at last. The aliens put the Tavern back, and the drums went home with it. The whole
@@ -352,9 +361,9 @@ barrel on wheels, with one back wheel missing. Zoe is already lying under it wit
 
 **Luc:** "They gave me my Tavern back, Twinsen, so I'm racing for the Tavern! Only... my back wheel came off on the way here."
 
-**Zoe:** "I can fit it, if someone finds it. Bob says there's a spare in the scrap at the harbour."
+**Zoe:** "I can fit one, if someone finds a wheel. Bob at the harbour fished an old tyre out of the sea this morning."
 
-The arrow points at the harbour.
+The arrow points at the harbour. (Luc and Zoe stand right outside the house's door; they tell it once.)
 
 If Twinsen goes home first, Zoe has left a word at the door: **Zoe:** "There's a crowd at the new track already! Come on, I want a
 look... and bring your toolbox. Somebody's going to need a mechanic today."
@@ -376,15 +385,29 @@ ever gets his barrel back on four wheels."
 
 **Mr. Paul:** "Rules are rules, Twinsen. Six cars."
 
-**6. The harbour.** Bob is sorting through the scrap heap by the quay.
+**6. The bait.** Mr. Bazoo's shop sells fishing bait (any time): a tin on the counter. Twinsen faces it and presses Action.
 
-**Bob:** "A wheel? Somewhere under that lot. Mind the fish."
+**Mr. Bazoo:** "A tin of fishing bait costs 2 kashes." "OK, I'll buy it!"
 
-The wheel is in the scrap, beside the road. Twinsen picks it up.
+**Twinsen:** "Fishing bait. Somebody at the harbour will be glad of this."
 
-**Twinsen:** "A wheel. A bit rusty, but round."
+**7. The harbour.** Bob is by the scrap heap on the quay, an old tyre beside him.
 
-**7. Back to the yard.** Zoe fits the wheel in no time.
+**Bob:** "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's
+yours for a tin of bait: the fish won't bite on rust. Mr. Bazoo sells it in his shop."
+
+With the bait, Twinsen hands it over at once:
+
+**Twinsen:** "Here: a tin of bait, fresh from Mr. Bazoo's."
+
+**Bob:** "Deal! The tyre's yours. Mind, there might still be a crab in it."
+
+**Twinsen:** "A tyre. A bit rusty, but round."
+
+(The bait, the tyre and Luc can come in any order: with the tyre before Luc has told, **Luc:** "A tyre! Twinsen, you read my mind: my
+back wheel came off on the way here, and I'm racing for the Tavern!")
+
+**8. Back to the yard.** Zoe fits the tyre in no time.
 
 **Zoe:** "There. Good as new. Well, good as old."
 
@@ -397,7 +420,7 @@ how the Cup goes."
 
 **Zoe:** "You drive, I'll keep the car in one piece. I'll be in the pit box by the start line."
 
-**8. The first call.** The radio beeps. The first time, a line on screen says: "The radio is ringing. Answer it from your inventory."
+**9. The first call.** The radio beeps. The first time, a line on screen says: "The radio is ringing. Answer it from your inventory."
 Twinsen opens the inventory and uses the radio.
 
 **Baldino** (radio): "Hello? Twinsen? Can you hear me? Excellent, the radio works! Listen, I've been reading about this Cup. I tuned your
@@ -405,15 +428,17 @@ car before you ever knew it needed tuning: shorter gears for the town's tight co
 
 (If the radio isn't answered, it answers itself after twenty seconds.)
 
-**9. The race.** Six cars on the grid: Twinsen, Mr. Paul, Raph, the Tralu, the thief and Luc's barrel. Flick drops the flag. Three
-laps; beat Mr. Paul. Zoe waves from the pit box on each lap.
+**10. The race.** Twinsen drives to the start line: out of the yard north, onto the circuit and round its east side to the grid behind
+the line. First a qualifying lap: over the line. Stopped at the line, the car is put on pole: "Qualifying lap: over the start line!"
+(Before the wheel is on: "Mr. Paul: six cars! Luc's a wheel short.") Then six cars on the grid: Twinsen, Mr. Paul,
+Raph, the Tralu, the thief and Luc's barrel. Flick drops the flag. Three laps; beat Mr. Paul. Zoe waves from the pit box on each lap.
 
 *Tip:* Mr. Paul drives a tugboat on wheels: slow off the line, hard to pass on the narrow streets. Get past him before the harbour
 straight.
 
 **Zoe** (at a pit stop): "Fuel's in, wheels are on. Go!"
 
-**10. Won.**
+**11. Won.**
 
 **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers."
 
@@ -427,7 +452,7 @@ Past the finish line, a black car stands with its engine running. When Twinsen w
 
 **Zoe:** "Whoever it is, they weren't racing. They were watching."
 
-**Luc** (outside the Tavern): "First round's on me, as promised! To the Cup!"
+**Luc** (behind his bar in the Tavern): "First round's on me, as promised! To the Cup!"
 
 **Secrets: the slate's two hidden pages (optional, before the ferry).** The slate only fills up on arrival from here on, but two tracks
 come before it: the dream's and the storm's. Both can still be found on Citadel. Talking to Zoe once Twinsen has the slate:
@@ -471,7 +496,7 @@ all week."
 
   **Zoe:** "Two tracks we've already raced, and the whole Cup still to come. Your slate's filling up."
 
-**11. The ferry.** Zoe comes along from now on.
+**12. The ferry.** Zoe comes along from now on.
 
 **Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
 

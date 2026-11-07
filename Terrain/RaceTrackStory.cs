@@ -663,6 +663,8 @@ void comportement_1()
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         log.AddRange(Gloves(gameDirectory, store));
         log.AddRange(Citadel.CitadelLighthouse.Install(gameDirectory));
+        // (chapter 2's props: the old tyre, the umbrella on its hook, the tin of bait -- Citadel/CitadelProps)
+        log.AddRange(Citadel.CitadelProps.Install(gameDirectory));
         // (the people copied are the game's own, from the scenes as they were before any track's build)
         var originals = RaceTrackService.OriginalScenes(store);
 

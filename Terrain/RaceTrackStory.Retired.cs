@@ -233,10 +233,12 @@ internal static partial class RaceTrackStory
         }),
         new(42, 5, @"set_var_game\(70, 1\)", "the Esmer of the game's landing not on the quay the night before they land (chapter 1)", Gone("2 > chapter()")),
         // (the Tavern's own Luc and drunk rabbibunny: in chapter 2 the story has Luc in the yard by his barrel car and the rabbibunny round
-        // the Esmers' landing -- RaceTrackStory.Chapters.cs, Yard and TownPeople -- so not in the Tavern too; back behind the bar after.
+        // the Esmers' landing -- RaceTrackStory.Chapters.cs, Yard and TownPeople -- so not in the Tavern too; back behind the bar after:
+        // Luc as soon as his car's wheel is on (Q_LUCCAR 4, he's gone from the yard then -- the user, 2026-11-06, "Tim is back in the bar
+        // but Luc isn't. Bring Luc back too").
         // Tim's MOVE_FOLLOW 4 and the regular's message_obj(4, 71) are the game's own with the rabbibunny gone, as on var 51)
         new(3, 4, @"1 == var_game\(51\) \|\| 4 == chapter\(\)", "the Tavern's drunk rabbibunny not in the Tavern in chapter 2 (he's round the Esmers' landing)", Gone("2 == chapter()")),
-        new(3, 5, @"set_dir_obj\(6, MOVE_FOLLOW, 5\)", "Luc not behind the Tavern's bar in chapter 2 (he's in the yard by his barrel car)", Gone("2 == chapter()")),
+        new(3, 5, @"set_dir_obj\(6, MOVE_FOLLOW, 5\)", "Luc not behind the Tavern's bar in chapter 2 while his barrel car is a wheel short (he's in the yard by it)", Gone($"2 == chapter() && {WheelFitted} > var_game({QLucCar})")),
         // (the game's Zoe in the yard: from chapter 2 the story's own Zoe is there and follows Twinsen; the game's ran up to him with the
         // healing wizard's helper (951, var 62 and the holomap's arrow) -- the scripted playthrough of 2026-11-05)
         new(49, 4, @"0 < var_game\(42\) \|\| 3 == var_game\(74\)", "the game's Zoe in the yard gone from chapter 2 (the story's Zoe is there; the game's told of Ker'aooc's helper, var 62)", Gone("1 < chapter()")),

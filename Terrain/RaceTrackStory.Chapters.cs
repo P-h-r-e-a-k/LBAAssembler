@@ -49,8 +49,13 @@ internal static partial class RaceTrackStory
     // Q_THIEF: 1 Zoe has told, 2 Tim has told, 3 the thief down the hatch, 4 cornered in the sewers, 5 the gloves back (and the umbrella
     // found), 6 the umbrella given back to Tim
     public const int QThief = 213, ThiefTold = 1, TimTold = 2, ThiefDown = 3, ThiefCornered = 4, GlovesBack = 5, UmbrellaBack = 6;
-    // Q_LUCCAR: 1 Zoe's word at the door read, 2 Luc has told, 3 the wheel found, 4 the wheel fitted (the town circuit's gate)
+    // Q_LUCCAR: 1 Zoe's word at the door read, 2 Luc has told, 3 the tyre traded for after he told, 4 the wheel fitted (the town circuit's
+    // gate)
     public const int QLucCar = 214, LucWord = 1, LucTold = 2, WheelFound = 3, WheelFitted = 4;
+    // QBait (chapter 2): 1 a tin of fishing bait bought at Mr. Bazoo's, 2 traded to Bob at the harbour for his old tyre (whenever: before
+    // Luc has told too). A game variable no script of the game's uses and the engine doesn't (RaceTrackStory.Eggs.cs: kept spare), as the
+    // inventory has no slot to spare for the bait (its forty are the game's own, the story's items the game's retexted).
+    public const int QBait = 118, BaitHeld = 1, BaitTraded = 2;
     // DREAM_CAUGHT (1: Twinsen caught FunFrock in the dream -- Polar Island's to set), Q_BLUEPRINT (1 seen, 2 copied onto the slate),
     // Q_SHEET (1 the neighbour has told, 2 brought out with the gallic acid), and the Esmers' landing speech heard (1)
     public const int DreamCaught = 229, QBlueprint = 231, QSheet = 232, EsmersSpoke = 233;
@@ -101,6 +106,11 @@ internal static partial class RaceTrackStory
     // zone into scene 3; the Tavern's front either side of it is a search zone, see Givers), the yard by the carport (RaceTrackIsland's CarHome)
     private static readonly (double X, double Z) ThiefSpot = (478.0, 605.5), Hatch = (470.5, 604.5), Scrap = (472.0, 604.0), TavernDoor = (546.9, 591.6),
                                                    YardSpot = (547.5, 652.5);
+    // the umbrella's hook in the Tavern (scene 3): on the left side of the front door's arch (the door's zone x 6656-7680 through the wall
+    // at z 15360-15872), the side the camera sees, at a hand's height; the tin of bait on Mr. Bazoo's counter (scene 14: its front, the
+    // grid's cell (6, 8), its top 1792, as the holomap for sale's on its end, actor 8 at (4352, 1792, 3664); dropped onto it)
+    private static readonly (int X, int Y, int Z) UmbrellaHook = (6656, 1950, 15616), BaitTin = (3328, 1950, 4352);
+    private const int Shop = 14, Bazoo = 2, BaitPrice = 2, QuayPaving = 1074;
     // a per-visit flag of a scene's own (var_cube): no script of the game's uses these (42 is Once3, the LBA1 rooms')
     private const int Once1 = 40, Once2 = 41, Once4 = 43;
     // the text file the pharmacist's price is the game's own in (the Desert's: file 5, text 996, "A flask of gallic costs 50 kashes.")
@@ -120,6 +130,8 @@ internal static partial class RaceTrackStory
         TimBan, MushroomLuc, LucBar, RabbibunnyBar, PatBar, FabBar, StrangerBar, TraluNoisy, TraluQuiet, LucKey, TimBar,
         // (the museum's picture of Twinsen with a cup, Action in front of it: Citadel/CitadelMuseum)
         TrophyPicture,
+        // (chapter 2's tyre for bait, the bait at Mr. Bazoo's, Luc behind his bar, the umbrella off its hook -- 2026-11-07)
+        TyreBait, TyreDeal, BobAfter, BaitPrice, BaitBought, BaitPlenty, LucTyre, TimLucAway, UmbrellaTaken,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -350,12 +362,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And that umbrella you brought back is on its hook by the door. She never came for it. Exactly as it was.",
-            "Et ce parapluie que tu as rapporté est à son crochet près de la porte. Elle n'est jamais venue le chercher. Exactement comme avant.",
-            "Und der Schirm, den du zurückgebracht hast, hängt an seinem Haken neben der Tür. Sie hat ihn nie abgeholt. Genau wie vorher.",
-            "Y ese paraguas que trajiste está en su gancho junto a la puerta. Ella nunca vino a buscarlo. Exactamente como estaba.",
-            "E quell'ombrello che hai riportato è al suo gancio vicino alla porta. Lei non è mai venuta a prenderlo. Esattamente com'era.",
-            "E aquele guarda-chuva que trouxeste está no gancho ao pé da porta. Ela nunca o veio buscar. Exatamente como estava.",
+            "And that umbrella you brought back is on its hook by the door. She never came for it. Take it, if you like: you've earned it, and she'd only lose it again.",
+            "Et ce parapluie que tu as rapporté est à son crochet près de la porte. Elle n'est jamais venue le chercher. Prends-le, si tu veux : tu l'as bien mérité, et elle le perdrait encore.",
+            "Und der Schirm, den du zurückgebracht hast, hängt an seinem Haken neben der Tür. Sie hat ihn nie abgeholt. Nimm ihn, wenn du willst: Du hast ihn dir verdient, und sie würde ihn ja doch wieder verlieren.",
+            "Y ese paraguas que trajiste está en su gancho junto a la puerta. Ella nunca vino a buscarlo. Llévatelo, si quieres: te lo has ganado, y ella lo volvería a perder.",
+            "E quell'ombrello che hai riportato è al suo gancio vicino alla porta. Lei non è mai venuta a prenderlo. Prendilo, se vuoi: te lo sei meritato, e lei lo perderebbe di nuovo.",
+            "E aquele guarda-chuva que trouxeste está no gancho ao pé da porta. Ela nunca o veio buscar. Leva-o, se quiseres: mereceste-o, e ela só o voltaria a perder.",
         },
         new[]
         {
@@ -386,30 +398,30 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "I can fit it, if someone finds it. Bob says there's a spare in the scrap at the harbour.",
-            "Je peux la remonter, si quelqu'un la trouve. Bob dit qu'il y en a une de rechange dans la ferraille du port.",
-            "Ich kann es anbauen, wenn jemand es findet. Bob sagt, im Schrott am Hafen liegt ein Ersatzrad.",
-            "Yo puedo ponerla, si alguien la encuentra. Bob dice que hay una de repuesto en la chatarra del puerto.",
-            "Posso montarla io, se qualcuno la trova. Bob dice che ce n'è una di scorta tra i rottami del porto.",
-            "Eu consigo montá-la, se alguém a encontrar. O Bob diz que há uma sobressalente na sucata do porto.",
+            "I can fit one, if someone finds a wheel. Bob at the harbour fished an old tyre out of the sea this morning.",
+            "Je peux en monter une, si quelqu'un trouve une roue. Bob, au port, a repêché un vieux pneu dans la mer ce matin.",
+            "Ich kann eins anbauen, wenn jemand ein Rad findet. Bob am Hafen hat heute Morgen einen alten Reifen aus dem Meer gefischt.",
+            "Yo puedo ponerle una, si alguien encuentra una rueda. Bob, el del puerto, ha pescado un neumático viejo en el mar esta mañana.",
+            "Posso montarne una, se qualcuno trova una ruota. Bob, al porto, stamattina ha ripescato un vecchio pneumatico dal mare.",
+            "Eu consigo montar uma, se alguém encontrar uma roda. O Bob, no porto, pescou um pneu velho no mar esta manhã.",
         },
         new[]
         {
-            "A wheel? Somewhere under that lot. Mind the fish.",
-            "Une roue ? Quelque part là-dessous. Attention aux poissons.",
-            "Ein Rad? Irgendwo unter dem ganzen Kram. Pass auf die Fische auf.",
-            "¿Una rueda? Por ahí debajo de todo eso. Cuidado con el pescado.",
-            "Una ruota? Da qualche parte lì sotto. Attento al pesce.",
-            "Uma roda? Algures debaixo daquilo tudo. Cuidado com o peixe.",
+            "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's yours for a tin of bait: the fish won't bite on rust. Mr. Bazoo sells it in his shop.",
+            "Tu vois ça ? Un vieux pneu que j'ai repêché dans le port ce matin, jante comprise. Luc demande une roue à tout le monde. Il est à toi pour une boîte d'appâts : les poissons ne mordent pas à la rouille. M. Bazoo en vend dans sa boutique.",
+            "Siehst du das? Ein alter Reifen, den ich heute Morgen aus dem Hafen gefischt habe, samt Felge. Luc fragt alle nach einem Rad. Er gehört dir für eine Dose Köder: Auf Rost beißen die Fische nicht an. Herr Bazoo verkauft welche in seinem Laden.",
+            "¿Ves esto? Un neumático viejo que he pescado en el puerto esta mañana, con llanta y todo. Luc anda pidiendo una rueda a todo el mundo. Es tuyo por una lata de cebo: los peces no pican con óxido. El señor Bazoo lo vende en su tienda.",
+            "Vedi questo? Un vecchio pneumatico che ho ripescato dal porto stamattina, cerchione compreso. Luc chiede una ruota a tutti. È tuo per una scatola di esche: i pesci non abboccano alla ruggine. Il signor Bazoo le vende nel suo negozio.",
+            "Vês isto? Um pneu velho que pesquei no porto esta manhã, com jante e tudo. O Luc anda a pedir uma roda a toda a gente. É teu por uma lata de isco: os peixes não mordem ferrugem. O senhor Bazoo vende-o na loja dele.",
         },
         new[]
         {
-            "A wheel. A bit rusty, but round.",
-            "Une roue. Un peu rouillée, mais ronde.",
-            "Ein Rad. Etwas rostig, aber rund.",
-            "Una rueda. Un poco oxidada, pero redonda.",
-            "Una ruota. Un po' arrugginita, ma rotonda.",
-            "Uma roda. Um pouco ferrugenta, mas redonda.",
+            "A tyre. A bit rusty, but round.",
+            "Un pneu. Un peu rouillé, mais rond.",
+            "Ein Reifen. Etwas rostig, aber rund.",
+            "Un neumático. Un poco oxidado, pero redondo.",
+            "Un pneumatico. Un po' arrugginito, ma rotondo.",
+            "Um pneu. Um pouco ferrugento, mas redondo.",
         },
         new[]
         {
@@ -720,6 +732,87 @@ internal static partial class RaceTrackStory
             "Un ritratto in una cornice dorata. La targhetta dice: TWINSEN, EROE DI TWINSUN. Il pittore gli ha messo in mano una coppa da vincitore... una coppa che non ha mai vinto. Non ancora.",
             "Um retrato numa moldura dourada. A placa diz: TWINSEN, HERÓI DE TWINSUN. O pintor pôs-lhe nas mãos uma taça de vencedor... uma taça que ele nunca ganhou. Ainda não.",
         },
+        new[]
+        {
+            "Here: a tin of bait, fresh from Mr. Bazoo's.",
+            "Tiens : une boîte d'appâts, tout droit de chez M. Bazoo.",
+            "Hier: eine Dose Köder, frisch von Herrn Bazoo.",
+            "Toma: una lata de cebo, recién comprada donde el señor Bazoo.",
+            "Ecco: una scatola di esche, fresca dal negozio del signor Bazoo.",
+            "Toma: uma lata de isco, acabada de comprar ao senhor Bazoo.",
+        },
+        new[]
+        {
+            "Deal! The tyre's yours. Mind, there might still be a crab in it.",
+            "Marché conclu ! Le pneu est à toi. Attention, il y a peut-être encore un crabe dedans.",
+            "Abgemacht! Der Reifen gehört dir. Pass auf, vielleicht sitzt noch ein Krebs drin.",
+            "¡Trato hecho! El neumático es tuyo. Ojo, puede que aún quede un cangrejo dentro.",
+            "Affare fatto! Il pneumatico è tuo. Attento, potrebbe esserci ancora un granchio dentro.",
+            "Negócio fechado! O pneu é teu. Cuidado, ainda pode ter um caranguejo lá dentro.",
+        },
+        new[]
+        {
+            "The fish are biting already. Good luck in the race, Twinsen!",
+            "Les poissons mordent déjà. Bonne chance pour la course, Twinsen !",
+            "Die Fische beißen schon. Viel Glück beim Rennen, Twinsen!",
+            "Los peces ya están picando. ¡Suerte en la carrera, Twinsen!",
+            "I pesci abboccano già. Buona fortuna per la gara, Twinsen!",
+            "Os peixes já estão a morder. Boa sorte na corrida, Twinsen!",
+        },
+        new[]
+        {
+            "A tin of fishing bait costs 2 kashes.",
+            "Une boîte d'appâts coûte 2 kashes.",
+            "Eine Dose Angelköder kostet 2 Kashes.",
+            "Una lata de cebo cuesta 2 kashes.",
+            "Una scatola di esche costa 2 kashes.",
+            "Uma lata de isco custa 2 kashes.",
+        },
+        new[]
+        {
+            "Fishing bait. Somebody at the harbour will be glad of this.",
+            "Des appâts. Quelqu'un au port sera content de les avoir.",
+            "Angelköder. Am Hafen wird sich jemand darüber freuen.",
+            "Cebo de pesca. Alguien en el puerto se alegrará de tenerlo.",
+            "Esche da pesca. Qualcuno al porto ne sarà contento.",
+            "Isco de pesca. Alguém no porto vai ficar contente com isto.",
+        },
+        new[]
+        {
+            "One tin's plenty, Twinsen: the fish round here aren't that hungry.",
+            "Une boîte suffit, Twinsen : les poissons d'ici n'ont pas si faim.",
+            "Eine Dose reicht, Twinsen: So hungrig sind die Fische hier nicht.",
+            "Con una lata basta, Twinsen: los peces de aquí no tienen tanta hambre.",
+            "Una scatola basta, Twinsen: i pesci da queste parti non hanno così fame.",
+            "Uma lata chega, Twinsen: os peixes por aqui não têm tanta fome.",
+        },
+        new[]
+        {
+            "A tyre! Twinsen, you read my mind: my back wheel came off on the way here, and I'm racing for the Tavern!",
+            "Un pneu ! Twinsen, tu lis dans mes pensées : ma roue arrière s'est détachée en venant, et je cours pour la Taverne !",
+            "Ein Reifen! Twinsen, du kannst Gedanken lesen: Mein Hinterrad ist auf dem Weg hierher abgefallen, und ich fahre für die Taverne!",
+            "¡Un neumático! Twinsen, me has leído el pensamiento: se me soltó la rueda trasera viniendo hacia aquí, ¡y corro por la Taberna!",
+            "Un pneumatico! Twinsen, mi hai letto nel pensiero: la ruota posteriore mi si è staccata venendo qui, e corro per la Taverna!",
+            "Um pneu! Twinsen, leste-me o pensamento: a roda de trás soltou-se a caminho daqui, e eu corro pela Taberna!",
+        },
+        new[]
+        {
+            "Luc's not in yet: he's out in the yard by your house with that barrel car of his, a wheel short.",
+            "Luc n'est pas encore là : il est dans la cour près de chez toi, avec son tonneau sur roues à qui il manque une roue.",
+            "Luc ist noch nicht da: Er ist draußen im Hof bei deinem Haus, bei seinem Fass auf Rädern, dem ein Rad fehlt.",
+            "Luc aún no ha llegado: está en el patio junto a tu casa con ese barril con ruedas suyo, al que le falta una rueda.",
+            "Luc non c'è ancora: è nel cortile vicino a casa tua con quella sua botte su ruote, che ha una ruota in meno.",
+            "O Luc ainda não chegou: está no pátio ao pé da tua casa com aquele barril com rodas dele, a que falta uma roda.",
+        },
+        new[]
+        {
+            "Her umbrella. After yesterday, I'm not going anywhere without one.",
+            "Son parapluie. Après hier, je ne sors plus sans.",
+            "Ihr Schirm. Nach gestern gehe ich nirgends mehr ohne einen hin.",
+            "Su paraguas. Después de lo de ayer, no voy a ninguna parte sin uno.",
+            "Il suo ombrello. Dopo ieri, non vado da nessuna parte senza.",
+            "O guarda-chuva dela. Depois de ontem, não vou a lado nenhum sem um.",
+        },
     };
 
     // The new lines into a language's bank from `first` on (`words`: their column), the pharmacist's price in the game's own words there.
@@ -851,6 +944,7 @@ void comportement_1()
         LighthouseClimb(p);
         HiddenPages(p);
         TownPeople(p);
+        BaitShop(p);
         TaxiStand(p);
         Yard(p);
         YardZoeLeaves(p);
@@ -1824,21 +1918,48 @@ void comportement_{HeroWatching}()
         else p.Log.Add("Raph outside the Tavern left out: no room off the town circuit there");
 
         // in the Tavern (scene 3), Tim (actor 6) the first time he's talked to in a visit: the Tavern exactly as it was, and the umbrella
-        // on its hook by the door (Q_THIEF 6) or the hook waiting for it; then his own lines (the game's, retold)
-        p.Edit(TavernScene, "Tim in the Tavern put back: exactly as it was, and the umbrella's hook", _ => scripts =>
+        // on its hook by the door (Q_THIEF 6: take it if you like) or the hook waiting for it, and where Luc is while his barrel car is a
+        // wheel short (in the yard: Yard); then his own lines (the game's, retold). Luc (actor 5) is back behind his bar once the wheel is
+        // on (RaceTrackStory.Retired.cs), and after the race it's his round, as he promised in the yard.
+        // (the user, 2026-11-06: "Tim says the umbrella is on a hook by the door, but there's no umbrella there". The hook is on the
+        // door's left side (the one the camera sees, inside its arch), the umbrella hanging from it (CitadelProps) while it's back
+        // (Q_THIEF 6) and Twinsen hasn't taken it: Action by it, his line and the umbrella his (item 20), gone from the hook.)
+        p.Edit(TavernScene, "the umbrella on its hook by the Tavern's door: Action takes it", model =>
+        {
+            SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Hook, UmbrellaHook.X, UmbrellaHook.Y, UmbrellaHook.Z));
+            return p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Umbrella, UmbrellaHook.X, UmbrellaHook.Y, UmbrellaHook.Z),
+                Talker($"2 <= chapter() && {UmbrellaBack} == var_game({QThief}) && 0 == var_game({Umbrella})", $@"            message_obj(0, {p.Say(ChapterLine.UmbrellaTaken)});
+            found_object({Umbrella});
+            set_var_game({Umbrella}, 1);
+            suicide();", 1100));
+        });
+        p.Edit(TavernScene, "Luc behind his bar: his round after the race", _ => scripts =>
+            scripts.SetText(TavernLuc, ScriptKind.Life, Loose(scripts.GetText(TavernLuc, ScriptKind.Life), "message(46);", $@"if (2 == chapter() && 0 < var_game({WonVar}))
+            {{
+                message({p.Say(ChapterLine.LucToast)});
+            }}
+            else
+            {{
+                message(46);
+            }}")));
+        p.Edit(TavernScene, "Tim in the Tavern put back: exactly as it was, the umbrella's hook, and where Luc is", _ => scripts =>
         {
             var tim = scripts.GetText(TavernTim, ScriptKind.Life);
             scripts.SetText(TavernTim, ScriptKind.Life, Loose(tim, "if (0 == var_cube(1))\n{\nif (1 == var_game(51))\n{\nmessage(43);", $@"if (0 == var_cube(1) && 2 == chapter() && 0 == var_cube({Once1}))
         {{
             set_var_cube({Once1}, 1);
             message({p.Say(ChapterLine.TimTavern)});
-            if ({UmbrellaBack} == var_game({QThief}))
+            if ({UmbrellaBack} == var_game({QThief}) && 0 == var_game({Umbrella}))
             {{
                 message({p.Say(ChapterLine.TimHook)});
             }}
-            else
+            else if ({UmbrellaBack} != var_game({QThief}))
             {{
                 message({p.Say(ChapterLine.TimNoHook)});
+            }}
+            if ({WheelFitted} > var_game({QLucCar}))
+            {{
+                message({p.Say(ChapterLine.TimLucAway)});
             }}
         }}
         else if (0 == var_cube(1))
@@ -1848,31 +1969,65 @@ void comportement_{HeroWatching}()
                 message(43);"));
         });
 
-        // the harbour in the fine weather: Bob by the scrap (the landing crowd's), and the wheel in it beside him (Action there: Q_LUCCAR 3)
+        // the harbour in the fine weather: Bob by the scrap (the landing crowd's: the game's Bob, BODY.HQR 152 -- the user calls him Felix, but
+        // the game's Felix is the fisherman with the rod further along the quay, BODY.HQR 161, scene 43's actor 2), and beside him the old
+        // tyre he fished out of the harbour (a body of its own, CitadelProps). The user, 2026-11-06: the wheel in the scrap answered only once
+        // Luc had told of it (Q_LUCCAR 2), so found first it couldn't be picked up; "model a round rubber tyre"; Bob "found an old tyre and
+        // will give it to him for some more fishing bait", the bait from the shop at any time, handed over at once if Twinsen has it. Spoken
+        // to, Bob asks for a tin of bait (Mr. Bazoo's, QBait); with one, the tyre is Twinsen's (QBait BaitTraded; Q_LUCCAR 3 once Luc has
+        // told -- before, the yard tells and fits it at once) and gone from beside him.
         var bob = CopyOf(p.Originals, AliensScene, CrowdBob);
-        if (bob is not null && OffRoad(p.Town, Scrap.X, Scrap.Z, 1) is { } bobAt && OffRoad(p.Town, bobAt.X + 1.5, bobAt.Z, 1, 3) is { } wheelAt
-            && OutsideScene(p.Store, bobAt.X, bobAt.Z) == Harbour && OutsideScene(p.Store, wheelAt.X, wheelAt.Z) == Harbour)
-            p.Edit(Harbour, $"Bob by the harbour's scrap at cell ({bobAt.X:0.#}, {bobAt.Z:0.#}), the wheel for Luc's car in it beside him", model =>
+        if (bob is not null && OffRoad(p.Town, Scrap.X, Scrap.Z, 1) is { } bobAt && OffRoad(p.Town, bobAt.X + 1.5, bobAt.Z, 1, 3) is { } tyreAt
+            && OutsideScene(p.Store, bobAt.X, bobAt.Z) == Harbour && OutsideScene(p.Store, tyreAt.X, tyreAt.Z) == Harbour)
+            p.Edit(Harbour, $"Bob by the harbour's scrap at cell ({bobAt.X:0.#}, {bobAt.Z:0.#}), the old tyre he'll trade for a tin of bait beside him", model =>
             {
-                Place(bob, model, Facing(bobAt, wheelAt.X, wheelAt.Z));
-                var bobLife = p.Add(model, bob, Talker("2 == chapter()", $@"            if ({WheelFound} > var_game({QLucCar}))
+                Place(bob, model, Facing(bobAt, tyreAt.X, tyreAt.Z));
+                var bobLife = p.Add(model, bob, Talker("2 == chapter()", $@"            if ({BaitTraded} == var_game({QBait}))
+            {{
+                message({p.Say(ChapterLine.BobAfter)});
+            }}
+            else
             {{
                 message({p.Say(ChapterLine.BobWheel)});
+                if ({BaitHeld} == var_game({QBait}))
+                {{
+                    message_obj(0, {p.Say(ChapterLine.TyreBait)});
+                    message({p.Say(ChapterLine.TyreDeal)});
+                    message_obj(0, {p.Say(ChapterLine.WheelSeen)});
+                    set_var_game({QBait}, {BaitTraded});
+                    if ({LucTold} == var_game({QLucCar}))
+                    {{
+                        set_var_game({QLucCar}, {WheelFound});
+                    }}
+                }}
             }}"));
-                var wheel = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(wheelAt.X, model.CubeX), (int)Math.Round(wheelAt.Y), RaceTrackScenes.CubeLocal(wheelAt.Z, model.CubeY), RaceTrackScenes.WheelSprite, 9);
-                // (in the scrap until it is found)
-                var wheelLife = p.Add(model, wheel, Talker($"2 == chapter() && {WheelFound} > var_game({QLucCar})", $@"            if ({LucTold} == var_game({QLucCar}))
-            {{
-                message_obj(0, {p.Say(ChapterLine.WheelSeen)});
-                set_var_game({QLucCar}, {WheelFound});
-            }}", 1100, $@"    if ({WheelFound} <= var_game({QLucCar}))
+                // (on the quay's paving, a decor of the island's over its ground: 1074 high where Twinsen stands there, 156 over the ground -- the
+                // game seats only Twinsen on it, a prop fell through to the ground under it)
+                var tyre = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Tyre, RaceTrackScenes.CubeLocal(tyreAt.X, model.CubeX), Math.Max((int)Math.Round(tyreAt.Y), QuayPaving), RaceTrackScenes.CubeLocal(tyreAt.Z, model.CubeY));
+                // (beside him until it is traded)
+                var tyreLife = p.Add(model, tyre, $@"void comportement_0()
+{{
+    if (2 == chapter() && {BaitTraded} != var_game({QBait}))
+    {{
+        set_comportement(comportement_1);
+    }}
+    else
     {{
         suicide();
     }}
-"));
-                return scripts => { bobLife(scripts); wheelLife(scripts); };
+}}
+
+void comportement_1()
+{{
+    if ({BaitTraded} == var_game({QBait}))
+    {{
+        suicide();
+    }}
+}}
+");
+                return scripts => { bobLife(scripts); tyreLife(scripts); };
             });
-        else p.Log.Add("Bob and the wheel at the harbour left out: no room off the town circuit by the scrap");
+        else p.Log.Add("Bob and the tyre at the harbour left out: no room off the town circuit by the scrap");
 
         // the ferry office (scene 8): Mrs. Brune (actor 3), once Twinsen has the ticket in chapter 2, and Zoe coming too as crew
         p.Edit(FerryOffice, "Mrs. Brune at the ferry office: the ticket for the Desert, and Zoe goes free as crew", _ => scripts =>
@@ -1889,6 +2044,53 @@ void comportement_{HeroWatching}()
                 }}"));
         });
     }
+
+    // ---- Mr. Bazoo's shop (scene 14): fishing bait ----------------------------------------------------------------------------------
+    // The user, 2026-11-06: "Add fishing bait as an item in the shop. Twinsen can buy it at any time (not gated on the quest), so if he
+    // already has bait he just hands it over when Felix asks." A tin of it on the counter's end (CitadelProps), sold as the game's own
+    // goods are -- Twinsen's script asks when he faces it from near (distance_message: in front of him), Mr. Bazoo names the price,
+    // "No, I am not interested." / "OK, I'll buy it!" (the game's 17 and 16), 2 kashes -- any chapter: QBait 1. One tin at a time.
+    private static void BaitShop(StoryParts p) => p.Edit(Shop, "Mr. Bazoo sells a tin of fishing bait (2 kashes, at any time)", model =>
+    {
+        var tin = model.Actors.Count;
+        var add = p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Bait, BaitTin.X, BaitTin.Y, BaitTin.Z, 400, settles: true), "void comportement_0()\n{\n}\n");
+        return scripts =>
+        {
+            add(scripts);
+            var hero = scripts.GetText(0, ScriptKind.Life);
+            scripts.SetText(0, ScriptKind.Life, Loose(hero, "else\n{\nswitch (zone())", $@"else if (750 > distance_message({tin}))
+            {{
+                bulle(0);
+                if (0 < var_game({QBait}))
+                {{
+                    message_obj({Bazoo}, {p.Say(ChapterLine.BaitPlenty)});
+                }}
+                else
+                {{
+                    add_choice(17);
+                    add_choice(16);
+                    ask_choice_obj({Bazoo}, {p.Say(ChapterLine.BaitPrice)});
+                    if (16 == choice())
+                    {{
+                        if ({BaitPrice} <= nb_gold_pieces())
+                        {{
+                            give_gold_pieces({BaitPrice});
+                            set_var_game({QBait}, {BaitHeld});
+                            message_obj(0, {p.Say(ChapterLine.BaitBought)});
+                        }}
+                        else
+                        {{
+                            message(115);
+                        }}
+                    }}
+                }}
+                bulle(1);
+            }}
+            else
+            {{
+                switch (zone())"));
+        };
+    });
 
     // ---- the bike taxi in town (scene 48), from chapter 2 on --------------------------------------------------------------------------
     // The user, 2026-11-06: "the taxi still drives round over the race track after the rain clears". The game's motorbike Rabbibunny (entity
@@ -1944,9 +2146,14 @@ stop();
 
     // ---- the yard by the carport (scene 49) -------------------------------------------------------------------------------------------
     // Luc, the Tavern's boss, by his barrel car and its lost back wheel, and Zoe with her spanner: Luc tells of the wheel and Zoe of Bob's
-    // scrap (Q_LUCCAR 2, the harbour's arrow); with the wheel (3) Zoe fits it, Luc stands them a round after the race, and Zoe gives the
-    // portable radio from Baldino (item 26; Q_LUCCAR 4: the town circuit's gate opens). Zoe asked later: the slate's hidden pages, or the
-    // two of them found. After the race, Luc's round.
+    // tyre (Q_LUCCAR 2, the harbour's arrow); with the tyre traded for bait at the harbour (QBait BaitTraded) Zoe fits it, Luc stands them a
+    // round after the race, and Zoe gives the portable radio from Baldino (item 26; Q_LUCCAR 4: the town circuit's gate opens) -- the
+    // tyre first, before Luc has told (the user, 2026-11-06: "make the order not matter"), Luc says what it's for as it goes on. Luc is
+    // gone from the yard once it's on (back behind his bar in the Tavern: the game's Luc, RaceTrackStory.Retired.cs, with his toast after
+    // the race). Zoe asked later: the slate's hidden pages, or the two of them found.
+    // (one Action, one telling: Twinsen beside them both was answered by Luc and then by Zoe too, the same lines twice -- the user,
+    // 2026-11-06, "the missing back wheel is told twice". Luc, before Zoe in the scene's order, marks each frame whether he spoke
+    // (var_cube Once2), and Zoe keeps quiet for an Action he has answered)
     private static void Yard(StoryParts p)
     {
         var luc = Copy(p.Originals, TavernScene, TavernLuc);
@@ -1957,13 +2164,18 @@ stop();
             p.Log.Add("Luc and Zoe in the yard left out: no room off the town circuit by the carport");
             return;
         }
-        p.Edit(scene, $"Luc and Zoe in the yard at cell ({lucAt.X:0.#}, {lucAt.Z:0.#}): his barrel car's wheel, Bob's scrap, the radio", model =>
+        p.Edit(scene, $"Luc and Zoe in the yard at cell ({lucAt.X:0.#}, {lucAt.Z:0.#}): his barrel car's wheel, Bob's tyre, the radio", model =>
         {
             Place(luc, model, Facing(lucAt, zoeAt.X, zoeAt.Z));
             Place(zoe, model, Facing(zoeAt, lucAt.X, lucAt.Z));
             var lucIndex = model.Actors.Count;
             var zoeIndex = lucIndex + 1;
-            var fitted = $@"                message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeGoodAsOld)});
+            var tyre = $"{WheelFitted} > var_game({QLucCar}) && {BaitTraded} == var_game({QBait})";
+            var fitted = $@"                if ({LucTold} > var_game({QLucCar}))
+                {{
+                    message_obj({lucIndex}, {p.Say(ChapterLine.LucTyre)});
+                }}
+                message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeGoodAsOld)});
                 message_obj({lucIndex}, {p.Say(ChapterLine.LucRound)});
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeRadio)});
                 found_object({Radio});
@@ -1975,29 +2187,30 @@ stop();
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeFitIt)});
                 set_var_game({QLucCar}, {LucTold});
                 set_holo_pos({HarbourPos});";
-            var lucLife = p.Add(model, luc, Talker("2 == chapter()", $@"            if ({WheelFound} == var_game({QLucCar}))
+            var lucLife = p.Add(model, luc, Talker($"2 == chapter() && {WheelFitted} > var_game({QLucCar})", $@"            set_var_cube({Once2}, 1);
+            if ({tyre})
             {{
 {fitted}
             }}
             else if ({WheelFitted} > var_game({QLucCar}))
             {{
 {told}
-            }}
-            else if (0 < var_game({WonVar}))
-            {{
-                message({p.Say(ChapterLine.LucToast)});
             }}
             else
             {{
                 message({p.Say(ChapterLine.LucRound)});
-            }}", 1200));
-            var zoeLife = p.Add(model, zoe, Talker("2 == chapter()", $@"            if ({WheelFound} == var_game({QLucCar}))
+            }}", 1200, $"    set_var_cube({Once2}, 0);\n"));
+            var zoeLife = p.Add(model, zoe, Talker("2 == chapter()", $@"            if (0 == var_cube({Once2}) && {tyre})
             {{
 {fitted}
             }}
-            else if ({WheelFitted} > var_game({QLucCar}))
+            else if (0 == var_cube({Once2}) && {WheelFitted} > var_game({QLucCar}))
             {{
 {told}
+            }}
+            else if (0 != var_cube({Once2}))
+            {{
+                set_var_cube({Once2}, 0);
             }}
             else if (2 == var_game({QSheet}))
             {{

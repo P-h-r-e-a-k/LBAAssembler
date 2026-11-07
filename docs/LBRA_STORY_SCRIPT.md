@@ -503,7 +503,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 | Who | Made from | Where |
 |---|---|---|
 | Zoe | the game's (scene 0 actor 4), then the companion | by the bed, then in the yard, fixing Luc's car |
-| Luc | the game's Tavern boss, beside his barrel car (the character car) | the yard; then the grid |
+| Luc | the game's Tavern boss, beside his barrel car (the character car) | the yard; once the wheel is on, behind his bar (scene 3); the grid |
 | The Esmers | built (a copy of scene 42 actor 6, the game's landing) | their ship, by the town circuit |
 | Tim the waiter | the game's (BODY 40) | the Tavern's door, then behind its bar |
 | Raph | built | by the Tavern |
@@ -511,7 +511,9 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 | The Esmer herald | a copy of scene 42 actor 6 | beside the start line |
 | Mr. Paul | built | the start line |
 | Raph, the Tralu, the thief | the race's (built) | the grid (Luc's barrel takes the sixth place) |
-| Bob | the game's Bob (BODY 152) | by the scrap heap at the harbour |
+| Bob | the game's Bob (BODY 152; the game's Felix, BODY 161, is the fisherman with the rod further along the quay) | by the scrap heap at the harbour, the old tyre beside him |
+| Mr. Bazoo | the game's shopkeeper (scene 14) | his shop: the tin of fishing bait on the counter |
+| The bike taxi | the game's motorbike Rabbibunny (scene 48 actor 12) | at a stand of his own beside the town square, off the circuit |
 | Mrs. Brune of the ferries | the game's (BODY 62) | the ticket office |
 | The masked driver | the black car (new) | past the finish |
 
@@ -536,7 +538,9 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **The Esmer:** "And today we open a Cup for both of our worlds, Twinsun's and Zeelich's. The first race is here, on your new
    > circuit."
 
-   The islanders around (each a line when Twinsen passes; the game's townsfolk bodies):
+   The islanders around (each a line when Twinsen passes; the game's townsfolk bodies, each speaking in the colour the game gives its
+   kind where it speaks -- the quetch and the grobo had colour 0, the palette's first row, and their lines typed out flashing through a
+   rainbow; every person the story adds gets a colour, `RaceTrackStory.GiveVoice`):
    > **A Quetch:** "A whole circuit in one night! I went to bed with a puddle outside my door and woke up with a grandstand."
    >
    > **A Grobo:** "Did you see the Tavern? Back like it never left. Even the sign's been repainted."
@@ -551,11 +555,22 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Tim:** "Twinsen! Look at it! The same bar, the same stools, the same stain on the ceiling... I asked them to leave that out, but
    > they said 'exactly as it was'. Come in, come in: the first drink in the new old Tavern is on the house."
 
-   Then, if Twinsen gave the umbrella back in chapter 1:
-   > **Tim:** "And that umbrella you brought back is on its hook by the door. The customer never came for it. Exactly as it was."
+   Then, if Twinsen gave the umbrella back in chapter 1 (and hasn't taken it since):
+   > **Tim:** "And that umbrella you brought back is on its hook by the door. She never came for it. Take it, if you like: you've
+   > earned it, and she'd only lose it again."
 
    If he didn't:
-   > **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
+   > **Tim:** "And if you ever find my regular's umbrella, there's a hook by the door waiting for it."
+
+   While Luc's barrel car is still a wheel short (Q_LUCCAR below 4):
+   > **Tim:** "Luc's not in yet: he's out in the yard by your house with that barrel car of his, a wheel short."
+
+   The umbrella hangs on its hook on the left side of the front door's arch (the side the camera sees; a hook and an umbrella of their
+   own, `Citadel/CitadelProps`). Action by it (while it's back, Q_THIEF 6):
+   > **Twinsen:** "Her umbrella. After yesterday, I'm not going anywhere without one."
+
+   Found: the umbrella (item 20), gone from the hook. Once the wheel is on, **Luc is back behind his bar** ("Hello, Twinsen my friend",
+   and his chapter 2 word of the life-points machines); after the race it's his round there (step 11).
 4. **The house door again.** Zoe has gone ahead:
    > **Zoe** (at the door, if Twinsen goes home first): "There's a crowd at the new track already! Come on, I want a look... and bring
    > your toolbox. Somebody's going to need a mechanic today."
@@ -563,9 +578,10 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    is already under it with a spanner:
    > **Luc:** "They gave me my Tavern back, Twinsen, so I'm racing for the Tavern! Only... my back wheel came off on the way here."
    >
-   > **Zoe:** "I can fit it, if someone finds it. Bob says there's a spare in the scrap at the harbour."
+   > **Zoe:** "I can fit one, if someone finds a wheel. Bob at the harbour fished an old tyre out of the sea this morning."
 
-   Q_LUCCAR = 2. The arrow points at the harbour.
+   Q_LUCCAR = 2. The arrow points at the harbour. Luc and Zoe stand right outside the house's door: one Action is answered by one of
+   them (the user, 2026-11-06: the wheel was told twice -- Luc answered, then Zoe the same Action).
 6. **The start line.** The Esmer herald:
    > **The Esmer herald:** "Welcome to the Two Worlds Cup! One race on every island of Twinsun and Zeelich, and to whoever wins them
    > all, a wish. Any wish. The first race is here, on Citadel."
@@ -583,14 +599,30 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Mr. Paul:** "Rules are rules, Twinsen. Six cars."
 
    The gate says it too (`gate=214 4`).
-7. **The harbour.** Bob, by the scrap:
-   > **Bob:** "A wheel? Somewhere under that lot. Mind the fish."
+7. **The bait.** Mr. Bazoo's shop (scene 14) sells a tin of fishing bait, any time (the tin on the counter's front: Action facing it):
+   > **Mr. Bazoo:** "A tin of fishing bait costs 2 kashes." (the game's "No, I am not interested." / "OK, I'll buy it!")
+   >
+   > **Twinsen:** "Fishing bait. Somebody at the harbour will be glad of this."
 
-   The wheel is in the scrap, beside the road:
-   > **Twinsen:** "A wheel. A bit rusty, but round."
+   QBait (var 118) = 1. Asked again: **Mr. Bazoo:** "One tin's plenty, Twinsen: the fish round here aren't that hungry." (The inventory
+   has no slot to spare -- its forty are the game's -- so the bait is the variable.)
+8. **The harbour.** Bob, by the scrap, the old tyre beside him (a round rubber tyre on a rusty rim, `Citadel/CitadelProps`):
+   > **Bob:** "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's
+   > yours for a tin of bait: the fish won't bite on rust. Mr. Bazoo sells it in his shop."
 
-   Q_LUCCAR = 3.
-8. **Back to the yard.** Zoe fits it in no time:
+   With the bait, at once:
+   > **Twinsen:** "Here: a tin of bait, fresh from Mr. Bazoo's."
+   >
+   > **Bob:** "Deal! The tyre's yours. Mind, there might still be a crab in it."
+   >
+   > **Twinsen:** "A tyre. A bit rusty, but round."
+
+   QBait = 2, the tyre gone from beside Bob; Q_LUCCAR = 3 if Luc has told (else it stays: the order doesn't matter). Asked again:
+   **Bob:** "The fish are biting already. Good luck in the race, Twinsen!"
+9. **Back to the yard.** If Twinsen comes with the tyre before Luc has told:
+   > **Luc:** "A tyre! Twinsen, you read my mind: my back wheel came off on the way here, and I'm racing for the Tavern!"
+
+   Zoe fits it in no time:
    > **Zoe:** "There. Good as new. Well, good as old."
    >
    > **Luc:** "Ha! First round's on me, both of you. After the race."
@@ -598,15 +630,20 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Zoe:** "And Twinsen, a parcel came for you on the morning ferry, from Baldino on the Desert. A portable radio! He says he wants
    > to hear how the Cup goes."
 
-   Found: Portable Radio (item 26). Q_LUCCAR = 4.
+   Found: Portable Radio (item 26). Q_LUCCAR = 4. Luc goes back to his bar.
    > **Zoe:** "You drive, I'll keep the car in one piece. I'll be in the pit box by the start line."
-9. **The first call.** The radio rings: "The radio is ringing. Answer it from your inventory." Twinsen answers.
+10. **The first call.** The radio rings: "The radio is ringing. Answer it from your inventory." Twinsen answers.
    > **Baldino (radio):** "Hello? Twinsen? Can you hear me? Excellent, the radio works! Listen, I've been reading about this Cup. I
    > tuned your car before you ever knew it needed tuning: shorter gears for the town's tight corners. Try not to scratch the paint."
 
    Car update: the Citadel town circuit's best setup.
-10. **The race.** Six cars, three laps (built). Flick drops the flag. Beat Mr. Paul.
-11. **Won.** Mr. Paul (built):
+11. **The race.** The way from the yard to the start line comes onto the grid behind it (the town's roads, the lap's way down the
+   circuit's east side). Before the race, Twinsen's qualifying lap: over the line the lap's way. Stopped at the line (or over it the
+   wrong way), the car is put on pole and the screen says "Qualifying lap: over the start line!" (RACEMOD.CPP
+   QualifyingArrival; the user, 2026-11-06: "arriving there in the car does nothing"); with the wheel not yet on, the gate's line
+   instead: "Mr. Paul: six cars! Luc's a wheel short." Then six cars, three laps (built). Flick drops the flag. Beat
+   Mr. Paul.
+12. **Won.** Mr. Paul (built):
    > **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers."
 
    Found: Ferry Ticket (item 13), 50 kashes.
@@ -619,6 +656,8 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Raph:** "Did you see that black car? No number, no driver I could see. And gone before I'd blinked."
    >
    > **Zoe:** "Whoever it is, they weren't racing. They were watching."
+
+   **Luc** (behind his bar): "First round's on me, as promised! To the Cup!"
 
    **The slate's two hidden pages (optional, before the ferry).** Once Twinsen has the slate (step 6), Zoe says, if he talks to her:
    > **Zoe:** "A book of race tracks... Twinsen, didn't you see a track in the museum? And our neighbour's been squinting at some
@@ -652,7 +691,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 
      Item 17 = 0. The slate copies the sheet: the Citadel 1 page, second in the book. Q_SHEET = 2.
      > **Zoe:** "Two tracks we've already raced, and the whole Cup still to come. Your slate's filling up."
-12. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
+13. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
    > **Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
 
    At the harbour, Mrs. Brune:
@@ -660,7 +699,11 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 
    The ferry crossing (the game's own, built: the ticket) lands them on the Desert. `inc_chapter()` -> 3.
 
-**Flags:** `chapter()` 1 -> 2 at the morning wake, var 70 with it; Q_LUCCAR (214), item 26 (the radio), item 28 (the magic slate), item
+**Also (built 2026-11-07):** the bike taxi in the town square (scene 48) looped the square across the circuit; from chapter 2 he waits for
+fares at a stand of his own off it (his ride as before).
+
+**Flags:** `chapter()` 1 -> 2 at the morning wake, var 70 with it; Q_LUCCAR (214), QBait (118: 1 the bait bought, 2 traded for the tyre),
+item 20 (the umbrella off its hook, optional), item 26 (the radio), item 28 (the magic slate), item
 13 (built), the purse (50 kashes), Q_BLUEPRINT (231) and Q_SHEET (232) with item 17 (optional), `chapter()`
 2 -> 3.
 
