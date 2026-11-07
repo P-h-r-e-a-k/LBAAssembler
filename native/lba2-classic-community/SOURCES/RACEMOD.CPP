@@ -813,6 +813,7 @@ static int s_footActWas = 0;               // the action key held last frame (on
 // (the console's racewalk: Twinsen walked through points on foot, island units, or to his car and into it -- the test of the party's way)
 #define RACE_WALK_POINTS 64
 static int s_walkN = 0, s_walkAt = 0, s_walkCar = 0;
+static int s_walkAny = 0;                  // the console's walkto: its points walked on foot in any game, not only on_foot='s
 static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
 static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
 static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
@@ -12208,6 +12209,16 @@ void RaceMod_Walk(int n, const double *xz, int car, int more) {
     Log_Info("[racemod] racewalk: %d point(s)%s", s_walkN, car ? ", then to the car" : "");
 }
 
+// The console's walkto <x z>... (island units): on foot, through the points, in any game -- the keys a player would press (WalkInput:
+// turned towards each point, walking once it is about ahead), for headless tests that go by inputs alone (2026-11-07: the School of
+// Magic's gate walked into from the road, the ladders round the Emerald Moon's track)
+void RaceMod_WalkTo(int n, const double *xz) {
+    s_walkN = 0; s_walkAt = 0; s_walkCar = 0;
+    for (int k = 0; k < n && s_walkN < RACE_WALK_POINTS; k++) { s_walkX[s_walkN] = xz[2 * k]; s_walkZ[s_walkN] = xz[2 * k + 1]; s_walkN++; }
+    s_walkAny = s_walkN > 0;
+    Log_Info("[racemod] walkto: %d point(s)", s_walkN);
+}
+
 // (RaceMod_AutoInput, on foot: turned towards the next point, walking once it is about ahead; the next once within reach of it)
 static U32 WalkInput(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -12221,7 +12232,7 @@ static U32 WalkInput(void) {
         if (ptb->Cube != (S32)NumCube) return 0;
         tx = ptb->X + CurrentCubeX * 32768.0; tz = ptb->Z + CurrentCubeY * 32768.0;
         if (CarReach() >= 0 && CarReach() < RACE_FOOT_REACH - 300) { s_walkCar = 0; s_walkN = 0; Log_Info("[racemod] racewalk: by the car"); if (s_chaseOn) { IntoCar("racewalk"); return 0; } return I_ACTION_M; }
-    } else { s_walkN = 0; return 0; }
+    } else { if (s_walkAny) Log_Info("[racemod] walkto: done at (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); s_walkN = 0; s_walkAny = 0; return 0; }
     const double dx = tx - wx, dz = tz - wz, d = sqrt(dx * dx + dz * dz);
     if (s_walkAt < s_walkN && d < 400) { Log_Info("[racemod] racewalk: point %d at (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz); s_walkAt++; return 0; }
     const S32 want = TurnRound(atan2(dx, dz));

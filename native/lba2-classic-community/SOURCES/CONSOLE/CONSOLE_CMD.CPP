@@ -2633,6 +2633,17 @@ static void cmd_raceview(int argc, const char *argv[]) {
     Console_Print("raceview: %d", atoi(argv[1]));
 }
 
+/* walkto <x z>... | walkto off: Twinsen on foot walked through the points (island units) by the keys a player would press, in any game
+   (RACEMOD.CPP RaceMod_WalkTo) -- for headless tests that move him by inputs alone. */
+static void cmd_walkto(int argc, const char *argv[]) {
+    extern void RaceMod_WalkTo(int n, const double *xz);
+    double xz[64];
+    int n = 0;
+    for (int i = 1; i + 1 < argc && n < 32; i += 2) { xz[2 * n] = atof(argv[i]); xz[2 * n + 1] = atof(argv[i + 1]); n++; }
+    RaceMod_WalkTo(n, xz);
+    Console_Print("walkto: %d point(s)", n);
+}
+
 /* racewalk [+] <x z>... [car] | racewalk off: with a race file's on_foot=, Twinsen out of his car walked on foot through the points (island
    units), then -- with "car" -- to his car and into it (RACEMOD.CPP RaceMod_Walk); "+" first: more points after those given before (a
    command line holds a few). For headless tests of the Temple of Bu's party. */
@@ -3158,6 +3169,10 @@ void Console_RegisterAll(void) {
                               "racestop <x> <z> <reach>",
                               "With a race file's on_foot=1, the test pilot stops the car once it comes within <reach> of the "
                               "place (island units) and gets Twinsen out of it. For headless tests.");
+    Console_RegisterCommandEx("walkto", cmd_walkto, "Test: walk Twinsen on foot through points by the keys a player would press",
+                              "walkto <x z>... (island units) | walkto off",
+                              "Twinsen on foot, in any game, walked through the points (island units) by the keys a player would "
+                              "press: turned towards each, walking once it is about ahead. For headless tests that go by inputs alone.");
     Console_RegisterCommandEx("racewalk", cmd_racewalk, "Race-track test: walk Twinsen on foot through points, then to his car",
                               "racewalk [+] <x z>... [car] | racewalk off",
                               "With a race file's on_foot=1 and Twinsen out of his car, walks him through the points (island "
