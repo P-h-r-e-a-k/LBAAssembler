@@ -7,8 +7,9 @@ namespace LBAAssembler.Terrain;
 //
 // The variables: game variables no script of the built game uses and the engine doesn't (checked 2026-11-04 with scriptgrep2 on a full
 // build of the fifteen story islands, and the engine source for ListVarGame[...]): 196-199, 210, 225, 226, 247, 250, and 153-155.
-// (235-237 are the videos seen, PLAYACF.CPP FLAG_ACF; 251-254 the engine's; 58, 75, 96, 106, 114, 118, 172 are free too, kept spare;
-// 52 is the final's: another race asked for once, RaceTrackStory.Final.cs FinalAskedAgain.)
+// (235-237 are the videos seen, PLAYACF.CPP FLAG_ACF; 251-254 the engine's; 75, 96, 106, 114, 172 are free too, kept spare -- 172 is
+// read by scene 62's dead branch; 52 is the final's: another race asked for once, RaceTrackStory.Final.cs FinalAskedAgain; 58 chapter 1's
+// evening's, RaceTrackStory.Evening.cs QEvening; 118 the bait's, Chapters.cs QBait.)
 internal static partial class RaceTrackStory
 {
     // the Little Big Postcards: how many found (0-13), and the chapter the last one was found in (each chapter's card is there while

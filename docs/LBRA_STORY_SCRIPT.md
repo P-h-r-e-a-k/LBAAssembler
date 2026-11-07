@@ -449,30 +449,60 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    > lighthouse."
 
    Flick drops the flag. One lap against Raph's time (built).
-9. **Won.** (built)
+9. **Won.** (built; reworked 2026-11-07, the user's fix list of 2026-11-06, items 1, 10, 14, 15 -- RaceTrackStory.Apply step 4,
+   RaceTrackStory.Evening.cs) Zoe has watched the practice from beside the start line since she left home (the yard's Zoe walks all the
+   way out of the yard, YardZoeLeaves; scene 42's Zoe, a copy of scene 0's, there while var 40 > 2 and Raph not yet won over: "show
+   him how it's done" / "go and beat his time"). Raph's time beaten (BeatVar 1): Raph out of his car -- the car out of sight and in no
+   one's way while he is out of it (its life script; RACEMOD.CPP RaceMod_NoCollide: an invisible parade car) -- and over beside Zoe.
+   Twinsen must talk to him (Action):
    > **Raph:** "You beat my time, Twinsen! A deal is a deal: I'm off to the lighthouse. See you there!"
 
-   Zoe joins Twinsen, the two walking together (built, behaviour 5):
+   He runs off down the road towards the lighthouse (track points along the storm track's road, out of the cube's reach) and is gone;
+   Zoe joins Twinsen, the two walking together (behaviour 5, her own body gone into theirs):
    > **Zoe:** "Twinsen, you did it! Raph's on his way to the lighthouse, and the Weather Wizard is meeting us there. Come on, let's go
    > together!"
+
+   They walk there on foot (no change of scene any more): scene 42's south edge into the yard (49 -- its own walk-in for the game's
+   walk to the lighthouse no longer puts them on its path, point 15), west into 46, round the back of the lighthouse's hill and up to
+   its door. Flick after the race: "Raph's lap record, beaten in the pouring rain!..." (before it, with gloves: "Drive up to the line
+   whenever you're ready...").
 10. **The lighthouse.** (built) The Wizard casts his spell from the top. The thunder stops; the rain thins to a drizzle. **The island
     stays Citadel 1** and nobody lands yet (new: the spell no longer moves the game on to chapter 2, below).
     > **The Weather Wizard:** "There. A storm this old doesn't clear in an evening, mind you: give it the night. By morning you'll see
     > the sun."
     >
-    > **Raph:** "Then I'm off to bed. Best race I've lost in years."
+    > **Raph:** "Back to my car, then, and off to bed. Best race I've lost in years." (said by Raph, actor 5 -- his fiancee, actor 6,
+    > said it until 2026-11-07)
     >
     > **Zoe:** "Something's up there, Twinsen. Above the clouds. Lights. Did you see them?"
+
+    (2026-11-07, items 11, 15, 16, 21) No change of scene to the storm track's any more: Twinsen and Zoe are left on the top, each their
+    own again (the couple's body, actor 12, gone; Zoe a copy of scene 0's, var_cube 44), Twinsen in body(1) -- his tunic once he has
+    it, the game's own after a cutscene (body(0) took it off him for the rest of the story) -- and the scene's ways out open again
+    (set_change_cube(1, 1)). Raph walks off down the hill and is gone past the bend (on a later visit he's not at the door: back with
+    his car at the track, the one Raph); the Wizard: "And now, home to my tent. Mind the puddles on your way down, Twinsen!" -- and home
+    in a flash (not at the door again either). Going down (the climb's Action at the lamp room's door) or talking to her, Zoe asks
+    (Q_EVENING, var 58, 1 once answered):
+    > **Zoe:** "Are you coming home, Twinsen?" -- "Yes, let's go home." (arm in arm, down and home together) / "I'll come home
+    > soon." (**Zoe:** "Don't stay up here too long, then. I'll light the candle by the bed for you." -- she goes down ahead)
 11. **Tired.** Everyone Twinsen talks to on the way home (built):
     > "You look tired, Twinsen. You should go home and have a nap."
 
-    Tim, on his doorstep, if Twinsen passes:
+    Tim, on his doorstep, if Twinsen passes -- and then he walks off along the road and is gone for the night (Q_EVENING 2):
     > **Tim:** "Lights over the sea, at this hour? First a race track, now this. I'm going home."
 
-    The bed (built, its line changed):
+    Home is the house at night (scene 193 -- the retail demo's copy of the house, unused -- Citadel/CitadelNightHouse: scene 0's grid in darkened bricks, the candle by the bed and its
+    light kept; the day's house sends Twinsen there while he is tired). Zoe is there, come in with him or waiting by the dining table:
+    > **Zoe:** "Bed, Twinsen. The Wizard said by morning, and morning comes quicker when you're asleep."
+
+    The bed, its zone round all three open sides (it was beside the bed's foot, out in the room -- RaceTrackStory.cs, BedSides):
     > **Twinsen:** "What a day! A good night's sleep..."
 
-    The screen fades out (the night).
+    Into bed (the screen dark a moment), then:
+    > **Zoe:** "Goodnight, Twinsen. Don't forget the candle." **Twinsen:** "Goodnight, Zoe."
+
+    The candle out (the screen goes black): the night, and the morning in the day's house (chapter 2, step 1). The alien with his two
+    dogs by the Tavern is there from chapter 2, not from the spell (scene 42's actors of entities 30 and 32).
 
 **Flags:** var 51, 56 (built); Q_THIEF (213, now 1-5); items 7 and 20; Q_BLUEPRINT (231) and Q_SHEET (232) to 1 (optional). `chapter()` stays 1 to the end of the chapter: it goes to 2 in
 the morning (chapter 2, step 1), not at the spell.

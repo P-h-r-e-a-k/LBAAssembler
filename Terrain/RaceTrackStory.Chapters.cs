@@ -29,7 +29,8 @@ namespace LBAAssembler.Terrain;
 //       his own hall next door (Citadel/RaceTrackStory.TraluTavern.cs, RaceTrackStory.TraluCaves.cs).
 //     - the spell at the lighthouse no longer moves the game on to chapter 2 (the game's own script set chapter() there): the Wizard says
 //       the sun comes in the morning, Raph goes to bed, Zoe saw lights over the clouds, and Twinsen is tired (DayVar Tired, everyone's
-//       tired line; Tim's line of the lights). His bed: the night (DayVar Night, scene 0 started again in the dark).
+//       tired line; Tim's line of the lights). His bed -- in the house at night, since 2026-11-07 (RaceTrackStory.Evening.cs) -- the night
+//       (DayVar Night, scene 0 started again in the dark).
 //   Chapter 2, the town circuit (CITABAU.ILE: chapter() 2 from the morning on):
 //     - the morning: Twinsen asleep in his bed, Zoe wakes him, the aliens have landed; inc_chapter, var 70 (the landing done: the game's
 //       landing cutscene never runs), DayVar Rested. Out of the door is the fine weather's island.
@@ -74,8 +75,8 @@ internal static partial class RaceTrackStory
     private const int TavernRabbibunny = 4, TavernLuc = 5, TavernTim = 6, UmbrellaThief = 6, CrowdQuetch = 39, CrowdGrobo = 33, CrowdBob = 102;
     // their animations: the thief's run (scene 48's own track)
     private const int ThiefRun = 129;
-    // the people of the lighthouse's spell (scene 46): the Weather Wizard and Raph
-    private const int LighthouseWizard = 4, LighthouseKeeper = 6;
+    // the people of the lighthouse's spell (scene 46): the Weather Wizard and Raph (6 is his fiancee: she said his line until 2026-11-07)
+    private const int LighthouseWizard = 4, LighthouseKeeper = 5;
     // Twinsen's bed in scene 0 (PolarDream's places: on the mattress, out of it, Zoe's step aside) and his animations there (asleep,
     // sitting up, getting out of bed: scene 101's)
     private static readonly (int X, int Y, int Z) BedSpot = (5900, 3072, 2000), OutOfBed = (4352, 2048, 2518), ZoeAside = (2894, 2048, 1902);
@@ -263,12 +264,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Then I'm off to bed. Best race I've lost in years.",
-            "Alors je vais me coucher. La plus belle course que j'aie perdue depuis des années.",
-            "Dann gehe ich ins Bett. Das beste Rennen, das ich seit Jahren verloren habe.",
-            "Entonces me voy a la cama. La mejor carrera que he perdido en años.",
-            "Allora vado a letto. La gara più bella che abbia perso da anni.",
-            "Então vou para a cama. A melhor corrida que perdi em anos.",
+            "Back to my car, then, and off to bed. Best race I've lost in years.",
+            "Je retourne à ma voiture, alors, et au lit. La plus belle course que j'aie perdue depuis des années.",
+            "Dann zurück zu meinem Auto, und ab ins Bett. Das beste Rennen, das ich seit Jahren verloren habe.",
+            "Entonces vuelvo a mi coche, y a la cama. La mejor carrera que he perdido en años.",
+            "Allora torno alla mia macchina, e poi a letto. La gara più bella che abbia perso da anni.",
+            "Então volto para o meu carro, e depois para a cama. A melhor corrida que perdi em anos.",
         },
         new[]
         {
@@ -819,6 +820,8 @@ internal static partial class RaceTrackStory
     private static void AddChapterTexts(HqrArchive text, int lang, Lba2TextBank bank, int first, byte attribute, int words)
     {
         AddTexts(bank, first, attribute, ChapterLines, words);
+        // (chapter 1's evening's after them: RaceTrackStory.Evening.cs)
+        AddTexts(bank, first + ChapterLines.Length, attribute, EveningLines, words);
         if (Lba2TextBank.Load(text, lang, DesertTexts).Find(DesertGallicPrice) is { } own && bank.Find(first + (int)ChapterLine.GallicPrice) is { } price)
             price.Bytes = own.Bytes;
     }
@@ -954,6 +957,8 @@ void comportement_1()
         PharmacyHold(p);
         // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
         Lba1Rooms(p);
+        // (chapter 1's evening, the race won to bed: RaceTrackStory.Evening.cs)
+        Evening(p);
     }
 
     // ---- the game's own lines put right for the story's days (the sweep of 2026-11-05) -------------------------------------------------
@@ -1403,21 +1408,34 @@ void comportement_1()
     // and that is his word once the umbrella is back: the secret bar's hint (Citadel/RaceTrackStory.TraluTavern.cs). He is there while
     // the umbrella isn't back, and again once Twinsen is tired (the lights); from the umbrella back till then he is off duty, serving in
     // the secret bar (TimInBar) -- never both (the 2026-11-06 report: "Tim the waiter could be in the new bar area too"). And Flick the
-    // marshal, at her plinth by the start line (the marshal herself is the race-track mode's, marshal=): no gloves, no flag.
-    private static string TimOnDoorstep => $"2 > chapter() && ({UmbrellaBack} != var_game({QThief}) || {Tired} == var_game({DayVar}))";
+    // marshal, at her plinth by the start line (the marshal herself is the race-track mode's, marshal=): no gloves, no flag; with them, the
+    // flag's hers to drop; Raph's time beaten, his record gone in the rain (the user, 2026-11-06: "she still stands by the track but has no
+    // lines"). Tim's lights over the sea end "I'm going home", and he goes: along the road away from the lighthouse and out of sight, and
+    // he's not on the doorstep again that night (Q_EVENING: the user, 2026-11-06, "he should walk off afterwards").
+    private static string TimOnDoorstep => $"2 > chapter() && {TimGoneHome} > var_game({QEvening}) && ({UmbrellaBack} != var_game({QThief}) || {Tired} == var_game({DayVar}))";
+    private const int TimHome = 30, TimHomeDone = 31;
     private static string TimInBar => $"2 > chapter() && {UmbrellaBack} == var_game({QThief}) && {Tired} != var_game({DayVar})";
     private static void StormPeople(StoryParts p)
     {
         var tim = Copy(p.Originals, TavernScene, TavernTim);
         if (tim is not null && OffRoad(p.Storm, TavernDoor.X, TavernDoor.Z, 1) is { } step && OutsideScene(p.Store, step.X, step.Z) is var scene and >= 0)
-            p.Edit(scene, $"Tim on the Tavern's old doorstep at cell ({step.X:0.#}, {step.Z:0.#}) in the storm: the thief, the umbrella", model =>
+            p.Edit(scene, $"Tim on the Tavern's old doorstep at cell ({step.X:0.#}, {step.Z:0.#}) in the storm: the thief, the umbrella; tired, the lights over the sea and home", model =>
             {
                 Place(tim, model, Facing(step, p.Storm.StartLine[0].X, p.Storm.StartLine[0].Z));
-                return p.Add(model, tim, Talker(TimOnDoorstep, $@"            if ({Tired} == var_game({DayVar}))
+                // (his way home: along the road from his doorstep, the way that goes off away from the lighthouse)
+                var home = AlongRoad(p.Storm, model, step.X, step.Z, 2 * step.X - LighthouseCells.X, 2 * step.Z - LighthouseCells.Z, 3, 6);
+                var firstPoint = model.TrackPoints.Count;
+                model.TrackPoints.AddRange(home);
+                var timIndex = model.Actors.Count;
+                var goesHome = $@"set_var_game({QEvening}, {TimGoneHome});
+                set_track(label_{TimHome});
+                set_comportement(comportement_2);";
+                var life = p.Add(model, tim, Talker(TimOnDoorstep, $@"            if ({Tired} == var_game({DayVar}))
             {{
                 set_var_game({DayVar}, 4);
                 message({p.Say(ChapterLine.TimLights)});
                 set_var_game({DayVar}, {Tired});
+                {goesHome}
             }}
             else if ({GlovesBack} == var_game({QThief}) && 0 < var_game({Umbrella}))
             {{
@@ -1454,13 +1472,37 @@ void comportement_1()
         set_var_game({DayVar}, 4);
         message({p.Say(ChapterLine.TimLights)});
         set_var_game({DayVar}, {Tired});
+        {goesHome}
     }}
-"));
+") + $@"
+void comportement_2()
+{{
+    if ({TimHomeDone} == l_track() || 7000 < distance(0))
+    {{
+        invisible(1);
+        suicide();
+    }}
+}}
+");
+                var walk = home.Count > 0 ? string.Join("\n", Enumerable.Range(firstPoint, home.Count).Select(k => $"goto_point({k});")) : "wait_nb_second(3);";
+                return scripts =>
+                {
+                    life(scripts);
+                    scripts.SetText(timIndex, ScriptKind.Track, $"label(0);\nstop();\n\nlabel({TimHome});\nanim(1);\n{walk}\n\nlabel({TimHomeDone});\nstop();\n");
+                };
             });
         else p.Log.Add("Tim on the Tavern's doorstep left out: no room off the storm track there, or no Tim in scene 3");
         Marshal(p, p.Storm, "2 > chapter()", $@"            if (0 == var_game({GlovesSlot}))
             {{
                 message({p.Say(ChapterLine.FlickStorm)});
+            }}
+            else if (0 == var_game({BeatVar}))
+            {{
+                message({EveningId(p.Say, EveningLine.FlickReady)});
+            }}
+            else
+            {{
+                message({EveningId(p.Say, EveningLine.FlickWon)});
             }}", "the storm track's");
     }
 
@@ -1481,8 +1523,10 @@ void comportement_1()
 
     // ---- the lighthouse (scene 46) -----------------------------------------------------------------------------------------------------
     // The spell is cast as the game casts it, but it doesn't move the game on (its script set chapter() to 2, the fine weather): the storm
-    // stays the night. The Wizard (actor 4) says the sun comes in the morning, Raph (actor 6) that he's off to bed, Zoe -- with Twinsen,
-    // walking together -- that she saw lights over the clouds; then Twinsen is tired, and back where the game's spell leaves him (scene 42).
+    // stays the night. The Wizard (actor 4) says the sun comes in the morning, Raph (actor 5) that he's back to his car and off to bed,
+    // Zoe -- with Twinsen, walking together -- that she saw lights over the clouds; then Twinsen is tired, and he and Zoe are left on the
+    // top together (the user, 2026-11-06: no more change of scene to the storm track's, scene 42 -- RaceTrackStory.Evening.cs: Zoe, Raph
+    // and the Wizard after the spell, and the way down).
     private static void Lighthouse(StoryParts p) => p.Edit(LighthouseScene, "the spell no longer moves the game on to chapter 2: the Wizard's, Raph's and Zoe's lines, and Twinsen is tired", _ => scripts =>
     {
         var hero = scripts.GetText(0, ScriptKind.Life);
@@ -1492,13 +1536,19 @@ void comportement_1()
         message_obj({LighthouseKeeper}, {p.Say(ChapterLine.RaphBed)});
         message_zoe({p.Say(ChapterLine.ZoeLights)});
         set_var_game({DayVar}, {Tired});");
-        // (his body back as he leaves: the spell's cutscene took it -- no_body, comportement_4 -- and the game gave it back in scene 42's
-        // landing cutscene, restore_hero, which chapter 2 starts; the chapter stays 1 now, so in 42 he stood bodiless, no walking, no one
-        // answering him: the scripted playthrough, chapter 1, 2026-11-05). And the cutscene's cinema mode off: his "We are ready, Master"
-        // turned it on (comportement_1) and the game turned it off in that same landing cutscene, so in 42 it stayed on the rest of the
-        // chapter -- the black bars, and Enter no longer recentring the camera on him (PERSO.CPP: not in cinema mode), nor the holomap
-        // opening (the user, 2026-11-05: "After the lighthouse scene the camera seems to be broken, enter no longer centres the camera").
-        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(0);\n        comportement_hero(0);\n        cinema_mode(0);\n        cam_follow(0);\n        change_cube(42);");
+        // (his body back: the spell's cutscene took it -- no_body, comportement_4 -- and the game gave it back in scene 42's landing
+        // cutscene, restore_hero, which chapter 2 starts; the chapter stays 1 now, so he stood bodiless, no walking, no one answering him:
+        // the scripted playthrough, chapter 1, 2026-11-05. The game's body after a cutscene, body(1): his tunic once he has it, his
+        // everyday clothes otherwise (OBJECT.CPP ChoiceHeroBody) -- body(0) took his tunic off him for the rest of the story: the user,
+        // 2026-11-06, "Waking up in chapter 2 resets Twinsen's outfit".) And the cutscene's cinema mode off: his "We are ready, Master"
+        // turned it on (comportement_1) and the game turned it off in that same landing cutscene, so it stayed on the rest of the chapter --
+        // the black bars, and Enter no longer recentring the camera on him (PERSO.CPP: not in cinema mode), nor the holomap opening (the
+        // user, 2026-11-05: "After the lighthouse scene the camera seems to be broken, enter no longer centres the camera"). The scene's
+        // ways out open again (its start shut them while the spell was to come: set_change_cube(1, 0), the game's own walk there); the two
+        // of them in one body on the top (actor 12) each their own again, Zoe beside him; Raph off down the hill, the Wizard home
+        // (RaceTrackStory.Evening.cs, LighthouseEvening). And his controls back: the Wizard's "Follow me!" held him (set_dir_obj NO_MOVE),
+        // and the change of scene let him go -- left on the top, he stood there frozen.
+        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(1);\n        comportement_hero(0);\n        set_dir(MOVE_MANUAL);\n        cinema_mode(0);\n        cam_follow(0);\n        set_change_cube(1, 1);");
         scripts.SetText(0, ScriptKind.Life, hero);
     });
 
@@ -2236,8 +2286,13 @@ stop();
     // she says: north up the path out of the yard, towards the storm track (two points of her own: past the door, and the yard's north
     // edge, where the path goes into the storm track's scene), and is gone there; var 40 is 14 from her first step, as the game's
     // walk ends, so the house and the island's other scenes go on as they did, and the yard has no Zoe in chapter 1 after it (var 40
-    // 3-14). Chapter 2's yard has the story's own Zoe (Yard; the game's gone there, RaceTrackStory.Retired.cs).
-    private static readonly (int X, int Y, int Z) YardPath = (18816, 250, 4400), YardNorthEdge = (18816, 250, 400);
+    // 3-14). Chapter 2's yard has the story's own Zoe (Yard; the game's gone there, RaceTrackStory.Retired.cs). She walks all the way to the
+    // yard's edge, and is gone only once Twinsen is well away from her there (the user, 2026-11-06: "after she talks to Twinsen she walks a
+    // few steps and then vanishes. Instead she should walk all the way to her new position if it stays in view"): she was gone as she came
+    // within reach of her last point, still in the yard; her new place is by the storm track's start line, where she watches the
+    // practice (RaceTrackStory.Apply step 4).
+    private static readonly (int X, int Y, int Z) YardPath = (18816, 250, 4400), YardNorthEdge = (18816, 250, 60);
+    private const int ZoeOutOfSight = 4500;
     private const int YardZoe = 4, ZoeOff = 40, ZoeGone = 41, ZoeOffComportement = 11;
     private static void YardZoeLeaves(StoryParts p) => p.Edit(CarScene, "the game's Zoe in the yard in chapter 1: off up the path to the race practice she speaks of, not to the Dino-Fly", model =>
     {
@@ -2286,7 +2341,7 @@ stop();
 
 void comportement_{ZoeOffComportement}()
 {{
-    if ({ZoeGone} == l_track())
+    if ({ZoeGone} == l_track() && {ZoeOutOfSight} < distance(0))
     {{
         suicide();
     }}
@@ -2299,6 +2354,8 @@ label({ZoeOff});
 anim(89);
 goto_point({first});
 goto_point({first + 1});
+anim(88);
+angle(2048);
 
 label({ZoeGone});
 stop();

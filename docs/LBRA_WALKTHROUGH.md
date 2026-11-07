@@ -88,7 +88,8 @@ them."
 
 **Zoe:** "I'm off to watch the race practice. Don't forget that you can change the view by pressing "ENTER"."
 
-She goes off up the path towards the storm track. Twinsen goes down the path and along the road to the Wizard's tent.
+She goes off up the path towards the storm track (she walks all the way out of the yard), and from then on she watches the practice from
+beside the start line. Twinsen goes down the path and along the road to the Wizard's tent.
 
 **The Weather Wizard:** "I was going to clear the rain, but I need to do it from the top of the lighthouse, and that rascal Raph is too
 busy at the race track and refuses to let me."
@@ -114,6 +115,14 @@ Flick, the marshal, stands on her plinth beside the line with her flag.
 
 **Flick:** "I'm the School of Magic's assistant, but on race days I'm the marshal. No gloves, no flag, I'm afraid. I saw a fellow with a
 pair stuffed in his pocket go past where the Tavern used to be."
+
+With his gloves back: **Flick:** "Gloves on, I see. Drive up to the line whenever you're ready, and I'll drop the flag for you."
+
+Zoe stands a little way along the track from Raph's parking place, watching:
+
+**Zoe:** "Raph's been lapping since breakfast, rain or no rain. Get your gloves back, Twinsen, and show him how it's done!"
+
+With the gloves: **Zoe:** "Gloves on? Then go and beat his time! I'll be watching from right here."
 
 **4. Where the Tavern stood.** All that's left of the Tavern is its doorstep. Tim the waiter stands on it in the rain, holding a tray.
 
@@ -270,35 +279,67 @@ Flick drops the flag. It's one lap against Raph's time, with the rain on the roa
 
 *Tip:* the track is slick. Brake before the bends, not in them, and keep off the puddles at the Tavern corner.
 
-**10. Raph's time beaten.**
+**10. Raph's time beaten.** Twinsen stops and gets out of his car. Raph has climbed out of his and walked over to Zoe; his car is
+nowhere to be seen. Twinsen goes over and talks to him.
 
 **Raph:** "You beat my time, Twinsen! A deal is a deal: I'm off to the lighthouse. See you there!"
 
-Zoe comes running up the road.
+He runs off down the road.
 
 **Zoe:** "Twinsen, you did it! Raph's on his way to the lighthouse, and the Weather Wizard is meeting us there. Come on, let's go
 together!"
 
-**11. The lighthouse.** Twinsen and Zoe walk to the lighthouse together and climb to the top, where Raph and the Wizard are waiting. The
-Wizard casts his spell. The thunder stops, and the rain thins to a drizzle.
+She takes his arm, and they walk to the lighthouse together, slowly: down the path into the yard by the house, west over the beach, up
+onto the lighthouse's hill and round its back to the door, where Raph and the Wizard are waiting.
+
+**Flick**, asked after the race: "Raph's lap record, beaten in the pouring rain! I'll chalk your time on my plinth, before the rain
+washes it off."
+
+**11. The lighthouse.** Twinsen to the Wizard: "We are ready, Master." **The Wizard:** "Follow me!" They climb to the top. The Wizard
+casts his spell. The thunder stops, and the rain thins to a drizzle.
 
 **The Weather Wizard:** "There. A storm this old doesn't clear in an evening, mind you: give it the night. By morning you'll see the sun."
 
-**Raph:** "Then I'm off to bed. Best race I've lost in years."
+**Raph:** "Back to my car, then, and off to bed. Best race I've lost in years."
 
 **Zoe:** "Something's up there, Twinsen. Above the clouds. Lights. Did you see them?"
+
+Twinsen and Zoe are left on the top together. Down below, Raph sets off down the hill towards the race track and his car.
+
+**The Weather Wizard:** "And now, home to my tent. Mind the puddles on your way down, Twinsen!"
+
+He raises his staff, and he's gone in a flash of lightning.
+
+The telescope on the balcony still works (the storm night through it: see the easter eggs). Going down -- Action facing the lamp room's
+door -- or talking to Zoe:
+
+**Zoe:** "Are you coming home, Twinsen?"
+- **"Yes, let's go home."** She takes his arm again, and they go down and walk home together.
+- **"I'll come home soon."** **Zoe:** "Don't stay up here too long, then. I'll light the candle by the bed for you." She goes down
+  ahead of him, and Twinsen goes down when he likes.
 
 **12. Home to bed.** On the way home, everyone Twinsen talks to says the same:
 
 "You look tired, Twinsen. You should go home and have a nap."
 
-If he passes the Tavern's doorstep: **Tim:** "Lights over the sea, at this hour? First a race track, now this. I'm going home."
+If he passes the Tavern's doorstep: **Tim:** "Lights over the sea, at this hour? First a race track, now this. I'm going home." And he
+goes, off along the road and out of sight; he isn't on the doorstep again that night.
 
-At home, Twinsen goes to his bed.
+At home the house is dark but for the candle on the bedside table. Zoe is there: in with Twinsen, or waiting by the dining table.
+
+**Zoe:** "Bed, Twinsen. The Wizard said by morning, and morning comes quicker when you're asleep."
+
+Upstairs, Twinsen goes to his bed (from either side, or its foot).
 
 **Twinsen:** "What a day! A good night's sleep..."
 
-The screen fades to black.
+He gets into bed.
+
+**Zoe:** "Goodnight, Twinsen. Don't forget the candle."
+
+**Twinsen:** "Goodnight, Zoe."
+
+He blows out the candle. Darkness.
 
 ---
 

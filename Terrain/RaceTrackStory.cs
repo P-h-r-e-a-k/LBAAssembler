@@ -650,7 +650,7 @@ void comportement_1()
             hqr = labels.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
-        log.Add($"the story's {Lines.Length + ChapterLines.Length} lines are texts {first}-{first + Lines.Length + ChapterLines.Length - 1} of Citadel Island's, the start lines' holomap labels texts {labelFirst}-{labelFirst + 1}, in all {languages} languages (shown, not spoken)");
+        log.Add($"the story's {Lines.Length + ChapterLines.Length + EveningLines.Length} lines are texts {first}-{first + Lines.Length + ChapterLines.Length + EveningLines.Length - 1} of Citadel Island's, the start lines' holomap labels texts {labelFirst}-{labelFirst + 1}, in all {languages} languages (shown, not spoken)");
 
         // the arrows: the storm track's start line, the town circuit's
         var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
@@ -707,8 +707,10 @@ void comportement_1()
         // -- the night: the screen fades to black and the scene starts again with Twinsen asleep in it, for the morning (Chapters.cs, Morning)
         Edit(OpeningScene, "Zoe sends Twinsen to the Weather Wizard (his tent's arrow) and tells of the stolen gloves; Action at Twinsen's bed sleeps the night once he is tired", model =>
         {
-            // the bed: a zone of its own round it (the hero starts the game at its foot), and Action there
-            model.Zones.Add(new SceneZoneModel { Type = 2, Num = BedZone, Info = new[] { 0, 0, 0, 0, 0, 0, 0, 1 }, X0 = 7168, Y0 = 2048, Z0 = 3072, X1 = 10751, Y1 = 3327, Z1 = 5631 });
+            // the bed: a zone of its own round its three open sides, and Action there (it was out in the room, beside the bed's foot: the user
+            // couldn't find it, 2026-11-06 -- the bed itself is cells x 9-11, z 1-4; RaceTrackStory.Evening.cs, BedSides, the night's house's too)
+            foreach (var (x0, x1, z0, z1) in BedSides)
+                model.Zones.Add(new SceneZoneModel { Type = 2, Num = BedZone, Info = new[] { 0, 0, 0, 0, 0, 0, 0, 1 }, X0 = x0, Y0 = BedY0, Z0 = z0, X1 = x1, Y1 = BedY1, Z1 = z1 });
             return scripts =>
         {
             var zoe = scripts.GetText(Zoe, ScriptKind.Life);
@@ -819,6 +821,7 @@ void comportement_1()
                         Math.Max(Math.Max(z.X0 - lx, lx - z.X1), 0) is var ox && Math.Max(Math.Max(z.Z0 - lz, lz - z.Z1), 0) is var oz && Math.Sqrt(ox * ox + oz * oz) >= 3 * 512);
                 }
                 (double X, double Z, double Y, int Beta)? parkAt = null;
+                double parkBack = -5; var parkSide = sides[0];
                 foreach (var back in new[] { -5.0, -7, -9, -11, 5, 7, 9 })
                 {
                     foreach (var side in sides)
@@ -826,11 +829,42 @@ void comportement_1()
                             && others.All(o => Math.Sqrt((at.X - o.X) * (at.X - o.X) + (at.Z - o.Z) * (at.Z - o.Z)) >= RaphApart))
                         {
                             parkAt = at;
+                            parkBack = back; parkSide = side;
                             break;
                         }
                     if (parkAt is not null) break;
                 }
                 parkAt ??= Beside(storm, start, -5, 1.5, sides);
+                // (Zoe watching the practice, from the moment she leaves home -- the yard's Zoe walks off up the path: YardZoeLeaves -- off the
+                // road a few cells along from his park: out of reach of him in his car and of everyone else who talks there; and where Raph,
+                // his time beaten, walks over to her, out of his car)
+                static double Apart(double ax, double az, double bx, double bz) => Math.Sqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz));
+                (double X, double Z, double Y, int Beta)? zoeAt = null;
+                if (parkAt is { } pk)
+                    foreach (var along in new[] { 5.0, -5.0, 6.0, -6.0, 7.0, -7.0, 4.5, -4.5 })
+                    {
+                        foreach (var side in new[] { parkSide, -parkSide })
+                            if (Beside(storm, start, parkBack + along, 2.0, new[] { side }) is { } at && InScene(at) && Apart(at.X, at.Z, pk.X, pk.Z) >= 4.4
+                                && others.All(o => Apart(at.X, at.Z, o.X, o.Z) >= RaphApart))
+                            {
+                                zoeAt = at;
+                                break;
+                            }
+                        if (zoeAt is not null) break;
+                    }
+                var raphOut = -1; var raphRun = new List<SceneTrackPoint>(); var runFirst = -1;
+                if (zoeAt is { } zw && parkAt is { } pr)
+                {
+                    double d = Apart(pr.X, pr.Z, zw.X, zw.Z), bx = zw.X + (pr.X - zw.X) / d * 1.3, bz = zw.Z + (pr.Z - zw.Z) / d * 1.3;
+                    raphOut = model.TrackPoints.Count;
+                    model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(bx, model.CubeX), (int)Math.Round(storm.GroundAfter?.Invoke(bx, bz) ?? zw.Y), RaceTrackScenes.CubeLocal(bz, model.CubeY)));
+                    // (and the way he runs off to the lighthouse: down the road, the way that goes towards it, out of sight)
+                    raphRun = AlongRoad(storm, model, pr.X, pr.Z, LighthouseCells.X, LighthouseCells.Z, 4, 6);
+                    runFirst = model.TrackPoints.Count;
+                    model.TrackPoints.AddRange(raphRun);
+                    log.Add($"scene {scenes.StartScene}: Zoe watches the practice at cell ({zw.X:0.0}, {zw.Z:0.0}); Raph out of his car beside her, then off down the road ({raphRun.Count} points)");
+                }
+                else log.Add($"scene {scenes.StartScene}: Zoe watching the practice left out: no room by the start line");
                 if (parkAt is { } park) log.Add($"scene {scenes.StartScene}: Raph's car parks at cell ({park.X:0.0}, {park.Z:0.0}), {others.Min(o => Math.Sqrt((park.X - o.X) * (park.X - o.X) + (park.Z - o.Z) * (park.Z - o.Z))):0.0} cells from the nearest who talks there");
                 if (parkAt is { } c)
                 {
@@ -845,9 +879,12 @@ void comportement_1()
                 // drives by, then have him pulling up next to Twinsen with a screech of the tyres and yelling at Twinsen to get off the track":
                 // parade_stop=, RaphYell) -- then he pulls up beside him, yells, and parks by the start line, and he talks from it (the game's own
                 // Raph is the one who speaks, out of sight where the car stands; with no room for the car, he stands by the start line, seen
-                // only once he has stopped). With a car and driving gloves (HasCar, the gloves' slot) he says his time; without, what it takes. Raph's time beaten (BeatVar 1, the race-track mode's beat=) and Twinsen out of his car: he is
-                // off to the lighthouse, and Zoe joins Twinsen -- the two of them walking together, as when the game's Raph was freed from
-                // the Tralu (behaviour 5) -- and they are there, the game's own lighthouse (scene 46: 51 and 56 at 3, the wizard at its door).
+                // only once he has stopped). With a car and driving gloves (HasCar, the gloves' slot) he says his time; without, what it takes. Raph's time beaten (BeatVar 1, the race-track mode's beat=): he
+                // is out of his car -- it out of sight, in no one's way: one Raph at a time -- and over beside Zoe; Twinsen talks to him (the
+                // user, 2026-11-06: "Twinsen has to talk to Raph to set things off"): he is off to the lighthouse, running down the road and
+                // gone, and Zoe joins Twinsen -- the two of them walking together, as when the game's Raph was freed from the Tralu (behaviour
+                // 5) -- and they walk there, no change of scene (scene 46: 51 and 56 at 3, the wizard at its door; RaceTrackStory.Evening.cs).
+                var raphIndex = model.Actors.Count;
                 var raphScript = Add(model, raph, $@"void comportement_0()
 {{
     if (1 < chapter() || 2 < var_game({KeeperPlot}))
@@ -885,15 +922,11 @@ void comportement_2()
     {{
         set_comportement(comportement_1);
     }}
-    if (1 == var_game({BeatVar}) && {Driving} != comportement_hero())
+    if (1 == var_game({BeatVar}))
     {{
-        message({Id(Line.RaphBeaten)});
-        set_var_game({StormPlot}, 3);
-        set_var_game({KeeperPlot}, 3);
-        set_var_game({BeatVar}, 2);
-        comportement_hero({TwinsenAndZoe});
-        message_zoe({Id(Line.ZoeJoins)});
-        change_cube({LighthouseScene});
+        invisible(0);
+        set_track(label_{RaphOutLabel});
+        set_comportement(comportement_3);
     }}
     swif (1 == action())
     {{
@@ -914,7 +947,110 @@ void comportement_2()
         }}
     }}
 }}
+
+void comportement_3()
+{{
+    swif (1 == action())
+    {{
+        if (1500 > distance(0) && {Driving} != comportement_hero())
+        {{
+            message({Id(Line.RaphBeaten)});
+            set_var_game({StormPlot}, 3);
+            set_var_game({KeeperPlot}, 3);
+            set_var_game({BeatVar}, 2);
+            set_track(label_{RaphRunsLabel});
+            set_comportement(comportement_4);
+        }}
+    }}
+}}
+
+void comportement_4()
+{{
+    if ({RaphGoneLabel} == l_track() || 9000 < distance(0))
+    {{
+        invisible(1);
+        suicide();
+    }}
+}}
 ");
+                var raphTrack = $@"label(0);
+stop();
+
+label({RaphOutLabel});
+{(raphOut >= 0 ? $"anim(1);\ngoto_point({raphOut});\n" : "")}anim(0);
+face_twinsen(-1);
+
+label({RaphOutLabel + 1});
+stop();
+
+label({RaphRunsLabel});
+anim(129);
+{(raphRun.Count > 0 ? string.Join("\n", Enumerable.Range(runFirst, raphRun.Count).Select(k => $"goto_point({k});")) : "wait_nb_second(3);")}
+
+label({RaphGoneLabel});
+stop();
+";
+                // (Zoe by the start line: watching, her word to Twinsen; Raph's time beaten, Raph out of his car beside her -- and once he has
+                // said he's off to the lighthouse, she says so too and takes Twinsen's arm: the two of them walking together, as when the
+                // game's Raph was freed from the Tralu, behaviour 5 -- her own body gone into theirs)
+                var zoeWatch = zoeAt is not null ? originals.Load(OpeningScene).Actors.ElementAtOrDefault(Zoe)?.Clone() : null;
+                Action<SceneScripts>? zoeScript = null;
+                if (zoeWatch is not null && zoeAt is { } zz)
+                {
+                    Place(zoeWatch, model, zz);
+                    var zoeIndex = model.Actors.Count;
+                    var zoeLife = Add(model, zoeWatch, $@"void comportement_0()
+{{
+    if (2 > chapter() && 2 < var_game(40) && 3 > var_game({KeeperPlot}) && 2 > var_game({BeatVar}))
+    {{
+        body(18);
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+    if (1 == var_game({BeatVar}))
+    {{
+        set_comportement(comportement_2);
+    }}
+    swif (1 == action())
+    {{
+        if (700 > distance(0) && {Driving} != comportement_hero())
+        {{
+            if (0 == var_game({GlovesSlot}))
+            {{
+                message({EveningId(Say, EveningLine.ZoeWatching)});
+            }}
+            else
+            {{
+                message({EveningId(Say, EveningLine.ZoeWatchingReady)});
+            }}
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if (2 == var_game({BeatVar}))
+    {{
+        message({Id(Line.ZoeJoins)});
+        comportement_hero({TwinsenAndZoe});
+        invisible(1);
+        suicide();
+    }}
+}}
+");
+                    zoeScript = scripts => { zoeLife(scripts); scripts.SetText(zoeIndex, ScriptKind.Track, "label(0);\nanim(88);\nstop();\n"); };
+                }
+                // (and his car, while he is out of it -- at the lighthouse, till the spell is cast and he walks back to it: out of sight, and
+                // in no one's way -- the race-track mode keeps it parked: one Raph at a time, the user, 2026-11-06)
+                var car = townScenes.Drivers.FirstOrDefault(d => d.Driver.Name == "Raph").Actors is { } carActors && carActors.TryGetValue(scenes.StartScene, out var ci) ? ci : -1;
+                if (car < 0) log.Add($"scene {scenes.StartScene}: Raph's car not found to put out of sight while he's out of it");
                 var paulScript = Add(model, paul, $@"void comportement_0()
 {{
     if (1 < chapter())
@@ -950,7 +1086,36 @@ void comportement_1()
     }}
 }}
 ");
-                return scripts => { raphScript(scripts); paulScript(scripts); };
+                return scripts =>
+                {
+                    raphScript(scripts);
+                    scripts.SetText(raphIndex, ScriptKind.Track, raphTrack);
+                    zoeScript?.Invoke(scripts);
+                    paulScript(scripts);
+                    if (car > 0)
+                        scripts.SetText(car, ScriptKind.Life, $@"void comportement_0()
+{{
+    if (2 > chapter())
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    if (1 == var_game({BeatVar}) || 3 == var_game({KeeperPlot}))
+    {{
+        invisible(1);
+        obj_col(0);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+}}
+");
+                };
             });
         else log.Add("Raph and Mr. Paul left out: no start scene, or the game's own Raph (scene 2) or Mr. Paul (scene 7) not found");
 
