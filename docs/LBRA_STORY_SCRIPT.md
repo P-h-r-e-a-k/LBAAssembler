@@ -274,7 +274,7 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 | Flick, the marshal | built (the race's); an actor on foot (new) | her plinth by the start line |
 | Luc, Pat, Fab, the visitor, the drunk rabbibunny | the game's Tavern people (scene 3), copied | the secret bar (scene 19): Luc behind his counter of crates, the others sitting at the massive table |
 | Tim, again | the same Tim | serving in the secret bar from the umbrella given back until Twinsen is tired -- off the doorstep meanwhile |
-| The Tralu | the game's (scene 2 actor 3), no longer the boss | his own hall in the caves (scene 2), grumbling |
+| The Tralu | the game's (scene 2 actor 3), no longer the boss | the secret bar (scene 19), at the round table by the north wall with a big tankard (gone from his own hall, scene 2) |
 
 **Walkthrough:**
 
@@ -389,7 +389,9 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      (`Terrain/Citadel/TraluBarRoom.cs`): the long back wall moved out, a massive old wooden table (the caves' own, three end to end)
      with benches, barrels for round tables, candlesticks; the hall's creatures and its two barred doors go. Luc behind a counter of
      crates; Pat, Fab, the visitor and the drunk rabbibunny sitting at the table; Tim serving there from the umbrella back until
-     Twinsen is tired (and off his doorstep meanwhile):
+     Twinsen is tired (and off his doorstep meanwhile); the Tralu, come over from his hall next door (2026-11-07, the user: "Move him
+     into the bar area ... with a large tankard of beer"), standing at the round table by the old room's north wall, his tankard on
+     it (a body of the build's, TraluBarRoom.InstallTankard: the props' entity 112, body 47):
      > **Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Back Room: the only bar on Citadel the mayor doesn't know
      > about. A proper table, and the Tavern's last bottles... And if you're racing today, it's lemonade for you."
      >
@@ -399,7 +401,7 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      > **Pat:** "No Tavern, no stage... so we brought the band down here. Listen to that echo! Every beat comes back three times.
      > Raph's meant to be playing with us, but he won't come off that track."
      >
-     > **Fab:** "And the big fellow next door hasn't come round to complain. Yet."
+     > **Fab:** "And the big fellow from next door came round to complain. He's still here. Third tankard."
      >
      > **The visitor:** "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, at a
      > table fit for a giant. I love this island."
@@ -421,10 +423,13 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      south down the corridor: its two barred doors are gone), Twinsen lands on the near side of the gate and goes down the stairs; with
      the key, the cave's mouth, its first hall, the Tralu's hall, the stairs and the gate are the bar's quick way back.
 
-     Next door, in his own hall (scene 2), the Tralu -- no longer the boss, he doesn't fight:
-     > **The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race
-     > track, and now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me
-     > peanuts."
+     The Tralu, at his tankard (his own hall next door, scene 2, is empty) -- no longer the boss, he doesn't fight:
+     > **The Tralu:** "Grrrr... A hundred years in these caves, with nothing but the drips for company. Then the rain, then that race
+     > track, and now the whole Tavern's moved into my back room, with drums! A Tralu can't hear himself growl. ...So I may as well
+     > have a tankard. And stop offering me peanuts."
+
+     In chapter 2 the regulars are back in the Tavern and the Tralu, still at his tankard, is glad of the quiet: "...The whole bar to
+     myself, and my tankard..."
 
      In chapter 2 the regulars are back in the Tavern and the Tralu is glad of the quiet.
 8. **The race.** Raph now tells his time (built):

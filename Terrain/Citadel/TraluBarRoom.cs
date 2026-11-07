@@ -46,7 +46,7 @@ internal static class TraluBarRoom
     };
     private static readonly (int X, int Z, int Block)[] OnBarrels =
     {
-        (29, 37, 107), (30, 38, 108), (30, 44, 105), (29, 45, 109), (29, 50, 106), (30, 51, 102), (41, 51, 108), (42, 52, 107), (44, 36, 104), (43, 37, 106),
+        (29, 37, 107), (30, 38, 108), (30, 44, 105), (29, 45, 109), (29, 50, 106), (30, 51, 102), (41, 51, 108), (42, 52, 107), (44, 36, 104),
     };
     private static readonly (int X, int Z)[] Candlesticks = { (31, 35), (36, 35) };
     // the steps up to the corridor's landing: x 51 (layer 9) to 54 (layer 12), z 40-42; the stalagmites cleared, x 53-54, z 39-43
@@ -218,6 +218,48 @@ internal static class TraluBarRoom
         if (header.MaxGri < (uint)stored.Length) { header.MaxGri = (uint)stored.Length; bkg.SetStored(0, header.Bytes); }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Commit();
         return $"the secret bar: scene 19's hall carried west to x {West} (z {North}-{South}), the massive table at x {TableX}-{TableX + 1}, z {TableZ0}-{TableZ1} with its benches, " +
-               $"{Barrels.Length} barrels for round tables, two candlesticks ({edits.Count} cells)";
+               $"{Barrels.Length} barrels for round tables, two candlesticks ({edits.Count} cells); " + InstallTankard(gameDirectory);
+    }
+
+    // ---- the Tralu's tankard (the user, 2026-11-06: "Move him into the bar area ... with a large tankard of beer") ---------------------------
+    // A body of the build's: a big wooden tankard, two iron hoops, a handle, a head of foam over its brim -- one more body of the mushroom's
+    // entity (the props' entity: CitadelLba1Rooms.PropEntity), at BODY.HQR's end. It stands on the round table (barrel) by the old room's
+    // north wall, its north-west cell (43, 36), at its front cell on the camera's side (43, 37: its bottle taken off for it), the Tralu on
+    // its far side (RaceTrackStory.TraluTavern), half as big again as a mug for Twinsen would be.
+    public const int TankardGeneric = 47;
+    public static readonly (int X, int Y, int Z) TankardAt = (43 * 512 + 256, (FloorLayer + 5) * 256, 37 * 512 + 256);
+
+    private static string InstallTankard(string gameDirectory)
+    {
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var like = LbaBodyStudio.Body.Read(HqrArchive.Open(bodyPath).Read(CitadelLba1Rooms.MushroomBody), 2, allowStatic: true).Header;
+        var palette = HqrArchive.Open(ressPath).Read(0);
+        var m = new Snow.SnowMesh(new Snow.SnowShading(palette, 225, 50));
+        var wood = new Snow.Rgb(126, 80, 42);
+        var iron = new Snow.Rgb(96, 96, 104);
+        var foam = new Snow.Rgb(238, 228, 196);
+        const int Sides = 12;
+        m.Transform = System.Numerics.Matrix4x4.CreateScale(1.5f);
+        // (the staves, a little narrower at the top; the hoops round them; the foam heaped over the brim and down its lip)
+        m.Cylinder(new(0, 0, 0), new(0, 300, 0), 120, 108, Sides, wood, capB: false);
+        m.Cylinder(new(0, 34, 0), new(0, 70, 0), 127, 125, Sides, iron, capA: false, capB: false);
+        m.Cylinder(new(0, 226, 0), new(0, 262, 0), 117, 115, Sides, iron, capA: false, capB: false);
+        m.Cylinder(new(0, 300, 0), new(0, 318, 0), 112, 116, Sides, foam, capA: false, capB: false);
+        m.Ellipsoid(new(0, 318, 0), 116, 54, 116, 6, Sides, foam, below: false);
+        // (the handle: out from the side, down, and back in)
+        m.Beam(new(108, 250, 0), new(190, 240, 0), 34, 30, wood);
+        m.Beam(new(190, 248, 0), new(190, 72, 0), 34, 30, wood);
+        m.Beam(new(190, 80, 0), new(112, 70, 0), 34, 30, wood);
+        var body = new LbaBodyStudio.Body { Game = 2, Lit = false, Static = true, Header = like };
+        body.Bones.Add(new LbaBodyStudio.Bone(0, m.Points.Count, 0, -1, new byte[8]));
+        body.Vertices.AddRange(m.Points);
+        body.SetWorld(m.Points.ToArray());
+        body.Faces.AddRange(m.Faces);
+        body.Validate();
+        var index = HqrArchive.CountEntries(bodyPath);
+        HqrWriter.AppendToFile(bodyPath, body.Write());
+        HqrWriter.ReplaceInFile(ressPath, 44, RaceTrackBaldinoCar.WithBody(HqrArchive.Open(ressPath).Read(44), CitadelLba1Rooms.PropEntity, TankardGeneric, index));
+        return $"the Tralu's tankard: BODY.HQR entry {index} ({body.Faces.Count} faces), the props' entity ({CitadelLba1Rooms.PropEntity}) body {TankardGeneric}";
     }
 }

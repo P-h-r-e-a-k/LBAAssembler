@@ -209,7 +209,9 @@ Back Room. A massive old wooden table runs down the middle of it with a
 bench along either side, plates, bowls, bottles and an oil lamp on it; old barrels stand round the edge as tall round tables, a bottle
 and a plate on each; two iron candlesticks against the north wall, and between them Luc behind a counter of crates. Pat and Fab of
 Raph's band sit on the far bench, the visitor from the Tavern and the drunk rabbibunny on the near one, and -- once he has his
-customer's umbrella back -- Tim serves at the table. Each talks when Twinsen walks up to them and presses Action:
+customer's umbrella back -- Tim serves at the table. By the round table at the north wall, past the old room's arch, stands the Tralu
+with a big tankard of beer on the barrel in front of him (he has left his own hall next door: it is empty now). Each talks when Twinsen
+walks up to them and presses Action:
 
 **Luc:** "Shh! Come in, Twinsen, and keep it down. Welcome to the Back Room: the only bar on Citadel the mayor doesn't know about. A
 proper table, and the Tavern's last bottles... And if you're racing today, it's lemonade for you."
@@ -225,7 +227,7 @@ table. With a mug. [hic!] Don't tell the mayor."
 **Pat:** "No Tavern, no stage... so we brought the band down here. Listen to that echo! Every beat comes back three times. Raph's
 meant to be playing with us, but he won't come off that track."
 
-**Fab:** "And the big fellow next door hasn't come round to complain. Yet."
+**Fab:** "And the big fellow from next door came round to complain. He's still here. Third tankard."
 
 **The visitor:** "Sorry, I'm not from here. Back home we drink in bars. Here you drink in a cave, in secret, in a storm, at a table
 fit for a giant. I love this island."
@@ -233,11 +235,11 @@ fit for a giant. I love this island."
 **Tim** (from the umbrella given back until Twinsen is tired; his doorstep is empty meanwhile): "There you are, Twinsen! My shift on
 the doorstep's over, so I'm on duty down here. Old habits: I can't sit in a bar without carrying a tray. Lemonade?"
 
-The big fellow next door is the Tralu, in his own hall of the caves (scene 2, past the first hall); he doesn't fight, he only
-grumbles:
+The big fellow is the Tralu, from the hall next door (scene 2, past the first hall); he doesn't fight, he only grumbles:
 
-**The Tralu:** "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and
-now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts."
+**The Tralu:** "Grrrr... A hundred years in these caves, with nothing but the drips for company. Then the rain, then that race track,
+and now the whole Tavern's moved into my back room, with drums! A Tralu can't hear himself growl. ...So I may as well have a tankard.
+And stop offering me peanuts."
 
 **The back gate.** From the bar, east past the table, steps go up through the stalagmites onto a landing, and from it a corridor runs
 south over the water to a door into the Tralu's hall: Twinsen comes out on a ledge, a barred gate behind him, and goes down the stairs
@@ -335,9 +337,9 @@ it. Exactly as it was."
 
 If he didn't: **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
 
-(The regulars are back in the Tavern, the Back Room's table is empty, and the Tralu is glad of the quiet: **The Tralu:** "Ahhh... quiet
-at last. The aliens put the Tavern back, and the drums went home with it. Mind you, now they want me in their race. A Tralu in a car!
-Whatever next?")
+(The regulars are back in the Tavern, the Back Room's table is empty, and the Tralu, still at his round table with his tankard, is
+glad of the quiet: **The Tralu:** "Ahhh... quiet at last. The aliens put the Tavern back, and the drums went home with it. The whole
+bar to myself, and my tankard. Mind you, now they want me in their race. A Tralu in a car! Whatever next?")
 
 **4. The yard.** In the yard north of Twinsen's house, where the cars park, Luc, the Tavern's boss, stands beside his car: a beer
 barrel on wheels, with one back wheel missing. Zoe is already lying under it with a spanner.

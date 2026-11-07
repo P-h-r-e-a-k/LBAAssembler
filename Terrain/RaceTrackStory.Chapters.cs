@@ -653,12 +653,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And the big fellow next door hasn't come round to complain. Yet.",
-            "Et le gros, à côté, n'est pas encore venu se plaindre. Pas encore.",
-            "Und der große Kerl nebenan hat sich noch nicht beschwert. Noch nicht.",
-            "Y el grandullón de al lado todavía no ha venido a quejarse. Todavía.",
-            "E il bestione qui accanto non è ancora venuto a lamentarsi. Non ancora.",
-            "E o grandalhão aqui ao lado ainda não veio queixar-se. Ainda.",
+            "And the big fellow from next door came round to complain. He's still here. Third tankard.",
+            "Et le gros d'à côté est venu se plaindre. Il est toujours là. Troisième chope.",
+            "Und der große Kerl von nebenan kam, um sich zu beschweren. Er ist immer noch da. Dritter Krug.",
+            "Y el grandullón de al lado vino a quejarse. Sigue aquí. Tercera jarra.",
+            "E il bestione qui accanto è venuto a lamentarsi. È ancora qui. Terzo boccale.",
+            "E o grandalhão aqui ao lado veio queixar-se. Ainda cá está. Terceira caneca.",
         },
         new[]
         {
@@ -671,21 +671,21 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Grrrr... A hundred years in this cave, with nothing but the drips for company. Then the rain, then that race track, and now the whole Tavern's moved in next door, with drums! A Tralu can't hear himself growl. ...And stop offering me peanuts.",
-            "Grrrr... Cent ans dans cette grotte, avec les gouttes pour seule compagnie. Puis la pluie, puis ce circuit, et maintenant toute la Taverne s'installe à côté, avec des tambours ! Un Tralu ne s'entend même plus grogner. ...Et arrêtez de m'offrir des cacahuètes.",
-            "Grrrr... Hundert Jahre in dieser Höhle, nur die Tropfen als Gesellschaft. Dann der Regen, dann diese Rennstrecke, und jetzt ist die ganze Taverne nebenan eingezogen, mit Trommeln! Ein Tralu hört sich nicht mal mehr selbst knurren. ...Und hört auf, mir Erdnüsse anzubieten.",
-            "Grrrr... Cien años en esta cueva, sin más compañía que las goteras. Luego la lluvia, luego ese circuito, ¡y ahora toda la Taberna se ha mudado aquí al lado, con tambores! Un Tralu ya no se oye ni gruñir. ...Y dejad de ofrecerme cacahuetes.",
-            "Grrrr... Cent'anni in questa grotta, con le gocce come unica compagnia. Poi la pioggia, poi quella pista, e adesso si è trasferita qui accanto tutta la Taverna, con i tamburi! Un Tralu non si sente più nemmeno ringhiare. ...E smettetela di offrirmi noccioline.",
-            "Grrrr... Cem anos nesta gruta, só com as gotas por companhia. Depois a chuva, depois aquela pista, e agora a Taberna inteira mudou-se aqui para o lado, com tambores! Um Tralu já nem se ouve rosnar. ...E parem de me oferecer amendoins.",
+            "Grrrr... A hundred years in these caves, with nothing but the drips for company. Then the rain, then that race track, and now the whole Tavern's moved into my back room, with drums! A Tralu can't hear himself growl. ...So I may as well have a tankard. And stop offering me peanuts.",
+            "Grrrr... Cent ans dans ces grottes, avec les gouttes pour seule compagnie. Puis la pluie, puis ce circuit, et maintenant toute la Taverne s'installe dans mon arrière-salle, avec des tambours ! Un Tralu ne s'entend même plus grogner. ...Alors autant prendre une chope. Et arrêtez de m'offrir des cacahuètes.",
+            "Grrrr... Hundert Jahre in diesen Höhlen, nur die Tropfen als Gesellschaft. Dann der Regen, dann diese Rennstrecke, und jetzt ist die ganze Taverne in mein Hinterzimmer eingezogen, mit Trommeln! Ein Tralu hört sich nicht mal mehr selbst knurren. ...Da trinke ich eben einen Krug. Und hört auf, mir Erdnüsse anzubieten.",
+            "Grrrr... Cien años en estas cuevas, sin más compañía que las goteras. Luego la lluvia, luego ese circuito, ¡y ahora toda la Taberna se ha mudado a mi trastienda, con tambores! Un Tralu ya no se oye ni gruñir. ...Así que me tomo una jarra. Y dejad de ofrecerme cacahuetes.",
+            "Grrrr... Cent'anni in queste grotte, con le gocce come unica compagnia. Poi la pioggia, poi quella pista, e adesso tutta la Taverna si è trasferita nel mio retrobottega, con i tamburi! Un Tralu non si sente più nemmeno ringhiare. ...Tanto vale farsi un boccale. E smettetela di offrirmi noccioline.",
+            "Grrrr... Cem anos nestas grutas, só com as gotas por companhia. Depois a chuva, depois aquela pista, e agora a Taberna inteira mudou-se para a minha sala dos fundos, com tambores! Um Tralu já nem se ouve rosnar. ...Mais vale beber uma caneca. E parem de me oferecer amendoins.",
         },
         new[]
         {
-            "Ahhh... quiet at last. The aliens put the Tavern back, and the drums went home with it. Mind you, now they want me in their race. A Tralu in a car! Whatever next?",
-            "Ahhh... enfin le calme. Les extraterrestres ont remis la Taverne en place, et les tambours sont rentrés avec elle. Remarque, maintenant ils veulent que je fasse leur course. Un Tralu en voiture ! Et puis quoi encore ?",
-            "Ahhh... endlich Ruhe. Die Außerirdischen haben die Taverne zurückgebracht, und die Trommeln sind mit ihr heimgegangen. Allerdings wollen sie mich jetzt in ihrem Rennen haben. Ein Tralu im Auto! Was kommt als Nächstes?",
-            "Ahhh... por fin, silencio. Los extraterrestres han devuelto la Taberna, y los tambores se han ido con ella. Eso sí, ahora quieren que corra en su carrera. ¡Un Tralu en coche! ¿Qué será lo próximo?",
-            "Ahhh... finalmente un po' di pace. Gli alieni hanno rimesso a posto la Taverna, e i tamburi se ne sono tornati con lei. Però adesso vogliono che faccia la loro gara. Un Tralu in macchina! E poi che altro?",
-            "Ahhh... finalmente, sossego. Os extraterrestres puseram a Taberna no lugar, e os tambores foram com ela. Mas agora querem-me na corrida deles. Um Tralu de carro! O que virá a seguir?",
+            "Ahhh... quiet at last. The aliens put the Tavern back, and the drums went home with it. The whole bar to myself, and my tankard. Mind you, now they want me in their race. A Tralu in a car! Whatever next?",
+            "Ahhh... enfin le calme. Les extraterrestres ont remis la Taverne en place, et les tambours sont rentrés avec elle. Tout le bar pour moi, et ma chope. Remarque, maintenant ils veulent que je fasse leur course. Un Tralu en voiture ! Et puis quoi encore ?",
+            "Ahhh... endlich Ruhe. Die Außerirdischen haben die Taverne zurückgebracht, und die Trommeln sind mit ihr heimgegangen. Die ganze Bar für mich allein, und mein Krug. Allerdings wollen sie mich jetzt in ihrem Rennen haben. Ein Tralu im Auto! Was kommt als Nächstes?",
+            "Ahhh... por fin, silencio. Los extraterrestres han devuelto la Taberna, y los tambores se han ido con ella. Todo el bar para mí solo, y mi jarra. Eso sí, ahora quieren que corra en su carrera. ¡Un Tralu en coche! ¿Qué será lo próximo?",
+            "Ahhh... finalmente un po' di pace. Gli alieni hanno rimesso a posto la Taverna, e i tamburi se ne sono tornati con lei. Tutto il bar per me, e il mio boccale. Però adesso vogliono che faccia la loro gara. Un Tralu in macchina! E poi che altro?",
+            "Ahhh... finalmente, sossego. Os extraterrestres puseram a Taberna no lugar, e os tambores foram com ela. O bar todo para mim, e a minha caneca. Mas agora querem-me na corrida deles. Um Tralu de carro! O que virá a seguir?",
         },
         new[]
         {

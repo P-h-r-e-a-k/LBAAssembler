@@ -26,8 +26,12 @@ namespace LBAAssembler.Terrain;
 //     ceiling by the way to the gate (2) -- and the two barred doors those keys opened between the hall and the way to scene 2 (4 and 5:
 //     the regulars come and go that way, RaceTrackStory.TraluCaves), and the spike zones where the hall is now (its stalagmites the build
 //     took out).
-//   - the Tralu in his own hall in the caves' first scene (scene 2: actor 3, where the game has him; his life and track the story's, no
-//     hunt and beyond harm) grumbles that the whole Tavern has moved in next door, with drums; in chapter 2 he is glad of the quiet.
+//   - the Tralu has joined them (the user, 2026-11-06: "Move him into the bar area ... with a large tankard of beer. Keep his lines,
+//     maybe adjusted for being in the bar itself"): the game's Tralu (scene 2's actor 3) copied into the bar, standing at the round
+//     table by the old room's north wall with his big tankard on it (TraluBarRoom.InstallTankard: a body of the build's, the props'
+//     entity), no hunt and beyond harm, grumbling that the whole Tavern has moved into his back room, with drums -- so he may as well
+//     have a tankard; in chapter 2 he has the bar and his tankard to himself. His own hall in the caves' first scene (scene 2) is empty:
+//     its Tralu is gone in every chapter (one Tralu at a time).
 // Chapter 2 (the fine weather): the Esmers have put the Tavern back, the regulars are in it again and gone from the bar (the game's Tavern
 // scene keeps its own); the hall keeps its furniture. None of the regulars stands anywhere else in chapter 1: the Tavern's scene is shut
 // in the storm (its door went with the storm track's road), Luc is in the yard and the rabbibunny round the Esmers' landing only in
@@ -54,8 +58,9 @@ internal static partial class RaceTrackStory
     private static readonly (int X, int Z)[] Crates = { (Cell(31.85), Cell(37.1)), (Cell(33.3), Cell(37.1)), (Cell(34.75), Cell(37.1)) };
     // the benches' seat: the height each one's sitting animation sits at above it (the Tavern's: the stools and chairs they sit on there)
     private const int BenchTop = TraluBarRoom.FloorY + 512;
-    // the Tralu, in his own hall (the game's place for him) facing its gate
-    private static readonly (int X, int Y, int Z, int Beta) TraluHome = (4096, 1792, 18048, 2048);
+    // the Tralu in the bar: east of the round table by the old room's north wall (its barrel's cells x 43-44, z 36-37), facing his tankard
+    // on it (TraluBarRoom.TankardAt)
+    private static readonly (int X, int Z) TraluAt = (Cell(46.1), Cell(37.4));
     // how near Twinsen comes to talk: the regulars' (Luc's across his counter), the Tralu's (a big fellow)
     private const int RegularReach = 750, LucReach = 1600, TraluReach = 1500;
 
@@ -121,6 +126,19 @@ internal static partial class RaceTrackStory
                     crate.Flags = CrateFlags;
                     edits.Add(p.Add(model, crate, OnlyWhile(Storm)));
                 }
+            // (the Tralu at his round table, his tankard on it -- every chapter: his back room, noisy in the storm, his own in chapter 2)
+            if (Copy(p.Originals, TraluCave, CaveTralu) is not { Entity: TraluEntity } tralu) throw new NotTheGames("the cave's Tralu");
+            Place(tralu, TraluAt, TraluBarRoom.FloorY, (TraluBarRoom.TankardAt.X, TraluBarRoom.TankardAt.Z));
+            tralu.Armor = 51;
+            edits.Add(p.Add(model, tralu, Talker("0 < chapter()", $@"            if (2 > chapter())
+            {{
+                message({p.Say(ChapterLine.TraluNoisy)});
+            }}
+            else
+            {{
+                message({p.Say(ChapterLine.TraluQuiet)});
+            }}", TraluReach)));
+            edits.Add(p.Add(model, Prop(TraluBarRoom.TankardAt.X, TraluBarRoom.TankardAt.Y, TraluBarRoom.TankardAt.Z, TraluBarRoom.TankardGeneric, 3072), OnlyWhile("0 < chapter()")));
             return scripts =>
             {
                 foreach (var gone in HallGone)
@@ -132,23 +150,33 @@ internal static partial class RaceTrackStory
             };
         });
 
-        // the Tralu in his own hall, no longer the game's hunter (his life and track the story's), beyond harm: grumbling at the noise
-        p.Edit(TraluCave, "the Tralu in his own hall, grumbling at the secret bar's noise next door (glad of the quiet in chapter 2)", model =>
+        // the Tralu gone from his own hall: he has joined the secret bar next door (above), with his tankard. (The game's barred door,
+        // actor 8 -- the back gate's now, RaceTrackStory.TraluCaves -- takes the Tralu gone for the Tralu killed: var 60 to 2, the
+        // hall's pots broken; that is left out of its script)
+        p.Edit(TraluCave, "the Tralu gone from his own hall: he has joined the secret bar next door, with a tankard", model =>
         {
-            if (model.Actors.ElementAtOrDefault(CaveTralu) is not { Entity: TraluEntity } tralu) throw new NotTheGames("the cave's Tralu");
-            (tralu.X, tralu.Y, tralu.Z, tralu.Beta) = TraluHome;
-            tralu.Armor = 51;
+            if (model.Actors.ElementAtOrDefault(CaveTralu) is not { Entity: TraluEntity }) throw new NotTheGames("the cave's Tralu");
             return scripts =>
             {
-                scripts.SetText(CaveTralu, ScriptKind.Life, Talker("0 < chapter()", $@"            if (2 > chapter())
-            {{
-                message({p.Say(ChapterLine.TraluNoisy)});
-            }}
-            else
-            {{
-                message({p.Say(ChapterLine.TraluQuiet)});
-            }}", TraluReach));
+                scripts.SetText(CaveTralu, ScriptKind.Life, "void comportement_0()\n{\n    suicide();\n}\n");
                 scripts.SetText(CaveTralu, ScriptKind.Track, "label(0);\nstop();\n");
+                scripts.SetText(CaveDoor, ScriptKind.Life, Loose(scripts.GetText(CaveDoor, ScriptKind.Life), @"oneif (1 > life_point_obj(3))
+    {
+        if (1 == var_game(60))
+        {
+            set_var_game(60, 2);
+            set_var_cube(10, 2);
+            set_var_cube(11, 2);
+            set_var_cube(12, 2);
+            set_var_cube(13, 2);
+            set_var_cube(14, 2);
+            hit_obj(12, 1);
+            hit_obj(13, 1);
+            hit_obj(14, 1);
+            hit_obj(15, 1);
+            hit_obj(16, 1);
+        }
+    }", ""));
             };
         });
 
