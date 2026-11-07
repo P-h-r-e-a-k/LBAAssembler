@@ -1196,6 +1196,8 @@ his start, lost and won lines (the race's own, as the other tracks' mains have);
 The elevator comes down into the game's own room at its foot (scene 123), whose laser barriers (actors 10-13) the game has the
 magic ball thrown at their levers to switch off; the story's Twinsen has no ball, so while he has none they are off
 (RaceTrackStory.Wannies.cs ElevatorFoot -- before 2026-11-07 he was shut in the room).
+The game's two guards on the deck outside (scene 98, actors 4-5) are gone while he has no ball, and a ladder (the raised road's,
+RaceTrackIsland.Wannies Ladders) goes up from that deck to the road, where his car stands on the start line (2026-11-07).
 
 **Cast:**
 
