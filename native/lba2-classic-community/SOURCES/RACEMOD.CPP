@@ -114,6 +114,13 @@
  *     main=<n>                   opponent n is the one to beat: the display says whether Twinsen is ahead of him, and win= is finishing
  *                                ahead of him (not first)
  *     finish=<var> <value>...    what the race's end sets, won or not
+ *     once_won=1                 (2026-11-07, the story's) a race won stays won: with its win= variables holding (each at least its
+ *                                value) as the track loads, its start line is inert -- no qualifying lap, no grid, the flag marshal on
+ *                                her plinth (Inert). A race lost runs again as before; Track select's files have no once_won=
+ *     win_stop=<var>             (2026-11-07) a won race's end is a cut-scene: over the line the car is braked to a stop, Twinsen got
+ *                                out of it and the player's controls kept from him until game variable <var> no longer holds what
+ *                                the win (and finish=) left in it -- the story's congratulations and prize have played, out of the
+ *                                car (or RACE_WINSTOP_MS of the game's clock with no change: the controls back all the same)
  *   The opponents (2026-10-03, later): opponent_pace=<lo> <hi> draws its skill between the two each time the track is loaded (the main
  *   opponent's is one number); opponent_small=<generic body> its car shrunk to half its size (the lightning spell).
  *   opponent_hover=<units> <ms> (2026-10-18, the Temple of Bu's witch on her broomstick): a car that flies -- it bobs up and down that far
@@ -664,12 +671,23 @@ static S32 s_runsBest = 0;                  // ... the fastest of them so far (t
 static S32 s_runAgainAt = 0;                // ... when the car goes back to the start for the next run (0: not waiting to)
 #define RACE_RUN_AGAIN_MS 1500             // ... this long after its finish line
 static int s_winSet[2 * RACE_MAX_SETS], s_nbWinSet = 0;
+static int s_onceWon = 0;                  // once_won=: a race won stays won (Inert)
 // won_set=: as win=, but only when the player really beat the one to beat -- a dream that wakes him whoever got there first
 // (dream_any_end=) applies win= either way; the story's DREAM_CAUGHT is a won_set=
 static int s_wonSet[2 * RACE_MAX_SETS], s_nbWonSet = 0;
 // clovers_fill=: the game variable that, at 2, fills Twinsen's clovers to his boxes (and goes back to 0); -1 none
 static int s_cloversFill = -1;
 static int s_place = 0, s_racers = 0;      // the player's place when he finished the race (0: not finished)
+// once_won= (the user, 2026-11-07: "in Story Mode a won race must not start again when Twinsen drives back near the start line"): the
+// race's win= variables all hold (each at least its value), and it isn't the race just finished -- its start line inert: no qualifying
+// lap, no grid, the flag marshal on her plinth. A lost race sets none of them and runs again as before (the final's "another race"
+// takes its win back: raced again too).
+static int Inert(void) {
+    if (!s_onceWon || s_nbWinSet <= 0 || s_place) return 0;
+    for (int i = 0; i + 1 < s_nbWinSet; i += 2)
+        if (s_winSet[i] < 0 || s_winSet[i] > 255 || ListVarGame[s_winSet[i]] < s_winSet[i + 1]) return 0;
+    return 1;
+}
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
 static int s_finishSet[2 * RACE_MAX_SETS], s_nbFinishSet = 0;
@@ -824,6 +842,13 @@ S32 RaceMod_InvCount(S32 slot) { return slot >= 0 && slot < 64 && ((s_invCount >
 static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
 static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
 static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
+// win_stop=: a won race's end, a cut-scene (WinStopStart): its variable, the stage (1 the car braking, 2 Twinsen out and waiting), what
+// the variable held as the race was won, and since when the stage
+// (the file's key, read again with each track; the stage and the variable watched outlive a track loaded again on the way -- the car
+// braking over a cube's edge into the next scene)
+static int s_winStopVar = -1, s_winStop = 0, s_winStopWatch = -1, s_winStopHeld = 0;
+static S32 s_winStopSince = 0;
+#define RACE_WINSTOP_MS 20000              // (the game's clock, which a dialogue stops: this long out of the car with nothing said)
 S32 RaceMod_OnFoot(void);
 static int FootRescue(const char *where);
 static int FootCross(void);
@@ -4582,6 +4607,8 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
         else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
+        else if (!strcmp(key, "once_won")) s_onceWon = atoi(v) != 0;
+        else if (!strcmp(key, "win_stop")) { s_winStopVar = atoi(v); if (s_winStopVar < 0 || s_winStopVar > 255) s_winStopVar = -1; }
         else if (!strcmp(key, "lap_record")) { if (sscanf(v, "%d %d %d", &s_lapRecordMs, &s_lapRecordVar, &s_lapRecordValue) != 3) s_lapRecordVar = -1; }
         else if (!strcmp(key, "margin_win")) { if (sscanf(v, "%d %d %d", &s_marginMs, &s_marginVar, &s_marginValue) != 3) s_marginVar = -1; }
         else if (!strcmp(key, "no_hit")) { if (sscanf(v, "%d %d", &s_noHitVar, &s_noHitValue) != 2) s_noHitVar = -1; }
@@ -5116,6 +5143,7 @@ static void Time(char *out, size_t size, S32 ms);
 static void PackLapLog(int lap);
 static void ChaseStart(void);
 static void ForgetPowerUps(const char *why);
+static void WinStopStart(S32 now);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car is put on the grid. Into the cube beside, by no more than RACE_CUBE_STEP --
     // driven over its edge -- where it came from in the new cube's units: a checkpoint runs on over a cube's edge where the road does,
@@ -5210,6 +5238,13 @@ void RaceMod_Lap(S32 x, S32 z) {
     const S32 now = TimerRefHR;
     // (the story's gate: the race isn't open yet -- no lap begins)
     if (s_laps == 0) {
+        // (a race won already, once_won=: no lap begins -- Inert)
+        if (Inert()) {
+            static S32 said = -100000;
+            if (now - said > 30000 || now < said) Log_Info("[racemod] start line crossed: this race is won already -- no race (once_won=)");
+            said = now;
+            return;
+        }
         if (const T_RACE_GATE *gate = ClosedGate()) {
             Message(gate->Text);
             Log_Info("[racemod] start line crossed, but the race is closed: %s", gate->Text);
@@ -5327,6 +5362,7 @@ void RaceMod_Lap(S32 x, S32 z) {
                 if (!s_heroMissileHits && s_beatMain) SetAtLeast(s_noHitVar, s_noHitValue, "won without one missile hit");
             }
             ApplySets(s_finishSet, s_nbFinishSet);
+            if (s_beatMain) WinStopStart(now);
         }
         if (s_phase == PHASE_QUALIFYING) {
             // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene) -- and the race
@@ -6410,8 +6446,50 @@ void RaceMod_AutoSlide(int on, double onDeg, double plan) {
 // The line the autodrive drives: the pilot's own (autoshort, autoline, autoslide) or the racing line.
 static const T_RACE_OPPONENT *AutoGuide(void) { return (s_autoShort || s_autoSmooth || s_autoSlide) && s_autoLine.Count ? &s_autoLine : Guide(); }
 
+// win_stop=<var> (the user, 2026-11-07: "once Twinsen crosses the line to end the race, take control away so he can't drive off: stop his
+// car just past the finish line, then play the scene where he's congratulated and given the ferry ticket, then hand control back"):
+// the race won, the pilot (autodrive) let go and the player's controls taken (RaceMod_Takeover, RaceMod_FilterInput), the car braked
+// to a stop (RaceMod_AutoInput) and Twinsen got out of it (LeaveBuggy: any scene, no car actor needed) -- out of the car the story's
+// own congratulations play (its scripts wait for him on foot) -- and the controls kept from him until <var> changes from what the win
+// left in it (the story's scene sets it on: Mr. Paul's prize 201 1 -> 2), or RACE_WINSTOP_MS of the game's clock with no change.
+static void WinStopStart(S32 now) {
+    if (s_winStopVar < 0 || s_winStop) return;
+    s_winStop = 1; s_winStopSince = now; s_winStopWatch = s_winStopVar; s_winStopHeld = ListVarGame[s_winStopVar];
+    s_auto = 0; s_stopReach = 0; s_stopping = 0; s_walkN = 0; s_walkCar = 0;
+    Log_Info("[racemod] win_stop: the race won -- the car braked to a stop past the line, Twinsen out of it, the controls his again once variable %d moves on from %d",
+             s_winStopVar, s_winStopHeld);
+}
+// Every frame (RaceMod_Frame): the controls back once the story's scene has played
+static void WinStopFrame(S32 now) {
+    if (s_winStop != 2 || s_winStopWatch < 0) return;
+    if (ListVarGame[s_winStopWatch] != s_winStopHeld) {
+        s_winStop = 0;
+        Log_Info("[racemod] win_stop: variable %d %d -> %d -- the controls back to the player", s_winStopWatch, s_winStopHeld, (int)ListVarGame[s_winStopWatch]);
+    } else if (now - s_winStopSince > RACE_WINSTOP_MS) {
+        s_winStop = 0;
+        Log_Info("[racemod] win_stop: WARNING -- variable %d still %d after %d s out of the car: the controls back to the player all the same",
+                 s_winStopWatch, s_winStopHeld, RACE_WINSTOP_MS / 1000);
+    }
+}
+// (RaceMod_AutoInput: the brake, then out once it stands -- as the action key lets him out, not in the air, over a jump or round a loop)
+static U32 WinStopInput(void) {
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    if (abs(ListBuggy[0].Speed) > 300) return ListBuggy[0].Speed > 0 ? I_DOWN : I_UP;
+    const int still = !(h->WorkFlags & FALLING) && s_flying < 0 && s_arcOn < 0 && s_loopOn < 0 && s_loopState == LOOP_NONE
+                      && TimerRefHR >= s_jetUntil && TimerRefHR >= s_skidUntil && h->GenAnim < RACE_JUMP_ANIM_FIRST && NewCube == -1;
+    if (!still) return 0;
+    Log_Info("[racemod] win_stop: the car stands at (%.0f,%d,%.0f) in scene %d -- Twinsen out of it", h->Obj.X + CurrentCubeX * 32768.0, (int)h->Obj.Y,
+             h->Obj.Z + CurrentCubeY * 32768.0, (int)NumCube);
+    ListObjet[NUM_PERSO].Move = MOVE_MANUAL;
+    LeaveBuggy(C_NORMAL);
+    s_winStop = 2; s_winStopSince = TimerRefHR;
+    return 0;
+}
+
 U32 RaceMod_AutoInput(void) {
     if (s_ghostWatch) return 0;
+    // (win_stop=: the won race's car braked to a stop and Twinsen out of it -- WinStopInput)
+    if (s_winStop == 1 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return WinStopInput();
     // (the console's racewalk: on foot, through its points -- on_foot=; and its points anywhere Twinsen is on foot, outside or in: the
     // scripted playthrough's walks by the keys, not teleports, 2026-11-07)
     if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
@@ -7893,6 +7971,12 @@ static void MarshalHop(S32 now) {
 static void MarshalWhere(S32 now) {
     T_RACE_MARSHAL *m = &s_marshal;
     if (!m->HasStart || !s_nbSpots) return;
+    // (a race won already, once_won=: on her plinth, the road clear -- Inert)
+    if (Inert()) {
+        if (m->Where == MARSHAL_AT_START) { m->Where = MARSHAL_AT_PLINTH; m->CX = m->X; m->CZ = m->Z; m->CY = m->Y; m->CBeta = m->Beta; Log_Info("[racemod] the flag marshal on her plinth: this race is won already (once_won=)"); }
+        if (m->Where == MARSHAL_HOPPING) MarshalHop(now);
+        return;
+    }
     const int qualifying = s_phase == PHASE_QUALIFYING;
     const int toStart = s_phase == PHASE_WAIT || s_phase == PHASE_GRID || (qualifying && s_laps == 0);
     if (toStart && m->Where != MARSHAL_AT_START)
@@ -7965,7 +8049,7 @@ static void Marshal(S32 now) {
     if (finishing && m->WaveUntil && (now < m->WaveUntil || !m->MeFinished)) want = MARSHAL_WAVE;
     else if (s_nbSpots && s_phase == PHASE_GRID && s_goAt && now >= s_goAt - RACE_MARSHAL_RAISE) { want = MARSHAL_RAISE; why = "the count-down"; }
     else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now >= s_goAt && now < s_goAt + RACE_MARSHAL_DROP) { want = MARSHAL_DROP; why = "go"; }
-    else if (s_phase == PHASE_QUALIFYING && s_laps == 0 && Comportement == C_BUGGY) { want = MARSHAL_RAISE; why = "Twinsen's qualifying lap"; }
+    else if (s_phase == PHASE_QUALIFYING && s_laps == 0 && Comportement == C_BUGGY && !Inert()) { want = MARSHAL_RAISE; why = "Twinsen's qualifying lap"; }
     else if (s_phase == PHASE_QUALIFYING && s_laps == 1 && now >= s_lapStart && now < s_lapStart + RACE_MARSHAL_DROP) { want = MARSHAL_DROP; why = "the qualifying lap begins"; }
     if (want == m->Want) return;
     if (want == MARSHAL_RAISE) Log_Info("[racemod] the flag marshal raises the start flag: %s", why);
@@ -10000,6 +10084,7 @@ static void ForgetPowerUps(const char *why) {
 // SAVEGAME.CPP, once a saved game is loaded (its clock set).
 void RaceMod_GameLoaded(void) {
     if (RaceMod_Active()) ForgetPowerUps("a saved game loaded");
+    s_winStop = 0;
 }
 
 // A jet-pack's factor now (`until`: when it ends, `full`: its factor): full, then over its last RACE_JET_EASE_MS back down to 1 -- the car
@@ -12580,6 +12665,9 @@ static void SkidSound(void) {
 // (on_foot=: the action key gets him out of a car all but stopped, never one that drives; on foot it gets him in by the car, and Ctrl
 // takes him back to it -- OnFoot)
 U32 RaceMod_FilterInput(U32 input) {
+    // (win_stop=: a won race's cut-scene -- nothing but the menus' keys while the car stops and the story's scene plays; the brake is
+    // RaceMod_AutoInput's own, kept)
+    if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0));
     s_useHeld = (input & I_COMPORTEMENT) != 0;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
     // (the inventory's key -- Shift -- and a pad's Y are the handbrake in the car: RaceMod_Handbrake)
@@ -12709,6 +12797,7 @@ double RaceMod_JetSteer(void) {
 // PERSO.CPP: the jet-pack has the controls (the player's own keys are left out while it lasts) -- when there is a line for it to drive
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
+    if (s_winStop == 1 && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (win_stop=: the car braked to a stop for him)
     if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return 1;   // (the console's racewalk)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) return 1;   // (a ghost played back drives the car: GhostWatch)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
@@ -17610,6 +17699,7 @@ void RaceMod_Frame(void) {
         if (s_footRoom != was) Log_Info("[racemod] Twinsen on foot %s", s_footRoom >= 0 ? "in a room under the ground: the camera under its ceiling" : "out of the room under the ground");
     }
     TortoiseWatch(TimerRefHR);
+    WinStopFrame(TimerRefHR);
     if (s_unlockAtVar >= 0 && s_unlockAtVar < 256 && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
         s_unlockAtDone = 1;
         Log_Info("[racemod] game variable %d at %d: the story unlock %s", s_unlockAtVar, (int)ListVarGame[s_unlockAtVar], s_unlockAt);
@@ -17681,7 +17771,7 @@ void RaceMod_Frame(void) {
         }
     }
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
-    if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
+    if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && !Inert() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     RaceHideActors();
     RoadKeep();
     // (a teleporter takes Twinsen on foot too: the user, 2026-10-31, "I don't seem to be able to trigger the teleport in the palace ... on foot")
@@ -19883,7 +19973,7 @@ void RaceMod_Draw(void) {
                 }
             }
             else if (s_place) snprintf(text, sizeof(text), "Finished %d%s of %d", s_place, Ordinal(s_place), s_racers);
-            else if (s_phase == PHASE_WAIT) snprintf(text, sizeof(text), "Drive to the start line");
+            else if (s_phase == PHASE_WAIT) { if (!Inert()) snprintf(text, sizeof(text), "Drive to the start line"); }
             else if (s_phase == PHASE_GRID) text[0] = 0;
             else if (s_laps > 0) {
                 // (a lap just driven: its number and time held a moment, still, before the new lap's clock -- a time trial's new best
@@ -19906,7 +19996,7 @@ void RaceMod_Draw(void) {
                 } else snprintf(text, sizeof(text), "Lap %d  %s", (int)lap, a);
             } else if (const T_RACE_GATE *gate = ClosedGate())
                 snprintf(text, sizeof(text), "%s", gate->Text);
-            else
+            else if (!Inert())
                 snprintf(text, sizeof(text), "Cross the start line");
         }
         if (text[0]) HudSmallIn(16, bottom, text, -1, colour);
@@ -20046,7 +20136,7 @@ static void ResetTrack(void) {
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_trialHide[0] = s_trialHide[1] = -1; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0; s_raceRun = 0;
     GhostReset();
-    s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
+    s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0; s_winStopVar = -1; s_onceWon = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots)); HeardReset();
@@ -20123,6 +20213,7 @@ void RaceMod_Island(S32 island) {
     Load(path, want ? 0 : 1);
     HoldVars();
     if (want) Log_Info("[racemod] island %d%s: its track, %s", (int)island, island == 0 ? (fine ? " (fine weather)" : " (storm)") : "", path);
+    if (want && Inert()) Log_Info("[racemod] this race is won already (once_won=): its start line inert -- no qualifying lap, no grid");
     else Log_Info("[racemod] island %d: no track -- the car alone", (int)island);
 }
 

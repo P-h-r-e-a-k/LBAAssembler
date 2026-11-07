@@ -6,7 +6,11 @@ in [LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md), which has the build notes; this
 
 **How the story works:**
 - **One race per island.** The story visits fifteen tracks in order, and each is raced once. Lose, and you race it again until you win;
-  once won, a track is closed for the season. The dream is the exception: it's run once, win or lose.
+  once won, a track is closed for the season: driving back over its start line starts no qualifying lap and no grid. The dream is the
+  exception: it's run once, win or lose.
+- **Over the line, a cut-scene.** Win, and the game takes the wheel: the car brakes to a stop just past the line, Twinsen gets out, and
+  the congratulations (and the prize) play before he can move again. On the volcano, Island CX and the lava lake the car stays yours:
+  walk up to whoever has the next word.
 - **A small quest before each race.** Someone has shut the track, or wants something first. Solve it, and the marshal drops the flag.
 - **Zoe** is with Twinsen from chapter 2 on. She follows him on foot, and talking to her (Action beside her) gives a hint for whatever
   he's stuck on. In a race she runs the pit box by the start line: drive slowly through it (under 20 km/h) for a pit stop, once a lap.
@@ -441,7 +445,7 @@ straight.
 
 **Zoe** (at a pit stop): "Fuel's in, wheels are on. Go!"
 
-**11. Won.**
+**11. Won.** The car brakes to a stop just past the line and Twinsen gets out; Mr. Paul comes over with the prize.
 
 **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers."
 

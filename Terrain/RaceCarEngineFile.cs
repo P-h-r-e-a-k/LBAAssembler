@@ -344,6 +344,12 @@ internal static class RaceCarEngineFile
         if (story && info is not null && RaceTrackStory.RaceKeysA(RaceTrackIsland.ByName(info.Island)) is { } keysA) text.Append(keysA);
         // chapters 8-10's (the Elevator Platform, Wannies Island's glove, Mosquibees Island's ring: RaceTrackStory.StoryRaceKeysB)
         if (story && info is not null) text.Append(RaceTrackStory.StoryRaceKeysB(RaceTrackIsland.ByName(info.Island)));
+        // a won story race's end, a cut-scene: the car braked to a stop past the line, Twinsen out of it, the controls his again once the
+        // story's congratulations have played -- RACEMOD.CPP win_stop= (WinStopVar)
+        if (story && info is not null && WinStopVar(RaceTrackIsland.ByName(info.Island), town) is int winStop) text.Append($"win_stop={winStop}\n");
+        // and a story race won stays won: driving back to its start line starts no qualifying lap and no grid (a lost one runs again) --
+        // RACEMOD.CPP once_won= (the user, 2026-11-07); Track select's races as they were
+        if (story) text.Append("once_won=1\n");
         // the easter eggs' (Bù's lap record, the monster's margin, the grey paint, the Wizard's weather, the tortoise: RaceTrackStory.EggRaceKeys)
         if (story && info is not null)
             foreach (var key in RaceTrackStory.EggRaceKeys(RaceTrackIsland.ByName(info.Island), town, info.Story, opponents.Select(o => o.Name).ToList())) text.Append(key).Append('\n');
@@ -379,6 +385,22 @@ internal static class RaceCarEngineFile
         foreach (var lift in info?.DeckLifts ?? new()) text.Append($"deck_lift={lift}\n");
         return text.ToString();
     }
+
+    // win_stop=<var> (the user, 2026-11-07: the town race won, Twinsen's car stopped past the line, his controls taken while he's congratulated
+    // and given the ferry ticket, then handed back): the story's races whose congratulations play by themselves once Twinsen is out of his
+    // car, and the variable their scene moves on as it plays -- the controls back then. The town circuit (Mr. Paul's prize: 201 1 -> 2), the
+    // Desert, the Emerald Moon, Otringal and the Francos (their quest's "won" -> "done"), the Elevator Platform, Wannies and the Mosquibees
+    // (the after-race lines' 246 1 -> 0) and the final (239 2 -> the wish granted, or another race). Not the volcano (Lyra's word is talked
+    // for) nor Island CX (its scene's own flag), nor the lava lake (the seller is talked to): they keep the car to the player.
+    internal static int? WinStopVar(RaceTrackIsland island, bool town) =>
+        town ? RaceTrackStory.WonVar
+        : island == RaceTrackIsland.Desert ? RaceTrackStory.QPages
+        : island == RaceTrackIsland.Emerald ? RaceTrackStory.QHal
+        : island == RaceTrackIsland.Otringal ? RaceTrackStory.QFee
+        : island == RaceTrackIsland.Knartas ? RaceTrackStory.QFuel
+        : island == RaceTrackIsland.Elevator || island == RaceTrackIsland.Wannies || island == RaceTrackIsland.Mosquibe ? RaceTrackStory.RaceDoneB
+        : island == RaceTrackIsland.Celebration ? RaceTrackStory.FinalStep
+        : null;
 
     // The best setup (RaceCarSetup.TrackSetups) of the track a record races: its island's entry's -- of an island with a track in each
     // file, the entry of the one raced (Citadel Island's town circuit or its storm track, as Raced picks) -- null for a track with none.

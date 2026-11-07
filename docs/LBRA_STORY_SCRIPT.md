@@ -643,7 +643,10 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    QualifyingArrival; the user, 2026-11-06: "arriving there in the car does nothing"); with the wheel not yet on, the gate's line
    instead: "Mr. Paul: six cars! Luc's a wheel short." Then six cars, three laps (built). Flick drops the flag. Beat
    Mr. Paul.
-12. **Won.** Mr. Paul (built):
+12. **Won.** A cut-scene (built: the race file's `win_stop=201`, RACEMOD.CPP): over the line the car brakes to a stop, Twinsen gets
+   out, and his controls stay locked until Mr. Paul's prize has played (201 1 -> 2). The same `win_stop=` on the Desert, the Moon,
+   Otringal, the Francos, the Elevator Platform, Wannies, the Mosquibees and the final (RaceCarEngineFile.WinStopVar); every story
+   track's `once_won=1` keeps a won race from starting again at its start line. Mr. Paul (built):
    > **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers."
 
    Found: Ferry Ticket (item 13), 50 kashes.
