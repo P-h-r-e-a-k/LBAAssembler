@@ -5087,6 +5087,7 @@ static void SprintOver(S32 now, int crossed);
 static void RaceFromGrid(void);
 static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot);
 static void TrialStartSpot(void);
+static void QualifyingArrival(int wrongWay, S32 now);
 static int SprintRunAgain(S32 now);
 static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
@@ -5108,6 +5109,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     const int same = pcx == CurrentCubeX && pcz == CurrentCubeY;
     const int beside = pcx >= 0 && !same && abs(CurrentCubeX - pcx) <= 1 && abs(CurrentCubeY - pcz) <= 1 && abs(x - x0) + abs(z - z0) <= RACE_CUBE_STEP;
     px = x; pz = z; pcx = CurrentCubeX; pcz = CurrentCubeY;
+    // (at the start line before the qualifying lap, stopped there: QualifyingArrival -- moving or not)
+    QualifyingArrival(0, TimerRefHR);
     if (!(same || beside) || (x == x0 && z == z0)) return;
     // (a ghost played back: the car is driven along it, and no lap is counted -- RaceMod_Frame, GhostWatch)
     if (s_ghostWatch) return;
@@ -5175,7 +5178,10 @@ void RaceMod_Lap(S32 x, S32 z) {
         return;
     }
     T_RACE_LINE line = {s_car.LineCubeX, s_car.LineCubeZ, s_car.LineX0, s_car.LineZ0, s_car.LineX1, s_car.LineZ1, s_car.LineDirX, s_car.LineDirZ, s_lineY, s_lineHasY};
-    if (CrossLine(&line, x0, z0, x, z) <= 0) return;
+    const int crossedLine = CrossLine(&line, x0, z0, x, z);
+    // (over it the wrong way before the qualifying lap: QualifyingArrival)
+    if (crossedLine < 0 && s_laps == 0) QualifyingArrival(1, TimerRefHR);
+    if (crossedLine <= 0) return;
     // (a sprint's start line counts once: its race begins there)
     if (s_sprint && s_laps > 0) return;
     const S32 now = TimerRefHR;
@@ -6906,6 +6912,66 @@ static void PlayerOnSpot(const T_RACE_SPOT *spot) {
     ListBuggy[0].Speed = 0;
     ListBuggy[0].SpeedInc = 0;
     s_forgetLap = 1;
+}
+
+// ---- the qualifying lap's start, made plain ----------------------------------------------------------------------------------------
+// The user, 2026-11-06 (Citadel's town circuit, chapter 2): told to drive to the start line, he did, and "arriving there in the car does
+// nothing". Before a qualifying lap the race begins only when the car crosses the start line the lap's way ("Cross the start line"); the
+// town's roads bring a car onto the circuit behind the line the wrong way round, so it came over the line backwards or stopped on the grid
+// by it, and nothing said why. Now a car at the start line before its qualifying lap -- over it the wrong way, or stopped
+// (RACE_ARRIVE_STILL) within RACE_ARRIVE_NEAR of the line or of a grid spot -- is put on pole (behind the line, facing the lap's way: the
+// grid's first spot) and told to drive over the line, which starts the lap; once, until the car has left the line's surroundings
+// (RACE_ARRIVE_LEAVE) -- and only after it has been away from them since the track loaded (a race that starts on pole is left as it
+// was). With the story's gate still shut its line is said instead: what the race is waiting for.
+#define RACE_ARRIVE_NEAR (4 * 512)
+#define RACE_ARRIVE_LEAVE (12 * 512)
+#define RACE_ARRIVE_STILL 600              // ms
+#define RACE_ARRIVE_SLOW 120               // the car's speed (ListBuggy) under this: stopped
+static int s_arrived = 0;                  // put on pole (or told of the gate) at the line, until the car leaves its surroundings
+static S32 s_arriveStill = 0;              // since when the car has stood at the line (0: it hasn't)
+
+// How far (island units) Twinsen is from the start line (its segment) and from the nearest grid spot, whichever is nearer
+static double ArriveDistance(void) {
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    const double hx = h->Obj.X + CurrentCubeX * 32768.0, hz = h->Obj.Z + CurrentCubeY * 32768.0;
+    const double ax = s_car.LineCubeX * 32768.0 + s_car.LineX0, az = s_car.LineCubeZ * 32768.0 + s_car.LineZ0;
+    const double bx = s_car.LineCubeX * 32768.0 + s_car.LineX1, bz = s_car.LineCubeZ * 32768.0 + s_car.LineZ1;
+    const double sx = bx - ax, sz = bz - az, s2 = sx * sx + sz * sz;
+    double u = s2 > 0 ? ((hx - ax) * sx + (hz - az) * sz) / s2 : 0;
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
+    double best = hypot(ax + sx * u - hx, az + sz * u - hz);
+    for (int i = 0; i < s_nbSpots; i++) {
+        const double d = hypot(s_spots[i].CubeX * 32768.0 + s_spots[i].X - hx, s_spots[i].CubeZ * 32768.0 + s_spots[i].Z - hz);
+        if (d < best) best = d;
+    }
+    return best;
+}
+
+static void QualifyingArrival(int wrongWay, S32 now) {
+    if (s_phase != PHASE_QUALIFYING || s_laps != 0 || s_trial || s_ghostWatch || !s_nbSpots || !s_car.HasLine || Comportement != C_BUGGY ||
+        CubeMode != CUBE_EXTERIEUR || NewCube != -1) { s_arriveStill = 0; return; }
+    const double d = ArriveDistance();
+    if (d > RACE_ARRIVE_LEAVE) { s_arrived = 0; s_arriveStill = 0; return; }
+    if (s_arrived) return;
+    int arrive = wrongWay;
+    if (!arrive && d < RACE_ARRIVE_NEAR) {
+        if (abs(ListBuggy[0].Speed) >= RACE_ARRIVE_SLOW) s_arriveStill = 0;
+        else if (!s_arriveStill) s_arriveStill = now ? now : 1;
+        else if (now - s_arriveStill >= RACE_ARRIVE_STILL) arrive = 1;
+    }
+    if (!arrive) return;
+    s_arrived = 1; s_arriveStill = 0;
+    const char *how = wrongWay ? "over it the wrong way" : "stopped by it";
+    if (const T_RACE_GATE *gate = ClosedGate()) {
+        Message(gate->Text);
+        Log_Info("[racemod] at the start line before the qualifying lap (%s), the race closed: %s", how, gate->Text);
+        return;
+    }
+    const T_RACE_SPOT *pole = &s_spots[0];
+    if (CurrentCubeX != pole->CubeX || CurrentCubeY != pole->CubeZ) { s_arrived = 0; return; }
+    PlayerOnSpot(pole);
+    Message("Qualifying lap: over the start line!");
+    Log_Info("[racemod] at the start line before the qualifying lap (%s, %.1f cells from it): the car put on pole, facing the lap's way", how, d / 512);
 }
 
 // The grid: every racer by its time (the player's qualifying lap; without qualifying the player is on pole -- or, grid_back=, at the
@@ -19842,6 +19908,9 @@ static void ResetTrack(void) {
     s_raceSkyOff = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
+    // (the start line's "arrival" -- QualifyingArrival -- only once the car has been away from it: a race that starts with the car on
+    // pole, the race game's, says nothing more)
+    s_arrived = 1; s_arriveStill = 0;
     s_online = s_netGo = s_netQual = 0;
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));

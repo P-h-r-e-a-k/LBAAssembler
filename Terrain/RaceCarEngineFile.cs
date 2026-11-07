@@ -331,7 +331,7 @@ internal static class RaceCarEngineFile
         {
             text.Append($"gate={RaceTrackStory.DayVar} {RaceTrackStory.Rested} The new track opens tomorrow\n");
             // (and six cars on the grid: Luc's barrel back on four wheels -- RaceTrackStory.Chapters.cs, Yard)
-            text.Append($"gate={RaceTrackStory.QLucCar} {RaceTrackStory.WheelFitted} Mr. Paul: six cars on the grid first!\n");
+            text.Append($"gate={RaceTrackStory.QLucCar} {RaceTrackStory.WheelFitted} Mr. Paul: six cars! Luc's a wheel short.\n");
             text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.WonVar} 1\n");
         }
         // Celebration Island's lava lake: three laps against the souvenir seller; ahead of him he tells what he knows (RaceTrackStory)
