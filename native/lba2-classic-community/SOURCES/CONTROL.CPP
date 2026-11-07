@@ -1490,6 +1490,28 @@ int Control_ReplayCutShort(void) {
     return s_left_for_menu ? 1 : 0;
 }
 
+/* The console's stepend (2026-11-07, the scripted playthrough by inputs alone): the run's tick count moved on to just before its last
+   --exec-at, so that one and every other not yet run fire on the next tick -- a step's end (its state dump and save) as soon as what it
+   played is done, not at a tick budget sized for the slowest walk. Returns the tick jumped to (-1: nothing left to run). */
+long Control_StepEnd(void) {
+    int i;
+    long last = -1;
+    for (i = 0; i < s_exec_at_count; i++)
+        if (!s_exec_at[i].fired && s_exec_at[i].tick > last) last = s_exec_at[i].tick;
+    if (last < 0) return -1;
+    {
+        const long now = s_hook_calls - 1;
+        long first = last;
+        for (i = 0; i < s_exec_at_count; i++)
+            if (!s_exec_at[i].fired && s_exec_at[i].tick < first) first = s_exec_at[i].tick;
+        /* (to the first of what is left -- the step's end: its dump and screenshot, then its save the tick after) */
+        if (first - 1 > now) s_hook_calls += first - 1 - now;
+        fprintf(stderr, "[control] stepend: at tick %ld, on to tick %ld\n", now, first - 1);
+        fflush(stderr);
+        return first - 1;
+    }
+}
+
 int Control_UnfiredExecAt(void) {
     int i, n = 0;
 

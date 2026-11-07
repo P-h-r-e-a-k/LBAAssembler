@@ -2684,6 +2684,16 @@ static void cmd_goto(int argc, const char *argv[]) {
     Console_Print("goto: %d place(s)%s%s", n, actor >= 0 ? ", then to an actor" : "", action ? ", then the action key" : "");
 }
 
+/* stepend: a scripted run's tick count moved on to its next --exec-at (CONTROL.CPP Control_StepEnd) -- a playthrough step ended as soon
+   as what it played is done (its end's state dump and save are the next scheduled), not at a budget sized for the slowest walk */
+extern "C" long Control_StepEnd(void);   // (CONTROL.H's C block)
+static void cmd_stepend(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    const long t = Control_StepEnd();
+    if (t < 0) Console_Print("stepend: nothing scheduled left");
+    else Console_Print("stepend: on to tick %ld", t);
+}
+
 /* gotomap <file.ppm>: the goto planner's map of the cube Twinsen is in (RACEMOD.CPP RaceMod_GotoMap) */
 static void cmd_gotomap(int argc, const char *argv[]) {
     extern void RaceMod_GotoMap(const char *file);
@@ -3223,7 +3233,9 @@ void Console_RegisterAll(void) {
                               "goto <x z>... [actor <n> [reach]] [action] (island units outside, the scene's inside) | goto off",
                               "Each place in turn: outside by a way planned round decors, water and steps over the cube's ground, "
                               "through scene edges and doors. For headless tests that go by inputs alone.");
-    Console_RegisterCommandEx("gotomap", cmd_gotomap, "Test: the goto planner's map of the cube Twinsen is in, as a PPM picture",
+    Console_RegisterCommandEx("stepend", cmd_stepend, "Test: a scripted run on to its next scheduled --exec-at at once",
+                              "stepend", "For a playthrough step that is done: its end's dump and save run on the next tick.");
+    Console_RegisterCommandEx("gotomap", cmd_gotomap,"Test: the goto planner's map of the cube Twinsen is in, as a PPM picture",
                               "gotomap <file.ppm>", "A pixel a cell of 256: grey ground by height, blue a decor's top, red nowhere to stand.");
     Console_RegisterCommandEx("walkto", cmd_walkto, "Test: walk Twinsen on foot through points by the keys a player would press",
                               "walkto <x z>... [actor <n> [reach]] [action] (island units outside, the scene's inside) | walkto off",

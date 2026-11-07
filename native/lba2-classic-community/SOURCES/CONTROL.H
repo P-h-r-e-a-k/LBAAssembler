@@ -92,6 +92,9 @@ void Control_ServiceListen(void);
 /* Number of --exec-at entries whose tick the run never reached, reported on stderr as a
    side effect. Non-zero means the run did not do what was asked of it. */
 int Control_UnfiredExecAt(void);
+/* The console's stepend: the run's tick count on to its next --exec-at not yet run (a playthrough step's end as soon as it is
+   done); the tick it is now, -1 when nothing is left. */
+long Control_StepEnd(void);
 /* PERSO.CPP's ESC break: the in-game menu is a return from MainLoop, and a harness run
    enters MainLoop once, so this return ends the run. Told to the harness so it can tell
    that from the benign early returns (LM_THE_END, the demo watchdog). */
