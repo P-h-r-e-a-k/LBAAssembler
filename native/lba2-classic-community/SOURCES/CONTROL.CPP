@@ -1494,25 +1494,25 @@ int Control_ReplayCutShort(void) {
     return s_left_for_menu ? 1 : 0;
 }
 
-/* The console's stepend (2026-11-07, the scripted playthrough by inputs alone): the run's tick count moved on to just before its last
-   --exec-at, so that one and every other not yet run fire on the next tick -- a step's end (its state dump and save) as soon as what it
-   played is done, not at a tick budget sized for the slowest walk. Returns the tick jumped to (-1: nothing left to run). */
+/* The console's stepend (2026-11-07, the scripted playthrough by inputs alone): a handoff step is done -- its own commands not yet run
+   are dropped, and the run's tick count moves on to its end: the last two ticks of what is scheduled (the runner's state dump and
+   screenshot, then its save the tick after), which run on the next ticks -- a step's end as soon as what it played is done, not at a tick
+   budget sized for the slowest walk. (For a run of one step only: a long chain's later steps would be dropped too.) Returns the tick
+   jumped to (-1: nothing left to run). */
 long Control_StepEnd(void) {
-    int i;
+    int i, dropped = 0;
     long last = -1;
     for (i = 0; i < s_exec_at_count; i++)
         if (!s_exec_at[i].fired && s_exec_at[i].tick > last) last = s_exec_at[i].tick;
     if (last < 0) return -1;
     {
-        const long now = s_hook_calls - 1;
-        long first = last;
+        const long now = s_hook_calls - 1, end = last - 1;
         for (i = 0; i < s_exec_at_count; i++)
-            if (!s_exec_at[i].fired && s_exec_at[i].tick < first) first = s_exec_at[i].tick;
-        /* (to the first of what is left -- the step's end: its dump and screenshot, then its save the tick after) */
-        if (first - 1 > now) s_hook_calls += first - 1 - now;
-        fprintf(stderr, "[control] stepend: at tick %ld, on to tick %ld\n", now, first - 1);
+            if (!s_exec_at[i].fired && s_exec_at[i].tick < end) { s_exec_at[i].fired = 1; dropped++; }
+        if (end - 1 > now) s_hook_calls += end - 1 - now;
+        fprintf(stderr, "[control] stepend: at tick %ld, on to tick %ld (%d scheduled command(s) of the step dropped)\n", now, end - 1, dropped);
         fflush(stderr);
-        return first - 1;
+        return end - 1;
     }
 }
 
