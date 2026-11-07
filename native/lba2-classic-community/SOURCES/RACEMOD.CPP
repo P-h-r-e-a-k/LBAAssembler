@@ -815,6 +815,7 @@ S32 RaceMod_OnFoot(void);
 static int FootRescue(const char *where);
 static int FootCross(void);
 static U32 WalkInput(void);
+static U32 DriveInput(void);
 static int s_trial = 0;                    // trial=
 static int s_online = 0;                   // online=: another player's car on the road with this one (NETRACE.CPP); a time trial's race file, with no ghost, with its race's mushrooms
 static int s_netGo = 0;                    // ... and the host has said go
@@ -6389,8 +6390,11 @@ static const T_RACE_OPPONENT *AutoGuide(void) { return (s_autoShort || s_autoSmo
 
 U32 RaceMod_AutoInput(void) {
     if (s_ghostWatch) return 0;
-    // (the console's racewalk: on foot, through its points -- on_foot=)
-    if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return CubeMode == CUBE_EXTERIEUR ? WalkInput() : 0;
+    // (the console's racewalk: on foot, through its points -- on_foot=; and its points anywhere Twinsen is on foot, outside or in: the
+    // scripted playthrough's walks by the keys, not teleports, 2026-11-07)
+    if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
+    // (... and in his car, driven through them: DriveInput)
+    if (s_walkN > 0 && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return DriveInput();
     // (the console's racestop: the test pilot's car stopped where it comes within reach of a place, and Twinsen out of it)
     if (s_stopReach > 0 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) {
         const T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -12191,10 +12195,12 @@ void RaceMod_Walk(int n, const double *xz, int car, int more) {
 // (RaceMod_AutoInput, on foot: turned towards the next point, walking once it is about ahead; the next once within reach of it)
 static U32 WalkInput(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    // (outside, island units; inside, the scene's own)
+    const int out = CubeMode == CUBE_EXTERIEUR;
+    const double wx = hero->Obj.X + (out ? CurrentCubeX * 32768.0 : 0), wz = hero->Obj.Z + (out ? CurrentCubeY * 32768.0 : 0);
     double tx, tz;
     if (s_walkAt < s_walkN) { tx = s_walkX[s_walkAt]; tz = s_walkZ[s_walkAt]; }
-    else if (s_walkCar && IsBuggyPresent()) {
+    else if (s_walkCar && IsBuggyPresent() && out) {
         const S_BUGGY *ptb = &ListBuggy[0];
         if (ptb->Cube != (S32)NumCube) return 0;
         tx = ptb->X + CurrentCubeX * 32768.0; tz = ptb->Z + CurrentCubeY * 32768.0;
@@ -12207,6 +12213,26 @@ static U32 WalkInput(void) {
     U32 in = 0;
     if (turn > 60) in |= I_LEFT; else if (turn < -60) in |= I_RIGHT;
     if (abs(turn) < 500) in |= I_UP;
+    return in;
+}
+
+// The console's racewalk in the car: the car driven through the points (island units) by the keys -- the accelerator held, steered for
+// the next point, which counts as reached within RACE_DRIVE_REACH; the last reached, the keys let go (the step brakes if it wants).
+#define RACE_DRIVE_REACH (2 * 512)
+static U32 DriveInput(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    if (s_walkAt >= s_walkN) { s_walkN = 0; Log_Info("[racemod] racewalk: the car at its last point (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); return 0; }
+    const double dx = s_walkX[s_walkAt] - wx, dz = s_walkZ[s_walkAt] - wz;
+    if (sqrt(dx * dx + dz * dz) < RACE_DRIVE_REACH) {
+        Log_Info("[racemod] racewalk: the car at point %d (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz);
+        s_walkAt++;
+        return I_UP;
+    }
+    const S32 want = TurnRound(atan2(dx, dz));
+    const S32 turn = ((want - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
+    U32 in = I_UP;
+    if (turn > 40) in |= I_LEFT; else if (turn < -40) in |= I_RIGHT;
     return in;
 }
 

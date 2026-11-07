@@ -102,6 +102,7 @@ internal static class Program
             "lba1find" => Lba1FindText.Run(args),
             "lba1says" => Lba1Says.Run(args),
             "entityof" => EntityOfCommand.Run(args),
+            "entity" => EntityOfCommand.Show(args),
             "floaters" => FloatersCommand.Run(args),
             "trackmap" => TrackSketchCommand.MapCommand(args),
             "sketchtest" => TrackSketchCommand.Test(args),

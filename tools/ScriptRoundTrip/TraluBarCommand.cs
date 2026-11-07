@@ -117,7 +117,7 @@ internal static class TraluBarCommand
         {
             var a = model.Actors[i];
             Console.WriteLine($"{i}: entity {a.Entity} body {a.Body} anim {a.Anim} sprite {a.Sprite} at ({a.X},{a.Y},{a.Z}) beta {a.Beta} flags 0x{a.Flags:X} " +
-                              $"options 0x{a.OptionFlags:X} bonus {a.NbBonus} life {a.LifePoints} armor {a.Armor} hit {a.HitForce} move {a.Move} srot {a.SRot} info {string.Join(",", a.Info)}");
+                              $"options 0x{a.OptionFlags:X} colour {a.CoulObj} bonus {a.NbBonus} life {a.LifePoints} armor {a.Armor} hit {a.HitForce} move {a.Move} srot {a.SRot} info {string.Join(",", a.Info)}");
         }
         return 0;
     }

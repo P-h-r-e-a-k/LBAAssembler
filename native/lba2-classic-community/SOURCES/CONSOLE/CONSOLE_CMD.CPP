@@ -903,10 +903,11 @@ static void cmd_give(int argc, const char *argv[]) {
            directly, because InitTabIndir() overwrites ListVarGame[FLAG_MONEY]
            from it (INVENT.CPP). */
         if (index == FLAG_MONEY) {
+            // (kashes on Twinsun, zlitos on Zeelich: the two were the wrong way round, and `give money` on Citadel gave zlitos)
             if (MONEY_ZLITOS)
-                NbGoldPieces = count;
-            else
                 NbZlitosPieces = count;
+            else
+                NbGoldPieces = count;
         } else {
             if (count > MAX_S16)
                 count = MAX_S16;

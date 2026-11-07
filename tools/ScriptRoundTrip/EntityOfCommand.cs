@@ -13,4 +13,14 @@ internal static class EntityOfCommand
                 Console.WriteLine($"body {b}: entity {e.Id} (generic {string.Join(",", e.Bodies.Where(x => x.Body == b).Select(x => x.Generic))}); its bodies {string.Join(" ", e.Bodies.Select(x => $"{x.Generic}={x.Body}"))}; anims {e.Anims.Count}");
         return 0;
     }
+
+    // entity <LBA2 folder> <entity>...: each entity's bodies (generic=BODY.HQR) and anims (generic=ANIM.HQR)
+    public static int Show(string[] args)
+    {
+        var table = Lba2EntityTable.Load(args[1]) ?? throw new InvalidDataException("no entity table");
+        foreach (var id in args.Skip(2).Select(int.Parse))
+            foreach (var e in table.Entities.Where(e => e.Id == id))
+                Console.WriteLine($"entity {e.Id}: bodies {string.Join(" ", e.Bodies.Select(x => $"{x.Generic}={x.Body}"))}; anims {string.Join(" ", e.Anims.Select(x => $"{x.Generic}={x.Anim}"))}");
+        return 0;
+    }
 }
