@@ -19990,9 +19990,21 @@ void RaceMod_Draw(void) {
                 } else if (s_sprint) snprintf(text, sizeof(text), "Race  %s", a);
                 else if (s_raceLaps > 0 && s_nbOrder > 0 && lap <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)lap, s_raceLaps, a);
                 else if (const S32 target = BeatTime()) {
-                    // (a time to beat: Raph's)
+                    // (a time to beat: Raph's -- on a line of its own over the lap's: on one line, "Lap 3  0:20.04  to beat 0:12.86", the
+                    // font's digits of different widths slid the time to beat to and fro as the lap's clock ticked, a flicker -- the user,
+                    // 2026-11-06. The lap's clock stays where it starts, after its lap number)
+                    // (and the two times in a column, after the wider of the two labels: the lap's left edge doesn't move as its lap number
+                    // grows either)
+                    char label[24];
                     Time(b, sizeof(b), target);
-                    snprintf(text, sizeof(text), "Lap %d  %s  to beat %s", (int)lap, a, b);
+                    snprintf(label, sizeof(label), "Lap %d", (int)lap);
+                    const S32 wBeat = SizeFont((char *)"To beat  "), wLap = SizeFont((char *)"Lap 99  ");
+                    const S32 col = 16 + (wBeat > wLap ? wBeat : wLap) * RACE_SMALL_NUM / RACE_SMALL_DEN;
+                    HudSmall(16, bottom - RACE_SMALL_STEP, "To beat", -1);
+                    HudSmall(col, bottom - RACE_SMALL_STEP, b, -1);
+                    HudSmallIn(16, bottom, label, -1, colour);
+                    HudSmallIn(col, bottom, a, -1, colour);
+                    text[0] = 0;
                 } else snprintf(text, sizeof(text), "Lap %d  %s", (int)lap, a);
             } else if (const T_RACE_GATE *gate = ClosedGate())
                 snprintf(text, sizeof(text), "%s", gate->Text);
