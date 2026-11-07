@@ -12075,6 +12075,8 @@ S32 RaceMod_NoCollide(S32 numobj) {
     // pushed out of it, as by an opponent's. Except as it rolls into its park, a short drive straight there from beside Twinsen: across
     // the start line he stands on, it pushed him and his car nine cells along it)
     if (RaceMod_Active() && numobj > 0 && numobj == s_paradeActorNow && s_pull == 4) return 1;
+    // (... nor while a script keeps it out of sight -- its driver out of it, gone to the lighthouse: RaceTrackStory -- 2026-11-07)
+    if (RaceMod_Active() && numobj > 0 && numobj == s_paradeActorNow && numobj < NbObjets && (ListObjet[numobj].Flags & INVISIBLE)) return 1;
     // (a gas monster: its bite is the race-track mode's own -- Monsters)
     if (RaceMod_Active() && numobj > 0)
         for (int i = 0; i < s_nbMonsters; i++)
