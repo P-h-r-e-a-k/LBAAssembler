@@ -27,12 +27,17 @@ namespace LBAAssembler.Demo96;
 internal static class Demo96Rooms
 {
     // (Arrival: where a door of the game's into the slot lands Twinsen when the demo has no door from that place -- its own way in;
-    // Pave: cells of the demo's grid paved over -- Paving)
-    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null, Paving? Pave = null);
+    // Pave: cells of the demo's grid paved over -- Paving; Wade: cells of its water made water Twinsen can stand in -- Wading)
+    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null, Paving? Pave = null, Wading? Wade = null);
 
     // The cells x X0-X1, z Z0-Z1 floored at `Layer` as the row z `Like` is there, cell for cell (its blocks and places), and emptied under
     // it down to `Under`
     public sealed record Paving(int X0, int X1, int Z0, int Z1, int Layer, int Like, int Under);
+
+    // The cells x X0-X1, z Z0-Z1 at `Layer` drawn as they are, but water Twinsen can stand in (the game code CJ_FOOT_WATER, 12, for the
+    // demo's water's 1): each block there copied once at the end of the room's library with that code, the cells set to the copy
+    public sealed record Wading(int X0, int X1, int Z0, int Z1, int Layer);
+    private const int FootWater = 12;
 
     public static readonly Room[] School =
     {
@@ -57,12 +62,16 @@ internal static class Demo96Rooms
     // doors from those halls land where the demo's do. (The game's own 20 has Joe the elf by the door to 19 in chapter 1, var 161, the
     // demo's hasn't: no story line uses him.)
     // The ladder up to the hall's back walk (the way on to the second hall, 19) stands in the demo in a pool of water a layer under the
-    // floor (cells x 44-46, z 48-50, layer 4: the demo's water, 0xF1, the game's 0x10): from the floor it can only be reached through the
-    // water, and Twinsen drowned at its foot (headless, 2026-11-06). The game's own hall has paving there; so has this one now, the floor's
-    // (layer 5) as the row in front of it has it.
+    // floor (cells x 44-46, z 48-50, layer 4: the demo's water, 0xF1, the game's 0x10, as the demo's own drowning test reads it too).
+    // It was paved over at first (Paving, 8d37014: walked into, Twinsen drowned). Now it is the demo's again, its bricks and its grid (the
+    // user, 2026-11-06: "restore the water at the foot of the ladder", water "the player had to jump over"): the front row (z 50) the
+    // demo's deadly water, walked into Twinsen drowns; but the engine's ladder isn't caught in the air, and a jump from the floor in
+    // front lands in the pool's middle row (z 49, a cell short of the ladder) -- in the demo's water a drowning, and the bar's first way
+    // in (this ladder, the back walk, the door to 19) shut for good. So the two rows at the ladder's foot (z 48-49) are the same water to
+    // look at, a wading depth: jumped over the front row, he lands at the ladder and climbs it.
     public static readonly Room[] TraluCave =
     {
-        new(20, 20, "the Tralu's caves' third hall", Pave: new Paving(44, 46, 48, 50, 5, 51, 4)),
+        new(20, 20, "the Tralu's caves' third hall", Wade: new Wading(44, 46, 48, 49, 4)),
     };
 
     // The sewers' lines in the demo's Citadel texts, as the game's: Twinsen's greetings to the painter (the demo's 6, 100-102: the game's
@@ -262,6 +271,33 @@ internal static class Demo96Rooms
                     }
                 grid = Lba2GridBackend.FromLba1Shape(grid, Lba1GridEdit.SetCells(shape, edits));
                 log.Add($"  scene {r.Slot}: cells x {pave.X0}-{pave.X1}, z {pave.Z0}-{pave.Z1} paved at layer {pave.Layer} as row z {pave.Like} is");
+            }
+            if (r.Wade is { } wade)
+            {
+                var head = new MapBricks.BkgHeader(bkg.Read(0));
+                var lib = bkg.Read(head.Bll + library);
+                var shape = Lba2GridBackend.ToLba1Shape(grid);
+                var copies = new Dictionary<int, int>();
+                var edits = new List<Lba1GridCell>();
+                for (var z = wade.Z0; z <= wade.Z1; z++)
+                    for (var x = wade.X0; x <= wade.X1; x++)
+                    {
+                        var cell = Lba1GridEdit.Get(shape, x, wade.Layer, z);
+                        if (cell.Block == 0 || GridPaint.Info(lib, cell.Block) is not { } info) continue;
+                        if (!copies.TryGetValue(cell.Block, out var copy))
+                        {
+                            var entries = GridPaint.Entries(lib, cell.Block).ToList();
+                            lib = GridPaint.AppendBlock(lib, info.Dx, info.Dy, info.Dz, 0);
+                            copy = GridPaint.BlockCount(lib);
+                            foreach (var e in entries) lib = GridPaint.SetEntry(lib, copy, e.Pos, e.Brick, e.Shape, FootWater << 4 | e.Sound & 0x0F);
+                            copies[cell.Block] = copy;
+                        }
+                        edits.Add(new Lba1GridCell(x, wade.Layer, z, copy, cell.Pos));
+                    }
+                grid = Lba2GridBackend.FromLba1Shape(grid, Lba1GridEdit.SetCells(shape, edits));
+                bkg.SetStored(head.Bll + library, lib);
+                if (head.MaxBll < (uint)lib.Length) { head.MaxBll = (uint)lib.Length; bkg.SetStored(0, head.Bytes); }
+                log.Add($"  scene {r.Slot}: cells x {wade.X0}-{wade.X1}, z {wade.Z0}-{wade.Z1}, layer {wade.Layer}: water to wade in (blocks {string.Join(", ", copies.Select(c => $"{c.Key} as {c.Value}"))})");
             }
             var header = bkg.Read(0);
             int gri = BinaryPrimitives.ReadUInt16LittleEndian(header);

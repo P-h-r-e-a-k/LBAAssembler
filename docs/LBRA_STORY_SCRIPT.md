@@ -383,7 +383,9 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      > missing of an evening, and come home singing. Funny, that. The mushrooms hear everything."
 
      The bar is the Tralu's caves' second hall (scene 19), reached through the cave's mouth below the tent, its first hall (2) and the
-     third (20, the 1996 demo's: the ladder, the lever, the gate). The build makes the hall bigger and furnishes it
+     third (20, the 1996 demo's: the ladder in its pool, the lever, the gate -- the pool's front row the demo's deadly water, its two
+     rows at the ladder's foot water to wade in, Demo96Rooms.Wading: a run and a jump over the front row, and up the ladder). The
+     build makes the hall bigger and furnishes it
      (`Terrain/Citadel/TraluBarRoom.cs`): the long back wall moved out, a massive old wooden table (the caves' own, three end to end)
      with benches, barrels for round tables, candlesticks; the hall's creatures and its two barred doors go. Luc behind a counter of
      crates; Pat, Fab, the visitor and the drunk rabbibunny sitting at the table; Tim serving there from the umbrella back until

@@ -250,9 +250,13 @@ game's, and land where the game's do; the game's doors into it from 2 and 19 lan
 20 has Joe the elf by the door to 19 in chapter 1 (var 161); the demo's hasn't, and no line of the story uses him.
 
 - **The ladder's foot**: in the demo the ladder up to the back walk stands in a pool of water a layer under the floor (cells x 44-46,
-  z 48-50, layer 4: the demo's water 0xF1, the game's 0x10), so it could only be reached through the water, and Twinsen drowned at its
-  foot (headless: dropped on the pool's cells, drowned). The game's hall has paving there; the install paves those cells as the row in
-  front of them is paved (`Demo96Rooms.Paving`, layer 5) and empties the pool under it.
+  z 48-50, layer 4: the demo's water 0xF1, the game's 0x10 -- deadly in the demo's own drowning test too). At first (8d37014) the install
+  paved it over as the game's hall is; since 2026-11-07 (the user: "restore the water at the foot of the ladder", water "the player had
+  to jump over") the pool is the demo's again, its bricks and grid. The engine's ladder isn't caught in the air, and a run and a jump
+  (sporty) from the floor in front lands in the pool's middle row, a cell short of the ladder: in the demo's water, a drowning, and the
+  bar's first way in shut. So its two rows at the ladder's foot (z 48-49) are the same water to look at, wading depth (CJ_FOOT_WATER,
+  `Demo96Rooms.Wading`: a copy of the water block, its code 12): walked into, the front row (z 50) drowns him as the demo's does;
+  jumped over it, he lands in the shallows at the ladder and climbs it; come down the ladder, a run and a jump take him back out.
 - **The hero's animations**: the hero's walk to the lever and its pull (the demo's `anim(34)`, the game's 48 through `HeroAnims`) end
   as they should: the lever toggles the gate (var_cube 0) from its platform.
 

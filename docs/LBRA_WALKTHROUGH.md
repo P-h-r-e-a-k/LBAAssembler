@@ -202,8 +202,10 @@ line about the rain):
 missing of an evening, and come home singing. Funny, that. The mushrooms hear everything."
 
 They are in the Tralu's caves, the cave's mouth in the cliff below the tent: through its first hall (scene 2), the door at its far end
-into the third hall (scene 20: up the ladder to the back walk, the lever on its platform to open the walk's gate, and the door at its
-end) and so into the second hall (scene 19), made bigger: the Back Room. A massive old wooden table runs down the middle of it with a
+into the third hall (scene 20: the ladder up to the back walk stands in a pool, the 1996 demo's; walked into, its front row drowns
+him, so a run and a jump (sporty) over it lands him in the shallows at the ladder's foot, and up the ladder (normal) to the back walk;
+the lever on its platform to open the walk's gate, and the door at its end) and so into the second hall (scene 19), made bigger: the
+Back Room. A massive old wooden table runs down the middle of it with a
 bench along either side, plates, bowls, bottles and an oil lamp on it; old barrels stand round the edge as tall round tables, a bottle
 and a plate on each; two iron candlesticks against the north wall, and between them Luc behind a counter of crates. Pat and Fab of
 Raph's band sit on the far bench, the visitor from the Tavern and the drunk rabbibunny on the near one, and -- once he has his
