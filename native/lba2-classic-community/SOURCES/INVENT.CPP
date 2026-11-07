@@ -776,7 +776,9 @@ U32 DrawOneInventory(S32 numbox) {
 
         DrawObjInventory(x, y, ptrobj, beta, LFactor, 15000);
 
-        if ((TabInv[numinv].FlagInv & FLAG_INV_FEWER) // Fuel, etc.
+        // (or a slot a race-track mod's story counts in: RACEMOD.CPP inv_count=)
+        extern S32 RaceMod_InvCount(S32 slot);
+        if (((TabInv[numinv].FlagInv & FLAG_INV_FEWER) OR RaceMod_InvCount(numinv)) // Fuel, etc.
             AND(FlagZoomed < 4)) {
             S32 xt;
             char string[10];

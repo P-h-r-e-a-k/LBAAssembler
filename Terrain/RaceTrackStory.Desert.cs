@@ -32,6 +32,30 @@ internal static partial class RaceTrackStory
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113;
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
+    // The exam pages as Twinsen carries them (the user, 2026-11-06: "Add the pages to the inventory as one item with a count, 1/2/3 for how
+    // many he has found ... gone when handed to the Dean"; and "once the Dean has told Twinsen where his missing papers are, mark each
+    // location on the holomap ... cleared as it's found"). The inventory's 40 slots are all the game's (a save keeps exactly 40), so the
+    // pages take one the race build has no use for, as the gloves took 7: 6, the pyramid key, which only the neighbour on Citadel Island
+    // gave -- the story took that out (Chapters.cs, the neighbour's design sheet). Its game variable is how many pages he has (1-3; 0 once
+    // the Dean has them), its box counts them (the race file's inv_count=, RACEMOD.CPP), its model the burgomaster's note's (OBJFIX.HQR 38
+    // copied into 6: a scroll of paper), its found message, name and description (file 2's 6, 106 and 206) the pages' -- each moved out of
+    // its voiced place, as the gloves' were. The arrows: three holomap positions no scene of the build has (from 224 on), labelled "An exam
+    // page", on from the Dean's word (Q_PAGES 2), each off as its page is found.
+    public const int PagesSlot = 6;
+    private const int PagesModelLike = 38, FirstFreeArrow = 224, LastArrow = 254;
+    private static readonly string[][] PagesItemTexts =
+    {
+        new[] { "You found one of the Dean's exam pages.", "Exam pages", "The Dean's exam pages, blown along the road by the racers' engines. He wants all three back." },
+        new[] { "Tu as trouvé une des pages d'examen du Doyen.", "Pages d'examen", "Les pages d'examen du Doyen, emportées le long de la route par les moteurs des pilotes. Il les veut toutes les trois." },
+        new[] { "Du hast eine der Prüfungsseiten des Dekans gefunden.", "Prüfungsseiten", "Die Prüfungsseiten des Dekans, von den Motoren der Rennfahrer die Straße entlang geweht. Er will alle drei zurück." },
+        new[] { "Has encontrado una de las páginas de examen del Decano.", "Páginas de examen", "Las páginas de examen del Decano, llevadas por la carretera por los motores de los pilotos. Las quiere de vuelta las tres." },
+        new[] { "Hai trovato una delle pagine d'esame del Rettore.", "Pagine d'esame", "Le pagine d'esame del Rettore, portate via lungo la strada dai motori dei piloti. Le rivuole tutte e tre." },
+        new[] { "Encontraste uma das páginas de exame do Reitor.", "Páginas de exame", "As páginas de exame do Reitor, levadas pela estrada pelos motores dos pilotos. Ele quer as três de volta." },
+    };
+    private static readonly string[] PageArrowLabel =
+    {
+        "An exam page", "Une page d'examen", "Eine Prüfungsseite", "Una página de examen", "Una pagina d'esame", "Uma página de exame",
+    };
     // the School's door from the canyon outside (scene 61, and the game's other scene of that cube, 201): its zone, as the game has it, and
     // how far out it reaches now and where in the School's entrance (scene 28) it lands Twinsen (its Info2: his x in the zone is added)
     private const int SchoolOutside = 61, SchoolOutsideToo = 201, SchoolEntrance = 28, SchoolDoorReach = 10240, SchoolDoorLanding = 10752 - 768;
@@ -42,7 +66,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\nwin={QPages} {PagesWon}\n"
+        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n"
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\n"
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -517,6 +541,70 @@ void comportement_1()
         },
     };
 
+    // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
+    // none). Returns each page's arrow, -1 where it has none. A second pass over the same files finds the texts there already and only
+    // places the arrows again.
+    private static int[] PagesInstall(string gameDirectory, SceneStore store, (double X, double Z, double Y)?[] places, List<string> log)
+    {
+        var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
+        var text = HqrArchive.Open(textPath);
+        var languages = Lba2TextBank.Languages(textPath);
+        var labelWords = System.Text.Encoding.Latin1.GetString(Dos.GetBytes(PageArrowLabel[0]));
+        var label = Lba2TextBank.Load(text, 0, HolomapTexts).Texts.FirstOrDefault(t => t.Value == labelWords)?.Id ?? -1;
+        if (label < 0)
+        {
+            label = NextId(text, languages, HolomapTexts);
+            var hqr = File.ReadAllBytes(textPath);
+            for (var lang = 0; lang < languages; lang++)
+            {
+                var words = lang < PageArrowLabel.Length ? lang : 0;
+                var bank = Lba2TextBank.Load(text, lang, HolomapTexts);
+                bank.Texts.Add(new Lba2TextBank.Text { Id = label, Attribute = LabelAttribute, Bytes = Dos.GetBytes(PageArrowLabel[words]) });
+                // (the slot's found message, name and description: each of the game's moved to an id nothing asks for, keeping its place --
+                // and so its voice, and every later text's -- and the pages' at the end, unvoiced)
+                var item = new[] { PagesSlot, 100 + PagesSlot, 200 + PagesSlot };
+                for (var k = 0; k < item.Length; k++)
+                {
+                    var own = bank.Find(item[k]);
+                    var attribute = own?.Attribute ?? Lba2TextBank.NormalAttribute;
+                    if (own is not null) own.Id = Retired + item[k];
+                    bank.Texts.Add(new Lba2TextBank.Text { Id = item[k], Attribute = attribute, Bytes = Dos.GetBytes(PagesItemTexts[words][k]) });
+                }
+                hqr = bank.WriteInto(hqr);
+            }
+            File.WriteAllBytes(textPath, hqr);
+            log.Add($"the exam pages: item {PagesSlot}'s texts (file {HolomapTexts}: {PagesSlot}, {100 + PagesSlot}, {200 + PagesSlot}) and the arrows' label ({label}), in all {languages} languages");
+        }
+        var objfix = Path.Combine(gameDirectory, "OBJFIX.HQR");
+        HqrWriter.ReplaceInFile(objfix, PagesSlot, HqrArchive.Open(objfix).Read(PagesModelLike));
+        log.Add($"the exam pages: OBJFIX.HQR entry {PagesSlot} (the pyramid key's) is entry {PagesModelLike}'s scroll of paper");
+
+        var arrows = Enumerable.Repeat(-1, places.Length).ToArray();
+        var free = Enumerable.Range(FirstFreeArrow, LastArrow - FirstFreeArrow + 1).Where(p => p != StartArrow && p != TownArrow && !store.SceneExists(p)).ToList();
+        var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
+        var table = HqrArchive.Open(holoPath).Read(12);
+        var desert = (50 + SchoolOutside) * ArrowRecordSize;
+        for (var k = 0; k < places.Length; k++)
+        {
+            if (places[k] is not { } at) continue;
+            if (k >= free.Count) { log.Add($"the exam pages: no holomap position left for page {k + 1}'s arrow"); continue; }
+            var record = (50 + free[k]) * ArrowRecordSize;
+            if (table.Length < record + ArrowRecordSize) { log.Add("the exam pages: the holomap's arrow table is shorter than the game's own -- no arrows"); break; }
+            void Put(int field, int value) => System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(table.AsSpan(record + field * 4), value);
+            Put(0, (int)Math.Round(at.X * 512)); Put(1, (int)Math.Round(at.Y)); Put(2, (int)Math.Round(at.Z * 512));
+            for (var f = 3; f < 6; f++) Put(f, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(desert + f * 4)));
+            Put(6, label);
+            table[record + 28] = 0xFF;                                  // no inventory object
+            table[record + 29] = 0;                                     // off until a script puts it on
+            table[record + 30] = 0;                                     // planet Twinsun
+            table[record + 31] = (byte)RaceTrackIsland.Desert.IslandByte;
+            arrows[k] = free[k];
+        }
+        File.WriteAllBytes(holoPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(holoPath), 12, HqrWriter.StoredEntry(table)));
+        log.Add($"the exam pages' holomap arrows: {string.Join(", ", arrows.Select((a, k) => $"page {k + 1} {a}"))}");
+        return arrows;
+    }
+
     private static List<string> ApplyDesert(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
     {
         var log = new List<string>();
@@ -567,6 +655,13 @@ void comportement_1()
                 message({Say(DesertLine.FlickOpen)});
             }}", "Flick");
 
+        // the three pages' places on the road, at 30, 55 and 80 % of the lap (each found driving over it or walking to it, in lap order),
+        // and the pages as Twinsen carries them: the item and the arrows (PagesInstall)
+        var pages = new[] { (0.30, DesertLine.Page1), (0.55, DesertLine.Page2), (0.80, DesertLine.Page3) };
+        var pagePlaces = pages.Select(p => OnLap(report, p.Item1)).ToArray();
+        var pageArrows = PagesInstall(gameDirectory, b.Store, pagePlaces, log);
+        var arrowsOn = string.Concat(pageArrows.Where(a => a >= 0).Select(a => $"\n                set_holo_pos({a});"));
+
         // the Dean in the School of Magic: a copy of the game's own talks (the game's is out of sight on the Desert's chapters). The hall is
         // the 1996 demo's when the build put it in (Demo96Rooms): its Dean, another actor there, is the one copied -- the actor at the
         // Dean's place, as the scene now has it.
@@ -577,6 +672,7 @@ void comportement_1()
             b.Edit(DeanScene, "the Dean: the three pages (Q_PAGES 2), the Wizard's Diploma (item 30, Q_PAGES 6)", model => IslandBeatsA.Add(model, dean, Talker(desert, DeanEggs(Say) + $@"            if (5 == var_game({QPages}))
             {{
                 message({Say(DesertLine.DeanAll)});
+                set_var_game({PagesSlot}, 0);
                 found_object({Diploma});
                 set_var_game({Diploma}, 1);
                 set_var_game({QPages}, 6);
@@ -585,7 +681,7 @@ void comportement_1()
             {{
                 message({Say(DesertLine.DeanShut)});
                 message_zoe({Say(DesertLine.ZoePages)});
-                set_var_game({QPages}, 2);
+                set_var_game({QPages}, 2);{arrowsOn}
             }}
             else if (5 > var_game({QPages}))
             {{
@@ -676,13 +772,14 @@ void comportement_2()
         b.Edit(PearlCave, "the Pearl of Incandescence's cave: Twinsen's look round is a text of the game's (337, not 327)", _ => scripts =>
             scripts.SetText(0, ScriptKind.Life, Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);")));
 
-        // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in lap order
-        var pages = new[] { (0.30, DesertLine.Page1), (0.55, DesertLine.Page2), (0.80, DesertLine.Page3) };
+        // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in lap order -- each one more in Twinsen's
+        // inventory (item PagesSlot's count), its arrow off
         for (var k = 0; k < pages.Length; k++)
         {
             var (fraction, line) = pages[k];
             var step = 2 + k;
-            if (OnLap(report, fraction) is not { } at) { log.Add($"page {k + 1} left out: no ground on the lap there"); continue; }
+            var arrowOff = pageArrows[k] >= 0 ? $"\n        clr_holo_pos({pageArrows[k]});" : "";
+            if (pagePlaces[k] is not { } at) { log.Add($"page {k + 1} left out: no ground on the lap there"); continue; }
             var scene = b.SceneAt(at.X, at.Z);
             if (scene < 0) { log.Add($"page {k + 1} left out: no scene at cell ({at.X:0.#}, {at.Z:0.#})"); continue; }
             b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}) ({fraction:0%} of the lap): Q_PAGES {step} -> {step + 1}", model =>
@@ -703,6 +800,7 @@ void comportement_1()
     if ({step} == var_game({QPages}) && 1400 > distance(0))
     {{
         set_var_game({QPages}, {step + 1});
+        set_var_game({PagesSlot}, {k + 1});{arrowOff}
         message({Say(line)});
     }}
 }}

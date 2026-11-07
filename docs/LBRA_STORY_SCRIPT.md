@@ -758,19 +758,22 @@ added to Mr. Paul's prize, and the two pages' pictures.
    The Dean:
    > **The Dean:** "Shut it is! Three pages, gone with the wind of your engines. Bring them back, and I'll think about it."
 
-   Q_PAGES = 2. The arrow points at page 1.
+   Q_PAGES = 2. Three holomap arrows come on, one at each page (positions 224, 225 and 228 on a full build: the first free of 224-254
+   no scene of the build has; label "An exam page", file 2) -- PagesInstall.
    > **Zoe:** "The pages blew along the road. If we drive the course we'll find them, and learn the bends while we're at it."
 4. **The pages.** Each is picked up driving over it, or on foot:
    - > *"A page: Chapter 1, Levitation for Beginners."*
    - > *"Another page: Turning Sand into Slightly Different Sand."*
    - > *"The last page: Why Wizards Should Not Drive."*
 
-   Q_PAGES 2 -> 5.
+   Q_PAGES 2 -> 5. Each page is item 6 (the pyramid key's slot, which the race build never gives -- its model OBJFIX 38's scroll,
+   its texts 6/106/206 of file 2 the pages', the old ones kept at 60006/60106/60206) set to 1, 2, 3 -- its box shows the count (the
+   race file's inv_count=6, RACEMOD.CPP) -- and its arrow off. Kept through a save and a load (a game variable).
 5. **Back to the Dean.**
    > **The Dean:** "All three! Very well. Here: a diploma. It says you may use the School's grounds, which include the track. Don't let
    > it go to your head."
 
-   Found: Wizard's Diploma (item 30). Q_PAGES = 6.
+   The pages handed over (item 6 = 0). Found: Wizard's Diploma (item 30). Q_PAGES = 6.
 6. **Baldino's house.** Baldino, at his workbench:
    > **Baldino:** "Twinsen! My radio works then. Sand filters, fitted. A longer top gear for the long straights. And a word of advice:
    > the champion brakes late at the Temple bend. Brake later."

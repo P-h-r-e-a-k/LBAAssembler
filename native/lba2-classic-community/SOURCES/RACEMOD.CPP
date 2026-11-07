@@ -55,6 +55,8 @@
  *     grid_back=1                with qualifying=0: the player at the back of the grid instead, the opponents before him in their
  *                                qualifying times' order (the race game's "skip qualifying", RACEGAME.CPP)
  *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
+ *     inv_count=<slot>           (2026-11-07) that inventory slot's box shows its count (the game variable of the slot), as the darts'
+ *                                does: a story's counted item in a slot the game counts nothing in (the Dean's exam pages)
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
  *     race_hide=<scene> <actor>  an actor the game needs, whose scripts switch doors, and who walks on the road: not drawn and no obstacle while
  *                                a car races, its scripts going on (hide_actor= moves it, and an actor that moves is back on the ground after them)
@@ -814,6 +816,11 @@ static int s_footActWas = 0;               // the action key held last frame (on
 #define RACE_WALK_POINTS 64
 static int s_walkN = 0, s_walkAt = 0, s_walkCar = 0;
 static int s_walkAny = 0;                  // the console's walkto: its points walked on foot in any game, not only on_foot='s
+// inv_count=<slot> (2026-11-07): an inventory slot whose box shows how many Twinsen has (its game variable), as the darts' does -- the
+// story's own counted items in slots the game shows no count for (the Dean's exam pages on the White Leaf Desert). Kept once read: a
+// slot the story counts in is counted whatever track is loaded.
+static unsigned long long s_invCount = 0;
+S32 RaceMod_InvCount(S32 slot) { return slot >= 0 && slot < 64 && ((s_invCount >> slot) & 1) ? 1 : 0; }
 static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
 static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
 static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
@@ -4475,6 +4482,10 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbJumpCams < RACE_MAX_JUMPCAMS && sscanf(v, "%d %d %d %d %d %d", &c->Anim, &c->CubeX, &c->CubeZ, &c->X, &c->Y, &c->Z) == 6) s_nbJumpCams++;
         }
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "inv_count")) {
+            const int slot = atoi(v);
+            if (slot >= 0 && slot < 64) s_invCount |= 1ull << slot;
+        }
         else if (!strcmp(key, "vargame")) {
             int n, value;
             if (s_nbHeld < RACE_MAX_HELD && sscanf(v, "%d %d", &n, &value) == 2 && n >= 0 && n < 256) { s_held[s_nbHeld][0] = n; s_held[s_nbHeld][1] = value; s_nbHeld++; }

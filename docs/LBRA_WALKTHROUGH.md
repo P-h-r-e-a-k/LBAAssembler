@@ -48,7 +48,7 @@ the jumps, to a ramp that leaps onto the rocky peak.
 
 *Tip:* FunFrock takes the loop wide. Stay on the inside and use the digger key on the straight after it.
 
-*Aside:* south of the dock, on Fortress Island's docks (LBA1's), the Dino-Fly stands at the end of the wooden jetty, where he lands
+*Aside:* south-west of the dock, on Fortress Island's docks (LBA1's), the Dino-Fly stands at the end of the wooden jetty, where he lands
 in LBA1. **The Dino-Fly:** "Where do you want to go?" (Brundle Island / Tippet Island) -- "This is not the game for that, Twinsen."
 
 **3. The peak.** The race is run once. Whoever reaches the peak first, the dream ends there: as Twinsen's car leaves the lip of the
@@ -544,7 +544,9 @@ walkway and up the stairs to the benches; the Dean's tier is a one-brick step up
 Talking to the Dean again: **The Dean:** "Shut it is! ..." and **Zoe:** "One by the first dunes, one past the Temple, one near the last
 bend. Drive the lap the way the race goes."
 
-**4. The three pages.** Twinsen drives the course (or walks it) and picks up each page lying beside the road.
+**4. The three pages.** Twinsen drives the course (or walks it) and picks up each page lying beside the road. Since the Dean's word,
+the holomap shows an arrow at each page ("An exam page"), each gone once its page is found; the pages go into the inventory as one
+item, **Exam pages**, its box counting them (1, 2, 3).
 
 **Found:** "A page: Chapter 1, Levitation for Beginners."
 
