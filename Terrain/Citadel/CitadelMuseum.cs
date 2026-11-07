@@ -283,7 +283,7 @@ internal static class CitadelMuseum
         var stored = HqrWriter.StoredEntry(bytes);
         for (var b = header.MaxBrk - 1; b >= 0; b--)
             if (!bkg.IsEmpty(header.Brk + b) && bkg.ExtentOf(header.Brk + b).AsSpan().SequenceEqual(stored)) return b;
-        if (header.MaxBrk + 1 > 20000) throw new InvalidDataException("LBA_BKG.HQR has 20000 bricks already: the engine holds no more.");
+        if (header.MaxBrk + 1 > MapBricks.RaceEngineMaxBricks) throw new InvalidDataException($"LBA_BKG.HQR has {MapBricks.RaceEngineMaxBricks} bricks already: the engine holds no more.");
         bkg.InsertAt(header.Brk + header.MaxBrk, bytes);
         header.MaxBrk += 1;
         return header.MaxBrk - 1;

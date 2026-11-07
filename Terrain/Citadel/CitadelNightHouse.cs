@@ -149,7 +149,7 @@ internal static class CitadelNightHouse
         var brickAt = header.Brk + header.MaxBrk;
         foreach (var brick in added) bkg.InsertAt(brickAt++, brick);
         header.MaxBrk += added.Count;
-        if (header.MaxBrk > 20000) return Daylit("LBA_BKG.HQR would hold more bricks than the engine does");
+        if (header.MaxBrk > MapBricks.RaceEngineMaxBricks) return Daylit("LBA_BKG.HQR would hold more bricks than the engine does");
         var newLibrary = Library(blocks);
         var libraryNumber = header.Brk - header.Bll;
         if (libraryNumber > 255) return Daylit("LBA_BKG.HQR has 256 block libraries already");

@@ -65,7 +65,7 @@
 #define MAX_PACK_SCENES 256
 #define MAP_LOCAL_SCENE 30000
 #define MAP_LOCAL_ENTITY 30000
-#define MAX_PACK_BRICKS 20000 // GRILLE.CPP MAX_BRICK_GAME: LoadUsedBrick's renumbering table
+#define MAX_PACK_BRICKS 65535 // GRILLE.CPP MAX_BRICK_GAME: a block names its bricks in 16 bits
 
 // A map's lines of dialogue: number, attribute (MESSAGE.CPP FlagDial), the line (the game's characters, 0-ended, in Data)
 typedef struct {

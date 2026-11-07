@@ -15,6 +15,10 @@ namespace LBAAssembler.Maps;
 // The engine reads the package straight from the map file (MAPPACK.CPP).
 internal static class MapBricks
 {
+    // The most bricks LBA_BKG.HQR may hold: the retail engine's 20000 (its tables parked in its screen buffer); the race story's own engine
+    // (GRILLE.CPP MAX_BRICK_GAME, 2026-11-07) takes what 16 bits name, so the race story's builds (LBRA ships that engine) may go to 65535.
+    public const int RetailMaxBricks = 20000, RaceEngineMaxBricks = 65535;
+
     // LBA_BKG.HQR's entry 0.
     internal sealed class BkgHeader
     {
@@ -100,7 +104,7 @@ internal static class MapBricks
             number[k] = header.MaxBrk + added.Count;
             added.Add(extent);
         }
-        if (header.MaxBrk + added.Count > 20000) throw new SceneEditException($"The map's bricks would make {header.MaxBrk + added.Count} in LBA_BKG.HQR: the engine holds 20000.");
+        if (header.MaxBrk + added.Count > RetailMaxBricks) throw new SceneEditException($"The map's bricks would make {header.MaxBrk + added.Count} in LBA_BKG.HQR: the game's engine holds {RetailMaxBricks}.");
 
         // the library, its brick numbers the file's
         var own = (byte[])map.Library!.Clone();

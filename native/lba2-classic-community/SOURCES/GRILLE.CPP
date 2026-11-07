@@ -102,8 +102,12 @@ T_GRI_HEADER *GriHeader;
 	     ██▀▀█ ██ ▄█ ██▀█▀       ██▀▀█ ██▀█▀  ██   ██    ██▀▄
 	     ▀▀  ▀ ▀▀▀▀  ▀▀  ▀ ▀▀▀▀▀ ▀▀▀▀▀ ▀▀  ▀  ▀▀   ▀▀▀▀▀ ▀▀  ▀
  *══════════════════════════════════════════════════════════════════════════*/
-#define MAX_BRICK_GAME 20000L
-#define OFFSET_BUFFER_FLAG 153800L
+// The most bricks LBA_BKG.HQR can hold: a block names its bricks in 16 bits (0 none), as the header counts them. Retail's own engine
+// held 20000, its two tables below parked in Screen (the offsets at 0, the renumbering at 153800, where 38450 offsets would reach);
+// they have memory of their own now, so a build with more bricks (the race story's fifteen islands) loads them all.
+#define MAX_BRICK_GAME 65535L
+static U16 BrickRenumber[MAX_BRICK_GAME];  // a brick of the file -> its number in BufferBrick + 1 (0 not used by the cube)
+static U32 BrickSeek[MAX_BRICK_GAME];      // the file's offset of each brick
 
 /*--------------------------------------------------------------------------*/
 // The bricks a grid's used blocks name, read from `name` -- LBA_BKG.HQR, its brick offsets from `tableseek` on, `count` of them; or an
@@ -132,11 +136,11 @@ static S32 LoadUsedBrickFrom(const char *name, U32 tableseek, U32 count, S32 for
     if (count > MAX_BRICK_GAME)
         count = MAX_BRICK_GAME;
 
-    tabflag = (U16 *)((U8 *)Screen + OFFSET_BUFFER_FLAG);
+    tabflag = BrickRenumber;
 
-    memset(tabflag, 0, MAX_BRICK_GAME * 2L); /* Table de U16 pour NewNumBrick */
+    memset(tabflag, 0, sizeof(BrickRenumber)); /* Table de U16 pour NewNumBrick */
 
-    min = 60000;
+    min = MAX_BRICK_GAME;
     max = 0;
 
     //-------------------------------------- Premiere Passe, Préparation ptflag
@@ -181,7 +185,7 @@ static S32 LoadUsedBrickFrom(const char *name, U32 tableseek, U32 count, S32 for
 
     Seek(handle, tableseek, SEEK_FROM_START); // Begin offsets Brk
 
-    Read(handle, Screen, count << 2); // Read Offsets Brk
+    Read(handle, BrickSeek, count << 2); // Read Offsets Brk
 
     ptflag = tabflag + min;
 
@@ -195,7 +199,7 @@ static S32 LoadUsedBrickFrom(const char *name, U32 tableseek, U32 count, S32 for
 
     nbbrick = 0;
 
-    ptseek = (U32 *)Screen;
+    ptseek = BrickSeek;
 
     for (i = min; i <= max; i++, ptflag++) {
         if (*ptflag) {
@@ -694,15 +698,13 @@ void InitBufferCube() {
     GridRoom.Brick = BkgHeader.Max_Size_Brick_Cube;
     GridRoom.Mask = BkgHeader.Max_Size_Mask_Brick_Cube;
 
-    /*	LoadUsedBrick() scratches its brick renumbering table into Screen at a
-        fixed offset (OFFSET_BUFFER_FLAG), from a time when the framebuffer was
-        always 640x480. The render resolution is now a player setting, and the
-        catalog offers 320x200, 320x240 and 400x300, all of them smaller than
-        where that table ends. Floor the framebuffer allocation so the table
-        stays inside it, otherwise the memset runs off the end of Screen and
-        into BufferMaskBrick, BufMap and TabBlock on every cube load. */
-    if (ListMem[MEM_SCREEN].Size < (S32)(OFFSET_BUFFER_FLAG + MAX_BRICK_GAME * 2L))
-        ListMem[MEM_SCREEN].Size = (S32)(OFFSET_BUFFER_FLAG + MAX_BRICK_GAME * 2L);
+    /*	LoadUsedBrick() used to scratch its brick renumbering table into Screen
+        at 153800, from a time when the framebuffer was always 640x480; the
+        catalog's 320x200, 320x240 and 400x300 are smaller than where it ended.
+        Its tables have memory of their own now, but Screen keeps that floor
+        (193800 bytes) for any other retail scratch use that assumes 640x480. */
+    if (ListMem[MEM_SCREEN].Size < 193800L)
+        ListMem[MEM_SCREEN].Size = 193800L;
 
     ListMem[MEM_BUFFER_MASK_BRICK].Size = BkgHeader.Max_Size_Mask_Brick_Cube;
     ListMem[MEM_BUF_MAP].Size = realgri + RECOVER_AREA;
