@@ -68,13 +68,24 @@ internal static class TraluBarRoom
     // The gate into scene 19 (its door zone x 7-8, z 17) stands on a ledge (the stone block with the sign of Sendell on its face, cells x
     // 6-9, z 16-20, its top layer 12: 3328) six layers over the Tralu's hall (its floor's top layer 6: 1792), with nothing to climb: come
     // down from 19 into the hall, Twinsen couldn't get back up (the user, 2026-11-06: "In scene 2 there's a soft lock for the top area ...
-    // We'd need to either put a ladder or some stairs there"). Stairs now go up along the block's east face, two cells wide (z 20-21): six
-    // of the caves' steps (block 74, rising towards -x, as the steps in scene 19 do), x 15 (layer 7) to x 10 (layer 12), onto the ledge at
-    // x 9, the cage's bars on that side (x 9, z 19-20, layers 13-17) taken out to let him on. The Sendell sign on the block's front stays
-    // in sight.
+    // We'd need to either put a ladder or some stairs there"). Stairs go up to the ledge's east side, the whole of it (z 19-20), against
+    // the hall's back wall (z 18), with a turn (the user, 2026-11-07: "flat against the wall, not jutting into the room; as wide as that
+    // side of the gate's block; a turn in the flight (a landing) so Twinsen can walk onto them easily" -- the first ones were a narrow
+    // flight out in the room, z 20-21, standing on nothing):
+    //   - the upper flight along the wall, rising west onto the ledge: three of the caves' steps (block 74, 1 x 2 cells, rising towards
+    //     -x, as scene 19's), x 12 (layer 10) to x 10 (layer 12);
+    //   - the landing at its foot, x 13-14, z 19-20, its top layer 9;
+    //   - the lower flight turning off the landing towards the hall, south: three steps (block 73, 2 x 1 cells, rising towards -z, as the
+    //     hall's own flights at x 31-35), z 21 (layer 9) to z 23 (layer 7), down onto the floor at z 24;
+    //   - all of it solid down to the floor, of the caves' stone slabs (blocks 17, 1 x 2, and 16, 2 x 1); the stalagmite at the wall's
+    //     foot (x 10, z 19) taken out, and the cage's bars on that side of the ledge (x 9, z 19-20, layers 13-17) to let him on, and the
+    //     chain and ring on the wall over the steps (block 75, x 11-13, layers 15-17: his head ran into it). The sign of Sendell on the
+    //     block's front (x 7-8, z 20) stays clear in front.
     public const int GateScene = 2;
-    public const int StairsTop = 10, StairsZ0 = 20, StairsZ1 = 21, LedgeX = 9, LedgeLayer = 12, HallLayer = 6;
-    private const int Step = 74, CageBars = 28;
+    public const int StairsTop = 10, StairsZ0 = 19, StairsZ1 = 20, LedgeX = 9, LedgeLayer = 12, HallLayer = 6;
+    // the upper flight's three steps (x 10-12), the landing (x 13-14, top layer 9), the lower flight (z 21-23)
+    public const int UpperSteps = 3, LandingX0 = 13, LandingX1 = 14, LowerZ0 = 21, LowerSteps = 3;
+    private const int Step = 74, StepSouth = 73, SlabZ = 17, SlabX = 16, CageBars = 28, WallFootRock = 84, WallChain = 75;
 
     public static bool StairsBuilt(string gameDirectory)
     {
@@ -97,24 +108,50 @@ internal static class TraluBarRoom
         var shape = Lba2GridBackend.ToLba1Shape(raw);
         var cells = Lba1GridCodec.Decode(shape);
         int At(int x, int y, int z) => ((z * Size + x) * Height + y) * 2;
-        var steps = LedgeLayer - HallLayer;
-        // (the game's: the ledge's top at x 9, z 19-20, its bars over it; the hall's floor under where the stairs go, nothing over it)
+        var landing = LedgeLayer - UpperSteps;
+        // (the cells the stairs stand on: the upper flight's and the landing's along the wall, the lower flight's)
+        var place = new List<(int X, int Z)>();
+        for (var x = StairsTop; x <= LandingX1; x++)
+            for (var z = StairsZ0; z <= StairsZ1; z++) place.Add((x, z));
+        for (var z = LowerZ0; z < LowerZ0 + LowerSteps; z++)
+            for (var x = LandingX0; x <= LandingX1; x++) place.Add((x, z));
+        // (the game's: the ledge's top at x 9, z 19-20, its bars over it; the hall's floor under where the stairs go, nothing over it up to
+        // the ledge's height but the stalagmite at the wall's foot)
         bool Game() => raw[0] == 1
-            && Enumerable.Range(StairsZ0 - 1, 2).All(z => cells[At(LedgeX, LedgeLayer, z)] != 0 && cells[At(LedgeX, LedgeLayer + 1, z)] == CageBars)
-            && Enumerable.Range(StairsTop, steps).All(x => Enumerable.Range(StairsZ0, StairsZ1 - StairsZ0 + 1).All(z =>
-                cells[At(x, HallLayer, z)] != 0 && Enumerable.Range(HallLayer + 1, Height - HallLayer - 1).All(y => cells[At(x, y, z)] == 0)));
-        if (!Game()) return "the back gate's stairs left out: scene 2's grid isn't the game's there (the ledge at x 9, the hall's floor x 10-15, z 20-21)";
+            && Enumerable.Range(StairsZ0, 2).All(z => cells[At(LedgeX, LedgeLayer, z)] != 0 && cells[At(LedgeX, LedgeLayer + 1, z)] == CageBars)
+            && place.All(c => cells[At(c.X, HallLayer, c.Z)] != 0
+                              && Enumerable.Range(HallLayer + 1, LedgeLayer - HallLayer).All(y => cells[At(c.X, y, c.Z)] is 0 or WallFootRock));
+        if (!Game()) return "the back gate's stairs left out: scene 2's grid isn't the game's there (the ledge at x 9, z 19-20, the hall's floor x 10-14, z 19-23)";
         var edits = new List<Lba1GridCell>();
-        for (var k = 0; k < steps; k++)
-            for (var z = StairsZ0; z <= StairsZ1; z++)
-                edits.Add(new Lba1GridCell(StairsTop + k, LedgeLayer - k, z, Step, (z - StairsZ0) % 2));
-        for (var z = StairsZ0 - 1; z <= StairsZ0; z++)
+        foreach (var (x, z) in place)
+            for (var y = HallLayer + 1; y <= LedgeLayer; y++) edits.Add(new Lba1GridCell(x, y, z, 0, 0));
+        // (each column's top: a step, or the landing's slab; under it the slabs down to the floor)
+        void Column(int x, int z, int top, int block, int pos, int slab, int slabPos)
+        {
+            for (var y = HallLayer + 1; y < top; y++) edits.Add(new Lba1GridCell(x, y, z, slab, slabPos));
+            edits.Add(new Lba1GridCell(x, top, z, block, pos));
+        }
+        for (var k = 0; k < UpperSteps; k++)
+            for (var z = StairsZ0; z <= StairsZ1; z++) Column(StairsTop + k, z, LedgeLayer - k, Step, z - StairsZ0, SlabZ, z - StairsZ0);
+        for (var x = LandingX0; x <= LandingX1; x++)
+            for (var z = StairsZ0; z <= StairsZ1; z++) Column(x, z, landing, SlabZ, z - StairsZ0, SlabZ, z - StairsZ0);
+        for (var k = 0; k < LowerSteps; k++)
+            for (var x = LandingX0; x <= LandingX1; x++) Column(x, LowerZ0 + k, landing - k, StepSouth, x - LandingX0, SlabX, x - LandingX0);
+        for (var z = StairsZ0; z <= StairsZ1; z++)
             for (var y = LedgeLayer + 1; y <= LedgeLayer + 5; y++) edits.Add(new Lba1GridCell(LedgeX, y, z, 0, 0));
+        // (the chain and ring hung on the back wall over the upper flight and the landing, x 11-13, layers 15-17: Twinsen's head ran into
+        // it on the steps, and he stopped half way down the first)
+        var chains = 0;
+        for (var x = StairsTop; x <= LandingX1; x++)
+            for (var y = LedgeLayer + 1; y < Height; y++)
+                if (cells[At(x, y, StairsZ0)] == WallChain) { edits.Add(new Lba1GridCell(x, y, StairsZ0, 0, 0)); chains++; }
         var stored = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
         bkg.SetStored(entry, stored);
         if (header.MaxGri < (uint)stored.Length) { header.MaxGri = (uint)stored.Length; bkg.SetStored(0, header.Bytes); }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Commit();
-        return $"the back gate's stairs: scene 2, {steps} steps up the ledge's east face (x {StairsTop + steps - 1} to {StairsTop}, z {StairsZ0}-{StairsZ1}), the cage's bars at x {LedgeX}, z {StairsZ0 - 1}-{StairsZ0} taken out";
+        return $"the back gate's stairs: scene 2, against the hall's back wall up the ledge's east side (z {StairsZ0}-{StairsZ1}): {UpperSteps} steps " +
+               $"x {StairsTop + UpperSteps - 1} to {StairsTop}, a landing x {LandingX0}-{LandingX1} (layer {landing}), {LowerSteps} steps turning south to z " +
+               $"{LowerZ0 + LowerSteps - 1}, solid to the floor; the cage's bars at x {LedgeX}, z {StairsZ0}-{StairsZ1} taken out, and the chain over the steps ({chains} cells)";
     }
 
     // Into a game folder: scene 19's grid made the bar's. A line for the build's log.

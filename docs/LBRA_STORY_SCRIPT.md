@@ -415,7 +415,10 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 
      **The back gate** (built 2026-11-06, `Terrain/Citadel/RaceTrackStory.TraluCaves.cs`): the gate from the Tralu's hall (scene 2) to
      the bar stands on a ledge six layers up, which in the game had no way up (Twinsen came down off it and was stuck: the hall's other
-     way out was the barred door only the Tralu's key opened). The build puts stairs up the ledge's east side (`TraluBarRoom.InstallStairs`);
+     way out was the barred door only the Tralu's key opened). The build puts stairs up the ledge's east side (`TraluBarRoom.InstallStairs`;
+     rebuilt 2026-11-07, the user: "flat against the wall ... as wide as that side of the gate's block ... a turn in the flight"): three
+     steps along the hall's back wall, the ledge's side's whole width (z 19-20), to a landing (x 13-14), and three more turning south
+     off it into the hall, solid stone down to the floor; the chain on the wall over them taken down (his head ran into it);
      the game's barred door (actor 8) moves onto the ledge across the gate's arch, drawn as scene 19's barred doors were, and the game's own
      key script opens it (var 60 to 3, gone for good); the way from the first hall into the Tralu's hall is open. The key is under the sign
      of Sendell on the ledge's face: Action there once Luc has told, while the gate is shut and Twinsen has no key, and a key jumps out.

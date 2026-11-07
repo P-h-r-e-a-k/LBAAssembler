@@ -242,8 +242,9 @@ and now the whole Tavern's moved into my back room, with drums! A Tralu can't he
 And stop offering me peanuts."
 
 **The back gate.** From the bar, east past the table, steps go up through the stalagmites onto a landing, and from it a corridor runs
-south over the water to a door into the Tralu's hall: Twinsen comes out on a ledge, a barred gate behind him, and goes down the stairs
-along the ledge's side. On the ledge's face is a sign of Sendell (Action: "Aha! a sign from Sendell. They are venerated by all the
+south over the water to a door into the Tralu's old hall: Twinsen comes out on a ledge, a barred gate behind him. Stairs go down from
+the ledge's side along the hall's back wall, as wide as the ledge's side, to a landing, and turn there down into the hall. On the
+ledge's face is a sign of Sendell (Action: "Aha! a sign from Sendell. They are venerated by all the
 wizards."), and once Luc has told him, Action there turns up the regulars' key (a key jumps out). With it, back up the stairs, the barred
 gate opens to him (the game's key door: the key is used, and the gate stays open for good), and the bar's quick way is open: the cave's
 mouth, its first hall, the Tralu's hall, the stairs and the gate.
