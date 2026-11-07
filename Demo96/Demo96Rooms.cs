@@ -370,8 +370,8 @@ internal static class Demo96Rooms
     }
 
     // The game's doors into the rooms from its other scenes: each lands where the demo's door from the same scene (its counterpart,
-    // the converter's map) lands -- the nearest of them to the game's door -- else at the room's Arrival; the rest of the door (its
-    // switch, whether it is on) the game's.
+    // the converter's map) lands -- the nearest of them to the game's door -- and turns him as it does, else at the room's Arrival; the
+    // rest of the door (its switch, whether it is on) the game's.
     private static void Doors(HqrFile scenes, SceneStore store, SceneStore demoStore, Dictionary<int, int> sceneOf, IReadOnlyList<Room> rooms, List<string> log)
     {
         var slots = rooms.ToDictionary(r => r.Slot);
@@ -393,6 +393,12 @@ internal static class Demo96Rooms
                 {
                     door.Num = rooms.First(r => r.DemoScene == demo.Num).Slot;
                     for (var k = 0; k < 3; k++) door.Info[k] = demo.Info[k];
+                    // (and the demo's turn with it: Info3 turns Twinsen's place in the zone round as he comes in -- OBJECT.CPP, the arrival is
+                    // Info0-2 plus his offset from the zone's corner turned by -Info3 quarters -- and the demo's arrival is the corner for
+                    // its own turn. The harbour's sewer lift, scene 48, turns half round in the game and not at all in the demo: with the
+                    // demo's place and the game's turn Twinsen came out a cell and a half off the far halls' lift platform, standing on the
+                    // wall between the gargoyles over the grate -- the user, 2026-11-06)
+                    door.Info[3] = demo.Info[3];
                 }
                 else if (slots[door.Num].Arrival is { } at) { door.Info[0] = at.X; door.Info[1] = at.Y; door.Info[2] = at.Z; }
                 else { log.Add($"  scene {s}: its door to {was} has no counterpart in the demo -- left"); continue; }

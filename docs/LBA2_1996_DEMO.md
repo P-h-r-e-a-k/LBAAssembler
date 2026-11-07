@@ -213,7 +213,10 @@ race-track build, after the School (`Demo96Rooms.Sewers`, the same package `Demo
   and 34 into 17 at the demo's places, the lift down from scene 48 into the far halls (18), the Tavern's cellar lift onto the demo's cellar
   lift platform. The storm track's lift (scene 42), which the demo hasn't, lands where the demo starts Twinsen in the sewers
   (20357, 1536, 15140) -- on the cellar lift's platform the demo's lift ride starts, and Twinsen, come any other way, fell and drowned.
-  The demo scenes those doors are in go into the package too.
+  The demo scenes those doors are in go into the package too. A door pointed at the demo's place takes the demo's turn too (its Info3:
+  the arrival is the place plus Twinsen's offset in the zone turned by it): the harbour's lift turns him half round in the game and not at
+  all in the demo, and with the game's turn he came out on top of the far halls' wall between the gargoyles, beside the lift platform
+  that should carry him down to the grate (the user, 2026-11-06). Ridden headless 2026-11-07: down onto the grate, off it, and back up.
 - **Texts**: the demo's Citadel texts aren't the game's numbers here (`SewerTexts`): Twinsen's greetings 6 and 102 are the game's 100
   and 101, his questions after the lighthouse keeper 105 and 106 the game's 520 and 107, the broken device's 383 the game's 110 ("It's
   locked."); the painter's 236 and 237 are the game's under the same numbers.
