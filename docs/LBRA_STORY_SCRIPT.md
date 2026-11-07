@@ -492,7 +492,9 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
     > **Tim:** "Lights over the sea, at this hour? First a race track, now this. I'm going home."
 
     Home is the house at night (scene 193 -- the retail demo's copy of the house, unused -- Citadel/CitadelNightHouse: scene 0's grid in darkened bricks, the candle by the bed and its
-    light kept; the day's house sends Twinsen there while he is tired). Zoe is there, come in with him or waiting by the dining table:
+    light kept; the day's house sends Twinsen there while he is tired. In a build of all fifteen islands the darkened bricks don't fit
+    -- LBA_BKG.HQR is at the engine's brick limit -- so the scene is made on the day's house's own grid, not dark, but still with Twinsen
+    coming in by the front door, 2026-11-07; before, that build left the demo's copy as it was and he arrived in the bedroom). Zoe is there, come in with him or waiting by the dining table:
     > **Zoe:** "Bed, Twinsen. The Wizard said by morning, and morning comes quicker when you're asleep."
 
     The bed, its zone round all three open sides (it was beside the bed's foot, out in the room -- RaceTrackStory.cs, BedSides):

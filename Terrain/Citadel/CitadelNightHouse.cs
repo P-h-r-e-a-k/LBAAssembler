@@ -149,17 +149,17 @@ internal static class CitadelNightHouse
         var brickAt = header.Brk + header.MaxBrk;
         foreach (var brick in added) bkg.InsertAt(brickAt++, brick);
         header.MaxBrk += added.Count;
-        if (header.MaxBrk > 20000) { log.Add("Twinsen's house at night left out: LBA_BKG.HQR would hold more bricks than the engine does"); return log; }
+        if (header.MaxBrk > 20000) return Daylit("LBA_BKG.HQR would hold more bricks than the engine does");
         var newLibrary = Library(blocks);
         var libraryNumber = header.Brk - header.Bll;
-        if (libraryNumber > 255) { log.Add("Twinsen's house at night left out: LBA_BKG.HQR has 256 block libraries already"); return log; }
+        if (libraryNumber > 255) return Daylit("LBA_BKG.HQR has 256 block libraries already");
         bkg.InsertAt(header.Brk, newLibrary);
         header.Brk += 1;
         if (header.MaxBll < newLibrary.Length) header.MaxBll = (uint)newLibrary.Length;
         var grid = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
         grid[0] = (byte)libraryNumber;
         var gridNumber = header.Grm - header.Gri;
-        if (gridNumber > 255) { log.Add("Twinsen's house at night left out: LBA_BKG.HQR has 256 grids already"); return log; }
+        if (gridNumber > 255) return Daylit("LBA_BKG.HQR has 256 grids already");
         bkg.InsertAt(header.Grm, grid);
         header.Grm += 1; header.Bll += 1; header.Brk += 1;
         if (header.MaxGri < (uint)grid.Length) header.MaxGri = (uint)grid.Length;
@@ -172,7 +172,29 @@ internal static class CitadelNightHouse
         if (table.Length < (Scene + 1) * 2) Array.Resize(ref table, (Scene + 1) * 2);
         table[Scene * 2] = type; table[Scene * 2 + 1] = (byte)gridNumber;
         bkg.SetStored(header.Brk + header.MaxBrk, table);
+        Finish(bkg);
+        log.Add($"Twinsen's house at night: scene {Scene}, scene 0's grid in {added.Count} darkened bricks (grid {gridNumber}, block library {libraryNumber}), " +
+                $"{litBlocks.Count} blocks in the candle's light and {(glow ? glowBlocks.Count : 0)} in its glow, its front door back to scene {Yard}");
+        return log;
 
+        // (the night's bricks don't fit -- a build of every island holds all the bricks the engine takes: the scene is made all the same,
+        // on the day's house's own grid, so the front door still brings Twinsen in by the door, Zoe beside him, and not into the demo's
+        // copy of the house, whose start is in the bedroom -- 2026-11-07, the scripted playthrough)
+        List<string> Daylit(string why)
+        {
+            var day = HqrFile.Parse(File.ReadAllBytes(bkgPath));
+            var dayHeader = new MapBricks.BkgHeader(day.Read(0));
+            var dayTable = day.Read(dayHeader.Brk + dayHeader.MaxBrk);
+            if (dayTable.Length < (Scene + 1) * 2) Array.Resize(ref dayTable, (Scene + 1) * 2);
+            dayTable[Scene * 2] = dayTable[House * 2]; dayTable[Scene * 2 + 1] = dayTable[House * 2 + 1];
+            day.SetStored(dayHeader.Brk + dayHeader.MaxBrk, dayTable);
+            Finish(day);
+            log.Add($"Twinsen's house at night not darkened ({why}): scene {Scene} on the day's house's grid, its front door back to scene {Yard}");
+            return log;
+        }
+
+        void Finish(HqrFile bkgFile)
+        {
         // the scene: the house's header, Twinsen by the front door, the penguin's slot, the front door out and the cameras
         var model = store.Load(House).Clone();
         model.Actors.RemoveRange(2, model.Actors.Count - 2);
@@ -198,10 +220,8 @@ internal static class CitadelNightHouse
             holo = HqrWriter.ReplaceEntry(holo, 12, HqrWriter.StoredEntry(arrows));
         }
         else log.Add($"Twinsen's house at night: the holomap's table has no place {Scene} (Twinsen not shown there)");
-        new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Write(holoPath, holo).Commit();
-        log.Add($"Twinsen's house at night: scene {Scene}, scene 0's grid in {added.Count} darkened bricks (grid {gridNumber}, block library {libraryNumber}), " +
-                $"{litBlocks.Count} blocks in the candle's light and {(glow ? glowBlocks.Count : 0)} in its glow, its front door back to scene {Yard}");
-        return log;
+        new FileTransaction().Write(bkgPath, bkgFile.ToBytes()).Write(scenePath, scenes.ToBytes()).Write(holoPath, holo).Commit();
+        }
     }
 
     // A block's bytes in the game's library, as it was (its bricks the game's)
