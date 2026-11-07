@@ -7060,8 +7060,9 @@ static double ArriveDistance(void) {
 }
 
 static void QualifyingArrival(int wrongWay, S32 now) {
+    // (a race won already, once_won=: nothing at its line -- Inert)
     if (s_phase != PHASE_QUALIFYING || s_laps != 0 || s_trial || s_ghostWatch || !s_nbSpots || !s_car.HasLine || Comportement != C_BUGGY ||
-        CubeMode != CUBE_EXTERIEUR || NewCube != -1) { s_arriveStill = 0; return; }
+        CubeMode != CUBE_EXTERIEUR || NewCube != -1 || Inert()) { s_arriveStill = 0; return; }
     const double d = ArriveDistance();
     if (d > RACE_ARRIVE_LEAVE) { s_arrived = 0; s_arriveStill = 0; return; }
     if (s_arrived) return;
