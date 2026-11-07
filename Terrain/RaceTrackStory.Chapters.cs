@@ -92,6 +92,10 @@ internal static partial class RaceTrackStory
     // the museum's bricks) -- read with Action by it: an unseen helper on the case's top, as the game's own book's case has one (actor 13)
     // (Y: the case's top, layer 7)
     private static readonly (int X, int Y, int Z) BlueprintFile = (Citadel.CitadelMuseum.BlueprintCase.X * 512, 1792, Citadel.CitadelMuseum.BlueprintCase.Z * 512 + 768);
+    // ... and the picture of Twinsen with a cup: its plate's helper at the wall's foot under the picture's middle, on the hall's floor (768), behind the
+    // sideboard under it: Action within 1300, from in front of the sideboard (Twinsen stops at z 41.1, 936 away) and not from the cases along the
+    // west wall (the blueprints' case, 3000 away)
+    private static readonly (int X, int Y, int Z) TrophyPlate = ((Citadel.CitadelMuseum.TrophyPicture.X + 1) * 512, 768, (Citadel.CitadelMuseum.TrophyPicture.Z + 1) * 512 + 160);
     // the island's places (cells): the harbour's quay below the warehouses (the thief, the hatch further along it -- a straight run on its
     // paving: from behind the warehouses he ran into their walls), the scrap on the quay, the Tavern's doorstep (outside scene 42's door
     // zone into scene 3; the Tavern's front either side of it is a search zone, see Givers), the yard by the carport (RaceTrackIsland's CarHome)
@@ -114,6 +118,8 @@ internal static partial class RaceTrackStory
         Brune, PharmacyFerry, MushroomWon, DinoFlySun,
         // (the Tavern regulars' secret bar of chapter 1, in the Tralu's caves' second hall: Citadel/RaceTrackStory.TraluTavern.cs)
         TimBan, MushroomLuc, LucBar, RabbibunnyBar, PatBar, FabBar, StrangerBar, TraluNoisy, TraluQuiet, LucKey, TimBar,
+        // (the museum's picture of Twinsen with a cup, Action in front of it: Citadel/CitadelMuseum)
+        TrophyPicture,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -705,6 +711,15 @@ internal static partial class RaceTrackStory
             "Eccoti, Twinsen! Il mio turno sulla soglia è finito, così sono di servizio quaggiù. Vecchie abitudini: non riesco a stare in un bar senza portare un vassoio. Una limonata?",
             "Aí estás tu, Twinsen! Acabou o meu turno à porta, por isso estou de serviço aqui em baixo. Velhos hábitos: não consigo estar num bar sem levar um tabuleiro. Uma limonada?",
         },
+        new[]
+        {
+            "A portrait in a gold frame. Its plate reads: TWINSEN, HERO OF TWINSUN. The painter has put a winner's cup in his hands... a cup he has never won. Not yet.",
+            "Un portrait dans un cadre doré. Sa plaque indique : TWINSEN, HÉROS DE TWINSUN. Le peintre lui a mis une coupe de vainqueur dans les mains... une coupe qu'il n'a jamais gagnée. Pas encore.",
+            "Ein Porträt in einem Goldrahmen. Auf dem Schild steht: TWINSEN, HELD VON TWINSUN. Der Maler hat ihm einen Siegerpokal in die Hände gegeben... einen Pokal, den er nie gewonnen hat. Noch nicht.",
+            "Un retrato con marco dorado. Su placa dice: TWINSEN, HÉROE DE TWINSUN. El pintor le ha puesto en las manos una copa de campeón... una copa que nunca ha ganado. Todavía no.",
+            "Un ritratto in una cornice dorata. La targhetta dice: TWINSEN, EROE DI TWINSUN. Il pittore gli ha messo in mano una coppa da vincitore... una coppa che non ha mai vinto. Non ancora.",
+            "Um retrato numa moldura dourada. A placa diz: TWINSEN, HERÓI DE TWINSUN. O pintor pôs-lhe nas mãos uma taça de vencedor... uma taça que ele nunca ganhou. Ainda não.",
+        },
     };
 
     // The new lines into a language's bank from `first` on (`words`: their column), the pharmacist's price in the game's own words there.
@@ -828,6 +843,8 @@ void comportement_1()
         TraluTavern(p);
         // (the cave's mouth: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
         TraluCaveMouth(p);
+        // (the spider cave's lower mouth, south of the sign of Sendell: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
+        SpiderCaveMouth(p);
         // (the back gate from the Tralu's hall up to the bar: its stairs, its key -- Citadel/RaceTrackStory.TraluCaves.cs)
         TraluBackGate(p);
         Lighthouse(p);
@@ -843,8 +860,6 @@ void comportement_1()
         // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
         Lba1Rooms(p);
     }
-        // (the spider cave's lower mouth, south of the sign of Sendell: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
-        SpiderCaveMouth(p);
 
     // ---- the game's own lines put right for the story's days (the sweep of 2026-11-05) -------------------------------------------------
     // IslandRetell gives the game's people the story's words, text by text; where a line is right one day and wrong the next, or comes
@@ -1712,6 +1727,15 @@ void comportement_{HeroWatching}()
     else if (1 == var_cube(1))
     {{"));
             };
+        });
+
+        // the museum: the picture of Twinsen with a cup on the hall's north wall (Citadel/CitadelMuseum), Action in front of it says what it
+        // is (the user, 2026-11-06: "make it examinable") -- an unseen helper at the wall's foot under it, as the blueprints' is
+        p.Edit(Museum, "the picture of Twinsen with a cup: Action in front of it reads its plate", model =>
+        {
+            var plate = RaceTrackScenes.SpriteProp(TrophyPlate.X, TrophyPlate.Y, TrophyPlate.Z, RaceTrackScenes.PaperSprite, 9);
+            plate.Flags |= RaceTrackScenes.InvisibleFlag;
+            return p.Add(model, plate, Talker("0 <= chapter()", $"            message({p.Say(ChapterLine.TrophyPicture)});", 1300));
         });
 
         // the neighbour: his sheet of drawings (the game's sewer map, retold the storm track's sheet: IslandRetell) -- told of, Q_SHEET 1;

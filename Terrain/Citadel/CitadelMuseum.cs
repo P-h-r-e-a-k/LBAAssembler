@@ -17,7 +17,8 @@ namespace LBAAssembler.Terrain.Citadel;
 //   - the picture of Twinsen with a trophy (a visitor: "you look like the guy in the picture! The one with the trophy!", IslandRetell's
 //     21; the user, 2026-11-06, of the picture that wasn't there: add it): a copy of the hall's portrait on its north wall (the Sup in a
 //     gold frame, block PortraitBlock) on the same wall by the corner, near the tunic's case, its canvas painted again -- Twinsen in his
-//     tunic, a gold cup held up over his head, a chequered flag in a corner of the sky (TrophyPainting, painted onto the wall's slant).
+//     tunic, head and shoulders, holding a gold cup in front of him (TrophyPainting, painted onto the wall's slant); Action in front of it
+//     says what it is (the story's, RaceTrackStory.Chapters.cs: TrophyPicture).
 // The bricks and the block they make go at the ends of LBA_BKG.HQR's bricks and of the museum's block library (the game's own grids,
 // which share that library, don't name them), the case into the grid's empty cells. A build over a folder a build already changed finds
 // its bricks and block there and uses them again (LBA_BKG.HQR isn't one of the files a build puts back first).
@@ -138,52 +139,54 @@ internal static class CitadelMuseum
     }
 
     // ---- the trophy painting: the portrait's canvas inside its gold frame (in Repaint's picture of the portrait block: x 27-47, its top
-    // edge y 40 + (x - 27) / 2, 30 lines down -- the wall's slant), painted again from the rows below, one character a pixel
+    // edge y 40 + (x - 27) / 2, 30 lines down -- the wall's slant), painted again from the rows below, one character a pixel: Twinsen
+    // head and shoulders, his hair's tuft on top, holding a gold cup in both hands in front of his tunic, against a dark red ground with
+    // a lighter glow round his head, every shape outlined dark (the user, 2026-11-06: "the poster of Twinsen with the trophy looks
+    // terrible" -- the first was a whole figure with the cup over his head, too small to make out at 21 x 30)
     private static readonly string[] Trophy =
     {
-        ".....GgyyyyygG...kKkK",
-        ".....GggyyyggG...KkKk",
-        "...gGGgggggggGGg.kKkK",
-        "...g.GgggggggG.g.KkKk",
-        "....gGGgggggGGg......",
-        "......GgggggG........",
-        ".......GgggG.........",
-        "........gGg..........",
-        "......sGgggGs........",
-        "......sGGGGGs........",
-        ".....ss.hhh.ss.......",
-        ".....s.hhhhh.s.......",
-        "....ss.hhhhhh.s......",
-        "....s.hsssssh.s......",
-        "....s.sesssesHs......",
-        "....s.sssssssHH......",
-        "....ss.sSmSs.HH......",
-        ".....st.sss.tsH......",
-        ".....tttTsTttt.......",
-        "....ttttttttttt......",
-        "....tttttttttttT.....",
-        "....TtttttttttT......",
-        "....TttttttttTT......",
-        "....TbbbbbbbbbT......",
-        "....TttttttttttT.....",
-        ".....ttttttttt.......",
-        ".....tttttttttt......",
-        "......lll.lll........",
-        "......lll.lll........",
-        "......lll.lll........",
+        "rrrrrrrrRRRkkrrrrrrrr",
+        "rrrrrrRRRRkhhRRrrrrrr",
+        "rrrrrRRRRkhhkRRRrrrrr",
+        "rrrrRRRRkhhRRRRRRrrrr",
+        "rrrRRRRRkkhkkRRRRRrrr",
+        "rrrRRRRkhhhhhkRRRRrrr",
+        "rrRRRRkhhhhhhHkRRRRrr",
+        "rrRRRkhhhssshHHkRRRrr",
+        "rrRRRkhsssssssHkRRRrr",
+        "rrRRRkhsHsssHsHkRRRrr",
+        "rrRRRkssesssesSkRRRrr",
+        "rrRRRkssssSsssSkRRRrr",
+        "rrRRRkssssssssSkRRRrr",
+        "rrrRRRkssmmmsskRRRrrr",
+        "rrrRRRRkssssskRRRRrrr",
+        "rrrrRRRRkSsSkRRRRrrrr",
+        "rrrrrkkkkkkkkkkkrrrrr",
+        "rrrrGGgyyggggggGGrrrr",
+        "rrrGkGgygggggggGkGrrr",
+        "rrkGtkGyggggggGkTGkrr",
+        "rkrtGkGyggggggGkGTrkr",
+        "kttksskGgggggGksskTTk",
+        "tttksstkGgggGkTsskTTT",
+        "ttttkkttkGgGktTkkTTTT",
+        "ttttttttkGgGktTTTTTTT",
+        "tttttttkGgggGkTTTTTTT",
+        "ttttttkGgggggGkTTTTTT",
+        "tttttttkkkkkkkTTTTTTT",
+        "ttttttttttttttTTTTTTT",
+        "ttttttttttttttTTTTTTT",
     };
 
     internal static Func<int, int, byte, byte> TrophyPainting(byte[] palette)
     {
-        // (the sky the game's blue ramp's light end over a grass green, the cup its gold ramp, Twinsen's tunic its blue, his hair the
-        // brown ramp, his trousers light grey)
+        // (the ground dark red, the outlines near black, the cup the gold ramp, Twinsen's tunic its blue, his hair the brown ramp)
         var colours = new Dictionary<char, byte>
         {
-            ['g'] = Nearest(palette, 227, 175, 83), ['G'] = Nearest(palette, 155, 119, 63), ['y'] = Nearest(palette, 247, 211, 139),
-            ['s'] = Nearest(palette, 207, 167, 131), ['S'] = Nearest(palette, 179, 135, 107), ['e'] = Nearest(palette, 43, 43, 39),
-            ['m'] = Nearest(palette, 179, 43, 39), ['h'] = Nearest(palette, 119, 79, 51), ['H'] = Nearest(palette, 91, 63, 35),
-            ['t'] = Nearest(palette, 39, 135, 167), ['T'] = Nearest(palette, 31, 87, 119), ['b'] = Nearest(palette, 67, 43, 19),
-            ['l'] = Nearest(palette, 211, 211, 203), ['k'] = Nearest(palette, 31, 31, 27), ['K'] = Nearest(palette, 231, 231, 227),
+            ['r'] = Nearest(palette, 110, 32, 30), ['R'] = Nearest(palette, 140, 48, 40), ['k'] = Nearest(palette, 28, 22, 20),
+            ['h'] = Nearest(palette, 126, 80, 44), ['H'] = Nearest(palette, 88, 54, 30), ['s'] = Nearest(palette, 232, 186, 146),
+            ['S'] = Nearest(palette, 198, 146, 112), ['e'] = Nearest(palette, 30, 30, 40), ['m'] = Nearest(palette, 170, 52, 48),
+            ['t'] = Nearest(palette, 40, 110, 190), ['T'] = Nearest(palette, 28, 78, 140), ['w'] = Nearest(palette, 235, 235, 230),
+            ['g'] = Nearest(palette, 228, 178, 60), ['G'] = Nearest(palette, 160, 110, 30), ['y'] = Nearest(palette, 255, 236, 150),
         };
         byte sky = Nearest(palette, 131, 183, 215), ground = Nearest(palette, 155, 171, 123);
         return (x, y, colour) =>

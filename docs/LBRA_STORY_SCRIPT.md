@@ -347,9 +347,14 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    - **The museum** (scene 15, by the rampart's lift). Miss Bloop, the curator, in the hall:
      > **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
 
-     On the hall's north wall by the corner, a picture of Twinsen holding up a trophy (a copy of the hall's portrait, its canvas
-     painted again: Citadel/CitadelMuseum) -- the visitor's line (text 21 retold): "you look like the guy in the picture! The one with
-     the trophy!"
+     On the hall's north wall by the corner, over a sideboard, a picture of Twinsen holding a cup (a copy of the hall's portrait, its
+     canvas painted again: Citadel/CitadelMuseum -- since 2026-11-07 head and shoulders, the gold cup held in front of his tunic, on a
+     dark red ground, every shape outlined: the first, the whole figure with the cup over his head, was too small to make out). Action
+     in front of it (an unseen helper under it, within 1300: TrophyPicture, six languages):
+     > *A portrait in a gold frame. Its plate reads: TWINSEN, HERO OF TWINSUN. The painter has put a winner's cup in his hands... a cup
+     > he has never won. Not yet.*
+
+     The visitor's line (text 21 retold): "you look like the guy in the picture! The one with the trophy!"
 
      In the hall, under the window, a display case like the one with the old book (the museum's own bricks, Citadel/CitadelMuseum):
      under its glass a sheet of blueprints (Action by the case):
