@@ -1415,7 +1415,17 @@ void AffAllCar() {
     FlushCar();
 }
 /*-------------------------------------------------------------------------*/
+// A speaker's dialogue colour is a palette row, 1-15. Row 0 is the palette's first row, a run of every hue, which the typewriter steps
+// through while a line types out (AffAllCar: MinDegrade up to MaxDegrade): the line flashes like a rainbow and settles white. The game
+// gives 0 to people who never speak; a race-story build has some speak (the landing crowd, 2026-11-06; HAL in the Emerald Moon's base,
+// 2026-11-07), so such a speaker talks in DIAL_DEFAULT_COLOUR instead (9, as the story build's GiveVoice gives one).
+#define DIAL_DEFAULT_COLOUR 9
 void TestCoulDial(S32 coul) {
+    if (coul < 1 OR coul > 15) {
+        static S32 s_warned = -1;
+        if (coul != s_warned) { Log_Info("[dial] speaker colour %d isn't a palette row 1-15: %d used", (int)coul, DIAL_DEFAULT_COLOUR); s_warned = coul; }
+        coul = DIAL_DEFAULT_COLOUR;
+    }
     MinDegrade = coul * 16;
     MaxDegrade = coul * 16 + 12;
 }

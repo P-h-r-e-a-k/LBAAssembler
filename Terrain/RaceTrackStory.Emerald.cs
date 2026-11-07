@@ -23,6 +23,7 @@ internal static partial class RaceTrackStory
     // (a scene variable of the base: HAL's talker is there this visit -- the eggs' HalTalks is 70, the base's own scripts use 0-2)
     private const int HalHere = 71;
     private static readonly (int X, int Y, int Z) HalSpot = (23152, 2816, 3904), MechanicSpot = (19344, 2816, 6400);
+    private const int HalVoice = 10;
 
     // A story driver who races only while the story has him at the track (the race file's opponentN_when=<var> <least> <below>, RACEMOD.CPP):
     // HAL, from his mending to the race's end -- in the moon base before and after (ApplyEmerald)
@@ -317,7 +318,9 @@ internal static partial class RaceTrackStory
             });
             b.Edit(BaseScene, "HAL's voice box: HAL's cries (Q_HAL 2), the mechanics take the radio (3), HAL mended gives it back (4)", model =>
             {
-                var hal = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(HalSpot.X, HalSpot.Y, HalSpot.Z, 15), Talker($"{moon} && {HalMended} > var_game({QHal})", $@"            if ({RadioLent} == var_game({QHal}))
+                // (HAL speaks in colour 10, the palette's cyan: the base's palette has no ramp in row 15 -- it ends blue, green, cyan, red,
+                // magenta -- so a line in 15 typed out in a rainbow, the user, 2026-11-07)
+                var hal = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(HalSpot.X, HalSpot.Y, HalSpot.Z, HalVoice), Talker($"{moon} && {HalMended} > var_game({QHal})", $@"            if ({RadioLent} == var_game({QHal}))
             {{
                 message({Say(MoonLine.HalThanks)});
                 message({Say(MoonLine.HalRadio)});
