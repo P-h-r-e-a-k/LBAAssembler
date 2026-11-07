@@ -838,6 +838,21 @@ static int s_footActWas = 0;               // the action key held last frame (on
 #define RACE_WALK_POINTS 64
 static int s_walkN = 0, s_walkAt = 0, s_walkCar = 0;
 static int s_walkAny = 0;                  // the console's walkto: its points walked on foot in any game, not only on_foot='s
+// (2026-11-07, the scripted playthrough by inputs alone: "actor N" -- walked up to an actor wherever it has moved to; "action" -- the
+// action key pressed once at the walk's end; the scene the walk is in -- a walk through a door indoors ends there, its points meaning
+// nothing in the next scene's units; and where he last made headway, to tell of a walk stuck against something)
+static int s_walkActor = -1, s_walkAction = 0, s_walkCube = -1, s_walkOut = 0;
+// (the console's goto: the places walked to by planned ways -- RaceMod_Goto)
+
+#define WP_GOALS 16
+static double s_goalX[WP_GOALS], s_goalZ[WP_GOALS];
+static int s_goalN = 0, s_goalAt = 0, s_goalCube = -1, s_goalTries = 0;
+static double s_walkReach = 800, s_walkLastX = 0, s_walkLastZ = 0;
+static U32 s_walkLastAt = 0;
+// (stuck -- no headway for a second against a post, a fence's end, someone in the way: a detour, as a player steps round it -- a quarter
+// turn one way for a while, then the other way for longer, then back on course; reset at each point reached)
+static U32 s_detourUntil = 0;
+static int s_detourTurn = 0, s_detourN = 0;
 // inv_count=<slot> (2026-11-07): an inventory slot whose box shows how many Twinsen has (its game variable), as the darts' does -- the
 // story's own counted items in slots the game shows no count for (the Dean's exam pages on the White Leaf Desert). Kept once read: a
 // slot the story counts in is counted whatever track is loaded.
@@ -6500,7 +6515,7 @@ U32 RaceMod_AutoInput(void) {
     if (s_winStop == 1 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return WinStopInput();
     // (the console's racewalk: on foot, through its points -- on_foot=; and its points anywhere Twinsen is on foot, outside or in: the
     // scripted playthrough's walks by the keys, not teleports, 2026-11-07)
-    if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
+    if ((s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
     // (... and in his car, driven through them: DriveInput)
     if (s_walkN > 0 && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return DriveInput();
     // (the console's racestop: the test pilot's car stopped where it comes within reach of a place, and Twinsen out of it)
@@ -12317,8 +12332,14 @@ void RaceMod_StopAt(double x, double z, double reach) {
 
 // The console's racewalk [+] <x z>... [car]: on foot, through the points (island units; "+" after those given before), then with "car"
 // to his car and into it -- the test of the party's way (WalkInput).
+static void WalkBegun(void) {
+    s_detourN = 0; s_detourUntil = 0;
+    s_walkCube = NumCube; s_walkOut = CubeMode == CUBE_EXTERIEUR; s_walkLastAt = TimerRefHR;
+    s_walkLastX = ListObjet[NUM_PERSO].Obj.X; s_walkLastZ = ListObjet[NUM_PERSO].Obj.Z;
+}
 void RaceMod_Walk(int n, const double *xz, int car, int more) {
-    if (!more) { s_walkN = 0; s_walkAt = 0; }
+    if (!more) { s_walkN = 0; s_walkAt = 0; s_walkActor = -1; s_walkAction = 0; s_goalN = 0; s_goalAt = 0; }
+    WalkBegun();
     for (int k = 0; k < n && s_walkN < RACE_WALK_POINTS; k++) { s_walkX[s_walkN] = xz[2 * k]; s_walkZ[s_walkN] = xz[2 * k + 1]; s_walkN++; }
     s_walkCar = car;
     // (a test that starts on foot -- straight into a scene of the party's -- walks as though he had got out of his car there)
@@ -12330,10 +12351,332 @@ void RaceMod_Walk(int n, const double *xz, int car, int more) {
 // turned towards each point, walking once it is about ahead), for headless tests that go by inputs alone (2026-11-07: the School of
 // Magic's gate walked into from the road, the ladders round the Emerald Moon's track)
 void RaceMod_WalkTo(int n, const double *xz) {
-    s_walkN = 0; s_walkAt = 0; s_walkCar = 0;
+    s_walkN = 0; s_walkAt = 0; s_walkCar = 0; s_walkActor = -1; s_walkAction = 0; s_goalN = 0; s_goalAt = 0;
+    WalkBegun();
     for (int k = 0; k < n && s_walkN < RACE_WALK_POINTS; k++) { s_walkX[s_walkN] = xz[2 * k]; s_walkZ[s_walkN] = xz[2 * k + 1]; s_walkN++; }
     s_walkAny = s_walkN > 0;
     Log_Info("[racemod] walkto: %d point(s)", s_walkN);
+}
+
+// ... and after the points given (or none): up to actor <actor> (>= 0), wherever it is as he walks, till within <reach> of it; then,
+// with <action>, the action key once -- a talk, a door, a lever, as a player walks up and presses it (racewalk/walkto ... [actor N
+// [reach]] [action]).
+void RaceMod_WalkThen(int actor, double reach, int action) {
+    if (actor >= 0) { s_walkActor = actor; s_walkReach = reach > 0 ? reach : 800; s_walkAny = 1; }
+    if (action) { s_walkAction = 1; s_walkAny = 1; }
+    if (s_walkN == 0 && actor < 0 && action) s_walkAction = 2;   // (nothing to walk: pressed at once)
+    WalkBegun();
+    Log_Info("[racemod] racewalk: then%s%s", actor >= 0 ? " to an actor" : "", action ? ", the action key" : "");
+}
+int RaceMod_Walking(void) { return s_walkN > 0 || s_walkCar || s_walkActor >= 0 || s_walkAction || s_goalAt < s_goalN; }
+
+
+// ---- the console's "goto": a walk planned round what is in the way (2026-11-07, the scripted playthrough by inputs alone) ----------
+// Outside, over the cube Twinsen is in: a grid of WP_CELL cells, each place's floor the ground's (the raised road's where there is one:
+// CalculAltitudeObjet) or the top of a decor standing there; from a cell to its neighbour only up a step he can walk (WP_STEP), down no
+// further than WP_DROP, onto no water, lava, gas or forbidden ground, and with no decor in the way of his body. A* from where he stands
+// to the goal -- or, the goal in another cube, to this cube's edge on the way to it -- then walked as racewalk's points, each turn of
+// the path a point; at the edge, into the next cube, planned again from there. Indoors, or with no way found, the goal is walked to
+// straight (with racewalk's detours). Only the keys a player would press: the plan only says where to walk.
+#define WP_CELL 256
+#define WP_N (32768 / WP_CELL)
+#define WP_STEP 220
+#define WP_DROP 900
+#define WP_BODY 1300
+#define WP_MARGIN 160
+#define WP_LEVELS 3
+#define WP_NONE (-100000)
+#define WP_EDGE 24
+#define WP_PULL 48
+
+extern S32 CalculAltitudeObjet(S32 x, S32 z, S32 cj);
+extern S32 GiveTerrainCol(S32 x, S32 z);
+extern U8 GiveTerrainCodeJeu(S32 x, S32 y, S32 z);
+static S16 s_wpDec[WP_N * WP_N][6];
+static U8 s_wpDecN[WP_N * WP_N];
+typedef struct { S32 Cell, Floor, Parent; float G, F; } T_WP_NODE;
+static T_WP_NODE s_wpNode[WP_N * WP_N * WP_LEVELS];
+static S32 s_wpHeap[WP_N * WP_N * WP_LEVELS];
+static S32 s_wpSeen[WP_N * WP_N][WP_LEVELS];   // node index of each floor reached in a cell (-1 none)
+
+static void WpBuckets(void) {
+    memset(s_wpDecN, 0, sizeof(s_wpDecN));
+    for (S32 i = 0; i < NbObjDecors && i < 32767; i++) {
+        const T_DECORS *d = &ListDecors[i];
+        if ((d->Body & DEC_INVISIBLE) || d->XMax < d->XMin || d->ZMax < d->ZMin || d->YMax < d->YMin) continue;
+        int x0 = (d->XMin - WP_MARGIN) / WP_CELL, x1 = (d->XMax + WP_MARGIN) / WP_CELL, z0 = (d->ZMin - WP_MARGIN) / WP_CELL, z1 = (d->ZMax + WP_MARGIN) / WP_CELL;
+        if (x0 < 0) x0 = 0; if (z0 < 0) z0 = 0; if (x1 > WP_N - 1) x1 = WP_N - 1; if (z1 > WP_N - 1) z1 = WP_N - 1;
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++) {
+                const int c = z * WP_N + x;
+                if (s_wpDecN[c] < 6) s_wpDec[c][s_wpDecN[c]++] = (S16)i;
+            }
+    }
+}
+
+// the floor at the cell's middle for a body coming from height h (WP_NONE: nowhere to stand)
+static S32 WpFloorAt(int cell, S32 h);
+static double s_wpGoalX = -1e9, s_wpGoalZ = -1e9;   // (the goal, cube units: a door it is in is not kept out of)
+static double s_wpFromX = -1e9, s_wpFromZ = -1e9;   // (... nor one Twinsen stands in -- he came in by it)
+static S32 WpFloor(int cell, S32 h) {
+    // (the raised road as Twinsen on foot meets it: its deck a floor a foot's step up, its side a wall -- RaceMod_FloorForFoot, FootDeckWall)
+    const S32 ref = s_floorRef, step = s_raisedStep, open = TerrainFootOpen;
+    s_floorRef = s_nbRaised ? h : RAISED_NOREF; s_raisedStep = RAISED_FOOT_STEP; TerrainFootOpen = RaceMod_Active() ? 1 : 0;
+    const S32 f = WpFloorAt(cell, h);
+    s_floorRef = ref; s_raisedStep = step; TerrainFootOpen = open;
+    return f;
+}
+static S32 WpFloorAt(int cell, S32 h) {
+    const S32 x = (cell % WP_N) * WP_CELL + WP_CELL / 2, z = (cell / WP_N) * WP_CELL + WP_CELL / 2;
+    S32 best = WP_NONE;
+    const S32 g = CalculAltitudeObjet(x, z, -1);
+    if (g >= 0 && g <= h + WP_STEP && g >= h - WP_DROP && !GiveTerrainCol(x, z)) {
+        const int cj = GiveTerrainCodeJeu(x, g, z) >> 4;
+        if (!(cj == CJ_WATER || cj == CJ_ELECTRIC || cj == CJ_POS_INVALID || cj == CJ_LAVE || cj == CJ_GAZ || cj == CJ_ANIMATED_LAVE || cj == CJ_ANIMATED_GAZ || cj == CJ_ANIMATED_WATER))
+            best = g;
+    }
+    if (best != WP_NONE && s_nbRaised && FootDeckIn(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, best, 1200)) return WP_NONE;
+    // (a door -- a zone into another scene -- is no way through, unless it is where the walk goes)
+    for (S32 i = 0; i < NbZones; i++) {
+        const T_ZONE *zn = &ListZone[i];
+        if (zn->Type != 0) continue;
+        if (x < zn->X0 - 128 || x > zn->X1 + 128 || z < zn->Z0 - 128 || z > zn->Z1 + 128) continue;
+        if (s_wpGoalX >= zn->X0 - 256 && s_wpGoalX <= zn->X1 + 256 && s_wpGoalZ >= zn->Z0 - 256 && s_wpGoalZ <= zn->Z1 + 256) continue;
+        if (s_wpFromX >= zn->X0 - 512 && s_wpFromX <= zn->X1 + 512 && s_wpFromZ >= zn->Z0 - 512 && s_wpFromZ <= zn->Z1 + 512) continue;
+        if (h + WP_STEP >= zn->Y0 - 256 && h <= zn->Y1 + 256) return WP_NONE;
+    }
+    for (int k = 0; k < s_wpDecN[cell]; k++) {
+        const T_DECORS *d = &ListDecors[s_wpDec[cell][k]];
+        if (x < d->XMin - WP_MARGIN || x > d->XMax + WP_MARGIN || z < d->ZMin - WP_MARGIN || z > d->ZMax + WP_MARGIN) continue;
+        // (on top of it: well inside its plan only)
+        if (x >= d->XMin + 64 && x <= d->XMax - 64 && z >= d->ZMin + 64 && z <= d->ZMax - 64 && d->YMax <= h + WP_STEP && d->YMax >= h - WP_DROP && d->YMax > best) best = d->YMax;
+    }
+    if (best == WP_NONE) return WP_NONE;
+    for (int k = 0; k < s_wpDecN[cell]; k++) {
+        const T_DECORS *d = &ListDecors[s_wpDec[cell][k]];
+        if (x < d->XMin - WP_MARGIN || x > d->XMax + WP_MARGIN || z < d->ZMin - WP_MARGIN || z > d->ZMax + WP_MARGIN) continue;
+        if (d->YMin < best + WP_BODY && d->YMax > best + 40) return WP_NONE;
+    }
+    return best;
+}
+
+static void WpPush(S32 n, S32 *count) {
+    S32 i = (*count)++;
+    s_wpHeap[i] = n;
+    while (i > 0) { const S32 up = (i - 1) / 2; if (s_wpNode[s_wpHeap[up]].F <= s_wpNode[n].F) break; s_wpHeap[i] = s_wpHeap[up]; i = up; }
+    s_wpHeap[i] = n;
+}
+static S32 WpPop(S32 *count) {
+    const S32 top = s_wpHeap[0], last = s_wpHeap[--(*count)];
+    S32 i = 0;
+    for (;;) {
+        S32 c = 2 * i + 1;
+        if (c >= *count) break;
+        if (c + 1 < *count && s_wpNode[s_wpHeap[c + 1]].F < s_wpNode[s_wpHeap[c]].F) c++;
+        if (s_wpNode[last].F <= s_wpNode[s_wpHeap[c]].F) break;
+        s_wpHeap[i] = s_wpHeap[c]; i = c;
+    }
+    if (*count > 0) s_wpHeap[i] = last;
+    return top;
+}
+
+// a path from where Twinsen stands to (gx, gz) (cube units; outside the cube: to its edge on the way) as racewalk's points (island
+// units); 0 if there is none
+static int WpPlan(double gx, double gz) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double ox = CurrentCubeX * 32768.0, oz = CurrentCubeY * 32768.0;
+    int sx = hero->Obj.X / WP_CELL, sz = hero->Obj.Z / WP_CELL;
+    if (sx < 0 || sz < 0 || sx >= WP_N || sz >= WP_N) return 0;
+    int tx = (int)(gx / WP_CELL), tz = (int)(gz / WP_CELL);
+    const int outside = tx < 0 || tz < 0 || tx >= WP_N || tz >= WP_N;
+    // (the goal in another cube: the edge where the straight way to it leaves this one -- side 0 west, 1 east, 2 north, 3 south --
+    // and the place on it; any cell on that edge within WP_EDGE of the place will do)
+    int side = -1;
+    if (outside) {
+        const double hx = hero->Obj.X, hz = hero->Obj.Z, vx = gx - hx, vz = gz - hz;
+        double t = 1e18;
+        if (vx < 0) { const double u = (0 - hx) / vx; if (u < t) { t = u; side = 0; } }
+        if (vx > 0) { const double u = (32767 - hx) / vx; if (u < t) { t = u; side = 1; } }
+        if (vz < 0) { const double u = (0 - hz) / vz; if (u < t) { t = u; side = 2; } }
+        if (vz > 0) { const double u = (32767 - hz) / vz; if (u < t) { t = u; side = 3; } }
+        tx = (int)((hx + vx * t) / WP_CELL); tz = (int)((hz + vz * t) / WP_CELL);
+    }
+    if (tx < 0) tx = 0; if (tz < 0) tz = 0; if (tx > WP_N - 1) tx = WP_N - 1; if (tz > WP_N - 1) tz = WP_N - 1;
+    WpBuckets();
+    s_wpGoalX = outside ? tx * WP_CELL + WP_CELL / 2 : gx; s_wpGoalZ = outside ? tz * WP_CELL + WP_CELL / 2 : gz; s_wpFromX = hero->Obj.X; s_wpFromZ = hero->Obj.Z;
+    memset(s_wpSeen, 0xFF, sizeof(s_wpSeen));
+    S32 nodes = 0, heap = 0, found = -1, bestNear = -1;
+    double bestD = 1e18;
+    const int start = sz * WP_N + sx, goal = tz * WP_N + tx;
+    s_wpNode[0].Cell = start; s_wpNode[0].Floor = hero->Obj.Y; s_wpNode[0].Parent = -1; s_wpNode[0].G = 0;
+    s_wpNode[0].F = (float)sqrt((double)(tx - sx) * (tx - sx) + (double)(tz - sz) * (tz - sz));
+    s_wpSeen[start][0] = 0; nodes = 1;
+    WpPush(0, &heap);
+    static const int DX[8] = {1, -1, 0, 0, 1, 1, -1, -1}, DZ[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+    while (heap > 0) {
+        const S32 n = WpPop(&heap);
+        const int c = s_wpNode[n].Cell, cx = c % WP_N, cz = c / WP_N;
+        const double dg = sqrt((double)(tx - cx) * (tx - cx) + (double)(tz - cz) * (tz - cz));
+        if (dg < bestD) { bestD = dg; bestNear = n; }
+        // (the goal's cell -- or, the goal outside the cube, any cell on the edge it lies past)
+        if (c == goal || (side == 0 && cx == 0 && abs(cz - tz) <= WP_EDGE) || (side == 1 && cx == WP_N - 1 && abs(cz - tz) <= WP_EDGE) ||
+            (side == 2 && cz == 0 && abs(cx - tx) <= WP_EDGE) || (side == 3 && cz == WP_N - 1 && abs(cx - tx) <= WP_EDGE)) { found = n; break; }
+        for (int k = 0; k < 8; k++) {
+            const int nx = cx + DX[k], nz = cz + DZ[k];
+            if (nx < 0 || nz < 0 || nx >= WP_N || nz >= WP_N) continue;
+            const int nc = nz * WP_N + nx;
+            const S32 f = WpFloor(nc, s_wpNode[n].Floor);
+            if (f == WP_NONE) continue;
+            // (a diagonal only where both its sides are open too: not round a corner's edge)
+            if (k >= 4 && (WpFloor(cz * WP_N + nx, s_wpNode[n].Floor) == WP_NONE || WpFloor(nz * WP_N + cx, s_wpNode[n].Floor) == WP_NONE)) continue;
+            int lv = 0, have = -1;
+            for (; lv < WP_LEVELS && s_wpSeen[nc][lv] >= 0; lv++)
+                if (abs(s_wpNode[s_wpSeen[nc][lv]].Floor - f) < 400) { have = s_wpSeen[nc][lv]; break; }
+            const float g = s_wpNode[n].G + (k >= 4 ? 1.414f : 1.0f);
+            if (have >= 0) {
+                if (g >= s_wpNode[have].G) continue;
+                // (a shorter way to a place already reached: pushed again with its better cost)
+            } else if (lv >= WP_LEVELS || nodes >= WP_N * WP_N * WP_LEVELS) continue;
+            const S32 m = have >= 0 ? have : nodes++;
+            if (have < 0) s_wpSeen[nc][lv] = m;
+            s_wpNode[m].Cell = nc; s_wpNode[m].Floor = f; s_wpNode[m].Parent = n; s_wpNode[m].G = g;
+            s_wpNode[m].F = g + (float)sqrt((double)(tx - nx) * (tx - nx) + (double)(tz - nz) * (tz - nz));
+            if (heap < WP_N * WP_N * WP_LEVELS) WpPush(m, &heap);
+        }
+    }
+    int partial = 0;
+    if (found < 0) {
+        Log_Info("[racemod] goto: no way found in scene %d from (%d,%d) to (%.0f,%.0f) -- the nearest place reached %.0f cells from it: walked to there, then on straight", (int)NumCube,
+                 (int)hero->Obj.X, (int)hero->Obj.Z, gx, gz, bestD);
+        if (bestNear <= 0) return 0;
+        found = bestNear; partial = 1;
+    }
+    // the path's cells, start to end, and a point at each turn (and at least every 12 cells)
+    // (pulled tight: from each point on to the furthest cell of the path -- at most WP_PULL on -- that a straight walk reaches over
+    // ground he can stand on all the way)
+    static S32 path[WP_N * WP_N], pathFloor[WP_N * WP_N];
+    int len = 0;
+    for (S32 n = found; n >= 0 && len < WP_N * WP_N; n = s_wpNode[n].Parent) { pathFloor[len] = s_wpNode[n].Floor; path[len++] = s_wpNode[n].Cell; }
+    s_walkN = 0; s_walkAt = 0;
+    for (int cur = len - 1; cur > 0 && s_walkN < RACE_WALK_POINTS - 2;) {
+        int next = cur - 1;
+        for (int j = cur - WP_PULL < 0 ? 0 : cur - WP_PULL; j < cur - 1; j++) {
+            const double ax = (path[cur] % WP_N) * WP_CELL + WP_CELL / 2, az = (path[cur] / WP_N) * WP_CELL + WP_CELL / 2;
+            const double bx = (path[j] % WP_N) * WP_CELL + WP_CELL / 2, bz = (path[j] / WP_N) * WP_CELL + WP_CELL / 2;
+            const double l = sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
+            const int steps = (int)(l / 64) + 1;
+            S32 h = pathFloor[cur];
+            int last = path[cur], ok = 1;
+            for (int k = 1; k <= steps && ok; k++) {
+                const double t = (double)k / steps;
+                // (the line and a body's half width either side of it)
+                for (int side = -1; side <= 1 && ok; side++) {
+                    const double px = ax + (bx - ax) * t + side * 160 * (-(bz - az) / (l > 0 ? l : 1)), pz = az + (bz - az) * t + side * 160 * ((bx - ax) / (l > 0 ? l : 1));
+                    const int c = ((int)pz / WP_CELL) * WP_N + (int)px / WP_CELL;
+                    if (px < 0 || pz < 0 || px >= 32768 || pz >= 32768) { ok = 0; break; }
+                    if (side == 0 && c == last) continue;
+                    const S32 f = WpFloor(c, h);
+                    if (f == WP_NONE) ok = 0;
+                    else if (side == 0) { h = f; last = c; }
+                }
+            }
+            if (ok) { next = j; break; }
+        }
+        cur = next;
+        if (cur > 0) { s_walkX[s_walkN] = ox + (path[cur] % WP_N) * WP_CELL + WP_CELL / 2; s_walkZ[s_walkN] = oz + (path[cur] / WP_N) * WP_CELL + WP_CELL / 2; s_walkN++; }
+    }
+    // the end: the goal itself, or a step past the edge into the next cube
+    if (partial) {
+        const int e = path[0];
+        s_walkX[s_walkN] = ox + (e % WP_N) * WP_CELL + WP_CELL / 2; s_walkZ[s_walkN] = oz + (e / WP_N) * WP_CELL + WP_CELL / 2; s_walkN++;
+        s_walkX[s_walkN] = ox + gx; s_walkZ[s_walkN] = oz + gz; s_walkN++;
+    } else if (outside) {
+        const int e = path[0];
+        double ex = ox + (e % WP_N) * WP_CELL + WP_CELL / 2, ez = oz + (e / WP_N) * WP_CELL + WP_CELL / 2;
+        if (side == 0) ex = ox - 600; else if (side == 1) ex = ox + 32768 + 600;
+        else if (side == 2) ez = oz - 600; else if (side == 3) ez = oz + 32768 + 600;
+        s_walkX[s_walkN] = ex; s_walkZ[s_walkN] = ez; s_walkN++;
+    } else { s_walkX[s_walkN] = ox + gx; s_walkZ[s_walkN] = oz + gz; s_walkN++; }
+    Log_Info("[racemod] goto: a way of %d cells in scene %d, %d point(s), to (%.0f,%.0f)%s", len, (int)NumCube, s_walkN, s_walkX[s_walkN - 1], s_walkZ[s_walkN - 1],
+             outside ? " -- the cube's edge on the way" : "");
+    return 1;
+}
+
+// The console's goto <x z>... [action]: each place walked to in turn by a planned way (island units outside, the scene's own indoors).
+void RaceMod_Goto(int n, const double *xz) {
+    s_goalN = 0; s_goalAt = 0; s_goalCube = -1; s_goalTries = 0;
+    for (int k = 0; k < n && k < WP_GOALS; k++) { s_goalX[k] = xz[2 * k]; s_goalZ[k] = xz[2 * k + 1]; s_goalN++; }
+    s_walkN = 0; s_walkAt = 0; s_walkCar = 0; s_walkActor = -1; s_walkAction = 0;
+    s_walkAny = s_goalN > 0;
+    WalkBegun();
+    Log_Info("[racemod] goto: %d place(s)", s_goalN);
+}
+
+// (WalkInput, each frame of a goto: the next leg planned when the last is walked -- or the scene changed under it)
+static void GotoLeg(void) {
+    if (s_goalAt >= s_goalN) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int out = CubeMode == CUBE_EXTERIEUR;
+    const double ox = out ? CurrentCubeX * 32768.0 : 0, oz = out ? CurrentCubeY * 32768.0 : 0;
+    const double dx = s_goalX[s_goalAt] - (hero->Obj.X + ox), dz = s_goalZ[s_goalAt] - (hero->Obj.Z + oz);
+    if (sqrt(dx * dx + dz * dz) < 400) {
+        Log_Info("[racemod] goto: place %d of %d reached at (%.0f,%d,%.0f)", s_goalAt + 1, s_goalN, hero->Obj.X + ox, (int)hero->Obj.Y, hero->Obj.Z + oz);
+        s_goalAt++; s_goalTries = 0; s_walkN = 0; s_walkAt = 0;
+        if (s_goalAt >= s_goalN) return;
+    }
+    if (s_walkAt < s_walkN && s_goalCube == (S32)NumCube) return;
+    s_goalCube = NumCube;
+    if (s_goalTries++ > 6) { Log_Info("[racemod] goto: place %d given up after %d tries", s_goalAt + 1, s_goalTries - 1); s_goalAt = s_goalN; s_walkN = 0; return; }
+    if (out && WpPlan(s_goalX[s_goalAt] - ox, s_goalZ[s_goalAt] - oz)) return;
+    // (indoors, or no way found: straight at it)
+    s_walkN = 1; s_walkAt = 0; s_walkX[0] = s_goalX[s_goalAt]; s_walkZ[0] = s_goalZ[s_goalAt];
+}
+int RaceMod_GotoBusy(void) { return s_goalAt < s_goalN; }
+
+// The console's gotomap <file.ppm>: the planner's view of the cube Twinsen is in, a pixel a cell (north up: z grows down the picture):
+// the ground's height grey (dark low, light high), a decor's top blue, nowhere to stand red, water/lava (no ground) dark red; Twinsen
+// yellow, the walk's points green. For working out a way by hand.
+void RaceMod_GotoMap(const char *file) {
+    if (CubeMode != CUBE_EXTERIEUR) { Log_Info("[racemod] gotomap: outside only"); return; }
+    WpBuckets();
+    FILE *f = fopen(file, "wb");
+    if (!f) { Log_Info("[racemod] gotomap: can't write %s", file); return; }
+    fprintf(f, "P6\n%d %d\n255\n", WP_N, WP_N);
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int hc = (hero->Obj.Z / WP_CELL) * WP_N + hero->Obj.X / WP_CELL;
+    static U8 rgb[WP_N * WP_N * 3];
+    for (int c = 0; c < WP_N * WP_N; c++) {
+        const S32 x = (c % WP_N) * WP_CELL + WP_CELL / 2, z = (c / WP_N) * WP_CELL + WP_CELL / 2;
+        const S32 g = CalculAltitudeObjet(x, z, -1);
+        // (standing there, from its own ground's height -- or from a decor's top there)
+        S32 fl = WpFloor(c, g < 0 ? 0 : g);
+        int onTop = 0;
+        for (int k = 0; fl == WP_NONE && k < s_wpDecN[c]; k++) { const S32 t = WpFloor(c, ListDecors[s_wpDec[c][k]].YMax); if (t != WP_NONE) { fl = t; onTop = 1; } }
+        U8 *o = &rgb[c * 3];
+        if (fl == WP_NONE) { o[0] = 200; o[1] = 0; o[2] = 0; if (g >= 0 && !GiveTerrainCol(x, z)) { o[0] = 90; } }
+        else {
+            int v = 40 + fl / 40; if (v > 255) v = 255; if (v < 0) v = 0;
+            if (onTop || fl > g + 100) { o[0] = 0; o[1] = (U8)(v / 2); o[2] = (U8)v; } else { o[0] = o[1] = o[2] = (U8)v; }
+        }
+    }
+    for (int k = s_walkAt; k < s_walkN; k++) {
+        const int px = (int)((s_walkX[k] - CurrentCubeX * 32768.0) / WP_CELL), pz = (int)((s_walkZ[k] - CurrentCubeY * 32768.0) / WP_CELL);
+        if (px >= 0 && pz >= 0 && px < WP_N && pz < WP_N) { U8 *o = &rgb[(pz * WP_N + px) * 3]; o[0] = 0; o[1] = 255; o[2] = 0; }
+    }
+    // (the doors: magenta outlines)
+    for (S32 i = 0; i < NbZones; i++) {
+        const T_ZONE *zn = &ListZone[i];
+        if (zn->Type != 0) continue;
+        for (int c = 0; c < WP_N * WP_N; c++) {
+            const S32 x = (c % WP_N) * WP_CELL + WP_CELL / 2, z = (c / WP_N) * WP_CELL + WP_CELL / 2;
+            if (x >= zn->X0 && x <= zn->X1 && z >= zn->Z0 && z <= zn->Z1) { U8 *o = &rgb[c * 3]; o[0] = 255; o[1] = 0; o[2] = 255; }
+        }
+    }
+    if (hc >= 0 && hc < WP_N * WP_N) { U8 *o = &rgb[hc * 3]; o[0] = 255; o[1] = 255; o[2] = 0; }
+    fwrite(rgb, 1, sizeof(rgb), f);
+    fclose(f);
+    Log_Info("[racemod] gotomap: scene %d (cube %d,%d: island x %d-%d, z %d-%d) written to %s", (int)NumCube, (int)CurrentCubeX, (int)CurrentCubeY,
+             (int)(CurrentCubeX * 32768), (int)(CurrentCubeX * 32768 + 32767), (int)(CurrentCubeY * 32768), (int)(CurrentCubeY * 32768 + 32767), file);
 }
 
 // (RaceMod_AutoInput, on foot: turned towards the next point, walking once it is about ahead; the next once within reach of it)
@@ -12343,16 +12686,90 @@ static U32 WalkInput(void) {
     const int out = CubeMode == CUBE_EXTERIEUR;
     const double wx = hero->Obj.X + (out ? CurrentCubeX * 32768.0 : 0), wz = hero->Obj.Z + (out ? CurrentCubeY * 32768.0 : 0);
     double tx, tz;
+    if (s_goalAt < s_goalN) {
+        if ((S32)NumCube != s_walkCube) {
+            // (through a door, into a building or out of one: the place it was walked to is reached -- the next is in the new scene's units)
+            if (s_walkCube >= 0 && (!out || !s_walkOut)) {
+                Log_Info("[racemod] goto: through a door into scene %d -- place %d of %d done", (int)NumCube, s_goalAt + 1, s_goalN);
+                s_goalAt++; s_goalTries = 0;
+            }
+            s_walkCube = NumCube; s_walkOut = out; s_walkN = 0; s_walkAt = 0;
+        }
+        GotoLeg();
+        if (s_goalAt >= s_goalN && !s_walkAction) { s_walkAny = 0; s_walkN = 0; Log_Info("[racemod] goto: done at (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); return 0; }
+    }
+    if ((S32)NumCube != s_walkCube) {
+        // (through a door: indoors, or out of doors from in, the points' units are another scene's -- the walk is over)
+        if (!out || !s_walkOut) {
+            Log_Info("[racemod] racewalk: into scene %d -- the walk ends at the door", (int)NumCube);
+            s_walkN = 0; s_walkAt = 0; s_walkCar = 0; s_walkActor = -1; s_walkAction = 0; s_walkAny = 0;
+            return 0;
+        }
+        s_walkCube = NumCube; s_walkLastAt = TimerRefHR; s_walkLastX = hero->Obj.X; s_walkLastZ = hero->Obj.Z;
+    }
+    if (TimerRefHR - s_walkLastAt > 1000) {
+        const double mx = hero->Obj.X - s_walkLastX, mz = hero->Obj.Z - s_walkLastZ;
+        if (sqrt(mx * mx + mz * mz) < 150 && TimerRefHR >= s_detourUntil && s_walkActor != -2) {
+            s_detourTurn = (s_detourN & 1) ? -1024 : 1024;
+            s_detourUntil = TimerRefHR + 800 + 500 * s_detourN;
+            Log_Info("[racemod] racewalk: stuck at (%.0f,%d,%.0f) in scene %d, beta %d, on the way to point %d of %d -- a detour %s for %d ms", wx, (int)hero->Obj.Y, wz,
+                     (int)NumCube, (int)(hero->Obj.Beta & 4095), s_walkAt + 1, s_walkN, s_detourTurn > 0 ? "left" : "right", (int)(s_detourUntil - TimerRefHR));
+            if (s_detourN < 8) s_detourN++;
+        }
+        s_walkLastAt = TimerRefHR; s_walkLastX = hero->Obj.X; s_walkLastZ = hero->Obj.Z;
+    }
     if (s_walkAt < s_walkN) { tx = s_walkX[s_walkAt]; tz = s_walkZ[s_walkAt]; }
+    else if (s_walkActor >= 0 && s_walkActor < NbObjets) {
+        const T_OBJET *a = &ListObjet[s_walkActor];
+        tx = a->Obj.X + (out ? CurrentCubeX * 32768.0 : 0); tz = a->Obj.Z + (out ? CurrentCubeY * 32768.0 : 0);
+        const double ax = tx - wx, az = tz - wz;
+        if (sqrt(ax * ax + az * az) < s_walkReach) {
+            Log_Info("[racemod] racewalk: by actor %d at (%.0f,%d,%.0f)", s_walkActor, wx, (int)hero->Obj.Y, wz);
+            s_walkActor = -1; s_walkN = 0; s_walkAt = 0;
+            // (turned to face it first: the walk's last steps may have come at it sideways)
+            const S32 face = TurnRound(atan2(ax, az));
+            const S32 off = ((face - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
+            if (abs(off) > 200) { s_walkActor = -2; s_walkX[0] = tx; s_walkZ[0] = tz; }
+            if (s_walkAction) { s_walkAction = 2; }
+            if (s_walkActor != -2) s_walkAny = 0;
+            return 0;
+        }
+    }
+    else if (s_walkActor == -2) {
+        // (turning on the spot to face the actor before the action key)
+        const S32 face = TurnRound(atan2(s_walkX[0] - wx, s_walkZ[0] - wz));
+        const S32 off = ((face - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
+        if (abs(off) <= 120) { s_walkActor = -1; if (!s_walkAction) s_walkAny = 0; return 0; }
+        return off > 0 ? I_LEFT : I_RIGHT;
+    }
+    else if (s_walkAction) {
+        // (the action key once at the walk's end -- one frame on, then the walk is over)
+        s_walkAction = 0; s_walkAny = 0; s_walkN = 0;
+        Log_Info("[racemod] racewalk: the action key at (%.0f,%d,%.0f), beta %d", wx, (int)hero->Obj.Y, wz, (int)(hero->Obj.Beta & 4095));
+        return I_ACTION_M;
+    }
     else if (s_walkCar && IsBuggyPresent() && out) {
         const S_BUGGY *ptb = &ListBuggy[0];
         if (ptb->Cube != (S32)NumCube) return 0;
         tx = ptb->X + CurrentCubeX * 32768.0; tz = ptb->Z + CurrentCubeY * 32768.0;
-        if (CarReach() >= 0 && CarReach() < RACE_FOOT_REACH - 300) { s_walkCar = 0; s_walkN = 0; Log_Info("[racemod] racewalk: by the car"); if (s_chaseOn) { IntoCar("racewalk"); return 0; } return I_ACTION_M; }
-    } else { if (s_walkAny) Log_Info("[racemod] walkto: done at (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); s_walkN = 0; s_walkAny = 0; return 0; }
+        // (a race's on_foot= lets him in from RACE_FOOT_REACH; elsewhere the scene's car actor does, from 1500 and facing it -- so
+        // walked closer first: the playthrough's walk back to a car parked out of a race, 2026-11-07)
+        const double reach = (s_chaseOn || s_onFoot) ? RACE_FOOT_REACH - 300 : 1300;
+        static U32 told = 0;
+        // (by its place on the ground's plan: the car's own height may be a stale one -- a car left on raised ground keeps the road's)
+        const double near = sqrt(((double)ptb->X - hero->Obj.X) * ((double)ptb->X - hero->Obj.X) + ((double)ptb->Z - hero->Obj.Z) * ((double)ptb->Z - hero->Obj.Z));
+        if (TimerRefHR - told > 1000) { told = TimerRefHR; Log_Info("[racemod] racewalk: to the car at (%d,%d,%d), %.0f away (Twinsen at y %d)", (int)ptb->X, (int)ptb->Y, (int)ptb->Z, near, (int)hero->Obj.Y); }
+        if ((s_chaseOn || s_onFoot) ? CarReach() >= 0 && CarReach() < reach : near < reach) { s_walkCar = 0; s_walkN = 0; Log_Info("[racemod] racewalk: by the car"); if (s_chaseOn) { IntoCar("racewalk"); return 0; } return I_ACTION_M; }
+    } else { if (s_walkAny) Log_Info("[racemod] walkto: done at (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); s_walkN = 0; s_walkAny = 0; s_walkActor = -1; return 0; }
     const double dx = tx - wx, dz = tz - wz, d = sqrt(dx * dx + dz * dz);
-    if (s_walkAt < s_walkN && d < 400) { Log_Info("[racemod] racewalk: point %d at (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz); s_walkAt++; return 0; }
-    const S32 want = TurnRound(atan2(dx, dz));
+    if (s_walkAt < s_walkN && d < 400) {
+        Log_Info("[racemod] racewalk: point %d at (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz); s_walkAt++;
+        s_detourN = 0; s_detourUntil = 0;
+        // (the last point reached with nothing after it but the action key: the walk ends with it, not on the next frame's "done")
+        if (s_walkAt >= s_walkN && s_walkActor < 0 && !s_walkCar && s_walkAction) s_walkN = 0;
+        return 0;
+    }
+    const S32 want = (TurnRound(atan2(dx, dz)) + (TimerRefHR < s_detourUntil ? s_detourTurn : 0)) & 4095;
     S32 turn = ((want - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
     U32 in = 0;
     if (turn > 60) in |= I_LEFT; else if (turn < -60) in |= I_RIGHT;

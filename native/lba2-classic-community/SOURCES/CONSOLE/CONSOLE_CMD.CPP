@@ -2635,30 +2635,80 @@ static void cmd_raceview(int argc, const char *argv[]) {
 
 /* walkto <x z>... | walkto off: Twinsen on foot walked through the points (island units) by the keys a player would press, in any game
    (RACEMOD.CPP RaceMod_WalkTo) -- for headless tests that move him by inputs alone. */
+/* (both, 2026-11-07: "... actor <n> [reach]" -- then up to actor n, wherever it has moved, till within reach (800) of it and facing it;
+   "... action" -- the action key pressed once at the walk's end; a walk through a door into or out of a building ends there) */
+static int walk_extras(int argc, const char *argv[], int *actor, double *reach, int *action) {
+    *actor = -1; *reach = 0; *action = 0;
+    int end = argc;
+    for (int i = 1; i < argc; i++) {
+        if (!strcasecmp(argv[i], "action")) { *action = 1; if (i < end) end = i; }
+        else if (!strcasecmp(argv[i], "actor") && i + 1 < argc) {
+            *actor = atoi(argv[i + 1]);
+            if (i < end) end = i;
+            if (i + 2 < argc && isdigit((unsigned char)argv[i + 2][0])) { *reach = atof(argv[i + 2]); i++; }
+            i++;
+        }
+    }
+    return end;
+}
+
 static void cmd_walkto(int argc, const char *argv[]) {
     extern void RaceMod_WalkTo(int n, const double *xz);
+    extern void RaceMod_WalkThen(int actor, double reach, int action);
     double xz[64];
-    int n = 0;
-    for (int i = 1; i + 1 < argc && n < 32; i += 2) { xz[2 * n] = atof(argv[i]); xz[2 * n + 1] = atof(argv[i + 1]); n++; }
+    int n = 0, actor, action;
+    double reach;
+    const int end = walk_extras(argc, argv, &actor, &reach, &action);
+    for (int i = 1; i + 1 < end && n < 32; i += 2) { xz[2 * n] = atof(argv[i]); xz[2 * n + 1] = atof(argv[i + 1]); n++; }
     RaceMod_WalkTo(n, xz);
-    Console_Print("walkto: %d point(s)", n);
+    if (actor >= 0 || action) RaceMod_WalkThen(actor, reach, action);
+    Console_Print("walkto: %d point(s)%s%s", n, actor >= 0 ? ", then to an actor" : "", action ? ", then the action key" : "");
 }
 
 /* racewalk [+] <x z>... [car] | racewalk off: with a race file's on_foot=, Twinsen out of his car walked on foot through the points (island
    units), then -- with "car" -- to his car and into it (RACEMOD.CPP RaceMod_Walk); "+" first: more points after those given before (a
    command line holds a few). For headless tests of the Temple of Bu's party. */
+/* goto <x z>... [actor <n> [reach]] [action] | goto off: each place walked to in turn, outside by a way planned round what is in the
+   way (RACEMOD.CPP RaceMod_Goto: the cube's ground, its decors' boxes, water and steps), through scene edges and doors (a door ends one
+   place: the next is in the new scene's units) -- only the keys a player would press, for the playthrough by inputs alone (2026-11-07). */
+static void cmd_goto(int argc, const char *argv[]) {
+    extern void RaceMod_Goto(int n, const double *xz);
+    extern void RaceMod_WalkThen(int actor, double reach, int action);
+    double xz[64];
+    int n = 0, actor, action;
+    double reach;
+    const int end = walk_extras(argc, argv, &actor, &reach, &action);
+    for (int i = 1; i + 1 < end && n < 16; i += 2) { xz[2 * n] = atof(argv[i]); xz[2 * n + 1] = atof(argv[i + 1]); n++; }
+    RaceMod_Goto(n, xz);
+    if (actor >= 0 || action) RaceMod_WalkThen(actor, reach, action);
+    Console_Print("goto: %d place(s)%s%s", n, actor >= 0 ? ", then to an actor" : "", action ? ", then the action key" : "");
+}
+
+/* gotomap <file.ppm>: the goto planner's map of the cube Twinsen is in (RACEMOD.CPP RaceMod_GotoMap) */
+static void cmd_gotomap(int argc, const char *argv[]) {
+    extern void RaceMod_GotoMap(const char *file);
+    if (argc < 2) { Console_Print("Usage: gotomap <file.ppm>"); return; }
+    RaceMod_GotoMap(argv[1]);
+    Console_Print("gotomap: %s", argv[1]);
+}
+
 static void cmd_racewalk(int argc, const char *argv[]) {
     extern void RaceMod_Walk(int n, const double *xz, int car, int more);
+    extern void RaceMod_WalkThen(int actor, double reach, int action);
     double xz[64];
-    int n = 0, car = 0, more = 0;
-    for (int i = 1; i < argc; i++) {
+    int n = 0, car = 0, more = 0, actor, action;
+    double reach;
+    const int end = walk_extras(argc, argv, &actor, &reach, &action);
+    for (int i = 1; i < end; i++) {
         if (i == 1 && !strcmp(argv[i], "+")) { more = 1; continue; }
         if (!strcasecmp(argv[i], "car")) { car = 1; continue; }
         if (!strcasecmp(argv[i], "off")) { n = 0; car = 0; more = 0; break; }
         if (i + 1 < argc && n < 32) { xz[2 * n] = atof(argv[i]); xz[2 * n + 1] = atof(argv[i + 1]); n++; i++; }
     }
     RaceMod_Walk(n, xz, car, more);
-    Console_Print("racewalk: %d point(s)%s%s", n, more ? " more" : "", car ? ", then into the car" : "");
+    if (actor >= 0 || action) RaceMod_WalkThen(actor, reach, action);
+    Console_Print("racewalk: %d point(s)%s%s%s%s", n, more ? " more" : "", car ? ", then into the car" : "", actor >= 0 ? ", then to an actor" : "",
+                  action ? ", then the action key" : "");
 }
 
 /* racestop <x> <z> <reach>: with a race file's on_foot=, the test pilot's car stopped once it comes within <reach> of the place (island
@@ -3169,12 +3219,18 @@ void Console_RegisterAll(void) {
                               "racestop <x> <z> <reach>",
                               "With a race file's on_foot=1, the test pilot stops the car once it comes within <reach> of the "
                               "place (island units) and gets Twinsen out of it. For headless tests.");
+    Console_RegisterCommandEx("goto", cmd_goto, "Test: walk Twinsen to places by a planned way, by the keys a player would press",
+                              "goto <x z>... [actor <n> [reach]] [action] (island units outside, the scene's inside) | goto off",
+                              "Each place in turn: outside by a way planned round decors, water and steps over the cube's ground, "
+                              "through scene edges and doors. For headless tests that go by inputs alone.");
+    Console_RegisterCommandEx("gotomap", cmd_gotomap, "Test: the goto planner's map of the cube Twinsen is in, as a PPM picture",
+                              "gotomap <file.ppm>", "A pixel a cell of 256: grey ground by height, blue a decor's top, red nowhere to stand.");
     Console_RegisterCommandEx("walkto", cmd_walkto, "Test: walk Twinsen on foot through points by the keys a player would press",
-                              "walkto <x z>... (island units) | walkto off",
+                              "walkto <x z>... [actor <n> [reach]] [action] (island units outside, the scene's inside) | walkto off",
                               "Twinsen on foot, in any game, walked through the points (island units) by the keys a player would "
                               "press: turned towards each, walking once it is about ahead. For headless tests that go by inputs alone.");
     Console_RegisterCommandEx("racewalk", cmd_racewalk, "Race-track test: walk Twinsen on foot through points, then to his car",
-                              "racewalk [+] <x z>... [car] | racewalk off",
+                              "racewalk [+] <x z>... [car] [actor <n> [reach]] [action] | racewalk off",
                               "With a race file's on_foot=1 and Twinsen out of his car, walks him through the points (island "
                               "units) and, with car, back to his car and into it. For headless tests.");
     Console_RegisterCommandEx("raceview", cmd_raceview, "Race-track camera view: inside the car, just behind, further back",
