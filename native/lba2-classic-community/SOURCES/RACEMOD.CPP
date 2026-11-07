@@ -38,6 +38,9 @@
  *     opponent_catchup=<percent> how much harder it pushes when it has fallen behind the player (at most, 60 cells behind)
  *     opponent_actor=<scene> <actor>   the opponent's car in that scene (one line per scene)
  *     opponent_name=<name>       for the grid's list
+ *     opponent_when=<var> <least> [<below>]   (2026-11-07) its car is not there -- out of sight, not waiting in the pit lane, not on
+ *                                the grid -- while game variable <var> is below <least>, or (with <below>) at <below> or more: HAL on the
+ *                                Emerald Moon, in the moon base until he is mended and back there once the race is over
  *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent6
  *     grid=<cube x> <cube z> <x> <y> <z> <turn>   a grid spot, cube-local; one line per spot, pole first (with none, the old start:
  *                                the opponents set off when the player first drives)
@@ -503,6 +506,8 @@ typedef struct {
     S32 PassAt, TailSince, ShutSince;      // (when its pass began; since when it has sat close behind a car; since when the side it passes on has had no room)
     double WX, WY, WZ;
     int Placed;
+    int WhenVar, WhenLeast, WhenBelow;     // opponentN_when=: its car not there (out of sight, not placed, not on the grid) while game
+                                           // variable WhenVar (-1 none) is below WhenLeast, or WhenBelow and more (0: no top)
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
 #define RACE_PACK_SKILL 0.6                // a skill drawn between two (opponent_pace=<lo> <hi>): this share of the way out from their middle
@@ -1215,7 +1220,7 @@ static void Defaults(T_RACE_CAR *c) {
     memset(c, 0, sizeof(*c));
     s_speedo = 0;
     memset(s_opp, 0, sizeof(s_opp));
-    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) { s_opp[n].Grid = 4; s_opp[n].Pace = 100; s_opp[n].Top = 100; s_opp[n].Grip = 100; s_opp[n].Small = -1; s_opp[n].Normal = -1; }
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) { s_opp[n].Grid = 4; s_opp[n].Pace = 100; s_opp[n].Top = 100; s_opp[n].Grip = 100; s_opp[n].Small = -1; s_opp[n].Normal = -1; s_opp[n].WhenVar = -1; }
     memset(&s_guide, 0, sizeof(s_guide));
     s_guide.Pace = s_guide.Top = s_guide.Grip = 100; s_guide.Small = s_guide.Normal = -1;
     c->Gears = 1;
@@ -4672,6 +4677,10 @@ static void Load(const char *path, int carOnly = 0) {
             else if (!strcmp(rest, "grip")) o->Grip = atoi(v);
             else if (!strcmp(rest, "catchup")) o->Catchup = atoi(v);
             else if (!strcmp(rest, "name")) snprintf(o->Name, sizeof(o->Name), "%s", v);
+            else if (!strcmp(rest, "when")) {
+                int var, least, below = 0;
+                if (sscanf(v, "%d %d %d", &var, &least, &below) >= 2 && var >= 0 && var < 256) { o->WhenVar = var; o->WhenLeast = least; o->WhenBelow = below; }
+            }
             else if (!strcmp(rest, "anim")) { int idle, drive; if (sscanf(v, "%d %d", &idle, &drive) == 2) { o->AnimIdle = idle; o->AnimDrive = drive; o->HasAnims = 1; } }
             else if (!strcmp(rest, "actor")) {
                 int scene, actor;
@@ -6981,12 +6990,19 @@ static void QualifyingArrival(int wrongWay, S32 now) {
 // The grid: every racer by its time (the player's qualifying lap; without qualifying the player is on pole -- or, grid_back=, at the
 // back), each on its spot, the laps counted afresh from the start line; then the grid is shown and the count-down runs.
 #define RACE_GRID_BACK 0x7FFFFFFF          // (the player's time at the back of the grid: slower than any qualifying time)
+// opponentN_when=: an opponent not there while its game variable is out of its range
+static int OpponentAway(const T_RACE_OPPONENT *o) {
+    if (o->WhenVar < 0) return 0;
+    const S32 v = ListVarGame[o->WhenVar];
+    return v < o->WhenLeast || (o->WhenBelow > 0 && v >= o->WhenBelow);
+}
+
 static void FormGrid(S32 now) {
     s_nbOrder = 0;
     s_order[s_nbOrder] = -1;
     s_orderTime[s_nbOrder++] = s_qualifying ? s_qualifyTime : s_gridBack ? RACE_GRID_BACK : 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
-        if (s_opp[n].Count && s_opp[n].Scenes) { s_order[s_nbOrder] = n; s_orderTime[s_nbOrder++] = s_opp[n].QualTime; }
+        if (s_opp[n].Count && s_opp[n].Scenes && !OpponentAway(&s_opp[n])) { s_order[s_nbOrder] = n; s_orderTime[s_nbOrder++] = s_opp[n].QualTime; }
     for (int i = 1; i < s_nbOrder; i++)
         for (int j = i; j > 0 && s_orderTime[j] < s_orderTime[j - 1]; j--) {
             const int t = s_order[j]; s_order[j] = s_order[j - 1]; s_order[j - 1] = t;
@@ -17719,6 +17735,19 @@ void RaceMod_Frame(void) {
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         if (!o->Count) continue;
+        // (opponentN_when=: not here yet -- its car out of sight in this scene, as hide_actor= keeps one, and nowhere for the others to
+        // pass. HAL waits in the Emerald Moon's pit lane only once he is mended: until then he is the moon base's broken computer, the
+        // user, 2026-11-06 -- "Only one should exist at a time")
+        if (OpponentAway(o)) {
+            o->Placed = 0;
+            const int away = CubeMode == CUBE_EXTERIEUR ? OpponentActor(o) : -1;
+            if (away >= 0) {
+                T_OBJET *car = &ListObjet[away];
+                car->Obj.Y = -20000;
+                if (car->SampleAlways) { HQ_StopOneSample(car->SampleAlways); car->SampleAlways = 0; }
+            }
+            continue;
+        }
         double x, z, y, v, dx, dz;
         PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
         if (moving) {

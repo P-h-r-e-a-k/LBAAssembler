@@ -819,8 +819,8 @@ added to Mr. Paul's prize, and the two pages' pictures.
 **Walkthrough:**
 
 1. **Landing.** Lyra, on the deck's edge:
-   > **Lyra:** "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer has locked
-   > the start gate, and nobody can get it to talk sense."
+   > **Lyra:** "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer won't switch
+   > on the start lights, and nobody can get it to talk sense."
 
    Q_HAL = 1.
 2. **The radio rings.** Baldino, from his lander's cockpit:
@@ -848,12 +848,19 @@ added to Mr. Paul's prize, and the two pages' pictures.
 
    They walk to HAL (their own track scripts). HAL's sprite becomes 228. Q_HAL = 4.
 5. **HAL, mended:**
-   > **HAL:** "Thank you, Twinsen. The gate is open. I have calculated your chances against Baldino: they are poor. I will race too,
-   > to see if I am right."
+   > **HAL:** "Thank you, Twinsen. The start lights are on. I have calculated your chances against Baldino: they are poor. I will race
+   > too, to see if I am right."
    >
    > **HAL:** "Your radio is returned. I have improved it: it now receives the Esmers' channel."
 
    Found: Portable Radio (item 26 = 1 again).
+
+   One HAL at a time (the user, 2026-11-06; built 2026-11-07): the race file's `opponent2_when=216 4 6` keeps HAL's car out of the pit
+   lane and off the grid while Q_HAL is below 4 or 6 and more (RACEMOD.CPP OpponentAway); in the base, from the next visit after he is
+   mended, his talker is gone and his screen sprite (actor 4: the coils' glow, his hum) off while Q_HAL is 4-5 -- his cabinet is the
+   room's bricks and stays -- and a mechanic says (text 786, MechanicHalOut): "HAL's loaded himself into a racing car and gone out to the
+   track. That cabinet's just a box till he's back." (In the mending visit HAL talks on, his song included: var_cube 71 marks him there.)
+   The race gate's text: "Lyra: HAL won't switch on the start lights!" (RaceKeysA).
 6. **The race.** Baldino in his lander (the one to beat), HAL driving itself (built). Lyra drops the flag.
 7. **Won.**
    > **Baldino (on foot):** "Beaten in my own lander! I'll have to tune the other one."

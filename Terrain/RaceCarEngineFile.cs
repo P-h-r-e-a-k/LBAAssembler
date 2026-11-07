@@ -256,6 +256,8 @@ internal static class RaceCarEngineFile
             if (o.Hover > 0 && !o.Ghost) text.Append($"{key}_hover={o.Hover} {RaceDriver.HoverMs}\n");
             text.Append($"{key}_top={(int)Math.Round(o.Top * 100)}\n{key}_grip={(int)Math.Round(o.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
             text.Append($"{key}_name={o.Name}\n");
+            // (in the story, a driver who is somewhere else until the story lets him race: HAL in the moon base -- RaceTrackStory.OpponentWhen)
+            if (story && info is not null && RaceTrackStory.OpponentWhen(RaceTrackIsland.ByName(info.Island), o.Name) is { } when) text.Append($"{key}_when={when}\n");
             // (the animations it stands and drives with: the cars' are the racer entity's 0 and 1, the bike's his own)
             if (o.Bike) text.Append($"{key}_anim={RaceTrackScenes.BikerIdleAnim} {RaceTrackScenes.BikerRideAnim}\n");
             foreach (var (scene, actor) in o.Actors) text.Append($"{key}_actor={scene} {actor}\n");

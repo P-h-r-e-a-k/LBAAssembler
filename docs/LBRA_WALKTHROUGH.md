@@ -597,8 +597,8 @@ Baldino's rocket takes them to the Emerald Moon, there and then.
 
 **1. Landing.** Lyra, the Cup's new marshal, stands on the deck's edge by the start.
 
-**Lyra:** "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer has locked the
-start gate, and nobody can get it to talk sense."
+**Lyra:** "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer won't switch on
+the start lights, and nobody can get it to talk sense."
 
 A new page on the slate: the Emerald Moon.
 
@@ -631,12 +631,16 @@ The mechanics troop out to HAL and set to work. HAL's screen lights up, whole ag
 
 **5. HAL, mended.**
 
-**HAL:** "Thank you, Twinsen. The gate is open. I have calculated your chances against Baldino: they are poor. I will race too, to see
-if I am right."
+**HAL:** "Thank you, Twinsen. The start lights are on. I have calculated your chances against Baldino: they are poor. I will race too,
+to see if I am right."
 
 **HAL:** "Your radio is returned. I have improved it: it now receives the Esmers' channel."
 
 **Found:** Portable Radio (back again).
+
+HAL goes out to race: his car waits in the pit lane from now on (before, the pit lane had no HAL), and back in the base later his
+cabinet is dark and silent. **A mechanic:** "HAL's loaded himself into a racing car and gone out to the track. That cabinet's just a box
+till he's back."
 
 **6. The race.** Baldino in his lander (the one to beat), HAL driving itself. Lyra drops the flag.
 

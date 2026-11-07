@@ -36,7 +36,7 @@ internal static partial class RaceTrackStory
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
         island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\nwin={QPages} {PagesWon}\n"
-        : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL has locked the start gate!\nwin={QHal} {HalWon}\n"
+        : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\n"
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
         : null;

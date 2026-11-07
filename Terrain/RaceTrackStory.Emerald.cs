@@ -6,21 +6,28 @@ namespace LBAAssembler.Terrain;
 
 // The race mod's story on the Emerald Moon, chapter 4 (docs/LBRA_WALKTHROUGH.md; the build notes: docs/LBRA_STORY_SCRIPT.md):
 //   - Arriving by Baldino's rocket (the Desert's win: scene 229, the track's start), the radio rings and Baldino calls from his lander.
-//   - Lyra, the marshal, at her plinth: the base's computer has locked the start gate (Q_HAL 1).
+//   - Lyra, the marshal, at her plinth: the base's computer won't switch on the start lights (Q_HAL 1).
 //   - In the moon base (scene 23, by Baldino's old cell), HAL: "HAL!! ZX81!!" (the game's own 546 and 545) and Zoe's word; his mechanics
 //     there: his voice box is broken, any radio would do -- Twinsen hands over the portable radio (item 26 taken, Q_HAL 3); HAL again,
-//     mended: the gate is open, and the radio given back, improved (item 26, Q_HAL 4: the race file's gate=216 4).
+//     mended: the start lights on, and the radio given back, improved (item 26, Q_HAL 4: the race file's gate=216 4).
 //   - Won (win=216 5): out of the car, in any of the track's outside scenes --Baldino, Lyra, HAL's log of a black car launched to Zeelich, Zoe -- and the
 //     Esmers' ship to Otringal (inc_chapter: 5; change_cube(88), Otringal's start).
 // HAL and his mechanics talk through invisible actors of their own beside the game's (HAL is a sprite over the base's bricks, and the
 // game's scripts there -- HAL's sparks, the mechanics' tracks -- are left as they are).
 internal static partial class RaceTrackStory
 {
-    // Q_HAL: 1 Lyra has told, 2 HAL heard, 3 the radio handed over, 4 HAL mended (the gate open), 5 the race won, 6 told
+    // Q_HAL: 1 Lyra has told, 2 HAL heard, 3 the radio handed over, 4 HAL mended (the start lights on), 5 the race won, 6 told
     public const int QHal = 216, HalHeard = 2, RadioLent = 3, HalMended = 4, HalWon = 5, HalDone = 6;
     // the moon base: HAL's place (scene 23's actor 4, its sprite, at the floor of the mechanics' room) and the mechanics' (actor 14's)
-    private const int BaseScene = 23, OtringalStart = 88, HalCry = 546, HalZx = 545;
+    private const int BaseScene = 23, HalScreen = 4, OtringalStart = 88, HalCry = 546, HalZx = 545;
+    // (a scene variable of the base: HAL's talker is there this visit -- the eggs' HalTalks is 70, the base's own scripts use 0-2)
+    private const int HalHere = 71;
     private static readonly (int X, int Y, int Z) HalSpot = (23152, 2816, 3904), MechanicSpot = (19344, 2816, 6400);
+
+    // A story driver who races only while the story has him at the track (the race file's opponentN_when=<var> <least> <below>, RACEMOD.CPP):
+    // HAL, from his mending to the race's end -- in the moon base before and after (ApplyEmerald)
+    internal static string? OpponentWhen(RaceTrackIsland island, string driver) =>
+        island == RaceTrackIsland.Emerald && driver == "HAL" ? $"{QHal} {HalMended} {HalDone}" : null;
 
     private enum MoonLine
     {
@@ -28,6 +35,8 @@ internal static partial class RaceTrackStory
         MechanicWorking, HalThanks, HalRadio, BaldinoBeaten, LyraZeelich, HalLog, ZoeLaugh,
         // (the eggs': RaceTrackStory.Eggs.Emerald.cs)
         HalDaisy, HalDiagnostic, BowlerUp, BowlerTuesday,
+        // (one HAL at a time, 2026-11-07: a mechanic's word while he is out at the track)
+        MechanicHalOut,
     }
     private static readonly string[][] MoonLines =
     {
@@ -51,30 +60,30 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer has locked the start gate, and nobody can get it to talk sense.",
-            "Bienvenue sur la lune, pilotes. Je suis Lyra, commissaire de la Coupe d'ici à la fin. Mauvaise nouvelle : l'ordinateur de la base a verrouillé la grille de départ, et personne n'arrive à le raisonner.",
-            "Willkommen auf dem Mond, Rennfahrer. Ich bin Lyra, die Rennleiterin des Pokals von hier bis zum Ende. Schlechte Nachrichten: Der Computer der Basis hat das Starttor verriegelt, und niemand bringt ihn zur Vernunft.",
-            "Bienvenidos a la luna, pilotos. Soy Lyra, la comisaria de la Copa de aquí al final. Malas noticias: el ordenador de la base ha bloqueado la puerta de salida, y nadie consigue hacerle entrar en razón.",
-            "Benvenuti sulla luna, piloti. Sono Lyra, la commissaria della Coppa da qui alla fine. Brutte notizie: il computer della base ha bloccato il cancello di partenza, e nessuno riesce a farlo ragionare.",
-            "Bem-vindos à lua, pilotos. Sou a Lyra, a comissária da Taça daqui até ao fim. Más notícias: o computador da base trancou a porta da partida, e ninguém o consegue pôr a falar com juízo.",
+            "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer won't switch on the start lights, and nobody can get it to talk sense.",
+            "Bienvenue sur la lune, pilotes. Je suis Lyra, commissaire de la Coupe d'ici à la fin. Mauvaise nouvelle : l'ordinateur de la base refuse d'allumer les feux de départ, et personne n'arrive à le raisonner.",
+            "Willkommen auf dem Mond, Rennfahrer. Ich bin Lyra, die Rennleiterin des Pokals von hier bis zum Ende. Schlechte Nachrichten: Der Computer der Basis schaltet die Startampel nicht ein, und niemand bringt ihn zur Vernunft.",
+            "Bienvenidos a la luna, pilotos. Soy Lyra, la comisaria de la Copa de aquí al final. Malas noticias: el ordenador de la base no quiere encender el semáforo de salida, y nadie consigue hacerle entrar en razón.",
+            "Benvenuti sulla luna, piloti. Sono Lyra, la commissaria della Coppa da qui alla fine. Brutte notizie: il computer della base non vuole accendere il semaforo di partenza, e nessuno riesce a farlo ragionare.",
+            "Bem-vindos à lua, pilotos. Sou a Lyra, a comissária da Taça daqui até ao fim. Más notícias: o computador da base não quer acender as luzes da partida, e ninguém o consegue pôr a falar com juízo.",
         },
         new[]
         {
-            "The gate's still locked. HAL is in the base, by Baldino's old cell. Good luck getting a word out of him.",
-            "La grille est toujours verrouillée. HAL est dans la base, près de l'ancienne cellule de Baldino. Bonne chance pour en tirer un mot.",
-            "Das Tor ist immer noch verriegelt. HAL steht in der Basis, bei Baldinos alter Zelle. Viel Glück dabei, ein Wort aus ihm herauszubekommen.",
-            "La puerta sigue bloqueada. HAL está en la base, junto a la antigua celda de Baldino. Suerte sacándole una palabra.",
-            "Il cancello è ancora bloccato. HAL è nella base, vicino alla vecchia cella di Baldino. Buona fortuna a cavargli una parola.",
-            "A porta continua trancada. O HAL está na base, junto à antiga cela do Baldino. Boa sorte a arrancar-lhe uma palavra.",
+            "The start lights are still dark. HAL is in the base, by Baldino's old cell. Good luck getting a word out of him.",
+            "Les feux de départ sont toujours éteints. HAL est dans la base, près de l'ancienne cellule de Baldino. Bonne chance pour en tirer un mot.",
+            "Die Startampel ist immer noch aus. HAL steht in der Basis, bei Baldinos alter Zelle. Viel Glück dabei, ein Wort aus ihm herauszubekommen.",
+            "El semáforo de salida sigue apagado. HAL está en la base, junto a la antigua celda de Baldino. Suerte sacándole una palabra.",
+            "Il semaforo di partenza è ancora spento. HAL è nella base, vicino alla vecchia cella di Baldino. Buona fortuna a cavargli una parola.",
+            "As luzes da partida continuam apagadas. O HAL está na base, junto à antiga cela do Baldino. Boa sorte a arrancar-lhe uma palavra.",
         },
         new[]
         {
-            "The gate's open! HAL must be feeling better. Line up whenever you're ready.",
-            "La grille est ouverte ! HAL doit aller mieux. Mets-toi en place quand tu veux.",
-            "Das Tor ist offen! HAL muss es besser gehen. Stell dich auf, wann immer du bereit bist.",
-            "¡La puerta está abierta! HAL debe de encontrarse mejor. Colócate cuando quieras.",
-            "Il cancello è aperto! HAL deve stare meglio. Mettiti in griglia quando vuoi.",
-            "A porta está aberta! O HAL deve estar melhor. Alinha quando quiseres.",
+            "The start lights are on! HAL must be feeling better. Line up whenever you're ready.",
+            "Les feux de départ sont allumés ! HAL doit aller mieux. Mets-toi en place quand tu veux.",
+            "Die Startampel ist an! HAL muss es besser gehen. Stell dich auf, wann immer du bereit bist.",
+            "¡El semáforo de salida está encendido! HAL debe de encontrarse mejor. Colócate cuando quieras.",
+            "Il semaforo di partenza è acceso! HAL deve stare meglio. Mettiti in griglia quando vuoi.",
+            "As luzes da partida estão acesas! O HAL deve estar melhor. Alinha quando quiseres.",
         },
         new[]
         {
@@ -141,12 +150,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Thank you, Twinsen. The gate is open. I have calculated your chances against Baldino: they are poor. I will race too, to see if I am right.",
-            "Merci, Twinsen. La grille est ouverte. J'ai calculé tes chances contre Baldino : elles sont faibles. Je cours aussi, pour voir si j'ai raison.",
-            "Danke, Twinsen. Das Tor ist offen. Ich habe deine Chancen gegen Baldino berechnet: Sie sind gering. Ich fahre auch mit, um zu sehen, ob ich recht habe.",
-            "Gracias, Twinsen. La puerta está abierta. He calculado tus posibilidades contra Baldino: son escasas. Yo también correré, para ver si tengo razón.",
-            "Grazie, Twinsen. Il cancello è aperto. Ho calcolato le tue probabilità contro Baldino: sono scarse. Correrò anch'io, per vedere se ho ragione.",
-            "Obrigado, Twinsen. A porta está aberta. Calculei as tuas hipóteses contra o Baldino: são fracas. Também vou correr, para ver se tenho razão.",
+            "Thank you, Twinsen. The start lights are on. I have calculated your chances against Baldino: they are poor. I will race too, to see if I am right.",
+            "Merci, Twinsen. Les feux de départ sont allumés. J'ai calculé tes chances contre Baldino : elles sont faibles. Je cours aussi, pour voir si j'ai raison.",
+            "Danke, Twinsen. Die Startampel ist an. Ich habe deine Chancen gegen Baldino berechnet: Sie sind gering. Ich fahre auch mit, um zu sehen, ob ich recht habe.",
+            "Gracias, Twinsen. El semáforo de salida está encendido. He calculado tus posibilidades contra Baldino: son escasas. Yo también correré, para ver si tengo razón.",
+            "Grazie, Twinsen. Il semaforo di partenza è acceso. Ho calcolato le tue probabilità contro Baldino: sono scarse. Correrò anch'io, per vedere se ho ragione.",
+            "Obrigado, Twinsen. As luzes da partida estão acesas. Calculei as tuas hipóteses contra o Baldino: são fracas. Também vou correr, para ver se tenho razão.",
         },
         new[]
         {
@@ -230,6 +239,15 @@ internal static partial class RaceTrackStory
             "Quella di martedì.",
             "A de terça-feira.",
         },
+        new[]
+        {
+            "HAL's loaded himself into a racing car and gone out to the track. That cabinet's just a box till he's back.",
+            "HAL s'est chargé dans une voiture de course et il est parti sur le circuit. Cette armoire n'est qu'une boîte jusqu'à son retour.",
+            "HAL hat sich in einen Rennwagen geladen und ist zur Strecke gefahren. Der Schrank da ist nur eine Kiste, bis er zurück ist.",
+            "HAL se ha cargado en un coche de carreras y se ha ido al circuito. Ese armario no es más que una caja hasta que vuelva.",
+            "HAL si è caricato in un'auto da corsa ed è andato in pista. Quell'armadio è solo una scatola finché non torna.",
+            "O HAL carregou-se num carro de corrida e foi para a pista. Aquele armário é só uma caixa até ele voltar.",
+        },
     };
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -247,7 +265,7 @@ internal static partial class RaceTrackStory
             b.Edit(scene, "the radio rings in chapter 4: Baldino's call from his lander", model => IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 4),
                 RadioController(4, Say(MoonLine.Ringing), new[] { Say(MoonLine.BaldinoRadio) })));
 
-        // Lyra at her plinth: the start gate locked (Q_HAL 1), still locked, open
+        // Lyra at her plinth: the start lights dark (Q_HAL 1), still dark, on
         MarshalA(b, report, moon, $@"            if (0 == var_game({QHal}))
             {{
                 message({Say(MoonLine.LyraWelcome)});
@@ -278,11 +296,28 @@ internal static partial class RaceTrackStory
             });
         }
 
-        // the moon base: HAL and his mechanics
+        // the moon base: HAL and his mechanics. One HAL at a time (the user, 2026-11-06: "HAL waits as a racer in the pit lane, and HAL is
+        // also inside the moon base ... Only one should exist at a time"): in the base until he is mended, then out at the track racing
+        // -- from the next visit his talker gone from the base and his screen (the game's actor 4: the glow of his coils and his hum) off,
+        // a mechanic saying he has loaded himself into a racing car (his cabinet is the room's bricks: it stays, a box without him), and
+        // his car in the pit lane from then on (the race file's opponent2_when=, OpponentWhen) -- and back in the base once the race is
+        // over. Mended, he talks on for the rest of that visit (his song, RaceTrackStory.Eggs.Emerald.cs; var_cube HalHere marks it).
         if (b.Store.SceneExists(BaseScene))
+        {
+            b.Edit(BaseScene, $"HAL's screen (actor {HalScreen}) out of the base while he races (Q_HAL {HalMended}-{HalWon})", _ => scripts =>
+            {
+                var life = scripts.GetText(HalScreen, ScriptKind.Life);
+                scripts.SetText(HalScreen, ScriptKind.Life, Loose(life, "void comportement_0()\n{", $@"void comportement_0()
+{{
+    if ({HalMended} <= var_game({QHal}) && {HalDone} > var_game({QHal}))
+    {{
+        suicide();
+    }}
+    else"));
+            });
             b.Edit(BaseScene, "HAL's voice box: HAL's cries (Q_HAL 2), the mechanics take the radio (3), HAL mended gives it back (4)", model =>
             {
-                var hal = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(HalSpot.X, HalSpot.Y, HalSpot.Z, 15), Talker(moon, $@"            if ({RadioLent} == var_game({QHal}))
+                var hal = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(HalSpot.X, HalSpot.Y, HalSpot.Z, 15), Talker($"{moon} && {HalMended} > var_game({QHal})", $@"            if ({RadioLent} == var_game({QHal}))
             {{
                 message({Say(MoonLine.HalThanks)});
                 message({Say(MoonLine.HalRadio)});
@@ -305,7 +340,7 @@ internal static partial class RaceTrackStory
             else
             {{
 {HalDaisy(Say(MoonLine.HalThanks), Say(MoonLine.HalDaisy), Say(MoonLine.HalDiagnostic))}
-            }}", 2500));
+            }}", 2500, $"    set_var_cube({HalHere}, 1);\n"));
                 var mechanics = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(MechanicSpot.X, MechanicSpot.Y, MechanicSpot.Z, 4), Talker(moon, $@"            if ({RadioLent} > var_game({QHal}) && 0 < var_game({Radio}))
             {{
                 message({Say(MoonLine.MechanicSpare)});
@@ -320,12 +355,17 @@ internal static partial class RaceTrackStory
             {{
                 message({Say(MoonLine.MechanicSpare)});
             }}
+            else if ({HalMended} <= var_game({QHal}) && 0 == var_cube({HalHere}))
+            {{
+                message({Say(MoonLine.MechanicHalOut)});
+            }}
             else
             {{
                 message({Say(MoonLine.MechanicWorking)});
             }}", 2500));
                 return scripts => { hal(scripts); mechanics(scripts); };
             });
+        }
         else log.Add($"HAL and the mechanics left out: no scene {BaseScene}");
 
         // won: out of the car by the start line -- Baldino, Lyra, HAL's log, Zoe -- and the Esmers' ship to Otringal
