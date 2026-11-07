@@ -843,6 +843,8 @@ void comportement_1()
         // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
         Lba1Rooms(p);
     }
+        // (the spider cave's lower mouth, south of the sign of Sendell: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
+        SpiderCaveMouth(p);
 
     // ---- the game's own lines put right for the story's days (the sweep of 2026-11-05) -------------------------------------------------
     // IslandRetell gives the game's people the story's words, text by text; where a line is right one day and wrong the next, or comes

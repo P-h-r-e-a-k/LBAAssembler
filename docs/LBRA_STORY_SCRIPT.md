@@ -434,7 +434,11 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
      In chapter 2 the regulars are back in the Tavern and the Tralu, still at his tankard, is glad of the quiet: "...The whole bar to
      myself, and my tankard..."
 
-     In chapter 2 the regulars are back in the Tavern and the Tralu is glad of the quiet.
+     **The spider cave** (2026-11-07, the user: "It's the cave that has a large spider in it"): its lower mouth in the cliff south of
+     the sign of Sendell (scene 47's door into 51) was taken out by the build, the town circuit's road running through the cliff there
+     in the fine weather; in the storm the cliff and the mouth are the game's. Now shut only while the town's file is shown (door_off),
+     its zone reaching 256 out in front of the cliff's face (it lay 8 behind it), and the way out landing Twinsen in front of the
+     opening (RaceTrackStory.SpiderCaveMouth).
 8. **The race.** Raph now tells his time (built):
    > **Raph:** "A car and driving gloves: you're all set, Twinsen! My best lap is ## seconds. Beat that, and I'll come with you to the
    > lighthouse."

@@ -500,10 +500,12 @@ internal static class RaceTrackScenes
         var edgeZonesAdded = 0; var doorsKept = 0;
         // Whether any track's road surface (asphalt and curbs; a raised road's deck at its own height) covers part of a zone's box at the
         // zone's height -- a car there stands in it. (A jump's gap has no surface.)
-        bool Paved(SceneZoneModel zone, int cubeX, int cubeZ)
+        // (only: that one track's road -- of an island with a file for each weather)
+        bool Paved(SceneZoneModel zone, int cubeX, int cubeZ, Track? only = null)
         {
             double x0 = cubeX * 64 + zone.X0 / 512.0, x1 = cubeX * 64 + zone.X1 / 512.0, z0 = cubeZ * 64 + zone.Z0 / 512.0, z1 = cubeZ * 64 + zone.Z1 / 512.0;
             foreach (var t in tracks)
+                if (only is null || ReferenceEquals(t, only))
                 foreach (var r in t.Report.Roads)
                     for (var i = 0; i < r.Count; i++)
                     {
@@ -969,6 +971,32 @@ internal static class RaceTrackScenes
                     {
                         var wall = zone.Info.Length > 5 && (zone.Info[5] & 1) != 0;
                         if (wall || !Paved(zone, model.CubeX, model.CubeY)) { doorsKept++; continue; }
+                        // (paved in one weather's file only: shut there, and its way back out there too, kept in the other -- the spider
+                        // cave's lower mouth in scene 47, the town circuit's road cut through the cliff there, the storm's cliff and mouth as
+                        // the game has them: removed, Twinsen couldn't walk in in the storm -- the user, 2026-11-06: "It's the cave that has
+                        // a large spider in it")
+                        if (tracks.Count > 1 && tracks.Where(t => Paved(zone, model.CubeX, model.CubeY, t)).ToList() is { } paving && paving.Count < tracks.Count)
+                        {
+                            foreach (var t in paving)
+                            {
+                                var file = FileOf(t);
+                                doorsOff.Add($"{file} {scene} {zone.X0} {zone.Z0} {zone.X1} {zone.Z1}");
+                                log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}, no wall to walk into) lies under {file}'s road and is shut while that file is shown");
+                                try
+                                {
+                                    if (!store.SceneExists(zone.Num)) continue;
+                                    var inside = store.Load(zone.Num);
+                                    foreach (var back in inside.Zones.Where(bz => LeadsTo(bz, scene, zone.X0, zone.Z0, zone.X1, zone.Z1)))
+                                    {
+                                        doorsOff.Add($"{file} {zone.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
+                                        log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} shut while {file} is shown too");
+                                    }
+                                }
+                                catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+                            }
+                            doorsKept++;
+                            continue;
+                        }
                         log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}, no wall to walk into) lies under the road's surface and is removed");
                         SceneOps.DeleteZone(model, z);
                         zonesRemoved++;
