@@ -764,8 +764,12 @@ static int s_nbDoorsTo = 0;
 #define RACE_LIFT_DROP 2000.0              // how far down through the road it goes
 static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16]; int Grate; } s_lifts[RACE_MAX_LIFTS];      // (File: "" or "*" any; Grate: -1 none)
 #define RACE_LIFT_PRESS_MS 1500            // the sewer lift's: Twinsen's animation 11 at most this long
-#define RACE_LIFT_SINK 300                 // ... the grate this far down
-#define RACE_LIFT_SINK_MS 2500             // ... or this long, and the scene changes
+// ... the grate this far down, or this long, and the scene changes: as the game's own sewer lift by the start line (scene 42) does it,
+// its door zone into the sewers (zone 28) 38 under its grate's top -- the grate barely starts down and the sewers come up. Riding 300
+// down Twinsen sank through the road's surface round the lift for most of a second (the user, 2026-11-06: "Twinsen seems to pass
+// through the road surface instead of descending into a hole ... Copy how the original game's elevators handle this")
+#define RACE_LIFT_SINK 40
+#define RACE_LIFT_SINK_MS 600
 static int s_liftPhase = 0;                // 0 Twinsen's animation, 1 the grate sinking
 static S32 s_liftGrateY = 0;
 static int s_nbLifts = 0, s_lift = -1, s_liftDir = 0, s_liftScene = -1;
