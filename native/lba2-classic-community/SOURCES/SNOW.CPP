@@ -112,5 +112,6 @@ void AffSnow(void) {
         for (S32 k = 0; k < size; k++) f |= LineRain(x + k, y, z, x + k, y + (size > 1 ? size - 1 : 1), z, c);
         if (f & 1) drawn = TRUE;
     }
-    if (drawn) BoxMovingAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+    // (inside the clip window: a dialogue's box under it kept -- RAIN.CPP WeatherBoxMovingAdd)
+    if (drawn) WeatherBoxMovingAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
 }

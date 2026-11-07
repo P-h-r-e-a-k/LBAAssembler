@@ -20,6 +20,9 @@ extern void ClearImpactRain(void);
 /*--------------------------------------------------------------------------*/
 extern void AffRain(void);
 /*--------------------------------------------------------------------------*/
+// What the rain or the snow drew, to be cleaned next frame: its box kept inside the clip window (RAIN.CPP)
+extern void WeatherBoxMovingAdd(S32 x0, S32 y0, S32 x1, S32 y1);
+/*--------------------------------------------------------------------------*/
 
 // Falling snow, on an island whose map says so (SNOW.CPP): whether it falls here (and its flakes set going when it starts to), and they
 // moved and drawn as the rain's are

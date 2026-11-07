@@ -94,6 +94,21 @@ void GereRain() {
 }
 
 //----------------------------------------------------------------------------
+// The box of what the rain or the snow drew, cleaned from the background on the next frame (BoxClean), kept inside the clip window: a
+// dialogue's typewriter draws each letter once into its box under the window (MESSAGE.CPP SpeakAnimation sets the window's foot just
+// over it), and a weather box reaching down over it put the box back without its letters every frame -- only the last few, which it
+// draws again each frame, stayed on the screen (the snow's box was the whole screen: the user, 2026-11-06, the Weather Wizard's snow
+// on the town race, "each word appears and the previous one vanishes"; the rain's splashes, with boxes of their own size, nibbled at it)
+void WeatherBoxMovingAdd(S32 x0, S32 y0, S32 x1, S32 y1) {
+    if (x0 < ClipWindowXMin) x0 = ClipWindowXMin;
+    if (y0 < ClipWindowYMin) y0 = ClipWindowYMin;
+    if (x1 > ClipWindowXMax) x1 = ClipWindowXMax;
+    if (y1 > ClipWindowYMax) y1 = ClipWindowYMax;
+    if (x1 < x0 || y1 < y0) return;
+    BoxMovingAdd(x0, y0, x1, y1);
+}
+
+//----------------------------------------------------------------------------
 void AffRain() {
     S32 i, c;
     S32 xp, yp;
@@ -138,7 +153,7 @@ void AffRain() {
             f |= LineRain(x, y, z, x1, y0, z, c);
 
             if (f & 1) {
-                BoxMovingAdd(x0, y0, x1, y1);
+                WeatherBoxMovingAdd(x0, y0, x1, y1);
             }
 
             if (dt && !yp) {
@@ -180,7 +195,7 @@ void AffRain() {
             f = LineRain(xp, yp, z0, Xp, Yp, z1, c);
 
             if (f & 1) {
-                BoxMovingAdd(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+                WeatherBoxMovingAdd(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
             }
 
             if (f & 2) {
