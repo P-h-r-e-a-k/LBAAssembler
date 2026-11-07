@@ -114,6 +114,7 @@
  *     main=<n>                   opponent n is the one to beat: the display says whether Twinsen is ahead of him, and win= is finishing
  *                                ahead of him (not first)
  *     finish=<var> <value>...    what the race's end sets, won or not
+ *     qualifying_always=1        (2026-11-07) a qualifying lap before every race, never skipped (the race game asks nothing)
  *     once_won=1                 (2026-11-07, the story's) a race won stays won: with its win= variables holding (each at least its
  *                                value) as the track loads, its start line is inert -- no qualifying lap, no grid, the flag marshal on
  *                                her plinth (Inert). A race lost runs again as before; Track select's files have no once_won=
@@ -567,6 +568,9 @@ static int s_nbPits = 0;
 enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
+// qualifying_always= (the user, 2026-11-06: "force a qualifying lap on Citadel 2 and the Desert tracks ... make those two always run one
+// before the race"): the race game's "skip qualifying" doesn't skip it there (RACEGAME.CPP QualifyingPage, and Load)
+static int s_qualifyAlways = 0;
 static int s_gridBack = 0;                 // grid_back=: no qualifying, the player at the back of the grid (not on pole)
 static int s_fineWeather = 0;
 // set_weather=fine (a set's key): the story played in the weather once the storm is over, whatever the game's chapter -- Play from the
@@ -4042,6 +4046,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d %d %d %d", &s_trialStart.CubeX, &s_trialStart.CubeZ, &s_trialStart.X, &s_trialStart.Y, &s_trialStart.Z, &s_trialStart.Beta) != 6)
                 s_trialStart.CubeX = -1;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
+        else if (!strcmp(key, "qualifying_always")) s_qualifyAlways = atoi(v) != 0;
         else if (!strcmp(key, "grid_back")) s_gridBack = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "wake_flight")) s_wakeFlight = atoi(v);
@@ -4834,6 +4839,9 @@ static void Load(const char *path, int carOnly = 0) {
                  (int)(pc->GearTop[pc->Gears - 1] * 36 / 5120.0 + 0.5), s_statSteer, (int)pc->Steer);
     }
     PlayerPlan();
+    // (qualifying_always=: the qualifying lap whatever came after it in the file -- the race game's "skip qualifying", qualifying=0 and
+    // grid_back=1, appended to the track's own; a time trial has none all the same)
+    if (s_qualifyAlways && !s_trial) { s_qualifying = 1; s_gridBack = 0; }
     // (no qualifying lap in a time trial -- the Citadel storm's trial file doesn't say qualifying=0, and the game's own default, a qualifying lap
     // first, left it with no count-down)
     if (s_trial) s_qualifying = 0;
@@ -19257,6 +19265,7 @@ S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page) {
         else if (!strcmp(key, "automatic")) automatic = atoi(v);
         else if (!strcmp(key, "grid")) page->Spots++;
         else if (!strcmp(key, "on_foot")) page->OnFoot = atoi(v);
+        else if (!strcmp(key, "qualifying_always")) page->QualifyAlways = atoi(v);
         else if (!strcmp(key, "powerup_only")) {
             int used = 0, value;
             nbOnly = 0;
@@ -20098,7 +20107,7 @@ static void ResetTrack(void) {
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
     s_raceSkyOff = 0;
-    s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
+    s_phase = PHASE_RACE; s_qualifying = 1; s_qualifyAlways = 0; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     // (the start line's "arrival" -- QualifyingArrival -- only once the car has been away from it: a race that starts with the car on
     // pole, the race game's, says nothing more)

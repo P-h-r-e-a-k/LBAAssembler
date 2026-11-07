@@ -195,6 +195,11 @@ internal static class RaceCarEngineFile
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
         if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying && track.Dream is null ? 1 : 0)}\n");
+        // (Citadel 2 -- the town circuit -- and the Desert: a qualifying lap before every race, the race game's "skip qualifying" or not --
+        // the user, 2026-11-06; RACEMOD.CPP qualifying_always=)
+        if (track?.Grid is { Count: > 0 } && track.Dream is null && info is not null && RaceTrackIsland.ByName(info.Island) is var qualIsland
+            && (qualIsland == RaceTrackIsland.Desert || (qualIsland == RaceTrackIsland.Citadel && ReferenceEquals(track, info.Twin))))
+            text.Append("qualifying_always=1\n");
         // a dreamt sprint (Polar Island's): start line to finish line once, its intro, and a win's waking up (a loss runs it again)
         if (track?.Dream is { } dream)
         {

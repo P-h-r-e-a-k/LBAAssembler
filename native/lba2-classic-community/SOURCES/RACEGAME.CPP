@@ -2402,6 +2402,12 @@ static int QualifyingPage(int sp, int trial) {
     ReadSettings();
     const T_RACE_PAGE *pg = TrackPage(sp);
     if (!pg || !pg->Spots) return 1;
+    // (a track whose file says qualifying_always=: always one -- Citadel 2 and the Desert, the user, 2026-11-06)
+    if (pg->QualifyAlways) {
+        s_qualifyNow = 1;
+        Log_Info("[racegame] a qualifying lap before every race on this track (qualifying_always=)");
+        return 1;
+    }
     if (!s_qualified) {
         s_qualifyNow = 1;
         Log_Info("[racegame] the first race: a qualifying lap, not to be skipped");
