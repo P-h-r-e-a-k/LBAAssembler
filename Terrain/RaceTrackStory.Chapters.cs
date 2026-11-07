@@ -851,6 +851,7 @@ void comportement_1()
         LighthouseClimb(p);
         HiddenPages(p);
         TownPeople(p);
+        TaxiStand(p);
         Yard(p);
         YardZoeLeaves(p);
         StartLine(p);
@@ -1888,6 +1889,58 @@ void comportement_{HeroWatching}()
                 }}"));
         });
     }
+
+    // ---- the bike taxi in town (scene 48), from chapter 2 on --------------------------------------------------------------------------
+    // The user, 2026-11-06: "the taxi still drives round over the race track after the rain clears". The game's motorbike Rabbibunny (entity
+    // 100, scene 48's) loops the town square from chapter 2 on (its points 30-33, its tracks 0-7), and the town circuit, built the night
+    // the rain clears, runs across the square. Now he waits for fares at a stand of his own beside the square, off the circuit (TaxiPark:
+    // its track to the stand, and back there after a ride, his labels 3 and 6); stopped, his ride is the game's as before (in front of him
+    // within 2200 he pulls up, Action asks where to).
+    // (labels 8 and 9, free below 10: his script keeps a track below 10 when he pulls up for Twinsen -- stop_l_track -- and goes back to it)
+    private const int TaxiEntity = 100, TaxiPark = 8, TaxiBack = 9;
+    private static void TaxiStand(StoryParts p) => p.Edit(UmbrellaScene, "the bike taxi waits at a stand off the town circuit (it looped the square across it)", model =>
+    {
+        var taxi = model.Actors.FindIndex(a => a.Entity == TaxiEntity);
+        if (taxi < 0 || model.TrackPoints.Count < 35) throw new NotTheGames("no bike taxi");
+        // (his stand: off the circuit by the square's west side, where his rides come in -- point 34)
+        var p34 = model.TrackPoints[34];
+        double x = model.CubeX * 64 + p34.X / 512.0, z = model.CubeY * 64 + p34.Z / 512.0;
+        if (OffRoad(p.Town, x, z, 2, 8) is not { } at || !RaceTrackScenes.InCube(model, at.X, at.Z)) throw new NotTheGames("no room off the circuit by the square");
+        var stand = model.TrackPoints.Count;
+        model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(at.X, model.CubeX), (int)Math.Round(at.Y), RaceTrackScenes.CubeLocal(at.Z, model.CubeY)));
+        var face = Facing(at, x, z).Beta;
+        p.Log.Add($"the bike taxi's stand at cell ({at.X:0.#}, {at.Z:0.#}), {at.Y:0}");
+        return scripts =>
+        {
+            var life = scripts.GetText(taxi, ScriptKind.Life);
+            life = Loose(life, "else\n{\nswitch (rnd(8))", $@"else if (2 <= chapter())
+    {{
+        pos_point({stand});
+        beta({face});
+        set_track(label_{TaxiPark});
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        switch (rnd(8))");
+            life = Loose(life, "if (1 == var_cube(12))\n{\nset_track(label_6);\n}\nelse\n{\nset_track(label_3);\n}", $"set_track(label_{TaxiBack});");
+            // (pulled up for Twinsen, his braking carries him on a little: Twinsen gone, back to the stand, not on from where he stopped)
+            life = Loose(life, "restore_l_track();", $"set_track(label_{TaxiBack});");
+            scripts.SetText(taxi, ScriptKind.Life, life);
+            scripts.SetText(taxi, ScriptKind.Track, scripts.GetText(taxi, ScriptKind.Track).TrimEnd() + $@"
+
+label({TaxiPark});
+anim(0);
+stop();
+
+label({TaxiBack});
+anim(317);
+goto_point({stand});
+anim(0);
+stop();
+");
+        };
+    });
 
     // ---- the yard by the carport (scene 49) -------------------------------------------------------------------------------------------
     // Luc, the Tavern's boss, by his barrel car and its lost back wheel, and Zoe with her spanner: Luc tells of the wheel and Zoe of Bob's
