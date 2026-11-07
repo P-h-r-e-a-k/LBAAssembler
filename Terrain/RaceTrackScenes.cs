@@ -857,6 +857,32 @@ internal static class RaceTrackScenes
                 }
                 if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log, park, home) is { } withBuggy) model = withBuggy;
             }
+            // Every outside scene its car actor, as each of the Desert island's has one (the user, 2026-11-06: "Twinsen can't get out of his
+            // car in some scenes"): the engine lets him out only through the scene's car actor -- its script answers the action key, and
+            // the empty car left standing is that actor (GERELIFE.CPP SET_DIR_OBJ, BUGGY.CPP LeaveBuggy) -- and Citadel's 43-48 and 50,
+            // the Mosquibees', Otringal's, Wannies' and the others' scenes but the start had none: he drove in and was stuck in the car.
+            // The Desert's own buggy (scene 67's: INIT_BUGGY 0, which only shows the car where it already is -- in this scene, or over its
+            // edge in the next -- and never makes a second one); where it stands is the car's own place, not the actor's.
+            if (!model.Actors.Skip(1).Any(a => a.Entity == BuggyEntity) && BuggyTemplate(originals, log) is { } sceneCar)
+            {
+                if (options.BuggyAlways) BuggyAlwaysThere(sceneCar);
+                sceneCar.X = model.Hero.X; sceneCar.Y = model.Hero.Y; sceneCar.Z = model.Hero.Z;
+                var carIndex = SceneOps.AddActor(model, sceneCar);
+                // (in by the action key only where the car is shown -- the car elsewhere, the actor stands bodiless at Twinsen's scene start,
+                // and the key there put him in an unseen car -- and never by standing on it, carry_obj_by: StartBuggyScript's)
+                var carScript = Rebuild(model, scene, "car actor", "the car's actor's script could not be set", log, scripts =>
+                {
+                    var text = scripts.GetText(carIndex, ScriptKind.Life);
+                    const string reach = "768 > angle_obj(0) && 1500 > distance(0)";
+                    if (!text.Contains(reach)) return false;
+                    text = text.Replace(reach, reach + " && 0 == body()");
+                    text = System.Text.RegularExpressions.Regex.Replace(text, @"if \(\d+ == carry_obj_by\(0\)\)\s*\{\s*set_dir_obj\(0, MOVE_BUGGY_MANUAL\);\s*set_comportement\(comportement_2\);\s*\}", "");
+                    scripts.SetText(carIndex, ScriptKind.Life, text);
+                    return true;
+                }, () => "in by the action key only where the car stands");
+                if (carScript is not null) model = carScript;
+                log.Add($"scene {scene}: the car's actor added (actor {carIndex}): Twinsen can get out of his car here");
+            }
             // zones that would act on a car driving along the road: doors into buildings (cube changes to scenes that are not part of the island's
             // outside), hit, ladder, escalator, grid and rail zones; and, with RemoveTrackCameras, the fixed cameras (type 1) the car would
             // drive into. The cube-edge changes, scenario, giver and message zones stay.
