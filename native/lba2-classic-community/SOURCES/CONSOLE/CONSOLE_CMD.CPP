@@ -2157,6 +2157,10 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
     static const char *const ops[] = {"=", "!=", "<", ">", "<=", ">="};
     if (nt >= 2 && (!strcasecmp(tok[0], "cube") || !strcasecmp(tok[0], "notcube"))) {
         what = 0; op = strcasecmp(tok[0], "cube") ? 1 : 0; v = atoi(tok[1]); used = 2;
+    } else if (nt >= 1 && !strcasecmp(tok[0], "walkdone")) {
+        what = 4; op = 0; v = 0; used = 1; /* (no racewalk / walkto / goto going any more) */
+    } else if (nt >= 1 && (!strcasecmp(tok[0], "incar") || !strcasecmp(tok[0], "onfoot"))) {
+        what = 5; op = 0; v = strcasecmp(tok[0], "incar") ? 0 : 1; used = 1; /* (Twinsen at the wheel of his car, or not) */
     } else if (nt >= 2 && !strcasecmp(tok[0], "said")) {
         what = 3; n = atoi(tok[1]); used = 2; /* (a line said from now on: Control_AddWatch) */
     } else if (nt >= 4 && (!strcasecmp(tok[0], "var") || !strcasecmp(tok[0], "varcube"))) {
@@ -2167,7 +2171,7 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
                 op = k;
     }
     if (what < 0 || op < 0) {
-        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V | said N)", until ? "until" : "when");
+        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V | said N | walkdone | incar | onfoot)", until ? "until" : "when");
         return;
     }
     for (int k = used; k + 1 < nt; k += 2) {

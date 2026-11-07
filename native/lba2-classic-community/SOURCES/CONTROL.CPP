@@ -1075,9 +1075,13 @@ int Control_AddWatch(int until, int what, int n, int op, int v, int every, int m
     return 1;
 }
 
+extern int RaceMod_Walking(void);   /* (RACEMOD.CPP: a console walk -- racewalk, walkto, goto -- still going) */
 static int control_watch_holds(const T_CONTROL_WATCH *w) {
     S32 have;
-    if (w->what == 0) have = NumCube;
+    /* (4: walkdone -- no console walk going; 5: incar / onfoot -- Twinsen at the wheel or not: 2026-11-07, the playthrough by inputs) */
+    if (w->what == 4) have = RaceMod_Walking() ? 1 : 0;
+    else if (w->what == 5) have = Comportement == C_BUGGY ? 1 : 0;
+    else if (w->what == 0) have = NumCube;
     else if (w->what == 1) have = (w->n >= 0 && w->n < MAX_VARS_GAME) ? ListVarGame[w->n] : 0;
     else if (w->what == 3) have = StoryLog_SaidCount(w->n);
     else have = (w->n >= 0 && w->n < MAX_VARS_CUBE) ? ListVarCube[w->n] : 0;

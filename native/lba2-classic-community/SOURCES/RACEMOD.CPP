@@ -12368,7 +12368,8 @@ void RaceMod_WalkThen(int actor, double reach, int action) {
     WalkBegun();
     Log_Info("[racemod] racewalk: then%s%s", actor >= 0 ? " to an actor" : "", action ? ", the action key" : "");
 }
-int RaceMod_Walking(void) { return s_walkN > 0 || s_walkCar || s_walkActor >= 0 || s_walkAction || s_goalAt < s_goalN; }
+extern "C" int RaceMod_Walking(void) {   // (C: CONTROL.CPP's watches ask)
+ return s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN; }
 
 
 // ---- the console's "goto": a walk planned round what is in the way (2026-11-07, the scripted playthrough by inputs alone) ----------
@@ -12442,7 +12443,9 @@ static S32 WpFloorAt(int cell, S32 h) {
         if (zn->Type != 0) continue;
         if (x < zn->X0 - 128 || x > zn->X1 + 128 || z < zn->Z0 - 128 || z > zn->Z1 + 128) continue;
         if (s_wpGoalX >= zn->X0 - 256 && s_wpGoalX <= zn->X1 + 256 && s_wpGoalZ >= zn->Z0 - 256 && s_wpGoalZ <= zn->Z1 + 256) continue;
-        if (s_wpFromX >= zn->X0 - 512 && s_wpFromX <= zn->X1 + 512 && s_wpFromZ >= zn->Z0 - 512 && s_wpFromZ <= zn->Z1 + 512) continue;
+        // (the one he stands in -- he came in by it -- only right round him: a way out of it, not a way back through it)
+        if (s_wpFromX >= zn->X0 - 64 && s_wpFromX <= zn->X1 + 64 && s_wpFromZ >= zn->Z0 - 64 && s_wpFromZ <= zn->Z1 + 64 &&
+            fabs(x - s_wpFromX) < 400 && fabs(z - s_wpFromZ) < 400) continue;
         if (h + WP_STEP >= zn->Y0 - 256 && h <= zn->Y1 + 256) return WP_NONE;
     }
     for (int k = 0; k < s_wpDecN[cell]; k++) {
@@ -12709,7 +12712,7 @@ static U32 WalkInput(void) {
     }
     if (TimerRefHR - s_walkLastAt > 1000) {
         const double mx = hero->Obj.X - s_walkLastX, mz = hero->Obj.Z - s_walkLastZ;
-        if (sqrt(mx * mx + mz * mz) < 150 && TimerRefHR >= s_detourUntil && s_walkActor != -2) {
+        if (sqrt(mx * mx + mz * mz) < 150 && TimerRefHR >= s_detourUntil && s_walkActor != -2 && !FlagClimbing) {
             s_detourTurn = (s_detourN & 1) ? -1024 : 1024;
             s_detourUntil = TimerRefHR + 800 + 500 * s_detourN;
             Log_Info("[racemod] racewalk: stuck at (%.0f,%d,%.0f) in scene %d, beta %d, on the way to point %d of %d -- a detour %s for %d ms", wx, (int)hero->Obj.Y, wz,
