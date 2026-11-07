@@ -344,7 +344,8 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    > **Tim:** "Our customer's umbrella! I'd stand you a drink on the house, if I still had a house. Here." *(10 kashes)*
 
    **Two optional visits, any time in the chapter** (the slate's hidden pages, finished in chapter 2):
-   - **The museum** (scene 15, by the rampart's lift). Miss Bloop, the curator, in the hall:
+   - **The museum** (scene 15, by the rampart's lift). The guard at the desk lets the Cup's winner in free: "yes" to his ticket opens the
+     hall's door and takes nothing (the game's 15 kashes were more than chapter 1's Twinsen has -- 2026-11-07). Miss Bloop, the curator, in the hall:
      > **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
 
      On the hall's north wall by the corner, over a sideboard, a picture of Twinsen holding a cup (a copy of the hall's portrait, its

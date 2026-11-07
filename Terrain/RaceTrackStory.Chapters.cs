@@ -1874,6 +1874,26 @@ void comportement_{HeroWatching}()
             };
         });
 
+        // the museum: in for nothing in the story -- the hall's door (actor 3) opens once its guard (actor 2) has sold a ticket, the game's
+        // 15 kashes, and chapter 1's Twinsen has 10 (Tim's for the umbrella); in chapter 2 the Cup's purse pays the museum or the pharmacy's
+        // gallic acid, not both (the scripted playthrough by inputs, 2026-11-07: he stood against the shut door). The Cup's winner, on the
+        // museum's own wall, is let in free: "yes" to the ticket opens the door and takes nothing.
+        p.Edit(Museum, "the museum's ticket free in the story: the hall's door opens without the 15 kashes", _ => scripts =>
+        {
+            var guard = scripts.GetText(2, ScriptKind.Life);
+            scripts.SetText(2, ScriptKind.Life, Loose(guard, "if (15 <= nb_gold_pieces())\n{", @"if (0 < chapter())
+                {
+                    set_var_cube(8, 1);
+                    set_var_cube(7, 1);
+                    save_comportement();
+                    set_dir(NO_MOVE);
+                    set_track(label_10);
+                    set_comportement(comportement_2);
+                }
+                else if (15 <= nb_gold_pieces())
+                {"));
+        });
+
         // the museum: the picture of Twinsen with a cup on the hall's north wall (Citadel/CitadelMuseum), Action in front of it says what it
         // is (the user, 2026-11-06: "make it examinable") -- an unseen helper at the wall's foot under it, as the blueprints' is
         p.Edit(Museum, "the picture of Twinsen with a cup: Action in front of it reads its plate", model =>

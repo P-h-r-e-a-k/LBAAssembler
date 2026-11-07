@@ -177,7 +177,8 @@ The same ladder brings Twinsen up onto the quay.
 
 **Secrets (optional, any time this chapter).** Two things on Citadel that pay off in chapter 2: each gives a page for the magic slate.
 
-- **The museum.** Twinsen takes the lift up the rampart and goes into the museum. Miss Bloop, the curator, is in the hall.
+- **The museum.** Twinsen takes the lift up the rampart and goes into the museum. The guard at the desk lets him in free (say yes to
+  the ticket). Miss Bloop, the curator, is in the hall.
 
   **Miss Bloop:** "You showed up at the right time. The door at the top of the stairs is jammed, and your old tunic is up there. Free
   the door, and you can have it back: wear it for luck at the races."
