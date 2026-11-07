@@ -527,7 +527,9 @@ the island. Three pages. He's at the School, and he's in a mood."
 Talking to her again (or meeting her after the Dean): **Flick:** "Twinsen! No flag yet, I'm afraid: the track stays shut till the
 Dean at the School of Magic has his three pages back. He means it."
 
-**3. The School of Magic.** In the School's hall, the first time Twinsen comes in, the Dean's people: "Welcome to the School of Magic! Mind
+**3. The School of Magic.** On foot from the road beside the School (east of it, by the canyon under the big stone face): down the
+ramp through the open gates into the canyon, then west along the walled passage to the door under the face. In the School's hall, the
+first time Twinsen comes in, the Dean's people: "Welcome to the School of Magic! Mind
 your step: we're still picking up after the Dean's exam papers." The Dean is in the hall, up on his dais; the gate up to it opens when
 Twinsen opens the chest at the hall's far wall (Action, facing it), and stays open on later visits. Through the gate, along the
 walkway and up the stairs to the benches; the Dean's tier is a one-brick step up from there, a jump (sporty).

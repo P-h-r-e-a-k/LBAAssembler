@@ -750,7 +750,12 @@ added to Mr. Paul's prize, and the two pages' pictures.
    > over the island. Three pages. He's at the School's gate, and he's in a mood."
 
    Q_PAGES = 1.
-3. **The School.** The Dean:
+3. **The School.** The way in on foot (the user, 2026-11-06, "can't be walked into"; built 2026-11-07): from the road's verge a ramp
+   (at most 355 a cell) down to a level sill under the School's gates (739, where the levelling left the gate's leaves; the lintel put
+   on it too -- RaceTrackIsland.GateSill), a ramp down into the canyon, and the door under the face reaching a cell out in front of its
+   doorway (scene 61's zone into 28 to x 10240, landing 768 further in; 28's way back out landing at x 10496 on -- ApplyDesert).
+   Walked in and back out headless by inputs.
+   The Dean:
    > **The Dean:** "Shut it is! Three pages, gone with the wind of your engines. Bring them back, and I'll think about it."
 
    Q_PAGES = 2. The arrow points at page 1.

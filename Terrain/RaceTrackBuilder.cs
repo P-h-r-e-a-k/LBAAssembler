@@ -1275,6 +1275,7 @@ internal static class RaceTrackBuilder
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
         if (plan.WallRail) RoadWalls(field, main, plan, report);
         follow.Apply();
+        if (options.Island.GateSill is { } sill) GateSill(island, index, RoadEdge, sill, report);
         // (and what the ground carried up into the road's way: the decors stood clear of it when they were cleared, and ground filled
         // under a raised road's end lifts what stood there -- 2026-10-06: two of LBA1's barrels at the foot of Polar Island's 108, lifted
         // 7,000 onto the start of the raised road round the rocky peak)
@@ -4156,6 +4157,50 @@ internal static class RaceTrackBuilder
     public const int LiftZoneHalf = 560;
     // RaceTrackIsland.OwnRimsAt: the ground put back this far past the road's curbs (cells)
     private const double OwnRimClear = 0.75;
+
+    // RaceTrackIsland.GateSill: a gateway walked through again (the White Leaf Desert's School of Magic, 2026-11-07). The gate is the decors
+    // whose origin is within a cell of its column and rows; the sill the highest of their origins (where the ground's following left the
+    // leaves); each of them set on it (the lintel, floating over its origin, was left behind at the island's old height, a head's height
+    // over the old floor and so under the raised one's); the ground under the gate the sill; along the passage's rows straight ramps from
+    // the sill out to column Out and in to column In, those two columns as they are -- no vertex by the road lowered.
+    private static void GateSill(IslandFile island, RoadIndex index, Func<RoadHit, double> roadEdge, (int X, int Z0, int Z1, int Out, int In) g, RaceTrackReport report)
+    {
+        var gate = new List<IslandDecor>();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+            {
+                double ox = cx * IslandCube.Cells + d.X / 512.0, oz = cz * IslandCube.Cells + d.Z / 512.0;
+                if (Math.Abs(ox - (g.X + 0.5)) <= 1 && oz >= g.Z0 - 1 && oz <= g.Z1 + 1) gate.Add(d);
+            }
+        if (gate.Count == 0) { report.Notes.Add($"the gate at column {g.X}: no decors there -- left as it is"); return; }
+        var sill = gate.Max(d => d.Y);
+        foreach (var d in gate)
+        {
+            var up = sill - d.Y;
+            d.Y += up; d.YMin += up; d.YMax += up;
+        }
+        var set = 0; var kept = 0;
+        void Put(int x, int z, double h)
+        {
+            if (island.HeightAt(x, z) is not { } was) return;
+            var want = (int)Math.Round(h);
+            if (want == was) return;
+            if (want < was && index.Near(x, z, 14, 4).Any(hit => hit.Dist <= roadEdge(hit) + OwnRimClear)) { kept++; return; }
+            island.SetHeight(x, z, want);
+            set++;
+        }
+        for (var z = g.Z0; z <= g.Z1; z++)
+        {
+            Put(g.X, z, sill); Put(g.X + 1, z, sill);
+            if (z == g.Z0 || z == g.Z1) continue;
+            if (island.HeightAt(g.Out, z) is { } outer)
+                for (var x = g.X + 2; x < g.Out; x++) Put(x, z, sill + (outer - sill) * (double)(x - g.X - 1) / (g.Out - g.X - 1));
+            if (island.HeightAt(g.In, z) is { } inner)
+                for (var x = g.In + 1; x < g.X; x++) Put(x, z, inner + (sill - inner) * (double)(x - g.In) / (g.X - g.In));
+        }
+        report.Notes.Add($"the gate at column {g.X}: its {gate.Count} decors on a sill at {sill}, {set} ground corners set to it and its ramps" +
+                         (kept > 0 ? $" ({kept} by the road left as they are)" : ""));
+    }
 
     // The island's own decors its record says go whatever the road does (RaceTrackIsland.DropDecors): the pieces placed at each origin.
     private static void DropDecors(IslandFile island, RaceTrackOptions o, RaceTrackReport report)

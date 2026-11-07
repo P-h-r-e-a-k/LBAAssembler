@@ -31,6 +31,11 @@ internal sealed record RaceTrackIsland(
         // the game has it: the user, 2026-10-27, "Let's raise the terrain slightly around the school of magic to force the user to access
         // it via the gate, but let's make sure we don't change the near track terrain height")
         OwnRimsAt = new[] { (535, 590, 571, 630) },
+        // (and its gates themselves: the levelling raised the ground east of them up to the road and under them, the gate's leaves with it
+        // but not its lintel, and Twinsen walking in from the road was stopped by the lintel -- his head under it -- or by the leaves: a
+        // level sill under the gate, the lintel on it as the leaves are, and ramps down from the road's verge and down into the canyon.
+        // The user, 2026-11-06: "make the slope steeper so he can walk down into the gate courtyard WITHOUT lowering the track's edge")
+        GateSill = (542, 610, 615, 546, 539),
         // (its water crossing a deck over the water, the ferry's channel open under it: RaceTrackBuilder.WaterDeck)
         WaterDeck = true,
     };
@@ -205,6 +210,11 @@ internal sealed record RaceTrackIsland(
     // Places (island cells, x0 z0 x1 z1) where the island's own ground comes back up to its height after the road's levelling, clear of the
     // road: rims that kept people to a gate (RaceTrackBuilder)
     public (int X0, int Z0, int X1, int Z1)[]? OwnRimsAt { get; init; }
+    // A gateway the levelling left with no way through on foot (RaceTrackBuilder.GateSill): its decors' origin column X (island cells: the
+    // gate stands over vertices X..X+1, its passage between rows Z0 and Z1), the ground under it a level sill at the height the build left
+    // its leaves on, every decor of the gate (the lintel too) on that sill, and straight ramps from the sill out to vertex column Out and
+    // in to column In -- whose heights stay -- along the passage's rows; nothing by the road lowered
+    public (int X, int Z0, int Z1, int Out, int In)? GateSill { get; init; }
     // The lap's longest water crossing a raised deck over the water, humped for a boat to pass under (RaceTrackBuilder.WaterDeck)
     public bool WaterDeck { get; init; }
     // Walls built up under the raised road where it passes over a building cut down for it: island cells x0 z0 x1 z1 and the height they
@@ -427,7 +437,7 @@ internal sealed record RaceTrackIsland(
             SharedFrom = from, SharedIndex = index,
             // (Citadel Island's: the town circuit's line-up, the track a plan for it is)
             Crossing = from.Crossing, Roster = from.RacesTwin && from.TwinRoster is { } town ? town : from.Roster, View = from.View, Look = from.Look, KeepOffRoadActors = from.KeepOffRoadActors,
-            OwnRimsAt = from.OwnRimsAt, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars, StoryUnheldVars = from.StoryUnheldVars,
+            OwnRimsAt = from.OwnRimsAt, GateSill = from.GateSill, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars, StoryUnheldVars = from.StoryUnheldVars,
             RailHeld = from.RailHeld, Title = $"{name} (shared, on {from.Shown})",
         };
     }

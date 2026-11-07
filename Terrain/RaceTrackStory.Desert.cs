@@ -32,6 +32,13 @@ internal static partial class RaceTrackStory
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113;
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
+    // the School's door from the canyon outside (scene 61, and the game's other scene of that cube, 201): its zone, as the game has it, and
+    // how far out it reaches now and where in the School's entrance (scene 28) it lands Twinsen (its Info2: his x in the zone is added)
+    private const int SchoolOutside = 61, SchoolOutsideToo = 201, SchoolEntrance = 28, SchoolDoorReach = 10240, SchoolDoorLanding = 10752 - 768;
+    private static bool IsSchoolDoor(SceneZoneModel z) => z.Type == 0 && z.Num == SchoolEntrance && z.X0 == 9216 && z.X1 == 9728 && z.Info[2] == 10752;
+    // (and the entrance's door back out to it, which lands Twinsen at x 9728 plus his z in it: now SchoolOutLanding plus)
+    private const int SchoolOutLanding = SchoolDoorReach + 256;
+    private static bool IsSchoolWayOut(SceneZoneModel z) => z.Type == 0 && z.Num == SchoolOutside && z.X0 == 26624 && z.Info[0] == 9728;
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
@@ -759,6 +766,28 @@ void comportement_1()
             };
             return scripts => { foreach (var e in edits) e(scripts); };
         });
+
+        // The School's door from the canyon (the user, 2026-11-06: the gate "can't be walked into"; the road's side of it, the gates, is
+        // RaceTrackIsland.GateSill): its zone (x 9216-9728) lies behind the doorway, which stops Twinsen walking in at x 9826 (headless,
+        // 2026-11-07, and the playthrough's ch03 06_school_outside, which teleported into it). It reaches a cell out now, in front of the
+        // doorway (to x 10240), and lands him 768 further from the entrance's door back out: the zone turns him a quarter round (Info3
+        // 1), so his x in the zone (walking in, its far side: 1024) is his z in scene 28 past its Info2 -- with Info2 as it was, z 11776,
+        // on that door (z 11264-11776), and he went straight back out. Now z 9984-11008: 11008 walking in, where scene 28 starts him.
+        foreach (var scene in new[] { SchoolOutside, SchoolOutsideToo })
+            if (b.Store.SceneExists(scene) && b.Store.Load(scene).Zones.Any(IsSchoolDoor))
+                b.Edit(scene, $"the School's door reaches out in front of its doorway (to x {SchoolDoorReach}) and lands Twinsen clear of the way back out", model =>
+                {
+                    foreach (var door in model.Zones.Where(IsSchoolDoor)) { door.X1 = SchoolDoorReach; door.Info[2] = SchoolDoorLanding; }
+                    return _ => { };
+                });
+        // (and the way back out lands him in front of the door's new reach, not in it: x 9728 plus his z in the entrance's door (0-512, turned
+        // a quarter round), in the zone as it reaches now, took him straight back in)
+        if (b.Store.SceneExists(SchoolEntrance) && b.Store.Load(SchoolEntrance).Zones.Any(IsSchoolWayOut))
+            b.Edit(SchoolEntrance, $"the School's way out lands Twinsen in front of its door's reach outside (x {SchoolOutLanding} on)", model =>
+            {
+                foreach (var door in model.Zones.Where(IsSchoolWayOut)) door.Info[0] = SchoolOutLanding;
+                return _ => { };
+            });
 
         // (the easter eggs: the fourth page, Bù's stone -- RaceTrackStory.Eggs.Desert.cs)
         DesertEggs(b, report, Say, desert);
