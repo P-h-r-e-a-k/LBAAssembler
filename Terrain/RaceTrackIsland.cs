@@ -566,6 +566,10 @@ internal sealed record RaceTrackIsland(
         StoryUnheldVars = new[] { 107 },
         // (the pier's east post, body 33: the pit lane runs over the pier there, low since the road came down -- 2026-10-15)
         DropDecors = new[] { (8, 7, 19712, 17664) },
+        // (ladders up from the ground under the road: the deck round the elevator's house, where Twinsen comes out of it on foot, is 1,700
+        // under the start line on the raised road, and nothing went up -- his car, parked on the line, out of reach on foot: the scripted
+        // playthrough by inputs, 2026-11-07)
+        Ladders = true,
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,

@@ -4218,7 +4218,9 @@ internal static class RaceTrackBuilder
             if (gx < 0 || gz < 0 || built.Contains((gx, gz)) || island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) return false;
             int x = gx % IslandCube.Cells, z = gz % IslandCube.Cells;
             var a = new IslandPolygon(cube.Polygon(x, z, 0)); var b = new IslandPolygon(cube.Polygon(x, z, 1));
-            return !a.Col && !b.Col && a.CodeJeu != 1 && b.CodeJeu != 1;
+            // (not the sea, nor lava, gas or deep water: Wannies Island's lava -- a ladder isn't wanted where he can't stand)
+            static bool Deadly(int cj) => cj is 1 or 9 or 11 or 13 or 14 or 15;
+            return !a.Col && !b.Col && !Deadly(a.CodeJeu) && !Deadly(b.CodeJeu);
         }
         // the stretches of walkable ground
         var region = new Dictionary<(int, int), int>();

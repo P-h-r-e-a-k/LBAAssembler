@@ -24,6 +24,8 @@ internal static partial class RaceTrackStory
     // the elevator's foot, where the Elevator Platform's elevator comes down (the game's scene), and its four laser barriers
     private const int ElevatorFoot = 123;
     private static readonly int[] ElevatorFootBarriers = { 10, 11, 12, 13 };
+    // ... and the game's two guards on the deck outside it (scene 98)
+    private static readonly int[] ElevatorDeckGuards = { 4, 5 };
 
     // (the last three: the easter eggs' -- kiss the frog, heigh-ho: RaceTrackStory.Eggs.Wannies)
     internal enum WanniesLine { LyraArrival, Ring, Baldino, Miner, ZoeGloves, OldWannie, MinerThanks, LyraFragment, OldWannieClue, KissShould, KissDare, OffToWork }
@@ -199,6 +201,19 @@ internal static partial class RaceTrackStory
             foreach (var barrier in ElevatorFootBarriers)
                 scripts.SetText(barrier, ScriptKind.Life, Loose(scripts.GetText(barrier, ScriptKind.Life), "void comportement_0()\n{",
                     "void comportement_0()\n{\n    if (0 == var_game(1))\n    {\n        no_body();\n        end_life();\n    }"));
+        });
+        // ... and the deck round the elevator's foot outside (WanniesArrival): the game's two guards there (actors 4 and 5) go for Twinsen
+        // on sight and hit him till he is dead -- the game's Twinsen fights them with the ball; the story's has none, and the deck is where he
+        // walks between the elevator, the miner, the old Wannie and the ladder up to his car (the playthrough by inputs, 2026-11-07: killed
+        // there on the way to the ladder). Without a ball, they aren't there.
+        GroupB.EditScene(store, WanniesArrival, log, "the elevator's deck: its two guards gone while Twinsen has no magic ball to fight them with", _ => scripts =>
+        {
+            foreach (var guard in ElevatorDeckGuards)
+            {
+                var text = scripts.GetText(guard, ScriptKind.Life);
+                if (!text.Contains("3000 > distance_message(0)")) throw new NotTheGames($"the deck's guard (actor {guard})");
+                scripts.SetText(guard, ScriptKind.Life, Loose(text, "void comportement_0()\n{", "void comportement_0()\n{\n    if (0 == var_game(1))\n    {\n        suicide();\n    }"));
+            }
         });
         // (the easter eggs: heigh-ho's miners, and kiss the frog -- RaceTrackStory.Eggs.Wannies)
         HeighHo(store, originals, heighHo, Say(WanniesLine.OffToWork), log);
