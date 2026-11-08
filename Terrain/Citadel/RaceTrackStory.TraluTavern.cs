@@ -97,22 +97,8 @@ internal static partial class RaceTrackStory
 
             var edits = new List<Action<SceneScripts>>();
             const string Storm = "2 > chapter()";
-            // (Luc: his welcome and the back gate's key -- told once, var 60 to 1: RaceTrackStory.TraluCaves -- then the key again till the
-            // gate is open, his welcome after that)
-            edits.Add(p.Add(model, luc, Talker(Storm, $@"            if (0 == var_game({CaveVar}))
-            {{
-                message({p.Say(ChapterLine.LucBar)});
-                message({p.Say(ChapterLine.LucKey)});
-                set_var_game({CaveVar}, {CaveKeyTold});
-            }}
-            else if ({CaveGateOpen} > var_game({CaveVar}))
-            {{
-                message({p.Say(ChapterLine.LucKey)});
-            }}
-            else
-            {{
-                message({p.Say(ChapterLine.LucBar)});
-            }}", LucReach)));
+            // (Luc: his welcome. The cave's gate opens as Twinsen comes in: RaceTrackStory.TraluCaves)
+            edits.Add(p.Add(model, luc, Talker(Storm, $"            message({p.Say(ChapterLine.LucBar)});", LucReach)));
             edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({p.Say(ChapterLine.RabbibunnyBar)});", RegularReach)));
             var fabIndex = model.Actors.Count + 1;
             edits.Add(p.Add(model, pat, Talker(Storm, $"            message({p.Say(ChapterLine.PatBar)});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabBar)});", RegularReach)));
@@ -151,7 +137,7 @@ internal static partial class RaceTrackStory
         });
 
         // the Tralu gone from his own hall: he has joined the secret bar next door (above), with his tankard. (The game's barred door,
-        // actor 8 -- the back gate's now, RaceTrackStory.TraluCaves -- takes the Tralu gone for the Tralu killed: var 60 to 2, the
+        // actor 8 -- open once the bar is found, RaceTrackStory.TraluCaves -- takes the Tralu gone for the Tralu killed: var 60 to 2, the
         // hall's pots broken; that is left out of its script)
         p.Edit(TraluCave, "the Tralu gone from his own hall: he has joined the secret bar next door, with a tankard", model =>
         {

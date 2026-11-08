@@ -942,7 +942,7 @@ void comportement_1()
         // (the spider cave's lower mouth, south of the sign of Sendell: in from anywhere in front of it -- Citadel/RaceTrackStory.TraluCaves.cs)
         SpiderCaveMouth(p);
         // (the back gate from the Tralu's hall up to the bar: its stairs, its key -- Citadel/RaceTrackStory.TraluCaves.cs)
-        TraluBackGate(p);
+        TraluBarOpensGate(p);
         Lighthouse(p);
         LighthouseClimb(p);
         HiddenPages(p);
