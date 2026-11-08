@@ -31,9 +31,14 @@ internal static class CitadelNightHouse
     public static readonly (int X, int Y, int Z) Arrival = (12800, 768, 9728);
     // the candle on the bedside table (cell x 12, z 1; its bricks at layers 11-12) and its light's reach (cells, a layer half a cell)
     public const int CandleX = 12, CandleY = 12, CandleZ = 1;
-    private const double LitReach = 2.6, GlowReach = 5.2;
-    // each level's share of a colour's light (red, green, blue): the night's, the candle's glow, its light
-    private static readonly (double R, double G, double B) Night = (0.27, 0.30, 0.44), Glow = (0.55, 0.45, 0.34), Lit = (0.88, 0.74, 0.55);
+    private const double Reach = 6.2;
+    // the night's share of a colour's light (red, green, blue) and the candle's at its brightest; between them Levels steps, each cell's
+    // by how near the flame it is (a smooth fall-off, not two hard rings -- the user, 2026-11-07: "it's very square at the moment") and
+    // only where the flame can see it (no light through a wall onto the floor beyond: "with light also going through the wall")
+    private static readonly (double R, double G, double B) Night = (0.27, 0.30, 0.44), Lit = (0.92, 0.76, 0.54);
+    private const int Levels = 6;
+    // the people in the house at night: lit at this share of the game's light, as dim as the room round them (RACEMOD.CPP dark_scene=)
+    public const int ActorLight = 45;
 
     public static List<string> Install(string gameDirectory)
     {
@@ -61,6 +66,25 @@ internal static class CitadelNightHouse
         var shape = Lba2GridBackend.ToLba1Shape(raw);
         var cells = Lba1GridCodec.Decode(shape);
         int At(int x, int y, int z) => ((z * 64 + x) * 25 + y) * 2;
+        // (whether the flame -- over the candle's top -- sees a cell: the side or corner of it nearest the flame, a line to it through
+        // nothing but air -- the candle's own cell and the cell itself aside. In cells, a layer half a cell high)
+        bool Seen(int x, int y, int z)
+        {
+            double sx = CandleX + 0.5, sy = (CandleY + 1.2) * 0.5, sz = CandleZ + 0.5;
+            double cx = x + 0.5, cy = (y + 0.5) * 0.5, cz = z + 0.5;
+            double tx = cx + Math.Clamp(sx - cx, -0.49, 0.49), ty = cy + Math.Clamp(sy - cy, -0.24, 0.24), tz = cz + Math.Clamp(sz - cz, -0.49, 0.49);
+            var len = Math.Sqrt((tx - sx) * (tx - sx) + (ty - sy) * (ty - sy) + (tz - sz) * (tz - sz));
+            var steps = (int)Math.Ceiling(len / 0.08);
+            for (var k = 1; k < steps; k++)
+            {
+                var t = k / (double)steps;
+                int qx = (int)Math.Floor(sx + (tx - sx) * t), qy = (int)Math.Floor((sy + (ty - sy) * t) * 2), qz = (int)Math.Floor(sz + (tz - sz) * t);
+                if (qx < 0 || qx > 63 || qz < 0 || qz > 63 || qy < 0 || qy > 24) return false;
+                if ((qx, qy, qz) == (x, y, z) || (qx, qy, qz) == (CandleX, CandleY, CandleZ)) continue;
+                if (cells[At(qx, qy, qz)] != 0) return false;
+            }
+            return true;
+        }
 
         // the library's blocks (each its own bytes: blocks may share theirs in the game's)
         var count = (int)(BinaryPrimitives.ReadUInt32LittleEndian(library) / 4);
@@ -73,10 +97,10 @@ internal static class CitadelNightHouse
             blocks.Add(library.AsSpan(at, Math.Min(3 + n * 4, library.Length - at)).ToArray());
         }
 
-        // each filled cell's light: 2 lit, 1 the glow, 0 the night
+        // each filled cell's light, 0 (the night) to `levels` (by the flame): how near the flame it is, if the flame sees it
         var candle = cells[At(CandleX, CandleY, CandleZ)];
-        var level = new int[64, 25, 64];
         var used = new HashSet<int>();
+        var near = new double[64, 25, 64];
         for (var z = 0; z < 64; z++)
             for (var x = 0; x < 64; x++)
                 for (var y = 0; y < 25; y++)
@@ -87,20 +111,45 @@ internal static class CitadelNightHouse
                     if (candle == 0) continue;
                     double dx = x - CandleX, dz = z - CandleZ, dy = (y - CandleY) * 0.5;
                     var d = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                    level[x, y, z] = d <= LitReach ? 2 : d <= GlowReach ? 1 : 0;
+                    if (d >= Reach) continue;
+                    if (!Seen(x, y, z)) continue;
+                    var f = 1 - d / Reach;
+                    near[x, y, z] = f * f * (3 - 2 * f);
                 }
+        // (as many steps as the library has room for: each (block, step) pair is a block of its own, and a grid names at most 255)
+        var levels = Levels;
+        var level = new int[64, 25, 64];
+        while (true)
+        {
+            var pairs = new HashSet<(int, int)>();
+            for (var z = 0; z < 64; z++)
+                for (var x = 0; x < 64; x++)
+                    for (var y = 0; y < 25; y++)
+                    {
+                        var block = cells[At(x, y, z)];
+                        level[x, y, z] = block == 0 ? 0 : (int)Math.Round(near[x, y, z] * levels);
+                        if (block != 0 && level[x, y, z] > 0) pairs.Add((block, level[x, y, z]));
+                    }
+            if (count + pairs.Count <= 255 || levels == 1) break;
+            levels--;
+        }
         if (candle == 0) log.Add($"Twinsen's house at night: no candle at cell ({CandleX}, {CandleY}, {CandleZ}) -- the house all night-dark");
         var candleBricks = new HashSet<int>();
         if (candle != 0 && candle - 1 < blocks.Count)
             foreach (var brick in Bricks(blocks[candle - 1])) candleBricks.Add(brick);
 
         // the darkened bricks, made as they are first needed (added after the file's bricks)
-        var maps = new[] { Shade(palette, Night), Shade(palette, Glow), Shade(palette, Lit) };
+        // (the step's share: from the night's to the flame's, warmer as it brightens)
+        var maps = Enumerable.Range(0, levels + 1).Select(k =>
+        {
+            var t = k / (double)levels;
+            return Shade(palette, (Night.R + (Lit.R - Night.R) * t, Night.G + (Lit.G - Night.G) * t, Night.B + (Lit.B - Night.B) * t));
+        }).ToArray();
         var made = new Dictionary<(int Brick, int Level), int>();
         var added = new List<byte[]>();
         int Copy(int brick, int lv)
         {
-            if (lv == 2 && candleBricks.Contains(brick)) return brick;
+            if (lv == levels && candleBricks.Contains(brick)) return brick;
             if (made.TryGetValue((brick, lv), out var have)) return have;
             if (brick < 0 || brick >= header.MaxBrk || bkg.IsEmpty(header.Brk + brick)) return made[(brick, lv)] = brick;
             var number = header.MaxBrk + added.Count;
@@ -118,23 +167,19 @@ internal static class CitadelNightHouse
             }
             return copy;
         }
-        // (every block the house uses at night; the lit and glowing cells' blocks copied for their light -- the glow left out when the
-        // library would hold more than a grid can name)
-        var litBlocks = new SortedSet<int>(); var glowBlocks = new SortedSet<int>();
+        // (every block the house uses at night; each lit cell's block copied for its step of light)
+        var lit = new SortedSet<(int Block, int Level)>();
         for (var z = 0; z < 64; z++)
             for (var x = 0; x < 64; x++)
                 for (var y = 0; y < 25; y++)
                 {
                     var block = cells[At(x, y, z)];
-                    if (block == 0) continue;
-                    if (level[x, y, z] == 2) litBlocks.Add(block); else if (level[x, y, z] == 1) glowBlocks.Add(block);
+                    if (block != 0 && level[x, y, z] > 0) lit.Add((block, level[x, y, z]));
                 }
-        var glow = count + litBlocks.Count + glowBlocks.Count <= 255;
-        if (!glow && count + litBlocks.Count > 255) litBlocks.Clear();
+        if (count + lit.Count > 255) lit.Clear();
         foreach (var block in used) if (block - 1 < blocks.Count) blocks[block - 1] = Variant(blocks[block - 1], 0);
         var variant = new Dictionary<(int Block, int Level), int>();
-        foreach (var block in litBlocks) { variant[(block, 2)] = blocks.Count + 1; blocks.Add(Variant(OwnBlock(library, block), 2)); }
-        if (glow) foreach (var block in glowBlocks) { variant[(block, 1)] = blocks.Count + 1; blocks.Add(Variant(OwnBlock(library, block), 1)); }
+        foreach (var (block, lv) in lit) { variant[(block, lv)] = blocks.Count + 1; blocks.Add(Variant(OwnBlock(library, block), lv)); }
         var edits = new List<Lba1GridCell>();
         for (var z = 0; z < 64; z++)
             for (var x = 0; x < 64; x++)
@@ -174,7 +219,7 @@ internal static class CitadelNightHouse
         bkg.SetStored(header.Brk + header.MaxBrk, table);
         Finish(bkg);
         log.Add($"Twinsen's house at night: scene {Scene}, scene 0's grid in {added.Count} darkened bricks (grid {gridNumber}, block library {libraryNumber}), " +
-                $"{litBlocks.Count} blocks in the candle's light and {(glow ? glowBlocks.Count : 0)} in its glow, its front door back to scene {Yard}");
+                $"{lit.Count} blocks in the candle's light in {levels} steps, its front door back to scene {Yard}");
         return log;
 
         // (the night's bricks don't fit -- a build of every island holds all the bricks the engine takes: the scene is made all the same,

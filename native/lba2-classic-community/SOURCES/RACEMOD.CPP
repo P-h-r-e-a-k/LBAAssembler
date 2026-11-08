@@ -1259,6 +1259,8 @@ static S32 s_superTurn = 0;                // superjet_turn= (the model turned o
 static int s_protectSpell = 0;             // the game's protection spell is on for the power-up (it goes off with it)
 #define RACE_PROTECT_ENDING 3000           // ... and blinks this long before
 static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
+// dark_scene=<scene> <percent>: a scene at night -- the actors' light at that share of the game's (DarkFrame)
+static int s_darkScene = -1, s_darkPct = 100;
 typedef struct { int Island, When, First, Last; char Path[260]; } T_RACE_TRACK;
 static T_RACE_TRACK s_tracks[RACE_MAX_TRACKS];
 static int s_nbTracks = 0;
@@ -3761,7 +3763,7 @@ static void PlayerPlan(void) {
 
 // The keys an island with no track keeps from the set (Load's carOnly): the car's handling, and the set's own.
 static int CarKey(const char *key) {
-    static const char *const keys[] = {"gears", "accel", "brake", "coast", "reverse", "steer", "automatic", "hud", "track", "tired"};
+    static const char *const keys[] = {"gears", "accel", "brake", "coast", "reverse", "steer", "automatic", "hud", "track", "tired", "dark_scene"};
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) if (!strcmp(key, keys[i])) return 1;
     return !strncmp(key, "gear", 4) && key[4] >= '1' && key[4] <= '0' + RACE_MAX_GEARS && !key[5];
 }
@@ -4666,6 +4668,9 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "tired")) {
             if (!setRead && sscanf(v, "%d %d %d", &s_tiredVar, &s_tiredValue, &s_tiredText) != 3) s_tiredVar = -1;
+        }
+        else if (!strcmp(key, "dark_scene")) {
+            if (!setRead && (sscanf(v, "%d %d", &s_darkScene, &s_darkPct) != 2 || s_darkPct < 0 || s_darkPct > 100)) s_darkScene = -1;
         }
         else if (!strcmp(key, "track")) {
             T_RACE_TRACK *t = &s_tracks[s_nbTracks];
@@ -13189,7 +13194,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -18134,7 +18139,21 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
 S32 CameraForceWorld[2];
 extern S32 CameraForced, CameraForce[6];
 static void TortoiseWatch(S32 now);
+// (dark_scene=: in that scene the actors' bodies are lit at its share of the game's light -- FactorLight, the scale of every body's
+// light (LIB386 LightList): a house at night where everyone stood as bright as by day in it, the user, 2026-11-07: "We need to make
+// Zoe and Twinsen's clothes darker in the night house". Back to the game's own anywhere else)
+static void DarkFrame(void) {
+    static float base = 0;
+    if (base == 0) base = FactorLight;
+    const float want = s_darkScene >= 0 && (S32)NumCube == s_darkScene && NewCube == -1 ? base * s_darkPct / 100.0f : base;
+    if (FactorLight != want) {
+        FactorLight = want;
+        Log_Info("[racemod] dark_scene: the actors' light at %d%% in scene %d", want == base ? 100 : s_darkPct, (int)NumCube);
+    }
+}
+
 void RaceMod_Frame(void) {
+    DarkFrame();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();

@@ -644,6 +644,8 @@ internal static class RaceCarEngineFile
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
             }
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
+            // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)
             if (t.Dream is not null && island.Dream && t.StartScene >= 0) text.Append($"dream={t.StartScene}\n");
         }

@@ -438,6 +438,10 @@ stop();
     internal static readonly (int X0, int X1, int Z0, int Z1)[] BedSides = { (3840, 6143, 512, 3327), (6144, 6911, 1024, 3327) };
     internal const int BedY0 = 2048, BedY1 = 3839;
     private const int IntoBed = 200, InBed = 201, Goodnight = 202, CandleOut = 203;
+    // the candle's flame on the bedside table (Citadel/CitadelNightHouse's candle: cell 12, layer 12, z 1 -- its wick's top), flickering
+    // between the props' two flames a tenth of a second at a time, and out at the goodnights (the user, 2026-11-07: "make sure the
+    // candle is actually lit")
+    private static readonly (int X, int Y, int Z) Wick = (12 * 512 + 276, 12 * 256 + 220, 1 * 512 + 236);
     private static void NightHouseStory(StoryParts p)
     {
         if (!p.Store.SceneExists(NightHouse)) { p.Log.Add($"home at night left out: no scene {NightHouse} (Citadel/CitadelNightHouse)"); return; }
@@ -465,6 +469,16 @@ stop();
             int bed = first, byDoor = first + 1;
             (zoe.X, zoe.Y, zoe.Z) = ZoeWaiting;
             zoe.Beta = RaceTrackMath.Turn(Math.Atan2(BedSpot.X - ZoeWaiting.X, BedSpot.Z - ZoeWaiting.Z));
+            var flame = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Flame, Wick.X, Wick.Y, Wick.Z);
+            var flameIndex = model.Actors.Count;
+            var flameLife = p.Add(model, flame, $@"void comportement_0()
+{{
+    if ({Tired} != var_game({DayVar}))
+    {{
+        suicide();
+    }}
+}}
+");
             var zoeIndex = model.Actors.Count;
             var zoeLife = p.Add(model, zoe, $@"void comportement_0()
 {{
@@ -497,6 +511,14 @@ void comportement_1()
 ");
             return scripts =>
             {
+                flameLife(scripts);
+                scripts.SetText(flameIndex, ScriptKind.Track, $@"label(0);
+body({Citadel.CitadelProps.Flame});
+wait_nb_dizieme(1);
+body({Citadel.CitadelProps.Flame2});
+wait_nb_dizieme(1);
+goto(label_0);
+");
                 zoeLife(scripts);
                 scripts.SetText(0, ScriptKind.Life, $@"void comportement_0()
 {{
@@ -544,6 +566,7 @@ void comportement_3()
     {{
         {Aside($"message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeGoodnight)});")}
         message({EveningId(p.Say, EveningLine.TwinsenGoodnight)});
+        kill_obj({flameIndex});
         fade_to_pal(3);
         set_var_game({DayVar}, {Night});
         change_cube({OpeningScene});

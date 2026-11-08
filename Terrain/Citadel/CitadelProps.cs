@@ -13,9 +13,9 @@ namespace LBAAssembler.Terrain.Citadel;
 // too), under a generic number of its own; an actor of that entity with that body shows it (RaceTrackStory.Chapters.cs places them).
 internal static class CitadelProps
 {
-    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6;
+    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6, Flame = 7, Flame2 = 8;
     // (the palette's ramps: 48 the greys from black, 56 a steel grey, 18 rust brown, 20 wood, 66 red, 130 green, 76 pink)
-    private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76, Glass = 164, Cream = 36;
+    private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76, Glass = 164, Cream = 36, FlameOuter = 242, FlameCore = 245;
     // (the shop's holomap's body, BODY.HQR 30: its header for the new bodies')
     private const int HeaderBody = 30;
 
@@ -141,6 +141,29 @@ internal static class CitadelProps
         return m.ToBody(header);
     }
 
+    // The candle's flame in the house at night (the user, 2026-11-07: "we should also make sure the candle is actually lit"): an orange
+    // teardrop round a yellow core, unlit (its own colours whatever the light -- the night's dark_scene= dims the others), two shapes the
+    // flame actor flickers between (RaceTrackStory.Evening.cs)
+    public static Body BuildFlame(byte[] header) => FlameBody(header, 96, 0);
+    public static Body BuildFlame2(byte[] header) => FlameBody(header, 80, 8);
+    private static Body FlameBody(byte[] header, float tall, float lean)
+    {
+        var m = new CarMesh("a candle's flame", new[] { -1 });
+        var low = m.Loop(0, new Vector3(0, 4, 0), new Vector3(13, 0, 0), new Vector3(0, 0, 13), 8);
+        var mid = m.Loop(0, new Vector3(lean * 0.4f, tall * 0.35f, 0), new Vector3(22, 0, 0), new Vector3(0, 0, 22), 8);
+        var tip = m.P(0, new Vector3(lean, tall, 0));
+        for (var k = 0; k < 8; k++)
+        {
+            m.Out(new[] { low[k], low[(k + 1) % 8], mid[(k + 1) % 8], mid[k] }, FlameOuter, new Vector3(0, tall * 0.2f, 0), true);
+        }
+        m.Cap(mid, tip, FlameOuter, new Vector3(lean * 0.5f, tall * 0.5f, 0), true);
+        m.Cap(low, m.P(0, new Vector3(0, -6, 0)), FlameOuter, new Vector3(0, 20, 0), true);
+        var core = m.Loop(0, new Vector3(lean * 0.3f, tall * 0.25f, 0), new Vector3(10, 0, 0), new Vector3(0, 0, 10), 6);
+        m.Cap(core, m.P(0, new Vector3(lean * 0.6f, tall * 0.62f, 0)), FlameCore, new Vector3(lean * 0.3f, tall * 0.1f, 0), true);
+        m.Cap(core, m.P(0, new Vector3(0, 8, 0)), FlameCore, new Vector3(0, tall * 0.4f, 0), true);
+        return m.ToBody(header);
+    }
+
     // Into the game folder: the four bodies at the end of BODY.HQR, each Prop's generic body of its number in RESS.HQR's entity table -- once:
     // where the entity already has that body and it is this, it stays. Lines for the build's log.
     public static List<string> Install(string gameDirectory)
@@ -155,7 +178,7 @@ internal static class CitadelProps
         var table = HqrArchive.Open(ressPath).Read(44);
         var made = new List<string>();
         foreach (var (generic, name, build) in new (int, string, Func<byte[], Body>)[]
-                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate) })
+                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2) })
         {
             var bytes = build(header).Write();
             var count = HqrArchive.CountEntries(bodyPath);
