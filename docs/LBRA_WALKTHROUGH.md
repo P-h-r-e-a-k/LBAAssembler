@@ -565,8 +565,8 @@ The ferry crosses to the White Leaf Desert.
 
 **1. The harbour.** The ferry lands. The radio rings; Twinsen answers it.
 
-**Baldino** (radio): "Hello? Twinsen? That's it, I'm at my house on the Desert. Come and see me before you race: your car's going to want
-sand filters."
+**Baldino** (radio): "Hello? Twinsen? That's it, I'm at the racers' garage, the big striped tent past the start line. Come and see me
+before you race: your car's going to want sand filters."
 
 The magic slate shows its icon: a new page, the Desert track.
 
@@ -609,15 +609,23 @@ to your head."
 
 **Found:** Wizard's Diploma.
 
-**6. Baldino's house.** Baldino is at his workbench, surrounded by parts.
+**6. The racers' garage** (2026-11-08). A big red and white striped tent on the sand on the left of the road, just past the start
+line's grid, open to the road: three racers' cars along its back, mechanics at work, Baldino by its right-hand end and Zoe by its left.
+(Baldino isn't at his house while he's here: from the race's win on he's back there.)
 
-**Baldino:** "Twinsen! My radio works then." (If Twinsen never answered the radio: "Twinsen! You never answered my call. Never mind:
-you found the house.")
+**Baldino:** "Twinsen! My radio works, then. Here: sand filters for your car. Give them to Zoe, she'll fit them. Without them the sand
+chokes your engine before you're halfway round." **Found:** Sand filters.
 
-**Baldino:** "Sand filters, fitted. A longer top gear for the long straights. And a word of advice: the champion brakes late at the
-Temple bend. Brake later."
+**Zoe** (with the filters): "Baldino's sand filters? Give them here... There. Fitted. No more sand in your engine, love." (Before:
+"This sand gets everywhere. Your engine won't last a lap without sand filters: Baldino has some, he's here in the tent." After: "Filters
+in, tyres checked. Your car's ready, Twinsen. Go and win!")
 
-**Baldino:** "I'm racing too, of course. I need to see how my work goes against my work."
+**Baldino** (once they're fitted): "Zoe's fitted the filters? Good. And I've given you a longer top gear for the long straights. And a
+word of advice: the champion brakes late at the Temple bend. Brake later." / "I'm racing too, of course. I need to see how my work goes
+against my work."
+
+Raced without the filters: past the lap's second checkpoint, "Sand in the engine! Zoe needs Baldino's sand filters: back to the
+garage." The car crawls on, smoking, to the end: the race is lost, and run again with the filters in.
 
 **7. The race.** On the grid: the racer (the one to beat), Moya the turtle, the Dino-Fly, the Dean and Baldino. Flick drops the flag.
 Zoe is in the pit lane.

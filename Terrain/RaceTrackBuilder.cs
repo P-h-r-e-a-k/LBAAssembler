@@ -4494,23 +4494,40 @@ internal static class RaceTrackBuilder
             var a = At(u0, v0, 0); var b = At(u1, v1, 0);
             return ((int)Math.Round(Math.Min(a.X, b.X)), (int)Math.Round(Math.Min(a.Z, b.Z)), (int)Math.Round(Math.Max(a.X, b.X)), (int)Math.Round(Math.Max(a.Z, b.Z)));
         }
-        void Add(int body, (int X0, int Z0, int X1, int Z1) box)
+        // (the tent drawn from its middle's cube -- it may reach over into the next: the sand by the Desert's start does -- its own box the
+        // back wall's middle pole; the walls' solid boxes each split by cube, a decor of a tiny body in each cube it reaches)
+        var tentDecor = IslandDecors.Blank(tent, spot.X, floor, spot.Z, 0);
+        var mid = Slab(-TentPole, hd - TentPole, TentPole, hd + TentPole);
+        tentDecor.XMin = spot.X + mid.X0; tentDecor.XMax = spot.X + mid.X1; tentDecor.ZMin = spot.Z + mid.Z0; tentDecor.ZMax = spot.Z + mid.Z1;
+        tentDecor.YMin = floor; tentDecor.YMax = floor + (int)TentEave;
+        spot.Cube.Decors.Add(tentDecor);
+        var stub = o.NewBodyBase + report.NewBodies.Count;
         {
-            var decor = IslandDecors.Blank(body, spot.X, floor, spot.Z, 0);
-            decor.XMin = spot.X + box.X0; decor.XMax = spot.X + box.X1; decor.ZMin = spot.Z + box.Z0; decor.ZMax = spot.Z + box.Z1;
-            decor.YMin = floor; decor.YMax = floor + (int)TentEave;
-            spot.Cube.Decors.Add(decor);
-        }
-        Add(tent, Slab(-hl, hd - TentWall, hl, hd + TentWall));
-        // (the end walls: an empty body each, only their boxes)
-        foreach (var u in new[] { -hl, hl })
-        {
-            var wall = o.NewBodyBase + report.NewBodies.Count;
             var wp = new List<System.Numerics.Vector3>(); var wf = new List<LbaBodyStudio.Face>();
-            RaceTrackPipes.Box(wp, wf, At(u, hd / 2, 0), along * 4, back * 4, 0, 8, Pole, PoleDark, Top);
+            RaceTrackPipes.Box(wp, wf, System.Numerics.Vector3.Zero, along * 4, back * 4, 0, 8, Pole, PoleDark, Top);
             report.NewBodies.Add(RaceTrackPipes.Write(wp, wf, true));
-            Add(wall, Slab(u - TentWall, 0, u + TentWall, hd));
         }
+        var walls = 0;
+        void Solid((int X0, int Z0, int X1, int Z1) box)
+        {
+            // (world units)
+            double wx0 = at.X * 512 + box.X0, wx1 = at.X * 512 + box.X1, wz0 = at.Z * 512 + box.Z0, wz1 = at.Z * 512 + box.Z1;
+            for (var cxi = (int)Math.Floor(wx0 / IslandFile.CubeSize); cxi <= (int)Math.Floor((wx1 - 1) / IslandFile.CubeSize); cxi++)
+            for (var czi = (int)Math.Floor(wz0 / IslandFile.CubeSize); czi <= (int)Math.Floor((wz1 - 1) / IslandFile.CubeSize); czi++)
+            {
+                double x0 = Math.Max(wx0, cxi * IslandFile.CubeSize), x1 = Math.Min(wx1, (cxi + 1) * IslandFile.CubeSize - 1);
+                double z0 = Math.Max(wz0, czi * IslandFile.CubeSize), z1 = Math.Min(wz1, (czi + 1) * IslandFile.CubeSize - 1);
+                if (IslandDecors.Locate(island, (x0 + x1) / 2, (z0 + z1) / 2) is not { } c || c.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) continue;
+                int lx0 = (int)Math.Round(x0 - cxi * IslandFile.CubeSize), lx1 = (int)Math.Round(x1 - cxi * IslandFile.CubeSize);
+                int lz0 = (int)Math.Round(z0 - czi * IslandFile.CubeSize), lz1 = (int)Math.Round(z1 - czi * IslandFile.CubeSize);
+                var d = IslandDecors.Blank(stub, (lx0 + lx1) / 2, floor, (lz0 + lz1) / 2, 0);
+                d.XMin = lx0; d.XMax = lx1; d.ZMin = lz0; d.ZMax = lz1; d.YMin = floor; d.YMax = floor + (int)TentEave;
+                c.Cube.Decors.Add(d);
+                walls++;
+            }
+        }
+        Solid(Slab(-hl, hd - TentWall, hl, hd + TentWall));
+        foreach (var u in new[] { -hl, hl }) Solid(Slab(u - TentWall, 0, u + TentWall, hd));
         report.Garage = (at.X, at.Z, at.Y, ax, az, -lx, -lz);
         report.Notes.Add($"garage tent: at cell ({at.X:0.0}, {at.Z:0.0}), its floor {floor} (the ground {bestSpread:0} high across it, {levelled} points levelled), {TentLong} by {TentDeep} cells, along ({ax}, {az}), open to the road ({-lx}, {-lz})");
     }

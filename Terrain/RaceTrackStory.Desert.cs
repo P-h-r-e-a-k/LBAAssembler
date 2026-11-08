@@ -73,7 +73,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.HelmetSlot} 1 Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n"
+        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.HelmetSlot} 1 Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\n"
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -272,6 +272,8 @@ void comportement_1()
         HallWelcome, BaldinoRadioWorks, BaldinoNoCall,
         // (the racing helmet, 2026-11-08: Citadel/CitadelOveralls)
         FlickHelmet,
+        // (the racers' garage, 2026-11-08: RaceTrackStory.Garage.cs)
+        BaldinoFilters, ZoeFitted, ZoeNoFilters, ZoeReady,
     }
     private static readonly string[][] DesertLines =
     {
@@ -286,12 +288,12 @@ void comportement_1()
         },
         new[]
         {
-            "Hello? Twinsen? That's it, I'm at my house on the Desert. Come and see me before you race: your car's going to want sand filters.",
-            "Allô ? Twinsen ? Ça y est, je suis chez moi, sur le Désert. Passe me voir avant la course : ta voiture va avoir besoin de filtres à sable.",
-            "Hallo? Twinsen? So, ich bin in meinem Haus in der Wüste. Komm vor dem Rennen bei mir vorbei: Dein Auto wird Sandfilter brauchen.",
-            "¿Hola? ¿Twinsen? Ya está, estoy en mi casa del Desierto. Ven a verme antes de la carrera: tu coche va a necesitar filtros de arena.",
-            "Pronto? Twinsen? Ecco, sono a casa mia, nel Deserto. Passa a trovarmi prima della gara: la tua macchina avrà bisogno di filtri per la sabbia.",
-            "Estou? Twinsen? Pronto, estou em minha casa, no Deserto. Passa por cá antes da corrida: o teu carro vai precisar de filtros de areia.",
+            "Hello? Twinsen? That's it, I'm at the racers' garage, the big striped tent past the start line. Come and see me before you race: your car's going to want sand filters.",
+            "Allô ? Twinsen ? Ça y est, je suis au garage des pilotes, la grande tente rayée après la ligne de départ. Passe me voir avant la course : ta voiture va avoir besoin de filtres à sable.",
+            "Hallo? Twinsen? So, ich bin in der Werkstatt der Fahrer, dem großen gestreiften Zelt hinter der Startlinie. Komm vor dem Rennen bei mir vorbei: Dein Auto wird Sandfilter brauchen.",
+            "¿Hola? ¿Twinsen? Ya está, estoy en el taller de los pilotos, la gran carpa a rayas pasada la línea de salida. Ven a verme antes de la carrera: tu coche va a necesitar filtros de arena.",
+            "Pronto? Twinsen? Ecco, sono all'officina dei piloti, la grande tenda a strisce dopo la linea di partenza. Passa a trovarmi prima della gara: la tua macchina avrà bisogno di filtri per la sabbia.",
+            "Estou? Twinsen? Pronto, estou na oficina dos pilotos, a grande tenda às riscas depois da linha de partida. Passa por cá antes da corrida: o teu carro vai precisar de filtros de areia.",
         },
         new[]
         {
@@ -385,12 +387,12 @@ void comportement_1()
         },
         new[]
         {
-            "Sand filters, fitted. A longer top gear for the long straights. And a word of advice: the champion brakes late at the Temple bend. Brake later.",
-            "Filtres à sable, posés. Une dernière vitesse plus longue pour les grandes lignes droites. Et un conseil : le champion freine tard au virage du Temple. Freine plus tard.",
-            "Sandfilter, eingebaut. Ein längerer höchster Gang für die langen Geraden. Und ein Rat: Der Champion bremst spät in der Tempelkurve. Brems später.",
-            "Filtros de arena, puestos. Una marcha larga más larga para las rectas. Y un consejo: el campeón frena tarde en la curva del Templo. Frena más tarde.",
-            "Filtri per la sabbia, montati. Una marcia alta più lunga per i rettilinei. E un consiglio: il campione frena tardi alla curva del Tempio. Frena più tardi.",
-            "Filtros de areia, montados. Uma mudança de cima mais longa para as retas. E um conselho: o campeão trava tarde na curva do Templo. Trava mais tarde.",
+            "Zoe's fitted the filters? Good. And I've given you a longer top gear for the long straights. And a word of advice: the champion brakes late at the Temple bend. Brake later.",
+            "Zoé a posé les filtres ? Parfait. Et je t'ai mis une dernière vitesse plus longue pour les grandes lignes droites. Et un conseil : le champion freine tard au virage du Temple. Freine plus tard.",
+            "Zoe hat die Filter eingebaut? Gut. Und ich habe dir einen längeren höchsten Gang für die langen Geraden gegeben. Und ein Rat: Der Champion bremst spät in der Tempelkurve. Brems später.",
+            "¿Zoe ha puesto los filtros? Bien. Y te he puesto una marcha larga más larga para las rectas. Y un consejo: el campeón frena tarde en la curva del Templo. Frena más tarde.",
+            "Zoe ha montato i filtri? Bene. E ti ho dato una marcia alta più lunga per i rettilinei. E un consiglio: il campione frena tardi alla curva del Tempio. Frena più tardi.",
+            "A Zoe montou os filtros? Ótimo. E pus-te uma mudança de cima mais longa para as retas. E um conselho: o campeão trava tarde na curva do Templo. Trava mais tarde.",
         },
         new[]
         {
@@ -556,6 +558,42 @@ void comportement_1()
             "¡Y sin casco no hay carrera! Hay un molusco gigante en una gruta marina de los acantilados que guarda un casco de carreras desde que un piloto fue a bucear. Te lo he marcado en el holomapa.",
             "E niente casco, niente corsa! C'è una conchiglia gigante in una grotta marina tra le scogliere che cova un casco da corsa da quando un pilota ci è andato a fare immersioni. Te l'ho segnata sull'olomappa.",
             "E sem capacete não há corrida! Há uma concha gigante numa gruta marinha nas falésias que guarda um capacete de corrida desde que um piloto foi lá mergulhar. Marquei-a no teu holomapa.",
+        },
+        new[]
+        {
+            "Twinsen! My radio works, then. Here: sand filters for your car. Give them to Zoe, she'll fit them. Without them the sand chokes your engine before you're halfway round.",
+            "Twinsen ! Ma radio marche, alors. Tiens : des filtres à sable pour ta voiture. Donne-les à Zoé, elle les posera. Sans eux, le sable étouffe ton moteur avant la moitié du tour.",
+            "Twinsen! Mein Funkgerät funktioniert also. Hier: Sandfilter für dein Auto. Gib sie Zoe, sie baut sie ein. Ohne sie erstickt der Sand deinen Motor, bevor du die halbe Runde geschafft hast.",
+            "¡Twinsen! Así que mi radio funciona. Toma: filtros de arena para tu coche. Dáselos a Zoe, ella los pondrá. Sin ellos, la arena ahoga el motor antes de media vuelta.",
+            "Twinsen! Allora la mia radio funziona. Tieni: filtri per la sabbia per la tua macchina. Dalli a Zoe, li monterà lei. Senza, la sabbia soffoca il motore prima di metà giro.",
+            "Twinsen! Então o meu rádio funciona. Toma: filtros de areia para o teu carro. Dá-os à Zoe, ela monta-os. Sem eles, a areia sufoca o motor antes de meia volta.",
+        },
+        new[]
+        {
+            "Baldino's sand filters? Give them here... There. Fitted. No more sand in your engine, love.",
+            "Les filtres à sable de Baldino ? Donne-les-moi... Voilà. Posés. Plus de sable dans ton moteur, mon chéri.",
+            "Baldinos Sandfilter? Gib her... So. Eingebaut. Kein Sand mehr in deinem Motor, Liebling.",
+            "¿Los filtros de arena de Baldino? Dámelos... Ya está. Puestos. Se acabó la arena en tu motor, cariño.",
+            "I filtri per la sabbia di Baldino? Dammeli... Ecco. Montati. Niente più sabbia nel tuo motore, tesoro.",
+            "Os filtros de areia do Baldino? Dá cá... Pronto. Montados. Acabou-se a areia no teu motor, querido.",
+        },
+        new[]
+        {
+            "This sand gets everywhere. Your engine won't last a lap without sand filters: Baldino has some, he's here in the tent.",
+            "Ce sable se met partout. Ton moteur ne tiendra pas un tour sans filtres à sable : Baldino en a, il est ici, sous la tente.",
+            "Dieser Sand kommt überall hin. Ohne Sandfilter hält dein Motor keine Runde durch: Baldino hat welche, er ist hier im Zelt.",
+            "Esta arena se mete por todas partes. Tu motor no aguantará una vuelta sin filtros de arena: Baldino tiene, está aquí, en la carpa.",
+            "Questa sabbia va dappertutto. Il tuo motore non reggerà un giro senza filtri per la sabbia: Baldino ne ha, è qui nella tenda.",
+            "Esta areia mete-se em todo o lado. O teu motor não aguenta uma volta sem filtros de areia: o Baldino tem alguns, está aqui na tenda.",
+        },
+        new[]
+        {
+            "Filters in, tyres checked. Your car's ready, Twinsen. Go and win!",
+            "Filtres posés, pneus vérifiés. Ta voiture est prête, Twinsen. Va gagner !",
+            "Filter drin, Reifen geprüft. Dein Auto ist bereit, Twinsen. Geh und gewinn!",
+            "Filtros puestos, neumáticos revisados. Tu coche está listo, Twinsen. ¡Ve y gana!",
+            "Filtri montati, gomme controllate. La tua macchina è pronta, Twinsen. Vai e vinci!",
+            "Filtros montados, pneus verificados. O teu carro está pronto, Twinsen. Vai e ganha!",
         },
     };
 
@@ -878,10 +916,12 @@ void comportement_1()
 
         // Baldino at his house: a copy of the game's own, the car's tune and his tip -- his greeting as his radio call was answered or not
         // (the sweep of 2026-11-05: "My radio works then" whether it was or not)
+        // (and at the racers' garage before the race is won -- never in both: RaceTrackStory.Garage.cs)
+        DesertGarage(gameDirectory, b, report, Say, desert, Copy(b.Originals, BaldinoHouse, BaldinoActor), scenes.StartScene, log);
         if (Copy(b.Originals, BaldinoHouse, BaldinoActor) is { } baldino)
         {
             b.Hide(BaldinoHouse, BaldinoActor, desert, "Baldino");
-            b.Edit(BaldinoHouse, "Baldino at his workbench: the sand filters, his tip, and he races too", model => IslandBeatsA.Add(model, baldino, Talker(desert, $@"            if (3 == var_game({RadioAnsweredA}))
+            b.Edit(BaldinoHouse, "Baldino at his workbench, once he's not at the racers' garage: his tip, and he races too", model => IslandBeatsA.Add(model, baldino, Talker($"{desert} && {PagesWon} <= var_game({QPages})", $@"            if (3 == var_game({RadioAnsweredA}))
             {{
                 message({Say(DesertLine.BaldinoRadioWorks)});
             }}

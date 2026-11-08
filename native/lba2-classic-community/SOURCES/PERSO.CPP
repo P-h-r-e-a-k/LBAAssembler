@@ -1185,7 +1185,9 @@ restartloop:
                 BackupScreen(TRUE);
                 MenuInventory(0);
 
-                switch (InventoryAction) {
+                // (the race mod's inv_kinds=: a slot given another thing -- the story's errands, its sand filters -- has the game's
+                // own use of it no more: no lightning spell from the errands' slot, no protection spell from the filters' -- RACEMOD.CPP)
+                switch (RaceMod_InvKindHas(InventoryAction) ? -1 : InventoryAction) {
                 case FLAG_HOLOMAP: // holomap
                     if (PtrComportement->Flags & CF_HOLOMAP) {
                         HoloMap();
@@ -1434,7 +1436,7 @@ restartloop:
 
                 if (SpellKeyDown(34)) { // Sort de Protection
                     if (!WaitNoKey34
-                            AND ListVarGame[FLAG_PROTECTION] > 0 AND MagicPoint > 0) {
+                            AND ListVarGame[FLAG_PROTECTION] > 0 AND MagicPoint > 0 AND !RaceMod_InvKindHas(FLAG_PROTECTION)) {
                         SaveTimer();
                         InventoryAction = FLAG_PROTECTION;
                         ToggleSortProtection();
@@ -1447,7 +1449,7 @@ restartloop:
 
                 if (SpellKeyDown(35)) { // Sort de Foudre
                     if (!WaitNoKey35
-                            AND ListVarGame[FLAG_ANNEAU_FOUDRE] > 0 AND MagicPoint >= (MagicLevel * 20)) {
+                            AND ListVarGame[FLAG_ANNEAU_FOUDRE] > 0 AND MagicPoint >= (MagicLevel * 20) AND !RaceMod_InvKindHas(FLAG_ANNEAU_FOUDRE)) {
                         SaveTimer();
                         InventoryAction = FLAG_ANNEAU_FOUDRE;
                         if (Comportement > C_DISCRET) {

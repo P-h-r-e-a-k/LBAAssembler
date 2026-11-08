@@ -319,6 +319,8 @@ S32 RaceMod_Glance(void);
 S32 RaceMod_OffIsland(void);
 extern S32 RaceMod_ExtraHit;
 S32 RaceMod_InFlight(void);
+// whether the race file's inv_kinds= gives a slot another thing (PERSO.CPP: the game's own use of it not made)
+S32 RaceMod_InvKindHas(S32 slot);
 S32 RaceMod_WantsMenu(void);
 void RaceMod_LoadFile(const char *path);
 // The race game's (RACEGAME.CPP): a race is over -- its time from GO to the line, its best lap, the place; a time trial's time goes to

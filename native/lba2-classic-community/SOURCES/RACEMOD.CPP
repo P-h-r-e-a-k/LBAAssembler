@@ -215,6 +215,10 @@
  *     ghost_watch=<file>         a ghost played back: Twinsen's car driven along it, round and round, no laps counted (GhostWatch)
  *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
  *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
+ *     breakdown=<var> <least> <checkpoint> <speed> <text>   (2026-11-08) the player's car breaks down while game variable <var> is under
+ *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
+ *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
+ *                                (Breakdown, RaceMod_Slide) -- a race he can't win; raced again once the filters are in
  *     no_suit=1                  (2026-11-08) the game's spacesuit never put on: a script's comportement_hero() of a suit's behaviour is
  *                                Twinsen's normal one (the sporty suit's his sporty one) -- the Emerald Moon's, where the story has him
  *                                in his racing overalls and helmet instead, ladders and all (RaceMod_SuitFor, OBJECT.CPP SetComportement)
@@ -870,6 +874,12 @@ S32 RaceMod_InvCount(S32 slot) { return slot >= 0 && slot < 64 && ((s_invCount >
 // at the same time so they only need a single slot"). Kept once read, as inv_count=.
 #define RACE_MAX_INV_KINDS 6
 static int s_invKindSlot[RACE_MAX_INV_KINDS], s_invKindN[RACE_MAX_INV_KINDS], s_invKind[RACE_MAX_INV_KINDS][4], s_nbInvKinds = 0;
+// whether inv_kinds= gives a slot another thing (PERSO.CPP: the game's own use of it, a spell, not made)
+S32 RaceMod_InvKindHas(S32 slot) {
+    for (int i = 0; i < s_nbInvKinds; i++)
+        if (s_invKindSlot[i] == slot) return 1;
+    return 0;
+}
 void RaceMod_InvKinds(void) {
     for (int i = 0; i < s_nbInvKinds; i++) {
         T_INV_OBJ *inv = &TabInv[s_invKindSlot[i]];
@@ -1270,6 +1280,11 @@ static int s_heroSmall = -1, s_heroIsSmall = 0;
 static int s_heroBody = -1, s_heroFire = -1, s_heroBodyChecked = 0;
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
 static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
+// breakdown= (2026-11-08): its variable (-1 none), the least it wants, after which checkpoint, the speed then, its words; broken down
+// this race, and the last puff of smoke
+static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000, s_broken = 0;
+static char s_brkText[96];
+static S32 s_brkSmoke = 0;
 #define RACE_SUPERJET_LEAN 0.0             // radians more it leans forward: none -- the build lays the model flat (RaceTrackSuperJet.LaidFlat)
 #define RACE_JET_EASE_MS 2500              // its last this long: the speed eased back to the car's own, and the jet-pack flashing
 #define RACE_JET_FLASH_MS 250              // ... the car and the jet-pack this long each in turn
@@ -4625,6 +4640,12 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
         else if (!strcmp(key, "no_suit")) s_noSuit = atoi(v) != 0;
+        else if (!strcmp(key, "breakdown")) {
+            int used = 0;
+            if (sscanf(v, "%d %d %d %d %n", &s_brkVar, &s_brkLeast, &s_brkCheckpoint, &s_brkSpeed, &used) >= 4 && used > 0) snprintf(s_brkText, sizeof(s_brkText), "%s", v + used);
+            else s_brkVar = -1;
+            s_broken = 0;
+        }
         else if (!strcmp(key, "foot_body")) { const int g = atoi(v); s_footBody = g > 0 && g < 255 ? g : -1; s_footChecked = 0; }
         else if (!strcmp(key, "twinsen_body")) {
             int body = -1, fire = -1, small = -1;
@@ -5248,6 +5269,13 @@ void RaceMod_Lap(S32 x, S32 z) {
             if (i == s_next && NextCrossed(&s_checkpoints[i], x0, z0, x, z) > 0) {
                 s_next++;
                 Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints);
+                // (breakdown=: the car without what it wants breaks down here)
+                if (s_brkVar >= 0 && !s_broken && s_laps == 1 && s_next == s_brkCheckpoint && ListVarGame[s_brkVar] < s_brkLeast) {
+                    s_broken = 1;
+                    if (s_brkText[0]) Message(s_brkText);
+                    Log_Info("[racemod] breakdown: the car broken down at checkpoint %d (game variable %d is %d, under %d): %d units/s at most", s_next,
+                             s_brkVar, (int)ListVarGame[s_brkVar], s_brkLeast, s_brkSpeed);
+                }
                 GhostSplit(s_next - 1);
             } else if (i == s_next - 1 && CrossLine(&s_checkpoints[i], x0, z0, x, z) < 0) {
                 s_next--;
@@ -5893,7 +5921,7 @@ void RaceMod_Story(void) {
 static void RaceFromGrid(void) {
     const int scene = StartScene();
     s_arcOn = s_arcLast = -1;
-    s_place = 0; s_laps = 0; s_halfway = 0; s_next = 0; s_beatMain = 0;
+    s_place = 0; s_laps = 0; s_halfway = 0; s_next = 0; s_beatMain = 0; s_broken = 0;
     s_phase = PHASE_WAIT; s_wantGrid = 1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_opp[n].Count) { s_opp[n].Laps = 1; s_opp[n].S = 0; s_opp[n].Speed = 0; }
     if (scene >= 0 && !(CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ)) {
@@ -7187,7 +7215,7 @@ static void FormGrid(S32 now) {
         if (s_order[i] < 0) PlayerOnSpot(spot);
         else OnSpot(&s_opp[s_order[i]], spot);
     }
-    s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0; s_heldAt = 0;
+    s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0; s_heldAt = 0; s_broken = 0;
     s_place = 0;
     s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_gridAt = now;
@@ -12981,6 +13009,20 @@ static void SlideSmoke(const T_OBJET *hero) {
 // BUGGY.CPP MoveBuggy, every frame of the player's car after its steering: the slide the handbrake starts, and its end.
 void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
     const S32 now = TimerRefHR;
+    // (broken down, breakdown=: no faster than its speed, and smoking -- a dark puff from the engine every so often)
+    if (s_broken) {
+        if (*speed > s_brkSpeed) *speed = s_brkSpeed;
+        if (*speed < -s_brkSpeed) *speed = -s_brkSpeed;
+        if (now - s_brkSmoke >= 160 || now < s_brkSmoke) {
+            s_brkSmoke = now;
+            const T_OBJET *hero = &ListObjet[NUM_PERSO];
+            s_smokeSeed = s_smokeSeed * 1103515245u + 12345u;
+            const double r = ((s_smokeSeed >> 8) & 0xFFFF) / 65536.0;
+            const double a = Radians(hero->Obj.Beta & 4095), fx = sin(a), fz = cos(a);
+            InitExtraPof((S32)(hero->Obj.X + fx * 300), hero->Obj.Y + 450, (S32)(hero->Obj.Z + fz * 300), 1, 1024 - 64 + (S32)(r * 128),
+                         (S32)(r * 4096), 6, 0, 900, 300, 900, 0, 900);
+        }
+    }
     const int free = HandbrakeFree(), key = free && HandbrakeKey();
     if (!s_slide) {
         if (!key || *speed < RACE_HB_MIN_SPEED || airborne) return;
@@ -20723,6 +20765,7 @@ static void ResetTrack(void) {
     s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
     // (the suit's behaviours his again, and his outside body off him: his own)
     s_noSuit = 0;
+    s_brkVar = -1; s_broken = 0;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_footBody = -1; s_footChecked = 0;
     s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
