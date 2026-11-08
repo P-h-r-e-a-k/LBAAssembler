@@ -940,11 +940,28 @@ void comportement_1()
     private static SceneActorModel? CopyOf(SceneStore originals, int scene, int entity) =>
         originals.SceneExists(scene) ? originals.Load(scene).Actors.Skip(1).FirstOrDefault(a => a.Entity == entity)?.Clone() : null;
 
+    // The pharmacy (scene 22) once the thief is caught: the game's exchange -- Twinsen asking for something for his hands, the customer's
+    // "bring back my umbrella", and the thief walking in and taking it -- plays while var 57 (the game's umbrella) is under 3; the story's
+    // thief gives the umbrella back in the sewers (Q_THIEF 5) and never moves var 57, so caught first, the theft played after it. The
+    // user, 2026-11-07: "it's possible to find the customer's umbrella before it's stolen" (in the sewers). Now the exchange and the
+    // theft are for while the thief is still out there (Q_THIEF under GlovesBack): Tim has already told of the umbrella he snatched there.
+    private static void PharmacyAfterThief(StoryParts p) => p.Edit(Pharmacy, "the pharmacy: the gloves and the umbrella's exchange, and the theft, only while the thief is still out there", _ => scripts =>
+    {
+        var hero = scripts.GetText(0, ScriptKind.Life);
+        var still = $"{GlovesBack} > var_game({QThief})";
+        var n = Regex.Matches(hero, @"if \(3 > var_game\(57\)\)").Count;
+        if (n < 2) throw new NotTheGames("the pharmacy's exchange");
+        hero = Regex.Replace(hero, @"if \(3 > var_game\(57\)\)", $"if (3 > var_game(57) && {still})");
+        hero = Loose(hero, "if (20 == l_track_obj(6) || 102 == l_track_obj(6))", $"if ((20 == l_track_obj(6) || 102 == l_track_obj(6)) && {still})");
+        scripts.SetText(0, ScriptKind.Life, hero);
+    });
+
     private static void Chapters(StoryParts p)
     {
         givers = Givers(p.Store);
         Morning(p);
         Thief(p);
+        PharmacyAfterThief(p);
         StormPeople(p);
         // (the Tralu's cave as the regulars' secret tavern in the storm -- Citadel/RaceTrackStory.TraluTavern.cs)
         TraluTavern(p);
