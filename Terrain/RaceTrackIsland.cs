@@ -23,6 +23,8 @@ internal sealed record RaceTrackIsland(
         // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
         // we're not removing any actors or zones we don't need the same as we checked with citadel")
         KeepOffRoadActors = true,
+        // (the racers' garage, a big tent on the sand after the start line: the user, 2026-11-07)
+        GarageTent = true,
         // (the School of Magic's gates open from the start -- the game unlocks them later, game variable 65, which also shows the open gates'
         // decor: the user, 2026-10-27, "The gates to the school of magic are initially closed on Desert island and get unlocked later in the
         // game, let's just start the game with them open")
@@ -218,6 +220,9 @@ internal sealed record RaceTrackIsland(
     // Ladders up the raised road's side from the ground under it, one into every stretch of ground Twinsen can land on jumping off it
     // and walk about without reaching another (RaceTrackBuilder.Ladders): the Emerald Moon's
     public bool Ladders { get; init; }
+    // The racers' garage: a big striped tent on the ground beside the road just after the start line, on the driver's left, open to the
+    // road (RaceTrackBuilder.GarageTent; the story's people and cars in it: RaceTrackStory.Garage.cs) -- the White Leaf Desert's
+    public bool GarageTent { get; init; }
     // The lap's longest water crossing a raised deck over the water, humped for a boat to pass under (RaceTrackBuilder.WaterDeck)
     public bool WaterDeck { get; init; }
     // Walls built up under the raised road where it passes over a building cut down for it: island cells x0 z0 x1 z1 and the height they
