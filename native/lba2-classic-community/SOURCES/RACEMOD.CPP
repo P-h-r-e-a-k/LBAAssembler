@@ -6688,6 +6688,18 @@ static void ParadeStep(S32 now, S32 dt) {
     // with no copy of his car there, he is parked. Pulling away from him, the variable is below the value again, and it stays that step
     // until it is back on its line)
     // (stopping for a walker, lapping all the while, it keeps to that stop: parade_walker=)
+    // (its driver's time beaten -- beat='s variables at their values, or past them: the story moves them on as he is talked to -- the
+    // car is parked for good. Without this, Twinsen on foot on the line after the race had it lap on to him and pull up to yell, though
+    // its driver was out of it beside Zoe; and stopped there (step 3) it held the one who talks for it at the car every frame: Raph, told
+    // he was beaten and running off to the lighthouse, ran on the spot by his car till a pause -- the user, 2026-11-07: "Raph the
+    // lighthouse keeper is just running around in circles instead of off to the lighthouse after Twinsen speaks to him")
+    int beaten = s_nbBeatSet > 0;
+    for (int i = 0; i + 1 < s_nbBeatSet; i += 2)
+        if (s_beatSet[i] >= 0 && s_beatSet[i] < 256 && ListVarGame[s_beatSet[i]] < s_beatSet[i + 1]) beaten = 0;
+    if (beaten && !wanted && s_pull != 5) {
+        if (s_pull != 0) Log_Info("[racemod] parade: its driver's time beaten -- the car is parked");
+        s_pull = 5; s_pullSay = 0; s_walker = -1;
+    }
     if (wanted) { if (s_pull != 6 && s_walker < 0) s_pull = 0; }
     else if (s_paradeStopText >= 0 && s_pull == 0) {
         s_pull = here && Comportement != C_BUGGY ? 1 : 5;

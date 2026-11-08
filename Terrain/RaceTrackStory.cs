@@ -885,6 +885,11 @@ void comportement_1()
                 // gone, and Zoe joins Twinsen -- the two of them walking together, as when the game's Raph was freed from the Tralu (behaviour
                 // 5) -- and they walk there, no change of scene (scene 46: 51 and 56 at 3, the wizard at its door; RaceTrackStory.Evening.cs).
                 var raphIndex = model.Actors.Count;
+                // (he runs off to the lighthouse along the road's points at a run, and the game's turning speed for him -- SRot 30, 51200 / 30
+                // a second -- is a walker's: at a run the next point stayed inside his turn and he ran round it in circles. 12 turns him a
+                // full turn a second. And no collisions with the others as he runs: Twinsen, who has just talked to him, stood in his way.
+                // The user, 2026-11-07: "Raph the lighthouse keeper is just running around in circles instead of off to the lighthouse")
+                raph.SRot = 12;
                 var raphScript = Add(model, raph, $@"void comportement_0()
 {{
     if (1 < chapter() || 2 < var_game({KeeperPlot}))
@@ -958,6 +963,7 @@ void comportement_3()
             set_var_game({StormPlot}, 3);
             set_var_game({KeeperPlot}, 3);
             set_var_game({BeatVar}, 2);
+            obj_col(0);
             set_track(label_{RaphRunsLabel});
             set_comportement(comportement_4);
         }}
