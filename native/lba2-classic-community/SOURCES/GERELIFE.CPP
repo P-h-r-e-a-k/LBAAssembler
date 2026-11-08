@@ -1947,6 +1947,10 @@ void DoLife(U8 numobj) {
                     RestoreTimer();
                     AffScene(AFF_ALL_FLIP);
                 }
+                // (the one asking dead or gone, the question isn't asked -- the game's own -- but the answers its script added are dropped
+                // too: they stayed, and the next question asked anywhere showed them before its own, doubled. The user, 2026-11-07, at the
+                // lighthouse's telescope: "No, I am not interested." / "OK, I'll buy it!" / "No, I am not interested." / "OK!")
+                GameNbChoices = 0;
                 PtrPrg += 2;
             }
             break;

@@ -97,9 +97,11 @@ internal static partial class RaceTrackStory
     // (its camera zone: alpha, beta, distance -- from the lighthouse's side, looking out to sea)
     private const int ShipCamera = 72;
     private static readonly int[] ShipShot = { 120, 2048, 16000 };
-    // (its hover, as its own scripts hover it over the space port's pad: the animation it was copied with, 211, is its take-off -- it rose
-    // out of the picture between the track's steps down)
-    private const int ShipHover = 213;
+    // (still, its rest animation: the track's steps put it where it is, a fifth of a second apart. The animation it was copied with, 211,
+    // is its take-off -- it rose out of the picture between the steps; its hover, 213, moves it too: it drifted between the steps, and
+    // after the look it climbed on out of the island for good -- the user, 2026-11-07: the ship "didn't seem to appear correctly", and a
+    // second look left Twinsen frozen)
+    private const int ShipHover = 0;
     // the Wizard's encore and Mrs. Brune's second word: per-visit flags of their scenes' own (var_cube)
     private const int BruneSaid = 50;
 
@@ -178,7 +180,7 @@ void comportement_2()
             for (var k = 0; k <= ShipSteps; k++)
                 track.Append($"pos_point({firstPoint + k});\nbody({(k % 2 == 0 ? 58 : 59)});\nwait_nb_dizieme(2);\n");
             track.Append("wait_nb_second(2);\n\n");
-            track.Append($"label({ShipLooked});\nstop();\n");
+            track.Append($"label({ShipLooked});\npos_point({firstPoint});\nstop();\n");
             return scripts =>
             {
                 life(scripts);
