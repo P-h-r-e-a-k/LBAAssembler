@@ -42,6 +42,8 @@ internal static partial class RaceTrackStory
     // its voiced place, as the gloves' were. The arrows: three holomap positions no scene of the build has (from 224 on), labelled "An exam
     // page", on from the Dean's word (Q_PAGES 2), each off as its page is found.
     public const int PagesSlot = 6;
+    // each page's own: found (1) -- spare game variables (RaceTrackStory.Eggs.cs's list: 75, 96, 106)
+    private static readonly int[] PageFoundVar = { 75, 96, 106 };
     private const int PagesModelLike = 38, FirstFreeArrow = 224, LastArrow = 254;
     private static readonly string[][] PagesItemTexts =
     {
@@ -772,20 +774,43 @@ void comportement_2()
         b.Edit(PearlCave, "the Pearl of Incandescence's cave: Twinsen's look round is a text of the game's (337, not 327)", _ => scripts =>
             scripts.SetText(0, ScriptKind.Life, Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);")));
 
-        // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in lap order -- each one more in Twinsen's
-        // inventory (item PagesSlot's count), its arrow off
+        // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in any order (the user, 2026-11-08: "can we
+        // have these count in any order and go into inventory") -- each a page lying on the road to be seen (CitadelProps.Page), once the
+        // Dean has told of them; found, one more in Twinsen's inventory (item PagesSlot's count, and Q_PAGES with it: 3, 4, then 5 -- all
+        // three), its own arrow off, and gone. Each page's own variable says it was found (PageFound); the lines go by how many are found,
+        // not by which. On the road at its height, and never under the ground there ("check that they're all above ground")
+        var lines = pages.Select(pg => pg.Item2).ToArray();
+        string ByCount() => $@"if (3 == var_game({QPages}))
+        {{
+            message({Say(lines[0])});
+        }}
+        else if (4 == var_game({QPages}))
+        {{
+            message({Say(lines[1])});
+        }}
+        else
+        {{
+            message({Say(lines[2])});
+        }}";
         for (var k = 0; k < pages.Length; k++)
         {
-            var (fraction, line) = pages[k];
-            var step = 2 + k;
-            var arrowOff = pageArrows[k] >= 0 ? $"\n        clr_holo_pos({pageArrows[k]});" : "";
+            var fraction = pages[k].Item1;
+            var arrowOff = pageArrows[k] >= 0 ? $"\n            clr_holo_pos({pageArrows[k]});" : "";
             if (pagePlaces[k] is not { } at) { log.Add($"page {k + 1} left out: no ground on the lap there"); continue; }
             var scene = b.SceneAt(at.X, at.Z);
             if (scene < 0) { log.Add($"page {k + 1} left out: no scene at cell ({at.X:0.#}, {at.Z:0.#})"); continue; }
-            b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}) ({fraction:0%} of the lap): Q_PAGES {step} -> {step + 1}", model =>
-                IslandBeatsA.Add(model, Voice(model, (at.X, at.Z, at.Y, 0), 9), $@"void comportement_0()
+            var ground = report.GroundAfter?.Invoke(at.X, at.Z) ?? at.Y;
+            var y = Math.Max(at.Y, ground) + 8;
+            if (ground > at.Y + 16) log.Add($"page {k + 1}: the lap's line ({at.Y:0}) under the ground there ({ground:0}) -- on the ground");
+            var flag = PageFoundVar[k];
+            b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}, height {y:0}) ({fraction:0%} of the lap): found in any order (its variable {flag})", model =>
+            {
+                var page = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Page, Math.Clamp(RaceTrackScenes.CubeLocal(at.X, model.CubeX), 0, IslandFile.CubeSize - 1), (int)Math.Round(y),
+                    Math.Clamp(RaceTrackScenes.CubeLocal(at.Z, model.CubeY), 0, IslandFile.CubeSize - 1), 700 * k);
+                page.CoulObj = 9;
+                return IslandBeatsA.Add(model, page, $@"void comportement_0()
 {{
-    if ({desert})
+    if ({desert} && 0 == var_game({flag}))
     {{
         set_comportement(comportement_1);
     }}
@@ -797,14 +822,26 @@ void comportement_2()
 
 void comportement_1()
 {{
-    if ({step} == var_game({QPages}) && 1400 > distance(0))
+    if (2 > var_game({QPages}) || 5 <= var_game({QPages}))
     {{
-        set_var_game({QPages}, {step + 1});
-        set_var_game({PagesSlot}, {k + 1});{arrowOff}
-        message({Say(line)});
+        invisible(1);
+    }}
+    else
+    {{
+        invisible(0);
+        if (1400 > distance(0))
+        {{
+            set_var_game({flag}, 1);
+            add_var_game({QPages}, 1);
+            add_var_game({PagesSlot}, 1);{arrowOff}
+            {ByCount()}
+            invisible(1);
+            suicide();
+        }}
     }}
 }}
-"));
+");
+            });
         }
 
         // Baldino at his house: a copy of the game's own, the car's tune and his tip -- his greeting as his radio call was answered or not

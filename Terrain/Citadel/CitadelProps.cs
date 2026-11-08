@@ -13,9 +13,9 @@ namespace LBAAssembler.Terrain.Citadel;
 // too), under a generic number of its own; an actor of that entity with that body shows it (RaceTrackStory.Chapters.cs places them).
 internal static class CitadelProps
 {
-    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6, Flame = 7, Flame2 = 8;
+    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6, Flame = 7, Flame2 = 8, Page = 9;
     // (the palette's ramps: 48 the greys from black, 56 a steel grey, 18 rust brown, 20 wood, 66 red, 130 green, 76 pink)
-    private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76, Glass = 164, Cream = 36, FlameOuter = 242, FlameCore = 245;
+    private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76, Glass = 164, Cream = 36, FlameOuter = 242, FlameCore = 245, Paper = 44, Ink = 48;
     // (the shop's holomap's body, BODY.HQR 30: its header for the new bodies')
     private const int HeaderBody = 30;
 
@@ -164,6 +164,35 @@ internal static class CitadelProps
         return m.ToBody(header);
     }
 
+    // One of the Dean's exam pages lying on the Desert's road (the user, 2026-11-08: the pages were unseen places on the road): a sheet of
+    // paper, curled up at two corners as the wind left it, with lines of writing across it, both sides showing
+    public static Body BuildPage(byte[] header)
+    {
+        var m = new CarMesh("an exam page", new[] { -1 });
+        m.Light = 0.95f;
+        const float W = 230, D = 300;
+        // (a 3 x 3 grid of the sheet's corners, lifted at the two curled corners)
+        float Lift(int i, int j) => (i == 0 && j == 0) ? 40 : (i == 2 && j == 2) ? 26 : (i == 1 && j == 1) ? 4 : 0;
+        var p = new int[3, 3];
+        for (var i = 0; i < 3; i++)
+            for (var j = 0; j < 3; j++)
+                p[i, j] = m.P(0, new Vector3(-W + i * W, 6 + Lift(i, j), -D + j * D));
+        for (var i = 0; i < 2; i++)
+            for (var j = 0; j < 2; j++)
+            {
+                m.Both(new[] { p[i, j], p[i + 1, j], p[i + 1, j + 1] }, Paper);
+                m.Both(new[] { p[i, j], p[i + 1, j + 1], p[i, j + 1] }, Paper);
+            }
+        // (the writing: thin dark strokes just over the sheet)
+        for (var r = 0; r < 5; r++)
+        {
+            var z = -D + 70 + r * 62f;
+            var x0 = -W + 40; var x1 = W - 40 - (r % 2) * 50;
+            m.Both(new[] { m.P(0, new Vector3(x0, 12, z)), m.P(0, new Vector3(x1, 12, z)), m.P(0, new Vector3(x1, 12, z + 14)), m.P(0, new Vector3(x0, 12, z + 14)) }, Ink);
+        }
+        return m.ToBody(header);
+    }
+
     // Into the game folder: the four bodies at the end of BODY.HQR, each Prop's generic body of its number in RESS.HQR's entity table -- once:
     // where the entity already has that body and it is this, it stays. Lines for the build's log.
     public static List<string> Install(string gameDirectory)
@@ -178,7 +207,7 @@ internal static class CitadelProps
         var table = HqrArchive.Open(ressPath).Read(44);
         var made = new List<string>();
         foreach (var (generic, name, build) in new (int, string, Func<byte[], Body>)[]
-                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2) })
+                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage) })
         {
             var bytes = build(header).Write();
             var count = HqrArchive.CountEntries(bodyPath);
