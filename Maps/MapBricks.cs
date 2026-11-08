@@ -80,7 +80,8 @@ internal static class MapBricks
     }
 
     // ---- into a game folder's LBA_BKG.HQR (`bkg`, its header written back): the library's and the fragments' numbers the grid's header gets
-    public static (int Library, int Fragments) Install(LbaMap map, HqrFile bkg)
+    // (`maxBricks`: the engine the folder is for -- the game's own by default; the race story's builds, which ship their engine, go to its)
+    public static (int Library, int Fragments) Install(LbaMap map, HqrFile bkg, int maxBricks = RetailMaxBricks)
     {
         var header = new BkgHeader(bkg.Read(0));
         int library = map.Grid![0], fragments = map.Grid[1];
@@ -104,7 +105,7 @@ internal static class MapBricks
             number[k] = header.MaxBrk + added.Count;
             added.Add(extent);
         }
-        if (header.MaxBrk + added.Count > RetailMaxBricks) throw new SceneEditException($"The map's bricks would make {header.MaxBrk + added.Count} in LBA_BKG.HQR: the game's engine holds {RetailMaxBricks}.");
+        if (header.MaxBrk + added.Count > maxBricks) throw new SceneEditException($"The map's bricks would make {header.MaxBrk + added.Count} in LBA_BKG.HQR: the engine holds {maxBricks}.");
 
         // the library, its brick numbers the file's
         var own = (byte[])map.Library!.Clone();

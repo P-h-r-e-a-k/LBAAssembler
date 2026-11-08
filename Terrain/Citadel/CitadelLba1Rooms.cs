@@ -34,6 +34,18 @@ internal static class CitadelLba1Rooms
     public const int SecretRoom = 226, Cellar = 227, Sewers = 17, Tavern = 3;
     // LBA1's scenes they are
     public const int Lba1SecretSewer = 55, Lba1Cellar = 33;
+    // ---- the secret chamber under Twinsen's house (scene 400: LBA1's 21, "Citadel Island, secret chamber in the house") ---------------
+    // (the user, 2026-11-07: "a secret area ... we can loosely model this on the scene from LBA1 '21: Citadel Island, secret chamber in the
+    // house'"; 2026-11-08, no scene slot free under 256 -- those the holomap's arrows need: "just modify the engine". A scene past 255 is
+    // reached by a door zone, as the story's islands' are: RaceTrackStory.Travels.) Twinsen comes down the house's lift onto LBA1's own
+    // start (27127, 1280, 29918), at the foot of its stairs, and goes back up where LBA1's way up was (its zone into its scene 5, x
+    // 26368-27903, z 30976-31487), onto the lift's squares in the house -- by day the house, at night the house at night
+    // (RaceTrackStory.SecretChamber switches between the two).
+    public const int SecretChamber = 400, Lba1SecretChamber = 21, House = 0;
+    public static readonly (int X, int Y, int Z) ChamberArrival = (27127, 1280, 29918);
+    public static readonly (int X0, int X1, int Z0, int Z1, int Y0, int Y1) ChamberExit = (26368, 27903, 30976, 31487, 1280, 2815);
+    // (out onto the lift's squares, x 4096-5119, z 8192-9215: his place in the zone, 0-1535 along x and 0-511 along z, added)
+    public static readonly (int X, int Y, int Z) ChamberExitLands = (4608 - 768, 2560, 8704 - 256);
 
     // ---- the secret room (scene 226: LBA1's 55, its walls round x 49-63, z 48-63 of the grid as LBA1 has them) -----------------------
     // Twinsen comes in from the sewers walking west, where LBA1's own way in from its first sewer was (the east wall's doorway, x 63, z 54-57,
@@ -79,6 +91,7 @@ internal static class CitadelLba1Rooms
     {
         new(SecretRoom, Lba1SecretSewer, Sewers, "LBA1's secret sewer room", RoomArrival, RoomExit, Sewers, SewerReturn),
         new(Cellar, Lba1Cellar, Tavern, "LBA1's Tavern cellar", CellarArrival, CellarExit, Tavern, TavernReturnCorner),
+        new(SecretChamber, Lba1SecretChamber, House, "LBA1's secret chamber under Twinsen's house", ChamberArrival, ChamberExit, House, ChamberExitLands),
     };
 
     // Into a game folder (after the 1996 demo's sewers, Demo96Rooms, whose wall the slab's doorway is cut into): the rooms, their scenes,
@@ -105,7 +118,7 @@ internal static class CitadelLba1Rooms
             var table = bkg.Read(header.Brk + header.MaxBrk);
             var type = room.BaseScene * 2 + 1 < table.Length ? table[room.BaseScene * 2] : (byte)1;
             var map = Lba1InteriorPort.Port(lba1Directory, room.Lba1Scene, palette, room.Name);
-            var (library, fragments) = MapBricks.Install(map, bkg);
+            var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
             grid[0] = (byte)library; grid[1] = (byte)fragments;
             // (the grid after the game's last, what follows it one entry on; its number in the scene-to-grid table)

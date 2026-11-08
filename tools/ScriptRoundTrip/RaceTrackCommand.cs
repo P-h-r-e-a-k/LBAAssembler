@@ -531,6 +531,39 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // lba1scene <lba1 folder> <scene>: an LBA1 scene's hero start (actor 0), its zones and its track points, for placing a ported room's ways
+    public static int Lba1SceneInfo(string[] args)
+    {
+        var game = new LBAAssembler.Lba1.Lba1Game(args[1]);
+        var scene = game.LoadScene(int.Parse(args[2]));
+        Console.WriteLine($"scene {scene.Index}: {game.Description(scene.Index)} -- {scene.Actors.Count} actors, {scene.Zones.Count} zones");
+        for (var i = 0; i < Math.Min(scene.Actors.Count, 12); i++) Console.WriteLine($"  actor {i}: {scene.Actors[i]}");
+        foreach (var z in scene.Zones) Console.WriteLine($"  zone type {z.Type} num {z.Num}: x {z.X0}..{z.X1} y {z.Y0}..{z.Y1} z {z.Z0}..{z.Z1} info {string.Join(",", z.Info)}");
+        for (var i = 0; i < scene.Tracks.Count; i++) Console.WriteLine($"  point {i}: {scene.Tracks[i]}");
+        return 0;
+    }
+
+    // gridtop <game> <scene> <layer>...: an interior's grid seen from above at each layer, a cell a character -- '.' empty, else its block's
+    // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
+    public static int GridTop(string[] args)
+    {
+        var backend = new LBAAssembler.Grids.Lba2GridBackend(args[1]);
+        if (backend.GridOfScene(int.Parse(args[2])) is not { } grid) { Console.WriteLine("no grid"); return 1; }
+        var cells = LBAAssembler.Lba1.Lba1GridCodec.Decode(backend.LoadGrid(grid));
+        foreach (var a in args.Skip(3))
+        {
+            var y = int.Parse(a);
+            Console.WriteLine($"layer {y}:      " + string.Concat(Enumerable.Range(0, 64).Select(x => x % 10 == 0 ? (char)('0' + x / 10) : ' ')));
+            for (var z = 0; z < 64; z++)
+            {
+                var row = new System.Text.StringBuilder();
+                for (var x = 0; x < 64; x++) { var b = cells[((z * 64 + x) * 25 + y) * 2]; row.Append(b == 0 ? '.' : "0123456789abcdefghijklmnopqrstuvwxyz"[b % 36]); }
+                if (row.ToString().Trim('.').Length > 0) Console.WriteLine($"z {z,2}:        {row}");
+            }
+        }
+        return 0;
+    }
+
     // objfixsize <game> <entry>...: each OBJFIX.HQR model's extent (x, y, z, min and max), to size a new inventory object as the game's are
     public static int ObjFixSize(string[] args)
     {

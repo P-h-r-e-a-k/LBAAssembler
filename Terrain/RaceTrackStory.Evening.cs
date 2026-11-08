@@ -42,6 +42,8 @@ internal static partial class RaceTrackStory
     {
         ZoeWatching, ZoeWatchingReady, FlickReady, FlickWon, ZoeComingHome, YesHome, HomeSoon, ZoeAhead, WizardHome, ZoeAtHome, ZoeGoodnight,
         TwinsenGoodnight,
+        // (home from the Tralu's bar: the secret chamber -- RaceTrackStory.SecretChamber, 2026-11-08)
+        ZoeCaught, TwinsenExcuse, ZoeStoreroom, ZoeScold, TwinsenOw, ZoeScoldMore, ZoeBed, DoorLocked,
     }
     private static readonly string[][] EveningLines =
     {
@@ -129,6 +131,70 @@ internal static partial class RaceTrackStory
             "Boa noite, Twinsen. Não te esqueças da vela.",
         },
         new[] { "Goodnight, Zoe.", "Bonne nuit, Zoé.", "Gute Nacht, Zoe.", "Buenas noches, Zoe.", "Buonanotte, Zoe.", "Boa noite, Zoe." },
+        new[]
+        {
+            "Twinsen! And where have you been till now? You smell of the Tralu's ale -- with drink banned on the whole island!",
+            "Twinsen ! Et où étais-tu passé jusqu'à maintenant ? Tu sens la bière du Tralu -- alors que l'alcool est interdit sur toute l'île !",
+            "Twinsen! Und wo warst du bis jetzt? Du riechst nach dem Bier des Tralu -- wo doch auf der ganzen Insel Alkohol verboten ist!",
+            "¡Twinsen! ¿Y dónde has estado hasta ahora? Hueles a la cerveza del Tralu... ¡con la bebida prohibida en toda la isla!",
+            "Twinsen! E dove sei stato fino adesso? Puzzi della birra del Tralu... con l'alcol vietato su tutta l'isola!",
+            "Twinsen! E onde é que estiveste até agora? Cheiras à cerveja do Tralu... com a bebida proibida na ilha inteira!",
+        },
+        new[]
+        {
+            "I only had the one, Zoe... the regulars insisted.",
+            "Je n'en ai bu qu'une, Zoé... les habitués ont insisté.",
+            "Ich hatte nur eins, Zoe... die Stammgäste haben darauf bestanden.",
+            "Solo me tomé una, Zoe... los habituales insistieron.",
+            "Ne ho bevuta solo una, Zoe... i clienti abituali hanno insistito.",
+            "Só bebi uma, Zoe... os habituais insistiram.",
+        },
+        new[]
+        {
+            "The storeroom. Now. You and I are going to have a little talk downstairs.",
+            "Le débarras. Tout de suite. Toi et moi, on va avoir une petite discussion en bas.",
+            "In die Abstellkammer. Sofort. Wir beide unterhalten uns jetzt mal unten.",
+            "Al trastero. Ahora. Tú y yo vamos a tener una charlita ahí abajo.",
+            "Nel ripostiglio. Subito. Io e te facciamo due chiacchiere di sotto.",
+            "Para a arrecadação. Já. Tu e eu vamos ter uma conversinha lá em baixo.",
+        },
+        new[]
+        {
+            "Racing all day without so much as asking me -- and then off drinking, while your pregnant wife sits up waiting for you!",
+            "À faire la course toute la journée sans même me demander -- et ensuite à boire, pendant que ta femme enceinte t'attend !",
+            "Den ganzen Tag Rennen fahren, ohne mich auch nur zu fragen -- und dann noch trinken gehen, während deine schwangere Frau auf dich wartet!",
+            "Todo el día de carreras sin ni siquiera preguntarme... ¡y luego a beber, mientras tu mujer embarazada te espera despierta!",
+            "Tutto il giorno a correre senza nemmeno chiedermelo... e poi a bere, mentre tua moglie incinta ti aspetta sveglia!",
+            "O dia inteiro a correr sem sequer me perguntar... e depois a beber, enquanto a tua mulher grávida fica à tua espera!",
+        },
+        new[] { "Ow! Ow! Zoe, I'm sorry!", "Aïe ! Aïe ! Zoé, je suis désolé !", "Au! Au! Zoe, es tut mir leid!", "¡Ay! ¡Ay! ¡Zoe, lo siento!", "Ahi! Ahi! Zoe, mi dispiace!", "Ai! Ai! Zoe, desculpa!" },
+        new[]
+        {
+            "And that's for the ale. Don't you ever worry me like that again, Twinsen.",
+            "Et ça, c'est pour la bière. Ne me refais jamais une peur pareille, Twinsen.",
+            "Und das ist für das Bier. Mach mir nie wieder solche Sorgen, Twinsen.",
+            "Y esto por la cerveza. No vuelvas a preocuparme así nunca más, Twinsen.",
+            "E questo è per la birra. Non farmi mai più preoccupare così, Twinsen.",
+            "E isto é pela cerveja. Nunca mais me preocupes assim, Twinsen.",
+        },
+        new[]
+        {
+            "Now upstairs, and straight to bed. The front door's locked for the night.",
+            "Maintenant, en haut, et au lit tout de suite. La porte d'entrée est fermée pour la nuit.",
+            "Und jetzt nach oben und sofort ins Bett. Die Haustür ist für heute Nacht abgeschlossen.",
+            "Ahora arriba, y derechito a la cama. La puerta de casa está cerrada por esta noche.",
+            "Adesso di sopra, e dritto a letto. La porta di casa è chiusa per stanotte.",
+            "Agora lá para cima, e direitinho para a cama. A porta da rua está trancada esta noite.",
+        },
+        new[]
+        {
+            "Zoe's locked the front door. I'd better go to bed.",
+            "Zoé a fermé la porte d'entrée à clé. Je ferais mieux d'aller me coucher.",
+            "Zoe hat die Haustür abgeschlossen. Ich gehe wohl besser ins Bett.",
+            "Zoe ha cerrado la puerta con llave. Será mejor que me vaya a la cama.",
+            "Zoe ha chiuso a chiave la porta di casa. Farei meglio ad andare a letto.",
+            "A Zoe trancou a porta da rua. É melhor ir para a cama.",
+        },
     };
     // (after the chapters' lines in Citadel Island's texts)
     private static int EveningId(Func<ChapterLine, int> say, EveningLine line) => say(ChapterLine.ZoeSmiling) + ChapterLines.Length + (int)line;
@@ -438,6 +504,8 @@ stop();
     internal static readonly (int X0, int X1, int Z0, int Z1)[] BedSides = { (3840, 6143, 512, 3327), (6144, 6911, 1024, 3327) };
     internal const int BedY0 = 2048, BedY1 = 3839;
     private const int IntoBed = 200, InBed = 201, Goodnight = 202, CandleOut = 203;
+    // (the front door's scenario zone, round its door, and a per-visit flag: Zoe's locked door said once each time he comes to it)
+    private const int FrontDoorTry = 71, Once6 = 45;
     // the candle's flame on the bedside table (Citadel/CitadelNightHouse's candle: cell 12, layer 12, z 1 -- its wick's top), flickering
     // between the props' two flames a tenth of a second at a time, and out at the goodnights (the user, 2026-11-07: "make sure the
     // candle is actually lit")
@@ -466,7 +534,18 @@ stop();
             var first = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint(BedSpot.X, BedSpot.Y, BedSpot.Z));
             model.TrackPoints.Add(new SceneTrackPoint(ZoeByTheDoor.X, ZoeByTheDoor.Y, ZoeByTheDoor.Z));
-            int bed = first, byDoor = first + 1;
+            model.TrackPoints.Add(new SceneTrackPoint(Citadel.CitadelHouseLift.Middle.X, Citadel.CitadelHouseLift.Middle.Y, Citadel.CitadelHouseLift.Middle.Z));
+            int bed = first, byDoor = first + 1, onLift = first + 2;
+            // (the lift down to the secret chamber, and the front door: a switch of its own, locked once Zoe has had her word -- and Action
+            // there says so: RaceTrackStory.SecretChamber)
+            AddLift(model);
+            var liftHelper = p.Add(model, RaceTrackScenes.InvisibleHelper(Citadel.CitadelHouseLift.Middle.X, Citadel.CitadelHouseLift.Middle.Y, Citadel.CitadelHouseLift.Middle.Z), LiftHelper());
+            var front = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == Citadel.CitadelNightHouse.Yard);
+            if (front is not null)
+            {
+                front.Info[4] = FrontDoorSwitch;
+                model.Zones.Add(new SceneZoneModel { Type = 2, Num = FrontDoorTry, X0 = front.X0 - 256, X1 = front.X1 + 256, Y0 = front.Y0, Y1 = front.Y1, Z0 = front.Z0 - 256, Z1 = front.Z1 + 256, Info = new int[8] });
+            }
             (zoe.X, zoe.Y, zoe.Z) = ZoeWaiting;
             zoe.Beta = RaceTrackMath.Turn(Math.Atan2(BedSpot.X - ZoeWaiting.X, BedSpot.Z - ZoeWaiting.Z));
             var flame = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Flame, Wick.X, Wick.Y, Wick.Z);
@@ -520,6 +599,7 @@ wait_nb_dizieme(1);
 goto(label_0);
 ");
                 zoeLife(scripts);
+                liftHelper(scripts);
                 scripts.SetText(0, ScriptKind.Life, $@"void comportement_0()
 {{
     if ({TwinsenAndZoe} == comportement_hero())
@@ -527,11 +607,41 @@ goto(label_0);
         set_var_cube({Once5}, 1);
         comportement_hero(0);
     }}
+    if ({DrankTonight} == var_game({Drunk}))
+    {{
+        set_dir(NO_MOVE);
+        cinema_mode(1);
+        set_var_game({DayVar}, {TiredAside});
+        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeCaught)});
+        message({EveningId(p.Say, EveningLine.TwinsenExcuse)});
+        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeStoreroom)});
+        set_var_game({DayVar}, {Tired});
+        cinema_mode(0);
+        set_dir(MOVE_MANUAL);
+        pos_point({onLift});
+        set_change_cube({LiftSwitch}, 1);
+    }}
+    if ({Scolded} == var_game({Drunk}))
+    {{
+        set_change_cube({FrontDoorSwitch}, 0);
+    }}
     set_comportement(comportement_1);
 }}
 
 void comportement_1()
 {{
+    if ({FrontDoorTry} == zone() && {Scolded} == var_game({Drunk}))
+    {{
+        if (0 == var_cube({Once6}))
+        {{
+            set_var_cube({Once6}, 1);
+            {Aside($"message({EveningId(p.Say, EveningLine.DoorLocked)});")}
+        }}
+    }}
+    else
+    {{
+        set_var_cube({Once6}, 0);
+    }}
     swif (1 == action())
     {{
         if ({BedZone} == zone() && {Driving} != comportement_hero() && {Tired} == var_game({DayVar}))

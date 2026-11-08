@@ -94,6 +94,8 @@ internal static class Program
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
+            "gridtop" => RaceTrackCommand.GridTop(args),
+            "lba1scene" => RaceTrackCommand.Lba1SceneInfo(args),
             "scenenames" => RaceTrackCommand.SceneNames(args),
             "footprints" => IslandFootprintStudy.Run(args),
             "islandrender" => IslandRenderCommand.Run(args),
