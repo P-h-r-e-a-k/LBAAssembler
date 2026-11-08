@@ -543,6 +543,62 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // bodybones <game> <BODY.HQR entry>: a body's bones -- parent, pivot at rest, points, extent -- and the colours of the faces on each
+    public static int BodyBones(string[] args)
+    {
+        var body = LbaBodyStudio.Body.Read(LBAAssembler.HqrArchive.Open(System.IO.Path.Combine(args[1], "BODY.HQR")).Read(int.Parse(args[2])), 2, allowStatic: true);
+        var world = body.World();
+        for (var b = 0; b < body.Bones.Count; b++)
+        {
+            var bone = body.Bones[b];
+            var pts = Enumerable.Range(bone.Start, bone.Count).Select(i => world[i]).ToList();
+            var faces = body.Faces.Where(f => f.Points.Length > 0 && f.Points[0] >= bone.Start && f.Points[0] < bone.Start + bone.Count).GroupBy(f => f.Colour).Select(g => $"{g.Key}x{g.Count()}");
+            var pv = world[bone.Pivot];
+            Console.WriteLine($"bone {b,2} parent {bone.Parent,2} pivot ({pv.X:0},{pv.Y:0},{pv.Z:0}) points {bone.Count,3}" +
+                (pts.Count > 0 ? $" y {pts.Min(q => q.Y):0}..{pts.Max(q => q.Y):0} x {pts.Min(q => q.X):0}..{pts.Max(q => q.X):0} z {pts.Min(q => q.Z):0}..{pts.Max(q => q.Z):0}" : "") +
+                $"  colours {string.Join(" ", faces)}");
+        }
+        return 0;
+    }
+
+    // animbasis <game> <ANIM.HQR entry> <bones>: an animation's first keyframe, bone by bone (type 0 a turn, 1 a move)
+    public static int AnimBasis(string[] args)
+    {
+        var anim = LBAAssembler.HqrArchive.Open(System.IO.Path.Combine(args[1], "ANIM.HQR")).Read(int.Parse(args[2]));
+        var frames = LBAAssembler.Terrain.Palace.PalaceTorturers.ReadFrames(anim, int.Parse(args[3]));
+        Console.WriteLine($"{frames.Count} keyframes");
+        var b = frames[0].Bones;
+        for (var i = 0; i < b.Length; i++) Console.WriteLine($"  bone {i,2}: type {b[i].Type} {b[i].A:0.###} {b[i].B:0.###} {b[i].C:0.###}");
+        return 0;
+    }
+
+    // spankposes <scratch game folder> <out folder>: makes the spanking's poses (CitadelSpanking.Install into a scratch copy) and writes each
+    // keyframe's posed points as a CSV (bone, x, y, z), for a side and front view
+    public static int SpankPoses(string[] args)
+    {
+        LBAAssembler.Terrain.Citadel.CitadelSpanking.Install(args[1]);
+        System.IO.Directory.CreateDirectory(args[2]);
+        foreach (var (name, body, frame) in LBAAssembler.Terrain.Citadel.CitadelSpanking.Frames)
+        {
+            var v = frame.Bones.Select(b => b.Type == 1 ? (1, (double)b.X, (double)b.Y, (double)b.Z) : (0, b.X * 2 * Math.PI, b.Y * 2 * Math.PI, b.Z * 2 * Math.PI)).ToArray();
+            var (points, _) = LBAAssembler.Terrain.Palace.PalaceTorturers.Posed(body, v);
+            var lines = new List<string>();
+            for (var bi = 0; bi < body.Bones.Count; bi++)
+                for (var i = body.Bones[bi].Start; i < body.Bones[bi].Start + body.Bones[bi].Count; i++) lines.Add($"{bi},{points[i].X:0},{points[i].Y:0},{points[i].Z:0}");
+            System.IO.File.WriteAllLines(System.IO.Path.Combine(args[2], name + ".csv"), lines);
+        }
+        // (and Twinsen's red-seated body in his first lap pose, its faces: colour, then each point's posed x y z)
+        var bodyFile = System.IO.Path.Combine(args[1], "BODY.HQR");
+        var red = LbaBodyStudio.Body.Read(HqrArchive.Open(bodyFile).Read(HqrArchive.CountEntries(bodyFile) - 1), 2);
+        var lap = LBAAssembler.Terrain.Citadel.CitadelSpanking.Frames.First(f => f.Name == "lap0").Frame;
+        var lv = lap.Bones.Select(b => b.Type == 1 ? (1, (double)b.X, (double)b.Y, (double)b.Z) : (0, b.X * 2 * Math.PI, b.Y * 2 * Math.PI, b.Z * 2 * Math.PI)).ToArray();
+        var (lp, _) = LBAAssembler.Terrain.Palace.PalaceTorturers.Posed(red, lv);
+        System.IO.File.WriteAllLines(System.IO.Path.Combine(args[2], "lapfaces.csv"), red.Faces.Where(f => f.Points.Length >= 3)
+            .Select(f => f.Colour + "," + string.Join(",", f.Points.Select(i => $"{lp[i].X:0},{lp[i].Y:0},{lp[i].Z:0}"))));
+        Console.WriteLine($"{LBAAssembler.Terrain.Citadel.CitadelSpanking.Frames.Count} poses");
+        return 0;
+    }
+
     // gridtop <game> <scene> <layer>...: an interior's grid seen from above at each layer, a cell a character -- '.' empty, else its block's
     // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
     public static int GridTop(string[] args)

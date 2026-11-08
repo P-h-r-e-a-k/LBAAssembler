@@ -79,6 +79,9 @@ void comportement_1()
     suicide();
 }}
 "));
+        // the spanking's animations, bodies and slap (Citadel/CitadelSpanking)
+        var (spankLog, slap) = Citadel.CitadelSpanking.Install(p.Store.Directory);
+        p.Log.AddRange(spankLog);
         // the chamber: its two ways up, Zoe, the scolding
         p.Edit(Chamber, "the secret chamber: up to the house by day or at night; home from the bar, Zoe's scolding and the spanking", model =>
         {
@@ -93,6 +96,26 @@ void comportement_1()
             (zoe.X, zoe.Y, zoe.Z) = ZoeInChamber;
             var arrival = Citadel.CitadelLba1Rooms.ChamberArrival;
             zoe.Beta = RaceTrackMath.Turn(Math.Atan2(arrival.X - ZoeInChamber.X, arrival.Z - ZoeInChamber.Z));
+            // (her stool under her, a little behind her middle -- none of the three pushing another away, their objects' collision off: the flags' CHECK_OBJ_COL, and Twinsen's obj_col(0) till he's up; Twinsen across her lap: her thighs' middle in front of her, his head to her
+            // left -- turned a quarter from her -- his hips at her lap's height by his own animation)
+            var turn = zoe.Beta * Math.PI / 2048;
+            double fx = Math.Sin(turn), fz = Math.Cos(turn);
+            var stool = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Stool, (int)Math.Round(ZoeInChamber.X - fx * 20), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z - fz * 20), zoe.Beta);
+            stool.Flags &= ~1u;
+            var stoolLife = p.Add(model, stool, $@"void comportement_0()
+{{
+    if ({DrankTonight} != var_game({Drunk}))
+    {{
+        suicide();
+    }}
+}}
+");
+            var lap = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint((int)Math.Round(ZoeInChamber.X + fx * 170), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z + fz * 170)));
+            var across = (zoe.Beta - 1024 + 4096) % 4096;
+            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21;
+            string Slaps(int n) => slap < 0 ? "wait_nb_second(1);\n" : string.Concat(Enumerable.Repeat($"sample({slap});\nwait_nb_dizieme(3);\n", n));
+            zoe.Flags &= ~1u;
             var zoeIndex = model.Actors.Count;
             var zoeLife = p.Add(model, zoe, $@"void comportement_0()
 {{
@@ -109,7 +132,27 @@ void comportement_1()
             return scripts =>
             {
                 zoeLife(scripts);
-                scripts.SetText(zoeIndex, ScriptKind.Track, "label(0);\nanim(0);\nstop();\n");
+                stoolLife(scripts);
+                scripts.SetText(zoeIndex, ScriptKind.Track, $@"label(0);
+anim({Citadel.CitadelSpanking.ZoeSit});
+stop();
+
+label({Slaps1});
+anim({Citadel.CitadelSpanking.ZoeSpank});
+wait_nb_dizieme(2);
+{Slaps(3)}
+label({Slapped1});
+anim({Citadel.CitadelSpanking.ZoeSit});
+stop();
+
+label({Slaps2});
+anim({Citadel.CitadelSpanking.ZoeSpank});
+wait_nb_dizieme(2);
+{Slaps(4)}
+label({Slapped2});
+anim({Citadel.CitadelSpanking.ZoeSit});
+stop();
+");
                 scripts.SetText(0, ScriptKind.Life, $@"void comportement_0()
 {{
     if ({Tired} == var_game({DayVar}) || {TiredAside} == var_game({DayVar}))
@@ -126,15 +169,54 @@ void comportement_1()
         cinema_mode(1);
         set_var_game({DayVar}, {TiredAside});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScold)});
+        obj_col(0);
+        pos_point({lap});
+        beta({across});
+        body({Citadel.CitadelSpanking.TwinsenBare});
+        anim({Citadel.CitadelSpanking.TwinsenKick});
+        set_track_obj({zoeIndex}, label_{Slaps1});
+        set_comportement(comportement_2);
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+}}
+
+void comportement_2()
+{{
+    if ({Slapped1} == l_track_obj({zoeIndex}))
+    {{
+        anim({Citadel.CitadelSpanking.TwinsenLap});
         message({EveningId(p.Say, EveningLine.TwinsenOw)});
+        body({Citadel.CitadelSpanking.TwinsenRed});
+        anim({Citadel.CitadelSpanking.TwinsenKick});
+        set_track_obj({zoeIndex}, label_{Slaps2});
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if ({Slapped2} == l_track_obj({zoeIndex}))
+    {{
+        anim({Citadel.CitadelSpanking.TwinsenLap});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScoldMore)});
         message({EveningId(p.Say, EveningLine.TwinsenOw)});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeBed)});
         set_var_game({DayVar}, {Tired});
         set_var_game({Drunk}, {Scolded});
+        body(1);
+        anim(0);
         cinema_mode(0);
         set_dir(MOVE_MANUAL);
         pos_point({up});
+        obj_col(1);
+        set_comportement(comportement_1);
     }}
 }}
 ");

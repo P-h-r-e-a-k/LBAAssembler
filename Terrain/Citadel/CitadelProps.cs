@@ -13,7 +13,7 @@ namespace LBAAssembler.Terrain.Citadel;
 // too), under a generic number of its own; an actor of that entity with that body shows it (RaceTrackStory.Chapters.cs places them).
 internal static class CitadelProps
 {
-    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6, Flame = 7, Flame2 = 8, Page = 9;
+    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6, Flame = 7, Flame2 = 8, Page = 9, Stool = 10;
     // (the palette's ramps: 48 the greys from black, 56 a steel grey, 18 rust brown, 20 wood, 66 red, 130 green, 76 pink)
     private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76, Glass = 164, Cream = 36, FlameOuter = 242, FlameCore = 245, Paper = 44, Ink = 48;
     // (the shop's holomap's body, BODY.HQR 30: its header for the new bodies')
@@ -193,6 +193,18 @@ internal static class CitadelProps
         return m.ToBody(header);
     }
 
+    // A wooden stool for the secret chamber (Zoe sits on it: CitadelSpanking.StoolTop high), a square seat on four legs
+    public static Body BuildStool(byte[] header)
+    {
+        var m = new CarMesh("a stool", new[] { -1 });
+        m.Light = 0.7f;
+        const float Top = CitadelSpanking.StoolTop, Half = 150, Seat = 40, Leg = 22;
+        m.Box(0, new Vector3(0, Top - Seat / 2, 0), new Vector3(2 * Half, Seat, 2 * Half), Wood);
+        foreach (var (x, z) in new[] { (1, 1), (1, -1), (-1, 1), (-1, -1) })
+            m.Box(0, new Vector3(x * (Half - Leg), (Top - Seat) / 2, z * (Half - Leg)), new Vector3(2 * Leg, Top - Seat, 2 * Leg), Rust);
+        return m.ToBody(header);
+    }
+
     // Into the game folder: the four bodies at the end of BODY.HQR, each Prop's generic body of its number in RESS.HQR's entity table -- once:
     // where the entity already has that body and it is this, it stays. Lines for the build's log.
     public static List<string> Install(string gameDirectory)
@@ -207,7 +219,7 @@ internal static class CitadelProps
         var table = HqrArchive.Open(ressPath).Read(44);
         var made = new List<string>();
         foreach (var (generic, name, build) in new (int, string, Func<byte[], Body>)[]
-                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage) })
+                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage), (Stool, "a stool", BuildStool) })
         {
             var bytes = build(header).Write();
             var count = HqrArchive.CountEntries(bodyPath);
