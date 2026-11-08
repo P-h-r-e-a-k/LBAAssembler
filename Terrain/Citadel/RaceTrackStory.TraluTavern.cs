@@ -53,11 +53,14 @@ internal static partial class RaceTrackStory
     // Tim beside the east bench, facing the table
     private static int Cell(double c) => (int)Math.Round(c * 512);
     private static readonly (int X, int Z) LucAt = (Cell(33.3), Cell(35.7)), PatAt = (Cell(35.5), Cell(42.5)), FabAt = (Cell(35.5), Cell(44.5)),
-                                           VisitorAt = (Cell(38.5), Cell(41.5)), RabbibunnyAt = (Cell(38.5), Cell(48.5)), TimAt = (Cell(39.6), Cell(45.0)),
+                                           VisitorAt = (Cell(38.5), Cell(41.5)), RabbibunnyAt = (Cell(38.87), Cell(48.5)), TimAt = (Cell(39.6), Cell(45.0)),
                                            HallMiddle = (Cell(36.5), Cell(45.5));
     private static readonly (int X, int Z)[] Crates = { (Cell(31.85), Cell(37.1)), (Cell(33.3), Cell(37.1)), (Cell(34.75), Cell(37.1)) };
-    // the benches' seat: the height each one's sitting animation sits at above it (the Tavern's: the stools and chairs they sit on there)
-    private const int BenchTop = TraluBarRoom.FloorY + 512;
+    // how high each sitter stands above the floor to sit on a bench: the Tavern's own height for the visitor (208 over its floor, on his
+    // chair), the same for Pat and Fab; the drunk rabbibunny's sitting animation sits higher and further back, so he is 316 up and a
+    // third of a cell out onto the bench's back (RabbibunnyAt). (The user, 2026-11-07: "none of the NPC's are sitting correctly on the
+    // bench" -- at the bench's top, 512 up, they sat on the table's height in the air; tried out headless with actorpos, 2026-11-08.)
+    private const int SitHigh = TraluBarRoom.FloorY + 208, BunnySitHigh = TraluBarRoom.FloorY + 316;
     // the Tralu in the bar: east of the round table by the old room's north wall (its barrel's cells x 43-44, z 36-37), facing his tankard
     // on it (TraluBarRoom.TankardAt)
     private static readonly (int X, int Z) TraluAt = (Cell(46.1), Cell(37.4));
@@ -85,10 +88,10 @@ internal static partial class RaceTrackStory
             Place(luc, LucAt, TraluBarRoom.FloorY, HallMiddle);
             Place(tim, TimAt, TraluBarRoom.FloorY, (Cell(36.5), TimAt.Z));
             // (the sitters face across the table)
-            Place(pat, PatAt, BenchTop - 200, (Cell(38.5), PatAt.Z));
-            Place(fab, FabAt, BenchTop - 196, (Cell(38.5), FabAt.Z));
-            Place(visitor, VisitorAt, BenchTop, (Cell(35.5), VisitorAt.Z));
-            Place(bunny, RabbibunnyAt, BenchTop, (Cell(35.5), RabbibunnyAt.Z));
+            Place(pat, PatAt, SitHigh, (Cell(38.5), PatAt.Z));
+            Place(fab, FabAt, SitHigh, (Cell(38.5), FabAt.Z));
+            Place(visitor, VisitorAt, SitHigh, (Cell(35.5), VisitorAt.Z));
+            Place(bunny, RabbibunnyAt, BunnySitHigh, (Cell(35.5), RabbibunnyAt.Z));
             // (the spike zones where the hall is now, and on the steps up to the corridor's landing -- the stalagmites the build took out)
             model.Zones.RemoveAll(z => z.Type == 8 && z.X0 < (TraluBarRoom.East + 1) * 512 && z.X1 > TraluBarRoom.West * 512
                                        && z.Z0 < (TraluBarRoom.South + 1) * 512 && z.Z1 > TraluBarRoom.North * 512);
@@ -114,7 +117,9 @@ internal static partial class RaceTrackStory
                 }
             // (the Tralu at his round table, his tankard on it -- every chapter: his back room, noisy in the storm, his own in chapter 2)
             if (Copy(p.Originals, TraluCave, CaveTralu) is not { Entity: TraluEntity } tralu) throw new NotTheGames("the cave's Tralu");
-            Place(tralu, TraluAt, TraluBarRoom.FloorY, (TraluBarRoom.TankardAt.X, TraluBarRoom.TankardAt.Z));
+            // (turned to the camera, his face to whoever comes to talk -- the user, 2026-11-07: "have the Tralu angled so we can see his
+            // face to talk to him" -- his tankard at his side)
+            Place(tralu, TraluAt, TraluBarRoom.FloorY, (TraluAt.X + 512, TraluAt.Z + 512));
             tralu.Armor = 51;
             edits.Add(p.Add(model, tralu, Talker("0 < chapter()", $@"            if (2 > chapter())
             {{
@@ -125,6 +130,14 @@ internal static partial class RaceTrackStory
                 message({p.Say(ChapterLine.TraluQuiet)});
             }}", TraluReach)));
             edits.Add(p.Add(model, Prop(TraluBarRoom.TankardAt.X, TraluBarRoom.TankardAt.Y, TraluBarRoom.TankardAt.Z, TraluBarRoom.TankardGeneric, 3072), OnlyWhile("0 < chapter()")));
+            // (a bottle and a plate round the middle of every other barrel's top, the round tables' -- the tankard's barrel is the Tralu's)
+            foreach (var barrel in TraluBarRoom.Barrels)
+            {
+                var (bx, by, bz) = TraluBarRoom.BarrelTop(barrel);
+                if (bx == TraluBarRoom.TankardAt.X && bz == TraluBarRoom.TankardAt.Z) continue;
+                SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.Bottle, bx + 100, by, bz - 110));
+                SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.Plate, bx - 90, by, bz + 80, 600));
+            }
             return scripts =>
             {
                 foreach (var gone in HallGone)

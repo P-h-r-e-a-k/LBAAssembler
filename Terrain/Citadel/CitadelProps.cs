@@ -13,9 +13,9 @@ namespace LBAAssembler.Terrain.Citadel;
 // too), under a generic number of its own; an actor of that entity with that body shows it (RaceTrackStory.Chapters.cs places them).
 internal static class CitadelProps
 {
-    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4;
+    public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6;
     // (the palette's ramps: 48 the greys from black, 56 a steel grey, 18 rust brown, 20 wood, 66 red, 130 green, 76 pink)
-    private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76;
+    private const int Rubber = 48, Steel = 56, Rust = 18, Wood = 20, Red = 66, Green = 130, Worm = 76, Glass = 164, Cream = 36;
     // (the shop's holomap's body, BODY.HQR 30: its header for the new bodies')
     private const int HeaderBody = 30;
 
@@ -113,6 +113,34 @@ internal static class CitadelProps
         return m.ToBody(header);
     }
 
+    // A bottle for the Tralu's bar's round tables (the user, 2026-11-07: the items on the barrels were "more off the top of a barrel than
+    // on it" -- one-cell blocks of the grid, each in a corner cell of a barrel two cells across; these stand anywhere on it): a teal
+    // glass body, round shoulders, a neck and a cork
+    public static Body BuildBottle(byte[] header)
+    {
+        var m = new CarMesh("a bottle", new[] { -1 });
+        m.Light = 0.7f;
+        var levels = new (float Y, float R)[] { (0, 62), (170, 66), (215, 46), (240, 24), (300, 22) };
+        var rings = levels.Select(l => m.Loop(0, new Vector3(0, l.Y, 0), new Vector3(l.R, 0, 0), new Vector3(0, 0, l.R), 10)).ToArray();
+        for (var j = 0; j + 1 < rings.Length; j++) m.Skin(rings[j], rings[j + 1], _ => Glass, new Vector3(0, (levels[j].Y + levels[j + 1].Y) / 2, 0));
+        var cork = m.Loop(0, new Vector3(0, 335, 0), new Vector3(20, 0, 0), new Vector3(0, 0, 20), 10);
+        m.Skin(rings[^1], cork, _ => Wood, new Vector3(0, 318, 0));
+        m.Cap(cork, m.P(0, new Vector3(0, 340, 0)), Wood, new Vector3(0, 300, 0));
+        return m.ToBody(header);
+    }
+
+    // A plate for the same: a shallow cream dish with a rim
+    public static Body BuildPlate(byte[] header)
+    {
+        var m = new CarMesh("a plate", new[] { -1 });
+        m.Light = 0.8f;
+        var foot = m.Loop(0, new Vector3(0, 0, 0), new Vector3(70, 0, 0), new Vector3(0, 0, 70), 12);
+        var rim = m.Loop(0, new Vector3(0, 30, 0), new Vector3(140, 0, 0), new Vector3(0, 0, 140), 12);
+        m.Skin(foot, rim, _ => Cream, new Vector3(0, 15, 0));
+        m.Cap(rim, m.P(0, new Vector3(0, 12, 0)), Cream, new Vector3(0, -40, 0));
+        return m.ToBody(header);
+    }
+
     // Into the game folder: the four bodies at the end of BODY.HQR, each Prop's generic body of its number in RESS.HQR's entity table -- once:
     // where the entity already has that body and it is this, it stays. Lines for the build's log.
     public static List<string> Install(string gameDirectory)
@@ -127,7 +155,7 @@ internal static class CitadelProps
         var table = HqrArchive.Open(ressPath).Read(44);
         var made = new List<string>();
         foreach (var (generic, name, build) in new (int, string, Func<byte[], Body>)[]
-                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait) })
+                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate) })
         {
             var bytes = build(header).Write();
             var count = HqrArchive.CountEntries(bodyPath);

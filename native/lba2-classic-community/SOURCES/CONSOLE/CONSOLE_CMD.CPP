@@ -1812,6 +1812,18 @@ static void cmd_fixedtimestep(int argc, const char *argv[]) {
    Sets ListObjet[NUM_PERSO].Obj coords directly; the next simulated frame re-runs zone detection and
    collision from the new spot. `teleport actor <n>` jumps onto actor n -- the quick way to reach a
    zone-gated interaction without walking. Within-cube only (cross-cube needs ChangeCube). */
+/* actorpos <n> <x> <y> <z> [beta]: puts actor n at a place in the scene (and turns it), for trying out where a story's actor stands or
+   sits before building it in (2026-11-08: the Tralu's bar's sitters). Its track and life go on as they were. */
+static void cmd_actorpos(int argc, const char *argv[]) {
+    if (argc < 5) { Console_Print("actorpos <n> <x> <y> <z> [beta]"); return; }
+    const int n = atoi(argv[1]);
+    if (n < 0 || n >= (int)NbObjets) { Console_Print("actorpos: actor %d out of range (0..%d)", n, (int)NbObjets - 1); return; }
+    T_OBJET *a = &ListObjet[n];
+    a->Obj.X = atoi(argv[2]); a->Obj.Y = atoi(argv[3]); a->Obj.Z = atoi(argv[4]);
+    if (argc >= 6) a->Obj.Beta = atoi(argv[5]) & 4095;
+    Console_Print("actorpos: actor %d at (%d,%d,%d) beta %d", n, (int)a->Obj.X, (int)a->Obj.Y, (int)a->Obj.Z, (int)a->Obj.Beta);
+}
+
 static void cmd_teleport(int argc, const char *argv[]) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
 
@@ -3157,6 +3169,8 @@ void Console_RegisterAll(void) {
                               "teleport <x> <y> <z> [beta [alpha [gamma]]] | teleport actor <n>",
                               "Sets the hero's coords directly; next frame re-runs zones/collision. "
                               "'actor <n>' jumps onto actor n. Within-cube only.");
+    Console_RegisterCommandEx("actorpos", cmd_actorpos, "Put an actor at a place in the scene", "actorpos <n> <x> <y> <z> [beta]",
+                              "Sets actor n's coords (and beta) directly; its scripts go on.");
     Console_RegisterCommandEx("newgame", cmd_newgame, "Start a new game, as the main menu's New Game", "newgame", "InitGame(1).");
     Console_RegisterCommandEx("behaviour", cmd_behaviour, "Read/set hero behaviour (comportement)",
                               "behaviour [0..13]", "0=Normal 1=Sportif 2=Aggressive 3=Discreet 4=Protopack. Routes through SetComportement.");

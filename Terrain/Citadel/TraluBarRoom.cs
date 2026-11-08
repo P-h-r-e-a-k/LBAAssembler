@@ -44,10 +44,9 @@ internal static class TraluBarRoom
     {
         (36, 40, 108), (37, 41, 106), (36, 42, 109), (37, 43, 108), (37, 45, 104), (37, 47, 110), (36, 47, 107), (37, 49, 105), (36, 50, 102),
     };
-    private static readonly (int X, int Z, int Block)[] OnBarrels =
-    {
-        (29, 37, 107), (30, 38, 108), (30, 44, 105), (29, 45, 109), (29, 50, 106), (30, 51, 102), (41, 51, 108), (42, 52, 107), (44, 36, 104),
-    };
+    // (what stands on the barrels isn't the grid's: a block is a cell's, and a barrel is two cells across, so a bottle or a plate in one
+    // of its cells stood half off its round top -- the user, 2026-11-07. A bottle and a plate of the props' bodies stand on each, round
+    // its middle: RaceTrackStory.TraluTavern, BarrelTop)
     private static readonly (int X, int Z)[] Candlesticks = { (31, 35), (36, 35) };
     // the steps up to the corridor's landing: x 51 (layer 9) to 54 (layer 12), z 40-42; the stalagmites cleared, x 53-54, z 39-43
     public const int UpStep = 137, UpFrom = 51, UpZ0 = 40, UpZ1 = 42, LandingLayer = 12;
@@ -218,7 +217,6 @@ internal static class TraluBarRoom
                 for (var dy = 0; dy < 4; dy++)
                     for (var dx = 0; dx < 2; dx++)
                         Set(bx + dx, FloorLayer + 1 + dy, bz + dz, Barrel, dx + 2 * dy + 8 * dz);
-        foreach (var (x, z, block) in OnBarrels) Item(x, FloorLayer + 5, z, block);
         foreach (var (x, z) in Candlesticks)
             for (var dy = 0; dy < 6; dy++) Set(x, FloorLayer + 1 + dy, z, Candlestick, dy);
         // the steps up to the corridor's landing, through the stalagmites
@@ -264,7 +262,9 @@ internal static class TraluBarRoom
     // north wall, its north-west cell (43, 36), at its front cell on the camera's side (43, 37: its bottle taken off for it), the Tralu on
     // its far side (RaceTrackStory.TraluTavern), half as big again as a mug for Twinsen would be.
     public const int TankardGeneric = 47;
-    public static readonly (int X, int Y, int Z) TankardAt = (43 * 512 + 256, (FloorLayer + 5) * 256, 37 * 512 + 256);
+    public static readonly (int X, int Y, int Z) TankardAt = (44 * 512, (FloorLayer + 5) * 256, 37 * 512);
+    // a barrel's top: the middle of its four cells, at its top
+    public static (int X, int Y, int Z) BarrelTop((int X, int Z) barrel) => ((barrel.X + 1) * 512, (FloorLayer + 5) * 256, (barrel.Z + 1) * 512);
 
     private static string InstallTankard(string gameDirectory)
     {
