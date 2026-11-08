@@ -69,9 +69,11 @@ internal static class Demo96Rooms
     // front lands in the pool's middle row (z 49, a cell short of the ladder) -- in the demo's water a drowning, and the bar's first way
     // in (this ladder, the back walk, the door to 19) shut for good. So the two rows at the ladder's foot (z 48-49) are the same water to
     // look at, a wading depth: jumped over the front row, he lands at the ladder and climbs it.
+    // Undone (the user, 2026-11-07: "you intentionally left part of it as shallow water so Twinsen didn't drown, but with a running jump
+    // that holds forwards to grab the ladder it doesn't need to be"): the whole pool is the demo's water again, as the demo has it.
     public static readonly Room[] TraluCave =
     {
-        new(20, 20, "the Tralu's caves' third hall", Wade: new Wading(44, 46, 48, 49, 4)),
+        new(20, 20, "the Tralu's caves' third hall"),
     };
 
     // The sewers' lines in the demo's Citadel texts, as the game's: Twinsen's greetings to the painter (the demo's 6, 100-102: the game's
