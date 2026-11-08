@@ -499,6 +499,11 @@ void InitTabIndir() //	NEW
     else
         TabInv[FLAG_PISTOLASER].FlagInv &= ~(FLAG_INV_UNUSABLE);
 
+    // (a race-track mod's story's slots that hold a thing of their own by their variable -- the Ring of Lightning's, its model by the magic
+    // level and unusable without the points above, is the errands' there: RACEMOD.CPP inv_kinds=)
+    extern void RaceMod_InvKinds(void);
+    RaceMod_InvKinds();
+
     pt = TabInv;
 
     for (i = 0; i < MAX_BOX_INVENTORY; i++) {
@@ -1507,6 +1512,9 @@ void DoFoundObj(S32 numvar) {
 
     Bulle = FALSE;
 
+    // (a slot that holds one of a few things by its variable, set just before: its model now -- RACEMOD.CPP inv_kinds=)
+    extern void RaceMod_InvKinds(void);
+    RaceMod_InvKinds();
     numobj = TabInv[numvar].TabObj3D[TabInv[numvar].IdObj3D];
 
     ptrobj = &ListObjet[NUM_PERSO];

@@ -531,6 +531,19 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // objfixsize <game> <entry>...: each OBJFIX.HQR model's extent (x, y, z, min and max), to size a new inventory object as the game's are
+    public static int ObjFixSize(string[] args)
+    {
+        var objfix = LBAAssembler.HqrArchive.Open(System.IO.Path.Combine(args[1], "OBJFIX.HQR"));
+        foreach (var a in args.Skip(2))
+        {
+            var body = LbaBodyStudio.Body.Read(objfix.Read(int.Parse(a)), 2, allowStatic: true);
+            var v = body.Vertices;
+            Console.WriteLine($"{a}: x {v.Min(p => p.X):0}..{v.Max(p => p.X):0}  y {v.Min(p => p.Y):0}..{v.Max(p => p.Y):0}  z {v.Min(p => p.Z):0}..{v.Max(p => p.Z):0}  ({v.Count} points)");
+        }
+        return 0;
+    }
+
     // scenenames <game>: every SCENE2.HQD name containing a word.
     public static int SceneNames(string[] args)
     {

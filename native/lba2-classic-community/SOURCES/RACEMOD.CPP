@@ -859,6 +859,23 @@ static int s_detourTurn = 0, s_detourN = 0;
 // slot the story counts in is counted whatever track is loaded.
 static unsigned long long s_invCount = 0;
 S32 RaceMod_InvCount(S32 slot) { return slot >= 0 && slot < 64 && ((s_invCount >> slot) & 1) ? 1 : 0; }
+// inv_kinds=<slot> <model>... (2026-11-08): an inventory slot that holds one of a few things in turn, by its game variable -- 1 the first
+// model's (OBJFIX.HQR entry, its found message, name and description the texts of that number, +100, +200), 2 the second's, up to four.
+// The story's errands that are never had together share a slot so (the user, 2026-11-08: "things like the bait and tyre we never have
+// at the same time so they only need a single slot"). Kept once read, as inv_count=.
+#define RACE_MAX_INV_KINDS 6
+static int s_invKindSlot[RACE_MAX_INV_KINDS], s_invKindN[RACE_MAX_INV_KINDS], s_invKind[RACE_MAX_INV_KINDS][4], s_nbInvKinds = 0;
+void RaceMod_InvKinds(void) {
+    for (int i = 0; i < s_nbInvKinds; i++) {
+        T_INV_OBJ *inv = &TabInv[s_invKindSlot[i]];
+        for (int k = 0; k < s_invKindN[i]; k++) inv->TabObj3D[k] = (U8)s_invKind[i][k];
+        int which = ListVarGame[s_invKindSlot[i]] - 1;
+        if (which < 0) which = 0;
+        if (which >= s_invKindN[i]) which = s_invKindN[i] - 1;
+        inv->IdObj3D = which;
+        inv->FlagInv &= ~FLAG_INV_UNUSABLE;
+    }
+}
 static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
 static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
 static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
@@ -3763,7 +3780,7 @@ static void PlayerPlan(void) {
 
 // The keys an island with no track keeps from the set (Load's carOnly): the car's handling, and the set's own.
 static int CarKey(const char *key) {
-    static const char *const keys[] = {"gears", "accel", "brake", "coast", "reverse", "steer", "automatic", "hud", "track", "tired", "dark_scene"};
+    static const char *const keys[] = {"gears", "accel", "brake", "coast", "reverse", "steer", "automatic", "hud", "track", "tired", "dark_scene", "inv_kinds"};
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) if (!strcmp(key, keys[i])) return 1;
     return !strncmp(key, "gear", 4) && key[4] >= '1' && key[4] <= '0' + RACE_MAX_GEARS && !key[5];
 }
@@ -4533,6 +4550,18 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "inv_count")) {
             const int slot = atoi(v);
             if (slot >= 0 && slot < 64) s_invCount |= 1ull << slot;
+        }
+        else if (!strcmp(key, "inv_kinds")) {
+            int slot, m[4], n;
+            if ((n = sscanf(v, "%d %d %d %d %d", &slot, &m[0], &m[1], &m[2], &m[3])) >= 2 && slot >= 0 && slot < MAX_INVENTORY) {
+                int i = 0;
+                while (i < s_nbInvKinds && s_invKindSlot[i] != slot) i++;
+                if (i < RACE_MAX_INV_KINDS) {
+                    if (i == s_nbInvKinds) s_nbInvKinds++;
+                    s_invKindSlot[i] = slot; s_invKindN[i] = n - 1;
+                    for (int k = 0; k < n - 1; k++) s_invKind[i][k] = m[k] & 255;
+                }
+            }
         }
         else if (!strcmp(key, "vargame")) {
             int n, value;
@@ -18163,6 +18192,7 @@ static void DarkFrame(void) {
 
 void RaceMod_Frame(void) {
     DarkFrame();
+    RaceMod_InvKinds();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();

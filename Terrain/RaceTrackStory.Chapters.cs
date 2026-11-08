@@ -956,12 +956,23 @@ void comportement_1()
         scripts.SetText(0, ScriptKind.Life, hero);
     });
 
+    // The Weather Wizard's tent (scene 21): the game's trade of the Incandescent Pearl for the Ring of Lightning (item 19) -- its slot is
+    // the story's errands' now (RaceTrackStory.Errands.cs). The trade is never started: the pearl stays Twinsen's and nothing gives 19.
+    private static void WizardNoRing(StoryParts p) => p.Edit(WizardTent, "the Weather Wizard's tent: no Ring of Lightning for the pearl (item 19 is the errands' slot)", _ => scripts =>
+    {
+        var hero = scripts.GetText(0, ScriptKind.Life);
+        hero = Loose(hero, "if (1 == var_game(169) && 1 == use_inventory(5))", "if (0 > var_game(169) && 1 == use_inventory(5))");
+        scripts.SetText(0, ScriptKind.Life, hero);
+    });
+
     private static void Chapters(StoryParts p)
     {
         givers = Givers(p.Store);
         Morning(p);
         Thief(p);
         PharmacyAfterThief(p);
+        p.Log.AddRange(ErrandsInstall(p.Store.Directory));
+        WizardNoRing(p);
         StormPeople(p);
         // (the Tralu's cave as the regulars' secret tavern in the storm -- Citadel/RaceTrackStory.TraluTavern.cs)
         TraluTavern(p);
@@ -2111,6 +2122,8 @@ void comportement_{HeroWatching}()
                     message({p.Say(ChapterLine.TyreDeal)});
                     message_obj(0, {p.Say(ChapterLine.WheelSeen)});
                     set_var_game({QBait}, {BaitTraded});
+                    set_var_game({ErrandSlot}, {ErrandTyre});
+                    found_object({ErrandSlot});
                     if ({LucTold} == var_game({QLucCar}))
                     {{
                         set_var_game({QLucCar}, {WheelFound});
@@ -2193,6 +2206,8 @@ void comportement_1()
                             give_gold_pieces({BaitPrice});
                             set_var_game({QBait}, {BaitHeld});
                             message_obj(0, {p.Say(ChapterLine.BaitBought)});
+                            set_var_game({ErrandSlot}, {ErrandBait});
+                            found_object({ErrandSlot});
                         }}
                         else
                         {{
@@ -2298,6 +2313,7 @@ stop();
                 set_var_game({Radio}, 1);
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoePitBox)});
                 set_var_game({QLucCar}, {WheelFitted});
+                set_var_game({ErrandSlot}, 0);
                 clr_holo_pos({HarbourPos});";
             var told = $@"                message_obj({lucIndex}, {p.Say(ChapterLine.LucWheel)});
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeFitIt)});

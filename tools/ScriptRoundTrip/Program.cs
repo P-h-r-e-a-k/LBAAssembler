@@ -93,6 +93,7 @@ internal static class Program
             "storytexts" => StoryTextsCommand.Run(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),
+            "objfixsize" => RaceTrackCommand.ObjFixSize(args),
             "scenenames" => RaceTrackCommand.SceneNames(args),
             "footprints" => IslandFootprintStudy.Run(args),
             "islandrender" => IslandRenderCommand.Run(args),
