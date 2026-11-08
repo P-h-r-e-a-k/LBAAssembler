@@ -1824,6 +1824,14 @@ static void cmd_actorpos(int argc, const char *argv[]) {
     Console_Print("actorpos: actor %d at (%d,%d,%d) beta %d", n, (int)a->Obj.X, (int)a->Obj.Y, (int)a->Obj.Z, (int)a->Obj.Beta);
 }
 
+// herobody <generic>: the hero's body, as a script's body_obj(0, n) -- GEN_BODY_TUNIQUE (1) his tunic's (the race story's overalls) once
+// he has item 4, else his everyday clothes (ChoiceHeroBody)
+static void cmd_herobody(int argc, const char *argv[]) {
+    if (argc < 2) { Console_Print("herobody <generic>: now %d", (int)ListObjet[NUM_PERSO].GenBody); return; }
+    InitBody((U8)atoi(argv[1]), NUM_PERSO);
+    Console_Print("herobody: generic %d", (int)ListObjet[NUM_PERSO].GenBody);
+}
+
 static void cmd_teleport(int argc, const char *argv[]) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
 
@@ -3171,6 +3179,8 @@ void Console_RegisterAll(void) {
                               "'actor <n>' jumps onto actor n. Within-cube only.");
     Console_RegisterCommandEx("actorpos", cmd_actorpos, "Put an actor at a place in the scene", "actorpos <n> <x> <y> <z> [beta]",
                               "Sets actor n's coords (and beta) directly; its scripts go on.");
+    Console_RegisterCommandEx("herobody", cmd_herobody, "Read/set the hero's body", "herobody [generic]",
+                              "InitBody(generic, NUM_PERSO), as body_obj(0, n): 1 is his tunic's once he has item 4.");
     Console_RegisterCommandEx("newgame", cmd_newgame, "Start a new game, as the main menu's New Game", "newgame", "InitGame(1).");
     Console_RegisterCommandEx("behaviour", cmd_behaviour, "Read/set hero behaviour (comportement)",
                               "behaviour [0..13]", "0=Normal 1=Sportif 2=Aggressive 3=Discreet 4=Protopack. Routes through SetComportement.");

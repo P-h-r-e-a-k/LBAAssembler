@@ -315,6 +315,8 @@ internal static class RaceCarEngineFile
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
         // after the storm, once Twinsen has slept; three laps, and a win is Mr. Paul's ferry ticket
         if (storm) text.Append($"gate={RaceTrackStory.GlovesSlot} 1 Mr. Paul: driving gloves first!\n");
+        // (and nobody without racing overalls: the museum's, item 4 in the tunic's place -- Citadel/CitadelOveralls)
+        if (storm) text.Append($"gate={Citadel.CitadelOveralls.OverallsSlot} 1 Mr. Paul: racing overalls first! Miss Bloop's museum has yours.\n");
         // the storm track's story: Raph laps it in his car -- the town circuit's copies of it, out of sight in the storm -- until Twinsen comes
         // to talk to him, then it stands parked by the start line; and his line that tells the time to beat has it in
         if (storm && ghost >= 0 && info!.Story is { } st)

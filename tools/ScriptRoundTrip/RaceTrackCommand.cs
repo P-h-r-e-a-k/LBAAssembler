@@ -599,6 +599,19 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // restfaces <game> <BODY.HQR entry> <out.csv>: a body's faces at rest -- colour, bone, then each point's x y z -- and its colours' counts
+    public static int BodyFaces(string[] args)
+    {
+        var body = LbaBodyStudio.Body.Read(HqrArchive.Open(System.IO.Path.Combine(args[1], "BODY.HQR")).Read(int.Parse(args[2])), 2);
+        var world = body.World();
+        int BoneOf(int p) { for (var b = 0; b < body.Bones.Count; b++) if (p >= body.Bones[b].Start && p < body.Bones[b].Start + body.Bones[b].Count) return b; return -1; }
+        System.IO.File.WriteAllLines(args[3], body.Faces.Where(f => f.Points.Length >= 3)
+            .Select(f => f.Colour + "," + string.Join(",", f.Points.Select(i => $"{world[i].X:0},{world[i].Y:0},{world[i].Z:0}"))));
+        foreach (var g in body.Faces.GroupBy(f => f.Colour).OrderBy(g => g.Key))
+            Console.WriteLine($"colour {g.Key}: {g.Count()} faces, bones {string.Join(" ", g.SelectMany(f => f.Points.Take(1)).Select(BoneOf).Distinct().OrderBy(x => x))}");
+        return 0;
+    }
+
     // gridtop <game> <scene> <layer>...: an interior's grid seen from above at each layer, a cell a character -- '.' empty, else its block's
     // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
     public static int GridTop(string[] args)

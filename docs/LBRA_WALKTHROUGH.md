@@ -175,15 +175,17 @@ The same ladder brings Twinsen up onto the quay.
 
 **Found:** 10 kashes.
 
-**Secrets (optional, any time this chapter).** Two things on Citadel that pay off in chapter 2: each gives a page for the magic slate.
+**Secrets (optional, any time this chapter).** Two things on Citadel that pay off in chapter 2: each gives a page for the magic slate. (The racing overalls in the museum are not optional any more: Mr. Paul wants them on the storm track, 2026-11-08.)
 
 - **The museum.** Twinsen takes the lift up the rampart and goes into the museum. The guard at the desk lets him in free (say yes to
   the ticket). Miss Bloop, the curator, is in the hall.
 
-  **Miss Bloop:** "You showed up at the right time. The door at the top of the stairs is jammed, and your old tunic is up there. Free
-  the door, and you can have it back: wear it for luck at the races."
+  **Miss Bloop:** "You showed up at the right time. The door at the top of the stairs is jammed, and your racing overalls are up
+  there: Zoe lent them to us for the racing exhibition. Free the door, and you can have them back for the races."
 
-  Once the door is free: **Miss Bloop:** "Thank you for freeing the door, Twinsen. Wear your tunic at the races: it brings luck."
+  Once the door is free: **Miss Bloop:** "Thank you for freeing the door, Twinsen. Your racing overalls suit you: good luck at the
+  races." **Found:** the racing overalls (item 4, the tunic's place: they store Magic as the tunic did). From now on Twinsen wears
+  them. Mr. Paul lets nobody onto the storm track without them, nor without the driving gloves.
 
   On the hall's north wall, by the corner, over a sideboard, hangs a picture of Twinsen, head and shoulders, holding a gold cup. Action
   in front of it:

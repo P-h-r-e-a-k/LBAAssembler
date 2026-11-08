@@ -29,7 +29,7 @@ internal static partial class RaceTrackStory
     private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2, MoonStart = 229;
     // the game's own: the variable of its Dino-Fly's cure (1 sent to Ker'aooc, 2 his assistant has answered, 3 the School's hall seen)
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
-    private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113;
+    private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113, PearlClam = 5;
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
     // The exam pages as Twinsen carries them (the user, 2026-11-06: "Add the pages to the inventory as one item with a count, 1/2/3 for how
@@ -73,7 +73,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n"
+        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.HelmetSlot} 1 Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n"
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\n"
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -270,6 +270,8 @@ void comportement_1()
         PageEgg, DeanNotMine, FlickNoIdea, FlickBox, RunesUnread, RunesRecord, RunesExcept, DeanBu,
         // (the sweep of 2026-11-05)
         HallWelcome, BaldinoRadioWorks, BaldinoNoCall,
+        // (the racing helmet, 2026-11-08: Citadel/CitadelOveralls)
+        FlickHelmet,
     }
     private static readonly string[][] DesertLines =
     {
@@ -546,6 +548,15 @@ void comportement_1()
             "Twinsen! Non hai mai risposto alla mia chiamata. Non importa: hai trovato la casa.",
             "Twinsen! Nunca atendeste a minha chamada. Não faz mal: encontraste a casa.",
         },
+        new[]
+        {
+            "And no helmet, no race! There's a giant clam in a sea cave in the cliffs that's been sitting on a racing helmet since some racer went diving. I've marked it on your holomap.",
+            "Et pas de casque, pas de course ! Il y a un coquillage géant dans une grotte marine au pied des falaises qui couve un casque de course depuis qu'un pilote est allé plonger. Je te l'ai marqué sur ton holomap.",
+            "Und ohne Helm kein Rennen! In einer Meeresgrotte in den Klippen sitzt eine Riesenmuschel auf einem Rennhelm, seit irgendein Rennfahrer dort tauchen war. Ich habe sie dir auf dem Holomap markiert.",
+            "¡Y sin casco no hay carrera! Hay un molusco gigante en una gruta marina de los acantilados que guarda un casco de carreras desde que un piloto fue a bucear. Te lo he marcado en el holomapa.",
+            "E niente casco, niente corsa! C'è una conchiglia gigante in una grotta marina tra le scogliere che cova un casco da corsa da quando un pilota ci è andato a fare immersioni. Te l'ho segnata sull'olomappa.",
+            "E sem capacete não há corrida! Há uma concha gigante numa gruta marinha nas falésias que guarda um capacete de corrida desde que um piloto foi lá mergulhar. Marquei-a no teu holomapa.",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -657,9 +668,14 @@ void comportement_1()
             {{
                 message({Say(DesertLine.FlickPages)});
             }}
-            else if ({PagesWon} > var_game({QPages}))
+            else if ({PagesWon} > var_game({QPages}) && 0 != var_game({Citadel.CitadelOveralls.HelmetSlot}))
             {{
                 message({Say(DesertLine.FlickOpen)});
+            }}
+            if (0 == var_game({Citadel.CitadelOveralls.HelmetSlot}))
+            {{
+                message({Say(DesertLine.FlickHelmet)});
+                set_holo_pos({PearlCave});
             }}", "Flick");
 
         // the three pages' places on the road, at 30, 55 and 80 % of the lap (each found driving over it or walking to it, in lap order),
@@ -776,8 +792,19 @@ void comportement_2()
         b.Edit(KeraoocHouse, "Ker'aooc's assistant: the umbrella isn't hers, Twinsen keeps it", _ => scripts =>
             scripts.SetText(KeraoocAssistant, ScriptKind.Life, Loose(scripts.GetText(KeraoocAssistant, ScriptKind.Life),
                 "oneif (1 == use_inventory(20))\n{\nset_var_game(20, 0);\nmessage(286);", "oneif (1 == use_inventory(20))\n{\nmessage(286);")));
-        b.Edit(PearlCave, "the Pearl of Incandescence's cave: Twinsen's look round is a text of the game's (337, not 327)", _ => scripts =>
-            scripts.SetText(0, ScriptKind.Life, Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);")));
+        // The giant clam there keeps the racing helmet now, in the pearl's place (item 5 -- Citadel/CitadelOveralls; the Desert race's gate
+        // wants it): opened as the game opens it, Action by it and it's Twinsen's. Not shut for good by what the story has no use for --
+        // the Ball of Sendell (variable 3) or the Ring of Lightning (19, the story's errands' slot now: the tin of bait would have shut
+        // it) -- and no word to the game's quest after it (83).
+        b.Edit(PearlCave, "the Pearl of Incandescence's cave: Twinsen's look round is a text of the game's (337, not 327); the clam gives the racing helmet, whatever the errands", _ => scripts =>
+        {
+            var hero = Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);");
+            hero = Loose(hero, "if (21 == l_track_obj(5) && 0 == var_game(169) && 0 == var_game(19) && 0 == var_game(3) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\nset_var_game(83, 11);\n}",
+                "if (21 == l_track_obj(5) && 0 == var_game(169) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\n}");
+            scripts.SetText(0, ScriptKind.Life, hero);
+            scripts.SetText(PearlClam, ScriptKind.Life, Loose(scripts.GetText(PearlClam, ScriptKind.Life),
+                "if (1 == var_game(3) || 1 == var_game(19) || 1 == var_game(169))", "if (1 == var_game(169))"));
+        });
 
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in any order (the user, 2026-11-08: "can we
         // have these count in any order and go into inventory") -- each a page lying on the road to be seen (CitadelProps.Page), once the

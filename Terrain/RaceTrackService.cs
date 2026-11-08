@@ -637,6 +637,9 @@ internal static class RaceTrackService
             if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
             // (and every other track's flag marshal, the Sup in her bikini, after everything else's: no body moves -- TempleMarshal.GridGirlRig)
             if (session.GridGirl) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig));
+            // (and the story's racing overalls in the tunic's place and racing helmet in the pearl's -- Twinsen's bodies, the inventory's
+            // models and texts -- after every body is made: none moves, the cars' drivers are their own -- Citadel/CitadelOveralls)
+            if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelOveralls.Install(gameDirectory));
             // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is
             // used -- RaceSounds)
             log.AddRange(RaceSounds.Install(gameDirectory));

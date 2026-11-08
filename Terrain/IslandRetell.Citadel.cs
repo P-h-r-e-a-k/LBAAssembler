@@ -71,12 +71,12 @@ internal static partial class IslandRetell
         }),
         (8, new[]
         {
-            "You showed up at the right time. The door at the top of the stairs is jammed, and your old tunic is up there. Free the door, and you can have it back: wear it for luck at the races.",
-            "Justement, tu tombes bien. La porte du haut de l'escalier est bloquée, et ta vieille tunique est là-haut. Débloque la porte et tu pourras la récupérer : mets-la pour les courses, elle te portera chance.",
-            "Du kommst gerade zur rechten Zeit. Die Tür oben an der Treppe klemmt, und deine alte Tunika ist da oben. Mach die Tür frei, dann bekommst du sie zurück: trag sie beim Rennen, als Glücksbringer.",
-            "Llegas justo a tiempo. La puerta de arriba de la escalera está atascada, y tu vieja túnica está allí. Desbloquea la puerta y podrás recuperarla: llévala en las carreras, da suerte.",
-            "Arrivi al momento giusto. La porta in cima alle scale è bloccata, e la tua vecchia tunica è lassù. Sblocca la porta e te la ridò: indossala alle corse, porta fortuna.",
-            "Você chegou em boa hora. A porta do alto da escada está emperrada, e sua velha túnica está lá em cima. Desbloqueie a porta e ela volta a ser sua: use-a para dar sorte nas corridas.",
+            "You showed up at the right time. The door at the top of the stairs is jammed, and your racing overalls are up there: Zoe lent them to us for the racing exhibition. Free the door, and you can have them back for the races.",
+            "Justement, tu tombes bien. La porte du haut de l'escalier est bloquée, et ta combinaison de course est là-haut : Zoé nous l'a prêtée pour l'exposition sur les courses. Débloque la porte et tu pourras la récupérer pour les courses.",
+            "Du kommst gerade zur rechten Zeit. Die Tür oben an der Treppe klemmt, und dein Rennoverall ist da oben: Zoe hat ihn uns für die Rennausstellung geliehen. Mach die Tür frei, dann bekommst du ihn für die Rennen zurück.",
+            "Llegas justo a tiempo. La puerta de arriba de la escalera está atascada, y tu mono de carreras está allí: Zoe nos lo prestó para la exposición sobre las carreras. Desbloquea la puerta y podrás recuperarlo para las carreras.",
+            "Arrivi al momento giusto. La porta in cima alle scale è bloccata, e la tua tuta da corsa è lassù: Zoe ce l'ha prestata per la mostra sulle corse. Sblocca la porta e te la ridò per le corse.",
+            "Você chegou em boa hora. A porta do alto da escada está emperrada, e seu macacão de corrida está lá em cima: a Zoe o emprestou para a exposição sobre as corridas. Desbloqueie a porta e ele volta a ser seu para as corridas.",
         }),
         (9, new[]
         {
@@ -143,12 +143,12 @@ internal static partial class IslandRetell
         }),
         (20, new[]
         {
-            "Thank you for freeing the door, Twinsen. Wear your tunic at the races: it brings luck.",
-            "Merci d'avoir débloqué la porte Twinsen. Mets ta tunique pour les courses : elle porte bonheur.",
-            "Danke, daß du die Tür freigemacht hast, Twinsen. Trag deine Tunika beim Rennen: sie bringt Glück.",
-            "Gracias por desbloquear la puerta, Twinsen. Lleva tu túnica en las carreras: da suerte.",
-            "Grazie di avere sbloccato la porta, Twinsen. Indossa la tua tunica alle corse: porta fortuna.",
-            "Obrigado por ter desbloqueado a porta, Twinsen. Use sua túnica nas corridas: ela dá sorte.",
+            "Thank you for freeing the door, Twinsen. Your racing overalls suit you: good luck at the races.",
+            "Merci d'avoir débloqué la porte, Twinsen. Ta combinaison de course te va bien : bonne chance pour les courses.",
+            "Danke, daß du die Tür freigemacht hast, Twinsen. Dein Rennoverall steht dir gut: viel Glück bei den Rennen.",
+            "Gracias por desbloquear la puerta, Twinsen. Tu mono de carreras te sienta bien: buena suerte en las carreras.",
+            "Grazie di avere sbloccato la porta, Twinsen. La tua tuta da corsa ti sta bene: buona fortuna alle corse.",
+            "Obrigado por ter desbloqueado a porta, Twinsen. Seu macacão de corrida fica bem em você: boa sorte nas corridas.",
         }),
         (21, new[]
         {
@@ -158,6 +158,34 @@ internal static partial class IslandRetell
             "¡Eh!... ¡oiga, se parece usted al personaje del cuadro! ¡El del trofeo!",
             "Ehi!... sa, lei assomiglia al tipo del quadro! Quello con il trofeo!",
             "Ei!... sabe, você é parecido com o sujeito do quadro! Aquele com o troféu!",
+        }),
+        // (the museum's tunic is Twinsen's racing overalls now -- Citadel/CitadelOveralls, 2026-11-08: his question, the plaque, his "aha")
+        (24, new[]
+        {
+            "I've come for my racing overalls.",
+            "Je viens chercher ma combinaison de course.",
+            "Ich komme wegen meines Rennoveralls.",
+            "Vengo a buscar mi mono de carreras.",
+            "Sono venuto a prendere la mia tuta da corsa.",
+            "Vim buscar meu macacão de corrida.",
+        }),
+        (29, new[]
+        {
+            "\"Racing overalls, lent by Zoe for the racing exhibition. They belong to Twinsen, and so does Sendell's Medallion in the pocket. Please do not touch.\"",
+            "\"Combinaison de course, prêtée par Zoé pour l'exposition sur les courses. Elle appartient à Twinsen, tout comme le Médaillon de Sendell dans sa poche. Prière de ne pas toucher.\"",
+            "\"Rennoverall, von Zoe für die Rennausstellung geliehen. Er gehört Twinsen, wie auch Sendells Medaillon in der Tasche. Bitte nicht berühren.\"",
+            "\"Mono de carreras, prestado por Zoe para la exposición sobre las carreras. Pertenece a Twinsen, igual que el Medallón de Sendell que lleva en el bolsillo. Se ruega no tocar.\"",
+            "\"Tuta da corsa, prestata da Zoe per la mostra sulle corse. Appartiene a Twinsen, come il Medaglione di Sendell nella tasca. Si prega di non toccare.\"",
+            "\"Macacão de corrida, emprestado pela Zoe para a exposição sobre as corridas. Pertence ao Twinsen, assim como o Medalhão de Sendell no bolso. Favor não tocar.\"",
+        }),
+        (231, new[]
+        {
+            "Aha! My racing overalls, and Sendell's Medallion still in the pocket.",
+            "Ah ! Ma combinaison de course, et le Médaillon de Sendell toujours dans la poche.",
+            "Aha! Mein Rennoverall, und Sendells Medaillon noch in der Tasche.",
+            "¡Ajá! Mi mono de carreras, y el Medallón de Sendell aún en el bolsillo.",
+            "Ah! La mia tuta da corsa, e il Medaglione di Sendell ancora in tasca.",
+            "Ah! Meu macacão de corrida, e o Medalhão de Sendell ainda no bolso.",
         }),
         (22, new[]
         {
