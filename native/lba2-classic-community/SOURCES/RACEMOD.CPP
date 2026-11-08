@@ -799,6 +799,7 @@ static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16];
 // through the road surface instead of descending into a hole ... Copy how the original game's elevators handle this")
 #define RACE_LIFT_SINK 40
 #define RACE_LIFT_SINK_MS 600
+#define RACE_LIFT_ARRIVE_MS 500            // (a lift ignores the action key this long after its scene starts: DeckLiftAction)
 static int s_liftPhase = 0;                // 0 Twinsen's animation, 1 the grate sinking
 static S32 s_liftGrateY = 0;
 static int s_nbLifts = 0, s_lift = -1, s_liftDir = 0, s_liftScene = -1;
@@ -13110,12 +13111,20 @@ U32 RaceMod_FilterInput(U32 input) {
     // (a ghost played back: the car is the ghost's -- nothing gets Twinsen out of it, nor fires, jumps or dodges)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) input &= ~(U32)(I_JOY | I_FIRE | I_ACTION | I_ESQUIVE);
     // (a lift on the raised road: the action key on its pad takes him down; while it moves, no key does anything -- deck_lift=)
-    if (RaceMod_Active() && s_nbLifts && CubeMode == CUBE_EXTERIEUR) {
+    // (the key's last state is kept in every scene, and a press counts only RACE_LIFT_ARRIVE_MS after a scene starts: out of the museum
+    // by its window he lands on the lift's grate, and a key still down from inside -- its last state was the road's, before he went in --
+    // took him straight back down. The user, 2026-11-07: "sometimes Twinsen drops straight back in again, it's not every time, but it is
+    // a lot")
+    {
         static int liftActWas = 0;
-        const int act = (input & I_ACTION_M) != 0, pressed = act && !liftActWas;
+        static S32 liftSceneWas = -1, liftSceneAt = 0;
+        if ((S32)NumCube != liftSceneWas) { liftSceneWas = NumCube; liftSceneAt = TimerRefHR; }
+        const int act = (input & I_ACTION_M) != 0, pressed = act && !liftActWas && TimerRefHR - liftSceneAt >= RACE_LIFT_ARRIVE_MS;
         liftActWas = act;
-        if (DeckLiftAction(pressed)) input &= ~(U32)I_ACTION_M;
-        if (s_lift >= 0) return 0;
+        if (RaceMod_Active() && s_nbLifts && CubeMode == CUBE_EXTERIEUR) {
+            if (DeckLiftAction(pressed)) input &= ~(U32)I_ACTION_M;
+            if (s_lift >= 0) return 0;
+        }
     }
     if (Explore() && CubeMode == CUBE_EXTERIEUR) {
         const int act = (input & I_ACTION_M) != 0, pressed = act && !s_footActWas;
