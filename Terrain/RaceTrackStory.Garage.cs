@@ -32,7 +32,12 @@ internal static partial class RaceTrackStory
 
     // The Desert race file's lines for the filters
     internal static string GarageRaceLines() =>
-        $"inv_kinds={FiltersSlot} {FiltersModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\n";
+        $"inv_kinds={FiltersSlot} {FiltersModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\n" +
+        // (and Chedil Amiradoo on his magic carpet, round the island: on the ground as the game had him, but never under the track's raised
+        // ground nor stopped by its decors, and well over the road wherever he comes near it -- F14, the user, 2026-11-08: "raise his
+        // actors path above ground", "check that during a race he won't be in the way of the track at any point": RACEMOD.CPP hover=)
+        $"hover={CarpetPeddler} 0 {CarpetOverRoad} {CarpetRoadReach}\n";
+    private const int CarpetPeddler = 169, CarpetOverRoad = 1600, CarpetRoadReach = 5000;
 
     private static readonly string[][] FiltersTexts =
     {

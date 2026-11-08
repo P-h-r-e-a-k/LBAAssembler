@@ -614,6 +614,27 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // trackgrep <game> <first scene> <last scene> <regex>: each actor's track script lines matching, scene by scene
+    public static int TrackGrep(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var re = new System.Text.RegularExpressions.Regex(args[4]);
+        for (var scene = int.Parse(args[2]); scene <= int.Parse(args[3]); scene++)
+        {
+            if (!store.SceneExists(scene)) continue;
+            var model = store.Load(scene);
+            var scripts = LBAAssembler.LbaScript.SceneScripts.Load(store.LoadRecord(scene), scene);
+            for (var a = 0; a < model.Actors.Count; a++)
+            {
+                string text;
+                try { text = scripts.GetText(a, LBAAssembler.LbaScript.ScriptKind.Track); } catch (InvalidOperationException) { continue; }
+                var hits = text.Split('\n').Where(l => re.IsMatch(l)).Select(l => l.Trim()).Distinct().Take(6).ToList();
+                if (hits.Count > 0) Console.WriteLine($"scene {scene} actor {a} (entity {model.Actors[a].Entity}, body {model.Actors[a].Body}, flags 0x{model.Actors[a].Flags:X}): {string.Join(" | ", hits)}");
+            }
+        }
+        return 0;
+    }
+
     // gridtop <game> <scene> <layer>...: an interior's grid seen from above at each layer, a cell a character -- '.' empty, else its block's
     // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
     public static int GridTop(string[] args)

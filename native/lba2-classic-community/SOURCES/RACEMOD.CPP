@@ -219,6 +219,10 @@
  *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
  *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
  *                                (Breakdown, RaceMod_Slide) -- a race he can't win; raced again once the filters are in
+ *     hover=<entity> <height> <over road> <reach>   (2026-11-08) that entity's actors outside fly at <height> over the ground -- and
+ *                                at least <over road> over the lap's road within <reach> units of it -- whatever their tracks' points
+ *                                say, with no collisions (the White Leaf Desert's Chedil Amiradoo on his magic carpet: sunk under the
+ *                                track's raised ground, stopped by its decors, never in the cars' way: Hover)
  *     no_suit=1                  (2026-11-08) the game's spacesuit never put on: a script's comportement_hero() of a suit's behaviour is
  *                                Twinsen's normal one (the sporty suit's his sporty one) -- the Emerald Moon's, where the story has him
  *                                in his racing overalls and helmet instead, ladders and all (RaceMod_SuitFor, OBJECT.CPP SetComportement)
@@ -1283,6 +1287,8 @@ static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 // breakdown= (2026-11-08): its variable (-1 none), the least it wants, after which checkpoint, the speed then, its words; broken down
 // this race, and the last puff of smoke
 static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000, s_broken = 0;
+// hover= (2026-11-08): the entity (-1 none), its height over the ground, over the road, and how near the road that holds
+static int s_hoverEntity = -1, s_hoverHeight = 300, s_hoverRoad = 1600, s_hoverReach = 3072;
 static char s_brkText[96];
 static S32 s_brkSmoke = 0;
 #define RACE_SUPERJET_LEAN 0.0             // radians more it leans forward: none -- the build lays the model flat (RaceTrackSuperJet.LaidFlat)
@@ -4640,6 +4646,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
         else if (!strcmp(key, "no_suit")) s_noSuit = atoi(v) != 0;
+        else if (!strcmp(key, "hover")) { if (sscanf(v, "%d %d %d %d", &s_hoverEntity, &s_hoverHeight, &s_hoverRoad, &s_hoverReach) < 4) s_hoverEntity = -1; }
         else if (!strcmp(key, "breakdown")) {
             int used = 0;
             if (sscanf(v, "%d %d %d %d %n", &s_brkVar, &s_brkLeast, &s_brkCheckpoint, &s_brkSpeed, &used) >= 4 && used > 0) snprintf(s_brkText, sizeof(s_brkText), "%s", v + used);
@@ -11685,6 +11692,33 @@ static void HeroLook(S32 now, int driving) {
     }
 }
 
+// hover=: the entity's actors outside eased to their height over the ground -- over the road near it -- every frame, their collisions off
+// (the ground the island's terrain under them, CalculAltitudeTerrain; the road's the lap's line's height at its nearest point, a raised
+// deck's included)
+static void Hover(void) {
+    if (s_hoverEntity < 0 || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    const T_RACE_OPPONENT *g = Guide();
+    for (int n = 1; n < (int)NbObjets; n++) {
+        T_OBJET *a = &ListObjet[n];
+        if (a->IndexFile3D != s_hoverEntity) continue;
+        a->Flags &= ~(CHECK_OBJ_COL | CHECK_BRICK_COL | OBJ_FALLABLE);
+        double want = CalculAltitudeTerrain(a->Obj.X, a->Obj.Z, 0) + s_hoverHeight;
+        if (g && g->Count) {
+            const double wx = CurrentCubeX * 32768.0 + a->Obj.X, wz = CurrentCubeY * 32768.0 + a->Obj.Z;
+            int best = -1;
+            double bd = 1e30;
+            for (int i = 0; i < g->Count; i++) {
+                const double d = (g->X[i] - wx) * (g->X[i] - wx) + (g->Z[i] - wz) * (g->Z[i] - wz);
+                if (d < bd) { bd = d; best = i; }
+            }
+            if (best >= 0 && bd < (double)s_hoverReach * s_hoverReach && g->Y[best] + s_hoverRoad > want) want = g->Y[best] + s_hoverRoad;
+        }
+        // (eased: a carpet rising over the road, not jumping)
+        const S32 step = 40, gap = (S32)want - a->Obj.Y;
+        a->Obj.Y += gap > step ? step : gap < -step ? -step : gap;
+    }
+}
+
 // no_suit=: a suit's behaviour asked for (a script's comportement_hero(), SetComportement) is his own instead -- the sporty suit's his sporty
 // one, the others his normal one; any other as asked
 S32 RaceMod_SuitFor(S32 comportement) {
@@ -18279,6 +18313,7 @@ void RaceMod_Frame(void) {
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
+    Hover();
     // (Twinsen on foot in a room of foot_room=: its camera -- FootRoomCamera)
     {
         const int was = s_footRoom;
@@ -20766,6 +20801,7 @@ static void ResetTrack(void) {
     // (the suit's behaviours his again, and his outside body off him: his own)
     s_noSuit = 0;
     s_brkVar = -1; s_broken = 0;
+    s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_footBody = -1; s_footChecked = 0;
     s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
