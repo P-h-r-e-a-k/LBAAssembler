@@ -42,8 +42,13 @@ internal static partial class RaceTrackStory
     // its voiced place, as the gloves' were. The arrows: three holomap positions no scene of the build has (from 224 on), labelled "An exam
     // page", on from the Dean's word (Q_PAGES 2), each off as its page is found.
     public const int PagesSlot = 6;
-    // each page's own: found (1) -- spare game variables (RaceTrackStory.Eggs.cs's list: 75, 96, 106)
-    private static readonly int[] PageFoundVar = { 75, 96, 106 };
+    // which pages are found, one bit each in one game variable (the user, 2026-11-08: "Can we use a single byte flag for the pages, we
+    // could use a single bit for each page"): page 1 adds 1, page 2 adds 2, page 3 adds 4. The scripts have no bit tests, only
+    // comparisons, so "page k not found yet" is the values 0-7 without its bit, one equality each. A spare game variable (75:
+    // RaceTrackStory.Eggs.cs's list)
+    private const int PagesFoundVar = 75;
+    private static string PageNotFound(int k) =>
+        string.Join(" || ", Enumerable.Range(0, 8).Where(v => (v & (1 << k)) == 0).Select(v => $"{v} == var_game({PagesFoundVar})"));
     private const int PagesModelLike = 38, FirstFreeArrow = 224, LastArrow = 254;
     private static readonly string[][] PagesItemTexts =
     {
@@ -777,7 +782,7 @@ void comportement_2()
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in any order (the user, 2026-11-08: "can we
         // have these count in any order and go into inventory") -- each a page lying on the road to be seen (CitadelProps.Page), once the
         // Dean has told of them; found, one more in Twinsen's inventory (item PagesSlot's count, and Q_PAGES with it: 3, 4, then 5 -- all
-        // three), its own arrow off, and gone. Each page's own variable says it was found (PageFound); the lines go by how many are found,
+        // three), its own arrow off, and gone. Which pages are found is a bit each in one variable (PagesFoundVar); the lines go by how many are found,
         // not by which. On the road at its height, and never under the ground there ("check that they're all above ground")
         var lines = pages.Select(pg => pg.Item2).ToArray();
         string ByCount() => $@"if (3 == var_game({QPages}))
@@ -802,15 +807,15 @@ void comportement_2()
             var ground = report.GroundAfter?.Invoke(at.X, at.Z) ?? at.Y;
             var y = Math.Max(at.Y, ground) + 8;
             if (ground > at.Y + 16) log.Add($"page {k + 1}: the lap's line ({at.Y:0}) under the ground there ({ground:0}) -- on the ground");
-            var flag = PageFoundVar[k];
-            b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}, height {y:0}) ({fraction:0%} of the lap): found in any order (its variable {flag})", model =>
+            var bit = 1 << k;
+            b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}, height {y:0}) ({fraction:0%} of the lap): found in any order (bit {bit} of variable {PagesFoundVar})", model =>
             {
                 var page = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Page, Math.Clamp(RaceTrackScenes.CubeLocal(at.X, model.CubeX), 0, IslandFile.CubeSize - 1), (int)Math.Round(y),
                     Math.Clamp(RaceTrackScenes.CubeLocal(at.Z, model.CubeY), 0, IslandFile.CubeSize - 1), 700 * k);
                 page.CoulObj = 9;
                 return IslandBeatsA.Add(model, page, $@"void comportement_0()
 {{
-    if ({desert} && 0 == var_game({flag}))
+    if ({desert} && ({PageNotFound(k)}))
     {{
         set_comportement(comportement_1);
     }}
@@ -831,7 +836,7 @@ void comportement_1()
         invisible(0);
         if (1400 > distance(0))
         {{
-            set_var_game({flag}, 1);
+            add_var_game({PagesFoundVar}, {bit});
             add_var_game({QPages}, 1);
             add_var_game({PagesSlot}, 1);{arrowOff}
             {ByCount()}
