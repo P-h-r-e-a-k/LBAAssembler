@@ -798,6 +798,9 @@ void SetComportement(U8 comportement) {
     U8 memogenbody;
     U16 memogenanim;
     T_OBJET *ptrobj = &ListObjet[NUM_PERSO];
+    // (the race mod's no_suit=: the spacesuit's behaviours his own -- RACEMOD.CPP)
+    extern S32 RaceMod_SuitFor(S32 comportement);
+    comportement = (U8)RaceMod_SuitFor(comportement);
 
     if (comportement >= MAX_COMPORTEMENTS)
         return;

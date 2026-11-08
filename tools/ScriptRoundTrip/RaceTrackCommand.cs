@@ -609,6 +609,8 @@ internal static class RaceTrackCommand
             .Select(f => f.Colour + "," + string.Join(",", f.Points.Select(i => $"{world[i].X:0},{world[i].Y:0},{world[i].Z:0}"))));
         foreach (var g in body.Faces.GroupBy(f => f.Colour).OrderBy(g => g.Key))
             Console.WriteLine($"colour {g.Key}: {g.Count()} faces, bones {string.Join(" ", g.SelectMany(f => f.Points.Take(1)).Select(BoneOf).Distinct().OrderBy(x => x))}");
+        foreach (var sp in body.Spheres) Console.WriteLine($"sphere: bone {BoneOf(sp.Point)} at {world[sp.Point]} radius {sp.Radius} colour {sp.Colour}");
+        foreach (var l in body.Lines) Console.WriteLine($"line: bones {BoneOf(l.A)}-{BoneOf(l.B)} colour {l.Colour}");
         return 0;
     }
 

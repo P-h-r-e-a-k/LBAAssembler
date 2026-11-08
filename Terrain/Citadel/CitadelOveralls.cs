@@ -22,6 +22,11 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static class CitadelOveralls
 {
     public const int OverallsSlot = 4, HelmetSlot = 5;
+    // the overalls with the helmet on: one more body of Twinsen's (the hero's entity, 0) -- the Emerald Moon's outside, where the race
+    // file's foot_body= puts it on him in place of the spacesuit (no_suit=: the suit's behaviours his normal ones -- RACEMOD.CPP; F15 of
+    // the Nov 7 notes, the user: "Twinsen wears his racing suit and helmet instead of the spacesuit")
+    public const int HelmetBody = 18;
+    private const int HeroEntity = 0, Head = 14;
     // the hero's bodies: his everyday clothes, the tunic's, the tunic's with a weapon
     private const int Everyday = 0, Tunic = 1, FirstArmed = 2, LastArmed = 6;
     // (the racing gloves' colours, RaceTrackGloves: the red lit along its ramp, the white and the dark flat)
@@ -95,8 +100,20 @@ internal static class CitadelOveralls
                 if (body.Faces[i].Colour is >= TunicBlue and < TunicBlue + 16) { body.Faces[i] = body.Faces[i] with { Colour = Bright + body.Faces[i].Colour - TunicBlue, Texture = null }; n++; }
             armed.Add((b, body, n));
         }
+        var helmeted = WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2)));
         HqrWriter.ReplaceInFile(bodyPath, Tunic, overalls.Write());
         foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, body.Write());
+        // (the helmeted one: its entry again on a second pass, else one more at the file's end, and the hero's entity told of it)
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = HqrArchive.Open(ressPath).Read(44);
+        if (RaceTrackGuards.BodyOf(table, HeroEntity, HelmetBody) is { } had) HqrWriter.ReplaceInFile(bodyPath, had, helmeted.Write());
+        else
+        {
+            var index = HqrArchive.CountEntries(bodyPath);
+            HqrWriter.AppendToFile(bodyPath, helmeted.Write());
+            HqrWriter.ReplaceInFile(ressPath, 44, RaceTrackBaldinoCar.WithBody(table, HeroEntity, HelmetBody, index));
+        }
+        log.Add($"Twinsen's racing overalls with the helmet on: the hero's body {HelmetBody} ({helmeted.Vertices.Count} points, {helmeted.Faces.Count} polygons)");
         log.Add($"Twinsen's racing overalls: BODY.HQR {Tunic} (the tunic's) his everyday body in racing red with a white belt and stripes; " +
                 $"{FirstArmed}-{LastArmed} (the tunic's with a weapon) the tunic's blue made red ({string.Join(", ", armed.Select(a => a.Faces))} polygons)");
 
@@ -151,6 +168,88 @@ internal static class CitadelOveralls
             var stripe = Limbs.Contains(BoneOf(f.Points[0])) && MathF.Abs(n.X) > 0.85f && MathF.Sign(n.X) == MathF.Sign(middle.X);
             body.Faces[i] = stripe ? f with { Colour = White, Material = 0, Texture = null } : f with { Colour = Bright, Material = -1, Texture = null };
         }
+        return body;
+    }
+
+    // The helmet on his head: a shell round the head bone's points -- red, a white stripe over the top, a dark visor across the face, the
+    // padding dark inside the rim -- its points the head's (added after the head's own, every later bone's moved along)
+    internal static Body WithHelmet(Body body)
+    {
+        var world = body.World().ToList();
+        var head = body.Bones[Head];
+        // (his hair's tuft -- a brown sphere at the back of his head -- tucked into the helmet: the head's spheres and its children's off)
+        bool UnderHead(int b) { while (b > Head) b = body.Bones[b].Parent; return b == Head; }
+        int BoneOfPoint(int p) => body.Bones.FindIndex(x => p >= x.Start && p < x.Start + x.Count);
+        body.Spheres.RemoveAll(sp => BoneOfPoint(sp.Point) is var bp && bp >= Head && UnderHead(bp));
+        var own = world.Skip(head.Start).Take(head.Count).ToArray();
+        var lo = new Vector3(own.Min(p => p.X), own.Min(p => p.Y), own.Min(p => p.Z));
+        var hi = new Vector3(own.Max(p => p.X), own.Max(p => p.Y), own.Max(p => p.Z));
+        var centre = new Vector3((lo.X + hi.X) / 2, (lo.Y + hi.Y) / 2 + 10, (lo.Z + hi.Z) / 2);
+        var radius = new Vector3((hi.X - lo.X) / 2 + 30, (hi.Y - lo.Y) / 2 + 28, (hi.Z - lo.Z) / 2 + 22);
+        const int Around = 12, Down = 6;
+        float Lat(int k) => (75 - k * 22) * MathF.PI / 180;   // 75 down to -35
+        var points = new List<Vector3>();
+        var faces = new List<(int[] Points, int Colour)>();
+        Vector3 On(float lat, float a, float shrink = 1) =>
+            centre + new Vector3(radius.X * shrink * MathF.Cos(lat) * MathF.Sin(a), radius.Y * MathF.Sin(lat), radius.Z * shrink * MathF.Cos(lat) * MathF.Cos(a));
+        var crown = points.Count; points.Add(centre + new Vector3(0, radius.Y, 0));
+        var rings = new int[Down][];
+        for (var k = 0; k < Down; k++)
+        {
+            rings[k] = new int[Around];
+            for (var i = 0; i < Around; i++) { rings[k][i] = points.Count; points.Add(On(Lat(k), i * MathF.Tau / Around)); }
+        }
+        int Colour(float around, float lat)
+        {
+            var fromFront = MathF.Abs(MathF.IEEERemainder(around, MathF.Tau));
+            if (lat is > -0.5f and < 0.35f && fromFront < 1.1f) return Dark;
+            var fromTop = MathF.Min(fromFront, MathF.PI - fromFront);
+            return lat > 0.2f && fromTop < 0.3f ? White : Bright;
+        }
+        void Out(int[] q, int colour)
+        {
+            var at = q.Select(p => points[p]).ToArray();
+            var n = LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(at);
+            var middle = at.Aggregate(Vector3.Zero, (s, p) => s + p) / at.Length;
+            faces.Add((Vector3.Dot(n, middle - centre) < 0 ? q.Reverse().ToArray() : q, colour));
+        }
+        for (var i = 0; i < Around; i++)
+        {
+            var n = (i + 1) % Around;
+            var mid = (i + 0.5f) * MathF.Tau / Around;
+            Out(new[] { crown, rings[0][i], rings[0][n] }, Colour(mid, 1.4f) == White ? White : Bright);
+            for (var k = 0; k + 1 < Down; k++) Out(new[] { rings[k][i], rings[k][n], rings[k + 1][n], rings[k + 1][i] }, Colour(mid, (Lat(k) + Lat(k + 1)) / 2));
+        }
+        // (the padding: a dark band inside the rim, both its sides drawn)
+        var inner = new int[Around];
+        for (var i = 0; i < Around; i++) { inner[i] = points.Count; points.Add(On(Lat(Down - 1), i * MathF.Tau / Around, 0.82f) + new Vector3(0, 40, 0)); }
+        for (var i = 0; i < Around; i++)
+        {
+            var n = (i + 1) % Around;
+            var q = new[] { rings[Down - 1][i], rings[Down - 1][n], inner[n], inner[i] };
+            faces.Add((q, Dark)); faces.Add((q.Reverse().ToArray(), Dark));
+        }
+
+        // into the body: the points after the head's own, every later index moved along by as many
+        var at = head.Start + head.Count;
+        var k2 = points.Count;
+        int Moved(int p) => p >= at ? p + k2 : p;
+        world.InsertRange(at, points);
+        for (var b = 0; b < body.Bones.Count; b++)
+        {
+            var bone = body.Bones[b];
+            if (b == Head) body.Bones[b] = bone with { Count = bone.Count + k2 };
+            else if (b > Head) body.Bones[b] = bone with { Start = bone.Start + k2, Pivot = Moved(bone.Pivot) };
+        }
+        for (var i = 0; i < body.Faces.Count; i++) body.Faces[i] = body.Faces[i] with { Points = body.Faces[i].Points.Select(Moved).ToArray(), PointNormals = null };
+        for (var i = 0; i < body.Lines.Count; i++) body.Lines[i] = body.Lines[i] with { A = Moved(body.Lines[i].A), B = Moved(body.Lines[i].B) };
+        for (var i = 0; i < body.Spheres.Count; i++) body.Spheres[i] = body.Spheres[i] with { Point = Moved(body.Spheres[i].Point) };
+        foreach (var (q, colour) in faces) body.Faces.Add(new Face(q.Select(p => at + p).ToArray(), colour, Material: colour == Bright ? -1 : 0));
+        // (the body's own light scales, a point each, moved along with their points; the helmet's its own, 1)
+        if (body.LightScale is { } scales && scales.Length > at)
+            body.LightScale = scales.Take(at).Concat(Enumerable.Repeat(1f, k2)).Concat(scales.Skip(at)).ToArray();
+        body.Vertices = Enumerable.Repeat(Vector3.Zero, world.Count).ToList();
+        body.SetWorld(world.ToArray());
         return body;
     }
 

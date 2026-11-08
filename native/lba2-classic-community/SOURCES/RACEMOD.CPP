@@ -215,6 +215,11 @@
  *     ghost_watch=<file>         a ghost played back: Twinsen's car driven along it, round and round, no laps counted (GhostWatch)
  *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
  *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
+ *     no_suit=1                  (2026-11-08) the game's spacesuit never put on: a script's comportement_hero() of a suit's behaviour is
+ *                                Twinsen's normal one (the sporty suit's his sporty one) -- the Emerald Moon's, where the story has him
+ *                                in his racing overalls and helmet instead, ladders and all (RaceMod_SuitFor, OBJECT.CPP SetComportement)
+ *     foot_body=<generic>        (2026-11-08) on foot outside, Twinsen's body that one in place of his tunic's or his everyday clothes'
+ *                                (the Emerald Moon's racing overalls with his racing helmet on); back in his own indoors (HeroLook)
  *   Halloween (2026-10-17, the Temple of Bú's; the builder writes these for it alone):
  *     dive=<body> <x> <z> <y>    a place over the lap's road (island units, the road's height there) that a witch (<body>, the spooks') dives
  *                                at Twinsen's car from, now and then, as it comes up to it -- pulling up to pass just over it (Dives)
@@ -1263,6 +1268,8 @@ static int s_heroSmall = -1, s_heroIsSmall = 0;
 // one while an opponent's lightning has him shrunk (in twinsen_small='s place). Still his buggy -- the game's code turns its wheels, its
 // steering wheel and his head as he drives -- not a car drawn in its place (drive_as=). -1: none (the buggy's own).
 static int s_heroBody = -1, s_heroFire = -1, s_heroBodyChecked = 0;
+// no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
+static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 #define RACE_SUPERJET_LEAN 0.0             // radians more it leans forward: none -- the build lays the model flat (RaceTrackSuperJet.LaidFlat)
 #define RACE_JET_EASE_MS 2500              // its last this long: the speed eased back to the car's own, and the jet-pack flashing
 #define RACE_JET_FLASH_MS 250              // ... the car and the jet-pack this long each in turn
@@ -4617,6 +4624,8 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "gold_icon")) s_goldIcon = atoi(v);
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
+        else if (!strcmp(key, "no_suit")) s_noSuit = atoi(v) != 0;
+        else if (!strcmp(key, "foot_body")) { const int g = atoi(v); s_footBody = g > 0 && g < 255 ? g : -1; s_footChecked = 0; }
         else if (!strcmp(key, "twinsen_body")) {
             int body = -1, fire = -1, small = -1;
             const int n = sscanf(v, "%d %d %d", &body, &fire, &small);
@@ -11588,6 +11597,7 @@ static void SecondIntoBox(S32 now) {
 // Every frame, power-ups or not: Twinsen's car hidden while another body is drawn in its place -- the super jet-pack's (DrawSuperJet) or
 // the car he drives as (drive_as=, DrawDriveAs). (In PowerUps until 2026-10-18, which runs only with power-ups or a time trial: a race
 // file without them -- Play solo, the solo tests -- showed his buggy where the Temple's pumpkin F1 should have been.)
+S32 RaceMod_SuitFor(S32 comportement);
 static void HeroLook(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     // the super jet-pack: the car turned into it -- hidden, the jet-pack drawn in its place (DrawSuperJet)
@@ -11626,6 +11636,37 @@ static void HeroLook(S32 now, int driving) {
         const int firing = g == GEN_BODY_TUNIQUE_TIR || g == GEN_BODY_MAGE_TIR || (s_heroFire >= 0 && g == s_heroFire);
         const S32 want = firing ? s_heroFire : g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE || g == GEN_BODY_MAGE ? s_heroBody : -1;
         if (want >= 0 && g != want) InitBody((U8)want, NUM_PERSO);
+    }
+    // no suit (no_suit=): a suit's behaviour he came in with -- put on where the file wasn't read (the moon base's airlock, island 3, has
+    // no track) -- his own, normal or sporty
+    if (s_noSuit && NewCube == -1 && RaceMod_SuitFor(Comportement) != Comportement) {
+        Log_Info("[racemod] no_suit: behaviour %d his own, %d", (int)Comportement, (int)RaceMod_SuitFor(Comportement));
+        SetComportement((U8)RaceMod_SuitFor(Comportement));
+    }
+    // his outside body (foot_body=): on foot outside, in place of his tunic's or his everyday clothes' -- every frame, as the game puts
+    // its own back (out of the car, after a cut-scene's body(1)); his own again indoors
+    if (s_footBody >= 0 && !driving && NewCube == -1 && Comportement != C_BUGGY) {
+        if (!s_footChecked) {
+            s_footChecked = 1;
+            if (SearchBody((U8)s_footBody, NUM_PERSO) < 0) { Log_Warn("[racemod] foot_body: Twinsen has no body %d", s_footBody); s_footBody = -1; return; }
+            Log_Info("[racemod] foot_body: Twinsen outside on foot in his body %d", s_footBody);
+        }
+        const S32 g = hero->GenBody;
+        if (CubeMode == CUBE_EXTERIEUR && (g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE)) InitBody((U8)s_footBody, NUM_PERSO);
+        else if (CubeMode != CUBE_EXTERIEUR && g == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+    }
+}
+
+// no_suit=: a suit's behaviour asked for (a script's comportement_hero(), SetComportement) is his own instead -- the sporty suit's his sporty
+// one, the others his normal one; any other as asked
+S32 RaceMod_SuitFor(S32 comportement) {
+    if (!s_noSuit) return comportement;
+    switch (comportement) {
+    case C_SCAPH_INT_SPOR:
+    case C_SCAPH_EXT_SPOR: return C_SPORTIF;
+    case C_SCAPH_INT_NORM:
+    case C_SCAPH_EXT_NORM: return C_NORMAL;
+    default: return comportement;
     }
 }
 
@@ -20680,6 +20721,10 @@ static void ResetTrack(void) {
     if (s_heroBody >= 0 && Comportement == C_BUGGY && (ListObjet[NUM_PERSO].GenBody == s_heroBody || (s_heroFire >= 0 && ListObjet[NUM_PERSO].GenBody == s_heroFire)))
         InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
+    // (the suit's behaviours his again, and his outside body off him: his own)
+    s_noSuit = 0;
+    if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+    s_footBody = -1; s_footChecked = 0;
     s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;

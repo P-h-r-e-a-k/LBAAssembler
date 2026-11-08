@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using LBAAssembler.LbaScript;
 using LBAAssembler.Scenes;
 
@@ -24,6 +25,9 @@ internal static partial class RaceTrackStory
     private const int HalHere = 71;
     private static readonly (int X, int Y, int Z) HalSpot = (23152, 2816, 3904), MechanicSpot = (19344, 2816, 6400);
     private const int HalVoice = 10;
+    // the moon's scenes whose scripts put the spacesuit on: the X building's airlock, the outside by the circle and the square entrances,
+    // the Esmers' shuttle
+    private static readonly int[] MoonSuitScenes = { 53, 75, 77, 115 };
 
     // A story driver who races only while the story has him at the track (the race file's opponentN_when=<var> <least> <below>, RACEMOD.CPP):
     // HAL, from his mending to the race's end -- in the moon base before and after (ApplyEmerald)
@@ -52,12 +56,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Twinsen? Baldino, from the pits. Low gravity up here: I've softened your springs and put weight in the nose, so you won't flip on the loops. And don't touch HAL, he hates me.",
-            "Twinsen ? Baldino, depuis les stands. Faible gravité ici : j'ai assoupli tes ressorts et lesté l'avant, pour que tu ne te retournes pas dans les loopings. Et ne touche pas à HAL, il me déteste.",
-            "Twinsen? Baldino, aus der Box. Hier oben ist wenig Schwerkraft: Ich habe deine Federn weicher gemacht und Gewicht in die Nase gepackt, damit du dich in den Loopings nicht überschlägst. Und fass HAL nicht an, er hasst mich.",
-            "¿Twinsen? Baldino, desde boxes. Aquí arriba hay poca gravedad: te he ablandado los muelles y he puesto peso en el morro, para que no vuelques en los rizos. Y no toques a HAL, me odia.",
-            "Twinsen? Baldino, dai box. Quassù c'è poca gravità: ho ammorbidito le molle e messo peso sul muso, così non ti ribalti nei giri della morte. E non toccare HAL, mi odia.",
-            "Twinsen? Baldino, da boxe. Aqui em cima há pouca gravidade: amaciei-te as molas e pus peso no nariz, para não capotares nos loopings. E não toques no HAL, ele odeia-me.",
+            "Twinsen? Baldino, from the pits. Low gravity up here: I've softened your springs and put weight in the nose, so you won't flip on the loops. And I've put an air filter in your racing helmet: you can breathe out here, no spacesuit needed. Don't touch HAL, he hates me.",
+            "Twinsen ? Baldino, depuis les stands. Faible gravité ici : j'ai assoupli tes ressorts et lesté l'avant, pour que tu ne te retournes pas dans les loopings. Et j'ai mis un filtre à air dans ton casque de course : tu peux respirer dehors, pas besoin de scaphandre. Ne touche pas à HAL, il me déteste.",
+            "Twinsen? Baldino, aus der Box. Hier oben ist wenig Schwerkraft: Ich habe deine Federn weicher gemacht und Gewicht in die Nase gepackt, damit du dich in den Loopings nicht überschlägst. Und in deinen Rennhelm habe ich einen Luftfilter eingebaut: Du kannst hier draußen atmen, ganz ohne Raumanzug. Fass HAL nicht an, er hasst mich.",
+            "¿Twinsen? Baldino, desde boxes. Aquí arriba hay poca gravedad: te he ablandado los muelles y he puesto peso en el morro, para que no vuelques en los rizos. Y le he puesto un filtro de aire a tu casco de carreras: puedes respirar aquí fuera, sin escafandra. No toques a HAL, me odia.",
+            "Twinsen? Baldino, dai box. Quassù c'è poca gravità: ho ammorbidito le molle e messo peso sul muso, così non ti ribalti nei giri della morte. E ho messo un filtro dell'aria nel tuo casco da corsa: puoi respirare qui fuori, niente scafandro. Non toccare HAL, mi odia.",
+            "Twinsen? Baldino, da boxe. Aqui em cima há pouca gravidade: amaciei-te as molas e pus peso no nariz, para não capotares nos loopings. E pus um filtro de ar no teu capacete de corrida: podes respirar cá fora, sem escafandro. Não toques no HAL, ele odeia-me.",
         },
         new[]
         {
@@ -296,6 +300,25 @@ internal static partial class RaceTrackStory
                 return _ => { };
             });
         }
+
+        // No spacesuit (F15 of the Nov 7 notes, the user: outside on the Emerald Moon "Twinsen wears his racing suit and helmet instead of
+        // the spacesuit"; "going back out through the airlock must not force Twinsen into the spacesuit again" -- the suit can't climb the
+        // track's ladders): the moon's scripts that put it on (comportement_hero(): the airlocks', the shuttle's, the outside's -- 7 and 10
+        // the suit's normal behaviours, 9 and 11 its sporty ones) put on his own normal or sporty one instead. Outside, the race file's
+        // foot_body= has his helmet on (Citadel/CitadelOveralls; Baldino's call tells of its air filter), and no_suit= turns any suit's
+        // behaviour that still comes his way into his own (RACEMOD.CPP)
+        foreach (var scene in MoonSuitScenes.Where(b.Store.SceneExists))
+            b.Edit(scene, "no spacesuit: the scripts' suit behaviours his own, normal or sporty", _ => scripts =>
+            {
+                for (var a = 0; a < scripts.ActorCount; a++)
+                {
+                    string life;
+                    try { life = scripts.GetText(a, ScriptKind.Life); } catch (InvalidOperationException) { continue; }
+                    var now = Regex.Replace(life, @"comportement_hero\((7|10)\);", "comportement_hero(0);");
+                    now = Regex.Replace(now, @"comportement_hero\((9|11)\);", "comportement_hero(1);");
+                    if (now != life) scripts.SetText(a, ScriptKind.Life, now);
+                }
+            });
 
         // the moon base: HAL and his mechanics. One HAL at a time (the user, 2026-11-06: "HAL waits as a racer in the pit lane, and HAL is
         // also inside the moon base ... Only one should exist at a time"): in the base until he is mended, then out at the track racing
