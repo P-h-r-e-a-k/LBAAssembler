@@ -5391,6 +5391,9 @@ void RaceMod_Lap(S32 x, S32 z) {
                 if (!s_heroMissileHits && s_beatMain) SetAtLeast(s_noHitVar, s_noHitValue, "won without one missile hit");
             }
             ApplySets(s_finishSet, s_nbFinishSet);
+            // (what was held, thrown or in flight goes with the race: a fire ball on its way stayed at Twinsen's feet once he was out of
+            // the car -- the user, 2026-11-07, after the town race)
+            ForgetPowerUps("the race is over");
             if (s_beatMain) WinStopStart(now);
         }
         if (s_phase == PHASE_QUALIFYING) {
@@ -10114,7 +10117,13 @@ static void ForgetPowerUps(const char *why) {
     for (int i = 0; i < RACE_MAX_PENGUINS; i++) s_penguins[i].On = 0;
     for (int i = 0; i < RACE_MAX_SLICKS; i++) s_slicks[i].On = 0;
     for (int i = 0; i < RACE_MAX_FAKES; i++) s_fakes[i].On = 0;
-    for (int i = 0; i < RACE_MAX_SHOTS; i++) s_shots[i].On = 0;
+    // (a shot's sprite is one of the game's extras, flying on its own: let go with the shot, or a fire ball on its way or landed as the
+    // race ended stayed where it was -- the user, 2026-11-07, after the town race won: "Twinsen acquired a fireball that seemed to stick
+    // to his feet")
+    for (int i = 0; i < RACE_MAX_SHOTS; i++) {
+        if (s_shots[i].On && s_shots[i].Extra >= 0 && s_shots[i].Extra < MAX_EXTRAS) ListExtra[s_shots[i].Extra].Sprite = -1;
+        s_shots[i].On = 0; s_shots[i].Extra = -1;
+    }
     for (int i = 0; i < s_nbMush; i++) s_mush[i].Back = 0;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
