@@ -76,7 +76,7 @@ internal static partial class RaceTrackStory
     // their animations: the thief's run (scene 48's own track)
     private const int ThiefRun = 129;
     // the people of the lighthouse's spell (scene 46): the Weather Wizard and Raph (6 is his fiancee: she said his line until 2026-11-07)
-    private const int LighthouseWizard = 4, LighthouseKeeper = 5;
+    private const int LighthouseWizard = 4, LighthouseKeeper = 5, LighthouseFiancee = 6;
     // Twinsen's bed in scene 0 (PolarDream's places: on the mattress, out of it, Zoe's step aside) and his animations there (asleep,
     // sitting up, getting out of bed: scene 101's)
     private static readonly (int X, int Y, int Z) BedSpot = (5900, 3072, 2000), OutOfBed = (4352, 2048, 2518), ZoeAside = (2894, 2048, 1902);
@@ -133,6 +133,8 @@ internal static partial class RaceTrackStory
         TrophyPicture,
         // (chapter 2's tyre for bait, the bait at Mr. Bazoo's, Luc behind his bar, the umbrella off its hook -- 2026-11-07)
         TyreBait, TyreDeal, BobAfter, BaitPrice, BaitBought, BaitPlenty, LucTyre, TimLucAway, UmbrellaTaken,
+        // (Raph's fiancée at the foot of the lighthouse, his time beaten and the storm still on -- 2026-11-08)
+        FianceeStorm,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -813,6 +815,15 @@ internal static partial class RaceTrackStory
             "Su paraguas. Después de lo de ayer, no voy a ninguna parte sin uno.",
             "Il suo ombrello. Dopo ieri, non vado da nessuna parte senza.",
             "O guarda-chuva dela. Depois de ontem, não vou a lado nenhum sem um.",
+        },
+        new[]
+        {
+            "My Raph's back at his lighthouse at last! Now if only the Weather Wizard could chase this storm away...",
+            "Mon Raph est enfin revenu à son phare ! Si seulement le Mage Météo pouvait chasser cet orage...",
+            "Mein Raph ist endlich wieder bei seinem Leuchtturm! Wenn der Wettermagier jetzt nur noch diesen Sturm vertreiben könnte...",
+            "¡Mi Raph por fin ha vuelto a su faro! Si el Mago Meteo pudiera ahuyentar esta tormenta...",
+            "Il mio Raph è finalmente tornato al suo faro! Se solo il Mago Metereologo potesse scacciare questa tempesta...",
+            "O meu Raph voltou finalmente para o farol dele! Se ao menos o Mago do Tempo pudesse afastar esta tempestade...",
         },
     };
 
@@ -1529,6 +1540,24 @@ void comportement_2()
     // and the Wizard after the spell, and the way down).
     private static void Lighthouse(StoryParts p) => p.Edit(LighthouseScene, "the spell no longer moves the game on to chapter 2: the Wizard's, Raph's and Zoe's lines, and Twinsen is tired", _ => scripts =>
     {
+        // (Raph's fiancée at its foot, actor 6: the game's "The storm's gone, and my Raph's off racing the aliens' cars!" once var 56 is 3
+        // -- the lamp lit, in the game; in the story it is 3 from Raph's time beaten, the evening before the storm clears. Till chapter 2
+        // she says the storm's still on -- the user, 2026-11-07: "contains the line 'The storm's gone' - but it's still there")
+        var fiancee = scripts.GetText(LighthouseFiancee, ScriptKind.Life);
+        var lampLit = Regex.Match(fiancee, @"if \(3 > var_game\(56\)\)\s*\{\s*message\((\d+)\);\s*\}\s*else\s*\{\s*message\((\d+)\);\s*\}");
+        if (!lampLit.Success) throw new NotTheGames("the lighthouse's fiancée");
+        scripts.SetText(LighthouseFiancee, ScriptKind.Life, fiancee[..lampLit.Index] + $@"if (3 > var_game(56))
+                    {{
+                        message({lampLit.Groups[1].Value});
+                    }}
+                    else if (2 > chapter())
+                    {{
+                        message({p.Say(ChapterLine.FianceeStorm)});
+                    }}
+                    else
+                    {{
+                        message({lampLit.Groups[2].Value});
+                    }}" + fiancee[(lampLit.Index + lampLit.Length)..]);
         var hero = scripts.GetText(0, ScriptKind.Life);
         hero = Loose(hero, "set_var_game(253, 2);", "");
         hero = Loose(hero, $"set_var_game({KeeperPlot}, 5);", $@"set_var_game({KeeperPlot}, 5);
