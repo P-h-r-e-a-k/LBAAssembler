@@ -1001,6 +1001,14 @@ void DoLife(U8 numobj) {
             obj = *PtrPrg++;
             ptrobjt = &ListObjet[obj];
 
+            // (not into the car with Zoe on his arm -- the user, 2026-11-09: "We need to prevent Twinsen getting into the car when he's with
+            // Zoe": the car's script puts him in by set_dir_obj(0, MOVE_BUGGY_MANUAL), and finds him not in it the frame after and waits again)
+            if (obj == NUM_PERSO AND Comportement == C_DOUBLE AND (*PtrPrg == MOVE_BUGGY OR *PtrPrg == MOVE_BUGGY_MANUAL)) {
+                PtrPrg++;
+                Log_Info("[life] not into the car with Zoe on his arm");
+                break;
+            }
+
             if (ptrobjt->LifePoint > 0) {
                 oldmove = ptrobjt->Move;
 
