@@ -10,9 +10,10 @@ namespace LBAAssembler.Terrain.Citadel;
 // its wall), their backs against it.
 internal static partial class CitadelProps
 {
-    public const int Seal = 11, TapestryRed = 12, TapestryBlue = 13, Picture = 14, Rack = 15, Chair = 16;
-    // (the palette: the gold ramp, a deep blue, a teal for the chair's cushion, the dark flat)
-    private const int Gold = 106, Blue = 197, Teal = 150, Dark = 49, Sky = 200, Leather = 50;
+    public const int Seal = 11, TapestryRed = 12, TapestryBlue = 13, Picture = 14, Rack = 15, Chair = 16,
+        Boulder = 17, Boulder2 = 18, Rug = 19, RugRound = 20, CurtainLeft = 21, CurtainRight = 22;
+    // (the palette: the gold ramp, a deep blue, a teal for the chair's cushion, the dark flat, the rock's slate)
+    private const int Gold = 106, Blue = 197, Teal = 150, Dark = 49, Sky = 200, Leather = 50, Slate = 180;
 
     // A flat quad in the x-y plane at depth z, its face to +z (or both sides)
     private static void Panel(CarMesh m, float x0, float y0, float x1, float y1, float z, int colour, bool both = false, bool flat = false)
@@ -149,4 +150,119 @@ internal static partial class CitadelProps
             m.Box(0, new Vector3(0, y, -(Half - Leg)), new Vector3(2 * (Half - Leg), 50, 22), Wood);
         return m.ToBody(header);
     }
+
+    // ---- round 2 (the user, 2026-11-09): "let's add the stairs back, but add in some giant bolders to show it's not useable"; "let's add
+    // some rugs on the floors, some curtains around the edges ... it's now part of Twinsen's home so it needs to feel homely"
+
+    // A boulder: a lumpy rock, its flat underside at 0 -- rings of points round it, each pushed in or out a little (a seeded roll, the same
+    // every build), skinned ring to ring
+    private static Body BuildRock(byte[] header, string name, float radius, int seed)
+    {
+        var m = new CarMesh(name, new[] { -1 });
+        m.Light = 0.75f;
+        var roll = new Random(seed);
+        const int Around = 9, Rings = 5;
+        var rings = new List<int[]>();
+        for (var k = 0; k < Rings; k++)
+        {
+            // from the underside (a flattened ring) up towards the crown
+            var t = (k + 1f) / (Rings + 1) * MathF.PI;
+            var r = radius * (k == 0 ? 0.75f : MathF.Sin(t));
+            var y = k == 0 ? 0 : radius * 0.85f * (1 - MathF.Cos(t));
+            var ring = new int[Around];
+            for (var i = 0; i < Around; i++)
+            {
+                var a = (i + 0.5f * (k % 2)) / Around * 2 * MathF.PI;
+                var s = 0.8f + 0.4f * (float)roll.NextDouble();
+                var lift = k == 0 ? 0 : radius * 0.12f * ((float)roll.NextDouble() - 0.5f);
+                ring[i] = m.P(0, new Vector3(r * s * MathF.Cos(a), y + lift, r * s * MathF.Sin(a)));
+            }
+            rings.Add(ring);
+        }
+        var middle = new Vector3(0, radius * 0.8f, 0);
+        for (var k = 0; k + 1 < Rings; k++) m.Skin(rings[k], rings[k + 1], _ => Slate, middle);
+        m.Cap(rings[Rings - 1], m.P(0, new Vector3(radius * 0.1f, radius * 1.65f, -radius * 0.05f)), Slate, middle);
+        m.Cap(rings[0], m.P(0, new Vector3(0, 0, 0)), Slate, middle);
+        return m.ToBody(header);
+    }
+    public static Body BuildBoulder(byte[] header) => BuildRock(header, "a boulder", 640, 1996);
+    public static Body BuildBoulder2(byte[] header) => BuildRock(header, "a smaller boulder", 480, 1997);
+
+    // A rug on the floor, its top at 0 (no higher than the floor: an actor's box only stops another's it overlaps in height, so no one
+    // walks into it): a red field, a gold border round it, a blue diamond in its middle with a gold one in that, and a cream fringe at
+    // each end. Each layer a little over the one under it, so the polygons' sort draws them in order. Its length along x.
+    public static Body BuildRug(byte[] header)
+    {
+        var m = new CarMesh("a rug", new[] { -1 });
+        m.Light = 0.8f;
+        const float L = 1400, Wd = 950, B = 110;
+        void Flat(float x0, float z0, float x1, float z1, float y, int colour) =>
+            m.Up(new[] { m.P(0, new Vector3(x0, y, z0)), m.P(0, new Vector3(x1, y, z0)), m.P(0, new Vector3(x1, y, z1)), m.P(0, new Vector3(x0, y, z1)) }, colour);
+        void Diamond(float rx, float rz, float y, int colour) =>
+            m.Up(new[] { m.P(0, new Vector3(rx, y, 0)), m.P(0, new Vector3(0, y, rz)), m.P(0, new Vector3(-rx, y, 0)), m.P(0, new Vector3(0, y, -rz)) }, colour);
+        // (the border: four strips round the field, not under it)
+        Flat(-L, -Wd, L, -Wd + B, -12, Gold); Flat(-L, Wd - B, L, Wd, -12, Gold);
+        Flat(-L, -Wd + B, -L + B, Wd - B, -12, Gold); Flat(L - B, -Wd + B, L, Wd - B, -12, Gold);
+        Flat(-L + B, -Wd + B, L - B, Wd - B, -12, Red);
+        Diamond(700, 520, -6, Blue);
+        Diamond(300, 220, -1, Gold);
+        foreach (var s in new[] { -1, 1 })
+            for (var z = -Wd + 60; z < Wd; z += 120)
+                m.Rod(0, new Vector3(s * L, -12, z), new Vector3(s * (L + 90), -12, z), Cream);
+        return m.ToBody(header);
+    }
+
+    // A round rug: rings of blue, cream and red out from a gold middle, its top at 0 (as the other)
+    public static Body BuildRugRound(byte[] header)
+    {
+        var m = new CarMesh("a round rug", new[] { -1 });
+        m.Light = 0.8f;
+        const int N = 16;
+        var radii = new[] { 220f, 520f, 640f, 940f, 1050f };
+        var colours = new[] { Blue, Cream, Red, Gold };
+        var rings = radii.Select(r => m.Loop(0, new Vector3(0, -2, 0), new Vector3(r, 0, 0), new Vector3(0, 0, r), N)).ToArray();
+        m.Cap(rings[0], m.P(0, new Vector3(0, -2, 0)), Gold, new Vector3(0, -100, 0));
+        for (var k = 0; k + 1 < rings.Length; k++)
+        {
+            var colour = colours[k];
+            m.Skin(rings[k], rings[k + 1], _ => colour, new Vector3(0, -100, 0));
+        }
+        return m.ToBody(header);
+    }
+
+    // A curtain hung on a wall, gathered to one side by a gold tie-back (`side` -1 its left, +1 its right): pleats of red cloth from its
+    // pelmet (its top at 0) to the floor CurtainDrop under it, drawn in to the tie-back's side two-thirds of the way down. Built facing
+    // +z, as the other wall pieces.
+    public const int CurtainDrop = 2000;
+    private static Body BuildCurtain(byte[] header, int side, string name)
+    {
+        var m = new CarMesh(name, new[] { -1 });
+        m.Light = 0.7f;
+        const float W = 300, Depth = 50;
+        const int Pleats = 6;
+        const float Tie = -CurtainDrop * 0.62f;
+        // the rows of points: under the pelmet, at the tie-back, at the hem
+        (float Y, float Left, float Right)[] rows =
+        {
+            (-90, -W, W),
+            (Tie, side < 0 ? -W : W - 160, side < 0 ? -W + 160 : W),
+            (-CurtainDrop, side < 0 ? -W : W - 380, side < 0 ? -W + 380 : W),
+        };
+        var points = rows.Select(r => Enumerable.Range(0, 2 * Pleats + 1).Select(i =>
+            m.P(0, new Vector3(r.Left + (r.Right - r.Left) * i / (2 * Pleats), r.Y, i % 2 == 0 ? Depth : Depth * 0.2f))).ToArray()).ToArray();
+        for (var k = 0; k + 1 < points.Length; k++)
+            for (var i = 0; i < 2 * Pleats; i++)
+            {
+                // (each pleat facing out from the wall, +z: by its own normal -- the pleats' slant fools a test against a point behind)
+                var q = new[] { points[k][i], points[k][i + 1], points[k + 1][i + 1], points[k + 1][i] };
+                m.In(q, i % 2 == 0 ? Red : Red - 1, m.At(q[0]) + new Vector3(0, 0, 100000));
+            }
+        m.Box(0, new Vector3(0, -45, 50), new Vector3(2 * W + 80, 110, 70), Red - 1);
+        m.Box(0, new Vector3(0, -95, 88), new Vector3(2 * W + 80, 18, 8), Gold);
+        var tx = side < 0 ? -W + 80 : W - 80;
+        m.Box(0, new Vector3(tx, Tie, 50), new Vector3(200, 50, 90), Gold);
+        return m.ToBody(header);
+    }
+    public static Body BuildCurtainLeft(byte[] header) => BuildCurtain(header, -1, "a curtain tied to its left");
+    public static Body BuildCurtainRight(byte[] header) => BuildCurtain(header, 1, "a curtain tied to its right");
 }

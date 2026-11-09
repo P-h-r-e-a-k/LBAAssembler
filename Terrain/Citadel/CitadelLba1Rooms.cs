@@ -120,7 +120,7 @@ internal static class CitadelLba1Rooms
             var map = Lba1InteriorPort.Port(lba1Directory, room.Lba1Scene, palette, room.Name);
             var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
-            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log);
+            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log, HouseChair(bkg, library, log));
             grid[0] = (byte)library; grid[1] = (byte)fragments;
             // (the grid after the game's last, what follows it one entry on; its number in the scene-to-grid table)
             header = new MapBricks.BkgHeader(bkg.Read(0));
@@ -161,7 +161,7 @@ internal static class CitadelLba1Rooms
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
 
         // ---- the props' bodies
-        log.Add(Bodies(gameDirectory));
+        log.Add(Bodies(gameDirectory, lba1Directory));
         return log;
     }
 
@@ -178,8 +178,8 @@ internal static class CitadelLba1Rooms
     //   - "the original entrance ... let's just fill this in with rocks": LBA1's stairs out (x 31-34, z 63) the front wall's rock, the
     //     landing before them (layer 3) the floor's height. (What Twinsen says there, and the Sendell seal back in the hall's wall:
     //     RaceTrackStory.SecretChamber.)
-    private const int HallFloor = 6, LowFloor = 4, FrontWall = 59, NewFront = 63, StoneShift = -10;
-    private static byte[] ChamberRemodel(byte[] raw, List<string> log)
+    private const int HallFloor = 6, LowFloor = 4, FrontWall = 59, NewFront = 63, StoneShift = -11;
+    private static byte[] ChamberRemodel(byte[] raw, List<string> log, (int Legs, int Back)? chair)
     {
         var shape = Lba2GridBackend.ToLba1Shape(raw);
         var was = Lba1GridCodec.Decode(shape);
@@ -208,13 +208,41 @@ internal static class CitadelLba1Rooms
             return Enumerable.Empty<(int, (int, int))>();
         }
 
-        // the red cross: the hall's front wall between its stairs, and the hall's floor out to the rock wall
-        for (var x = 38; x <= 48; x++)
+        // the red cross: the hall's front wall between its stairs (to x 47, the right stairs' pillar's line), and the hall's floor out to
+        // the rock wall -- short of the right stairs (x 48-50) and their pillar (x 47, z 47-49): the user, round 2, "the set of stairs on
+        // the right you've added flooring extending out over the stairs, we just need to remove this"
+        for (var x = 38; x <= 47; x++)
         {
             for (var y = HallFloor; y < 25; y++) Clear(x, y, 46);
-            for (var z = 46; z <= 49; z++) Set(x, HallFloor, z, Tile(x, HallFloor, z, 36, 50, 40, 45, 2));
+            for (var z = 46; z <= (x <= 46 ? 49 : 46); z++) Set(x, HallFloor, z, Tile(x, HallFloor, z, 36, 50, 40, 45, 2));
         }
-        // the lime: the stone, its plinth, arcs and lamps to the left wall (old places floor again)
+        // the middle of the hall: LBA1's raised square with its spikes (block 87) and the four white posts round it (block 86) gone, the
+        // hall's floor under them (round 2: "let's remove these totally")
+        for (var z = 35; z <= 43; z++)
+            for (var x = 38; x <= 46; x++)
+            {
+                var any = false;
+                for (var y = HallFloor; y < 25; y++)
+                    if (Cell(x, y, z).Block is 86 or 87) { Clear(x, y, z); any = true; }
+                if (any || Cell(x, HallFloor, z).Block == 0) Set(x, HallFloor, z, Tile(x, HallFloor, z, 36, 50, 40, 45, 2));
+            }
+        // the hole in the hall's back wall (block 104, x 40-43, layers 9-15) walled up with the wall's own blocks four cells along: the
+        // Sendell seal's picture (SealBodies) shows over it, as LBA1's sprite of the seal and the wall round it covered the hole
+        for (var x = 40; x <= 43; x++)
+            for (var y = 9; y <= 15; y++)
+                if (Cell(x, y, 33).Block == 104) Set(x, y, 33, Cell(x - 4, y, 33));
+        // the hall's right wall (x 51, the one between the camera and Twinsen in the hall -- LBA1 cut it away): down to its first layer
+        // over the floor (round 2: "we can either copy this, or just remove the majority of this wall")
+        for (var z = 34; z <= 45; z++)
+            for (var y = HallFloor + 2; y < 25; y++) Clear(51, y, z);
+        // ... and the hall's front edge's last tall pieces (z 46): the lintels over both stairs (x 34-36 and 48-50, layers 17-19, their
+        // spikes on top) and the pillars holding them (x 37 and 51, layers 6-19) -- from the camera the right-hand lintel and its pillar
+        // stood over the hall's middle, in front of Twinsen wherever he walked there; down to the same height as the right wall
+        foreach (var x in new[] { 34, 35, 36, 37, 48, 49, 50, 51 })
+            for (var y = HallFloor + 2; y < 25; y++) Clear(x, y, 46);
+        // the lime: the stone, its plinth, arcs and lamps flush against the left wall (x 31, the wall at x 30) -- the two lamps that would
+        // stand behind it, in the wall, left out (round 2: "fully flush in the wall, we'll need to remove the two white posts that are
+        // behind it"); old places floor again
         var moved = 0;
         for (var z = 51; z <= 59; z++)
             for (var x = 41; x <= 43; x++)
@@ -222,31 +250,89 @@ internal static class CitadelLba1Rooms
                 {
                     var c = Cell(x, y, z);
                     if (c.Block is 0 or 1 or 5) continue;
-                    Set(x + StoneShift, y, z, c);
+                    if (x + StoneShift > 30) Set(x + StoneShift, y, z, c);
                     if (!now.ContainsKey((x, y, z)) || now[(x, y, z)] == c) Clear(x, y, z);
                     moved++;
                 }
+        // the barrel the front wall's move cut in half (block 13, by the right-hand block of rock): gone, the floor under it
+        for (var z = 56; z <= 63; z++)
+            for (var x = 50; x <= 56; x++)
+                for (var y = 0; y < 25; y++)
+                    if (Cell(x, y, z).Block == 13)
+                    {
+                        Clear(x, y, z);
+                        if (Cell(x, LowFloor, z).Block is 0 or 13) Set(x, LowFloor, z, Tile(x, LowFloor, z, 36, 53, 52, 58, 3));
+                    }
         // (the floor where the plinth stood: it had none under it)
         for (var z = 51; z <= 59; z++)
             for (var x = 41; x <= 43; x++)
                 if (Cell(x, LowFloor, z).Block == 0) Set(x, LowFloor, z, Tile(x, LowFloor, z, 36, 53, 52, 58, 3));
-        // the dark red to the purple: the front wall out to z 63, the floor carried to it (and the landing and LBA1's stairs out: rock)
-        for (var x = 31; x <= 53; x++)
+        // the dark red to the purple: the front wall out to z 63, the floor carried to it. LBA1's way out (its landing, x 31-34, a step
+        // down, and its stairs at z 63) and the landing's side wall (x 35) stay as LBA1 has them: round 2, "let's add the stairs back, but
+        // add in some giant bolders to show it's not useable" (the boulders: RaceTrackStory.SecretChamber)
+        for (var x = 36; x <= 53; x++)
         {
-            for (var z = Math.Min(FrontWall, x <= 34 ? 60 : FrontWall); z < NewFront; z++)
+            for (var z = FrontWall; z < NewFront; z++)
             {
-                if (x <= 34 && z < 60) continue;
                 for (var y = 0; y < 13; y++) Clear(x, y, z);
                 Set(x, LowFloor, z, Tile(x, LowFloor, z, 36, 53, 52, 58, 3));
             }
             for (var y = 0; y < 25; y++) Clear(x, y, NewFront);
             foreach (var (y, c) in WallColumn(x)) Set(x, y, NewFront, c);
         }
+        // the bedroom's chair, where Zoe sits (ChairCell): its legs' floor tile on the floor's layer, its back the four over it
+        if (chair is { } ch)
+        {
+            Set(ChairCell.X, LowFloor, ChairCell.Z, (ch.Legs, 0));
+            for (var k = 0; k < 4; k++) Set(ChairCell.X, LowFloor + 1 + k, ChairCell.Z, (ch.Back, k));
+        }
         var edits = now.Select(kv => new Lba1GridCell(kv.Key.X, kv.Key.Y, kv.Key.Z, kv.Value.Block, kv.Value.Pos))
             .Where(e => (e.Block, e.Pos) != Cell(e.X, e.Y, e.Z)).ToList();
         log.Add($"the secret chamber made over: the hall's front wall down (x 38-48), the stone and its lamps to the left wall ({moved} cells), " +
                 $"the front wall out to z {NewFront} and LBA1's stairs out filled with rock ({edits.Count} cells changed)");
         return Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
+    }
+
+    // ---- the bedroom's chair in the chamber (the user, 2026-11-09: "The chair prop looks nothing like the one I asked you to copy"): the
+    // house's own chair -- scene 0's grid at cell (5, 3): its legs drawn in the floor's tile (block 82, layer 7) and its ladder back over
+    // them (block 48, layers 8-11) -- its two blocks copied into the chamber's block library (their bricks are the game's, shared), and
+    // set in the chamber's grid where Zoe sits, facing as the bedroom's does (+x: Zoe's turn RaceTrackStory.SecretChamber takes from here)
+    public static readonly (int X, int Z) ChairCell = (51, 57);
+    public const int ChairFacing = 1024;
+    private const int HouseChairLegs = 82, HouseChairBack = 48;
+    private static (int Legs, int Back)? HouseChair(HqrFile bkg, int library, List<string> log)
+    {
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        if (House * 2 + 1 >= table.Length) { log.Add("the chamber's chair left out: scene 0 has no grid"); return null; }
+        var house = bkg.Read(header.Gri + table[House * 2 + 1]);
+        byte[] Blocks(byte[] lib, out int count, out List<byte[]> list)
+        {
+            count = (int)(BinaryPrimitives.ReadUInt32LittleEndian(lib) / 4);
+            list = new List<byte[]>();
+            for (var b = 0; b < count; b++)
+            {
+                var at = (int)BinaryPrimitives.ReadUInt32LittleEndian(lib.AsSpan(b * 4));
+                var end = b + 1 < count ? (int)BinaryPrimitives.ReadUInt32LittleEndian(lib.AsSpan((b + 1) * 4)) : lib.Length;
+                list.Add(lib.AsSpan(at, end - at).ToArray());
+            }
+            return lib;
+        }
+        Blocks(bkg.Read(header.Bll + house[0]), out var houseCount, out var houseBlocks);
+        if (HouseChairLegs > houseCount || HouseChairBack > houseCount) { log.Add("the chamber's chair left out: the house's blocks aren't the game's"); return null; }
+        var entry = header.Bll + library;
+        Blocks(bkg.Read(entry), out var count, out var blocks);
+        if (count + 2 > 255) { log.Add("the chamber's chair left out: its block library is full"); return null; }
+        blocks.Add(houseBlocks[HouseChairLegs - 1]);
+        blocks.Add(houseBlocks[HouseChairBack - 1]);
+        var size = blocks.Count * 4 + blocks.Sum(b => b.Length);
+        var bytes = new byte[size];
+        var pos = blocks.Count * 4;
+        for (var b = 0; b < blocks.Count; b++) { BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(b * 4), (uint)pos); blocks[b].CopyTo(bytes, pos); pos += blocks[b].Length; }
+        bkg.SetStored(entry, bytes);
+        if (header.MaxBll < bytes.Length) { header.MaxBll = (uint)bytes.Length; bkg.SetStored(0, header.Bytes); }
+        log.Add($"the chamber's chair: the house's (blocks {HouseChairLegs} and {HouseChairBack}) as the chamber's {count + 1} and {count + 2}, at cell ({ChairCell.X}, {ChairCell.Z})");
+        return (count + 1, count + 2);
     }
 
     // The demo's sewers' back wall at the slab's cell emptied from layer HoleFirst to HoleLast and the landing's floor carried in under it,
@@ -285,7 +371,7 @@ internal static class CitadelLba1Rooms
     }
 
     // ---- the props' bodies: BODY.HQR's end, the mushroom's entity's generic numbers --------------------------------------------------------
-    private static string Bodies(string gameDirectory)
+    private static string Bodies(string gameDirectory, string lba1Directory)
     {
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
@@ -295,10 +381,12 @@ internal static class CitadelLba1Rooms
         var table = HqrArchive.Open(ressPath).Read(44);
         var first = HqrArchive.CountEntries(bodyPath);
         var index = first;
+        var seal = SealBodies(lba1Directory, palette);
+        SealParts = seal.Count;
         foreach (var (generic, body) in new[]
                  {
                      (SlabGeneric, Slab(C)), (SignCheckpoint, Sign(C, 0)), (SignOrder, Sign(C, 1)), (SignWanted, Sign(C, 2)), (BottleGeneric, Bottle(C)),
-                 })
+                 }.Concat(seal.Select((b, k) => (SealFirst + k, b))))
         {
             body.Header = header;
             body.Static = true;
@@ -307,7 +395,91 @@ internal static class CitadelLba1Rooms
         }
         HqrWriter.ReplaceInFile(ressPath, 44, table);
         return $"the LBA1 rooms' props: BODY.HQR entries {first}-{index - 1}, the mushroom's entity ({PropEntity}) bodies {SlabGeneric} (the sewers' loose slab), " +
-               $"{SignCheckpoint}-{SignWanted} (the old signs), {BottleGeneric} (the cellar's dusty bottle)";
+               $"{SignCheckpoint}-{SignWanted} (the old signs), {BottleGeneric} (the cellar's dusty bottle), {SealFirst}-{SealFirst + seal.Count - 1} (the Sendell seal, LBA1's sprite {SealSprite}: " +
+               $"{string.Join(" + ", seal.Select(b => $"{b.Faces.Count} polygons"))})";
+    }
+
+    // ---- the Sendell seal (the user, 2026-11-09: "looks nothing like the original sendell seal ... we need to fix this"): LBA1's own
+    // picture of it, sprite 84 of its SPRITES.HQR (89 by 114: the bronze disc at the room's iso angle, with the cracked wall round the
+    // hole it fills) -- the disc's pixels (the warm ones and what lies inside their ellipse; the hole itself is walled up in the grid),
+    // two pixels to a square, each row's run of one colour a flat polygon in LBA2's nearest colour, laid in a plane facing the camera:
+    // a pixel to the right is +x and -z (the iso camera draws x and z at 24 pixels to 512 units), a pixel down 256/15 units lower. As
+    // many bodies of the mushroom's entity as the body's limits want (SealFirst on), drawn together at SealAt.
+    public const int SealSprite = 84, SealFirst = 35, SealMost = 8;
+    // where the bodies stand: the hole's middle on the hall's back wall (x 40-43, layers 9-15, the wall's face z 17408), moved out
+    // along the camera's line (x and z alike, y 0.8 of them -- drawn where it was) so the slanted picture is clear of the wall
+    public static readonly (int X, int Y, int Z) SealAt = (21504 + 520, 3200 + 416, 17408 + 520);
+    public static int SealParts { get; private set; }
+    private static List<Body> SealBodies(string lba1Directory, byte[] palette)
+    {
+        var list = new List<Body>();
+        var sprites = Path.Combine(lba1Directory, "SPRITES.HQR");
+        if (!File.Exists(sprites)) return list;
+        var data = HqrArchive.Open(sprites).Read(SealSprite);
+        var p1 = HqrArchive.Open(Path.Combine(lba1Directory, "RESS.HQR")).Read(0);
+        var scale1 = p1.Take(768).Max() < 64 ? 4 : 1;
+        var start = (int)BinaryPrimitives.ReadUInt32LittleEndian(data);
+        int w = data[start], h = data[start + 1], at = start + 4;
+        var px = new int[w, h];
+        for (var y = 0; y < h; y++)
+        {
+            for (var x = 0; x < w; x++) px[x, y] = -1;
+            var runs = data[at++];
+            for (int r = 0, x = 0; r < runs; r++)
+            {
+                var b = data[at++];
+                int type = b >> 6, n = (b & 0x3F) + 1;
+                if (type == 0) { x += n; continue; }
+                if (type == 1) { for (var k = 0; k < n; k++, x++) { if (x < w) px[x, y] = data[at]; at++; } continue; }
+                var c = data[at++];
+                for (var k = 0; k < n; k++, x++) if (x < w) px[x, y] = c;
+            }
+        }
+        // the disc: the warm pixels' ellipse
+        bool Warm(int i) => i >= 0 && p1[i * 3] * scale1 > p1[i * 3 + 2] * scale1 + 8;
+        int x0 = w, x1 = 0, y0 = h, y1 = 0;
+        for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) if (Warm(px[x, y])) { x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y); }
+        if (x1 <= x0) return list;
+        double cx = (x0 + x1) / 2.0, cy = (y0 + y1) / 2.0, rx = (x1 - x0) / 2.0 + 1, ry = (y1 - y0) / 2.0 + 1;
+        bool Inside(int x, int y) => (x - cx) * (x - cx) / (rx * rx) + (y - cy) * (y - cy) / (ry * ry) <= 1;
+        var near = new Dictionary<int, int>();
+        int Colour(int i) => near.TryGetValue(i, out var c) ? c : near[i] = Nearest(palette, p1[i * 3] * scale1, p1[i * 3 + 1] * scale1, p1[i * 3 + 2] * scale1);
+        // (a pixel's place: right +x -z, down -y; the plane's middle the disc's)
+        System.Numerics.Vector3 At(double x, double y) => new((float)((x - cx) * 512 / 48), (float)(-(y - cy) * 256 / 15), (float)(-(x - cx) * 512 / 48));
+        var toward = new System.Numerics.Vector3(1, 0.8f, 1);
+        const int Step = 2;
+        Body? body = null; Dictionary<(int, int), int>? points = null;
+        void NewBody() { body = new Body { Game = 2, Static = true, Lit = false }; points = new(); list.Add(body); }
+        int Point(int x, int y)
+        {
+            if (points!.TryGetValue((x, y), out var i)) return i;
+            body!.Vertices.Add(At(x, y)); return points[(x, y)] = body.Vertices.Count - 1;
+        }
+        NewBody();
+        for (var y = y0; y <= y1; y += Step)
+        {
+            if (body!.Vertices.Count > 470 || body.Faces.Count > 480) { if (list.Count >= SealMost) break; NewBody(); }
+            for (var x = x0; x <= x1;)
+            {
+                var i = px[x, y];
+                if (i < 0 || !Inside(x, y)) { x += Step; continue; }
+                var c = Colour(i);
+                var e = x + Step;
+                while (e <= x1 && px[e, y] >= 0 && Inside(e, y) && Colour(px[e, y]) == c) e += Step;
+                var q = new[] { Point(x, y), Point(e, y), Point(e, y + Step), Point(x, y + Step) };
+                var n = LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(q.Select(k => body.Vertices[k]).ToArray());
+                if (System.Numerics.Vector3.Dot(n, toward) < 0) q = q.Reverse().ToArray();
+                body.Faces.Add(new Face(q, c, Material: 0));
+                x = e;
+            }
+        }
+        foreach (var b in list)
+        {
+            b.Bones.Add(new Bone(0, b.Vertices.Count, 0, -1, new byte[8]));
+            b.SetWorld(b.Vertices.ToArray());
+        }
+        list.RemoveAll(b => b.Faces.Count == 0);
+        return list;
     }
 
     // The palette's colour nearest an RGB (redmean)

@@ -221,7 +221,10 @@ internal static partial class CitadelProps
         foreach (var (generic, name, build) in new (int, string, Func<byte[], Body>)[]
                  { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage), (Stool, "a stool", BuildStool),
                    (Seal, "the Sendell seal", BuildSeal), (TapestryRed, "a red tapestry", BuildTapestryRed), (TapestryBlue, "a blue tapestry", BuildTapestryBlue),
-                   (Picture, "a picture", BuildPicture), (Rack, "a rack of paddles and whips", BuildRack), (Chair, "a chair", BuildChair) })
+                   (Picture, "a picture", BuildPicture), (Rack, "a rack of paddles and whips", BuildRack), (Chair, "a chair", BuildChair),
+                   (Boulder, "a boulder", BuildBoulder), (Boulder2, "a smaller boulder", BuildBoulder2), (Rug, "a rug", BuildRug), (RugRound, "a round rug", BuildRugRound),
+                   (CurtainLeft, "a curtain", BuildCurtainLeft), (CurtainRight, "a curtain", BuildCurtainRight) }
+                 .Concat(Enumerable.Range(0, BayeuxParts).Select(k => (Bayeux + k, $"the Bayeux hanging's part {k + 1}", (Func<byte[], Body>)(h => BuildBayeux(h, k))))))
         {
             var bytes = build(header).Write();
             var count = HqrArchive.CountEntries(bodyPath);

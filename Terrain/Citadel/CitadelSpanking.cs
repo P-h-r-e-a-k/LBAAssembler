@@ -23,6 +23,9 @@ internal static class CitadelSpanking
     public const int HeroEntity = 0, TwinsenLap = 240, TwinsenKick = 241, TwinsenBare = 30, TwinsenRed = 31, TwinsenPink = 32;
     // how far Zoe's hips come down to sit (her hips' bone at 633 standing, her thighs' tops 60 under it): the stool's top
     public const int SitDrop = 280, StoolTop = 633 - SitDrop - 60;
+    // her hips this far behind her place (her place a cell in front of the chair's -- the bedroom's own, in the chamber's grid -- so the
+    // grid draws the chair behind her, not over her: CitadelLba1Rooms.ChairCell)
+    public const int SeatBack = 300;
     // Twinsen's hips over her lap: her thighs out SitDrop under her standing hips, his hips' bone (533 standing) this far down
     // (raised, 2026-11-09: "his bare ass up in the air" -- his hips higher, his chest and legs further down either side of her lap)
     public const int LapDown = 55;
@@ -73,11 +76,11 @@ internal static class CitadelSpanking
         var armUp = With(zoeSeat, (4, N(0.35f, 0.55f, 0.6f)), (5, N(0.05f, 0.95f, 0.3f)));
         var armDown = With(zoeSeat, (4, N(0.1f, -0.7f, 0.7f)), (5, N(-0.35f, -0.55f, 0.75f)));
         var sit = new Anim { Game = 2, LoopFrame = 0 };
-        sit.Frames.Add(Frame(zoeBody, 500, zoeBasis, restArm, -SitDrop, ZoeHead));
-        sit.Frames.Add(Frame(zoeBody, 900, zoeBasis, With(restArm, (3, N(0, 1, 0.16f))), -SitDrop, ZoeHead));
+        sit.Frames.Add(Frame(zoeBody, 500, zoeBasis, restArm, -SitDrop, ZoeHead, SeatBack));
+        sit.Frames.Add(Frame(zoeBody, 900, zoeBasis, With(restArm, (3, N(0, 1, 0.16f))), -SitDrop, ZoeHead, SeatBack));
         var spank = new Anim { Game = 2, LoopFrame = 0 };
-        spank.Frames.Add(Frame(zoeBody, 180, zoeBasis, armUp, -SitDrop, ZoeHead));
-        spank.Frames.Add(Frame(zoeBody, 110, zoeBasis, armDown, -SitDrop, ZoeHead));
+        spank.Frames.Add(Frame(zoeBody, 180, zoeBasis, armUp, -SitDrop, ZoeHead, SeatBack));
+        spank.Frames.Add(Frame(zoeBody, 110, zoeBasis, armDown, -SitDrop, ZoeHead, SeatBack));
 
         // ---- Twinsen: across her lap, and kicking
         var lap = new Dictionary<int, Vector3>
@@ -153,10 +156,10 @@ internal static class CitadelSpanking
 
     // A keyframe: the standing's values, the hips' move down by `drop`, then each bone in `aims` turned to point its own way (from its
     // pivot to its first child's) along the given direction -- parents before children
-    private static AnimFrame Frame(Body body, int time, (int Type, double A, double B, double C)[] basis, Dictionary<int, Vector3> aims, int drop, int head)
+    private static AnimFrame Frame(Body body, int time, (int Type, double A, double B, double C)[] basis, Dictionary<int, Vector3> aims, int drop, int head, int back = 0)
     {
         var v = basis.ToArray();
-        v[1] = (1, 0, drop, 0);
+        v[1] = (1, 0, drop, -back);
         var rest = body.World();
         int Depth(int b) { var d = 0; while (b > 0) { b = body.Bones[b].Parent; d++; } return d; }
         foreach (var bone in aims.Keys.OrderBy(Depth))
