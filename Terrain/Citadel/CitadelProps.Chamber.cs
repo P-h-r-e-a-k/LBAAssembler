@@ -280,16 +280,17 @@ internal static partial class CitadelProps
     public const int SmallBoulder = 61;
     public static Body BuildSmallBoulder(byte[] header) => BuildRock(header, "a small boulder", 260, 1998);
 
-    // The chamber's lift (the user, 2026-11-09: "we also need to add in the elevator for Zoe and Twinsen to leave the basement area"): a
-    // platform of dark planks in an iron frame, LiftSize square, its top LiftTop over its foot, a low rail on its back and sides, and the
-    // four chains it hangs from, up out of sight. Twinsen stands on it (an OBJ_CARRIER: RaceTrackStory.SecretChamber), and it rises.
-    public const int LiftPlatform = 62, LiftSize = 1024, LiftTop = 40;
+    // The lift (the user, 2026-11-09: "we also need to add in the elevator for Zoe and Twinsen to leave the basement area"): a platform of
+    // dark planks in an iron frame, LiftSize square, its top LiftTop over its foot -- no chains ("the other in-game elevators don't have
+    // chains so we just accept an elevator can just go up and down") -- and its rail on three sides, each side a body of its own with a box
+    // of its own (CitadelProps.BoxOf), so the rail stops Twinsen as the platform carries him ("they have no colission, so we need to add
+    // this"). All of them carriers riding the same track (RaceTrackStory.SecretChamber.LiftRig).
+    public const int LiftPlatform = 62, LiftRailBack = 100, LiftRailLeft = 101, LiftRailRight = 102, LiftSize = 1024, LiftTop = 40, RailHigh = 460;
     public static Body BuildLiftPlatform(byte[] header)
     {
-        var m = new CarMesh("the chamber's lift", new[] { -1 });
+        var m = new CarMesh("the lift", new[] { -1 });
         m.Light = 0.7f;
         const float H = LiftSize / 2f, Rim = 40;
-        // the planks, two shades, across x; the iron frame round them
         for (var k = 0; k < 8; k++)
         {
             var z0 = -H + Rim + k * (LiftSize - 2 * Rim) / 8f;
@@ -300,16 +301,34 @@ internal static partial class CitadelProps
             m.Box(0, new Vector3(s * (H - Rim / 2), LiftTop - 20, 0), new Vector3(Rim, 44, LiftSize), Steel);
             m.Box(0, new Vector3(0, LiftTop - 20, s * (H - Rim / 2)), new Vector3(LiftSize, 44, Rim), Steel);
         }
-        // the rail: posts at the corners and the middles of the back and sides, a bar along their tops (the front, +z, open)
-        foreach (var (x, z) in new[] { (-H + 20, -H + 20), (H - 20, -H + 20), (-H + 20, H - 20), (H - 20, H - 20), (0, -H + 20), (-H + 20, 0), (H - 20, 0) })
-            m.Box(0, new Vector3(x, LiftTop + 230, z), new Vector3(30, 460, 30), Steel);
-        m.Box(0, new Vector3(0, LiftTop + 460, -H + 20), new Vector3(LiftSize - 20, 30, 30), Steel);
-        foreach (var s in new[] { -1, 1 }) m.Box(0, new Vector3(s * (H - 20), LiftTop + 460, 0), new Vector3(30, 30, LiftSize - 20), Steel);
-        // the chains: from the corners up
-        foreach (var (x, z) in new[] { (-H + 20, -H + 20), (H - 20, -H + 20), (-H + 20, H - 20), (H - 20, H - 20) })
-            m.Rod(0, new Vector3(x, LiftTop + 460, z), new Vector3(x * 0.4f, LiftTop + 5000, z * 0.4f), Dark);
         return m.ToBody(header);
     }
+    // a side of the rail: posts at its ends and middle, a bar along their tops -- the back (-z), the left (-x) or the right (+x)
+    private static Body BuildLiftRail(byte[] header, int side)
+    {
+        var m = new CarMesh("the lift's rail", new[] { -1 });
+        m.Light = 0.7f;
+        const float H = LiftSize / 2f - 20;
+        Vector3 At(float along) => side == 0 ? new Vector3(along, 0, -H) : new Vector3(side * H, 0, along);
+        foreach (var along in new[] { -H, 0, H })
+            m.Box(0, At(along) + new Vector3(0, LiftTop + RailHigh / 2f, 0), new Vector3(30, RailHigh, 30), Steel);
+        var size = side == 0 ? new Vector3(2 * H + 30, 30, 30) : new Vector3(30, 30, 2 * H + 30);
+        m.Box(0, At(0) + new Vector3(0, LiftTop + RailHigh, 0), size, Steel);
+        m.Box(0, At(0) + new Vector3(0, LiftTop + RailHigh / 2f, 0), size with { Y = 20 }, Steel);
+        return m.ToBody(header);
+    }
+    public static Body BuildLiftRailBack(byte[] header) => BuildLiftRail(header, 0);
+    public static Body BuildLiftRailLeft(byte[] header) => BuildLiftRail(header, -1);
+    public static Body BuildLiftRailRight(byte[] header) => BuildLiftRail(header, 1);
+    // (the rail's sides' boxes: thin, as high as the rail)
+    public static short[]? LiftBox(int generic) => generic switch
+    {
+        LiftPlatform => new short[] { -512, 0, -512, 511, LiftTop, 511 },
+        LiftRailBack => new short[] { -512, 0, -512, 511, LiftTop + RailHigh + 20, -460 },
+        LiftRailLeft => new short[] { -512, 0, -512, -460, LiftTop + RailHigh + 20, 511 },
+        LiftRailRight => new short[] { 460, 0, -512, 511, LiftTop + RailHigh + 20, 511 },
+        _ => null,
+    };
 
     // A curtain hung on a wall, gathered to one side by a gold tie-back (`side` -1 its left, +1 its right): pleats of red cloth from its
     // pelmet (its top at 0) to the floor CurtainDrop under it, drawn in to the tie-back's side two-thirds of the way down. Built facing

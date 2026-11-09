@@ -12244,6 +12244,8 @@ static int IsRaceCar(S32 numobj) {
 // sweep of 2026-10-31) and a car goes through whoever is left (RaceMod_CarThrough): the invisible helper with a body of its own in Volcano Island's road stopped every car
 // until a rescue, every lap. Only the other cars stop one, and what carries one is ridden. What it goes through is logged, once a race: run_sweep.ps1.
 S32 RaceMod_CarRacing(void) { return CarRacing(); }
+// A speaker held as it is while it talks (MESSAGE.CPP InitWhoSpeak): one of the race's cars -- the parade car's driver yelling from it
+S32 RaceMod_HoldSpeaker(S32 numobj) { return RaceMod_Active() && numobj > 0 && numobj < NbObjets && IsRaceCar(numobj); }
 S32 RaceMod_NoChase(S32 move, S32 target) {
     return move == MOVE_FOLLOW && target == NUM_PERSO && CarRacing();
 }

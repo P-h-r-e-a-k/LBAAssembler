@@ -223,7 +223,7 @@ internal static partial class CitadelProps
                  { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage), (Stool, "a stool", BuildStool),
                    (Seal, "the Sendell seal", BuildSeal), (TapestryRed, "a red tapestry", BuildTapestryRed), (TapestryBlue, "a blue tapestry", BuildTapestryBlue),
                    (Picture, "a picture", BuildPicture), (Rack, "a stand of paddles and whips", BuildRack), (Chair, "a chair", BuildChair),
-                   (Boulder, "a boulder", BuildBoulder), (Boulder2, "a smaller boulder", BuildBoulder2), (BikeTwinsen, "Twinsen's bike", BuildBikeTwinsen), (BikeZoe, "Zoe's bike", BuildBikeZoe), (JollyRoger, "a Jolly Roger", BuildJollyRoger), (SmallBoulder, "a small boulder", BuildSmallBoulder), (LiftPlatform, "the chamber's lift", BuildLiftPlatform),
+                   (Boulder, "a boulder", BuildBoulder), (Boulder2, "a smaller boulder", BuildBoulder2), (BikeTwinsen, "Twinsen's bike", BuildBikeTwinsen), (BikeZoe, "Zoe's bike", BuildBikeZoe), (JollyRoger, "a Jolly Roger", BuildJollyRoger), (SmallBoulder, "a small boulder", BuildSmallBoulder), (LiftPlatform, "the lift", BuildLiftPlatform), (LiftRailBack, "the lift's rail", BuildLiftRailBack), (LiftRailLeft, "the lift's rail", BuildLiftRailLeft), (LiftRailRight, "the lift's rail", BuildLiftRailRight),
                    (CurtainLeft, "a curtain", BuildCurtainLeft), (CurtainRight, "a curtain", BuildCurtainRight) }
                  .Concat(PictureBodies())
                  .Concat(Enumerable.Range(0, BayeuxParts).Select(k => (Bayeux + k, $"the Bayeux hanging's part {k + 1}", (Func<byte[], Body>)(h => BuildBayeux(h, k))))))
@@ -238,13 +238,16 @@ internal static partial class CitadelProps
                 File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes)));
                 index = count;
             }
-            table = generic == LiftPlatform ? WithBodyBox(table, Prop, generic, index, new short[] { -512, 0, -512, 511, LiftTop, 511 })
-                                            : RaceTrackBaldinoCar.WithBody(table, Prop, generic, index);
+            table = BoxOf(generic) is { } box ? WithBodyBox(table, Prop, generic, index, box) : RaceTrackBaldinoCar.WithBody(table, Prop, generic, index);
             made.Add($"{name} BODY.HQR {index} (body {generic})");
         }
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
         return new() { $"chapter 2's props, entity {Prop}'s bodies: {string.Join(", ", made)}" };
     }
+
+    // The props whose box isn't the one their body's extent makes: the lift's platform (not its rails), the rugs' tiles (CitadelProps.Rugs)
+    private static short[]? BoxOf(int generic) =>
+        LiftBox(generic) ?? RugTileBox(generic);
 
     // An entity's body record with its own box (the engine's ZV: F_BODY, the generic, the record's size, the body's number, "has
     // actions", F_ZV and the box's six values) in place of the one the body's own extent makes -- the chamber's lift: its rail and chains

@@ -28,13 +28,19 @@ internal static partial class RaceTrackStory
     private const int LandslideZone = 73, LandslideSaid = 3;
     // the scenario zone round LBA1's catamaran in the lower room (Action there: Twinsen's memories of it) and where the boat stands
     private const int BoatZone = 74;
-    // the chamber's lift (CitadelProps.BuildLiftPlatform) on the hall's free strip right of the Sendell rug (cells x 49-50, z 41-42), where
-    // Twinsen comes out (CitadelLba1Rooms.ChamberArrival): Action on it and it rises LiftRise, into the way up over it
-    // (CitadelLba1Rooms.ChamberExit); the scenario zone over it, Action's
-    // (the ride a step at a time, LiftSteps a tenth of a second apart, the platform, Twinsen and Zoe each on their own track: the engine's
-    // goto_point_3d moves only a sprite, and its own vertical moves are animations' -- the platform's track sets it a step up, Twinsen's
-    // him on it; a change of scene gives him back to the player)
-    private const int LiftUpZone = 75, LiftRise = 1600, LiftSteps = 20, LiftRide = 1, ZoeRide = 30, HeroRide = 40;
+    // the chamber's lift (CitadelProps.BuildLiftPlatform and its rail) on the hall's free strip right of the Sendell rug (cells x 49-50, z
+    // 41-42): it comes down from ChamberLiftDown over the hall's floor with Twinsen on it (CitadelLba1Rooms.ChamberArrival), and Action on it
+    // takes it up ChamberLiftUp, into the way up over it (CitadelLba1Rooms.ChamberExit); the scenario zones over it: Action's, and his
+    // arrival's (he waits on it till it is down: LiftDownZone). In the house, the lift's squares carry a platform of their own down
+    // HouseLiftDown, through the floor, into the way down under it. Each a carrier gliding on its track (GERETRAK's goto_point_3d for
+    // carriers, 2026-11-09: the user, "when we take the elevator down we just teleport ... When we're riding the elevator back up again
+    // it's not smooth"), Twinsen carried; a change of scene gives him back to the player.
+    internal const int LiftUpZone = 75, LiftDownZone = 76, LiftRide = 1, LiftDown = 2, ZoeRide = 30, LiftSpeed = 600;
+    internal const int ChamberLiftDown = 1200, ChamberLiftUp = 1800, HouseLiftDown = 1600;
+    // Up from the chamber: out of its lift's way up onto the house's platform HouseLiftUp under the house's floor, in its shaft (a scenario
+    // zone, LiftShaftZone), the platform put there and gliding up to the floor with him (label LiftRise; LiftRisen when it is up) -- deep
+    // enough that he isn't in the platform's box where it stands at the floor till then, which would push him off it
+    internal const int HouseLiftUp = 1200, LiftShaftZone = 77, LiftRise = 3, LiftRisen = 4, ZoeLiftRise = 40;
     private static readonly (int X, int Y, int Z) LiftAt = (25600, 1792, 21504);
     private static readonly (int X, int Y, int Z) BoatAt = (25300, 1280, 28700);
     private static readonly (int X0, int X1, int Y0, int Y1, int Z0, int Z1) LiftBox = (4096, 5119, 2560, 3583, 8192, 9215);
@@ -46,23 +52,84 @@ internal static partial class RaceTrackStory
     // the Sendell rug's middle (the hall's floor, x 35-48 and z 34-45, almost all of it) and the Dinofly rug's (the lower room's middle)
     private static readonly (int X, int Y, int Z) SendellRugAt = (21504, 1792, 20480), DinoRugAt = (21760, 1280, 28416);
 
-    // The lift's two zones in a house scene: the scenario zone Action is pressed in, and the door down, off till the Action switches it on
-    // (Twinsen in it, he goes: his place in it added to where he comes out, at the chamber's foot of the stairs)
-    internal static void AddLift(SceneModel model)
+    // A lift: its platform (and its rail, `rails`), each a carrier with a body on its own track, at `foot` (the platform's foot at its
+    // lowest), starting `startUp` over it. Label 0: down to its foot if it started up (then label LiftDown), else still; label LiftRide:
+    // to `rideTo` over its foot. Its actors, and their scripts.
+    private static (int[] Actors, Action<SceneScripts> Scripts) LiftRig(StoryParts p, SceneModel model, (int X, int Y, int Z) foot, int startUp, int rideTo, bool rails, int riseFrom = 0)
+    {
+        var low = model.TrackPoints.Count;
+        model.TrackPoints.Add(new SceneTrackPoint(foot.X, foot.Y, foot.Z));
+        var to = model.TrackPoints.Count;
+        model.TrackPoints.Add(new SceneTrackPoint(foot.X, foot.Y + rideTo, foot.Z));
+        var under = model.TrackPoints.Count;
+        if (riseFrom != 0) model.TrackPoints.Add(new SceneTrackPoint(foot.X, foot.Y - riseFrom, foot.Z));
+        var actors = new List<int>();
+        var adds = new List<Action<SceneScripts>>();
+        var parts = rails ? new[] { Citadel.CitadelProps.LiftPlatform, Citadel.CitadelProps.LiftRailBack, Citadel.CitadelProps.LiftRailLeft, Citadel.CitadelProps.LiftRailRight }
+                          : new[] { Citadel.CitadelProps.LiftPlatform };
+        foreach (var generic in parts)
+        {
+            actors.Add(model.Actors.Count);
+            var a = Citadel.CitadelProps.Actor(generic, foot.X, foot.Y + startUp, foot.Z);
+            a.Flags |= RaceTrackScenes.CarrierFlag;
+            // (its track running from the scene's start: label 0, down to its foot when it starts up -- an actor's track starts by itself
+            // only when it moves by its track)
+            a.Move = 3;
+            adds.Add(p.Add(model, a, "void comportement_0()\n{\n}\n"));
+        }
+        var down = startUp != 0 ? $"speed({LiftSpeed});\ngoto_point_3d({low});\n" : "";
+        var track = $"label(0);\n{down}\nlabel({LiftDown});\nstop();\n\nlabel({LiftRide});\nspeed({LiftSpeed});\ngoto_point_3d({to});\nstop();\n";
+        if (riseFrom != 0) track += $"\nlabel({LiftRise});\npos_point({under});\nspeed({LiftSpeed});\ngoto_point_3d({low});\n\nlabel({LiftRisen});\nstop();\n";
+        return (actors.ToArray(), scripts => { foreach (var add in adds) add(scripts); foreach (var i in actors) scripts.SetText(i, ScriptKind.Track, track); });
+    }
+    // (a lift's ride: its actors off up -- or down -- together)
+    internal static string Ride(int[] lift) => string.Concat(lift.Select(i => $"set_track_obj({i}, label_{LiftRide});\n"));
+
+    // The lift in a house scene: the platform on the storeroom's squares, down through the floor on Action there, into the way down under
+    // the floor (a door zone, off till the Action switches it on), which brings Twinsen out on the chamber's lift as it starts down -- his
+    // height in the zone (he comes into it from its top, falling with the platform) taken off. Returns the lift's actors and the scripts.
+    private static (int[] Lift, Action<SceneScripts> Scripts) AddLift(StoryParts p, SceneModel model)
     {
         var b = LiftBox;
         var arrival = Citadel.CitadelLba1Rooms.ChamberArrival;
         model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = b.X0, X1 = b.X1, Y0 = b.Y0, Y1 = b.Y1, Z0 = b.Z0, Z1 = b.Z1, Info = new int[8] });
+        const int DoorTop = 1500, DoorBottom = 1000;
+        const int DontReadjust = 1;     // (a zone's Info6 in the file, bit 1: the engine's ZONE_DONT_REAJUST_POS_TWINSEN -- else he is put on the floor under him, the chamber's)
+        // (he comes into the zone a step under its top -- the platform's step a frame -- and out that far over the chamber's platform, not into it,
+        // which would push him off it)
+        const int ArriveOver = 40;
         model.Zones.Add(new SceneZoneModel
         {
-            Type = 0, Num = Chamber, X0 = b.X0, X1 = b.X1, Y0 = b.Y0, Y1 = b.Y1, Z0 = b.Z0, Z1 = b.Z1,
-            Info = new[] { arrival.X - 512, arrival.Y, arrival.Z - 512, 0, LiftSwitch, 0, 0, 0 },
+            Type = 0, Num = Chamber, X0 = b.X0, X1 = b.X1, Y0 = DoorBottom, Y1 = DoorTop, Z0 = b.Z0, Z1 = b.Z1,
+            Info = new[] { arrival.X - 512, arrival.Y - (DoorTop - DoorBottom) + ArriveOver, arrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
+        var foot = Citadel.CitadelHouseLift.Foot;
+        var (lift, liftScripts) = LiftRig(p, model, (foot.X, foot.Y, foot.Z), 0, -HouseLiftDown, false, HouseLiftUp);
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftShaftZone, X0 = b.X0, X1 = b.X1, Y0 = foot.Y - HouseLiftUp - 300, Y1 = foot.Y - 200, Z0 = b.Z0, Z1 = b.Z1, Info = new int[8] });
+        var helper = p.Add(model, RaceTrackScenes.InvisibleHelper(foot.X, foot.Y, foot.Z), LiftHelper(lift));
+        return (lift, scripts => { liftScripts(scripts); helper(scripts); });
     }
-    // A house's helper: Action on the squares, on foot, and down the lift
-    internal static string LiftHelper() => $@"void comportement_0()
+    // A house's helper: Action on the lift, on foot, and down it
+    internal static string LiftHelper(int[] lift) => $@"void comportement_0()
 {{
-    set_comportement(comportement_1);
+    if ({LiftShaftZone} == zone_obj(0))
+    {{
+        set_dir_obj(0, NO_MOVE);
+        {string.Concat(lift.Select(i => $"set_track_obj({i}, label_{LiftRise});\n"))}        set_comportement(comportement_2);
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({LiftRisen} == l_track_obj({lift[0]}))
+    {{
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }}
 }}
 
 void comportement_1()
@@ -71,8 +138,9 @@ void comportement_1()
     {{
         if ({LiftZone} == zone_obj(0) && {Driving} != comportement_hero())
         {{
+            set_dir_obj(0, NO_MOVE);
             set_change_cube({LiftSwitch}, 1);
-        }}
+            {Ride(lift)}        }}
     }}
 }}
 ";
@@ -81,11 +149,7 @@ void comportement_1()
     {
         if (!p.Store.SceneExists(Chamber)) { p.Log.Add($"the secret chamber left out: no scene {Chamber} (Citadel/CitadelLba1Rooms)"); return; }
         // the house by day: the lift
-        p.Edit(OpeningScene, "the house's lift down to the secret chamber: Action on the storeroom's darker squares", model =>
-        {
-            AddLift(model);
-            return p.Add(model, RaceTrackScenes.InvisibleHelper(Citadel.CitadelHouseLift.Middle.X, Citadel.CitadelHouseLift.Middle.Y, Citadel.CitadelHouseLift.Middle.Z), LiftHelper());
-        });
+        p.Edit(OpeningScene, "the house's lift down to the secret chamber: Action on the storeroom's darker squares", model => AddLift(p, model).Scripts);
         // the Tralu's bar in the evening: Drunk
         p.Edit(BarHall, "the Tralu's bar walked into in the evening: Zoe will know (Drunk 1)", model =>
             p.Add(model, RaceTrackScenes.InvisibleHelper(model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z), $@"void comportement_0()
@@ -170,22 +234,16 @@ void comportement_1()
             }
             // the lift: a platform Twinsen stands on (OBJ_CARRIER), on its track -- still, or rising (LiftRide) -- and the zone over it Action
             // is pressed in; Zoe's place on it beside him, and both up
-            var liftIndex = model.Actors.Count;
-            var liftActor = Citadel.CitadelProps.Actor(Citadel.CitadelProps.LiftPlatform, LiftAt.X, LiftAt.Y, LiftAt.Z, 0);
-            liftActor.Flags |= RaceTrackScenes.CarrierFlag;
-            var liftLife = p.Add(model, liftActor, "void comportement_0()\n{\n}\n");
-            // (each one's place at each step of the ride: the platform's, Twinsen's on it -- a hair over its top -- and Zoe's beside him)
-            int[] Steps(int x, int y, int z)
-            {
-                var first = model.TrackPoints.Count;
-                for (var k = 0; k <= LiftSteps; k++) model.TrackPoints.Add(new SceneTrackPoint(x, y + k * LiftRise / LiftSteps, z));
-                return Enumerable.Range(first, LiftSteps + 1).ToArray();
-            }
-            var liftSteps = Steps(LiftAt.X, LiftAt.Y, LiftAt.Z);
-            var heroSteps = Steps(LiftAt.X + 220, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z + 150);
-            var zoeSteps = Steps(LiftAt.X - 220, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z - 150);
-            string Ride(int[] steps) => string.Concat(steps.Skip(1).Select(k => $"pos_point({k});\nwait_nb_dizieme(1);\n"));
-            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftUpZone, X0 = LiftAt.X - 700, X1 = LiftAt.X + 511, Y0 = LiftAt.Y, Y1 = LiftAt.Y + 800, Z0 = LiftAt.Z - 700, Z1 = LiftAt.Z + 700, Info = new int[8] });
+            var (lift, liftLife) = LiftRig(p, model, LiftAt, ChamberLiftDown, ChamberLiftUp, true);
+            var platform = lift[0];
+            var onLift = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint(LiftAt.X + 220, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z + 150));
+            var zoeOn = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint(LiftAt.X - 250, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z + 330));
+            var zoeHigh = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint(LiftAt.X - 250, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4 + ChamberLiftUp, LiftAt.Z + 330));
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftUpZone, X0 = LiftAt.X - 512, X1 = LiftAt.X + 511, Y0 = LiftAt.Y, Y1 = LiftAt.Y + 800, Z0 = LiftAt.Z - 512, Z1 = LiftAt.Z + 511, Info = new int[8] });
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftDownZone, X0 = LiftAt.X - 512, X1 = LiftAt.X + 511, Y0 = LiftAt.Y + ChamberLiftDown - 200, Y1 = LiftAt.Y + ChamberLiftDown + 400, Z0 = LiftAt.Z - 512, Z1 = LiftAt.Z + 511, Info = new int[8] });
             // the bedroom's chair under Zoe (its seat CitadelSpanking.SeatBack behind her place, under her hips; the actor itself
             // CitadelProps.ChairAhead further back, its box behind hers), and the stand of paddles and whips beside it, to her left
             var (chairX, chairZ) = Ahead(-Citadel.CitadelSpanking.SeatBack - Citadel.CitadelProps.ChairAhead);
@@ -226,17 +284,25 @@ void comportement_1()
             const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21;
             string Slaps(int n) => slap < 0 ? "wait_nb_second(1);\n" : string.Concat(Enumerable.Repeat($"sample({slap});\nwait_nb_dizieme(3);\n", n));
             zoe.Flags &= ~3u;   // (and no brick collision: her hips back over the chair)
+            zoe.Flags |= RaceTrackScenes.CarrierFlag;   // (a carrier: goto_point_3d glides her up the lift beside Twinsen)
             var zoeIndex = model.Actors.Count;
+            // (her check once, as the scene starts: run every frame, the scolding's end -- Drunk past DrankTonight -- took her out of the
+            // scene just as she went up the lift with him)
             var zoeLife = p.Add(model, zoe, $@"void comportement_0()
 {{
     if ({DrankTonight} == var_game({Drunk}))
     {{
         body(0);
+        set_comportement(comportement_1);
     }}
     else
     {{
         suicide();
     }}
+}}
+
+void comportement_1()
+{{
 }}
 ");
             return scripts =>
@@ -265,23 +331,12 @@ stop();
 
 label({ZoeRide});
 anim(0);
-pos_point({zoeSteps[0]});
-{Ride(zoeSteps)}stop();
+pos_point({zoeOn});
+speed({LiftSpeed});
+goto_point_3d({zoeHigh});
+stop();
 ");
                 liftLife(scripts);
-                scripts.SetText(liftIndex, ScriptKind.Track, $@"label(0);
-stop();
-
-label({LiftRide});
-{Ride(liftSteps)}stop();
-");
-                scripts.SetText(0, ScriptKind.Track, $@"label(0);
-stop();
-
-label({HeroRide});
-pos_point({heroSteps[0]});
-{Ride(heroSteps)}stop();
-");
                 // (his behaviour put back to Normal first: each behaviour is its own entity, and only Normal's has the spanking's bodies and his
                 // lap's animations -- the user, 2026-11-09, home in Sporty or the like: he stood there in his everyday clothes, body(30) and
                 // anim(240) not found)
@@ -299,6 +354,32 @@ pos_point({heroSteps[0]});
     {{
         set_dir(NO_MOVE);
         cinema_mode(1);
+        set_comportement(comportement_5);
+    }}
+    else if ({LiftDownZone} == zone())
+    {{
+        set_dir(NO_MOVE);
+        set_comportement(comportement_4);
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_4()
+{{
+    if ({LiftDown} == l_track_obj({platform}))
+    {{
+        set_dir(MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_5()
+{{
+    if ({LiftDown} == l_track_obj({platform}))
+    {{
         set_var_game({DayVar}, {TiredAside});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScold)});
         obj_col(0);
@@ -309,10 +390,6 @@ pos_point({heroSteps[0]});
         anim({Citadel.CitadelSpanking.TwinsenKick});
         set_track_obj({zoeIndex}, label_{Slaps1});
         set_comportement(comportement_2);
-    }}
-    else
-    {{
-        set_comportement(comportement_1);
     }}
 }}
 
@@ -339,9 +416,7 @@ void comportement_1()
         if ({LiftUpZone} == zone() && {Driving} != comportement_hero())
         {{
             set_dir(NO_MOVE);
-            set_track_obj(0, label_{HeroRide});
-            set_track_obj({liftIndex}, label_{LiftRide});
-        }}
+            {Ride(lift)}        }}
     }}
 }}
 
@@ -375,12 +450,12 @@ void comportement_3()
         set_var_game({Drunk}, {Scolded});
         body(1);
         anim(0);
+        pos_point({onLift});
         obj_col(1);
         cinema_mode(0);
         set_dir(NO_MOVE);
-        set_track_obj(0, label_{HeroRide});
         set_track_obj({zoeIndex}, label_{ZoeRide});
-        set_track_obj({liftIndex}, label_{LiftRide});
+        {Ride(lift)}
         set_comportement(comportement_1);
     }}
 }}

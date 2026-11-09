@@ -176,40 +176,82 @@ internal static partial class CitadelProps
         "KKKKKKWWWWKKKKWWWWKKKKKK",
         "KKKKWWWKKKKKKKKKKWWWKKKK",
     };
-    // (the second Bayeux hanging, the right way up on the lower room's back wall: Zoe carried off by the clones, the lighthouse, Twinsen's
-    // magic ball, the snowboard down the Hamalayi, the Book of Bu -- its letters BayeuxColours' and skin and gold)
+    // (the second Bayeux hanging, the right way up on the lower room's back wall, the wall's height from its top to the floor: Zoe carried
+    // off by the clones, Twinsen's magic ball, the snowboard down the Hamalayi, the Book of Bu -- four scenes, each stitch two by two (the
+    // user, 2026-11-09: "there's no lighthouse in LBA1 so let's remove it, and let's also make it high enough to cover the whole wall ...
+    // or just have less but larger scenes depicted") -- its letters BayeuxColours' and skin and gold)
     public static readonly string[] Bayeux2Rows =
     {
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "..r.k.k.y.....g.....r.k.k.y.....g.....r.k.k.y.....g.....r.k.k.y.....g.....r.k.k.y.....g.....r.k.k.y.....g.....r.k.k.y.....g.....r.k.k.y.....",
-        ".r...k.y.....g.....r...k.y.....g.....r...k.y.....g.....r...k.y.....g.....r...k.y.....g.....r...k.y.....g.....r...k.y.....g.....r...k.y.....g",
-        "r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........",
+        "........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........",
+        "......rrkk..kk....yy..........ggkk..kk....rr..........yykk..kk....gg..........rrkk..kk....yy..........ggkk..kk....rr..........yykk..kk....gg",
+        "......rrkk..kk....yy..........ggkk..kk....rr..........yykk..kk....gg..........rrkk..kk....yy..........ggkk..kk....rr..........yykk..kk....gg",
+        "....rr....kk....yy..........gg....kk....rr..........yy....kk....gg..........rr....kk....yy..........gg....kk....rr..........yy....kk....gg..",
+        "....rr....kk....yy..........gg....kk....rr..........yy....kk....gg..........rr....kk....yy..........gg....kk....rr..........yy....kk....gg..",
+        "..rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg....",
+        "..rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg....",
+        "rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg......",
+        "rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg......",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "............................................................................................................................................",
-        "...........bbb.bbb.bbb...........bb..b.b..b..bb..b.b.bbb.........bb..bbb.b....b................bb..bbb.b.b.................bb..b.b..........",
-        ".............b.b.b.b.............b.b.b.b.b.b.b.b.b.b.b...........b.b..b..b...b.b...............b.b..b..b.b.................b.b.b.b..........",
-        "............b..b.b.bb............bb..bbb.bbb.bb..b.b.bbb.........bb...b..b...bbb...............b.b..b...b..................bb..b.b..........",
-        "...........b...b.b.b.............b...b.b.b.b.b.b.b.b...b.........b....b..b...b.b...............b.b..b..b.b.................b.b.b.b..........",
-        "...........bbb.bbb.bbb...........b...b.b.b.b.b.b.bbb.bbb.........b...bbb.bbb.b.b...............b.b.bbb.b.b.................bb..bbb..........",
-        "..............yy...................................y.y......................................................................................",
-        ".....llll....wwwy......llll.............kkkkkk...y..................................................................kkkkkkkkkkkkkkkkk.......",
-        ".....llll....www.......llll..............yyyy.yyyyyyyy.......kkw.....y.y.........................kkw................kwwwwwwwkwwwwwwwk.......",
-        ".....lklll.w.rrrr.w...lllkl......................y..........kwww...y.....y......................kwww................kwrwrwwwkwwrwrwwk.......",
-        ".....lllllk.rrrrrr...klllll...............ww.......y.y.....k.www...b..................lll......k.www................kwwwwwwwkwwwwwwwk.......",
-        "....yyyyyyk..rrrr....kyyyyyy.............rrrr...............bbbbbbb........Y..........llllll....bbbbb...............kwrrwrwwkwrwwrrwk.......",
-        "....yyyyyyk..rrrr....kyyyyyy.............rrrr...............bbbbb............yy.......llllllwll.bbbbb...............kwwwwwwwkwwwwwwwk.......",
-        "....yyyyyyk..w..w....kyyyyyy.............wwww...............bbbbb............yy.......llllwlllllbbbbb...............kwwrwrrwkwrrwrwwk.......",
-        "....yyyyyyk..........kyyyyyy............wwwwww..............bbbbb.............ll......llllllllyyyybbb...............kkkkkkkkkkkkkkkkk.......",
-        "....kkkkkkk..........kkkkkkk............rrrrrr..............bbbbb.............llyy....lllllwllllbbyyyyll....................kk..............",
-        ".....k..k.k..........k.k..k.............rrrrrr...............k.k...............yyy....lllwlllllkllllklyylll.................kk..............",
-        ".....k..k.k..........k.k..k............kkkkkkkk..............k.k................kk....lllllllllklllllkllllllll..............kk..............",
-        ".....k..k..............k..k...........kkkkkkkkkk.............k.k......................llllllllllklllllklllllllll.........kkkkkkkk...........",
+        "............................................................................................................................................",
+        "............................................................................................................................................",
+        "............................................................................................................................................",
+        "........bbbbbb..bbbbbb..bbbbbb........bbbb....bbbbbb..bb........bb............bbbb....bbbbbb..bb..bb................bbbb....bb..bb..........",
+        "........bbbbbb..bbbbbb..bbbbbb........bbbb....bbbbbb..bb........bb............bbbb....bbbbbb..bb..bb................bbbb....bb..bb..........",
+        "............bb..bb..bb..bb............bb..bb....bb....bb......bb..bb..........bb..bb....bb....bb..bb................bb..bb..bb..bb..........",
+        "............bb..bb..bb..bb............bb..bb....bb....bb......bb..bb..........bb..bb....bb....bb..bb................bb..bb..bb..bb..........",
+        "..........bb....bb..bb..bbbb..........bbbb......bb....bb......bbbbbb..........bb..bb....bb......bb..................bbbb....bb..bb..........",
+        "..........bb....bb..bb..bbbb..........bbbb......bb....bb......bbbbbb..........bb..bb....bb......bb..................bbbb....bb..bb..........",
+        "........bb......bb..bb..bb............bb........bb....bb......bb..bb..........bb..bb....bb....bb..bb................bb..bb..bb..bb..........",
+        "........bb......bb..bb..bb............bb........bb....bb......bb..bb..........bb..bb....bb....bb..bb................bb..bb..bb..bb..........",
+        "........bbbbbb..bbbbbb..bbbbbb........bb......bbbbbb..bbbbbb..bb..bb..........bb..bb..bbbbbb..bb..bb................bbbb....bbbbbb..........",
+        "........bbbbbb..bbbbbb..bbbbbb........bb......bbbbbb..bbbbbb..bb..bb..........bb..bb..bbbbbb..bb..bb................bbbb....bbbbbb..........",
+        "............................................................................................................................................",
+        "............................................................................................................................................",
+        "..................yyyy......................................................................................................................",
+        "..................yyyy......................................................................................................................",
+        "....llllllll....wwwwwwyy....llllllll........................................................................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "....llllllll....wwwwwwyy....llllllll........................................................................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "....llllllll....wwwwww......llllllll....kkkkww..........yy..yy..............................kkkkww..........kkwwwwwwwwwwwwwwkkwwwwwwwwwwwwww",
+        "....llllllll....wwwwww......llllllll....kkkkww..........yy..yy..............................kkkkww..........kkwwwwwwwwwwwwwwkkwwwwwwwwwwwwww",
+        "....llkkllllww..rrrrrrrr..llllllkkll..kkwwwwww......yy..........yy........................kkwwwwww..........kkwwrrwwrrwwwwwwkkwwwwrrwwrrwwww",
+        "....llkkllllww..rrrrrrrr..llllllkkll..kkwwwwww......yy..........yy........................kkwwwwww..........kkwwrrwwrrwwwwwwkkwwwwrrwwrrwwww",
+        "....llllllllllrrrrrrrrrrkkllllllllllkk..wwwwww......bb................llllll............kk..wwwwww..........kkwwwwwwwwwwwwwwkkwwwwwwwwwwwwww",
+        "....llllllllllrrrrrrrrrrkkllllllllllkk..wwwwww......bb................llllll............kk..wwwwww..........kkwwwwwwwwwwwwwwkkwwwwwwwwwwwwww",
+        "..yyyyyyyyyyyykkrrrrrrrrkkyyyyyyyyyyyybbbbbbbbbbbbbb................YYllllllllllll........bbbbbbbbbb........kkwwrrrrwwrrwwwwkkwwrrwwwwrrrrww",
+        "..yyyyyyyyyyyykkrrrrrrrrkkyyyyyyyyyyyybbbbbbbbbbbbbb................YYllllllllllll........bbbbbbbbbb........kkwwrrrrwwrrwwwwkkwwrrwwwwrrrrww",
+        "..yyyyyyyyyyyykkrrrrrrrrkkyyyyyyyyyyyybbbbbbbbbb......................llllllllllllwwllll..bbbbbbbbbb........kkwwwwwwwwwwwwwwkkwwwwwwwwwwwwww",
+        "..yyyyyyyyyyyykkrrrrrrrrkkyyyyyyyyyyyybbbbbbbbbb......................llllllllllllwwllll..bbbbbbbbbb........kkwwwwwwwwwwwwwwkkwwwwwwwwwwwwww",
+        "..yyyyyyyyyyyykkww....wwkkyyyyyyyyyyyybbbbbbbbbb......................llllllllwwllllllllllbbbbbbbbbb........kkwwwwrrwwrrrrwwkkwwrrrrwwrrwwww",
+        "..yyyyyyyyyyyykkww....wwkkyyyyyyyyyyyybbbbbbbbbb......................llllllllwwllllllllllbbbbbbbbbb........kkwwwwrrwwrrrrwwkkwwrrrrwwrrwwww",
+        "..yyyyyyyyyyyykk........kkyyyyyyyyyyyybbbbbbbbbb......................llllllllllllllllyyyyyyyybbbbbb........kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "..yyyyyyyyyyyykk........kkyyyyyyyyyyyybbbbbbbbbb......................llllllllllllllllyyyyyyyybbbbbb........kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "..kkkkkkkkkkkkkk........kkkkkkkkkkkkkkbbbbbbbbbb......................llllllllllwwllllllllbbbbyyyyyyyyllll..................kkkk............",
+        "..kkkkkkkkkkkkkk........kkkkkkkkkkkkkkbbbbbbbbbb......................llllllllllwwllllllllbbbbyyyyyyyyllll..................kkkk............",
+        "....kk....kk..kk........kk..kk....kk....kk..kk........................llllllwwllllllllllkkllllllllkkllyyyyllllll............kkkk............",
+        "....kk....kk..kk........kk..kk....kk....kk..kk........................llllllwwllllllllllkkllllllllkkllyyyyllllll............kkkk............",
+        "....kk....kk..kk........kk..kk....kk....kk..kk........................llllllllllllllllllkkllllllllllkkllllllllllllllll......kkkk............",
+        "....kk....kk..kk........kk..kk....kk....kk..kk........................llllllllllllllllllkkllllllllllkkllllllllllllllll......kkkk............",
+        "....kk....kk................kk....kk....kk..kk........................llllllllllllllllllllkkllllllllllkkllllllllllllllkkkkkkkkkkkkkkkk......",
+        "....kk....kk................kk....kk....kk..kk........................llllllllllllllllllllkkllllllllllkkllllllllllllllkkkkkkkkkkkkkkkk......",
+        "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
         "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "...r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y.....g.....r.....y....",
-        "..r.....y...yyy.....r.....y.....g...yyy.....y.....g.....r...yyy.....g.....r.....y...yyy.....r.....y.....g...yyy.....y.....g.....r...yyy.....",
-        ".r.....y....y.y....r.....y.....g....y.y....y.....g.....r....y.y....g.....r.....y....y.y....r.....y.....g....y.y....y.....g.....r....y.y....g",
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........",
+        "........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........",
+        "......rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg",
+        "......rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg..........rr..........yy..........gg",
+        "....rr..........yyyyyy......gg..........rr......yyyyyy..........gg..........rr..yyyyyy..yy..........gg..........yyyyyy......yy..........gg..",
+        "....rr..........yyyyyy......gg..........rr......yyyyyy..........gg..........rr..yyyyyy..yy..........gg..........yyyyyy......yy..........gg..",
+        "..rr..........yyyy..yy....gg..........rr........yy..yy........gg..........rr....yy..yyyy..........gg..........rryy..yy....yy..........gg....",
+        "..rr..........yyyy..yy....gg..........rr........yy..yy........gg..........rr....yy..yyyy..........gg..........rryy..yy....yy..........gg....",
+        "rrbbbbbbbbbbyybbbbbbbbbbggbbbbbbbbbbrrbbbbbbbbbbyybbbbbbbbbbggbbbbbbbbbbrrbbbbbbbbbbyybbbbbbbbbbggbbbbbbbbbbrrbbbbbbbbbbyybbbbbbbbbbggbbbbbb",
+        "rrbbbbbbbbbbyybbbbbbbbbbggbbbbbbbbbbrrbbbbbbbbbbyybbbbbbbbbbggbbbbbbbbbbrrbbbbbbbbbbyybbbbbbbbbbggbbbbbbbbbbrrbbbbbbbbbbyybbbbbbbbbbggbbbbbb",
     };
 
     // A picture's squares as rectangles: each square's colour (at), as few rectangles of one colour as cover columns [c0, c1) and rows
@@ -303,7 +345,7 @@ internal static partial class CitadelProps
 
     // The second Bayeux hanging, upright on a wall: a piece of its columns, its top at 0, its middle across at 0, its face +z; a dark rod
     // along its top
-    public const int Bayeux2First = 80, Bayeux2Most = 10, Bayeux2Stitch = 28;
+    public const int Bayeux2First = 80, Bayeux2Most = 16, Bayeux2Stitch = 28;
     private static Body BuildBayeux2(byte[] header, (int C0, int C1, int R0, int R1) t)
     {
         var m = new CarMesh("the second Bayeux hanging", new[] { -1 });
@@ -317,6 +359,19 @@ internal static partial class CitadelProps
     }
     // where a piece's actor stands along the wall, from the hanging's middle
     public static int Bayeux2X((int C0, int C1, int R0, int R1) t) => (int)MathF.Round(((t.C0 + t.C1) / 2f - Bayeux2Rows[0].Length / 2f) * Bayeux2Stitch);
+
+    // A rug tile's box (the engine's ZV, CitadelProps.WithBodyBox): its own area from its near corner, no higher than the floor -- the box
+    // the body's extent makes is a square round the actor's place, here the tile's corner, and the engine left out a tile whose corner
+    // was off the screen though the rest of it was on (the user, 2026-11-09: from the lower room, "parts of it aren't visible ... it does
+    // come back when twinsen walks back up to it")
+    private static short[]? RugTileBox(int generic)
+    {
+        (int C0, int C1, int R0, int R1)? t = null; var stitch = 0;
+        if (generic >= DinoFirst && generic < DinoFirst + Math.Min(DinoMost, DinoTiles.Count)) { t = DinoTiles[generic - DinoFirst]; stitch = DinoStitch; }
+        else if (generic >= SendellFirst && generic < SendellFirst + Math.Min(SendellMost, SendellTiles.Count)) { t = SendellTiles[generic - SendellFirst]; stitch = SendellStitch; }
+        if (t is not { } k) return null;
+        return new short[] { 0, -16, 0, (short)((k.C1 - k.C0) * stitch), 0, (short)((k.R1 - k.R0) * stitch) };
+    }
 
     public static IEnumerable<(int Generic, string Name, Func<byte[], Body> Build)> PictureBodies() =>
         DinoTiles.Take(DinoMost).Select((t, k) => (DinoFirst + k, $"the Dinofly rug, tile {k + 1}", (Func<byte[], Body>)(h => BuildRugTile(h, "the Dinofly rug", DinoRows, DinoStitch, t))))

@@ -2,6 +2,7 @@
 
 #include <SYSTEM/KEYBOARD_KEYS.H>
 #include <stdint.h>
+#include <math.h>
 #include "AMBIANCE.H"
 #include "SCRIPT_BREAKPOINT.H"
 
@@ -419,6 +420,37 @@ void DoTrack(U8 numobj) {
             /*-------------------------------------------------------------------------*/
         case TM_GOTO_POINT_3D:
             ptrobj->OffsetTrack++;
+            // (a lift: a carrier with a body -- not a sprite -- glides straight to the point at its speed (speed(), units a second), and
+            // whoever stands on it with it, by as much each frame: the retail command moved only sprites, and a body's own moves are its
+            // animations' steps. The race-track story's lift in Twinsen's house and its secret chamber, 2026-11-09: "When we're riding the
+            // elevator back up again it's not smooth")
+            if (!(ptrobj->Flags & SPRITE_3D) && (ptrobj->Flags & OBJ_CARRIER)) {
+                static S32 liftLast[MAX_OBJETS];
+                Value = *ptrtrack;
+                X0 = ListBrickTrack[Value].X;
+                Y0 = ListBrickTrack[Value].Y;
+                Z0 = ListBrickTrack[Value].Z;
+                const S32 now = TimerRefHR;
+                S32 dt = liftLast[numobj] && now - liftLast[numobj] > 0 && now - liftLast[numobj] < 250 ? now - liftLast[numobj] : 0;
+                liftLast[numobj] = now;
+                const double ddx = X0 - ptrobj->Obj.X, ddy = Y0 - ptrobj->Obj.Y, ddz = Z0 - ptrobj->Obj.Z;
+                const double far = sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+                // (speed()'s value, which TM_SPEED keeps for a body as 51200 over it)
+                const double step = (ptrobj->SRot > 0 ? 51200.0 / ptrobj->SRot : 500) * dt / 1000.0;
+                S32 mx, my, mz;
+                if (far <= step || far < 1) {
+                    mx = X0 - ptrobj->Obj.X; my = Y0 - ptrobj->Obj.Y; mz = Z0 - ptrobj->Obj.Z;
+                    liftLast[numobj] = 0;
+                } else {
+                    mx = (S32)(ddx * step / far); my = (S32)(ddy * step / far); mz = (S32)(ddz * step / far);
+                    ptrobj->OffsetTrack -= 2;
+                    flag = FALSE;
+                }
+                ptrobj->Obj.X += mx; ptrobj->Obj.Y += my; ptrobj->Obj.Z += mz;
+                for (S32 k = 0; k < NbObjets; k++)
+                    if (k != numobj && ListObjet[k].CarryBy == numobj) { ListObjet[k].Obj.X += mx; ListObjet[k].Obj.Y += my; ListObjet[k].Obj.Z += mz; }
+                break;
+            }
             if (ptrobj->Flags & SPRITE_3D) {
                 Value = *ptrtrack; // index point
                 X0 = ListBrickTrack[Value].X;

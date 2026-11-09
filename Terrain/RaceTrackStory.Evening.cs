@@ -597,12 +597,16 @@ stop();
             var first = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint(BedSpot.X, BedSpot.Y, BedSpot.Z));
             model.TrackPoints.Add(new SceneTrackPoint(ZoeByTheDoor.X, ZoeByTheDoor.Y, ZoeByTheDoor.Z));
-            model.TrackPoints.Add(new SceneTrackPoint(Citadel.CitadelHouseLift.Middle.X, Citadel.CitadelHouseLift.Middle.Y, Citadel.CitadelHouseLift.Middle.Z));
-            int bed = first, byDoor = first + 1, onLift = first + 2;
+            model.TrackPoints.Add(new SceneTrackPoint(Citadel.CitadelHouseLift.Middle.X, Citadel.CitadelHouseLift.Middle.Y + 4, Citadel.CitadelHouseLift.Middle.Z));
+            // (up from the chamber after the scolding, Zoe beside him on the platform, rising with it: her place on it under the floor,
+            // and at the floor -- as in the chamber, RaceTrackStory.SecretChamber)
+            var foot = Citadel.CitadelHouseLift.Foot;
+            model.TrackPoints.Add(new SceneTrackPoint(foot.X - 250, foot.Y - HouseLiftUp + Citadel.CitadelProps.LiftTop + 4, foot.Z + 330));
+            model.TrackPoints.Add(new SceneTrackPoint(foot.X - 250, foot.Y + Citadel.CitadelProps.LiftTop + 4, foot.Z + 330));
+            int bed = first, byDoor = first + 1, onLift = first + 2, zoeUnder = first + 3, zoeUp = first + 4;
             // (the lift down to the secret chamber, and the front door: a switch of its own, locked once Zoe has had her word -- and Action
             // there says so: RaceTrackStory.SecretChamber)
-            AddLift(model);
-            var liftHelper = p.Add(model, RaceTrackScenes.InvisibleHelper(Citadel.CitadelHouseLift.Middle.X, Citadel.CitadelHouseLift.Middle.Y, Citadel.CitadelHouseLift.Middle.Z), LiftHelper());
+            var (lift, liftHelper) = AddLift(p, model);
             var front = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == Citadel.CitadelNightHouse.Yard);
             if (front is not null)
             {
@@ -610,6 +614,7 @@ stop();
                 model.Zones.Add(new SceneZoneModel { Type = 2, Num = FrontDoorTry, X0 = front.X0 - 256, X1 = front.X1 + 256, Y0 = front.Y0, Y1 = front.Y1, Z0 = front.Z0 - 256, Z1 = front.Z1 + 256, Info = new int[8] });
             }
             (zoe.X, zoe.Y, zoe.Z) = ZoeWaiting;
+            zoe.Flags |= RaceTrackScenes.CarrierFlag;   // (a carrier: goto_point_3d glides her up the shaft with the platform)
             zoe.Beta = RaceTrackMath.Turn(Math.Atan2(BedSpot.X - ZoeWaiting.X, BedSpot.Z - ZoeWaiting.Z));
             var flame = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Flame, Wick.X, Wick.Y, Wick.Z);
             var flameIndex = model.Actors.Count;
@@ -631,6 +636,10 @@ stop();
         {{
             pos_point({byDoor});
             beta(3072);
+        }}
+        if ({Scolded} == var_game({Drunk}) && {LiftShaftZone} == zone_obj(0))
+        {{
+            set_track(label_{ZoeLiftRise});
         }}
         set_comportement(comportement_1);
     }}
@@ -682,7 +691,9 @@ goto(label_0);
         cinema_mode(0);
         set_dir(MOVE_MANUAL);
         pos_point({onLift});
+        set_dir(NO_MOVE);
         set_change_cube({LiftSwitch}, 1);
+        {Ride(lift)}
     }}
     if ({Scolded} == var_game({Drunk}))
     {{
@@ -763,7 +774,7 @@ wait_nb_dizieme(15);
 label({CandleOut});
 stop();
 ");
-                scripts.SetText(zoeIndex, ScriptKind.Track, "label(0);\nanim(0);\nstop();\n");
+                scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nanim(0);\nstop();\n\nlabel({ZoeLiftRise});\nanim(0);\npos_point({zoeUnder});\nbeta(512);\nspeed({LiftSpeed});\ngoto_point_3d({zoeUp});\nstop();\n");
             };
         });
     }

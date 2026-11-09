@@ -44,10 +44,12 @@ internal static partial class CitadelLba1Rooms
     public const int SecretChamber = 400, Lba1SecretChamber = 21, House = 0;
     // (since 2026-11-09 the chamber's own lift -- RaceTrackStory.SecretChamber, CitadelProps.BuildLiftPlatform -- on the hall's free strip
     // right of the Sendell rug, cells x 49-50, z 41-42: Twinsen comes out on it, and goes up on it into the way up, high over it)
-    public static readonly (int X, int Y, int Z) ChamberArrival = (25600, 1792 + CitadelProps.LiftTop, 21504);
-    public static readonly (int X0, int X1, int Z0, int Z1, int Y0, int Y1) ChamberExit = (25088, 26111, 20992, 22015, 3000, 4500);
+    // (he comes out on it as it starts down, RaceTrackStory.ChamberLiftDown over the hall's floor; the way up is higher than that, and
+    // the lift's ride up, RaceTrackStory.ChamberLiftUp, takes him into it)
+    public static readonly (int X, int Y, int Z) ChamberArrival = (25600, 1792 + CitadelProps.LiftTop + RaceTrackStory.ChamberLiftDown, 21504);
+    public static readonly (int X0, int X1, int Z0, int Z1, int Y0, int Y1) ChamberExit = (25088, 26111, 20992, 22015, 1792 + RaceTrackStory.ChamberLiftDown + 300, 4800);
     // (out onto the lift's squares, x 4096-5119, z 8192-9215: his place in the way up -- the lift's square, 1024 by 1024 -- added)
-    public static readonly (int X, int Y, int Z) ChamberExitLands = (4096, 2560, 8192);
+    public static readonly (int X, int Y, int Z) ChamberExitLands = (4096, CitadelHouseLift.Middle.Y - RaceTrackStory.HouseLiftUp + 4, 8192);
 
     // ---- the secret room (scene 226: LBA1's 55, its walls round x 49-63, z 48-63 of the grid as LBA1 has them) -----------------------
     // Twinsen comes in from the sewers walking west, where LBA1's own way in from its first sewer was (the east wall's doorway, x 63, z 54-57,
@@ -122,7 +124,7 @@ internal static partial class CitadelLba1Rooms
             var map = Lba1InteriorPort.Port(lba1Directory, room.Lba1Scene, palette, room.Name);
             var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
-            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log);
+            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log, InvisibleWall(bkg, library));
             grid[0] = (byte)library; grid[1] = (byte)fragments;
             // (the grid after the game's last, what follows it one entry on; its number in the scene-to-grid table)
             header = new MapBricks.BkgHeader(bkg.Read(0));
@@ -149,7 +151,7 @@ internal static partial class CitadelLba1Rooms
             {
                 Type = 0, Num = room.ExitTo, X0 = e.X0, X1 = e.X1, Z0 = e.Z0, Z1 = e.Z1, Y0 = e.Y0, Y1 = e.Y1,
                 // (Twinsen's height over the zone's foot is added to Info1: the floor he lands on)
-                Info = new[] { room.ExitLands.X, room.ExitLands.Y, room.ExitLands.Z, 0, 0, 0, 0, 1 },
+                Info = new[] { room.ExitLands.X, room.ExitLands.Y, room.ExitLands.Z, 0, 0, 0, room.ExitTo == House ? 1 : 0, 1 },
             });
             var entry = room.Slot + 1;
             while (scenes.Count <= entry) scenes.Slots.Add(new HqrFile.Slot());
@@ -181,7 +183,20 @@ internal static partial class CitadelLba1Rooms
     //     landing before them (layer 3) the floor's height. (What Twinsen says there, and the Sendell seal back in the hall's wall:
     //     RaceTrackStory.SecretChamber.)
     private const int HallFloor = 6, LowFloor = 4, FrontWall = 59, NewFront = 63, StoneShift = -11;
-    private static byte[] ChamberRemodel(byte[] raw, List<string> log)
+    // A block of one cell that blocks and draws nothing (a shape, no brick), added to the room's library: its number
+    private static int InvisibleWall(HqrFile bkg, int library)
+    {
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var entry = header.Bll + library;
+        var lib = bkg.Read(entry);
+        var count = (int)(BinaryPrimitives.ReadUInt32LittleEndian(lib) / 4);
+        var bytes = LBAAssembler.Grids.GridPaint.AppendBlock(lib, 1, 1, 1, -1);
+        bkg.SetStored(entry, bytes);
+        if (header.MaxBll < bytes.Length) { header.MaxBll = (uint)bytes.Length; bkg.SetStored(0, header.Bytes); }
+        return count + 1;
+    }
+
+    private static byte[] ChamberRemodel(byte[] raw, List<string> log, int unseen)
     {
         var shape = Lba2GridBackend.ToLba1Shape(raw);
         var was = Lba1GridCodec.Decode(shape);
@@ -242,6 +257,20 @@ internal static partial class CitadelLba1Rooms
         // stood over the hall's middle, in front of Twinsen wherever he walked there; down to the same height as the right wall
         foreach (var x in new[] { 34, 35, 36, 37, 48, 49, 50, 51 })
             for (var y = HallFloor + 2; y < 25; y++) Clear(x, y, 46);
+        // walls that can't be seen, round the hall (the user, 2026-11-09, a running jump in the hall towards the left wall: Twinsen out of
+        // the room, fallen to the grid's floor behind it -- the hall's walls have a band of trim a layer over its floor (blocks 64-67, layer 8)
+        // that stops nothing, and the right wall cut down to that height stops nothing either): behind the left wall (x 32) and the back wall
+        // (z 32), the hall's floor up to over his head; and over the cut-down right wall (x 51) as high
+        for (var y = HallFloor + 1; y <= HallFloor + 8; y++)
+        {
+            for (var z = 32; z <= 46; z++) if (Cell(32, y, z).Block == 0) Set(32, y, z, (unseen, 0));
+            for (var x = 32; x <= 52; x++) if (Cell(x, y, 32).Block == 0) Set(x, y, 32, (unseen, 0));
+            for (var z = 34; z <= 46; z++) if (!now.TryGetValue((51, y, z), out var c) ? Cell(51, y, z).Block == 0 : c.Block == 0) Set(51, y, z, (unseen, 0));
+        }
+        // (and north off the ledge the lower room's left wall makes at the hall's corner, x 30-32 at z 49's top, layer 12: into nothing)
+        for (var y = 12; y <= 18; y++)
+            for (var x = 30; x <= 32; x++) if (Cell(x, y, 48).Block == 0) Set(x, y, 48, (unseen, 0));
+
         // the wrought-iron arcs on the stairs' sides (block 59, layers 9-14, z 47-49), all but the one against the left wall (x 33): the
         // user, 2026-11-09, "remove all of these semi-circle pieces of scenery apart from the one on the side wall as they just get in the way"
         foreach (var x in new[] { 37, 47, 51 })

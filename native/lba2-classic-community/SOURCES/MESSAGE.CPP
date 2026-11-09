@@ -2075,7 +2075,16 @@ void InitWhoSpeak(S32 numobj) {
     // no actors in it, and nothing drew them again -- everyone moving near the sprite vanished while it spoke. A race-track story's
     // props are sprites that talk (RaceTrackScenes.SpriteProp: the museum's blueprints, 2026-11-04, "Twinsen momentarily vanishes,
     // only a white crescent is left on the floor" -- the crescent the speech bubble over the paper, which was gone too)
-    if (PtrWhoSpeak->Flags & SPRITE_3D) {
+    // (nor a race-track mod's car: its talking animation is a car's, and drove it off out of sight while its driver spoke -- the
+    // position put back only as the box closed: the user, 2026-11-08, Raph's yell from his car on the storm track, "Raph reappeared once
+    // the text box was closed" -- RACEMOD.CPP RaceMod_HoldSpeaker)
+    extern S32 RaceMod_HoldSpeaker(S32 numobj);
+    // (nor someone held in a pose of the race-track story's -- the secret chamber's spanking: Twinsen across Zoe's lap (his animations
+    // 240, 241) stood up to answer her and lay back down after, the user, 2026-11-09, "let's keep him bent over the whole time"; and
+    // Zoe sitting in her chair (her entity 15's 100, 101))
+    const S32 posed = (numobj == NUM_PERSO && (PtrWhoSpeak->GenAnim == 240 || PtrWhoSpeak->GenAnim == 241))
+                      || (PtrWhoSpeak->IndexFile3D == 15 && (PtrWhoSpeak->GenAnim == 100 || PtrWhoSpeak->GenAnim == 101));
+    if ((PtrWhoSpeak->Flags & SPRITE_3D) || RaceMod_HoldSpeaker(numobj) || posed) {
         CopyScreen(Log, Screen);
         BoxReset();
         return;

@@ -9,8 +9,8 @@ namespace LBAAssembler.Terrain.Citadel;
 // embroidery on linen -- Twinsen's house, the clones taking him, his flight, the boat, the Dinofly, Funfrock on his throne with his
 // clones, Sendell, the victory -- each scene's word over it, between borders of slanted bars, birds and beasts, as the real one has. The
 // rows below are the cloth drawn upright (BayeuxColours: what each letter stitches); the game hangs it over the front wall's top
-// (CitadelLba1Rooms' z 63, its top at layer 8), so the camera sees it turned right round: its first row at the bottom of the drop and
-// its first column at the right. Flat colours, no light (as the Sendell seal's picture), a stitch BayeuxStitch units square; in
+// (CitadelLba1Rooms' z 63, its top at layer 8), from the room's side over the top and down the face the camera sees: upright to the
+// camera, its first row at the top's far edge and its first column at the left. Flat colours, no light (as the Sendell seal's picture), a stitch BayeuxStitch units square; in
 // BayeuxParts bodies of BayeuxColumns columns each (the body's limits), each square of one colour as few rectangles as cover it.
 internal static partial class CitadelProps
 {
@@ -58,21 +58,28 @@ internal static partial class CitadelProps
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     };
 
-    // Part `part` of the hanging: its columns (as the camera sees them, left to right: the cloth's from its last) down the wall's outside,
-    // and the cloth over the wall's top behind them
+    // Part `part` of the hanging: its columns (as the camera sees them, left to right), the cloth's first BayeuxOnTop rows (its top
+    // border) across the wall's top from BayeuxFold in to its outside face and the rest down that face, BayeuxDrop deep, upright -- the
+    // scenes over the edge, one cloth draped over the wall (the user, 2026-11-09: "this is meant to be a full tapestry covering both sides
+    // of the wall, it just looks like a tapestry hanging upside down on the wall ... make the scenes we already have bigger so they're
+    // covering the top of the wall and hanging down the other side")
+    // (the 2026-11-09 evening build had it the other way up: "The upside down tapestry")
+    public const int BayeuxOnTop = 6, BayeuxDrop = 1080;
     public static Body BuildBayeux(byte[] header, int part)
     {
         var m = new CarMesh($"the Bayeux hanging, part {part + 1}", new[] { -1 });
         int width = BayeuxRows[0].Length, height = BayeuxRows.Length;
         const float Face = BayeuxBack + 4;
-        // the stitch the camera sees at column c (from the left, in this part) and row r (from the top of the drop)
-        char At(int c, int r) => BayeuxRows[height - 1 - r][width - 1 - (part * BayeuxColumns + c)];
-        var Point = Corners(m, (c, r) => new Vector3((c - BayeuxColumns / 2f) * BayeuxStitch, -r * BayeuxStitch, Face));
-        Stitched(m, 0, BayeuxColumns, 0, height, At, Point, BayeuxColours, new Vector3(0, 0, -100));
-        // the cloth over the wall's top, plain linen, from the outside face most of the way in
-        float x0 = -BayeuxColumns / 2f * BayeuxStitch, x1 = BayeuxColumns / 2f * BayeuxStitch;
-        m.Out(new[] { Point(0, 0), Point(BayeuxColumns, 0), m.P(0, new Vector3(x1, 0, Face - BayeuxFold)), m.P(0, new Vector3(x0, 0, Face - BayeuxFold)) },
-              BayeuxColours['.'], new Vector3(0, -100, 0), unlit: true);
+        // the stitch the camera sees at column c (from the left, in this part) and row r (from the cloth's edge on the wall's top: its
+        // first row)
+        char At(int c, int r) => BayeuxRows[r][part * BayeuxColumns + c];
+        float onTop = (float)BayeuxFold / BayeuxOnTop, down = (float)BayeuxDrop / (height - BayeuxOnTop);
+        Vector3 Place(float c, float r) => r <= BayeuxOnTop
+            ? new Vector3((c - BayeuxColumns / 2f) * BayeuxStitch, 2, Face - BayeuxFold + r * onTop)
+            : new Vector3((c - BayeuxColumns / 2f) * BayeuxStitch, -(r - BayeuxOnTop) * down, Face);
+        var Point = Corners(m, Place);
+        Stitched(m, 0, BayeuxColumns, 0, BayeuxOnTop, At, Point, BayeuxColours, new Vector3(0, -100, 0));
+        Stitched(m, 0, BayeuxColumns, BayeuxOnTop, height, At, Point, BayeuxColours, new Vector3(0, 0, -100));
         return m.ToBody(header);
     }
 }
