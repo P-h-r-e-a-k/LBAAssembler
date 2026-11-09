@@ -7,38 +7,38 @@ namespace LBAAssembler.Terrain.Citadel;
 // The secret chamber's lower room as a store of old things (the user, 2026-11-09: "The lower area, let's fill it with some random clutter
 // such as Twinsen and Zoe's bikes, an old snowboard (we can copy the one from LBA1), and a few other old items from LBA1"): LBA1's own
 // inventory objects (its INVOBJ.HQR, drawn in the inventory some ten times life size) at life size -- the snowboard he rode down the
-// Hamalayi slopes and the space guitar leant against the wall, the protopack, the meca-penguin, the old holomap and Gawley's horn on the
-// floor, the pirate flag hung on the wall -- each the mushroom's entity's body OldThingFirst on, as the seal's parts are. Their colours
+// Hamalayi slopes and the space guitar leant against the wall (not the protopack or the holomap, which LBA2 has too, nor the meca-penguin
+// or Gawley's horn: the user, 2026-11-09; the pirate flag a Jolly Roger of the build's own, CitadelProps.JollyRoger) -- each the mushroom's
+// entity's body OldThingFirst on, as the seal's parts are. Their colours
 // each moved to the LBA2 ramp nearest their own (RaceTrackCharacterCars.Lba1ToLba2Colours, as the digger's); LBA1's lit faces lit.
 internal static partial class CitadelLba1Rooms
 {
-    public const int OldThingFirst = 44;
+    // (from 50: 47 is the Tralu bar's tankard's -- TraluBarRoom.TankardGeneric -- which stood in for the meca-penguin, "a pint of beer")
+    public const int OldThingFirst = 50;
     // (the things: INVOBJ.HQR's entry, its name, its size -- its longest side, in scene units -- and how it stands: on the floor as it
     // is, leant against a wall at its back (z 0) -- the snowboard stood up on its tail, its deck out -- or hung flat on one)
     public enum OldStand { Floor, Lean, StoodUp, Hung }
-    public static readonly (int Entry, string Name, float Size, OldStand Stand)[] OldThings =
+    // (and Twinsen's catamaran, the sailing boat of LBA1's BODY.HQR -- with the pirate flag at its bow -- at its own size: the user,
+    // 2026-11-09, "Let's create a copy of Twinsen's boat from LBA1 to store down here, that'd be quite big and make a little sense")
+    public static readonly (string File, int Entry, string Name, float Size, OldStand Stand)[] OldThings =
     {
-        (13, "LBA1's snowboard", 1400, OldStand.StoodUp),
-        (18, "LBA1's space guitar", 950, OldStand.Lean),
-        (12, "LBA1's protopack", 700, OldStand.Floor),
-        (14, "LBA1's meca-penguin", 600, OldStand.Floor),
-        (0, "LBA1's holomap", 620, OldStand.Floor),
-        (3, "Gawley's horn", 460, OldStand.Floor),
-        (16, "LBA1's pirate flag", 900, OldStand.Hung),
+        ("INVOBJ.HQR", 13, "LBA1's snowboard", 1400, OldStand.StoodUp),
+        ("INVOBJ.HQR", 18, "LBA1's space guitar", 950, OldStand.Lean),
+        ("BODY.HQR", 50, "Twinsen's catamaran", 3076, OldStand.Floor),
     };
+    public const int Catamaran = OldThingFirst + 2;
 
     private static List<(int Generic, string Name, Body Body)> OldThingBodies(string lba1Directory, byte[] lba2Palette, byte[] header)
     {
         var list = new List<(int, string, Body)>();
-        var path = Path.Combine(lba1Directory, "INVOBJ.HQR");
-        if (!File.Exists(path)) return list;
-        var hqr = HqrArchive.Open(path);
         var colours = RaceTrackCharacterCars.Lba1ToLba2Colours(HqrArchive.Open(Path.Combine(lba1Directory, "RESS.HQR")).Read(0), lba2Palette);
         for (var k = 0; k < OldThings.Length; k++)
         {
-            var (entry, name, size, stand) = OldThings[k];
+            var (file, entry, name, size, stand) = OldThings[k];
+            var path = Path.Combine(lba1Directory, file);
+            if (!File.Exists(path)) continue;
             Body lba1;
-            try { lba1 = Body.Read(hqr.Read(entry), 1); } catch { continue; }
+            try { lba1 = Body.Read(HqrArchive.Open(path).Read(entry), 1); } catch { continue; }
             var world = lba1.World();
             if (world.Length == 0) continue;
             // to life size, then stood as it stands

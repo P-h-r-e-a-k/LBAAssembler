@@ -17,6 +17,7 @@ internal static partial class CitadelProps
     {
         ['.'] = 72, ['R'] = 83, ['r'] = 86, ['y'] = 106, ['Y'] = 108, ['b'] = 196, ['B'] = 194, ['l'] = 204, ['L'] = 207, ['w'] = 95,
         ['g'] = 137, ['G'] = 135, ['k'] = 97, ['s'] = 41, ['c'] = 223, ['o'] = 88, ['n'] = 195, ['p'] = 78,
+        ['C'] = 199, ['q'] = 172, ['Q'] = 175, ['h'] = 198, ['H'] = 202, ['K'] = 48, ['W'] = 62,
     };
     public static readonly string[] DinoRows =
     {
@@ -82,81 +83,101 @@ internal static partial class CitadelProps
         "yBBByyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyBBBy",
         "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
         "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnYnnnnYnnnYnnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnYnnnnynnnynnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnynnnnnnnnnnnnnnnnnnnnnnnnYnnnynnnynnyYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnyYynnnnnnnnnnnnnnnnnnYYnnnnynnynnnynnynnnnYYnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnynnnnnnnnnnnnnnnnnnnnnYnnnynnnynynnnynnnYnnnnnnnnnnnnnnnnnnnnnynnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnynnnynYYYYYnynnnynnnnnnnnnnnnnnnnnnnnnyYynnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyynYYYYLYYYYnyynnnnnnnnnnnnnnnnnnnnnnnynnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnYYYnnnnnYYYLLLLLYYYnnnnnYYYnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnyyynYYYLLLwLLLYYYnyyynnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyyYYLLwwwwwLLYYyynnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnYYLLwwwwwLLYYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnYYYyyyyYYYLLwbwbwLLYYYyyyyYYYnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnynnnnnnnnnnnnYLLLwwwwwLLLYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnyYynnnnnnnnnyyYYLLwwpwwLLYYyynnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnynnnnnnnnyyynYYLLwwwwwLLYYnyyynnnnnnnnynnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnYYYnnnnnYLLLLwLLLLYnnnnnYYYnnnnyYynnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyLLYLLLLLLLLnyynnnnnnnnnnnynnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnynLLllLLLLllLLnnynnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnYnlllllLLLLlllllnnYnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnllllllllllllLLLLllllllllllllnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnlllllllllllllllllllLLLLlllllllllllllllllllnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnwwnlllllllllllllllllllllLLLLLLlllllllllllllllllllllnnwwnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnllllllllllllllllllYlllLLLLLLllllllllllllllllllllllnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnlllllllllllllllnnnLlllLLLLLLlllnnnllllllllllllllllnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnlllllllllllllnnnnnnLlllLLLLLLlllLnnnnnllllllllllllllnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnllllLLLLLLllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnynnnnnnnnnnnnnnnnnnnnnnnnnllllLLLLLLllllnnnnnnnnnnnnnnnnnnnnnnnnnnynnnnyBBBy",
-        "yBBBynnnnyYynnnnnnnnnnnnnnnnnnnnnnnnllllLLLLLLllllnnnnnnnnnnnnnnnnnnnnnnnnnyYynnnyBBBy",
-        "yBBBynnnnnynnnnnnnnnnnnnnnnnnnnnnnnlllllLLLLLLlllllnnnnnnnnnnnnnnnnnnnnnnnnnynnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnllllLLyyyyyLllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnllllyyLLLLLyylllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnlllllyLLLLLLLyllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnllllyLLLLLLLLlylllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnlllllLLLyyyLLlllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnlllllLLLyyyLLlllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnllllllLLLyyyLLllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnllllllLLLLLLLLllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnlllllLLLLLLLLLLlllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnllllllLLLLLLLLLLllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnllllllLLLLLLLLLLllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnynnnnnnnnnllllllLLLLLLLLLLllllllnnnnnnnnnnynnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnyYynnnnnnnlllllllLLLLLLLLLLlllllllnnnnnnnnyYynnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnynnnnnnnnlllllllLLLLLLLLLLlllllllnnnnnnnnnynnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnlllllllLLLLLLLLLLlllllllnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnllllllllLLLLLLLLLLllllllllnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnlllllllLLLLLLLLLLLLlllllllnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnlllllllLLLLLLLLLLLLlllllllnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnllllllllLLLLLLLLLLLLllllllllnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnllllllllLLLLLLLLLLLLllllllllnnnnnnnnnnnnnynnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyYynnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnynnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnyYynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnynnnnnnnnnnnnnYYYnYYYnYYnnYYnnYYYnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnYnnnYnnnYnYnYnYnYnnnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnYYYnYYnnYnYnYnYnYYnnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhhhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhhhhhHHHhhhhhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhhHHHHHHCHHHHHHhhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHHqqqqqqqqqqCHHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnynnnnnnnnnnnnnnnnnnnnhHHqqqqqqqqqqqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnyYynnnnnnnnnnnnnnnnnnhHHqQQQqqqqqqqqqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnynnnnnnnnnnnnnnnnnnhHHQQQQQQQqqqqqqqqqQqCHHhnnnnnnnnnnnnnnnnnnynnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnhHHqQQQQQQQqqqqqqqqqqqqCHHhnnnnnnnnnnnnnnnnyYynnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnhHqqQQQQQQQqqqqqqqqqqqqqCHhnnnnnnnnnnnnnnnnnynnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnhHHqqqqQQQqqqqqqqqqqqqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnhHqqqQqqqqqqqqqqqqqqqqqqqqCHhnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnhhHqqqqqqqqqqqqqqqqqqqqqqqqCHhhnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnhHHHqqqqqqqqqqqqqqqqqqqqqqqqCHHHhnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnhHHqqqqqqqqqKqqqqqqqqqKqqqqqqqqCHHhnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnynhHqqqqqqqqqKKKqqqqqqqKKKqqqqqqqqCHhnnnynnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnyYyhHqqqqqqqqKwKKKqqqqqKwKKKqqqqqqqCHhnnyYynnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnynhHCqqqqqqqKKKKKqqqqqKKKKKqCqqqqCCHhnnnynnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnhHHCCqqqqqKKKKKqqqqqKKKKKqqCqCCCHHhnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnhHHHCqqqqqKKKqqqqqqqKKKqqCCCCHHHhnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnhhHHqqqqqqKqqqqqqqqqKqqqCCCHHhhnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnhHCqqqqqqqqqqqqqqqqqqqCCCHhnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnhHHCqqqqqqqqqqqqqqqqqCCCHHhnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnhHHCqqqqqqqqqqqqqqCCCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnhHHCqqqqqqCCCCCCCCCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHCCqqqqqqqqqqCCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHHCCCCCCCCCCCHHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhhHHHHHHCHHHHHHhhnnnnnnnnnnnnnnnnnnnnnnnnynnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhhhHHqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnyYynnnyBYBy",
+        "yBBBynnnnnynnnnnnnnnnnnnnnnnnnnnnnnnnnhHHqqqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnynnnnyBBBy",
+        "yBBBynnnnyYynnnnnnnnnnnnnnnnnnnnnnnnnhHHqqqqqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnynnnnnnnnnnnnnnnnnnnnnnnnnhhHqqqqqqqqqqCHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHHqqqqqqqqqqCHHhhhnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHqqqqqqqqqqqqqCHHHHhhhnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnhhHHqqCCqqqqqqqqCCqqqCHHHHhhnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnhHHHqCCCHqqQqqqqqCHCCqqqqCHHHhhhnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnhhHHqqCCHHHqQQQqqqqCHHHCCCqqqCHHHHhhnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnhHHHqCCCHHhHqQQQqqqCCHhHHHHCCCqqqCHHHhhnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnhhHHqqCCHHHhhHqQQQqqqCHHhhhhHHHHCCCqqCHHHhhhnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnhHHHqCCCHHhhnhHqQQQCqqCHhnnnnhhhHHHHCCqqCHHHHhnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnhhHHqqCCHHHhnnnhHqQQCCCCCHhnnnnnnnhhhHHHCCqqqCHhnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnhhhHHHqqCCHHhhnnnhHHqqCCCCCHHhnnnnnnnnnnhhHHHCqqCHhnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnhHHHHqqCCCHHhnnnnnhHqqqqCCCCHhnnnnnnnnnnnnnhhHHCCCHhnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnhHqqqCCCHHHhnnnnnnhHqqqqqCCHHhnnnnnnnnnnnnnnnhHHHHHhnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnhHqqCCHHHhhnnnnnnnhHqqqqqCCHhnnnnnnnnnnnnnnnnnhhhhhnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnhHCCCHHhhnnnnnnnnnhHqqqqqCHHhnnnnnnnnnnnnnnnnnnynnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnhHHHHHhnnnnnnnnnnhHHqqqqCCHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnhhhhhnnnnnnnnnnnhHqqqqCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHqqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHqqqCCHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHqqqCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHHqqCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnhHqqqCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnynnnnnnnnnnnnnnnnhHHqqCCHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnynnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnyYynnnnnnnnnnnnnnnhHqqCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnyYynnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnynnnnnnnnnnnnnnnhHHqCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnynnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnhHCCCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnhHHCHHhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnYYYhYYYhYYnnYYnnYYYnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnYnnnYhhnYnYnYnYnYnnnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
+        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnYYYnYYnnYnYnYnYnYYnnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
         "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnYnYnnnYnYnYnYnYnnnYnnnYnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
         "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnYYYnYYYnYnYnYYnnYYYnYYYnYYYnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBYBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBYBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
-        "yBBBynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnyBBBy",
         "yBBByyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyBBBy",
         "yBYBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBYBy",
         "yBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBBYBBy",
         "yBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBy",
         "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
     };
+    // (a Jolly Roger for the lower room's wall, in place of LBA1's pirate flag -- its black came out brown in LBA2's colours, and the
+    // user, 2026-11-09, "I've no idea what this decoration is supposed to be")
+    public static readonly string[] FlagRows =
+    {
+        "KKKKKKKKKKKKKKKKKKKKKKKK",
+        "KKKKKKKKKKKKKKKKKKKKKKKK",
+        "KKKKKKKKKKWWWWKKKKKKKKKK",
+        "KKKKKKKKWWWWWWWWKKKKKKKK",
+        "KKKKKKKWWWWWWWWWWKKKKKKK",
+        "KKKKKKKWWKKWWKKWWKKKKKKK",
+        "KKKKKKKWWKKWWKKWWKKKKKKK",
+        "KKKKKKKWWWWKKWWWWKKKKKKK",
+        "KKKKKKKKWWWWWWWWKKKKKKKK",
+        "KKKKKKKKKWKWKWKWKKKKKKKK",
+        "KKKWWKKKKKWWWWKKKKKWWKKK",
+        "KKKKWWWKKKKKKKKKWWWKKKKK",
+        "KKKKKKWWWWKKKKWWWWKKKKKK",
+        "KKKKKKKKKWWWWWWKKKKKKKKK",
+        "KKKKKKWWWWKKKKWWWWKKKKKK",
+        "KKKKWWWKKKKKKKKKKWWWKKKK",
+    };
 
     // A picture's squares as rectangles: each square's colour (at), as few rectangles of one colour as cover the columns [c0, c1) and
     // all the rows, each from its corners (point: a column's and a row's edge -- shared, a point once) facing away from `inside`
-    internal static int Stitched(CarMesh m, int c0, int c1, int rows, Func<int, int, char> at, Func<int, int, int> point, IReadOnlyDictionary<char, int> colours, Vector3 inside)
+    internal static void Stitched(CarMesh m, int c0, int c1, int rows, Func<int, int, char> at, Func<int, int, int> point, IReadOnlyDictionary<char, int> colours, Vector3 inside)
     {
         var done = new bool[c1 - c0, rows];
-        var count = 0;
         for (var r = 0; r < rows; r++)
             for (var c = c0; c < c1; c++)
             {
@@ -168,9 +189,7 @@ internal static partial class CitadelProps
                 while (r + h < rows && Enumerable.Range(c, w).All(i => !done[i - c0, r + h] && at(i, r + h) == colour)) h++;
                 for (var j = r; j < r + h; j++) for (var i = c; i < c + w; i++) done[i - c0, j] = true;
                 m.Out(new[] { point(c, r), point(c + w, r), point(c + w, r + h), point(c, r + h) }, colours[colour], inside, unlit: true);
-                count++;
             }
-        return count;
     }
 
     // A rug's parts: bands of columns, each as wide as keeps its body under the engine's limits (550 points and polygons, kept well under)
@@ -182,9 +201,9 @@ internal static partial class CitadelProps
         {
             var m = new CarMesh("count", new[] { -1 });
             var pts = new Dictionary<(int, int), int>();
-            var faces = Stitched(m, a, b, rows.Length, (c, r) => rows[r][c], (c, r) => pts.TryGetValue((c, r), out var h) ? h : pts[(c, r)] = m.P(0, new Vector3(c, 0, r)),
-                                 RugColours, new Vector3(0, -100, 0));
-            return (faces, pts.Count);
+            Stitched(m, a, b, rows.Length, (c, r) => rows[r][c], (c, r) => pts.TryGetValue((c, r), out var h) ? h : pts[(c, r)] = m.P(0, new Vector3(c, 0, r)),
+                     RugColours, new Vector3(0, -100, 0));
+            return (m.ToBody(new byte[96]).Faces.Count, pts.Count);
         }
         while (c0 < width)
         {
@@ -208,6 +227,23 @@ internal static partial class CitadelProps
                  RugColours, new Vector3(0, -100, 0));
         return m.ToBody(header);
     }
+    // The Jolly Roger hung on a wall: its cloth (FlagRows, a stitch FlagStitch square, flat colours) from its top at 0 down, its face +z, on
+    // a dark rod with knobbed ends
+    public const int JollyRoger = 60, FlagStitch = 36;
+    public static Body BuildJollyRoger(byte[] header)
+    {
+        var m = new CarMesh("a Jolly Roger", new[] { -1 });
+        int w = FlagRows[0].Length, h = FlagRows.Length;
+        var pts = new Dictionary<(int, int), int>();
+        Stitched(m, 0, w, h, (c, r) => FlagRows[r][c],
+                 (c, r) => pts.TryGetValue((c, r), out var p) ? p : pts[(c, r)] = m.P(0, new Vector3((c - w / 2f) * FlagStitch, -r * FlagStitch, 8)),
+                 RugColours, new Vector3(0, 0, -100));
+        m.Light = 0.7f;
+        m.Box(0, new Vector3(0, 10, 14), new Vector3(w * FlagStitch + 100, 22, 22), Dark);
+        foreach (var s in new[] { -1, 1 }) m.Box(0, new Vector3(s * (w * FlagStitch / 2f + 60), 10, 14), new Vector3(36, 36, 36), Gold);
+        return m.ToBody(header);
+    }
+
     // where a part's actor stands, from the rug's middle (x along it)
     public static int RugPartX(string[] rows, int stitch, (int C0, int C1) part) => (int)MathF.Round(((part.C0 + part.C1) / 2f - rows[0].Length / 2f) * stitch);
     public static IEnumerable<(int Generic, string Name, Func<byte[], Body> Build)> RugBodies() =>

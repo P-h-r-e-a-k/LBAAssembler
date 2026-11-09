@@ -26,6 +26,9 @@ internal static partial class RaceTrackStory
     internal const int LiftZone = 70, LiftSwitch = 7, ChamberUpNight = 8, ChamberUpDay = 9, FrontDoorSwitch = 10;
     // the scenario zone at LBA1's old way out of the chamber, filled with rock (a scene variable: said once a visit)
     private const int LandslideZone = 73, LandslideSaid = 3;
+    // the scenario zone round LBA1's catamaran in the lower room (Action there: Twinsen's memories of it) and where the boat stands
+    private const int BoatZone = 74;
+    private static readonly (int X, int Y, int Z) BoatAt = (25300, 1280, 28700);
     private static readonly (int X0, int X1, int Y0, int Y1, int Z0, int Z1) LiftBox = (4096, 5119, 2560, 3583, 8192, 9215);
     // Zoe in the chamber's hall, on the bedroom's chair in the middle of the Sendell rug, facing the camera's way (+x +z): Twinsen across her
     // lap broadside to it, his bottom up in plain sight (the user, 2026-11-09: "The orientation of the chair in the spanking scene means we
@@ -150,19 +153,20 @@ void comportement_1()
             Furnish(Citadel.CitadelProps.Chair, chairX, ZoeInChamber.Y, chairZ, ZoeFacing);
             Furnish(Citadel.CitadelProps.Rack, 23900, ZoeInChamber.Y, 20300, ZoeFacing);
             // "the lower area, let's fill it with some random clutter": Twinsen's and Zoe's bikes parked side by side, LBA1's snowboard and space
-            // guitar leant against the back wall's right-hand stretch (x 52-54) under LBA1's pirate flag, the protopack, the meca-penguin, the
-            // old holomap and Gawley's horn on the floor -- all clear of the low front and right walls, which hide what stands near them from
-            // the camera, of the right-hand stairs' foot, and of Twinsen's way between the lift's arrival and LBA1's way up
-            Furnish(Citadel.CitadelProps.BikeTwinsen, 25500, 1280, 29000, 0);
-            Furnish(Citadel.CitadelProps.BikeZoe, 26200, 1280, 29000, 0);
+            // guitar leant against the back wall's right-hand stretch (x 52-54) under a Jolly Roger -- all clear of
+            // the low front and right walls, which hide what stands near them from the camera, of the right-hand stairs' foot, and of Twinsen's
+            // way between the lift's arrival and LBA1's way up
+            // (the bikes by the stone, left of the Dinofly rug; Twinsen's catamaran on the right, clear of the lift's arrival (27127, 29918) and
+            // of the way up, x 26368-27903 from z 30976 -- its box, the engine's square of half its length and breadth together, keeps
+            // Twinsen off it -- and Action beside it, his memories of it: BoatZone)
+            Furnish(Citadel.CitadelProps.BikeTwinsen, 18000, 1280, 28900, 0);
+            Furnish(Citadel.CitadelProps.BikeZoe, 18700, 1280, 28900, 0);
+            Old(Citadel.CitadelLba1Rooms.Catamaran, BoatAt.X, BoatAt.Y, BoatAt.Z, 0);
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = BoatZone, X0 = BoatAt.X - 1900, X1 = BoatAt.X + 1700, Y0 = 1280, Y1 = 3000, Z0 = BoatAt.Z - 1800, Z1 = BoatAt.Z + 1800, Info = new int[8] });
             int Thing(int k) => Citadel.CitadelLba1Rooms.OldThingFirst + k;
             Old(Thing(0), 26900, 1280, 26112 + 10, 0);
             Old(Thing(1), 26250, 1280, 26112 + 10, 0);
-            Old(Thing(6), 26600, 2650, 26112 + 4, 0);
-            Old(Thing(2), 24950, 1280, 27800, 512);
-            Old(Thing(3), 25700, 1280, 30300, 512);
-            Old(Thing(4), 25000, 1280, 30200, 512);
-            Old(Thing(5), 24300, 1280, 30550, 700);
+            Furnish(Citadel.CitadelProps.JollyRoger, 26600, 3250, 26112 + 4, 0);
             // "a bayeaux tapestry style hanging based on the first game ... draping over the top of the wall" (the front wall, z 63, x 36-53,
             // its top layer 8's floor, y 2048): its parts side by side along it, each standing on the wall's top (so the engine redraws no
             // brick of the wall over it: only those from the actor's own layer up) and out by its outside face (Citadel/CitadelProps.Bayeux)
@@ -267,6 +271,13 @@ void comportement_1()
     else
     {{
         set_var_cube({LandslideSaid}, 0);
+    }}
+    swif (1 == action())
+    {{
+        if ({BoatZone} == zone())
+        {{
+            message({EveningId(p.Say, EveningLine.Boat)});
+        }}
     }}
 }}
 

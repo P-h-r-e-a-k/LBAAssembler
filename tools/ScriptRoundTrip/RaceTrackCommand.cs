@@ -639,12 +639,13 @@ internal static class RaceTrackCommand
     // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
     // griddump <game> <scene> <out.bin>: an interior's decoded grid cells (64 x 64 columns of 25 layers, two bytes each: block, its
     // brick's place in it; ((z * 64 + x) * 25 + y) * 2), for drawing it outside the tool
-    // invobj <lba1 dir> <out.json>: LBA1's inventory objects (INVOBJ.HQR), each one's points (as it stands) and faces (colour, points),
-    // for drawing them outside the tool -- to find which entry is which item
+    // invobj <lba1 dir> <out.json> [file]: LBA1's inventory objects (INVOBJ.HQR, or another of its body files: BODY.HQR), each one's points
+    // (as it stands) and faces (colour, points), for drawing them outside the tool -- to find which entry is which
     public static int InvObj(string[] args)
     {
-        var hqr = HqrArchive.Open(System.IO.Path.Combine(args[1], "INVOBJ.HQR"));
-        var count = HqrArchive.CountEntries(System.IO.Path.Combine(args[1], "INVOBJ.HQR"));
+        var file = System.IO.Path.Combine(args[1], args.Length > 3 ? args[3] : "INVOBJ.HQR");
+        var hqr = HqrArchive.Open(file);
+        var count = HqrArchive.CountEntries(file);
         var all = new List<object>();
         for (var i = 0; i < count; i++)
         {

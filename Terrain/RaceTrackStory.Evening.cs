@@ -46,6 +46,8 @@ internal static partial class RaceTrackStory
         ZoeCaught, TwinsenExcuse, ZoeStoreroom, ZoeScold, TwinsenOw, ZoeScoldMore, ZoeBed, DoorLocked,
         // (the chamber made over and the spanking redone, 2026-11-09)
         Landslide, ZoeNotInCharge, TwinsenYesMaam, ZoeNoMoreBars, TwinsenPromise,
+        // (the chamber's lower room as a store, 2026-11-09: LBA1's catamaran)
+        Boat,
     }
     private static readonly string[][] EveningLines =
     {
@@ -244,6 +246,17 @@ internal static partial class RaceTrackStory
             "Entendido. Te lo prometo, Zoe.",
             "Capito. Te lo prometto, Zoe.",
             "Entendido. Prometo, Zoe.",
+        },
+        // (the chamber's lower room, 2026-11-09: Twinsen at LBA1's catamaran -- the user: "This boat took me around the world, but since the
+        // cave collapse I'm unable to use it, but fond memories")
+        new[]
+        {
+            "This boat took me around the world... but since the cave collapsed I can't take her out any more. Fond memories, though.",
+            "Ce bateau m'a fait faire le tour du monde... mais depuis l'éboulement de la grotte, je ne peux plus le sortir. Que de bons souvenirs, quand même.",
+            "Mit diesem Boot bin ich um die ganze Welt gesegelt... aber seit dem Einsturz der Höhle kann ich es nicht mehr hinausbringen. Schöne Erinnerungen trotzdem.",
+            "Este barco me llevó a dar la vuelta al mundo... pero desde el derrumbe de la cueva ya no puedo sacarlo. Aun así, qué buenos recuerdos.",
+            "Questa barca mi ha portato in giro per il mondo... ma da quando la grotta è crollata non posso più tirarla fuori. Che bei ricordi, però.",
+            "Este barco levou-me à volta do mundo... mas desde que a gruta desabou já não o posso tirar daqui. Mas que boas recordações.",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)
