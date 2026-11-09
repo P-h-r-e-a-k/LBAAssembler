@@ -1304,6 +1304,10 @@ static S32 s_superTurn = 0;                // superjet_turn= (the model turned o
 static int s_protectSpell = 0;             // the game's protection spell is on for the power-up (it goes off with it)
 #define RACE_PROTECT_ENDING 3000           // ... and blinks this long before
 static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
+// (tired='s texts after its own: lines said as they are even then -- the Tralu's moan in his bar the evening after the lighthouse, before
+// he too tells Twinsen to go home: the user, 2026-11-08)
+#define RACE_MAX_TIRED_KEEP 8
+static int s_tiredKeep[RACE_MAX_TIRED_KEEP], s_nbTiredKeep = 0;
 // dark_scene=<scene> <percent>: a scene at night -- the actors' light at that share of the game's (DarkFrame)
 static int s_darkScene = -1, s_darkPct = 100;
 typedef struct { int Island, When, First, Last; char Path[260]; } T_RACE_TRACK;
@@ -4733,7 +4737,13 @@ static void Load(const char *path, int carOnly = 0) {
             for (const char *q = v; s_nbAfterGears < RACE_MAX_GEARS && sscanf(q, "%d%n", &top, &used) == 1; q += used) s_afterGears[s_nbAfterGears++] = top;
         }
         else if (!strcmp(key, "tired")) {
-            if (!setRead && sscanf(v, "%d %d %d", &s_tiredVar, &s_tiredValue, &s_tiredText) != 3) s_tiredVar = -1;
+            int used = 0;
+            if (!setRead && sscanf(v, "%d %d %d%n", &s_tiredVar, &s_tiredValue, &s_tiredText, &used) != 3) s_tiredVar = -1;
+            else if (!setRead) {
+                int keep;
+                s_nbTiredKeep = 0;
+                for (const char *q = v + used; s_nbTiredKeep < RACE_MAX_TIRED_KEEP && sscanf(q, "%d%n", &keep, &used) == 1; q += used) s_tiredKeep[s_nbTiredKeep++] = keep;
+            }
         }
         else if (!strcmp(key, "dark_scene")) {
             if (!setRead && (sscanf(v, "%d %d", &s_darkScene, &s_darkPct) != 2 || s_darkPct < 0 || s_darkPct > 100)) s_darkScene = -1;
@@ -13368,7 +13378,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -20917,6 +20927,7 @@ S32 RaceMod_Dial(S32 num) {
     }
     if (!RaceMod_Active() || s_tiredVar < 0 || s_tiredVar > 255 || Island != 0 || NumObjDial == NUM_PERSO) return num;
     if (ListVarGame[s_tiredVar] != s_tiredValue) return num;
+    for (int k = 0; k < s_nbTiredKeep; k++) if (num == s_tiredKeep[k]) return num;
     Log_Info("[racemod] text %d said as the tired line %d", (int)num, s_tiredText);
     return s_tiredText;
 }

@@ -645,7 +645,7 @@ internal static class RaceCarEngineFile
                     : scenes.Max() - scenes.Min() + 1 == scenes.Distinct().Count() ? (scenes.Min(), scenes.Max()) : (island.FirstScene, island.LastScene);
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
             }
-            if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
+            if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}{string.Concat((s.TiredKeep ?? Array.Empty<int>()).Select(k => $" {k}"))}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)

@@ -61,11 +61,12 @@ internal static partial class RaceTrackStory
     // third of a cell out onto the bench's back (RabbibunnyAt). (The user, 2026-11-07: "none of the NPC's are sitting correctly on the
     // bench" -- at the bench's top, 512 up, they sat on the table's height in the air; tried out headless with actorpos, 2026-11-08.)
     private const int SitHigh = TraluBarRoom.FloorY + 208, BunnySitHigh = TraluBarRoom.FloorY + 316;
-    // the Tralu in the bar: east of the round table by the old room's north wall (its barrel's cells x 43-44, z 36-37), facing his tankard
-    // on it (TraluBarRoom.TankardAt)
-    private static readonly (int X, int Z) TraluAt = (Cell(46.1), Cell(37.4));
-    // how near Twinsen comes to talk: the regulars' (Luc's across his counter), the Tralu's (a big fellow)
-    private const int RegularReach = 750, LucReach = 1600, TraluReach = 1500;
+    // the Tralu in the bar: in the corner behind the round table by the old room's north wall (its barrel's cells x 43-44, z 36-37), the
+    // wall and the foot of the stairs behind him, facing the camera with the barrel and his tankard on it in front of him (the user,
+    // 2026-11-08: "in the corner ... It fits him being moody about the bar being there"; he stood east of the barrel, in front of it)
+    private static readonly (int X, int Z) TraluAt = (Cell(42.5), Cell(35.8));
+    // how near Twinsen comes to talk: the regulars' (Luc's across his counter), the Tralu's (a big fellow, behind his barrel in his corner)
+    private const int RegularReach = 750, LucReach = 1600, TraluReach = 2200;
 
     private static int Face((int X, int Z) from, (int X, int Z) to) => RaceTrackMath.Turn(Math.Atan2(to.X - from.X, to.Z - from.Z));
 
@@ -135,7 +136,15 @@ internal static partial class RaceTrackStory
             // face to talk to him" -- his tankard at his side)
             Place(tralu, TraluAt, TraluBarRoom.FloorY, (TraluAt.X + 512, TraluAt.Z + 512));
             tralu.Armor = 51;
-            edits.Add(p.Add(model, tralu, Talker("0 < chapter()", $@"            if (2 > chapter())
+            // (the evening after the lighthouse -- Tired, when everyone tells Twinsen to go home and have a nap (tired=): his moan first, a
+            // line tired= leaves as it is (RaceTrackStory.TiredKeep), and then he says it too -- the user, 2026-11-08: "First he should moan
+            // about people being in his bar ... then tell him to go home")
+            edits.Add(p.Add(model, tralu, Talker("0 < chapter()", $@"            if (2 > chapter() && {Tired} == var_game({DayVar}))
+            {{
+                message({EveningId(p.Say, EveningLine.TraluEvening)});
+                message({p.Said(Line.Tired)});
+            }}
+            else if (2 > chapter())
             {{
                 message({p.Say(ChapterLine.TraluNoisy)});
             }}

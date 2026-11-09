@@ -51,6 +51,8 @@ internal static partial class RaceTrackStory
         // (chapter 2: the replies to Luc's round on him once the wheel is fitted -- Twinsen's after the spanking, and Zoe's; at the end of
         // the bank's lines so that no other text's number moves, 2026-11-09)
         TwinsenLemonade, ZoeNoDrink,
+        // (the Tralu in his bar the evening after the lighthouse: his moan, before he too tells Twinsen to go home -- 2026-11-09)
+        TraluEvening,
     }
     private static readonly string[][] EveningLines =
     {
@@ -279,9 +281,20 @@ internal static partial class RaceTrackStory
             "Niente alcol per me in questo periodo, Luc. Sono incinta!",
             "Nada de álcool para mim por agora, Luc. Estou grávida!",
         },
+        new[]
+        {
+            "Grrrr... YOU again. A hundred years in these caves, and tonight the whole island is in my back room: drums, singing, toasts to some race. A Tralu can't even hear his own ale go down.",
+            "Grrrr... ENCORE toi. Cent ans dans ces grottes, et ce soir toute l'île est dans mon arrière-salle : des tambours, des chansons, des toasts à je ne sais quelle course. Un Tralu n'entend même plus sa bière descendre.",
+            "Grrrr... DU schon wieder. Hundert Jahre in diesen Höhlen, und heute Abend ist die ganze Insel in meinem Hinterzimmer: Trommeln, Gesang, Trinksprüche auf irgendein Rennen. Ein Tralu hört nicht mal mehr sein eigenes Bier hinunterlaufen.",
+            "Grrrr... TÚ otra vez. Cien años en estas cuevas, y esta noche toda la isla está en mi trastienda: tambores, canciones, brindis por no sé qué carrera. Un Tralu ya ni oye bajar su propia cerveza.",
+            "Grrrr... ANCORA tu. Cent'anni in queste grotte, e stasera tutta l'isola è nel mio retrobottega: tamburi, canti, brindisi a chissà quale gara. Un Tralu non sente nemmeno più scendere la sua birra.",
+            "Grrrr... TU outra vez. Cem anos nestas grutas, e esta noite a ilha inteira está na minha sala dos fundos: tambores, cantorias, brindes a uma corrida qualquer. Um Tralu já nem ouve a própria cerveja a descer.",
+        },
     };
     // (after the chapters' lines in Citadel Island's texts)
     private static int EveningId(Func<ChapterLine, int> say, EveningLine line) => say(ChapterLine.ZoeSmiling) + ChapterLines.Length + (int)line;
+    // (the lines the race-track mode's tired= says as they are while Twinsen is tired, not as the go-home line: RACEMOD.CPP)
+    private static int[] TiredKeep(Func<ChapterLine, int> say) => new[] { EveningId(say, EveningLine.TraluEvening) };
 
     // A line said as the one saying it would, while Twinsen is tired (not the tired line in its place)
     private static string Aside(string said) => $@"set_var_game({DayVar}, {TiredAside});
