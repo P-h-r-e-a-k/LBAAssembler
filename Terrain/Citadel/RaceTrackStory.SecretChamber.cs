@@ -220,6 +220,9 @@ label({Slapped2});
 anim({Citadel.CitadelSpanking.ZoeSit});
 stop();
 ");
+                // (his behaviour put back to Normal first: each behaviour is its own entity, and only Normal's has the spanking's bodies and his
+                // lap's animations -- the user, 2026-11-09, home in Sporty or the like: he stood there in his everyday clothes, body(30) and
+                // anim(240) not found)
                 scripts.SetText(0, ScriptKind.Life, $@"void comportement_0()
 {{
     if ({Tired} == var_game({DayVar}) || {TiredAside} == var_game({DayVar}))
@@ -237,6 +240,7 @@ stop();
         set_var_game({DayVar}, {TiredAside});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScold)});
         obj_col(0);
+        comportement_hero(0);
         pos_point({lap});
         beta({across});
         body({Citadel.CitadelSpanking.TwinsenBare});
