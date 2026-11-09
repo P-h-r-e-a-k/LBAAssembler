@@ -18433,7 +18433,10 @@ void RaceMod_Frame(void) {
     // twelve the mixer has for nothing, and with the racing cars' they filled every one, 2026-10-19)
     static int silenced = 0;
     for (int i = 0; i < s_nbHidden; i++)
-        if (s_hideScene[i] == NumCube && s_hideActor[i] > 0 && s_hideActor[i] < NbObjets) {
+        // (but not the car lapping on its own, parade=, which ParadeStep puts back each frame: held while its driver yells at Twinsen,
+        // it was put out of sight here under his line and nothing put it back -- the user, 2026-11-08, "Raph's car disappears while he's
+        // yelling at Twinsen", "Raph reappeared once the text box was closed")
+        if (s_hideScene[i] == NumCube && s_hideActor[i] > 0 && s_hideActor[i] < NbObjets && !(s_paradeYelling && s_hideActor[i] == s_paradeActorNow)) {
             T_OBJET *hidden = &ListObjet[s_hideActor[i]];
             hidden->Obj.Y = -20000;
             if (hidden->SampleAlways) {
