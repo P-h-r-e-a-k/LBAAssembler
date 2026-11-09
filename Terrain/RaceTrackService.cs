@@ -516,6 +516,8 @@ internal static class RaceTrackService
                 made.Add(LBAAssembler.Terrain.Citadel.CitadelHouseLift.Install(gameDirectory));
                 // (and Twinsen's house at night, where he goes to bed at the end of chapter 1: Citadel/CitadelNightHouse)
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelNightHouse.Install(gameDirectory));
+                // (and the lift's shaft under the squares, in the night's house only: the lift is the night home drunk's)
+                made.Add(LBAAssembler.Terrain.Citadel.CitadelHouseLift.OpenShaft(gameDirectory));
                 // (and the Tavern regulars' secret bar: the Tralu's caves' second hall made bigger and furnished -- Citadel/TraluBarRoom)
                 made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.Install(gameDirectory));
                 // (and the stairs up to the back gate's ledge in the caves' first scene, scene 2)

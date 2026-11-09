@@ -65,8 +65,9 @@ internal static partial class RaceTrackStory
         if (riseFrom != 0) model.TrackPoints.Add(new SceneTrackPoint(foot.X, foot.Y - riseFrom, foot.Z));
         var actors = new List<int>();
         var adds = new List<Action<SceneScripts>>();
+        // (the chamber's: planks in an iron frame, and the rail; the house's: the storeroom's four darker squares)
         var parts = rails ? new[] { Citadel.CitadelProps.LiftPlatform, Citadel.CitadelProps.LiftRailBack, Citadel.CitadelProps.LiftRailLeft, Citadel.CitadelProps.LiftRailRight }
-                          : new[] { Citadel.CitadelProps.LiftPlatform };
+                          : new[] { Citadel.CitadelProps.HouseLiftPlatform };
         foreach (var generic in parts)
         {
             actors.Add(model.Actors.Count);
@@ -136,7 +137,7 @@ void comportement_1()
 {{
     swif (1 == action())
     {{
-        if ({LiftZone} == zone_obj(0) && {Driving} != comportement_hero())
+        if ({LiftZone} == zone_obj(0) && {Driving} != comportement_hero() && {DrankTonight} == var_game({Drunk}))
         {{
             set_dir_obj(0, NO_MOVE);
             set_change_cube({LiftSwitch}, 1);
@@ -149,7 +150,10 @@ void comportement_1()
     {
         if (!p.Store.SceneExists(Chamber)) { p.Log.Add($"the secret chamber left out: no scene {Chamber} (Citadel/CitadelLba1Rooms)"); return; }
         // the house by day: the lift
-        p.Edit(OpeningScene, "the house's lift down to the secret chamber: Action on the storeroom's darker squares", model => AddLift(p, model).Scripts);
+        // (the day's house: no lift -- it is the night home drunk's only, the user, 2026-11-09 evening: "Yes I still want it limited" --
+        // unless the night's house had to share its grid, shaft and all: then a platform over the shaft here too, Action on it as at night)
+        var dayShaft = Citadel.CitadelHouseLift.ShaftInDayHouse(p.Store.Directory);
+        if (dayShaft) p.Edit(OpeningScene, "the house's lift over its shaft (the night's house on the day's grid)", model => AddLift(p, model).Scripts);
         // the Tralu's bar in the evening: Drunk
         p.Edit(BarHall, "the Tralu's bar walked into in the evening: Zoe will know (Drunk 1)", model =>
             p.Add(model, RaceTrackScenes.InvisibleHelper(model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z), $@"void comportement_0()
@@ -172,6 +176,8 @@ void comportement_1()
             var night = new SceneZoneModel { Type = 0, Num = NightHouse, X0 = day.X0, X1 = day.X1, Y0 = day.Y0, Y1 = day.Y1, Z0 = day.Z0, Z1 = day.Z1, Info = (int[])day.Info.Clone() };
             night.Info[4] = ChamberUpNight;
             model.Zones.Add(night);
+            // (the day's way up -- the chamber is the night's, so it shouldn't be taken -- onto the storeroom's floor if there's no shaft there)
+            if (!dayShaft) { day.Info[1] = Citadel.CitadelHouseLift.Middle.Y + 4; day.Info[6] = 0; }
             var zoe = Copy(p.Originals, OpeningScene, Zoe) ?? throw new NotTheGames("Zoe");
             (zoe.X, zoe.Y, zoe.Z) = ZoeInChamber;
             zoe.Beta = ZoeFacing;

@@ -317,13 +317,34 @@ internal static partial class CitadelProps
         m.Box(0, At(0) + new Vector3(0, LiftTop + RailHigh / 2f, 0), size with { Y = 20 }, Steel);
         return m.ToBody(header);
     }
+    // The house's platform: the storeroom's four darker squares, so the lift looks there as it does by day (the user, 2026-11-09 evening:
+    // "Leave the 4 dark squares, the lift still exists even if Twinsen can't activate it"). Four tiles in the night house's floor's
+    // colours a shade darker (its floor is 209-210 by night), near-black grout between them and round its sides, unlit as the bricks are.
+    public const int HouseLiftPlatform = 103, SquareTile = 208, SquareGrout = 224;
+    public static Body BuildHouseLiftPlatform(byte[] header)
+    {
+        var m = new CarMesh("the house's lift", new[] { -1 });
+        const float H = LiftSize / 2f, G = 10, Y = LiftTop;
+        foreach (var (x0, x1) in new[] { (-H, -G), (G, H) })
+            foreach (var (z0, z1) in new[] { (-H, -G), (G, H) })
+                m.Flat(0, SquareTile, new Vector3(x0, Y, z0), new Vector3(x1, Y, z0), new Vector3(x1, Y, z1), new Vector3(x0, Y, z1));
+        m.Flat(0, SquareGrout, new Vector3(-G, Y, -H), new Vector3(G, Y, -H), new Vector3(G, Y, H), new Vector3(-G, Y, H));
+        m.Flat(0, SquareGrout, new Vector3(-H, Y, -G), new Vector3(-G, Y, -G), new Vector3(-G, Y, G), new Vector3(-H, Y, G));
+        m.Flat(0, SquareGrout, new Vector3(G, Y, -G), new Vector3(H, Y, -G), new Vector3(H, Y, G), new Vector3(G, Y, G));
+        foreach (var s in new[] { -H, H })
+        {
+            m.Flat(0, SquareGrout, new Vector3(s, 0, -H), new Vector3(s, 0, H), new Vector3(s, Y, H), new Vector3(s, Y, -H));
+            m.Flat(0, SquareGrout, new Vector3(-H, 0, s), new Vector3(H, 0, s), new Vector3(H, Y, s), new Vector3(-H, Y, s));
+        }
+        return m.ToBody(header);
+    }
     public static Body BuildLiftRailBack(byte[] header) => BuildLiftRail(header, 0);
     public static Body BuildLiftRailLeft(byte[] header) => BuildLiftRail(header, -1);
     public static Body BuildLiftRailRight(byte[] header) => BuildLiftRail(header, 1);
     // (the rail's sides' boxes: thin, as high as the rail)
     public static short[]? LiftBox(int generic) => generic switch
     {
-        LiftPlatform => new short[] { -512, 0, -512, 511, LiftTop, 511 },
+        LiftPlatform or HouseLiftPlatform => new short[] { -512, 0, -512, 511, LiftTop, 511 },
         LiftRailBack => new short[] { -512, 0, -512, 511, LiftTop + RailHigh + 20, -460 },
         LiftRailLeft => new short[] { -512, 0, -512, -460, LiftTop + RailHigh + 20, 511 },
         LiftRailRight => new short[] { 460, 0, -512, 511, LiftTop + RailHigh + 20, 511 },
