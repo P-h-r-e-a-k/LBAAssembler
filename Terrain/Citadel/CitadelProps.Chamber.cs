@@ -10,8 +10,9 @@ namespace LBAAssembler.Terrain.Citadel;
 // its wall), their backs against it.
 internal static partial class CitadelProps
 {
+    // (19 and 20 the old plain rugs, gone: the picture rugs, CitadelProps.Rugs, in their place)
     public const int Seal = 11, TapestryRed = 12, TapestryBlue = 13, Picture = 14, Rack = 15, Chair = 16,
-        Boulder = 17, Boulder2 = 18, Rug = 19, RugRound = 20, CurtainLeft = 21, CurtainRight = 22;
+        Boulder = 17, Boulder2 = 18, CurtainLeft = 21, CurtainRight = 22;
     // (the palette: the gold ramp, a deep blue, a teal for the chair's cushion, the dark flat, the rock's slate)
     private const int Gold = 106, Blue = 197, Teal = 150, Dark = 49, Sky = 200, Leather = 50, Slate = 180;
 
@@ -96,60 +97,147 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
-    // The rack on the wall: a wooden board with pegs, and hanging from them two paddles (a wooden one, a black leather one), a whip
-    // coiled in a loop and a riding crop; its middle at 0
+    // The rack of paddles and whips: a wooden board with pegs, and hanging from them two paddles (a wooden one, a black leather one), a whip
+    // coiled in a loop and a riding crop -- free-standing (the user, 2026-11-09: "Let's make the stand with the spanking implements on it
+    // free standing so they can be near the chair"): the board on two uprights with splayed feet, its foot at 0, its front +z
     public static Body BuildRack(byte[] header)
     {
-        var m = new CarMesh("a rack of paddles and whips", new[] { -1 });
+        var m = new CarMesh("a stand of paddles and whips", new[] { -1 });
         m.Light = 0.7f;
-        const float W = 520;
-        m.Box(0, new Vector3(0, 300, 20), new Vector3(2 * W, 90, 40), Wood);
+        const float W = 520, Lift = 1250;
+        // the stand: two uprights to the board's ends and a little over, each on a foot running front to back, a rail low between them
+        foreach (var s in new[] { -1, 1 })
+        {
+            m.Box(0, new Vector3(s * (W + 40), (Lift + 380) / 2, 20), new Vector3(50, Lift + 380, 50), Wood);
+            m.Box(0, new Vector3(s * (W + 40), 25, 20), new Vector3(70, 50, 420), Wood);
+            m.Box(0, new Vector3(s * (W + 40), Lift + 395, 20), new Vector3(70, 30, 70), Gold);
+        }
+        m.Box(0, new Vector3(0, 160, 20), new Vector3(2 * W + 80, 40, 36), Wood);
+        // the board and its pegs
+        m.Box(0, new Vector3(0, Lift + 300, 20), new Vector3(2 * W + 40, 90, 40), Wood);
         var pegs = new[] { -390f, -130f, 130f, 390f };
-        foreach (var x in pegs) m.Box(0, new Vector3(x, 300, 70), new Vector3(24, 24, 70), Steel);
-        // a wooden paddle: its handle up to the peg, its broad blade below
+        foreach (var x in pegs) m.Box(0, new Vector3(x, Lift + 300, 70), new Vector3(24, 24, 70), Steel);
+        // a paddle: its handle up to the peg, its broad blade below
         void Paddle(float x, int colour)
         {
-            m.Box(0, new Vector3(x, 180, 60), new Vector3(40, 220, 18), colour);
-            m.Box(0, new Vector3(x, -60, 60), new Vector3(150, 280, 18), colour);
+            m.Box(0, new Vector3(x, Lift + 180, 60), new Vector3(40, 220, 18), colour);
+            m.Box(0, new Vector3(x, Lift - 60, 60), new Vector3(150, 280, 18), colour);
         }
         Paddle(pegs[0], Wood);
         Paddle(pegs[1], Leather);
         // a whip: its handle, then its lash hanging in a long loop of short black lengths
-        m.Box(0, new Vector3(pegs[2], 170, 60), new Vector3(36, 240, 36), Dark);
-        var prev = new Vector3(pegs[2], 50, 60);
+        m.Box(0, new Vector3(pegs[2], Lift + 170, 60), new Vector3(36, 240, 36), Dark);
+        var prev = new Vector3(pegs[2], Lift + 50, 60);
         for (var k = 1; k <= 10; k++)
         {
             var a = k / 10f * MathF.PI;
-            var next = new Vector3(pegs[2] + 90 * MathF.Sin(a), 50 - 420 * MathF.Sin(a / 2), 60);
-            var mid = (prev + next) / 2;
-            var len = Vector3.Distance(prev, next);
-            m.Box(0, mid, new Vector3(18, len + 6, 18), Dark);
+            var next = new Vector3(pegs[2] + 90 * MathF.Sin(a), Lift + 50 - 420 * MathF.Sin(a / 2), 60);
+            m.Box(0, (prev + next) / 2, new Vector3(18, Vector3.Distance(prev, next) + 6, 18), Dark);
             prev = next;
         }
         // a riding crop: a thin rod and its leather flap
-        m.Box(0, new Vector3(pegs[3], 40, 60), new Vector3(16, 520, 16), Dark);
-        m.Box(0, new Vector3(pegs[3], -240, 60), new Vector3(60, 70, 10), Leather);
+        m.Box(0, new Vector3(pegs[3], Lift + 40, 60), new Vector3(16, 520, 16), Dark);
+        m.Box(0, new Vector3(pegs[3], Lift - 240, 60), new Vector3(60, 70, 10), Leather);
         return m.ToBody(header);
     }
 
-    // The bedroom's chair (the user's picture: a wooden ladder-back chair with a teal cushion), its seat at CitadelSpanking.StoolTop --
-    // Zoe sits on it; its back to -z
+    // The bedroom's chair (the house's own, as LBA2 draws it in Twinsen's bedroom -- the user, 2026-11-09: "The chair prop looks nothing like
+    // the one I asked you to copy"): a ladder-back of mid-brown wood -- square legs, a deep apron round the seat, a thick teal cushion
+    // over the whole seat, two square back posts leaning a little back with three broad slats across them and a top rail -- its seat's
+    // top at CitadelSpanking.StoolTop (Zoe sits on it) and its seat's middle ChairAhead in front of its own place (+z): the actor stands
+    // back behind it, so its box -- the engine's sort -- keeps it behind Zoe, who sits on it
+    public const int ChairAhead = 500;
     public static Body BuildChair(byte[] header)
     {
-        var m = new CarMesh("a chair", new[] { -1 });
+        var m = new CarMesh("the bedroom's chair", new[] { -1 });
         m.Light = 0.7f;
-        const float Top = CitadelSpanking.StoolTop, Half = 170, Seat = 50, Leg = 24, Back = 820;
-        m.Box(0, new Vector3(0, Top - Seat - 10, 0), new Vector3(2 * Half, 20, 2 * Half), Wood);
-        m.Box(0, new Vector3(0, Top - Seat / 2, 10), new Vector3(2 * Half - 30, Seat - 20, 2 * Half - 40), Teal, Teal);
-        foreach (var (x, z) in new[] { (1, 1), (-1, 1) })
-            m.Box(0, new Vector3(x * (Half - Leg), (Top - Seat) / 2, z * (Half - Leg)), new Vector3(2 * Leg, Top - Seat, 2 * Leg), Wood);
-        // the back legs run on up as the back's uprights, three slats between them
-        foreach (var x in new[] { 1, -1 })
-            m.Box(0, new Vector3(x * (Half - Leg), Back / 2, -(Half - Leg)), new Vector3(2 * Leg, Back, 2 * Leg), Wood);
-        foreach (var y in new[] { Top + 180, Top + 340, Top + 500 })
-            m.Box(0, new Vector3(0, y, -(Half - Leg)), new Vector3(2 * (Half - Leg), 50, 22), Wood);
+        const float Top = CitadelSpanking.StoolTop, Half = 200, Cushion = 70, Apron = 80, Leg = 46, Z = ChairAhead;
+        const float SeatUnder = Top - Cushion;
+        // the cushion, its top a shade lighter, and the apron under it all round
+        m.Box(0, new Vector3(0, Top - Cushion / 2, Z + 8), new Vector3(2 * Half - 10, Cushion, 2 * Half - 26), Teal, Teal + 1);
+        m.Box(0, new Vector3(0, SeatUnder - Apron / 2, Z + Half - 12), new Vector3(2 * Half, Apron, 24), Wood);
+        m.Box(0, new Vector3(0, SeatUnder - Apron / 2, Z - Half + 12), new Vector3(2 * Half, Apron, 24), Wood);
+        foreach (var s in new[] { -1, 1 })
+            m.Box(0, new Vector3(s * (Half - 12), SeatUnder - Apron / 2, Z), new Vector3(24, Apron, 2 * Half), Wood);
+        // the front legs, and the low stretchers between all four
+        foreach (var s in new[] { -1, 1 })
+            m.Box(0, new Vector3(s * (Half - Leg / 2), SeatUnder / 2, Z + Half - Leg / 2), new Vector3(Leg, SeatUnder, Leg), Wood);
+        foreach (var s in new[] { -1, 1 })
+            m.Box(0, new Vector3(s * (Half - Leg / 2), 70, Z), new Vector3(20, 22, 2 * Half - Leg), Wood);
+        m.Box(0, new Vector3(0, 90, Z + Half - Leg / 2), new Vector3(2 * Half - Leg, 22, 20), Wood);
+        // the back: its posts from the floor up past the seat, leaning back as they rise; the slats and the top rail across them
+        const float PostTop = Top + 560, Lean = 90;
+        float Back(float y) => Z - Half + Leg / 2 - Lean * MathF.Max(0, y - SeatUnder) / (PostTop - SeatUnder);
+        foreach (var s in new[] { -1, 1 })
+        {
+            var x = s * (Half - Leg / 2);
+            m.Strut(0, new Vector3(x, 0, Z - Half + Leg / 2), new Vector3(x, SeatUnder, Back(SeatUnder)), Leg, Wood);
+            m.Strut(0, new Vector3(x, SeatUnder, Back(SeatUnder)), new Vector3(x, PostTop, Back(PostTop)), Leg, Wood);
+        }
+        foreach (var y in new[] { Top + 150, Top + 290, Top + 430 })
+            m.Box(0, new Vector3(0, y, Back(y)), new Vector3(2 * Half - Leg, 70, 22), Wood);
+        m.Box(0, new Vector3(0, PostTop - 30, Back(PostTop - 30)), new Vector3(2 * Half + 10, 60, 34), Wood);
         return m.ToBody(header);
     }
+
+    // A bicycle, parked on its stand and leaning a little onto it: two wheels -- black tyres, a hub and its spokes -- a diamond frame in
+    // `colour`, the saddle, the handlebars and their grips, the pedals; with a basket on the front for Zoe's. Along z (its front +z), its
+    // wheels on the floor at 0
+    public const int BikeTwinsen = 32, BikeZoe = 33;
+    private static Body BuildBike(byte[] header, string name, int colour, bool basket)
+    {
+        var m = new CarMesh(name, new[] { -1 });
+        m.Light = 0.75f;
+        const float R = 270, Base = 520, Tilt = 0.12f;
+        // (the lean: x moves over as it rises)
+        Vector3 L(float x, float y, float z) => new(x - y * Tilt, y, z);
+        int P(float x, float y, float z) => m.P(0, L(x, y, z));
+        void Bar(Vector3 a, Vector3 b, float t, int c) => m.Strut(0, L(a.X, a.Y, a.Z), L(b.X, b.Y, b.Z), t, c);
+        foreach (var hz in new[] { -Base, Base })
+        {
+            // the tyre: a ring of short dark lengths round the hub, the spokes as lines
+            const int N = 14;
+            for (var k = 0; k < N; k++)
+            {
+                float a0 = k * MathF.Tau / N, a1 = (k + 1) * MathF.Tau / N;
+                Bar(new Vector3(0, R + R * MathF.Sin(a0), hz + R * MathF.Cos(a0)), new Vector3(0, R + R * MathF.Sin(a1), hz + R * MathF.Cos(a1)), 34, Dark);
+            }
+            var hub = P(0, R, hz);
+            for (var k = 0; k < 8; k++) m.Line(hub, P(0, R + (R - 20) * MathF.Sin(k * MathF.Tau / 8), hz + (R - 20) * MathF.Cos(k * MathF.Tau / 8)), Steel);
+        }
+        Vector3 bracket = new(0, R + 10, -30), seat = new(0, 760, -170), head = new(0, 770, 400), headLow = new(0, 640, 420);
+        Vector3 rear = new(0, R, -Base), front = new(0, R, Base);
+        Bar(bracket, seat, 34, colour);
+        Bar(seat, head, 32, colour);
+        Bar(bracket, headLow, 36, colour);
+        Bar(bracket, rear, 24, colour);
+        Bar(seat, rear, 22, colour);
+        Bar(headLow, front, 26, colour);
+        Bar(head, headLow, 34, colour);
+        // the saddle, the stem and the handlebars with their grips
+        Bar(seat, seat + new Vector3(0, 70, 0), 22, Steel);
+        m.Box(0, L(0, 845, -175), new Vector3(110, 40, 230), Dark);
+        Bar(head, head + new Vector3(0, 110, -30), 22, Steel);
+        Bar(new Vector3(-230, 880, 370), new Vector3(230, 880, 370), 22, Steel);
+        foreach (var s in new[] { -1, 1 }) Bar(new Vector3(s * 230, 880, 370), new Vector3(s * 290, 880, 370), 30, Dark);
+        // the pedals, the stand
+        Bar(new Vector3(-90, R - 60, -30), new Vector3(90, R + 80, -30), 20, Steel);
+        foreach (var (x, y) in new[] { (-100f, R - 60f), (100f, R + 80f) }) m.Box(0, L(x, y, -30), new Vector3(70, 18, 90), Dark);
+        m.Strut(0, L(-20, R, -120), new Vector3(-160, 0, -200), 18, Steel);
+        if (basket)
+        {
+            // a wicker basket on the front, over the wheel
+            foreach (var (x, z) in new[] { (-140f, 470f), (140f, 470f), (-140f, 700f), (140f, 700f) }) Bar(new Vector3(x, 620, z), new Vector3(x, 820, z), 16, Wood);
+            m.Box(0, L(0, 620, 585), new Vector3(300, 20, 250), Wood);
+            Bar(new Vector3(-140, 820, 470), new Vector3(140, 820, 470), 16, Wood);
+            Bar(new Vector3(-140, 820, 700), new Vector3(140, 820, 700), 16, Wood);
+            Bar(new Vector3(-140, 820, 470), new Vector3(-140, 820, 700), 16, Wood);
+            Bar(new Vector3(140, 820, 470), new Vector3(140, 820, 700), 16, Wood);
+        }
+        return m.ToBody(header);
+    }
+    public static Body BuildBikeTwinsen(byte[] header) => BuildBike(header, "Twinsen's bike", Blue, false);
+    public static Body BuildBikeZoe(byte[] header) => BuildBike(header, "Zoe's bike", Red, true);
 
     // ---- round 2 (the user, 2026-11-09): "let's add the stairs back, but add in some giant bolders to show it's not useable"; "let's add
     // some rugs on the floors, some curtains around the edges ... it's now part of Twinsen's home so it needs to feel homely"
@@ -187,48 +275,6 @@ internal static partial class CitadelProps
     }
     public static Body BuildBoulder(byte[] header) => BuildRock(header, "a boulder", 640, 1996);
     public static Body BuildBoulder2(byte[] header) => BuildRock(header, "a smaller boulder", 480, 1997);
-
-    // A rug on the floor, its top at 0 (no higher than the floor: an actor's box only stops another's it overlaps in height, so no one
-    // walks into it): a red field, a gold border round it, a blue diamond in its middle with a gold one in that, and a cream fringe at
-    // each end. Each layer a little over the one under it, so the polygons' sort draws them in order. Its length along x.
-    public static Body BuildRug(byte[] header)
-    {
-        var m = new CarMesh("a rug", new[] { -1 });
-        m.Light = 0.8f;
-        const float L = 1400, Wd = 950, B = 110;
-        void Flat(float x0, float z0, float x1, float z1, float y, int colour) =>
-            m.Up(new[] { m.P(0, new Vector3(x0, y, z0)), m.P(0, new Vector3(x1, y, z0)), m.P(0, new Vector3(x1, y, z1)), m.P(0, new Vector3(x0, y, z1)) }, colour);
-        void Diamond(float rx, float rz, float y, int colour) =>
-            m.Up(new[] { m.P(0, new Vector3(rx, y, 0)), m.P(0, new Vector3(0, y, rz)), m.P(0, new Vector3(-rx, y, 0)), m.P(0, new Vector3(0, y, -rz)) }, colour);
-        // (the border: four strips round the field, not under it)
-        Flat(-L, -Wd, L, -Wd + B, -12, Gold); Flat(-L, Wd - B, L, Wd, -12, Gold);
-        Flat(-L, -Wd + B, -L + B, Wd - B, -12, Gold); Flat(L - B, -Wd + B, L, Wd - B, -12, Gold);
-        Flat(-L + B, -Wd + B, L - B, Wd - B, -12, Red);
-        Diamond(700, 520, -6, Blue);
-        Diamond(300, 220, -1, Gold);
-        foreach (var s in new[] { -1, 1 })
-            for (var z = -Wd + 60; z < Wd; z += 120)
-                m.Rod(0, new Vector3(s * L, -12, z), new Vector3(s * (L + 90), -12, z), Cream);
-        return m.ToBody(header);
-    }
-
-    // A round rug: rings of blue, cream and red out from a gold middle, its top at 0 (as the other)
-    public static Body BuildRugRound(byte[] header)
-    {
-        var m = new CarMesh("a round rug", new[] { -1 });
-        m.Light = 0.8f;
-        const int N = 16;
-        var radii = new[] { 220f, 520f, 640f, 940f, 1050f };
-        var colours = new[] { Blue, Cream, Red, Gold };
-        var rings = radii.Select(r => m.Loop(0, new Vector3(0, -2, 0), new Vector3(r, 0, 0), new Vector3(0, 0, r), N)).ToArray();
-        m.Cap(rings[0], m.P(0, new Vector3(0, -2, 0)), Gold, new Vector3(0, -100, 0));
-        for (var k = 0; k + 1 < rings.Length; k++)
-        {
-            var colour = colours[k];
-            m.Skin(rings[k], rings[k + 1], _ => colour, new Vector3(0, -100, 0));
-        }
-        return m.ToBody(header);
-    }
 
     // A curtain hung on a wall, gathered to one side by a gold tie-back (`side` -1 its left, +1 its right): pleats of red cloth from its
     // pelmet (its top at 0) to the floor CurtainDrop under it, drawn in to the tie-back's side two-thirds of the way down. Built facing

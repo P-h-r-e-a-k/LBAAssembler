@@ -70,19 +70,7 @@ internal static partial class CitadelProps
         var points = new Dictionary<(int, int), int>();
         int Point(int c, int r) => points.TryGetValue((c, r), out var h) ? h
             : points[(c, r)] = m.P(0, new Vector3((c - BayeuxColumns / 2f) * BayeuxStitch, -r * BayeuxStitch, Face));
-        var done = new bool[BayeuxColumns, height];
-        for (var r = 0; r < height; r++)
-            for (var c = 0; c < BayeuxColumns; c++)
-            {
-                if (done[c, r]) continue;
-                var colour = At(c, r);
-                var w = 1;
-                while (c + w < BayeuxColumns && !done[c + w, r] && At(c + w, r) == colour) w++;
-                var h = 1;
-                while (r + h < height && Enumerable.Range(c, w).All(i => !done[i, r + h] && At(i, r + h) == colour)) h++;
-                for (var j = r; j < r + h; j++) for (var i = c; i < c + w; i++) done[i, j] = true;
-                m.Out(new[] { Point(c, r), Point(c + w, r), Point(c + w, r + h), Point(c, r + h) }, BayeuxColours[colour], new Vector3(0, 0, -100), unlit: true);
-            }
+        Stitched(m, 0, BayeuxColumns, height, At, Point, BayeuxColours, new Vector3(0, 0, -100));
         // the cloth over the wall's top, plain linen, from the outside face most of the way in
         float x0 = -BayeuxColumns / 2f * BayeuxStitch, x1 = BayeuxColumns / 2f * BayeuxStitch;
         m.Out(new[] { Point(0, 0), Point(BayeuxColumns, 0), m.P(0, new Vector3(x1, 0, Face - BayeuxFold)), m.P(0, new Vector3(x0, 0, Face - BayeuxFold)) },

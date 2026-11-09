@@ -98,6 +98,7 @@ internal static class Program
             "spankposes" => RaceTrackCommand.SpankPoses(args),
             "trackgrep" => RaceTrackCommand.TrackGrep(args),
             "griddump" => RaceTrackCommand.GridDump(args),
+            "invobj" => RaceTrackCommand.InvObj(args),
             "restfaces" => RaceTrackCommand.BodyFaces(args),
             "animbasis" => RaceTrackCommand.AnimBasis(args),
             "bodybones" => RaceTrackCommand.BodyBones(args),

@@ -23,13 +23,14 @@ internal static class CitadelSpanking
     public const int HeroEntity = 0, TwinsenLap = 240, TwinsenKick = 241, TwinsenBare = 30, TwinsenRed = 31, TwinsenPink = 32;
     // how far Zoe's hips come down to sit (her hips' bone at 633 standing, her thighs' tops 60 under it): the stool's top
     public const int SitDrop = 280, StoolTop = 633 - SitDrop - 60;
-    // her hips this far behind her place (her place a cell in front of the chair's -- the bedroom's own, in the chamber's grid -- so the
-    // grid draws the chair behind her, not over her: CitadelLba1Rooms.ChairCell)
+    // her hips this far behind her place, over the chair's seat (CitadelProps.BuildChair)
     public const int SeatBack = 300;
     // Twinsen's hips over her lap: her thighs out SitDrop under her standing hips, his hips' bone (533 standing) this far down
     // (raised, 2026-11-09: "his bare ass up in the air" -- his hips higher, his chest and legs further down either side of her lap)
     public const int LapDown = 55;
-    private const int Skin = 32, Red = 66, Pink = 76;
+    // his thighs bare (the skin's ramp, lit); his bottom bare, then pink, then red -- flat colours, unlit (the user, 2026-11-09: they "didn't
+    // appear pulled down": lit off the red ramp the racing suit is lit off, his bottom was the suit's red under the iso camera)
+    private const int Skin = 32, BareBottom = 38, Red = 75, Pink = 78;
     // his everyday clothes' trousers (the racing suit's lower half once CitadelOveralls has painted them: what he pulls down)
     private const int Trousers = 194;
     // the heads' bones (the back is aimed at its head)
@@ -119,7 +120,7 @@ internal static class CitadelSpanking
                 if (bone is not (2 or 3 or 8 or 11)) continue;
                 var middle = f.Points.Aggregate(Vector3.Zero, (s, p) => s + world[p]) / f.Points.Length;
                 var bottom = bone is 2 or 3 && middle.Z < 20;
-                b.Faces[i] = f with { Colour = bottom ? colour : Skin, Material = -1, Texture = null };
+                b.Faces[i] = f with { Colour = bottom ? colour : Skin, Material = bottom ? 0 : -1, Texture = null };
             }
             return b;
         }
@@ -129,7 +130,7 @@ internal static class CitadelSpanking
             for (var k = 0; k < an.Frames.Count; k++) Frames.Add(($"{name}{k}", b, an.Frames[k]));
         var bodyIndex = HqrArchive.CountEntries(bodyPath);
         var file = File.ReadAllBytes(bodyPath);
-        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(Skin).Write()));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(BareBottom).Write()));
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(Red).Write()));
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(Pink).Write()));
         File.WriteAllBytes(bodyPath, file);

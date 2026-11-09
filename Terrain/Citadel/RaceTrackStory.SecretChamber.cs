@@ -27,10 +27,13 @@ internal static partial class RaceTrackStory
     // the scenario zone at LBA1's old way out of the chamber, filled with rock (a scene variable: said once a visit)
     private const int LandslideZone = 73, LandslideSaid = 3;
     private static readonly (int X0, int X1, int Y0, int Y1, int Z0, int Z1) LiftBox = (4096, 5119, 2560, 3583, 8192, 9215);
-    // Zoe in the chamber, to the stairs' side of where Twinsen comes down, facing him
-    // (on the bedroom's chair, set in the chamber's grid: Citadel/CitadelLba1Rooms.ChairCell, its middle)
-    // (she stands a cell in front of it -- the chair drawn behind her -- her sitting pose's hips CitadelSpanking.SeatBack back over its seat)
-    private static readonly (int X, int Y, int Z) ZoeInChamber = (Citadel.CitadelLba1Rooms.ChairCell.X * 512 + 256 + Citadel.CitadelSpanking.SeatBack, 1280, Citadel.CitadelLba1Rooms.ChairCell.Z * 512 + 256);
+    // Zoe in the chamber's hall, on the bedroom's chair in the middle of the Sendell rug, facing the camera's way (+x +z): Twinsen across her
+    // lap broadside to it, his bottom up in plain sight (the user, 2026-11-09: "The orientation of the chair in the spanking scene means we
+    // can't see Twinsen's bottom ... Let's move this scene to the upper area where the sendell scene is"), the Sendell seal behind them
+    private static readonly (int X, int Y, int Z) ZoeInChamber = (22528, 1792, 21504);
+    private const int ZoeFacing = 512;
+    // the Sendell rug's middle (the hall's floor, x 35-48 and z 34-45, almost all of it) and the Dinofly rug's (the lower room's middle)
+    private static readonly (int X, int Y, int Z) SendellRugAt = (21504, 1792, 20480), DinoRugAt = (21760, 1280, 28416);
 
     // The lift's two zones in a house scene: the scenario zone Action is pressed in, and the door down, off till the Action switches it on
     // (Twinsen in it, he goes: his place in it added to where he comes out, at the chamber's foot of the stairs)
@@ -98,47 +101,68 @@ void comportement_1()
             model.TrackPoints.Add(new SceneTrackPoint((day.X0 + day.X1) / 2, day.Y0, (day.Z0 + day.Z1) / 2));
             var zoe = Copy(p.Originals, OpeningScene, Zoe) ?? throw new NotTheGames("Zoe");
             (zoe.X, zoe.Y, zoe.Z) = ZoeInChamber;
-            zoe.Beta = Citadel.CitadelLba1Rooms.ChairFacing;
-            // (her stool under her, a little behind her middle -- none of the three pushing another away, their objects' collision off: the flags' CHECK_OBJ_COL, and Twinsen's obj_col(0) till he's up; Twinsen across her lap: her thighs' middle in front of her, his head to her
-            // left -- turned a quarter from her -- his hips at her lap's height by his own animation)
+            zoe.Beta = ZoeFacing;
+            // (none of the three pushing another away, their objects' collision off: the flags' CHECK_OBJ_COL, and Twinsen's obj_col(0) till
+            // he's up; Twinsen across her lap: her thighs' middle in front of her, turned a quarter from her, his hips at her lap's height by
+            // his own animation)
             var turn = zoe.Beta * Math.PI / 2048;
             double fx = Math.Sin(turn), fz = Math.Cos(turn);
-            // (the bedroom's chair, the user, 2026-11-08: "one of the chairs from the bedroom down there for Zoe to sit on" -- the house's
-            // own, set in the chamber's grid: Citadel/CitadelLba1Rooms.HouseChair)
-            Action<SceneScripts> stoolLife = _ => { };
+            (int X, int Z) Ahead(double d) => ((int)Math.Round(ZoeInChamber.X + fx * d), (int)Math.Round(ZoeInChamber.Z + fz * d));
             // the room's furnishings (Citadel/CitadelProps.Chamber): the Sendell seal back in the hole in the hall's back wall (LBA1's sprite
-            // 84 there, cell 41.2, layer 10.1, 33.2); on the rock wall facing the lower floor (z 50's face, z 26112) a red tapestry, the rack
-            // of paddles and whips and a picture; on the left wall (x 30's face, x 15872) by LBA1's old way out, a blue tapestry
+            // 84 there, cell 41.2, layer 10.1, 33.2); on the rock wall facing the lower floor (z 50's face, z 26112) a red tapestry and a
+            // picture; on the left wall (x 30's face, x 15872) by LBA1's old way out, a blue tapestry
             var furnishings = new List<Action<SceneScripts>>();
             void Furnish(int generic, int x, int y, int z, int beta) =>
                 furnishings.Add(p.Add(model, Citadel.CitadelProps.Actor(generic, x, y, z, beta), "void comportement_0()\n{\n}\n"));
+            // (and the mushroom's entity's: the seal's parts, LBA1's old things)
+            void Old(int generic, int x, int y, int z, int beta)
+            {
+                var a = SceneOps.BlankActor(SceneGame.Lba2, x, y, z, Citadel.CitadelLba1Rooms.PropEntity);
+                a.Body = generic; a.Beta = beta; a.Flags = 0x1000u; a.Armor = 51; a.LifePoints = -1; a.CoulObj = DefaultVoice;
+                furnishings.Add(p.Add(model, a, "void comportement_0()\n{\n}\n"));
+            }
             // (the seal: LBA1's own picture of it, in as many parts as it took -- Citadel/CitadelLba1Rooms.SealBodies)
             for (var k = 0; k < Citadel.CitadelLba1Rooms.SealParts; k++)
-            {
-                var part = SceneOps.BlankActor(SceneGame.Lba2, Citadel.CitadelLba1Rooms.SealAt.X, Citadel.CitadelLba1Rooms.SealAt.Y, Citadel.CitadelLba1Rooms.SealAt.Z, Citadel.CitadelLba1Rooms.PropEntity);
-                part.Body = Citadel.CitadelLba1Rooms.SealFirst + k; part.Flags = 0x1000u; part.Armor = 51; part.LifePoints = -1; part.CoulObj = DefaultVoice;
-                furnishings.Add(p.Add(model, part, "void comportement_0()\n{\n}\n"));
-            }
+                Old(Citadel.CitadelLba1Rooms.SealFirst + k, Citadel.CitadelLba1Rooms.SealAt.X, Citadel.CitadelLba1Rooms.SealAt.Y, Citadel.CitadelLba1Rooms.SealAt.Z, 0);
             Furnish(Citadel.CitadelProps.TapestryRed, 20550, 2560, 26112 + 6, 0);
-            Furnish(Citadel.CitadelProps.Rack, 21888, 1980, 26112 + 4, 0);
-            Furnish(Citadel.CitadelProps.Picture, 23552, 2080, 26112 + 4, 0);
+            Furnish(Citadel.CitadelProps.Picture, 22400, 2080, 26112 + 4, 0);
             Furnish(Citadel.CitadelProps.TapestryBlue, 15872 + 6, 2560, 31232, 1024);
             // round 2 (the user, 2026-11-09): "add in some giant bolders" on LBA1's way out (its landing, x 31-34 at z 62, layer 3's top, and
             // its stairs down at z 63, layer 2's) -- they stand in Twinsen's way, as any actor with a body does
             Furnish(Citadel.CitadelProps.Boulder, 16450, 1024, 32050, 300);
             Furnish(Citadel.CitadelProps.Boulder2, 17550, 768, 32450, 1500);
             Furnish(Citadel.CitadelProps.Boulder2, 17450, 1024, 31850, 2900);
-            // "some rugs on the floors, some curtains around the edges": a rug in the lower room's middle (clear of the chair's cell, x 51 --
-            // a rug is drawn after the grid's bricks, so over any it overlapped -- and of the stone by the left wall), a round one in the
-            // hall where LBA1's posts stood; curtains either side of the Sendell seal (the hall's back wall, z 17408) and at the two ends of
-            // the lower room's back wall (z 26112: x 37.5 to 48) and on its stretch right of the right-hand stairs (x 52-54)
-            Furnish(Citadel.CitadelProps.Rug, 22016, 1280, 28160, 0);
-            Furnish(Citadel.CitadelProps.RugRound, 21760, 1792, 20224, 0);
+            // "some curtains around the edges": either side of the Sendell seal (the hall's back wall, z 17408) and at the two ends of the lower
+            // room's back wall (z 26112: x 37.5 to 48)
             Furnish(Citadel.CitadelProps.CurtainLeft, 20150, 3900, 17408 + 4, 0);
             Furnish(Citadel.CitadelProps.CurtainRight, 22858, 3900, 17408 + 4, 0);
             Furnish(Citadel.CitadelProps.CurtainLeft, 19700, 1280 + Citadel.CitadelProps.CurtainDrop + 10, 26112 + 4, 0);
             Furnish(Citadel.CitadelProps.CurtainRight, 24250, 1280 + Citadel.CitadelProps.CurtainDrop + 10, 26112 + 4, 0);
-            Furnish(Citadel.CitadelProps.CurtainLeft, 27400, 1280 + Citadel.CitadelProps.CurtainDrop + 10, 26112 + 4, 0);
+            // round 3 (the user, 2026-11-09): the picture rugs -- the Dinofly with Twinsen riding him in the lower room, Sendell in the hall --
+            // each in its parts side by side (Citadel/CitadelProps.Rugs)
+            for (var k = 0; k < Math.Min(Citadel.CitadelProps.DinoParts.Count, Citadel.CitadelProps.DinoMost); k++)
+                Furnish(Citadel.CitadelProps.DinoFirst + k, DinoRugAt.X + Citadel.CitadelProps.RugPartX(Citadel.CitadelProps.DinoRows, Citadel.CitadelProps.DinoStitch, Citadel.CitadelProps.DinoParts[k]), DinoRugAt.Y, DinoRugAt.Z, 0);
+            for (var k = 0; k < Math.Min(Citadel.CitadelProps.SendellParts.Count, Citadel.CitadelProps.SendellMost); k++)
+                Furnish(Citadel.CitadelProps.SendellFirst + k, SendellRugAt.X + Citadel.CitadelProps.RugPartX(Citadel.CitadelProps.SendellRows, Citadel.CitadelProps.SendellStitch, Citadel.CitadelProps.SendellParts[k]), SendellRugAt.Y, SendellRugAt.Z, 0);
+            // the bedroom's chair under Zoe (its seat CitadelSpanking.SeatBack behind her place, under her hips; the actor itself
+            // CitadelProps.ChairAhead further back, its box behind hers), and the stand of paddles and whips beside it, to her left
+            var (chairX, chairZ) = Ahead(-Citadel.CitadelSpanking.SeatBack - Citadel.CitadelProps.ChairAhead);
+            Furnish(Citadel.CitadelProps.Chair, chairX, ZoeInChamber.Y, chairZ, ZoeFacing);
+            Furnish(Citadel.CitadelProps.Rack, 23900, ZoeInChamber.Y, 20300, ZoeFacing);
+            // "the lower area, let's fill it with some random clutter": Twinsen's and Zoe's bikes parked side by side, LBA1's snowboard and space
+            // guitar leant against the back wall's right-hand stretch (x 52-54) under LBA1's pirate flag, the protopack, the meca-penguin, the
+            // old holomap and Gawley's horn on the floor -- all clear of the low front and right walls, which hide what stands near them from
+            // the camera, of the right-hand stairs' foot, and of Twinsen's way between the lift's arrival and LBA1's way up
+            Furnish(Citadel.CitadelProps.BikeTwinsen, 25500, 1280, 29000, 0);
+            Furnish(Citadel.CitadelProps.BikeZoe, 26200, 1280, 29000, 0);
+            int Thing(int k) => Citadel.CitadelLba1Rooms.OldThingFirst + k;
+            Old(Thing(0), 26900, 1280, 26112 + 10, 0);
+            Old(Thing(1), 26250, 1280, 26112 + 10, 0);
+            Old(Thing(6), 26600, 2650, 26112 + 4, 0);
+            Old(Thing(2), 24950, 1280, 27800, 512);
+            Old(Thing(3), 25700, 1280, 30300, 512);
+            Old(Thing(4), 25000, 1280, 30200, 512);
+            Old(Thing(5), 24300, 1280, 30550, 700);
             // "a bayeaux tapestry style hanging based on the first game ... draping over the top of the wall" (the front wall, z 63, x 36-53,
             // its top layer 8's floor, y 2048): its parts side by side along it, each standing on the wall's top (so the engine redraws no
             // brick of the wall over it: only those from the actor's own layer up) and out by its outside face (Citadel/CitadelProps.Bayeux)
@@ -158,7 +182,7 @@ void comportement_1()
             var across = (zoe.Beta - 1024 + 4096) % 4096;
             const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21;
             string Slaps(int n) => slap < 0 ? "wait_nb_second(1);\n" : string.Concat(Enumerable.Repeat($"sample({slap});\nwait_nb_dizieme(3);\n", n));
-            zoe.Flags &= ~3u;   // (and no brick collision: her hips over the chair's own cell)
+            zoe.Flags &= ~3u;   // (and no brick collision: her hips back over the chair)
             var zoeIndex = model.Actors.Count;
             var zoeLife = p.Add(model, zoe, $@"void comportement_0()
 {{
@@ -175,7 +199,6 @@ void comportement_1()
             return scripts =>
             {
                 zoeLife(scripts);
-                stoolLife(scripts);
                 foreach (var f in furnishings) f(scripts);
                 scripts.SetText(zoeIndex, ScriptKind.Track, $@"label(0);
 anim({Citadel.CitadelSpanking.ZoeSit});

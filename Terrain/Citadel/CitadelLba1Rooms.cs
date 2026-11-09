@@ -28,7 +28,7 @@ namespace LBAAssembler.Terrain.Citadel;
 //   - the props' bodies: the slab, the three old signs (wooden boards leaning on the wall, painted -- what each says is the story's
 //     line), and the cellar's dusty bottle -- bodies of the small brown mushroom's entity (112, a fixed object, as RaceTrackOil's slicks
 //     are), generic numbers no other build gives it.
-internal static class CitadelLba1Rooms
+internal static partial class CitadelLba1Rooms
 {
     // the scenes: the secret room, the cellar (and the scenes they are entered from: the demo's sewers, the Tavern)
     public const int SecretRoom = 226, Cellar = 227, Sewers = 17, Tavern = 3;
@@ -120,7 +120,7 @@ internal static class CitadelLba1Rooms
             var map = Lba1InteriorPort.Port(lba1Directory, room.Lba1Scene, palette, room.Name);
             var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
-            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log, HouseChair(bkg, library, log));
+            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log);
             grid[0] = (byte)library; grid[1] = (byte)fragments;
             // (the grid after the game's last, what follows it one entry on; its number in the scene-to-grid table)
             header = new MapBricks.BkgHeader(bkg.Read(0));
@@ -179,7 +179,7 @@ internal static class CitadelLba1Rooms
     //     landing before them (layer 3) the floor's height. (What Twinsen says there, and the Sendell seal back in the hall's wall:
     //     RaceTrackStory.SecretChamber.)
     private const int HallFloor = 6, LowFloor = 4, FrontWall = 59, NewFront = 63, StoneShift = -11;
-    private static byte[] ChamberRemodel(byte[] raw, List<string> log, (int Legs, int Back)? chair)
+    private static byte[] ChamberRemodel(byte[] raw, List<string> log)
     {
         var shape = Lba2GridBackend.ToLba1Shape(raw);
         var was = Lba1GridCodec.Decode(shape);
@@ -280,59 +280,11 @@ internal static class CitadelLba1Rooms
             for (var y = 0; y < 25; y++) Clear(x, y, NewFront);
             foreach (var (y, c) in WallColumn(x)) Set(x, y, NewFront, c);
         }
-        // the bedroom's chair, where Zoe sits (ChairCell): its legs' floor tile on the floor's layer, its back the four over it
-        if (chair is { } ch)
-        {
-            Set(ChairCell.X, LowFloor, ChairCell.Z, (ch.Legs, 0));
-            for (var k = 0; k < 4; k++) Set(ChairCell.X, LowFloor + 1 + k, ChairCell.Z, (ch.Back, k));
-        }
         var edits = now.Select(kv => new Lba1GridCell(kv.Key.X, kv.Key.Y, kv.Key.Z, kv.Value.Block, kv.Value.Pos))
             .Where(e => (e.Block, e.Pos) != Cell(e.X, e.Y, e.Z)).ToList();
         log.Add($"the secret chamber made over: the hall's front wall down (x 38-48), the stone and its lamps to the left wall ({moved} cells), " +
                 $"the front wall out to z {NewFront} and LBA1's stairs out filled with rock ({edits.Count} cells changed)");
         return Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
-    }
-
-    // ---- the bedroom's chair in the chamber (the user, 2026-11-09: "The chair prop looks nothing like the one I asked you to copy"): the
-    // house's own chair -- scene 0's grid at cell (5, 3): its legs drawn in the floor's tile (block 82, layer 7) and its ladder back over
-    // them (block 48, layers 8-11) -- its two blocks copied into the chamber's block library (their bricks are the game's, shared), and
-    // set in the chamber's grid where Zoe sits, facing as the bedroom's does (+x: Zoe's turn RaceTrackStory.SecretChamber takes from here)
-    public static readonly (int X, int Z) ChairCell = (51, 57);
-    public const int ChairFacing = 1024;
-    private const int HouseChairLegs = 82, HouseChairBack = 48;
-    private static (int Legs, int Back)? HouseChair(HqrFile bkg, int library, List<string> log)
-    {
-        var header = new MapBricks.BkgHeader(bkg.Read(0));
-        var table = bkg.Read(header.Brk + header.MaxBrk);
-        if (House * 2 + 1 >= table.Length) { log.Add("the chamber's chair left out: scene 0 has no grid"); return null; }
-        var house = bkg.Read(header.Gri + table[House * 2 + 1]);
-        byte[] Blocks(byte[] lib, out int count, out List<byte[]> list)
-        {
-            count = (int)(BinaryPrimitives.ReadUInt32LittleEndian(lib) / 4);
-            list = new List<byte[]>();
-            for (var b = 0; b < count; b++)
-            {
-                var at = (int)BinaryPrimitives.ReadUInt32LittleEndian(lib.AsSpan(b * 4));
-                var end = b + 1 < count ? (int)BinaryPrimitives.ReadUInt32LittleEndian(lib.AsSpan((b + 1) * 4)) : lib.Length;
-                list.Add(lib.AsSpan(at, end - at).ToArray());
-            }
-            return lib;
-        }
-        Blocks(bkg.Read(header.Bll + house[0]), out var houseCount, out var houseBlocks);
-        if (HouseChairLegs > houseCount || HouseChairBack > houseCount) { log.Add("the chamber's chair left out: the house's blocks aren't the game's"); return null; }
-        var entry = header.Bll + library;
-        Blocks(bkg.Read(entry), out var count, out var blocks);
-        if (count + 2 > 255) { log.Add("the chamber's chair left out: its block library is full"); return null; }
-        blocks.Add(houseBlocks[HouseChairLegs - 1]);
-        blocks.Add(houseBlocks[HouseChairBack - 1]);
-        var size = blocks.Count * 4 + blocks.Sum(b => b.Length);
-        var bytes = new byte[size];
-        var pos = blocks.Count * 4;
-        for (var b = 0; b < blocks.Count; b++) { BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(b * 4), (uint)pos); blocks[b].CopyTo(bytes, pos); pos += blocks[b].Length; }
-        bkg.SetStored(entry, bytes);
-        if (header.MaxBll < bytes.Length) { header.MaxBll = (uint)bytes.Length; bkg.SetStored(0, header.Bytes); }
-        log.Add($"the chamber's chair: the house's (blocks {HouseChairLegs} and {HouseChairBack}) as the chamber's {count + 1} and {count + 2}, at cell ({ChairCell.X}, {ChairCell.Z})");
-        return (count + 1, count + 2);
     }
 
     // The demo's sewers' back wall at the slab's cell emptied from layer HoleFirst to HoleLast and the landing's floor carried in under it,
@@ -383,10 +335,11 @@ internal static class CitadelLba1Rooms
         var index = first;
         var seal = SealBodies(lba1Directory, palette);
         SealParts = seal.Count;
+        var old = OldThingBodies(lba1Directory, palette, header);
         foreach (var (generic, body) in new[]
                  {
                      (SlabGeneric, Slab(C)), (SignCheckpoint, Sign(C, 0)), (SignOrder, Sign(C, 1)), (SignWanted, Sign(C, 2)), (BottleGeneric, Bottle(C)),
-                 }.Concat(seal.Select((b, k) => (SealFirst + k, b))))
+                 }.Concat(seal.Select((b, k) => (SealFirst + k, b))).Concat(old.Select(o => (o.Generic, o.Body))))
         {
             body.Header = header;
             body.Static = true;
@@ -396,7 +349,8 @@ internal static class CitadelLba1Rooms
         HqrWriter.ReplaceInFile(ressPath, 44, table);
         return $"the LBA1 rooms' props: BODY.HQR entries {first}-{index - 1}, the mushroom's entity ({PropEntity}) bodies {SlabGeneric} (the sewers' loose slab), " +
                $"{SignCheckpoint}-{SignWanted} (the old signs), {BottleGeneric} (the cellar's dusty bottle), {SealFirst}-{SealFirst + seal.Count - 1} (the Sendell seal, LBA1's sprite {SealSprite}: " +
-               $"{string.Join(" + ", seal.Select(b => $"{b.Faces.Count} polygons"))})";
+               $"{string.Join(" + ", seal.Select(b => $"{b.Faces.Count} polygons"))}), " +
+               $"the chamber's old things {string.Join(", ", old.Select(o => $"{o.Generic} ({o.Name}: {o.Body.Vertices.Count} points, {o.Body.Faces.Count} polygons)"))}";
     }
 
     // ---- the Sendell seal (the user, 2026-11-09: "looks nothing like the original sendell seal ... we need to fix this"): LBA1's own

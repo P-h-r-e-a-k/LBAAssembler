@@ -639,6 +639,29 @@ internal static class RaceTrackCommand
     // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
     // griddump <game> <scene> <out.bin>: an interior's decoded grid cells (64 x 64 columns of 25 layers, two bytes each: block, its
     // brick's place in it; ((z * 64 + x) * 25 + y) * 2), for drawing it outside the tool
+    // invobj <lba1 dir> <out.json>: LBA1's inventory objects (INVOBJ.HQR), each one's points (as it stands) and faces (colour, points),
+    // for drawing them outside the tool -- to find which entry is which item
+    public static int InvObj(string[] args)
+    {
+        var hqr = HqrArchive.Open(System.IO.Path.Combine(args[1], "INVOBJ.HQR"));
+        var count = HqrArchive.CountEntries(System.IO.Path.Combine(args[1], "INVOBJ.HQR"));
+        var all = new List<object>();
+        for (var i = 0; i < count; i++)
+        {
+            try
+            {
+                var b = LbaBodyStudio.Body.Read(hqr.Read(i), 1);
+                var w = b.World();
+                all.Add(new { index = i, points = w.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(), faces = b.Faces.Select(f => new { c = f.Colour, m = f.Material, p = f.Points }).ToArray(),
+                              spheres = b.Spheres.Select(s => new { c = s.Colour, r = s.Radius, p = s.Point }).ToArray(), lines = b.Lines.Select(l => new { c = l.Colour, a = l.A, b = l.B }).ToArray() });
+            }
+            catch (Exception e) { all.Add(new { index = i, error = e.Message }); }
+        }
+        System.IO.File.WriteAllText(args[2], System.Text.Json.JsonSerializer.Serialize(all));
+        Console.WriteLine($"{count} entries");
+        return 0;
+    }
+
     public static int GridDump(string[] args)
     {
         var backend = new LBAAssembler.Grids.Lba2GridBackend(args[1]);
