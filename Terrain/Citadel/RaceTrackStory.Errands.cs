@@ -19,6 +19,9 @@ internal static partial class RaceTrackStory
 {
     public const int ErrandSlot = 19, ErrandBait = 1, ErrandTyre = 2;
     public const int BaitModel = 154, TyreModel = 155;
+    // (the inventory's tin less than half the counter's height: the user, 2026-11-08, "Its inventory model is too tall: at least half the
+    // height"; scaled to the inventory's size by its width then)
+    private const float InventoryBaitHeight = 0.45f;
     // (the game's inventory objects are about 3,500 across, centred on their middle: OBJFIX.HQR 20, the customer's umbrella, -1739..1739)
     private const float InventoryExtent = 3200;
 
@@ -52,7 +55,7 @@ internal static partial class RaceTrackStory
         var objfix = HqrArchive.Open(objfixPath);
         var header = Body.Read(objfix.Read(20), 2, allowStatic: true).Header;
         var bodyHeader = Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(30), 2, allowStatic: true).Header;
-        var models = new (int Model, Func<byte[], Body> Build)[] { (BaitModel, Citadel.CitadelProps.BuildBait), (TyreModel, Citadel.CitadelProps.BuildTyre) };
+        var models = new (int Model, Func<byte[], Body> Build)[] { (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre) };
         var bytes = File.ReadAllBytes(objfixPath);
         var count = HqrArchive.CountEntries(objfixPath);
         // (the entries up to the models: each empty one a copy of the game's first, never shown)

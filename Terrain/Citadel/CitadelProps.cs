@@ -100,17 +100,19 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
-    // The tin of fishing bait: a steel tin with a green label round it, its lid open on a few pink worms
-    public static Body BuildBait(byte[] header)
+    // The tin of fishing bait: a steel tin with a green label round it, its lid open on a few pink worms. `height` its height as a part of
+    // the counter's tin's (the inventory's is squatter: the user, 2026-11-08, "Its inventory model is too tall")
+    public static Body BuildBait(byte[] header) => BuildBait(header, 1);
+    public static Body BuildBait(byte[] header, float height)
     {
         var m = new CarMesh("the tin of bait", new[] { -1 });
         m.Light = 0.6f;
-        var levels = new[] { 0f, 35, 115, 150 };
+        var levels = new[] { 0f, 35, 115, 150 }.Select(y => y * height).ToArray();
         var rings = levels.Select(y => m.Loop(0, new Vector3(0, y, 0), new Vector3(95, 0, 0), new Vector3(0, 0, 95), 10)).ToArray();
         for (var j = 0; j + 1 < rings.Length; j++) m.Skin(rings[j], rings[j + 1], _ => j == 1 ? Green : Steel, new Vector3(0, (levels[j] + levels[j + 1]) / 2, 0));
-        m.Cap(rings[^1], m.P(0, new Vector3(0, 142, 0)), Rust, new Vector3(0, 80, 0));
+        m.Cap(rings[^1], m.P(0, new Vector3(0, 150 * height - 8, 0)), Rust, new Vector3(0, 80 * height, 0));
         m.Light = 1;
-        foreach (var (x, z) in new[] { (-35f, 10f), (20f, -28f), (25f, 32f) }) m.Ball(0, new Vector3(x, 160, z), 22, Worm);
+        foreach (var (x, z) in new[] { (-35f, 10f), (20f, -28f), (25f, 32f) }) m.Ball(0, new Vector3(x, 150 * height + 10, z), 22, Worm);
         return m.ToBody(header);
     }
 

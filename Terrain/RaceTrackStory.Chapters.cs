@@ -2199,12 +2199,20 @@ void comportement_1()
     private static void BaitShop(StoryParts p) => p.Edit(Shop, "Mr. Bazoo sells a tin of fishing bait (2 kashes, at any time)", model =>
     {
         var tin = model.Actors.Count;
-        var add = p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Bait, BaitTin.X, BaitTin.Y, BaitTin.Z, 400, settles: true), "void comportement_0()\n{\n}\n");
+        // (off the counter once bought, as the game's meca-penguin's display is -- the user, 2026-11-08: one tin, and gone then)
+        var add = p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Bait, BaitTin.X, BaitTin.Y, BaitTin.Z, 400, settles: true), $@"void comportement_0()
+{{
+    if (0 < var_game({QBait}))
+    {{
+        suicide();
+    }}
+}}
+");
         return scripts =>
         {
             add(scripts);
             var hero = scripts.GetText(0, ScriptKind.Life);
-            scripts.SetText(0, ScriptKind.Life, Loose(hero, "else\n{\nswitch (zone())", $@"else if (750 > distance_message({tin}))
+            scripts.SetText(0, ScriptKind.Life, Loose(hero, "else\n{\nswitch (zone())", $@"else if (0 == var_game({QBait}) && 750 > distance_message({tin}))
             {{
                 bulle(0);
                 if (0 < var_game({QBait}))
