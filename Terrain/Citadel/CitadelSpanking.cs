@@ -20,12 +20,15 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static class CitadelSpanking
 {
     public const int ZoeEntity = 15, ZoeSit = 100, ZoeSpank = 101;
-    public const int HeroEntity = 0, TwinsenLap = 240, TwinsenKick = 241, TwinsenBare = 30, TwinsenRed = 31;
+    public const int HeroEntity = 0, TwinsenLap = 240, TwinsenKick = 241, TwinsenBare = 30, TwinsenRed = 31, TwinsenPink = 32;
     // how far Zoe's hips come down to sit (her hips' bone at 633 standing, her thighs' tops 60 under it): the stool's top
     public const int SitDrop = 280, StoolTop = 633 - SitDrop - 60;
     // Twinsen's hips over her lap: her thighs out SitDrop under her standing hips, his hips' bone (533 standing) this far down
-    public const int LapDown = 90;
-    private const int Skin = 32, Red = 66;
+    // (raised, 2026-11-09: "his bare ass up in the air" -- his hips higher, his chest and legs further down either side of her lap)
+    public const int LapDown = 55;
+    private const int Skin = 32, Red = 66, Pink = 76;
+    // his everyday clothes' trousers (the racing suit's lower half once CitadelOveralls has painted them: what he pulls down)
+    private const int Trousers = 194;
     // the heads' bones (the back is aimed at its head)
     private const int ZoeHead = 12, TwinsenHead = 14;
 
@@ -79,33 +82,41 @@ internal static class CitadelSpanking
         // ---- Twinsen: across her lap, and kicking
         var lap = new Dictionary<int, Vector3>
         {
-            [2] = N(0, -0.15f, 1),                                  // his hips tipped forward: lying face down along his own forward
-            [3] = N(0, -0.55f, 0.83f),                              // his chest and head hanging down on her left
-            [8] = N(0, -0.3f, -0.95f), [9] = N(0, -1, -0.15f),      // his legs back over her right, the shins hanging
-            [11] = N(0, -0.3f, -0.95f), [12] = N(0, -1, -0.15f),
+            [2] = N(0, -0.05f, 1),                                  // his hips tipped forward: lying face down along his own forward
+            [3] = N(0, -0.8f, 0.6f),                                // his chest and head hanging well down on her left
+            [8] = N(0, -0.62f, -0.78f), [9] = N(0, -1, -0.08f),     // his legs down over her right, the shins hanging: his bottom up
+            [11] = N(0, -0.62f, -0.78f), [12] = N(0, -1, -0.08f),
             [4] = N(0.1f, -1, 0.15f), [6] = N(-0.1f, -1, 0.15f),    // his arms hanging
         };
         var kickUp = new Dictionary<int, Vector3>(lap) { [9] = N(0, -0.2f, -0.98f), [12] = N(0, -1, -0.1f) };
         var kickDown = new Dictionary<int, Vector3>(lap) { [9] = N(0, -1, -0.1f), [12] = N(0, -0.2f, -0.98f) };
         var lie = new Anim { Game = 2, LoopFrame = 0 };
         lie.Frames.Add(Frame(twinsenBody, 600, heroBasis, lap, -LapDown, TwinsenHead));
-        lie.Frames.Add(Frame(twinsenBody, 800, heroBasis, new Dictionary<int, Vector3>(lap) { [3] = N(0, -0.5f, 0.86f) }, -LapDown, TwinsenHead));
+        lie.Frames.Add(Frame(twinsenBody, 800, heroBasis, new Dictionary<int, Vector3>(lap) { [3] = N(0, -0.75f, 0.66f) }, -LapDown, TwinsenHead));
         var kick = new Anim { Game = 2, LoopFrame = 0 };
         kick.Frames.Add(Frame(twinsenBody, 150, heroBasis, kickUp, -LapDown, TwinsenHead));
         kick.Frames.Add(Frame(twinsenBody, 150, heroBasis, kickDown, -LapDown, TwinsenHead));
 
-        // ---- his bare seat, then red
+        // ---- his racing suit pulled down to his knees (the user, 2026-11-09: "with his trousers down and his bare ass up in the air which
+        // turns red as she spanks him"; the racing suit only -- "the suit is required ... to access the Tralu bar area"): his everyday
+        // body painted as the suit (Citadel/CitadelOveralls), then its lower half's polygons -- the trousers' -- bare: his thighs and his
+        // hips skin, his bottom (their backs) `colour`; the shins keep the suit, bunched at the knees
         Body Seat(int colour)
         {
             var b = Body.Read(bodies.Read(RaceTrackGuards.BodyOf(table, HeroEntity, 0) ?? 0), 2);
+            var trousers = b.Faces.Select(f => f.Colour == Trousers).ToArray();
+            CitadelOveralls.Overalls(b);
             var world = b.World();
-            var hips = b.Bones[2];
+            int BoneOf(int p) => b.Bones.FindIndex(x => p >= x.Start && p < x.Start + x.Count);
             for (var i = 0; i < b.Faces.Count; i++)
             {
                 var f = b.Faces[i];
-                if (f.Points.Length == 0 || f.Points[0] < hips.Start || f.Points[0] >= hips.Start + hips.Count) continue;
+                if (!trousers[i] || f.Points.Length == 0) continue;
+                var bone = BoneOf(f.Points[0]);
+                if (bone is not (2 or 3 or 8 or 11)) continue;
                 var middle = f.Points.Aggregate(Vector3.Zero, (s, p) => s + world[p]) / f.Points.Length;
-                if (middle.Z < 20) b.Faces[i] = f with { Colour = colour };
+                var bottom = bone is 2 or 3 && middle.Z < 20;
+                b.Faces[i] = f with { Colour = bottom ? colour : Skin, Material = -1, Texture = null };
             }
             return b;
         }
@@ -117,6 +128,7 @@ internal static class CitadelSpanking
         var file = File.ReadAllBytes(bodyPath);
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(Skin).Write()));
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(Red).Write()));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Seat(Pink).Write()));
         File.WriteAllBytes(bodyPath, file);
         var animIndex = HqrArchive.CountEntries(animPath);
         var animFile = File.ReadAllBytes(animPath);
@@ -124,6 +136,7 @@ internal static class CitadelSpanking
         File.WriteAllBytes(animPath, animFile);
         table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, TwinsenBare, bodyIndex);
         table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, TwinsenRed, bodyIndex + 1);
+        table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, TwinsenPink, bodyIndex + 2);
         table = RaceTrackJumpAnim.WithAnim(table, ZoeEntity, ZoeSit, animIndex);
         table = RaceTrackJumpAnim.WithAnim(table, ZoeEntity, ZoeSpank, animIndex + 1);
         table = RaceTrackJumpAnim.WithAnim(table, HeroEntity, TwinsenLap, animIndex + 2);

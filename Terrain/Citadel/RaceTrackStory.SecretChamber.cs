@@ -216,8 +216,10 @@ void comportement_2()
     if ({Slapped1} == l_track_obj({zoeIndex}))
     {{
         anim({Citadel.CitadelSpanking.TwinsenLap});
+        body({Citadel.CitadelSpanking.TwinsenPink});
         message({EveningId(p.Say, EveningLine.TwinsenOw)});
-        body({Citadel.CitadelSpanking.TwinsenRed});
+        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeNotInCharge)});
+        message({EveningId(p.Say, EveningLine.TwinsenYesMaam)});
         anim({Citadel.CitadelSpanking.TwinsenKick});
         set_track_obj({zoeIndex}, label_{Slaps2});
         set_comportement(comportement_3);
@@ -229,8 +231,11 @@ void comportement_3()
     if ({Slapped2} == l_track_obj({zoeIndex}))
     {{
         anim({Citadel.CitadelSpanking.TwinsenLap});
-        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScoldMore)});
+        body({Citadel.CitadelSpanking.TwinsenRed});
         message({EveningId(p.Say, EveningLine.TwinsenOw)});
+        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScoldMore)});
+        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeNoMoreBars)});
+        message({EveningId(p.Say, EveningLine.TwinsenPromise)});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeBed)});
         set_var_game({DayVar}, {Tired});
         set_var_game({Drunk}, {Scolded});
