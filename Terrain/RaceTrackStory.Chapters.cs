@@ -2325,6 +2325,11 @@ stop();
                 }}
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeGoodAsOld)});
                 message_obj({lucIndex}, {p.Say(ChapterLine.LucRound)});
+                if ({Scolded} == var_game({Drunk}))
+                {{
+                    message_obj(0, {EveningId(p.Say, EveningLine.TwinsenLemonade)});
+                }}
+                message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeNoDrink)});
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeRadio)});
                 found_object({Radio});
                 set_var_game({Radio}, 1);

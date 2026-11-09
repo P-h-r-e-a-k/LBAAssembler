@@ -48,6 +48,9 @@ internal static partial class RaceTrackStory
         Landslide, ZoeNotInCharge, TwinsenYesMaam, ZoeNoMoreBars, TwinsenPromise,
         // (the chamber's lower room as a store, 2026-11-09: LBA1's catamaran)
         Boat,
+        // (chapter 2: the replies to Luc's round on him once the wheel is fitted -- Twinsen's after the spanking, and Zoe's; at the end of
+        // the bank's lines so that no other text's number moves, 2026-11-09)
+        TwinsenLemonade, ZoeNoDrink,
     }
     private static readonly string[][] EveningLines =
     {
@@ -257,6 +260,24 @@ internal static partial class RaceTrackStory
             "Este barco me llevó a dar la vuelta al mundo... pero desde el derrumbe de la cueva ya no puedo sacarlo. Aun así, qué buenos recuerdos.",
             "Questa barca mi ha portato in giro per il mondo... ma da quando la grotta è crollata non posso più tirarla fuori. Che bei ricordi, però.",
             "Este barco levou-me à volta do mundo... mas desde que a gruta desabou já não o posso tirar daqui. Mas que boas recordações.",
+        },
+        new[]
+        {
+            "Er, not for me thanks, Luc. Just a lemonade.",
+            "Euh, pas pour moi, merci Luc. Juste une limonade.",
+            "Äh, für mich nicht, danke, Luc. Nur eine Limonade.",
+            "Eh, para mí no, gracias, Luc. Solo una limonada.",
+            "Ehm, non per me, grazie Luc. Solo una limonata.",
+            "Hã, para mim não, obrigado, Luc. Só uma limonada.",
+        },
+        new[]
+        {
+            "No drinking for me at the moment, Luc. I'm pregnant!",
+            "Pas d'alcool pour moi en ce moment, Luc. Je suis enceinte !",
+            "Für mich gerade keinen Alkohol, Luc. Ich bin schwanger!",
+            "Nada de alcohol para mí por ahora, Luc. ¡Estoy embarazada!",
+            "Niente alcol per me in questo periodo, Luc. Sono incinta!",
+            "Nada de álcool para mim por agora, Luc. Estou grávida!",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)
