@@ -5835,6 +5835,23 @@ void RaceMod_Story(void) {
     }
     if (s_missBackAt && now >= s_missBackAt && NewCube == -1 && CubeMode == CUBE_EXTERIEUR) MissedBackDue();
     if (!s_sprint || CubeMode != CUBE_EXTERIEUR) return;
+    // (the game clock gone back under the opening or the race's end -- their next moment then lay that far ahead, and was waited for:
+    // the user, 2026-11-09, a New Game from the in-game menu mid-dream and the clock later put back by as long as the menu had been
+    // open; Twinsen's line after FunFrock drove off never came, and, the opening unfinished, the race's end was never looked at -- the
+    // dream lost and never woken from. No step of either waits longer than these: caught up)
+    if (s_chaseOn && (s_chaseStep < 5 || s_chaseStep == 11) && s_chaseAt - now > RACE_CHASE_WALK_MS + RACE_CHASE_PAUSE_MS) {
+        Log_Info("[racemod] WARNING: the game clock went back under the chase's opening (step %d, %.1f s ahead): caught up", s_chaseStep, (s_chaseAt - now) / 1000.0);
+        s_chaseAt = now;
+    }
+    if (s_endAt && s_endAt - now > RACE_SPRINT_END_MS + RACE_DREAM_END_FLIGHT_MS) {
+        Log_Info("[racemod] WARNING: the game clock went back under the race's end (%.1f s ahead): caught up", (s_endAt - now) / 1000.0);
+        s_endAt = now;
+    }
+    // (and the race over before the opening's last lines were said -- Twinsen's, the helper's: left unsaid, the end comes first)
+    if (s_chaseOn && s_place && s_chaseStep >= 2 && s_chaseStep < 5) {
+        Log_Info("[racemod] chase: the race is over -- the opening's step %d left unsaid", s_chaseStep);
+        s_chaseStep = 5;
+    }
     // (a story start, chase=: the opening in turn, in the start line's scene)
     if (s_chaseOn && (s_chaseStep < 5 || s_chaseStep == 11)) { ChaseOpening(now); if (s_chaseStep < 5 || s_chaseStep == 11) return; }
     // (him gone from beside his car once he has driven off -- the start's scene come into again: chase_car=)
