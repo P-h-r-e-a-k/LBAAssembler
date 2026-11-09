@@ -360,6 +360,11 @@ internal static partial class RaceTrackStory
     // (Twinsen's own, Zoe's and Raph's labels and behaviours there: new)
     internal const int RaphHome = 170, RaphHomeDone = 171, RaphGoes = 2, WizardGoes = 5, WizardGone = 12, WizardHomeLabel = 11;
     private const int ZoeDown = 190, ZoeGoneDown = 191;
+    // (her way down ahead of him, certain to end: F13, the user's game, 2026-11-08 -- Twinsen in the doorway, she walked into him and
+    // stood wedged there for good, and with her the way down; the user: "we just need to make sure she reaches the door and correctly
+    // suicides". So she's seen as she goes -- she was already invisible there -- walks through him (no object collision), and is gone
+    // after some 5 seconds whatever happens: a scene variable counting her frames)
+    private const int ZoeLeaving = 46;
     private static void LighthouseEvening(StoryParts p)
     {
         var zoe = Copy(p.Originals, OpeningScene, Zoe);
@@ -370,6 +375,9 @@ internal static partial class RaceTrackStory
             model.TrackPoints.Add(new SceneTrackPoint(LampRoomDoor.X, LampRoomDoor.Y, LampRoomDoor.Z));
             foreach (var (x, y, z) in RaphDownHill) model.TrackPoints.Add(new SceneTrackPoint(x, y, z));
             int door = first, downHill = first + 1;
+            // (Zoe ahead of him: turned to the door and walking into it a moment -- she stands nearer it than goto_point's 500, which
+            // had her there at once and gone on the spot)
+            var toDoor = RaceTrackMath.Turn(Math.Atan2(LampRoomDoor.X - ZoeOnTop.X, LampRoomDoor.Z - ZoeOnTop.Z));
             (zoe.X, zoe.Y, zoe.Z) = ZoeOnTop;
             zoe.Beta = 0;
             var zoeIndex = model.Actors.Count;
@@ -437,7 +445,10 @@ void comportement_2()
 
 void comportement_3()
 {{
-    if ({ZoeGoneDown} == l_track())
+    invisible(0);
+    obj_col(0);
+    add_var_cube({ZoeLeaving}, 1);
+    if ({ZoeGoneDown} == l_track() || 250 < var_cube({ZoeLeaving}))
     {{
         invisible(1);
         suicide();
@@ -460,7 +471,8 @@ stop();
 
 label({ZoeDown});
 anim(89);
-goto_point({door});
+beta({toDoor});
+wait_nb_dizieme(7);
 
 label({ZoeGoneDown});
 stop();
