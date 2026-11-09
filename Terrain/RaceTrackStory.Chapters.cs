@@ -50,7 +50,7 @@ internal static partial class RaceTrackStory
     // Q_THIEF: 1 Zoe has told, 2 Tim has told, 3 the thief down the hatch, 4 cornered in the sewers, 5 the gloves back (and the umbrella
     // found), 6 the umbrella given back to Tim
     public const int QThief = 213, ThiefTold = 1, TimTold = 2, ThiefDown = 3, ThiefCornered = 4, GlovesBack = 5, UmbrellaBack = 6;
-    // Q_LUCCAR: 1 Zoe's word at the door read, 2 Luc has told, 3 the tyre traded for after he told, 4 the wheel fitted (the town circuit's
+    // Q_LUCCAR: 1 Zoe's word at the door read (no longer said, 2026-11-09), 2 Luc has told, 3 the tyre traded for after he told, 4 the wheel fitted (the town circuit's
     // gate)
     public const int QLucCar = 214, LucWord = 1, LucTold = 2, WheelFound = 3, WheelFitted = 4;
     // QBait (chapter 2): 1 a tin of fishing bait bought at Mr. Bazoo's, 2 traded to Bob at the harbour for his old tyre (whenever: before
@@ -1104,7 +1104,7 @@ void comportement_1()
     // scene 101's animations, as the dream's waking), Zoe beside it waits a moment and wakes him with the news of the landing, he answers,
     // sits up and gets out of bed -- then it is chapter 2 (inc_chapter: the fine weather's island from the door on), the landing is done
     // (var 70: the game's landing cutscene never runs) and the day has begun (DayVar Rested: the town circuit's gate open). Later in the
-    // day, coming home before Luc has told of his wheel, Zoe's word at the door (Q_LUCCAR 1). The hero's labels 170-172 and Zoe's 180-183
+    // day she's out in the yard with Luc for the rest of chapter 2, not in the house as well. The hero's labels 170-172 and Zoe's 180-183
     // are new (PolarDream's are 150, 151 and 160-164); its scene-start branch goes before the game's own, which PolarDream's own then
     // finds as it always did.
     private static void Morning(StoryParts p) => p.Edit(OpeningScene, "the night: Twinsen asleep in his bed, Zoe wakes him to the morning the aliens land (chapter 2); later Zoe's word at the door", model =>
@@ -1131,13 +1131,8 @@ void comportement_1()
         set_comportement(comportement_70);
     }}
     else");
-            hero = Loose(hero, "void comportement_1()\n{", $@"void comportement_1()
-{{
-    if (2 == chapter() && 0 == var_game({QLucCar}) && {Rested} == var_game({DayVar}) && 0 == var_cube({Once1}))
-    {{
-        set_var_game({QLucCar}, {LucWord});
-        message_zoe({p.Say(ChapterLine.ZoeDoor)});
-    }}");
+            // (no word from Zoe at the door later in the day: she is out in the yard with Luc, and they tell of his wheel there -- the
+            // user, 2026-11-08, "Two Zoes ... let's just have her waiting outside for him"; ChapterLine.ZoeDoor left unsaid)
             hero = hero.TrimEnd() + $@"
 
 void comportement_70()
@@ -1178,6 +1173,10 @@ stop();
     {{
         set_track(label_180);
         set_comportement(comportement_70);
+    }}
+    else if (2 == chapter() && {Rested} == var_game({DayVar}))
+    {{
+        suicide();
     }}
     else");
             zoe = zoe.TrimEnd() + $@"
