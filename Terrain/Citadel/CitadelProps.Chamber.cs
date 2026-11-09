@@ -276,6 +276,41 @@ internal static partial class CitadelProps
     public static Body BuildBoulder(byte[] header) => BuildRock(header, "a boulder", 640, 1996);
     public static Body BuildBoulder2(byte[] header) => BuildRock(header, "a smaller boulder", 480, 1997);
 
+    // A small boulder, for the scatter round the blocked way out (the user, 2026-11-09: "add some more small boulders by the blocked exit")
+    public const int SmallBoulder = 61;
+    public static Body BuildSmallBoulder(byte[] header) => BuildRock(header, "a small boulder", 260, 1998);
+
+    // The chamber's lift (the user, 2026-11-09: "we also need to add in the elevator for Zoe and Twinsen to leave the basement area"): a
+    // platform of dark planks in an iron frame, LiftSize square, its top LiftTop over its foot, a low rail on its back and sides, and the
+    // four chains it hangs from, up out of sight. Twinsen stands on it (an OBJ_CARRIER: RaceTrackStory.SecretChamber), and it rises.
+    public const int LiftPlatform = 62, LiftSize = 1024, LiftTop = 40;
+    public static Body BuildLiftPlatform(byte[] header)
+    {
+        var m = new CarMesh("the chamber's lift", new[] { -1 });
+        m.Light = 0.7f;
+        const float H = LiftSize / 2f, Rim = 40;
+        // the planks, two shades, across x; the iron frame round them
+        for (var k = 0; k < 8; k++)
+        {
+            var z0 = -H + Rim + k * (LiftSize - 2 * Rim) / 8f;
+            m.Box(0, new Vector3(0, LiftTop - 20, z0 + (LiftSize - 2 * Rim) / 16f), new Vector3(LiftSize - 2 * Rim, 40, (LiftSize - 2 * Rim) / 8f - 4), k % 2 == 0 ? Wood : Rust, k % 2 == 0 ? Wood : Rust);
+        }
+        foreach (var s in new[] { -1, 1 })
+        {
+            m.Box(0, new Vector3(s * (H - Rim / 2), LiftTop - 20, 0), new Vector3(Rim, 44, LiftSize), Steel);
+            m.Box(0, new Vector3(0, LiftTop - 20, s * (H - Rim / 2)), new Vector3(LiftSize, 44, Rim), Steel);
+        }
+        // the rail: posts at the corners and the middles of the back and sides, a bar along their tops (the front, +z, open)
+        foreach (var (x, z) in new[] { (-H + 20, -H + 20), (H - 20, -H + 20), (-H + 20, H - 20), (H - 20, H - 20), (0, -H + 20), (-H + 20, 0), (H - 20, 0) })
+            m.Box(0, new Vector3(x, LiftTop + 230, z), new Vector3(30, 460, 30), Steel);
+        m.Box(0, new Vector3(0, LiftTop + 460, -H + 20), new Vector3(LiftSize - 20, 30, 30), Steel);
+        foreach (var s in new[] { -1, 1 }) m.Box(0, new Vector3(s * (H - 20), LiftTop + 460, 0), new Vector3(30, 30, LiftSize - 20), Steel);
+        // the chains: from the corners up
+        foreach (var (x, z) in new[] { (-H + 20, -H + 20), (H - 20, -H + 20), (-H + 20, H - 20), (H - 20, H - 20) })
+            m.Rod(0, new Vector3(x, LiftTop + 460, z), new Vector3(x * 0.4f, LiftTop + 5000, z * 0.4f), Dark);
+        return m.ToBody(header);
+    }
+
     // A curtain hung on a wall, gathered to one side by a gold tie-back (`side` -1 its left, +1 its right): pleats of red cloth from its
     // pelmet (its top at 0) to the floor CurtainDrop under it, drawn in to the tie-back's side two-thirds of the way down. Built facing
     // +z, as the other wall pieces.

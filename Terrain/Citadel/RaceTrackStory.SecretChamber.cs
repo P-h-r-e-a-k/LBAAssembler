@@ -28,6 +28,14 @@ internal static partial class RaceTrackStory
     private const int LandslideZone = 73, LandslideSaid = 3;
     // the scenario zone round LBA1's catamaran in the lower room (Action there: Twinsen's memories of it) and where the boat stands
     private const int BoatZone = 74;
+    // the chamber's lift (CitadelProps.BuildLiftPlatform) on the hall's free strip right of the Sendell rug (cells x 49-50, z 41-42), where
+    // Twinsen comes out (CitadelLba1Rooms.ChamberArrival): Action on it and it rises LiftRise, into the way up over it
+    // (CitadelLba1Rooms.ChamberExit); the scenario zone over it, Action's
+    // (the ride a step at a time, LiftSteps a tenth of a second apart, the platform, Twinsen and Zoe each on their own track: the engine's
+    // goto_point_3d moves only a sprite, and its own vertical moves are animations' -- the platform's track sets it a step up, Twinsen's
+    // him on it; a change of scene gives him back to the player)
+    private const int LiftUpZone = 75, LiftRise = 1600, LiftSteps = 20, LiftRide = 1, ZoeRide = 30, HeroRide = 40;
+    private static readonly (int X, int Y, int Z) LiftAt = (25600, 1792, 21504);
     private static readonly (int X, int Y, int Z) BoatAt = (25300, 1280, 28700);
     private static readonly (int X0, int X1, int Y0, int Y1, int Z0, int Z1) LiftBox = (4096, 5119, 2560, 3583, 8192, 9215);
     // Zoe in the chamber's hall, on the bedroom's chair in the middle of the Sendell rug, facing the camera's way (+x +z): Twinsen across her
@@ -100,8 +108,6 @@ void comportement_1()
             var night = new SceneZoneModel { Type = 0, Num = NightHouse, X0 = day.X0, X1 = day.X1, Y0 = day.Y0, Y1 = day.Y1, Z0 = day.Z0, Z1 = day.Z1, Info = (int[])day.Info.Clone() };
             night.Info[4] = ChamberUpNight;
             model.Zones.Add(night);
-            var up = model.TrackPoints.Count;
-            model.TrackPoints.Add(new SceneTrackPoint((day.X0 + day.X1) / 2, day.Y0, (day.Z0 + day.Z1) / 2));
             var zoe = Copy(p.Originals, OpeningScene, Zoe) ?? throw new NotTheGames("Zoe");
             (zoe.X, zoe.Y, zoe.Z) = ZoeInChamber;
             zoe.Beta = ZoeFacing;
@@ -127,14 +133,23 @@ void comportement_1()
             // (the seal: LBA1's own picture of it, in as many parts as it took -- Citadel/CitadelLba1Rooms.SealBodies)
             for (var k = 0; k < Citadel.CitadelLba1Rooms.SealParts; k++)
                 Old(Citadel.CitadelLba1Rooms.SealFirst + k, Citadel.CitadelLba1Rooms.SealAt.X, Citadel.CitadelLba1Rooms.SealAt.Y, Citadel.CitadelLba1Rooms.SealAt.Z, 0);
-            Furnish(Citadel.CitadelProps.TapestryRed, 20550, 2560, 26112 + 6, 0);
-            Furnish(Citadel.CitadelProps.Picture, 22400, 2080, 26112 + 4, 0);
+            // (round 3, the user: "The wall with the two posters on with curtains either side, let's remove these two posters and add another
+            // bayeaux tapestry with different elements of LBA1 than we already have shown, this time the right way up so it's viewable" --
+            // between the curtains, its top under the wall's, Citadel/CitadelProps.Rugs)
+            for (var k = 0; k < Math.Min(Citadel.CitadelProps.Bayeux2Parts.Count, Citadel.CitadelProps.Bayeux2Most); k++)
+                Furnish(Citadel.CitadelProps.Bayeux2First + k, 21975 + Citadel.CitadelProps.Bayeux2X(Citadel.CitadelProps.Bayeux2Parts[k]), 3250, 26112 + 4, 0);
             Furnish(Citadel.CitadelProps.TapestryBlue, 15872 + 6, 2560, 31232, 1024);
             // round 2 (the user, 2026-11-09): "add in some giant bolders" on LBA1's way out (its landing, x 31-34 at z 62, layer 3's top, and
             // its stairs down at z 63, layer 2's) -- they stand in Twinsen's way, as any actor with a body does
             Furnish(Citadel.CitadelProps.Boulder, 16450, 1024, 32050, 300);
             Furnish(Citadel.CitadelProps.Boulder2, 17550, 768, 32450, 1500);
             Furnish(Citadel.CitadelProps.Boulder2, 17450, 1024, 31850, 2900);
+            // ("let's also add some more small boulders by the blocked exit")
+            Furnish(Citadel.CitadelProps.SmallBoulder, 16150, 1280, 30950, 400);
+            Furnish(Citadel.CitadelProps.SmallBoulder, 17000, 1280, 31100, 1700);
+            Furnish(Citadel.CitadelProps.SmallBoulder, 17750, 1280, 30850, 3000);
+            Furnish(Citadel.CitadelProps.SmallBoulder, 16700, 1280, 30500, 2400);
+            Furnish(Citadel.CitadelProps.SmallBoulder, 15990, 1024, 31900, 900);
             // "some curtains around the edges": either side of the Sendell seal (the hall's back wall, z 17408) and at the two ends of the lower
             // room's back wall (z 26112: x 37.5 to 48)
             Furnish(Citadel.CitadelProps.CurtainLeft, 20150, 3900, 17408 + 4, 0);
@@ -143,10 +158,34 @@ void comportement_1()
             Furnish(Citadel.CitadelProps.CurtainRight, 24250, 1280 + Citadel.CitadelProps.CurtainDrop + 10, 26112 + 4, 0);
             // round 3 (the user, 2026-11-09): the picture rugs -- the Dinofly with Twinsen riding him in the lower room, Sendell in the hall --
             // each in its parts side by side (Citadel/CitadelProps.Rugs)
-            for (var k = 0; k < Math.Min(Citadel.CitadelProps.DinoParts.Count, Citadel.CitadelProps.DinoMost); k++)
-                Furnish(Citadel.CitadelProps.DinoFirst + k, DinoRugAt.X + Citadel.CitadelProps.RugPartX(Citadel.CitadelProps.DinoRows, Citadel.CitadelProps.DinoStitch, Citadel.CitadelProps.DinoParts[k]), DinoRugAt.Y, DinoRugAt.Z, 0);
-            for (var k = 0; k < Math.Min(Citadel.CitadelProps.SendellParts.Count, Citadel.CitadelProps.SendellMost); k++)
-                Furnish(Citadel.CitadelProps.SendellFirst + k, SendellRugAt.X + Citadel.CitadelProps.RugPartX(Citadel.CitadelProps.SendellRows, Citadel.CitadelProps.SendellStitch, Citadel.CitadelProps.SendellParts[k]), SendellRugAt.Y, SendellRugAt.Z, 0);
+            for (var k = 0; k < Math.Min(Citadel.CitadelProps.DinoTiles.Count, Citadel.CitadelProps.DinoMost); k++)
+            {
+                var (dx, dz) = Citadel.CitadelProps.RugTileAt(Citadel.CitadelProps.DinoRows, Citadel.CitadelProps.DinoStitch, Citadel.CitadelProps.DinoTiles[k]);
+                Furnish(Citadel.CitadelProps.DinoFirst + k, DinoRugAt.X + dx, DinoRugAt.Y, DinoRugAt.Z + dz, 0);
+            }
+            for (var k = 0; k < Math.Min(Citadel.CitadelProps.SendellTiles.Count, Citadel.CitadelProps.SendellMost); k++)
+            {
+                var (dx, dz) = Citadel.CitadelProps.RugTileAt(Citadel.CitadelProps.SendellRows, Citadel.CitadelProps.SendellStitch, Citadel.CitadelProps.SendellTiles[k]);
+                Furnish(Citadel.CitadelProps.SendellFirst + k, SendellRugAt.X + dx, SendellRugAt.Y, SendellRugAt.Z + dz, 0);
+            }
+            // the lift: a platform Twinsen stands on (OBJ_CARRIER), on its track -- still, or rising (LiftRide) -- and the zone over it Action
+            // is pressed in; Zoe's place on it beside him, and both up
+            var liftIndex = model.Actors.Count;
+            var liftActor = Citadel.CitadelProps.Actor(Citadel.CitadelProps.LiftPlatform, LiftAt.X, LiftAt.Y, LiftAt.Z, 0);
+            liftActor.Flags |= RaceTrackScenes.CarrierFlag;
+            var liftLife = p.Add(model, liftActor, "void comportement_0()\n{\n}\n");
+            // (each one's place at each step of the ride: the platform's, Twinsen's on it -- a hair over its top -- and Zoe's beside him)
+            int[] Steps(int x, int y, int z)
+            {
+                var first = model.TrackPoints.Count;
+                for (var k = 0; k <= LiftSteps; k++) model.TrackPoints.Add(new SceneTrackPoint(x, y + k * LiftRise / LiftSteps, z));
+                return Enumerable.Range(first, LiftSteps + 1).ToArray();
+            }
+            var liftSteps = Steps(LiftAt.X, LiftAt.Y, LiftAt.Z);
+            var heroSteps = Steps(LiftAt.X + 220, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z + 150);
+            var zoeSteps = Steps(LiftAt.X - 220, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z - 150);
+            string Ride(int[] steps) => string.Concat(steps.Skip(1).Select(k => $"pos_point({k});\nwait_nb_dizieme(1);\n"));
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftUpZone, X0 = LiftAt.X - 700, X1 = LiftAt.X + 511, Y0 = LiftAt.Y, Y1 = LiftAt.Y + 800, Z0 = LiftAt.Z - 700, Z1 = LiftAt.Z + 700, Info = new int[8] });
             // the bedroom's chair under Zoe (its seat CitadelSpanking.SeatBack behind her place, under her hips; the actor itself
             // CitadelProps.ChairAhead further back, its box behind hers), and the stand of paddles and whips beside it, to her left
             var (chairX, chairZ) = Ahead(-Citadel.CitadelSpanking.SeatBack - Citadel.CitadelProps.ChairAhead);
@@ -180,7 +219,7 @@ void comportement_1()
             // (LBA1's old way out, its stairs blocked by the boulders: Twinsen's word there -- the user: "if Twinsen goes over to it have him comment 'This exit is
             // no longer useable due to a land slide'")
             // (from z 60: the boulders keep him from the landing itself)
-            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LandslideZone, X0 = 15872, X1 = 17919, Y0 = 768, Y1 = 2815, Z0 = 30720, Z1 = 32255, Info = new int[8] });
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LandslideZone, X0 = 15872, X1 = 17919, Y0 = 768, Y1 = 2815, Z0 = 30000, Z1 = 32255, Info = new int[8] });
             var lap = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint((int)Math.Round(ZoeInChamber.X + fx * 170), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z + fz * 170)));
             var across = (zoe.Beta - 1024 + 4096) % 4096;
@@ -223,6 +262,25 @@ wait_nb_dizieme(2);
 label({Slapped2});
 anim({Citadel.CitadelSpanking.ZoeSit});
 stop();
+
+label({ZoeRide});
+anim(0);
+pos_point({zoeSteps[0]});
+{Ride(zoeSteps)}stop();
+");
+                liftLife(scripts);
+                scripts.SetText(liftIndex, ScriptKind.Track, $@"label(0);
+stop();
+
+label({LiftRide});
+{Ride(liftSteps)}stop();
+");
+                scripts.SetText(0, ScriptKind.Track, $@"label(0);
+stop();
+
+label({HeroRide});
+pos_point({heroSteps[0]});
+{Ride(heroSteps)}stop();
 ");
                 // (his behaviour put back to Normal first: each behaviour is its own entity, and only Normal's has the spanking's bodies and his
                 // lap's animations -- the user, 2026-11-09, home in Sporty or the like: he stood there in his everyday clothes, body(30) and
@@ -278,6 +336,12 @@ void comportement_1()
         {{
             message({EveningId(p.Say, EveningLine.Boat)});
         }}
+        if ({LiftUpZone} == zone() && {Driving} != comportement_hero())
+        {{
+            set_dir(NO_MOVE);
+            set_track_obj(0, label_{HeroRide});
+            set_track_obj({liftIndex}, label_{LiftRide});
+        }}
     }}
 }}
 
@@ -311,10 +375,12 @@ void comportement_3()
         set_var_game({Drunk}, {Scolded});
         body(1);
         anim(0);
-        cinema_mode(0);
-        set_dir(MOVE_MANUAL);
-        pos_point({up});
         obj_col(1);
+        cinema_mode(0);
+        set_dir(NO_MOVE);
+        set_track_obj(0, label_{HeroRide});
+        set_track_obj({zoeIndex}, label_{ZoeRide});
+        set_track_obj({liftIndex}, label_{LiftRide});
         set_comportement(comportement_1);
     }}
 }}

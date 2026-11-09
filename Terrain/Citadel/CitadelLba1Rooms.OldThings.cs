@@ -18,13 +18,14 @@ internal static partial class CitadelLba1Rooms
     // (the things: INVOBJ.HQR's entry, its name, its size -- its longest side, in scene units -- and how it stands: on the floor as it
     // is, leant against a wall at its back (z 0) -- the snowboard stood up on its tail, its deck out -- or hung flat on one)
     public enum OldStand { Floor, Lean, StoodUp, Hung }
-    // (and Twinsen's catamaran, the sailing boat of LBA1's BODY.HQR -- with the pirate flag at its bow -- at its own size: the user,
+    // (and Twinsen's catamaran, the sailing boat of LBA1's BODY.HQR -- its Catamaran entity 23's body without the pirate flag, which hangs on
+    // the wall: the user, 2026-11-09 -- at its own size: the user,
     // 2026-11-09, "Let's create a copy of Twinsen's boat from LBA1 to store down here, that'd be quite big and make a little sense")
     public static readonly (string File, int Entry, string Name, float Size, OldStand Stand)[] OldThings =
     {
         ("INVOBJ.HQR", 13, "LBA1's snowboard", 1400, OldStand.StoodUp),
         ("INVOBJ.HQR", 18, "LBA1's space guitar", 950, OldStand.Lean),
-        ("BODY.HQR", 50, "Twinsen's catamaran", 3076, OldStand.Floor),
+        ("BODY.HQR", 49, "Twinsen's catamaran", 3076, OldStand.Floor),
     };
     public const int Catamaran = OldThingFirst + 2;
 

@@ -67,10 +67,8 @@ internal static partial class CitadelProps
         const float Face = BayeuxBack + 4;
         // the stitch the camera sees at column c (from the left, in this part) and row r (from the top of the drop)
         char At(int c, int r) => BayeuxRows[height - 1 - r][width - 1 - (part * BayeuxColumns + c)];
-        var points = new Dictionary<(int, int), int>();
-        int Point(int c, int r) => points.TryGetValue((c, r), out var h) ? h
-            : points[(c, r)] = m.P(0, new Vector3((c - BayeuxColumns / 2f) * BayeuxStitch, -r * BayeuxStitch, Face));
-        Stitched(m, 0, BayeuxColumns, height, At, Point, BayeuxColours, new Vector3(0, 0, -100));
+        var Point = Corners(m, (c, r) => new Vector3((c - BayeuxColumns / 2f) * BayeuxStitch, -r * BayeuxStitch, Face));
+        Stitched(m, 0, BayeuxColumns, 0, height, At, Point, BayeuxColours, new Vector3(0, 0, -100));
         // the cloth over the wall's top, plain linen, from the outside face most of the way in
         float x0 = -BayeuxColumns / 2f * BayeuxStitch, x1 = BayeuxColumns / 2f * BayeuxStitch;
         m.Out(new[] { Point(0, 0), Point(BayeuxColumns, 0), m.P(0, new Vector3(x1, 0, Face - BayeuxFold)), m.P(0, new Vector3(x0, 0, Face - BayeuxFold)) },

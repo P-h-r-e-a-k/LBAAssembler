@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -222,9 +223,9 @@ internal static partial class CitadelProps
                  { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage), (Stool, "a stool", BuildStool),
                    (Seal, "the Sendell seal", BuildSeal), (TapestryRed, "a red tapestry", BuildTapestryRed), (TapestryBlue, "a blue tapestry", BuildTapestryBlue),
                    (Picture, "a picture", BuildPicture), (Rack, "a stand of paddles and whips", BuildRack), (Chair, "a chair", BuildChair),
-                   (Boulder, "a boulder", BuildBoulder), (Boulder2, "a smaller boulder", BuildBoulder2), (BikeTwinsen, "Twinsen's bike", BuildBikeTwinsen), (BikeZoe, "Zoe's bike", BuildBikeZoe), (JollyRoger, "a Jolly Roger", BuildJollyRoger),
+                   (Boulder, "a boulder", BuildBoulder), (Boulder2, "a smaller boulder", BuildBoulder2), (BikeTwinsen, "Twinsen's bike", BuildBikeTwinsen), (BikeZoe, "Zoe's bike", BuildBikeZoe), (JollyRoger, "a Jolly Roger", BuildJollyRoger), (SmallBoulder, "a small boulder", BuildSmallBoulder), (LiftPlatform, "the chamber's lift", BuildLiftPlatform),
                    (CurtainLeft, "a curtain", BuildCurtainLeft), (CurtainRight, "a curtain", BuildCurtainRight) }
-                 .Concat(RugBodies())
+                 .Concat(PictureBodies())
                  .Concat(Enumerable.Range(0, BayeuxParts).Select(k => (Bayeux + k, $"the Bayeux hanging's part {k + 1}", (Func<byte[], Body>)(h => BuildBayeux(h, k))))))
         {
             var bytes = build(header).Write();
@@ -237,11 +238,32 @@ internal static partial class CitadelProps
                 File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes)));
                 index = count;
             }
-            table = RaceTrackBaldinoCar.WithBody(table, Prop, generic, index);
+            table = generic == LiftPlatform ? WithBodyBox(table, Prop, generic, index, new short[] { -512, 0, -512, 511, LiftTop, 511 })
+                                            : RaceTrackBaldinoCar.WithBody(table, Prop, generic, index);
             made.Add($"{name} BODY.HQR {index} (body {generic})");
         }
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
         return new() { $"chapter 2's props, entity {Prop}'s bodies: {string.Join(", ", made)}" };
+    }
+
+    // An entity's body record with its own box (the engine's ZV: F_BODY, the generic, the record's size, the body's number, "has
+    // actions", F_ZV and the box's six values) in place of the one the body's own extent makes -- the chamber's lift: its rail and chains
+    // over it, its box only the platform, so Twinsen stands on it, not in it, pushed off
+    private static byte[] WithBodyBox(byte[] table, int entity, int generic, int bodyIndex, short[] box)
+    {
+        table = RaceTrackBaldinoCar.WithBody(table, entity, generic, bodyIndex);
+        var start = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
+        var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
+        for (var p = start; p < end && table[p] != 255; p += table[p] == 3 ? 3 + table[p + 3] : 2 + table[p + 2])
+        {
+            if (table[p] != 1 || table[p + 1] != generic) continue;
+            var record = new byte[19];
+            record[0] = 1; record[1] = (byte)generic; record[2] = 17; record[3] = (byte)bodyIndex; record[4] = (byte)(bodyIndex >> 8);
+            record[5] = 1; record[6] = 14;
+            for (var k = 0; k < 6; k++) BinaryPrimitives.WriteInt16LittleEndian(record.AsSpan(7 + k * 2), box[k]);
+            return Lba2EntityTable.Splice(table, entity, p, 2 + table[p + 2], record);
+        }
+        return table;
     }
 
     // A prop of these in a scene at (x, y, z) (scene units) turned `beta`: no collisions with anyone, no shadow (as the shop's holomap on its

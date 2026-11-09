@@ -42,10 +42,12 @@ internal static partial class CitadelLba1Rooms
     // 26368-27903, z 30976-31487), onto the lift's squares in the house -- by day the house, at night the house at night
     // (RaceTrackStory.SecretChamber switches between the two).
     public const int SecretChamber = 400, Lba1SecretChamber = 21, House = 0;
-    public static readonly (int X, int Y, int Z) ChamberArrival = (27127, 1280, 29918);
-    public static readonly (int X0, int X1, int Z0, int Z1, int Y0, int Y1) ChamberExit = (26368, 27903, 30976, 31487, 1280, 2815);
-    // (out onto the lift's squares, x 4096-5119, z 8192-9215: his place in the zone, 0-1535 along x and 0-511 along z, added)
-    public static readonly (int X, int Y, int Z) ChamberExitLands = (4608 - 768, 2560, 8704 - 256);
+    // (since 2026-11-09 the chamber's own lift -- RaceTrackStory.SecretChamber, CitadelProps.BuildLiftPlatform -- on the hall's free strip
+    // right of the Sendell rug, cells x 49-50, z 41-42: Twinsen comes out on it, and goes up on it into the way up, high over it)
+    public static readonly (int X, int Y, int Z) ChamberArrival = (25600, 1792 + CitadelProps.LiftTop, 21504);
+    public static readonly (int X0, int X1, int Z0, int Z1, int Y0, int Y1) ChamberExit = (25088, 26111, 20992, 22015, 3000, 4500);
+    // (out onto the lift's squares, x 4096-5119, z 8192-9215: his place in the way up -- the lift's square, 1024 by 1024 -- added)
+    public static readonly (int X, int Y, int Z) ChamberExitLands = (4096, 2560, 8192);
 
     // ---- the secret room (scene 226: LBA1's 55, its walls round x 49-63, z 48-63 of the grid as LBA1 has them) -----------------------
     // Twinsen comes in from the sewers walking west, where LBA1's own way in from its first sewer was (the east wall's doorway, x 63, z 54-57,
@@ -240,6 +242,12 @@ internal static partial class CitadelLba1Rooms
         // stood over the hall's middle, in front of Twinsen wherever he walked there; down to the same height as the right wall
         foreach (var x in new[] { 34, 35, 36, 37, 48, 49, 50, 51 })
             for (var y = HallFloor + 2; y < 25; y++) Clear(x, y, 46);
+        // the wrought-iron arcs on the stairs' sides (block 59, layers 9-14, z 47-49), all but the one against the left wall (x 33): the
+        // user, 2026-11-09, "remove all of these semi-circle pieces of scenery apart from the one on the side wall as they just get in the way"
+        foreach (var x in new[] { 37, 47, 51 })
+            for (var z = 47; z <= 49; z++)
+                for (var y = 9; y <= 14; y++)
+                    if (Cell(x, y, z).Block == 59) Clear(x, y, z);
         // the lime: the stone, its plinth, arcs and lamps flush against the left wall (x 31, the wall at x 30) -- the two lamps that would
         // stand behind it, in the wall, left out (round 2: "fully flush in the wall, we'll need to remove the two white posts that are
         // behind it"); old places floor again
