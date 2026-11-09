@@ -1004,12 +1004,25 @@ stop();
                 if (zoeWatch is not null && zoeAt is { } zz)
                 {
                     Place(zoeWatch, model, zz);
+                    // (still on her way from the yard when Twinsen comes into this scene -- he followed her up the path, or went ahead of her
+                    // -- she comes in a little ahead of where the yard's path does, and walks on to her place: ZoeOnHerWay)
+                    var zoeIn = model.TrackPoints.Count;
+                    model.TrackPoints.Add(new SceneTrackPoint(YardPathIn.X, YardPathIn.Y, YardPathIn.Z));
+                    var zoeSpot = model.TrackPoints.Count;
+                    model.TrackPoints.Add(new SceneTrackPoint(zoeWatch.X, zoeWatch.Y, zoeWatch.Z));
+                    zoeWatch.Flags &= ~1u;   // (no one in her way stops her: CHECK_OBJ_COL off)
                     var zoeIndex = model.Actors.Count;
                     var zoeLife = Add(model, zoeWatch, $@"void comportement_0()
 {{
     if (2 > chapter() && 2 < var_game(40) && 3 > var_game({KeeperPlot}) && 2 > var_game({BeatVar}))
     {{
         body(18);
+        if (1 == var_game({ZoeOnHerWay}))
+        {{
+            set_var_game({ZoeOnHerWay}, 2);
+            pos_point({zoeIn});
+            set_track(label_1);
+        }}
         set_comportement(comportement_1);
     }}
     else
@@ -1051,7 +1064,7 @@ void comportement_2()
     }}
 }}
 ");
-                    zoeScript = scripts => { zoeLife(scripts); scripts.SetText(zoeIndex, ScriptKind.Track, "label(0);\nanim(88);\nstop();\n"); };
+                    zoeScript = scripts => { zoeLife(scripts); scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nanim(88);\nstop();\n\nlabel(1);\nanim(89);\ngoto_point({zoeSpot});\nanim(88);\nbeta({zoeWatch.Beta});\nstop();\n"); };
                 }
                 // (and his car, while he is out of it -- at the lighthouse, till the spell is cast and he walks back to it: out of sight, and
                 // in no one's way -- the race-track mode keeps it parked: one Raph at a time, the user, 2026-11-06)

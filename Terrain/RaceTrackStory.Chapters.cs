@@ -2375,8 +2375,14 @@ stop();
     // within reach of her last point, still in the yard; her new place is by the storm track's start line, where she watches the
     // practice (RaceTrackStory.Apply step 4).
     private static readonly (int X, int Y, int Z) YardPath = (18816, 250, 4400), YardNorthEdge = (18816, 250, 60);
+    // (the storm track's scene, where the yard's path comes into it -- Twinsen comes in at its edge, z 32512 -- a little further on)
+    private static readonly (int X, int Y, int Z) YardPathIn = (18816, 250, 31300);
     private const int ZoeOutOfSight = 4500;
     private const int YardZoe = 4, ZoeOff = 40, ZoeGone = 41, ZoeOffComportement = 11;
+    // (her way on into the storm track's scene: 1 from her first step out of the yard, till the start line's Zoe there has walked on from
+    // the path's end to her place, 2 -- the user, 2026-11-08, third report: following her up the path, Twinsen went into that scene ahead
+    // of her, and the yard's Zoe was gone with the yard: RaceTrackStory.Apply's start line Zoe)
+    internal const int ZoeOnHerWay = 242;
     private static void YardZoeLeaves(StoryParts p) => p.Edit(CarScene, "the game's Zoe in the yard in chapter 1: off up the path to the race practice she speaks of, not to the Dino-Fly", model =>
     {
         var first = model.TrackPoints.Count;
@@ -2399,6 +2405,7 @@ stop();
         if (2 > chapter())
         {{
             set_var_game(40, 14);
+            set_var_game({ZoeOnHerWay}, 1);
             set_track(label_{ZoeOff});
             set_comportement(comportement_{ZoeOffComportement});
         }}
@@ -2411,6 +2418,7 @@ stop();
             life = Loose(life, "set_var_game(40, 3);\nset_track(label_2);\nset_comportement(comportement_1);", $@"if (2 > chapter())
             {{
                 set_var_game(40, 14);
+                set_var_game({ZoeOnHerWay}, 1);
                 set_track(label_{ZoeOff});
                 set_comportement(comportement_{ZoeOffComportement});
             }}
