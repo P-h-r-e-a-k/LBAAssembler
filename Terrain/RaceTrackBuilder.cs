@@ -4604,6 +4604,14 @@ internal static class RaceTrackBuilder
         // (the decor at the island's doors: RaceTrackOptions.DoorBoxes)
         var atDoor = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
         foreach (var b in o.DoorBoxes) atDoor.UnionWith(RaceTrackOptions.DecorsAtDoor(island, b));
+        // (and in the island's own kept places: RaceTrackIsland.KeepDecorBoxes)
+        foreach (var k in o.Island.KeepDecorBoxes ?? Array.Empty<(double, double, double, double)>())
+            foreach (var (kx, kz, kcube) in IslandOps.CubeCells(island))
+                foreach (var d in kcube.Decors)
+                {
+                    var (x0, z0, x1, z1) = DecorCells(d, kx, kz);
+                    if (x1 >= k.X0 && x0 <= k.X1 && z1 >= k.Z0 && z0 <= k.Z1) atDoor.Add(d);
+                }
         var raised = roads is { Count: > 0 } && roads[0].Raised is not null;
         // (a raised road wider than a ground road's verge -- the Emerald Moon's, as wide as the reactor's dish -- is looked for further out)
         var look = raised ? Math.Max(8, (roads![0].RaisedHalfs is { Length: > 0 } wide ? wide.Max() : o.RaisedHalfWidth) + 1.5) : 8;

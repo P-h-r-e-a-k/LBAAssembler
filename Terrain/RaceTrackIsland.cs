@@ -62,6 +62,9 @@ internal sealed record RaceTrackIsland(
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
         ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
         DropDecors = new[] { (8, 10, 16448, 7552) }, OwnWeather = 0,
+        // (the neighbour's white fence along the edge between scenes 49 and 42, east of Twinsen's yard: both its lines, either side of the
+        // edge, the town circuit beside its east end)
+        KeepDecorBoxes = new[] { (551.0, 638.5, 566.0, 641.0) },
         // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door and Twinsen and Zoe on its top, whom the Weather
         // Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town circuit, in
         // the fine weather's file, cut the hill there by 2,000. Raph's fiancee went with the others, 2026-10-14 -- the user: "an NPC on the
@@ -352,6 +355,11 @@ internal sealed record RaceTrackIsland(
     // pieces placed there (RaceTrackBuilder.DropDecors) -- Citadel Island's car under Twinsen's carport, a model that can't be driven,
     // where the build parks the real one (2026-10-06: the user found two cars by the house, the island's and the build's).
     public (int CubeX, int CubeZ, int X, int Z)[]? DropDecors { get; init; }
+    // Places (island cells) whose decor stays unless it stands on the asphalt, as at the island's doors (RaceTrackOptions.DoorBoxes):
+    // a fence along a cube's edge where the game has no way over that edge -- it was the wall there, and taken away for being near the
+    // road it left the edge's invisible wall standing where it had been (Citadel Island's neighbour's fence, the user, 2026-11-08: "gone,
+    // but its collision is still there ... We should be consistent with this")
+    public (double X0, double Z0, double X1, double Z1)[]? KeepDecorBoxes { get; init; }
 
     // Props of the island's scenes the twin's track took the ground and the building from under, each [scene, actor]: they don't fall, and nothing
     // moves them, so they stayed in the air, kept out of sight in that track's races (RaceCarEngineFile: hide_actor=). Citadel Island's mill wheel over
