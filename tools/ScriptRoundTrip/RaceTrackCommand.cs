@@ -637,6 +637,18 @@ internal static class RaceTrackCommand
 
     // gridtop <game> <scene> <layer>...: an interior's grid seen from above at each layer, a cell a character -- '.' empty, else its block's
     // number in base 36 (mod 36) -- x across, z down, for finding a room's cells
+    // griddump <game> <scene> <out.bin>: an interior's decoded grid cells (64 x 64 columns of 25 layers, two bytes each: block, its
+    // brick's place in it; ((z * 64 + x) * 25 + y) * 2), for drawing it outside the tool
+    public static int GridDump(string[] args)
+    {
+        var backend = new LBAAssembler.Grids.Lba2GridBackend(args[1]);
+        if (backend.GridOfScene(int.Parse(args[2])) is not { } grid) { Console.WriteLine("no grid"); return 1; }
+        var cells = LBAAssembler.Lba1.Lba1GridCodec.Decode(backend.LoadGrid(grid));
+        System.IO.File.WriteAllBytes(args[3], cells.Select(c => (byte)c).ToArray());
+        Console.WriteLine($"{cells.Length} bytes");
+        return 0;
+    }
+
     public static int GridTop(string[] args)
     {
         var backend = new LBAAssembler.Grids.Lba2GridBackend(args[1]);

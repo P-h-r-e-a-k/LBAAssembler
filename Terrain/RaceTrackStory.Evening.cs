@@ -44,6 +44,8 @@ internal static partial class RaceTrackStory
         TwinsenGoodnight,
         // (home from the Tralu's bar: the secret chamber -- RaceTrackStory.SecretChamber, 2026-11-08)
         ZoeCaught, TwinsenExcuse, ZoeStoreroom, ZoeScold, TwinsenOw, ZoeScoldMore, ZoeBed, DoorLocked,
+        // (the chamber made over and the spanking redone, 2026-11-09)
+        Landslide, ZoeNotInCharge, TwinsenYesMaam, ZoeNoMoreBars, TwinsenPromise,
     }
     private static readonly string[][] EveningLines =
     {
@@ -194,6 +196,54 @@ internal static partial class RaceTrackStory
             "Zoe ha cerrado la puerta con llave. Será mejor que me vaya a la cama.",
             "Zoe ha chiuso a chiave la porta di casa. Farei meglio ad andare a letto.",
             "A Zoe trancou a porta da rua. É melhor ir para a cama.",
+        },
+        // (the chamber made over, 2026-11-09: LBA1's old way out, filled with rock)
+        new[]
+        {
+            "This exit is no longer usable: there's been a landslide.",
+            "Cette sortie n'est plus utilisable : il y a eu un éboulement.",
+            "Dieser Ausgang ist nicht mehr benutzbar: Es hat einen Erdrutsch gegeben.",
+            "Esta salida ya no se puede usar: ha habido un derrumbe.",
+            "Quest'uscita non è più utilizzabile: c'è stata una frana.",
+            "Esta saída já não pode ser usada: houve um desabamento.",
+        },
+        // (the spanking redone, 2026-11-09: Zoe tells him off between the slaps -- the user: "Just because you once saved the world, doesn't
+        // mean you can do whatever you want, you're not in charge in this house" / "Yes Ma'am, sorry Zoe")
+        new[]
+        {
+            "Just because you once saved the world doesn't mean you can do whatever you want. You're not in charge in this house!",
+            "Ce n'est pas parce que tu as sauvé le monde une fois que tu peux faire tout ce que tu veux. Ce n'est pas toi qui commandes dans cette maison !",
+            "Nur weil du einmal die Welt gerettet hast, heißt das nicht, dass du tun kannst, was du willst. In diesem Haus hast du nicht das Sagen!",
+            "Que hayas salvado el mundo una vez no significa que puedas hacer lo que quieras. ¡En esta casa no mandas tú!",
+            "Solo perché una volta hai salvato il mondo non vuol dire che puoi fare quello che vuoi. In questa casa non comandi tu!",
+            "Lá por teres salvado o mundo uma vez, não quer dizer que possas fazer o que te apetece. Nesta casa não és tu quem manda!",
+        },
+        new[]
+        {
+            "Yes, Ma'am. Sorry, Zoe.",
+            "Oui, Madame. Pardon, Zoé.",
+            "Ja, Ma'am. Entschuldige, Zoe.",
+            "Sí, señora. Perdón, Zoe.",
+            "Sì, signora. Scusa, Zoe.",
+            "Sim, minha senhora. Desculpa, Zoe.",
+        },
+        new[]
+        {
+            "And no more sneaking off to bars while I'm carrying your child. Understood?",
+            "Et plus question de filer en douce dans les bars pendant que je porte ton enfant. Compris ?",
+            "Und kein Herumschleichen mehr in Bars, während ich dein Kind trage. Verstanden?",
+            "Y nada de escaparte a los bares mientras llevo a tu hijo. ¿Entendido?",
+            "E basta sgattaiolare nei bar mentre porto in grembo tuo figlio. Capito?",
+            "E nada de fugires para os bares enquanto trago o teu filho na barriga. Entendido?",
+        },
+        new[]
+        {
+            "Understood. I promise, Zoe.",
+            "Compris. Je te le promets, Zoé.",
+            "Verstanden. Ich verspreche es, Zoe.",
+            "Entendido. Te lo prometo, Zoe.",
+            "Capito. Te lo prometto, Zoe.",
+            "Entendido. Prometo, Zoe.",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)

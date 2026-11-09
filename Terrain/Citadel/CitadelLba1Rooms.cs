@@ -120,6 +120,7 @@ internal static class CitadelLba1Rooms
             var map = Lba1InteriorPort.Port(lba1Directory, room.Lba1Scene, palette, room.Name);
             var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
+            if (room.Slot == SecretChamber) grid = ChamberRemodel(grid, log);
             grid[0] = (byte)library; grid[1] = (byte)fragments;
             // (the grid after the game's last, what follows it one entry on; its number in the scene-to-grid table)
             header = new MapBricks.BkgHeader(bkg.Read(0));
@@ -162,6 +163,90 @@ internal static class CitadelLba1Rooms
         // ---- the props' bodies
         log.Add(Bodies(gameDirectory));
         return log;
+    }
+
+    // ---- the secret chamber made over (the user, 2026-11-09, on a picture of it marked up; E:\dump\TEMP\user_screenshots\
+    // 2026-11-09_chamber_annotated.png). LBA1's room is a raised hall (floor layer 6, walls x 33 and 52, z 33 and 46, its two flights of
+    // stairs down at x 34-37 and 49-52) over a lower floor (layer 4, x 31-56, z 50-63) walled with rock:
+    //   - "the wall area with a red cross through it we need to get rid of and if there's a hole left in this space just fill it in": the
+    //     hall's front wall (z 46) between its stairs' tops, x 38-48, gone, and the gap behind it to the lower floor's rock wall (z 47-49)
+    //     the hall's floor (its tiles: block 27, two by two);
+    //   - "the section I've put a lime green circle around needs to go back to flat against the wall": the inscribed stone on its plinth,
+    //     its iron arcs and its two lamps (x 41-43, z 51-59, layers 5-11), moved ten cells to the left wall (x 31-33);
+    //   - "let's slide it to the purple line to square up the room": the lower floor's front wall (z 59, x 35-53) moved out to z 63, the
+    //     floor (block 5, three by three) carried to it;
+    //   - "the original entrance ... let's just fill this in with rocks": LBA1's stairs out (x 31-34, z 63) the front wall's rock, the
+    //     landing before them (layer 3) the floor's height. (What Twinsen says there, and the Sendell seal back in the hall's wall:
+    //     RaceTrackStory.SecretChamber.)
+    private const int HallFloor = 6, LowFloor = 4, FrontWall = 59, NewFront = 63, StoneShift = -10;
+    private static byte[] ChamberRemodel(byte[] raw, List<string> log)
+    {
+        var shape = Lba2GridBackend.ToLba1Shape(raw);
+        var was = Lba1GridCodec.Decode(shape);
+        int At(int x, int y, int z) => ((z * 64 + x) * 25 + y) * 2;
+        (int Block, int Pos) Cell(int x, int y, int z) => (was[At(x, y, z)], was[At(x, y, z) + 1]);
+        // (the cells as they'll be: edits over what was)
+        var now = new Dictionary<(int X, int Y, int Z), (int Block, int Pos)>();
+        void Set(int x, int y, int z, (int Block, int Pos) c) => now[(x, y, z)] = c;
+        void Clear(int x, int y, int z) => now[(x, y, z)] = (0, 0);
+        // a floor cell like the floor's own at the same place in its tiling, found where the floor is whole
+        (int, int) Tile(int x, int y, int z, int x0, int x1, int z0, int z1, int period)
+        {
+            for (var zs = z0; zs <= z1; zs++)
+                for (var xs = x0; xs <= x1; xs++)
+                    if (((xs - x) % period + period) % period == 0 && ((zs - z) % period + period) % period == 0 && Cell(xs, y, zs).Block != 0 && Cell(xs, y + 1, zs).Block == 0)
+                        return Cell(xs, y, zs);
+            return Cell(x0, y, z0);
+        }
+        // a rock wall's column like the front wall's own at the same place along it (the wall's block 1, three cells to a repeat)
+        IEnumerable<(int Y, (int, int) C)> WallColumn(int x)
+        {
+            for (var k = 0; k < 30; k++)
+                foreach (var xs in new[] { x + 3 * k, x - 3 * k })
+                    if (xs is >= 36 and <= 53 && Cell(xs, 0, FrontWall).Block == 1)
+                        return Enumerable.Range(0, 8).Select(y => (y, Cell(xs, y, FrontWall)));
+            return Enumerable.Empty<(int, (int, int))>();
+        }
+
+        // the red cross: the hall's front wall between its stairs, and the hall's floor out to the rock wall
+        for (var x = 38; x <= 48; x++)
+        {
+            for (var y = HallFloor; y < 25; y++) Clear(x, y, 46);
+            for (var z = 46; z <= 49; z++) Set(x, HallFloor, z, Tile(x, HallFloor, z, 36, 50, 40, 45, 2));
+        }
+        // the lime: the stone, its plinth, arcs and lamps to the left wall (old places floor again)
+        var moved = 0;
+        for (var z = 51; z <= 59; z++)
+            for (var x = 41; x <= 43; x++)
+                for (var y = 5; y <= 11; y++)
+                {
+                    var c = Cell(x, y, z);
+                    if (c.Block is 0 or 1 or 5) continue;
+                    Set(x + StoneShift, y, z, c);
+                    if (!now.ContainsKey((x, y, z)) || now[(x, y, z)] == c) Clear(x, y, z);
+                    moved++;
+                }
+        // (the floor where the plinth stood: it had none under it)
+        for (var z = 51; z <= 59; z++)
+            for (var x = 41; x <= 43; x++)
+                if (Cell(x, LowFloor, z).Block == 0) Set(x, LowFloor, z, Tile(x, LowFloor, z, 36, 53, 52, 58, 3));
+        // the dark red to the purple: the front wall out to z 63, the floor carried to it (and the landing and LBA1's stairs out: rock)
+        for (var x = 31; x <= 53; x++)
+        {
+            for (var z = Math.Min(FrontWall, x <= 34 ? 60 : FrontWall); z < NewFront; z++)
+            {
+                if (x <= 34 && z < 60) continue;
+                for (var y = 0; y < 13; y++) Clear(x, y, z);
+                Set(x, LowFloor, z, Tile(x, LowFloor, z, 36, 53, 52, 58, 3));
+            }
+            for (var y = 0; y < 25; y++) Clear(x, y, NewFront);
+            foreach (var (y, c) in WallColumn(x)) Set(x, y, NewFront, c);
+        }
+        var edits = now.Select(kv => new Lba1GridCell(kv.Key.X, kv.Key.Y, kv.Key.Z, kv.Value.Block, kv.Value.Pos))
+            .Where(e => (e.Block, e.Pos) != Cell(e.X, e.Y, e.Z)).ToList();
+        log.Add($"the secret chamber made over: the hall's front wall down (x 38-48), the stone and its lamps to the left wall ({moved} cells), " +
+                $"the front wall out to z {NewFront} and LBA1's stairs out filled with rock ({edits.Count} cells changed)");
+        return Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
     }
 
     // The demo's sewers' back wall at the slab's cell emptied from layer HoleFirst to HoleLast and the landing's floor carried in under it,

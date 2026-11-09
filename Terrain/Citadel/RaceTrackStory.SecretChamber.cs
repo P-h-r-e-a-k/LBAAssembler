@@ -24,6 +24,8 @@ internal static partial class RaceTrackStory
     public const int Chamber = Citadel.CitadelLba1Rooms.SecretChamber;
     // the lift's scenario zone and the switches of the lift's door and the chamber's two ways up, and of the front door at night
     internal const int LiftZone = 70, LiftSwitch = 7, ChamberUpNight = 8, ChamberUpDay = 9, FrontDoorSwitch = 10;
+    // the scenario zone at LBA1's old way out of the chamber, filled with rock (a scene variable: said once a visit)
+    private const int LandslideZone = 73, LandslideSaid = 3;
     private static readonly (int X0, int X1, int Y0, int Y1, int Z0, int Z1) LiftBox = (4096, 5119, 2560, 3583, 8192, 9215);
     // Zoe in the chamber, to the stairs' side of where Twinsen comes down, facing him
     private static readonly (int X, int Y, int Z) ZoeInChamber = (26368, 1280, 29184);
@@ -100,16 +102,25 @@ void comportement_1()
             // left -- turned a quarter from her -- his hips at her lap's height by his own animation)
             var turn = zoe.Beta * Math.PI / 2048;
             double fx = Math.Sin(turn), fz = Math.Cos(turn);
-            var stool = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Stool, (int)Math.Round(ZoeInChamber.X - fx * 20), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z - fz * 20), zoe.Beta);
-            stool.Flags &= ~1u;
-            var stoolLife = p.Add(model, stool, $@"void comportement_0()
-{{
-    if ({DrankTonight} != var_game({Drunk}))
-    {{
-        suicide();
-    }}
-}}
-");
+            // (the bedroom's chair, the user, 2026-11-08: "one of the chairs from the bedroom down there for Zoe to sit on" -- the room's,
+            // there always)
+            var chair = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Chair, (int)Math.Round(ZoeInChamber.X - fx * 20), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z - fz * 20), zoe.Beta);
+            chair.Flags &= ~1u;
+            var stoolLife = p.Add(model, chair, "void comportement_0()\n{\n}\n");
+            // the room's furnishings (Citadel/CitadelProps.Chamber): the Sendell seal back in the hole in the hall's back wall (LBA1's sprite
+            // 84 there, cell 41.2, layer 10.1, 33.2); on the rock wall facing the lower floor (z 50's face, z 26112) a red tapestry, the rack
+            // of paddles and whips and a picture; on the left wall (x 30's face, x 15872) by LBA1's old way out, a blue tapestry
+            var furnishings = new List<Action<SceneScripts>>();
+            void Furnish(int generic, int x, int y, int z, int beta) =>
+                furnishings.Add(p.Add(model, Citadel.CitadelProps.Actor(generic, x, y, z, beta), "void comportement_0()\n{\n}\n"));
+            Furnish(Citadel.CitadelProps.Seal, 21420, 3100, 17408 + 60, 0);
+            Furnish(Citadel.CitadelProps.TapestryRed, 20224, 2560, 26112 + 6, 0);
+            Furnish(Citadel.CitadelProps.Rack, 21888, 1980, 26112 + 4, 0);
+            Furnish(Citadel.CitadelProps.Picture, 23552, 2080, 26112 + 4, 0);
+            Furnish(Citadel.CitadelProps.TapestryBlue, 15872 + 6, 2560, 31232, 1024);
+            // (LBA1's old way out, filled with rock: Twinsen's word there -- the user: "if Twinsen goes over to it have him comment 'This exit is
+            // no longer useable due to a land slide'")
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LandslideZone, X0 = 15872, X1 = 17919, Y0 = 1280, Y1 = 2815, Z0 = 31232, Z1 = 32255, Info = new int[8] });
             var lap = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint((int)Math.Round(ZoeInChamber.X + fx * 170), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z + fz * 170)));
             var across = (zoe.Beta - 1024 + 4096) % 4096;
@@ -133,6 +144,7 @@ void comportement_1()
             {
                 zoeLife(scripts);
                 stoolLife(scripts);
+                foreach (var f in furnishings) f(scripts);
                 scripts.SetText(zoeIndex, ScriptKind.Track, $@"label(0);
 anim({Citadel.CitadelSpanking.ZoeSit});
 stop();
@@ -185,6 +197,18 @@ stop();
 
 void comportement_1()
 {{
+    if ({LandslideZone} == zone())
+    {{
+        if (0 == var_cube({LandslideSaid}))
+        {{
+            message({EveningId(p.Say, EveningLine.Landslide)});
+            set_var_cube({LandslideSaid}, 1);
+        }}
+    }}
+    else
+    {{
+        set_var_cube({LandslideSaid}, 0);
+    }}
 }}
 
 void comportement_2()

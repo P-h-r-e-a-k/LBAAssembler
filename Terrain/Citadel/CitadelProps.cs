@@ -11,7 +11,7 @@ namespace LBAAssembler.Terrain.Citadel;
 // Tavern's door ("there's no umbrella there"), and the tin of fishing bait on Mr. Bazoo's counter. Each is a body of the game's static
 // prop entity, Prop (entity 17: one body of a single bone, the shop's holomap's, and its animation 0 -- these are single-bone bodies
 // too), under a generic number of its own; an actor of that entity with that body shows it (RaceTrackStory.Chapters.cs places them).
-internal static class CitadelProps
+internal static partial class CitadelProps
 {
     public const int Prop = 17, Tyre = 1, Umbrella = 2, Hook = 3, Bait = 4, Bottle = 5, Plate = 6, Flame = 7, Flame2 = 8, Page = 9, Stool = 10;
     // (the palette's ramps: 48 the greys from black, 56 a steel grey, 18 rust brown, 20 wood, 66 red, 130 green, 76 pink)
@@ -219,7 +219,9 @@ internal static class CitadelProps
         var table = HqrArchive.Open(ressPath).Read(44);
         var made = new List<string>();
         foreach (var (generic, name, build) in new (int, string, Func<byte[], Body>)[]
-                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage), (Stool, "a stool", BuildStool) })
+                 { (Tyre, "the old tyre", BuildTyre), (Umbrella, "the umbrella", BuildUmbrella), (Hook, "its hook", BuildHook), (Bait, "the tin of bait", BuildBait), (Bottle, "a bottle", BuildBottle), (Plate, "a plate", BuildPlate), (Flame, "a candle's flame", BuildFlame), (Flame2, "its flicker", BuildFlame2), (Page, "an exam page", BuildPage), (Stool, "a stool", BuildStool),
+                   (Seal, "the Sendell seal", BuildSeal), (TapestryRed, "a red tapestry", BuildTapestryRed), (TapestryBlue, "a blue tapestry", BuildTapestryBlue),
+                   (Picture, "a picture", BuildPicture), (Rack, "a rack of paddles and whips", BuildRack), (Chair, "a chair", BuildChair) })
         {
             var bytes = build(header).Write();
             var count = HqrArchive.CountEntries(bodyPath);
