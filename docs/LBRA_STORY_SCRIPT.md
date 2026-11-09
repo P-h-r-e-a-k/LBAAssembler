@@ -544,7 +544,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 | The Esmer herald | a copy of scene 42 actor 6 | beside the start line |
 | Mr. Paul | built | the start line |
 | Raph, the Tralu, the thief | the race's (built) | the grid (Luc's barrel takes the sixth place) |
-| Bob | the game's Bob (BODY 152; the game's Felix, BODY 161, is the fisherman with the rod further along the quay) | by the scrap heap at the harbour, the old tyre beside him |
+| Felix | the fisherman by the scrap (the landing crowd's actor, BODY 152; the user, 2026-11-09: "The man by the scrap is Felix the fisherman") | by the scrap heap at the harbour, the old tyre beside him |
 | Mr. Bazoo | the game's shopkeeper (scene 14) | his shop: the tin of fishing bait on the counter |
 | The bike taxi | the game's motorbike Rabbibunny (scene 48 actor 12) | at a stand of his own beside the town square, off the circuit |
 | Mrs. Brune of the ferries | the game's (BODY 62) | the ticket office |
@@ -611,7 +611,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    is already under it with a spanner:
    > **Luc:** "They gave me my Tavern back, Twinsen, so I'm racing for the Tavern! Only... my back wheel came off on the way here."
    >
-   > **Zoe:** "I can fit one, if someone finds a wheel. Bob at the harbour fished an old tyre out of the sea this morning."
+   > **Zoe:** "I can fit one, if someone finds a wheel. Felix at the harbour fished an old tyre out of the sea this morning."
 
    Q_LUCCAR = 2. The arrow points at the harbour. Luc and Zoe stand right outside the house's door: one Action is answered by one of
    them (the user, 2026-11-06: the wheel was told twice -- Luc answered, then Zoe the same Action).
@@ -639,19 +639,19 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 
    QBait (var 118) = 1. Asked again: **Mr. Bazoo:** "One tin's plenty, Twinsen: the fish round here aren't that hungry." (The inventory
    has no slot to spare -- its forty are the game's -- so the bait is the variable.)
-8. **The harbour.** Bob, by the scrap, the old tyre beside him (a round rubber tyre on a rusty rim, `Citadel/CitadelProps`):
-   > **Bob:** "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's
+8. **The harbour.** Felix, by the scrap, the old tyre beside him (a round rubber tyre on a rusty rim, `Citadel/CitadelProps`):
+   > **Felix:** "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's
    > yours for a tin of bait: the fish won't bite on rust. Mr. Bazoo sells it in his shop."
 
    With the bait, at once:
    > **Twinsen:** "Here: a tin of bait, fresh from Mr. Bazoo's."
    >
-   > **Bob:** "Deal! The tyre's yours. Mind, there might still be a crab in it."
+   > **Felix:** "Deal! The tyre's yours. Mind, there might still be a crab in it."
    >
    > **Twinsen:** "A tyre. A bit rusty, but round."
 
-   QBait = 2, the tyre gone from beside Bob; Q_LUCCAR = 3 if Luc has told (else it stays: the order doesn't matter). Asked again:
-   **Bob:** "The fish are biting already. Good luck in the race, Twinsen!"
+   QBait = 2, the tyre gone from beside Felix; Q_LUCCAR = 3 if Luc has told (else it stays: the order doesn't matter). Asked again:
+   **Felix:** "The fish are biting already. Good luck in the race, Twinsen!"
 9. **Back to the yard.** If Twinsen comes with the tyre before Luc has told:
    > **Luc:** "A tyre! Twinsen, you read my mind: my back wheel came off on the way here, and I'm racing for the Tavern!"
 

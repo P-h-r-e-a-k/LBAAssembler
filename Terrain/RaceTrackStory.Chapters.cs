@@ -401,12 +401,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "I can fit one, if someone finds a wheel. Bob at the harbour fished an old tyre out of the sea this morning.",
-            "Je peux en monter une, si quelqu'un trouve une roue. Bob, au port, a repêché un vieux pneu dans la mer ce matin.",
-            "Ich kann eins anbauen, wenn jemand ein Rad findet. Bob am Hafen hat heute Morgen einen alten Reifen aus dem Meer gefischt.",
-            "Yo puedo ponerle una, si alguien encuentra una rueda. Bob, el del puerto, ha pescado un neumático viejo en el mar esta mañana.",
-            "Posso montarne una, se qualcuno trova una ruota. Bob, al porto, stamattina ha ripescato un vecchio pneumatico dal mare.",
-            "Eu consigo montar uma, se alguém encontrar uma roda. O Bob, no porto, pescou um pneu velho no mar esta manhã.",
+            "I can fit one, if someone finds a wheel. Felix at the harbour fished an old tyre out of the sea this morning.",
+            "Je peux en monter une, si quelqu'un trouve une roue. Felix, au port, a repêché un vieux pneu dans la mer ce matin.",
+            "Ich kann eins anbauen, wenn jemand ein Rad findet. Felix am Hafen hat heute Morgen einen alten Reifen aus dem Meer gefischt.",
+            "Yo puedo ponerle una, si alguien encuentra una rueda. Felix, el del puerto, ha pescado un neumático viejo en el mar esta mañana.",
+            "Posso montarne una, se qualcuno trova una ruota. Felix, al porto, stamattina ha ripescato un vecchio pneumatico dal mare.",
+            "Eu consigo montar uma, se alguém encontrar uma roda. O Felix, no porto, pescou um pneu velho no mar esta manhã.",
         },
         new[]
         {
@@ -2114,8 +2114,8 @@ void comportement_{HeroWatching}()
                 message(43);"));
         });
 
-        // the harbour in the fine weather: Bob by the scrap (the landing crowd's: the game's Bob, BODY.HQR 152 -- the user calls him Felix, but
-        // the game's Felix is the fisherman with the rod further along the quay, BODY.HQR 161, scene 43's actor 2), and beside him the old
+        // the harbour in the fine weather: Felix the fisherman by the scrap (the landing crowd's actor, BODY.HQR 152, our CrowdBob -- the user,
+        // 2026-11-09: "The man by the scrap is Felix the fisherman which is why he wants the bait"; the lines name him so), and beside him the old
         // tyre he fished out of the harbour (a body of its own, CitadelProps). The user, 2026-11-06: the wheel in the scrap answered only once
         // Luc had told of it (Q_LUCCAR 2), so found first it couldn't be picked up; "model a round rubber tyre"; Bob "found an old tyre and
         // will give it to him for some more fishing bait", the bait from the shop at any time, handed over at once if Twinsen has it. Spoken
@@ -2124,7 +2124,7 @@ void comportement_{HeroWatching}()
         var bob = CopyOf(p.Originals, AliensScene, CrowdBob);
         if (bob is not null && OffRoad(p.Town, Scrap.X, Scrap.Z, 1) is { } bobAt && OffRoad(p.Town, bobAt.X + 1.5, bobAt.Z, 1, 3) is { } tyreAt
             && OutsideScene(p.Store, bobAt.X, bobAt.Z) == Harbour && OutsideScene(p.Store, tyreAt.X, tyreAt.Z) == Harbour)
-            p.Edit(Harbour, $"Bob by the harbour's scrap at cell ({bobAt.X:0.#}, {bobAt.Z:0.#}), the old tyre he'll trade for a tin of bait beside him", model =>
+            p.Edit(Harbour, $"Felix the fisherman by the harbour's scrap at cell ({bobAt.X:0.#}, {bobAt.Z:0.#}), the old tyre he'll trade for a tin of bait beside him", model =>
             {
                 Place(bob, model, Facing(bobAt, tyreAt.X, tyreAt.Z));
                 var bobLife = p.Add(model, bob, Talker("2 == chapter()", $@"            if ({BaitTraded} == var_game({QBait}))
@@ -2174,7 +2174,7 @@ void comportement_1()
 ");
                 return scripts => { bobLife(scripts); tyreLife(scripts); };
             });
-        else p.Log.Add("Bob and the tyre at the harbour left out: no room off the town circuit by the scrap");
+        else p.Log.Add("Felix and the tyre at the harbour left out: no room off the town circuit by the scrap");
 
         // the ferry office (scene 8): Mrs. Brune (actor 3), once Twinsen has the ticket in chapter 2, and Zoe coming too as crew
         p.Edit(FerryOffice, "Mrs. Brune at the ferry office: the ticket for the Desert, and Zoe goes free as crew", _ => scripts =>
@@ -2321,7 +2321,7 @@ stop();
             p.Log.Add("Luc and Zoe in the yard left out: no room off the town circuit by the carport");
             return;
         }
-        p.Edit(scene, $"Luc and Zoe in the yard at cell ({lucAt.X:0.#}, {lucAt.Z:0.#}): his barrel car's wheel, Bob's tyre, the radio", model =>
+        p.Edit(scene, $"Luc and Zoe in the yard at cell ({lucAt.X:0.#}, {lucAt.Z:0.#}): his barrel car's wheel, Felix's tyre, the radio", model =>
         {
             Place(luc, model, Facing(lucAt, zoeAt.X, zoeAt.Z));
             Place(zoe, model, Facing(zoeAt, lucAt.X, lucAt.Z));

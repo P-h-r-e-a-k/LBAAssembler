@@ -412,7 +412,7 @@ barrel on wheels, with one back wheel missing. Zoe is already lying under it wit
 
 **Luc:** "They gave me my Tavern back, Twinsen, so I'm racing for the Tavern! Only... my back wheel came off on the way here."
 
-**Zoe:** "I can fit one, if someone finds a wheel. Bob at the harbour fished an old tyre out of the sea this morning."
+**Zoe:** "I can fit one, if someone finds a wheel. Felix at the harbour fished an old tyre out of the sea this morning."
 
 The arrow points at the harbour. (Luc and Zoe stand right outside the house's door; they tell it once.)
 
@@ -442,16 +442,16 @@ ever gets his barrel back on four wheels."
 
 **Twinsen:** "Fishing bait. Somebody at the harbour will be glad of this."
 
-**7. The harbour.** Bob is by the scrap heap on the quay, an old tyre beside him.
+**7. The harbour.** Felix is by the scrap heap on the quay, an old tyre beside him.
 
-**Bob:** "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's
+**Felix:** "See this? An old tyre I fished out of the harbour this morning, rim and all. Luc's been asking everyone for a wheel. It's
 yours for a tin of bait: the fish won't bite on rust. Mr. Bazoo sells it in his shop."
 
 With the bait, Twinsen hands it over at once:
 
 **Twinsen:** "Here: a tin of bait, fresh from Mr. Bazoo's."
 
-**Bob:** "Deal! The tyre's yours. Mind, there might still be a crab in it."
+**Felix:** "Deal! The tyre's yours. Mind, there might still be a crab in it."
 
 **Twinsen:** "A tyre. A bit rusty, but round."
 

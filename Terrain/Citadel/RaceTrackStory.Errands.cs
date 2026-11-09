@@ -29,21 +29,21 @@ internal static partial class RaceTrackStory
     {
         (BaitModel, new[]
         {
-            new[] { "You bought a tin of fishing bait. Bob at the harbour will want it.", "Tin of fishing bait", "A tin of lively worms from Mr. Bazoo's shop. Bob at the harbour will trade for it." },
-            new[] { "Tu as acheté une boîte d'appâts. Bob, au port, en voudra.", "Boîte d'appâts", "Une boîte de vers bien vivants de la boutique de M. Bazoo. Bob, au port, l'échangera volontiers." },
-            new[] { "Du hast eine Dose Angelköder gekauft. Bob am Hafen wird sie haben wollen.", "Dose Angelköder", "Eine Dose munterer Würmer aus Herrn Bazoos Laden. Bob am Hafen tauscht gern dafür." },
-            new[] { "Has comprado una lata de cebo. Bob, en el puerto, la querrá.", "Lata de cebo", "Una lata de gusanos bien vivos de la tienda del señor Bazoo. Bob, en el puerto, la cambiará con gusto." },
-            new[] { "Hai comprato una scatola di esche. Bob, al porto, la vorrà.", "Scatola di esche", "Una scatola di vermi vivaci dal negozio del signor Bazoo. Bob, al porto, la scambierà volentieri." },
-            new[] { "Compraste uma lata de isco. O Bob, no porto, vai querê-la.", "Lata de isco", "Uma lata de minhocas bem vivas da loja do senhor Bazoo. O Bob, no porto, troca-a de bom grado." },
+            new[] { "You bought a tin of fishing bait. Felix at the harbour will want it.", "Tin of fishing bait", "A tin of lively worms from Mr. Bazoo's shop. Felix at the harbour will trade for it." },
+            new[] { "Tu as acheté une boîte d'appâts. Felix, au port, en voudra.", "Boîte d'appâts", "Une boîte de vers bien vivants de la boutique de M. Bazoo. Felix, au port, l'échangera volontiers." },
+            new[] { "Du hast eine Dose Angelköder gekauft. Felix am Hafen wird sie haben wollen.", "Dose Angelköder", "Eine Dose munterer Würmer aus Herrn Bazoos Laden. Felix am Hafen tauscht gern dafür." },
+            new[] { "Has comprado una lata de cebo. Felix, en el puerto, la querrá.", "Lata de cebo", "Una lata de gusanos bien vivos de la tienda del señor Bazoo. Felix, en el puerto, la cambiará con gusto." },
+            new[] { "Hai comprato una scatola di esche. Felix, al porto, la vorrà.", "Scatola di esche", "Una scatola di vermi vivaci dal negozio del signor Bazoo. Felix, al porto, la scambierà volentieri." },
+            new[] { "Compraste uma lata de isco. O Felix, no porto, vai querê-la.", "Lata de isco", "Uma lata de minhocas bem vivas da loja do senhor Bazoo. O Felix, no porto, troca-a de bom grado." },
         }),
         (TyreModel, new[]
         {
-            new[] { "Bob gave you the old tyre he fished out of the harbour.", "Old tyre", "The tyre Bob fished out of the harbour. Zoe can fit it to Luc's barrel car." },
-            new[] { "Bob t'a donné le vieux pneu qu'il a repêché dans le port.", "Vieux pneu", "Le pneu que Bob a repêché dans le port. Zoé peut le monter sur le tonneau sur roues de Luc." },
-            new[] { "Bob hat dir den alten Reifen gegeben, den er aus dem Hafen gefischt hat.", "Alter Reifen", "Der Reifen, den Bob aus dem Hafen gefischt hat. Zoe kann ihn an Lucs Fass auf Rädern montieren." },
-            new[] { "Bob te ha dado el neumático viejo que pescó en el puerto.", "Neumático viejo", "El neumático que Bob pescó en el puerto. Zoe puede ponérselo al barril con ruedas de Luc." },
-            new[] { "Bob ti ha dato il vecchio pneumatico che ha ripescato nel porto.", "Vecchio pneumatico", "Il pneumatico che Bob ha ripescato nel porto. Zoe può montarlo sulla botte su ruote di Luc." },
-            new[] { "O Bob deu-te o pneu velho que pescou no porto.", "Pneu velho", "O pneu que o Bob pescou no porto. A Zoe pode montá-lo no barril com rodas do Luc." },
+            new[] { "Felix gave you the old tyre he fished out of the harbour.", "Old tyre", "The tyre Felix fished out of the harbour. Zoe can fit it to Luc's barrel car." },
+            new[] { "Felix t'a donné le vieux pneu qu'il a repêché dans le port.", "Vieux pneu", "Le pneu que Felix a repêché dans le port. Zoé peut le monter sur le tonneau sur roues de Luc." },
+            new[] { "Felix hat dir den alten Reifen gegeben, den er aus dem Hafen gefischt hat.", "Alter Reifen", "Der Reifen, den Felix aus dem Hafen gefischt hat. Zoe kann ihn an Lucs Fass auf Rädern montieren." },
+            new[] { "Felix te ha dado el neumático viejo que pescó en el puerto.", "Neumático viejo", "El neumático que Felix pescó en el puerto. Zoe puede ponérselo al barril con ruedas de Luc." },
+            new[] { "Felix ti ha dato il vecchio pneumatico che ha ripescato nel porto.", "Vecchio pneumatico", "Il pneumatico che Felix ha ripescato nel porto. Zoe può montarlo sulla botte su ruote di Luc." },
+            new[] { "O Felix deu-te o pneu velho que pescou no porto.", "Pneu velho", "O pneu que o Felix pescou no porto. A Zoe pode montá-lo no barril com rodas do Luc." },
         }),
     };
 
