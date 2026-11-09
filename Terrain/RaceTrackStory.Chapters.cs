@@ -1618,7 +1618,7 @@ void comportement_2()
     // unlocked it and not before". Once the spell is cast (KeeperPlot 5: Raph unlocked the door and they went up), Action at the door (its
     // zone, sceneric 0, facing it: the game's "It's locked." until then) takes Twinsen up to where the spell's scene has him (track point
     // 5), and Action there facing the lamp room back down to the door (point 6). The island's telescope stands beside him there
-    // (CitadelLighthouse.AddTelescope); Action facing it: the game's "For 3 Kashes, do you want to use the telescope?" -- paid, the cow's
+    // (CitadelLighthouse, CitadelProps.RailScope); Action facing it: the game's "For 3 Kashes, do you want to use the telescope?" -- paid, the cow's
     // field (scene 47): Twinsen out of sight, the camera on the Wizard behind Rosa (her zone 11, facing her) hopping as Twinsen does
     // (CitadelLighthouse.Hop) -- the fourth hop and she gives her clover (her own script, var_cube 11 past 3) -- and back up the lighthouse.
     // (ScopeVar: 1 at the cow's, 2 on the way back -- the cow's cinema mode off again there, and the camera on Twinsen, not on the
@@ -1744,9 +1744,12 @@ void comportement_2()
     }}
 }}
 ");
+            // (the telescope itself, on the balcony's west railing: CitadelLighthouse)
+            var spyglass = p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.RailScope, Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY, Citadel.CitadelLighthouse.ScopeZ), "void comportement_0()\n{\n}\n");
             return scripts =>
             {
                 life(scripts);
+                spyglass(scripts);
                 scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $@"
 
 label({Up});

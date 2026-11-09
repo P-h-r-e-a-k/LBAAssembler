@@ -14,38 +14,12 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static class CitadelLighthouse
 {
     // ---- the telescope ----------------------------------------------------------------------------------------------------------------
-    // The island's own coin telescope (cube (8,8), its decor at (24512, 4500, 6016): CITADEL's body 40, CITABAU's 48) copied onto the
-    // lighthouse's balcony (cube (7,10): the tower, its decor at (13952, 3250, 11776), up to 7628), west of where Twinsen stands in the
-    // spell's scene (track point 5, (13425, 7628, 11122)) -- he faces it there, his back to the lamp room.
-    private const int ParkCubeX = 8, ParkCubeZ = 8, ParkX = 24512, ParkY = 4500, ParkZ = 6016;
-    private const int TowerCubeX = 7, TowerCubeZ = 10, TowerX = 13952, TowerY = 3250, TowerZ = 11776, TowerTop = 7628;
-    public const int ScopeX = 12880, ScopeY = TowerTop, ScopeZ = 11122;
-
-    // The island's own telescope as it was before the build (a copy: the road may clear it), null on an island without one
-    public static IslandDecor? Telescope(IslandFile island) =>
-        island.CubeAt(ParkCubeX, ParkCubeZ)?.Decors.FirstOrDefault(d => d.X == ParkX && d.Y == ParkY && d.Z == ParkZ)?.Clone();
-
-    public static void AddTelescope(IslandFile island, IslandDecor? scope, RaceTrackReport report)
-    {
-        if (island.CubeAt(TowerCubeX, TowerCubeZ) is not { } top
-            || top.Decors.FirstOrDefault(d => d.X == TowerX && d.Y == TowerY && d.Z == TowerZ && d.YMax == TowerTop) is null) return;
-        if (scope is null)
-        {
-            report.Notes.Add("WARNING: the lighthouse's telescope left out: the island's own telescope (cube (8,8)) isn't there");
-            return;
-        }
-        if (top.Decors.Any(d => d.X == ScopeX && d.Y == ScopeY && d.Z == ScopeZ)) return;
-        var copy = scope.Clone();
-        copy.MoveTo(ScopeX, ScopeY, ScopeZ);
-        // (turned half round from the park's: as copied (turn 1024) it faced the wrong way -- the user, 2026-11-05: "we should turn it
-        // around 180 degrees". Its box turned with it: mirrored through its origin, x and z. Twinsen's place to use it, east of it facing
-        // west (track point 5), is beside its post either way: the tube runs north-south, z -717..410 of the post now, 410..-717 before.)
-        copy.Beta = (copy.Beta & ~0xFFFF) | (((copy.Beta & 0xFFFF) + 2048) & 4095);
-        (copy.XMin, copy.XMax) = (2 * copy.X - copy.XMax, 2 * copy.X - copy.XMin);
-        (copy.ZMin, copy.ZMax) = (2 * copy.Z - copy.ZMax, 2 * copy.Z - copy.ZMin);
-        top.Decors.Add(copy);
-        report.Notes.Add($"the island's telescope (body {scope.Body & 0xFFFF}) on the lighthouse's balcony, cube (7,10) at ({ScopeX}, {ScopeY}, {ScopeZ})");
-    }
+    // On the lighthouse's balcony (cube (7,10): the tower, its decor at (13952, 3250, 11776), its floor up at 7628; the west railing x
+    // 12223-12439, its top at 8331), west of where Twinsen stands in the spell's scene (track point 5, (13425, 7628, 11122)) -- he faces it
+    // there, his back to the lamp room. A spyglass of the story's on the west railing's top (CitadelProps.RailScope, an actor of scene 46:
+    // RaceTrackStory.Chapters' LighthouseClimb). Until 2026-11-09 the island's coin telescope from the park (cube (8,8)) was copied there,
+    // post and all: "it's sticking out too far, we could probably mount it on the side of the lighthouse" (the user, 2026-11-08).
+    public const int ScopeX = 12331, ScopeY = 8331, ScopeZ = 11122;
 
     // ---- the Wizard's hop ---------------------------------------------------------------------------------------------------------------
     // Twinsen's hop forward (entity 0's animation 42, the one the cow counts) on the weather wizard (entity 67, BODY.HQR 111: 21 bones to

@@ -338,6 +338,33 @@ internal static partial class CitadelProps
         }
         return m.ToBody(header);
     }
+    // The lighthouse's telescope (the user, 2026-11-08: "it's sticking out too far, we could probably mount it on the side of the lighthouse
+    // instead of it having its own post"): a small brass-banded spyglass on a bracket clamped to the balcony's west railing, its tube out
+    // west over the sea, tilted a little up, its eyepiece back over the balcony towards whoever stands to use it. Its foot (0) the
+    // railing's top; -x out to sea.
+    public const int RailScope = 104;
+    public static Body BuildRailScope(byte[] header)
+    {
+        var m = new CarMesh("the lighthouse's telescope", new[] { -1 });
+        m.Light = 0.7f;
+        // (the clamp over the railing's top, a short post, the swivel)
+        m.Box(0, new Vector3(0, 20, 0), new Vector3(150, 40, 170), Steel);
+        m.Box(0, new Vector3(0, 110, 0), new Vector3(40, 140, 40), Steel);
+        m.Ball(0, new Vector3(0, 195, 0), 34, Steel);
+        // (the tube, along x: eyepiece +x, objective -x, rising 0.12 a unit out)
+        var stations = new (float X, float R)[] { (300, 26), (230, 30), (200, 40), (-280, 52), (-330, 60), (-400, 60) };
+        float Y(float x) => 230 - x * 0.12f;
+        var rings = stations.Select(s => m.Loop(0, new Vector3(s.X, Y(s.X), 0), new Vector3(0, s.R, 0), new Vector3(0, 0, s.R), 10)).ToArray();
+        for (var j = 0; j + 1 < rings.Length; j++)
+        {
+            var mid = (stations[j].X + stations[j + 1].X) / 2;
+            var band = j == 1 || j == 3;
+            m.Skin(rings[j], rings[j + 1], _ => band ? Rust : Steel, new Vector3(mid, Y(mid), 0));
+        }
+        m.Cap(rings[0], m.P(0, new Vector3(310, Y(310), 0)), Steel, new Vector3(250, Y(250), 0));
+        m.Cap(rings[^1], m.P(0, new Vector3(-404, Y(-404), 0)), Glass, new Vector3(-350, Y(-350), 0));
+        return m.ToBody(header);
+    }
     public static Body BuildLiftRailBack(byte[] header) => BuildLiftRail(header, 0);
     public static Body BuildLiftRailLeft(byte[] header) => BuildLiftRail(header, -1);
     public static Body BuildLiftRailRight(byte[] header) => BuildLiftRail(header, 1);
