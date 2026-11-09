@@ -100,8 +100,22 @@ internal static partial class RaceTrackStory
 
             var edits = new List<Action<SceneScripts>>();
             const string Storm = "2 > chapter()";
-            // (Luc: his welcome. The cave's gate opens as Twinsen comes in: RaceTrackStory.TraluCaves)
-            edits.Add(p.Add(model, luc, Talker(Storm, $"            message({p.Say(ChapterLine.LucBar)});", LucReach)));
+            // (Luc: his welcome and the back gate's key -- told once, BackGateVar to 1: RaceTrackStory.TraluCaves -- then the key again till
+            // the back gate is open, his welcome after that. The cave's own gate opens as Twinsen comes in.)
+            edits.Add(p.Add(model, luc, Talker(Storm, $@"            if (0 == var_game({BackGateVar}))
+            {{
+                message({p.Say(ChapterLine.LucBar)});
+                message({p.Say(ChapterLine.LucKey)});
+                set_var_game({BackGateVar}, {BackKeyTold});
+            }}
+            else if ({BackGateOpen} > var_game({BackGateVar}))
+            {{
+                message({p.Say(ChapterLine.LucKey)});
+            }}
+            else
+            {{
+                message({p.Say(ChapterLine.LucBar)});
+            }}", LucReach)));
             edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({p.Say(ChapterLine.RabbibunnyBar)});", RegularReach)));
             var fabIndex = model.Actors.Count + 1;
             edits.Add(p.Add(model, pat, Talker(Storm, $"            message({p.Say(ChapterLine.PatBar)});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabBar)});", RegularReach)));

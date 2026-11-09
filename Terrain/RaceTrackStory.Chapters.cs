@@ -982,6 +982,7 @@ void comportement_1()
         SpiderCaveMouth(p);
         // (the back gate from the Tralu's hall up to the bar: its stairs, its key -- Citadel/RaceTrackStory.TraluCaves.cs)
         TraluBarOpensGate(p);
+        TraluBackGate(p);
         SecretChamber(p);
         Lighthouse(p);
         LighthouseClimb(p);

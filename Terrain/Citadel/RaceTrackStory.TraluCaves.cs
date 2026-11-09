@@ -47,6 +47,87 @@ internal static partial class RaceTrackStory
 }}
 "));
 
+    // The back gate (the user, 2026-11-08: "The second gate, at the top of the stairs: back, locked, with its key under Sendell's sign
+    // again ... it seems to have been removed, perhaps in the confusion we had about the gate that we've now restored"): BOTH gates. The
+    // game's (actor 8) in its doorway as above; and a second on the ledge at the top of the stairs, across the arch to the bar -- a barred
+    // door of its own (scene 19's, sprite 186, drawn and boxed as there, its clip box moved with it), locked: a key opens it (touching it
+    // with one, as the game's own gate) and it slides aside, gone for good after. The key: Luc tells of it in the bar (BackGateVar 1),
+    // and it is under the sign of Sendell on the ledge's face (the game's text zone there: "Aha! a sign from Sendell") -- Action in
+    // front of it once told, while the gate is shut and Twinsen has no key, and a key jumps out. Its own variable, 244: 1 told, 2 open.
+    public const int BackGateVar = 244, BackKeyTold = 1, BackGateOpen = 2;
+    private const int HallDoor = 4, BackGateOpened = 100;
+    // the gate's place: the arch's left edge, across its middle; the key's: in front of the sign of Sendell
+    private static readonly (int X, int Y, int Z) GateAt = (3584, 3328, 9472), KeyAt = (4096, 1792, 11008);
+    private const int KeyReach = 900;
+
+    private static void TraluBackGate(StoryParts p)
+    {
+        if (!TraluBarRoom.StairsBuilt(p.Store.Directory)) { p.Log.Add("the back gate left out: the build didn't make its stairs (TraluBarRoom.InstallStairs)"); return; }
+        p.Edit(TraluCave, "the back gate: a barred door of its own on the ledge across the arch to the secret bar, locked; its key under the sign of Sendell once Luc has told", model =>
+        {
+            if (Copy(p.Originals, BarHall, HallDoor) is not { Entity: -1, Sprite: 186 } gate) throw new NotTheGames("scene 19's barred door");
+            // (its clip box is the screen's, from the world's origin: moved by the door's move, as the projection does it -- 24 across and
+            // 12 down a cell of x, 24 back and 12 down a cell of z, 15 up a layer)
+            int dx = GateAt.X - gate.X, dy = GateAt.Y - gate.Y, dz = GateAt.Z - gate.Z;
+            int sx = (dx - dz) * 24 / 512, sy = (dx + dz) * 12 / 512 - dy * 15 / 256;
+            gate.Info = new[] { gate.Info[0] + sx, gate.Info[1] + sy, gate.Info[2] + sx, gate.Info[3] + sy };
+            (gate.X, gate.Y, gate.Z) = (GateAt.X, GateAt.Y, GateAt.Z);
+            gate.Move = 0;
+            var gateIndex = model.Actors.Count;
+            var addGate = p.Add(model, gate, $@"void comportement_0()
+{{
+    if ({BackGateOpen} <= var_game({BackGateVar}))
+    {{
+        suicide();
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    if ({BackGateOpened} == l_track())
+    {{
+        suicide();
+    }}
+}}
+");
+            var key = RaceTrackScenes.InvisibleHelper(KeyAt.X, KeyAt.Y, KeyAt.Z);
+            key.OptionFlags = 0x80; key.NbBonus = 1;
+            // (and the key used on it: Twinsen touching it with one, as the game's own gate's)
+            var addKey = p.Add(model, key, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    oneif (0 < nb_little_keys() && {gateIndex} == col_obj(0) && {BackGateOpen} > var_game({BackGateVar}))
+    {{
+        set_track_obj({gateIndex}, label_0);
+        use_one_little_key();
+        set_var_game({BackGateVar}, {BackGateOpen});
+    }}
+    swif (1 == action())
+    {{
+        if ({KeyReach} > distance(0) && {BackKeyTold} <= var_game({BackGateVar}) && {BackGateOpen} > var_game({BackGateVar}) && 0 == nb_little_keys())
+        {{
+            give_bonus(0);
+        }}
+    }}
+}}
+");
+            return scripts =>
+            {
+                addGate(scripts);
+                scripts.SetText(gateIndex, ScriptKind.Track, $"label(0);\nsample(353);\nopen_right(1024);\nwait_door();\n\nlabel({BackGateOpened});\nstop();\n");
+                addKey(scripts);
+            };
+        });
+    }
+
     private const int MouthScene = 45;
     private static readonly (int X0, int X1, int Z0) MouthZone = (29696, 30208, 11776);
     private const int MouthReach = 30464, MouthLanding = 31744 - 512;
