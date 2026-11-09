@@ -1624,12 +1624,18 @@ void comportement_2()
     // Wizard's number in the cow's scene: neither goes with a change of scene, so Enter never recentred the camera on him again.
     // Twinsen's track labels 160-163 in scene 46 are new.) In chapter 1 -- the night after the
     // spell -- the telescope shows the Esmers' ship coming down over the sea instead (an easter egg: RaceTrackStory.Eggs.Citadel.cs, StormLook).
+    // (and the door at the foot taken by walking into it too, in any behaviour -- Action is a jump in Sporty, a blow in Aggressive: the
+    // user, 2026-11-08, "The lighthouse's ground-floor door doesn't work in CITABAU.ILE ... teleport Twinsen to the top and back down again
+    // when he uses the doors". Only once he's been out of its zone since he last came through it: DoorAway.)
     public const int ScopeVar = 227;
     private const int CowScene = 47, LighthouseTop = 60, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
     private const int Hops = 40, HopLabel = 10, Hopped = 11, Watch = 12, Watched = 13, HeroWatching = 20;
     private static readonly (int X, int Y, int Z) WizardAtCow = (22600, 8700, 23552), DoorStep = (16600, 3300, 11152);
     private const int TopClear = 80, CowCamera = 70, RosaEntity = 119;
+    // (walked into the door at the foot only once he has been out of its zone since he last came through it: come down, he stands in it,
+    // and turning round there -- or the way on west, round the tower -- took him straight back up)
+    private const int DoorAway = 48;
     // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
@@ -1668,6 +1674,16 @@ void comportement_2()
 
 void comportement_1()
 {{
+    if (0 != zone_obj(0))
+    {{
+        set_var_cube({DoorAway}, 1);
+    }}
+    if (1 == var_cube({DoorAway}) && 4 < var_game({KeeperPlot}) && {Driving} != comportement_hero() && 0 == zone_obj(0) && 2560 < beta_obj(0) && 3584 > beta_obj(0))
+    {{
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj(0, label_{Up});
+        set_comportement(comportement_2);
+    }}
     swif (1 == action())
     {{
         if (4 < var_game({KeeperPlot}) && {Driving} != comportement_hero())
@@ -1721,6 +1737,7 @@ void comportement_2()
 {{
     if ({UpDone} == l_track_obj(0) || {DownDone} == l_track_obj(0))
     {{
+        set_var_cube({DoorAway}, 0);
         set_dir_obj(0, MOVE_MANUAL);
         set_comportement(comportement_1);
     }}
