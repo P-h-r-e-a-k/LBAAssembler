@@ -1697,7 +1697,7 @@ void comportement_1()
             }}
             else if ({LighthouseTop} == zone_obj(0))
             {{
-                if (2560 < beta_obj(0) && 3584 > beta_obj(0))
+                if (1536 < beta_obj(0) && 2560 > beta_obj(0))
                 {{
                     add_choice({ScopeNo});
                     add_choice({ScopeYes});
@@ -1745,7 +1745,7 @@ void comportement_2()
 }}
 ");
             // (the telescope itself, on the balcony's west railing: CitadelLighthouse)
-            var spyglass = p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.RailScope, Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY, Citadel.CitadelLighthouse.ScopeZ), "void comportement_0()\n{\n}\n");
+            var spyglass = p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.RailScope, Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY, Citadel.CitadelLighthouse.ScopeZ, Citadel.CitadelLighthouse.ScopeBeta), "void comportement_0()\n{\n}\n");
             return scripts =>
             {
                 life(scripts);

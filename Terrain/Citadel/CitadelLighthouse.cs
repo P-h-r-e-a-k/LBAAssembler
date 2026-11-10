@@ -19,7 +19,14 @@ internal static class CitadelLighthouse
     // there, his back to the lamp room. A spyglass of the story's on the west railing's top (CitadelProps.RailScope, an actor of scene 46:
     // RaceTrackStory.Chapters' LighthouseClimb). Until 2026-11-09 the island's coin telescope from the park (cube (8,8)) was copied there,
     // post and all: "it's sticking out too far, we could probably mount it on the side of the lighthouse" (the user, 2026-11-08).
-    public const int ScopeX = 12331, ScopeY = 8331, ScopeZ = 11122;
+    // (on the north railing -- x 12223-13736, z 10317-10479, its top at 8168 -- west of the lamp room, the side towards the ship; aimed across
+    // the island at the cow's field, scene 47's cube (8,7), where Rosa and the Wizard are: from the lighthouse, cube (7,10), that is north
+    // and a little east -- the user, 2026-11-10: "should be pointing towards the other end of the island near the cow - so it needs moving
+    // onto the wall nearest to the ship". Twinsen uses it facing north. Its tube is built along -x (CitadelProps.BuildRailScope): turned
+    // by ScopeBeta onto the cow's bearing.)
+    public const int ScopeX = 12850, ScopeY = 8168, ScopeZ = 10398;
+    private const int CowIslandX = 8 * 32768 + 22600, CowIslandZ = 7 * 32768 + 23552, TopIslandX = 7 * 32768 + 13425, TopIslandZ = 10 * 32768 + 11122;
+    public static int ScopeBeta => (RaceTrackMath.Turn(Math.Atan2(CowIslandX - TopIslandX, CowIslandZ - TopIslandZ)) - 3072) & 4095;
 
     // ---- the Wizard's hop ---------------------------------------------------------------------------------------------------------------
     // Twinsen's hop forward (entity 0's animation 42, the one the cow counts) on the weather wizard (entity 67, BODY.HQR 111: 21 bones to
