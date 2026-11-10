@@ -27,6 +27,8 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static class CitadelNightHouse
 {
     public const int Scene = 193, House = 0, Yard = 49;
+    // the back room's door (scene 0's actor 2) and the sceneric zone it opens in
+    private const int BackRoomDoor = 2, BackRoomDoorZone = 2;
     // where the front door from the yard brings Twinsen in (the yard's door zone into scene 0: its arrival)
     public static readonly (int X, int Y, int Z) Arrival = (12800, 768, 9728);
     // the candle on the bedside table (cell x 12, z 1; its bricks at layers 11-12) and its light's reach (cells, a layer half a cell)
@@ -242,8 +244,12 @@ internal static class CitadelNightHouse
         {
         // the scene: the house's header, Twinsen by the front door, the penguin's slot, the front door out and the cameras
         var model = store.Load(House).Clone();
-        model.Actors.RemoveRange(2, model.Actors.Count - 2);
-        model.Zones.RemoveAll(zn => !(zn.Type == 0 && zn.Num == Yard) && zn.Type is not (1 or 5 or 6));
+        // (and the door of his back room, the game's actor 2 -- a sprite that slides down into the floor -- with its zone, sceneric 2, where
+        // it opens: without them the doorway stood empty at night and Twinsen got stuck in it -- the user, 2026-11-10: "The door to
+        // Twinsen's back room isn't there at night ... we just need to restore the door")
+        var keep = model.Actors.Count > BackRoomDoor && model.Actors[BackRoomDoor] is { Entity: -1, Sprite: > 0 } ? BackRoomDoor + 1 : 2;
+        model.Actors.RemoveRange(keep, model.Actors.Count - keep);
+        model.Zones.RemoveAll(zn => !(zn.Type == 0 && zn.Num == Yard) && zn.Type is not (1 or 5 or 6) && !(keep > 2 && zn.Type == 2 && zn.Num == BackRoomDoorZone));
         var hero = model.Hero;
         (hero.X, hero.Y, hero.Z) = Arrival;
         hero.Life = new byte[] { 0 }; hero.Track = new byte[] { 0 };
