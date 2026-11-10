@@ -14,6 +14,8 @@ internal sealed class RaceCarWindow : Window
     private readonly ComboBox gears = new() { Width = 70 };
     // the car Twinsen drives: his buggy, or one of the opponents' cars the folder has (RaceCarSetup.DriveAs)
     private readonly ComboBox driveAs = new() { MinWidth = 320 };
+    // Twinsen's racing suit's colour (RaceCarSetup.SuitColour): made into his bodies the next time the race tracks are built
+    private readonly ComboBox suitColour = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly StackPanel gearRows = new();
     private readonly List<(FrameworkElement Row, Slider Slider)> gearSliders = new();
     private readonly CheckBox automatic = new() { Content = "Automatic gearbox (the gears change by themselves)" };
@@ -244,6 +246,12 @@ internal sealed class RaceCarWindow : Window
         hideRaceSky.Margin = new Thickness(0, 4, 0, 0);
         play.Children.Add(hideRaceSky);
 
+        play.Children.Add(Section("The story's racing suit"));
+        play.Children.Add(new TextBlock { Text = "Twinsen's racing suit's colour (used the next time the race tracks are built):", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
+        foreach (var suit in Terrain.Citadel.CitadelOveralls.Suits) suitColour.Items.Add(new ComboBoxItem { Content = suit.Name, Tag = suit.Colour.ToString() });
+        suitColour.SelectionChanged += (_, _) => { if (!updating && suitColour.SelectedItem is ComboBoxItem { Tag: string name }) setup.SuitColour = name; };
+        play.Children.Add(suitColour);
+
         play.Children.Add(Section("On screen"));
         display.Checked += (_, _) => setup.ShowDisplay = true;
         display.Unchecked += (_, _) => setup.ShowDisplay = false;
@@ -302,6 +310,7 @@ internal sealed class RaceCarWindow : Window
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
         hideRaceSky.IsChecked = setup.HideRaceSky;
+        suitColour.SelectedItem = suitColour.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is string n && string.Equals(n, setup.SuitColour, StringComparison.OrdinalIgnoreCase)) ?? suitColour.Items[0];
         driveAs.SelectedItem = driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int g && g == setup.DriveAs) ?? driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault();
         trackSetups.IsChecked = setup.UseTrackSetups;
         foreach (var r in refresh) r();

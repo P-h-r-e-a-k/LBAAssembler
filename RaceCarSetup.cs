@@ -73,6 +73,8 @@ public sealed partial class RaceCarSetup
     // exploring an island on foot to help in testing story mode"): the story's chapter to be in (game variable 253), or -1 the one the
     // game has.
     public int ExploreChapter { get; set; } = -1;
+    // Twinsen's racing suit's colour, made into his bodies as the race tracks are built (Citadel/CitadelOveralls.SuitColour's names)
+    public string SuitColour { get; set; } = "Red";
     // The car Twinsen drives: -1 the track's own -- his buggy, or the car a track has for him (the Temple of Bú's pumpkin F1, since
     // 2026-10-17: Terrain.RaceTrackCharacterCars.TrackCar) --, -4 his buggy on every track, -2 or -3 his buggy firing green or red lasers out
     // of its gun (his laser cars), else a race car by its number -- the racer entity's bodies (RaceTrackScenes.RacerEntity: the retail racer's

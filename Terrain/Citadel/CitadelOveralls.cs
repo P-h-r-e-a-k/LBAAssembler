@@ -33,7 +33,28 @@ internal static class CitadelOveralls
     private const int Red = 64, White = 62, Dark = 49;
     // (on Twinsen: a ramp's start is its darkest -- 64 came out maroon -- so his overalls' red six shades up it, as his jeans' blue is
     // 194; the shirt's polygons are textured, its pattern taken off)
-    private const int Bright = 70;
+    // The suit's colour, a choice (the user, 2026-11-10: "generate a few different colour outfits and add them into LBAAssembler. Let's go
+    // for a blue based on Twinsen's tunic, British racing green, a dark mustard yellow"): each a ramp of the palette and how far up it the
+    // suit is lit from (the red's six, as above). The build's choice: RT_SUIT (red, blue, green, mustard) if set, else the race car
+    // window's (RaceCarSetup.SuitColour). Everything painted the suit's colour follows it: the overalls, the helmet, the tunic's armed
+    // bodies, and the spanking's suit pulled down (CitadelSpanking).
+    public enum SuitColour { Red, Blue, Green, Mustard }
+    public static readonly (SuitColour Colour, string Name, int Ramp, int Shade)[] Suits =
+    {
+        (SuitColour.Red, "Red", 64, 6),
+        (SuitColour.Blue, "Blue, his tunic's", 192, 6),
+        (SuitColour.Green, "British racing green", 128, 4),
+        (SuitColour.Mustard, "Dark mustard yellow", 96, 7),
+    };
+    public static SuitColour Colour { get; set; } = SuitColour.Red;
+    private static (SuitColour Colour, string Name, int Ramp, int Shade) Suit => Suits.First(s => s.Colour == Colour);
+    private static int Bright => Suit.Ramp + Suit.Shade;
+    // (the build's choice: RT_SUIT, else the race car window's)
+    public static SuitColour Chosen()
+    {
+        var name = Environment.GetEnvironmentVariable("RT_SUIT") is { Length: > 0 } env ? env : EditorSettings.Current.RaceCar.SuitColour;
+        return Enum.TryParse<SuitColour>(name, true, out var c) ? c : SuitColour.Red;
+    }
     // the tunic's blue (its ramp), and the everyday clothes': the shirt, the jeans, the belt
     private const int TunicBlue = 192, Shirt = 224, Jeans = 194, Belt = 97;
     // the everyday body's arms and legs (bones), for the stripes
@@ -87,20 +108,21 @@ internal static class CitadelOveralls
     public static List<string> Install(string gameDirectory)
     {
         var log = new List<string>();
+        Colour = Chosen();
         // ---- Twinsen's bodies
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var bodies = HqrArchive.Open(bodyPath);
-        var overalls = Overalls(Body.Read(bodies.Read(Everyday), 2));
+        var overalls = WithBackPatch(Overalls(Body.Read(bodies.Read(Everyday), 2)));
         var armed = new List<(int Entry, Body Body, int Faces)>();
         for (var b = FirstArmed; b <= LastArmed; b++)
         {
             var body = Body.Read(bodies.Read(b), 2);
             var n = 0;
             for (var i = 0; i < body.Faces.Count; i++)
-                if (body.Faces[i].Colour is >= TunicBlue and < TunicBlue + 16) { body.Faces[i] = body.Faces[i] with { Colour = Bright + body.Faces[i].Colour - TunicBlue, Texture = null }; n++; }
+                if (body.Faces[i].Colour is >= TunicBlue and < TunicBlue + 16) { body.Faces[i] = body.Faces[i] with { Colour = Math.Min(Suit.Ramp + 15, Bright + body.Faces[i].Colour - TunicBlue), Texture = null }; n++; }
             armed.Add((b, body, n));
         }
-        var helmeted = WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2)));
+        var helmeted = WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2))));
         HqrWriter.ReplaceInFile(bodyPath, Tunic, overalls.Write());
         foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, body.Write());
         // (the helmeted one: its entry again on a second pass, else one more at the file's end, and the hero's entity told of it)
@@ -114,8 +136,8 @@ internal static class CitadelOveralls
             HqrWriter.ReplaceInFile(ressPath, 44, RaceTrackBaldinoCar.WithBody(table, HeroEntity, HelmetBody, index));
         }
         log.Add($"Twinsen's racing overalls with the helmet on: the hero's body {HelmetBody} ({helmeted.Vertices.Count} points, {helmeted.Faces.Count} polygons)");
-        log.Add($"Twinsen's racing overalls: BODY.HQR {Tunic} (the tunic's) his everyday body in racing red with a white belt and stripes; " +
-                $"{FirstArmed}-{LastArmed} (the tunic's with a weapon) the tunic's blue made red ({string.Join(", ", armed.Select(a => a.Faces))} polygons)");
+        log.Add($"Twinsen's racing overalls ({Suit.Name}, the palette's {Bright}): BODY.HQR {Tunic} (the tunic's) his everyday body in the suit's colour with a white belt and stripes " +
+                $"and an LBRA patch on his back; {FirstArmed}-{LastArmed} (the tunic's with a weapon) the tunic's blue made the suit's ({string.Join(", ", armed.Select(a => a.Faces))} polygons)");
 
         // ---- the inventory's models
         var objfixPath = Path.Combine(gameDirectory, "OBJFIX.HQR");
@@ -230,27 +252,85 @@ internal static class CitadelOveralls
             faces.Add((q, Dark)); faces.Add((q.Reverse().ToArray(), Dark));
         }
 
-        // into the body: the points after the head's own, every later index moved along by as many
-        var at = head.Start + head.Count;
+        return AddToBone(body, world, Head, points, faces);
+    }
+
+    // `points` (world) into bone `bone` after its own, every later index moved along by as many, and `faces` on them (their indexes
+    // `points`'): the suit's colour lit, the rest flat
+    private static Body AddToBone(Body body, List<Vector3> world, int bone, List<Vector3> points, List<(int[] Points, int Colour)> faces)
+    {
+        var owner = body.Bones[bone];
+        var at = owner.Start + owner.Count;
         var k2 = points.Count;
         int Moved(int p) => p >= at ? p + k2 : p;
         world.InsertRange(at, points);
         for (var b = 0; b < body.Bones.Count; b++)
         {
-            var bone = body.Bones[b];
-            if (b == Head) body.Bones[b] = bone with { Count = bone.Count + k2 };
-            else if (b > Head) body.Bones[b] = bone with { Start = bone.Start + k2, Pivot = Moved(bone.Pivot) };
+            var bn = body.Bones[b];
+            if (b == bone) body.Bones[b] = bn with { Count = bn.Count + k2 };
+            else if (bn.Start >= at) body.Bones[b] = bn with { Start = bn.Start + k2, Pivot = Moved(bn.Pivot) };
+            else body.Bones[b] = bn with { Pivot = Moved(bn.Pivot) };
         }
         for (var i = 0; i < body.Faces.Count; i++) body.Faces[i] = body.Faces[i] with { Points = body.Faces[i].Points.Select(Moved).ToArray(), PointNormals = null };
         for (var i = 0; i < body.Lines.Count; i++) body.Lines[i] = body.Lines[i] with { A = Moved(body.Lines[i].A), B = Moved(body.Lines[i].B) };
         for (var i = 0; i < body.Spheres.Count; i++) body.Spheres[i] = body.Spheres[i] with { Point = Moved(body.Spheres[i].Point) };
         foreach (var (q, colour) in faces) body.Faces.Add(new Face(q.Select(p => at + p).ToArray(), colour, Material: colour == Bright ? -1 : 0));
-        // (the body's own light scales, a point each, moved along with their points; the helmet's its own, 1)
+        // (the body's own light scales, a point each, moved along with their points; the new ones their own, 1)
         if (body.LightScale is { } scales && scales.Length > at)
             body.LightScale = scales.Take(at).Concat(Enumerable.Repeat(1f, k2)).Concat(scales.Skip(at)).ToArray();
         body.Vertices = Enumerable.Repeat(Vector3.Zero, world.Count).ToList();
         body.SetWorld(world.ToArray());
         return body;
+    }
+
+    // The patch on his back (the user, 2026-11-10: "I'm not sure how well it'll show on screen, but let's add a patch to the back of the suit
+    // saying LBRA"): a white panel across his shoulder blades -- the chest bone's back, a hair behind it -- and on it LBRA in dark letters
+    // of a 3 x 5 pixel font, each pixel PatchPixel square, reading the right way round from behind him
+    private const int Chest = 3, PatchPixel = 9;
+    private static readonly string[] PatchLetters =
+    {
+        "#.. ##. ##. .#.",
+        "#.. #.# #.# #.#",
+        "#.. ##. ##. ###",
+        "#.. #.# #.# #.#",
+        "### ##. #.# #.#",
+    };
+    internal static Body WithBackPatch(Body body)
+    {
+        if (body.Bones.Count <= Chest) return body;
+        var world = body.World().ToList();
+        var chest = body.Bones[Chest];
+        var own = world.Skip(chest.Start).Take(chest.Count).ToArray();
+        if (own.Length == 0) return body;
+        var lo = new Vector3(own.Min(p => p.X), own.Min(p => p.Y), own.Min(p => p.Z));
+        var hi = new Vector3(own.Max(p => p.X), own.Max(p => p.Y), own.Max(p => p.Z));
+        int columns = PatchLetters[0].Length, rows = PatchLetters.Length;
+        float w = (columns + 2) * PatchPixel, h = (rows + 2) * PatchPixel;
+        // (he faces +z: his back is the chest's least z; the panel's middle a little above the chest's)
+        var centre = new Vector3((lo.X + hi.X) / 2, lo.Y + (hi.Y - lo.Y) * 0.62f, lo.Z - 3);
+        var points = new List<Vector3>();
+        var faces = new List<(int[] Points, int Colour)>();
+        // (a quad facing -z, out of his back: x across his back -- from behind, his left is the viewer's left, -x reads left to right
+        // if +x is his left: the letters' columns run from +x to -x)
+        void Quad(float x0, float y0, float x1, float y1, float z, int colour)
+        {
+            var q = new[] { new Vector3(x0, y0, z), new Vector3(x1, y0, z), new Vector3(x1, y1, z), new Vector3(x0, y1, z) };
+            var n = LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(q);
+            if (n.Z > 0) q = q.Reverse().ToArray();
+            var first = points.Count;
+            points.AddRange(q);
+            faces.Add((new[] { first, first + 1, first + 2, first + 3 }, colour));
+        }
+        Quad(centre.X - w / 2, centre.Y - h / 2, centre.X + w / 2, centre.Y + h / 2, centre.Z, White);
+        for (var r = 0; r < rows; r++)
+            for (var c = 0; c < columns; c++)
+            {
+                if (PatchLetters[r][c] != '#') continue;
+                var x = centre.X + w / 2 - (c + 1) * PatchPixel;
+                var y = centre.Y + h / 2 - (r + 1) * PatchPixel;
+                Quad(x - PatchPixel, y - PatchPixel, x, y, centre.Z - 2, Dark);
+            }
+        return AddToBone(body, world, Chest, points, faces);
     }
 
     // ---- the inventory's models: single-bone bodies, upright, their fronts to +z (the side the inventory shows first)
