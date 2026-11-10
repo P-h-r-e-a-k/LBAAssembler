@@ -95,6 +95,7 @@ internal static class Program
             "enginebody" => EngineBody(args[1], args[2], args.Skip(3).DefaultIfEmpty("humanoid unlit").ToArray()),
             "styletest" => StyleTest(game, args.Length > 2 ? int.Parse(args[2]) : 0),
             "colours" => Colours(game, args.Length > 2 ? int.Parse(args[2]) : 0),
+            "colourscan" => ColourScan(game, int.Parse(args[2]), args.Length > 3 ? int.Parse(args[3]) : 30),
             // NOT `game` (the top-level heuristic assumes args[1] is numeric, true for every other
             // command here but not this one, whose args[1] is a channel NAME like "green" -- using
             // it silently always scanned LBA2 regardless of a 3rd arg, found live 2026-09-23 when
@@ -348,6 +349,21 @@ internal static class Program
     }
 
     // colours <game> <body>: the body's palette indices with their whole 16-step ramps as RGB
+    // every body of the game's BODY.HQR with at least `least` faces of colour `colour` (the story's racing suit: which bodies wear
+    // Twinsen's tunic, 192)
+    private static int ColourScan(int game, int colour, int least)
+    {
+        var archive = new Hqr(Generator.BodyArchive(Folder(game)));
+        for (var i = 0; i < archive.Count; i++)
+        {
+            Body b;
+            try { b = Body.Read(archive.Read(i), game); } catch { continue; }
+            var n = b.Faces.Count(f => f.Colour == colour);
+            if (n >= least) Console.WriteLine($"body {i}: {n} of {b.Faces.Count} faces colour {colour}");
+        }
+        return 0;
+    }
+
     private static int Colours(int game, int body)
     {
         var palette = PaletteBytes(game);

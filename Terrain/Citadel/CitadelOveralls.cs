@@ -29,6 +29,18 @@ internal static class CitadelOveralls
     private const int HeroEntity = 0, Head = 14;
     // the hero's bodies: his everyday clothes, the tunic's, the tunic's with a weapon
     private const int Everyday = 0, Tunic = 1, FirstArmed = 2, LastArmed = 6;
+    // The game's other bodies of Twinsen in his tunic (the user, 2026-11-08: "Twinsen in his racing suit everywhere he's still in the
+    // tunic"): his tunic's two others (11, 13), at the wheel (14, 22), with the protopack (16, 21), arm in arm with Zoe (17, 175), the
+    // buggy's (18, 19), on the Dino-Fly (166), and 201, 286, 339, 362, 368 -- picked by sight from every body with his eyes (two faces of
+    // 197) and the tunic's blue (192): the Wizard at a wheel (15, 23), the rabbibunny, the grobos and the mixed casts keep theirs, and so do
+    // the balloons and their basket (247, 248, 275: some balloons are that blue too). Their shapes stay the tunic's; its colour, 192 lit,
+    // is the suit's -- patched in the body's own bytes, nothing else rewritten (17, 175 and 362 store more primitives than the writer
+    // takes, and play as they are).
+    private static readonly int[] TunicBodies = { 9, 10, 11, 13, 14, 16, 17, 18, 19, 21, 22, 166, 175, 201, 286, 339, 362, 368 };
+    // (and the race game's small cars with him at the wheel, the build's copies of 14 made before this: his eyes, two faces of 197, and
+    // the 66 of the tunic's blue that 14's driver has)
+    private const int Eyes = 197, WheelTunicFaces = 66;
+    private const int TunicColour = 192;
     // (the racing gloves' colours, RaceTrackGloves: the red lit along its ramp, the white and the dark flat)
     private const int Red = 64, White = 62, Dark = 49;
     // (on Twinsen: a ramp's start is its darkest -- 64 came out maroon -- so his overalls' red six shades up it, as his jeans' blue is
@@ -123,6 +135,19 @@ internal static class CitadelOveralls
             armed.Add((b, body, n));
         }
         var helmeted = WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2))));
+        // (and the rest of him in his tunic: the suit's colour where it was the tunic's)
+        var others = new List<(int Entry, int Faces)>();
+        byte[]? Entry(int i) { try { return bodies.Read(i); } catch (ArgumentOutOfRangeException) { return null; } catch (InvalidDataException) { return null; } }
+        var copies = Enumerable.Range(0, bodies.Count).Where(i => !TunicBodies.Contains(i) && Entry(i) is { } e && Counts(e) is (2, WheelTunicFaces)).ToList();
+        foreach (var t in TunicBodies.Concat(copies).ToList())
+        {
+            if (t >= bodies.Count) continue;
+            if (Entry(t) is not { } bytes) continue;
+            var n = RecolourPolygons(bytes, TunicColour, Bright);
+            if (n <= 0) continue;
+            HqrWriter.ReplaceInFile(bodyPath, t, bytes);
+            others.Add((t, n));
+        }
         HqrWriter.ReplaceInFile(bodyPath, Tunic, overalls.Write());
         foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, body.Write());
         // (the helmeted one: its entry again on a second pass, else one more at the file's end, and the hero's entity told of it)
@@ -135,6 +160,7 @@ internal static class CitadelOveralls
             HqrWriter.AppendToFile(bodyPath, helmeted.Write());
             HqrWriter.ReplaceInFile(ressPath, 44, RaceTrackBaldinoCar.WithBody(table, HeroEntity, HelmetBody, index));
         }
+        log.Add($"Twinsen's other bodies in his tunic in the suit's colour: BODY.HQR {string.Join(", ", others.Select(o => $"{o.Entry} ({o.Faces})"))}");
         log.Add($"Twinsen's racing overalls with the helmet on: the hero's body {HelmetBody} ({helmeted.Vertices.Count} points, {helmeted.Faces.Count} polygons)");
         log.Add($"Twinsen's racing overalls ({Suit.Name}, the palette's {Bright}): BODY.HQR {Tunic} (the tunic's) his everyday body in the suit's colour with a white belt and stripes " +
                 $"and an LBRA patch on his back; {FirstArmed}-{LastArmed} (the tunic's with a weapon) the tunic's blue made the suit's ({string.Join(", ", armed.Select(a => a.Faces))} polygons)");
@@ -281,6 +307,35 @@ internal static class CitadelOveralls
         body.Vertices = Enumerable.Repeat(Vector3.Zero, world.Count).ToList();
         body.SetWorld(world.ToArray());
         return body;
+    }
+
+    // How many polygons of a body are Twinsen's eyes' colour and the tunic's (-1, -1 for what isn't a body)
+    private static (int Eyes, int Tunic) Counts(byte[] b)
+    {
+        var copy = (byte[])b.Clone();
+        var eyes = RecolourPolygons(copy, Eyes, Eyes);
+        return eyes < 0 ? (-1, -1) : (eyes, RecolourPolygons(copy, TunicColour, TunicColour));
+    }
+
+    // An LBA2 body's polygons of colour `from` made `to`, in its own bytes (its polygon blocks as Body.Read walks them: a type, a count,
+    // then each polygon's record with its colour at 8): how many, -1 if it isn't a body that reads so
+    private static int RecolourPolygons(byte[] b, int from, int to)
+    {
+        if (b.Length < 96) return -1;
+        int p = BitConverter.ToInt32(b, 68), end = BitConverter.ToInt32(b, 76), n = 0;
+        if (p < 96 || end > b.Length || p > end) return -1;
+        while (p < end)
+        {
+            if (p + 8 > end) return -1;
+            int type = BitConverter.ToUInt16(b, p), count = BitConverter.ToUInt16(b, p + 2);
+            p += 8;
+            bool quad = (type & 32768) != 0, env = (type & 16384) != 0, texture = (type & 255) > 7;
+            var stride = env ? 16 : texture ? (quad ? 32 : 24) : 12;
+            if ((type & 255) > 23 || p + count * stride > end) return -1;
+            for (var i = 0; i < count; i++, p += stride)
+                if (b[p + 8] == from) { b[p + 8] = (byte)to; n++; }
+        }
+        return n;
     }
 
     // The patch on his back (the user, 2026-11-10: "I'm not sure how well it'll show on screen, but let's add a patch to the back of the suit
