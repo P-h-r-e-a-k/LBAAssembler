@@ -53,6 +53,8 @@ internal static partial class RaceTrackStory
         TwinsenLemonade, ZoeNoDrink,
         // (the Tralu in his bar the evening after the lighthouse: his moan, before he too tells Twinsen to go home -- 2026-11-09)
         TraluEvening,
+        // (the bar's celebration the evening after the lighthouse: the regulars cheer Twinsen's win, Luc brings him a drink -- 2026-11-10)
+        PatCheer, FabCheer, BunnyCheer, TwinsenJustOne, LucServes, TwinsenCheers,
     }
     private static readonly string[][] EveningLines =
     {
@@ -290,11 +292,66 @@ internal static partial class RaceTrackStory
             "Grrrr... ANCORA tu. Cent'anni in queste grotte, e stasera tutta l'isola è nel mio retrobottega: tamburi, canti, brindisi a chissà quale gara. Un Tralu non sente nemmeno più scendere la sua birra.",
             "Grrrr... TU outra vez. Cem anos nestas grutas, e esta noite a ilha inteira está na minha sala dos fundos: tambores, cantorias, brindes a uma corrida qualquer. Um Tralu já nem ouve a própria cerveja a descer.",
         },
+        new[]
+        {
+            "Hey, it's Twinsen! The kid beat Raph's time in the storm -- and Raph's still talking about it!",
+            "Hé, c'est Twinsen ! Le petit a battu le temps de Raph sous l'orage -- et Raph n'en revient toujours pas !",
+            "He, das ist Twinsen! Der Kleine hat Raphs Zeit im Sturm geschlagen -- und Raph redet immer noch davon!",
+            "¡Eh, es Twinsen! El chaval batió el tiempo de Raph en plena tormenta... ¡y Raph todavía no se lo cree!",
+            "Ehi, è Twinsen! Il ragazzo ha battuto il tempo di Raph sotto la tempesta -- e Raph ne sta ancora parlando!",
+            "Ei, é o Twinsen! O miúdo bateu o tempo do Raph no meio da tempestade -- e o Raph ainda não se calou com isso!",
+        },
+        new[]
+        {
+            "A drink for the champion! Luc, his first one's on us!",
+            "Un verre pour le champion ! Luc, sa première tournée est pour nous !",
+            "Ein Drink für den Champion! Luc, sein erstes geht auf uns!",
+            "¡Una copa para el campeón! Luc, ¡la primera la pagamos nosotros!",
+            "Da bere per il campione! Luc, il suo primo lo offriamo noi!",
+            "Uma bebida para o campeão! Luc, a primeira é por nossa conta!",
+        },
+        new[]
+        {
+            "To Twinsen! [hic!] ...and to the drums!",
+            "À Twinsen ! [hic !] ...et aux tambours !",
+            "Auf Twinsen! [hicks!] ...und auf die Trommeln!",
+            "¡Por Twinsen! [¡hip!] ...¡y por los tambores!",
+            "A Twinsen! [hic!] ...e ai tamburi!",
+            "Ao Twinsen! [hic!] ...e aos tambores!",
+        },
+        new[]
+        {
+            "Well... just the one, then. Zoe will be waiting.",
+            "Bon... juste un, alors. Zoé m'attend.",
+            "Na gut... nur einen. Zoe wartet sicher schon.",
+            "Bueno... solo uno, entonces. Zoe me estará esperando.",
+            "Va bene... solo uno, allora. Zoe mi starà aspettando.",
+            "Pronto... só um, então. A Zoe deve estar à minha espera.",
+        },
+        new[]
+        {
+            "Here you are, champion: the house's finest. And not a word to the mayor!",
+            "Et voilà, champion : ce que la maison a de meilleur. Et pas un mot au maire !",
+            "Bitte schön, Champion: das Beste vom Haus. Und kein Wort zum Bürgermeister!",
+            "Aquí tienes, campeón: lo mejor de la casa. ¡Y ni una palabra al alcalde!",
+            "Ecco qua, campione: il meglio della casa. E non una parola al sindaco!",
+            "Aqui tens, campeão: o melhor da casa. E nem uma palavra ao presidente da câmara!",
+        },
+        new[]
+        {
+            "Cheers, everyone!",
+            "Santé, tout le monde !",
+            "Prost, alle zusammen!",
+            "¡Salud a todos!",
+            "Salute a tutti!",
+            "Saúde, pessoal!",
+        },
     };
     // (after the chapters' lines in Citadel Island's texts)
     private static int EveningId(Func<ChapterLine, int> say, EveningLine line) => say(ChapterLine.ZoeSmiling) + ChapterLines.Length + (int)line;
     // (the lines the race-track mode's tired= says as they are while Twinsen is tired, not as the go-home line: RACEMOD.CPP)
-    private static int[] TiredKeep(Func<ChapterLine, int> say) => new[] { EveningId(say, EveningLine.TraluEvening) };
+    private static int[] TiredKeep(Func<ChapterLine, int> say) => new[] { EveningLine.TraluEvening, EveningLine.PatCheer, EveningLine.FabCheer, EveningLine.BunnyCheer,
+        EveningLine.LucServes }.Select(l => EveningId(say, l)).ToArray();
 
     // A line said as the one saying it would, while Twinsen is tired (not the tired line in its place)
     private static string Aside(string said) => $@"set_var_game({DayVar}, {TiredAside});

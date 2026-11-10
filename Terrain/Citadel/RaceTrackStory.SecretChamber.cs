@@ -154,17 +154,7 @@ void comportement_1()
         // unless the night's house had to share its grid, shaft and all: then a platform over the shaft here too, Action on it as at night)
         var dayShaft = Citadel.CitadelHouseLift.ShaftInDayHouse(p.Store.Directory);
         if (dayShaft) p.Edit(OpeningScene, "the house's lift over its shaft (the night's house on the day's grid)", model => AddLift(p, model).Scripts);
-        // the Tralu's bar in the evening: Drunk
-        p.Edit(BarHall, "the Tralu's bar walked into in the evening: Zoe will know (Drunk 1)", model =>
-            p.Add(model, RaceTrackScenes.InvisibleHelper(model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z), $@"void comportement_0()
-{{
-    if (2 > chapter() && {Tired} == var_game({DayVar}) && 0 == var_game({Drunk}))
-    {{
-        set_var_game({Drunk}, {DrankTonight});
-    }}
-    suicide();
-}}
-"));
+        // (the Tralu's bar in the evening: the drink Luc brings Twinsen at the regulars' celebration sets Drunk -- RaceTrackStory.TraluTavern)
         // the spanking's animations, bodies and slap (Citadel/CitadelSpanking)
         var (spankLog, slap) = Citadel.CitadelSpanking.Install(p.Store.Directory);
         p.Log.AddRange(spankLog);

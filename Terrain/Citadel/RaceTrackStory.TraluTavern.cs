@@ -65,6 +65,18 @@ internal static partial class RaceTrackStory
     // wall and the foot of the stairs behind him, facing the camera with the barrel and his tankard on it in front of him (the user,
     // 2026-11-08: "in the corner ... It fits him being moody about the bar being there"; he stood east of the barrel, in front of it)
     private static readonly (int X, int Z) TraluAt = (Cell(42.5), Cell(35.8));
+    // the regulars' own lines in the game's Tavern (Citadel Island's texts): the rabbibunny's, Pat's, Fab's
+    private const int TavernBunnyLine = 53, TavernPatLine = 106, TavernFabLine = 48;
+    // the celebration: Twinsen's seat on the west bench (cells 35.5, 47 -- its top 512 over the floor), where he stands up to; Luc's way
+    // round his counter's east end and down the bench's far side to beside him; the drink on the table in front of him (its top 768 up);
+    // Twinsen's track labels in scene 19 and Luc's, and the scene variable that has the drink appear
+    private const int BenchTop = TraluBarRoom.FloorY + 512, Served = 30, PartyWait = 31;
+    private static readonly (int X, int Z) SeatAt = (Cell(35.5), Cell(47.0)), StandAt = (Cell(34.0), Cell(48.0));
+    // (out past his counter's east crate, clear of the candlestick at cell (36, 35): no way out of there is wide enough for him, so he
+    // walks without object collision -- brushing the crate's corner -- and down behind the west bench)
+    private static readonly (int X, int Z)[] LucWay = { (Cell(35.2), Cell(35.7)), (Cell(35.2), Cell(38.9)), (Cell(34.2), Cell(39.5)), (Cell(34.2), Cell(46.2)) };
+    private static readonly (int X, int Y, int Z) DrinkAt = (Cell(36.3), TraluBarRoom.FloorY + 768, Cell(47.0));
+    private const int BarSitDown = 200, BarSeated = 201, BarStandUp = 202, BarStoodUp = 203, LucBrings = 10, LucThere = 11, LucBack = 12, LucHome = 13;
     // how near Twinsen comes to talk: the regulars' (Luc's across his counter), the Tralu's (a big fellow, behind his barrel in his corner)
     private const int RegularReach = 750, LucReach = 1600, TraluReach = 2200;
 
@@ -87,6 +99,7 @@ internal static partial class RaceTrackStory
             if (luc is null || bunny is null || pat is null || fab is null || visitor is null || tim is null) throw new NotTheGames("the Tavern's people");
             void Place(SceneActorModel who, (int X, int Z) at, int y, (int X, int Z) facing) => (who.X, who.Y, who.Z, who.Beta) = (at.X, y, at.Z, Face(at, facing));
             Place(luc, LucAt, TraluBarRoom.FloorY, HallMiddle);
+            luc.Flags &= ~1u;   // (no object collision: out past his counter's crates with Twinsen's drink -- the celebration below)
             Place(tim, TimAt, TraluBarRoom.FloorY, (Cell(36.5), TimAt.Z));
             // (the sitters face across the table)
             Place(pat, PatAt, SitHigh, (Cell(38.5), PatAt.Z));
@@ -103,6 +116,7 @@ internal static partial class RaceTrackStory
             const string Storm = "2 > chapter()";
             // (Luc: his welcome and the back gate's key -- told once, BackGateVar to 1: RaceTrackStory.TraluCaves -- then the key again till
             // the back gate is open, his welcome after that. The cave's own gate opens as Twinsen comes in.)
+            var lucIndex = model.Actors.Count;
             edits.Add(p.Add(model, luc, Talker(Storm, $@"            if (0 == var_game({BackGateVar}))
             {{
                 message({p.Say(ChapterLine.LucBar)});
@@ -117,9 +131,14 @@ internal static partial class RaceTrackStory
             {{
                 message({p.Say(ChapterLine.LucBar)});
             }}", LucReach)));
-            edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({p.Say(ChapterLine.RabbibunnyBar)});", RegularReach)));
+            // (each regular's own line from the game's Tavern first, then the bar's -- the user, 2026-11-08: "each should have their ORIGINAL
+            // dialogue lines ... as well as anything new": the rabbibunny's hole in the cellar (53), Pat's "we need some music here!" (106),
+            // Fab's "Howdy kiddo!" (48); the visitor's "Sorry, I am not from here." (66) is how the bar's line of his begins)
+            var bunnyIndex = model.Actors.Count;
+            edits.Add(p.Add(model, bunny, Talker(Storm, $"            message({TavernBunnyLine});\n            message({p.Say(ChapterLine.RabbibunnyBar)});", RegularReach)));
+            var patIndex = model.Actors.Count;
             var fabIndex = model.Actors.Count + 1;
-            edits.Add(p.Add(model, pat, Talker(Storm, $"            message({p.Say(ChapterLine.PatBar)});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabBar)});", RegularReach)));
+            edits.Add(p.Add(model, pat, Talker(Storm, $"            message({TavernPatLine});\n            message({p.Say(ChapterLine.PatBar)});\n            message_obj({fabIndex}, {TavernFabLine});\n            message_obj({fabIndex}, {p.Say(ChapterLine.FabBar)});", RegularReach)));
             edits.Add(p.Add(model, fab, OnlyWhile(Storm)));
             edits.Add(p.Add(model, visitor, Talker(Storm, $"            message({p.Say(ChapterLine.StrangerBar)});", RegularReach)));
             edits.Add(p.Add(model, tim, Talker(TimInBar, $"            message({p.Say(ChapterLine.TimBar)});", RegularReach)));
@@ -128,7 +147,32 @@ internal static partial class RaceTrackStory
                 {
                     (crate.X, crate.Y, crate.Z, crate.Beta) = (at.X, TraluBarRoom.FloorY, at.Z, 0);
                     crate.Flags = CrateFlags;
-                    edits.Add(p.Add(model, crate, OnlyWhile(Storm)));
+                    // (nothing in the way of Luc's while he squeezes past them with Twinsen's drink, and back -- the celebration below:
+                    // in his way a crate's own collision pushed it off along the wall)
+                    edits.Add(p.Add(model, crate, $@"void comportement_0()
+{{
+    if ({Storm})
+    {{
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+    if ({LucBrings} == l_track_obj({lucIndex}) || {LucBack} == l_track_obj({lucIndex}))
+    {{
+        obj_col(0);
+    }}
+    else
+    {{
+        obj_col(1);
+    }}
+}}
+"));
                 }
             // (the Tralu at his round table, his tankard on it -- every chapter: his back room, noisy in the storm, his own in chapter 2)
             if (Copy(p.Originals, TraluCave, CaveTralu) is not { Entity: TraluEntity } tralu) throw new NotTheGames("the cave's Tralu");
@@ -161,6 +205,104 @@ internal static partial class RaceTrackStory
                 SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.Bottle, bx + 100, by, bz - 110));
                 SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.Plate, bx - 90, by, bz + 80, 600));
             }
+            // ---- the celebration, the evening after the lighthouse (the user, 2026-11-08: "some of them congratulate him on his win and offer
+            // to buy him a drink; then Twinsen sits down at a table and Luc brings the drink over"): as Twinsen first comes in that evening
+            // (Tired, chapter 1, not drunk yet) Pat, Fab and the rabbibunny cheer him, he'll have just the one; he sits on the west bench,
+            // Luc comes round the counter with it -- a tankard on the table in front of him as he gets there -- and the drink is what Zoe
+            // will smell (Drunk 1: RaceTrackStory.SecretChamber). Then he gets up and is the player's again.
+            var first = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint(SeatAt.X, BenchTop, SeatAt.Z));
+            foreach (var (x, z) in LucWay) model.TrackPoints.Add(new SceneTrackPoint(x, TraluBarRoom.FloorY, z));
+            model.TrackPoints.Add(new SceneTrackPoint(LucAt.X, TraluBarRoom.FloorY, LucAt.Z));
+            model.TrackPoints.Add(new SceneTrackPoint(StandAt.X, TraluBarRoom.FloorY, StandAt.Z));
+            int seat = first, way = first + 1, home = first + 1 + LucWay.Length, stand = home + 1;
+            var drink = Prop(DrinkAt.X, DrinkAt.Y, DrinkAt.Z, TraluBarRoom.TankardGeneric, 1024);
+            var drinkIndex = model.Actors.Count;
+            edits.Add(p.Add(model, drink, $@"void comportement_0()
+{{
+    if (2 > chapter() && {Tired} == var_game({DayVar}) && 0 == var_game({Drunk}))
+    {{
+        invisible(1);
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+    if (1 == var_cube({Served}))
+    {{
+        invisible(0);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+}}
+"));
+            var party = RaceTrackScenes.InvisibleHelper(SeatAt.X, TraluBarRoom.FloorY, SeatAt.Z);
+            edits.Add(p.Add(model, party, $@"void comportement_0()
+{{
+    if (2 > chapter() && {Tired} == var_game({DayVar}) && 0 == var_game({Drunk}))
+    {{
+        set_dir_obj(0, NO_MOVE);
+        cinema_mode(1);
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+    add_var_cube({PartyWait}, 1);
+    if (25 < var_cube({PartyWait}))
+    {{
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    message_obj({patIndex}, {EveningId(p.Say, EveningLine.PatCheer)});
+    message_obj({fabIndex}, {EveningId(p.Say, EveningLine.FabCheer)});
+    message_obj({bunnyIndex}, {EveningId(p.Say, EveningLine.BunnyCheer)});
+    message_obj(0, {EveningId(p.Say, EveningLine.TwinsenJustOne)});
+    set_track_obj(0, label_{BarSitDown});
+    set_track_obj({lucIndex}, label_{LucBrings});
+    set_comportement(comportement_2);
+}}
+
+void comportement_2()
+{{
+    if ({LucThere} == l_track_obj({lucIndex}))
+    {{
+        set_var_cube({Served}, 1);
+        message_obj({lucIndex}, {EveningId(p.Say, EveningLine.LucServes)});
+        message_obj(0, {EveningId(p.Say, EveningLine.TwinsenCheers)});
+        set_var_game({Drunk}, {DrankTonight});
+        set_track_obj({lucIndex}, label_{LucBack});
+        set_track_obj(0, label_{BarStandUp});
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if ({BarStoodUp} == l_track_obj(0))
+    {{
+        cinema_mode(0);
+        set_dir_obj(0, MOVE_MANUAL);
+        suicide();
+    }}
+}}
+"));
             return scripts =>
             {
                 foreach (var gone in HallGone)
@@ -169,6 +311,51 @@ internal static partial class RaceTrackStory
                     scripts.SetText(gone, ScriptKind.Track, "label(0);\nstop();\n");
                 }
                 foreach (var e in edits) e(scripts);
+                // (the celebration's tracks after the regulars' own: Luc's Add gave him the game's)
+                // (his track empty till now: a label 0 first -- the sitting down at its very start, offset 0, never ran)
+                var heroTrack = scripts.GetText(0, ScriptKind.Track).TrimEnd();
+                if (!heroTrack.Contains("label(")) heroTrack += "\nlabel(0);\nstop();";
+                scripts.SetText(0, ScriptKind.Track, heroTrack + $@"
+
+label({BarSitDown});
+pos_point({seat});
+beta(1024);
+anim({CitadelSpanking.TwinsenSit});
+wait_nb_dizieme(30);
+
+label({BarSeated});
+stop();
+
+label({BarStandUp});
+wait_nb_dizieme(20);
+pos_point({stand});
+beta(2048);
+anim(0);
+
+label({BarStoodUp});
+stop();
+");
+                scripts.SetText(lucIndex, ScriptKind.Track, $@"label(0);
+stop();
+
+label({LucBrings});
+anim(1);
+{string.Concat(Enumerable.Range(way, LucWay.Length).Select(k => $"goto_point({k});\n"))}anim(0);
+beta(1024);
+
+label({LucThere});
+stop();
+
+label({LucBack});
+wait_nb_dizieme(10);
+anim(1);
+{string.Concat(Enumerable.Range(way, LucWay.Length).Reverse().Select(k => $"goto_point({k});\n"))}goto_point({home});
+anim(0);
+beta({Face(LucAt, HallMiddle)});
+
+label({LucHome});
+stop();
+");
             };
         });
 

@@ -21,6 +21,9 @@ internal static class CitadelSpanking
 {
     public const int ZoeEntity = 15, ZoeSit = 100, ZoeSpank = 101;
     public const int HeroEntity = 0, TwinsenLap = 240, TwinsenKick = 241, TwinsenBare = 30, TwinsenRed = 31, TwinsenPink = 32;
+    // and Twinsen sitting at a table (the bar's celebration, RaceTrackStory.TraluTavern): his thighs level on a seat TwinsenSitDrop under
+    // his standing hips' thighs, his back upright, his forearms out in front of him on the table
+    public const int TwinsenSit = 242, TwinsenSitDrop = 463;
     // how far Zoe's hips come down to sit (her hips' bone at 633 standing, her thighs' tops 60 under it): the stool's top
     public const int SitDrop = 280, StoolTop = 633 - SitDrop - 60;
     // her hips this far behind her place, over the chair's seat (CitadelProps.BuildChair)
@@ -101,6 +104,19 @@ internal static class CitadelSpanking
         kick.Frames.Add(Frame(twinsenBody, 150, heroBasis, kickUp, -LapDown, TwinsenHead));
         kick.Frames.Add(Frame(twinsenBody, 150, heroBasis, kickDown, -LapDown, TwinsenHead));
 
+        // ---- Twinsen: sitting at a table
+        var seated = new Dictionary<int, Vector3>
+        {
+            [3] = N(0, 1, 0.1f),                                    // his back upright, leant a little to the table
+            [8] = N(0.1f, -0.05f, 1), [9] = N(0.03f, -1, 0.12f),    // his thighs out level on the seat, the shins down
+            [11] = N(-0.1f, -0.05f, 1), [12] = N(-0.03f, -1, 0.12f),
+            [4] = N(0.25f, -0.75f, 0.6f), [5] = N(-0.1f, -0.05f, 1), // his upper arms down and forward, his forearms out on the table
+            [6] = N(-0.25f, -0.75f, 0.6f), [7] = N(0.1f, -0.05f, 1),
+        };
+        var sitDown = new Anim { Game = 2, LoopFrame = 0 };
+        sitDown.Frames.Add(Frame(twinsenBody, 700, heroBasis, seated, -TwinsenSitDrop, TwinsenHead));
+        sitDown.Frames.Add(Frame(twinsenBody, 900, heroBasis, new Dictionary<int, Vector3>(seated) { [3] = N(0, 1, 0.16f) }, -TwinsenSitDrop, TwinsenHead));
+
         // ---- his racing suit pulled down to his knees (the user, 2026-11-09: "with his trousers down and his bare ass up in the air which
         // turns red as she spanks him"; the racing suit only -- "the suit is required ... to access the Tralu bar area"): his everyday
         // body painted as the suit (Citadel/CitadelOveralls), then its lower half's polygons -- the trousers' -- bare: his thighs and his
@@ -126,7 +142,7 @@ internal static class CitadelSpanking
         }
 
         Frames.Clear();
-        foreach (var (name, b, an) in new[] { ("sit", zoeBody, sit), ("spank", zoeBody, spank), ("lap", twinsenBody, lie), ("kick", twinsenBody, kick) })
+        foreach (var (name, b, an) in new[] { ("sit", zoeBody, sit), ("spank", zoeBody, spank), ("lap", twinsenBody, lie), ("kick", twinsenBody, kick), ("seated", twinsenBody, sitDown) })
             for (var k = 0; k < an.Frames.Count; k++) Frames.Add(($"{name}{k}", b, an.Frames[k]));
         var bodyIndex = HqrArchive.CountEntries(bodyPath);
         var file = File.ReadAllBytes(bodyPath);
@@ -136,7 +152,7 @@ internal static class CitadelSpanking
         File.WriteAllBytes(bodyPath, file);
         var animIndex = HqrArchive.CountEntries(animPath);
         var animFile = File.ReadAllBytes(animPath);
-        foreach (var a in new[] { sit, spank, lie, kick }) animFile = HqrWriter.AppendEntry(animFile, HqrWriter.StoredEntry(a.Write()));
+        foreach (var a in new[] { sit, spank, lie, kick, sitDown }) animFile = HqrWriter.AppendEntry(animFile, HqrWriter.StoredEntry(a.Write()));
         File.WriteAllBytes(animPath, animFile);
         table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, TwinsenBare, bodyIndex);
         table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, TwinsenRed, bodyIndex + 1);
@@ -145,6 +161,7 @@ internal static class CitadelSpanking
         table = RaceTrackJumpAnim.WithAnim(table, ZoeEntity, ZoeSpank, animIndex + 1);
         table = RaceTrackJumpAnim.WithAnim(table, HeroEntity, TwinsenLap, animIndex + 2);
         table = RaceTrackJumpAnim.WithAnim(table, HeroEntity, TwinsenKick, animIndex + 3);
+        table = RaceTrackJumpAnim.WithAnim(table, HeroEntity, TwinsenSit, animIndex + 4);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
         log.Add($"the spanking: Zoe sitting and spanking (entity {ZoeEntity}'s animations {ZoeSit}, {ZoeSpank}: ANIM.HQR {animIndex}, {animIndex + 1}), " +
                 $"Twinsen across her lap and kicking ({TwinsenLap}, {TwinsenKick}: {animIndex + 2}, {animIndex + 3}), his seat bare and red (bodies {TwinsenBare}, " +
