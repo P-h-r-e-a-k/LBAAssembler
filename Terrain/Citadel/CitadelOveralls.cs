@@ -45,10 +45,11 @@ internal static class CitadelOveralls
     private const int Red = 64, White = 62, Dark = 49;
     // (on Twinsen: a ramp's start is its darkest -- 64 came out maroon -- so his overalls' red six shades up it, as his jeans' blue is
     // 194; the shirt's polygons are textured, its pattern taken off)
-    // The suit's colour, a choice (the user, 2026-11-10: "generate a few different colour outfits and add them into LBAAssembler. Let's go
+    // The suit's colour, a choice -- green by default (the user, 2026-11-10: "Let's go with green, but let's keep the models, they may be
+    // useful for multiplayer at a later date"; and before: "generate a few different colour outfits and add them into LBAAssembler. Let's go
     // for a blue based on Twinsen's tunic, British racing green, a dark mustard yellow"): each a ramp of the palette and how far up it the
     // suit is lit from (the red's six, as above). The build's choice: RT_SUIT (red, blue, green, mustard) if set, else the race car
-    // window's (RaceCarSetup.SuitColour). Everything painted the suit's colour follows it: the overalls, the helmet, the tunic's armed
+    // window's (RaceCarSetup.RacingSuit). Everything painted the suit's colour follows it: the overalls, the helmet, the tunic's armed
     // bodies, and the spanking's suit pulled down (CitadelSpanking).
     public enum SuitColour { Red, Blue, Green, Mustard }
     public static readonly (SuitColour Colour, string Name, int Ramp, int Shade)[] Suits =
@@ -58,14 +59,14 @@ internal static class CitadelOveralls
         (SuitColour.Green, "British racing green", 128, 4),
         (SuitColour.Mustard, "Dark mustard yellow", 96, 7),
     };
-    public static SuitColour Colour { get; set; } = SuitColour.Red;
+    public static SuitColour Colour { get; set; } = SuitColour.Green;
     private static (SuitColour Colour, string Name, int Ramp, int Shade) Suit => Suits.First(s => s.Colour == Colour);
     private static int Bright => Suit.Ramp + Suit.Shade;
     // (the build's choice: RT_SUIT, else the race car window's)
     public static SuitColour Chosen()
     {
-        var name = Environment.GetEnvironmentVariable("RT_SUIT") is { Length: > 0 } env ? env : EditorSettings.Current.RaceCar.SuitColour;
-        return Enum.TryParse<SuitColour>(name, true, out var c) ? c : SuitColour.Red;
+        var name = Environment.GetEnvironmentVariable("RT_SUIT") is { Length: > 0 } env ? env : EditorSettings.Current.RaceCar.RacingSuit;
+        return Enum.TryParse<SuitColour>(name, true, out var c) ? c : SuitColour.Green;
     }
     // the tunic's blue (its ramp), and the everyday clothes': the shirt, the jeans, the belt
     private const int TunicBlue = 192, Shirt = 224, Jeans = 194, Belt = 97;
