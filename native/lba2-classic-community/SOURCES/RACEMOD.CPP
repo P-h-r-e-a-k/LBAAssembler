@@ -451,7 +451,7 @@ static int s_nbCheckpoints = 0, s_next = 0, s_showCheckpoints = 0;
 static int s_halfway = 0;
 
 // a short message on the display ("Missed checkpoint 3") and until when
-static char s_message[64];
+static char s_message[160];
 static S32 s_messageUntil = 0;
 
 // A car going round a vertical loop (LoopStep): the player's, and each opponent's.
@@ -624,7 +624,7 @@ static int s_wantFlip = 0;
 #define RACE_MAX_GATES 4
 #define RACE_MAX_SETS 4
 #define RACE_MAX_TRACKS 16
-typedef struct { int Var, Least; char Text[64]; } T_RACE_GATE;
+typedef struct { int Var, Least; char Text[128]; } T_RACE_GATE;
 static T_RACE_GATE s_gates[RACE_MAX_GATES];
 static int s_nbGates = 0;
 // Game variables held while the race-track mode runs (vargame=<n> <value>): an island's travel cutscenes kept from playing in a race --
@@ -20787,7 +20787,28 @@ void RaceMod_Draw(void) {
     // since the first tracks and never drawn till 2026-10-10
     // (the story's cars unlocked -- StoryUnlock: once the race's own word is over)
     if (s_sayNext[0] && now >= s_messageUntil) { Message(s_sayNext); s_messageUntil = now + 5000; s_sayNext[0] = 0; }
-    if (hud && now < s_messageUntil && s_message[0]) HudLine(width / 2 - SizeFont(s_message) / 2, height / 5, s_message, -1);
+    // (wrapped at its spaces into lines that fit the screen, each in the middle, three at most: a gate's or a breakdown's words ran off
+    // both sides on one line -- the user, 2026-11-08, of Flick's "No helmet, no race!": "doesn't wrap, and goes off the screen")
+    if (hud && now < s_messageUntil && s_message[0]) {
+        const S32 room = width - 64;
+        const char *s = s_message;
+        for (int line = 0; *s && line < 3; line++) {
+            char buf[96];
+            int n = (int)strlen(s), cut = n;
+            if (n > (int)sizeof(buf) - 1) n = cut = (int)sizeof(buf) - 1;
+            snprintf(buf, sizeof(buf), "%.*s", n, s);
+            while (line < 2 && SizeFont(buf) > room) {
+                int sp = cut - 1;
+                while (sp > 0 && s[sp] != ' ') sp--;
+                if (sp <= 0) break;
+                cut = sp;
+                snprintf(buf, sizeof(buf), "%.*s", cut, s);
+            }
+            HudLine(width / 2 - SizeFont(buf) / 2, height / 5 + line * RACE_LINE_STEP, buf, -1);
+            s += cut;
+            while (*s == ' ') s++;
+        }
+    }
     if (hud) DrawNetBoard(now);
 
     RestoreClipWindow();
