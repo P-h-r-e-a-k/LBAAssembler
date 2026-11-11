@@ -1316,7 +1316,7 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_SHARED))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_STORY_TWO))) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -3163,7 +3163,7 @@ static S32 StoryMode(void) {
     ReadSettings();
     s_storyMenu[0] = (U16)(saved ? 2 : 1);
     s_storyMenu[1] = 5;
-    s_storyMenu[2] = 270;
+    s_storyMenu[2] = 298;
     s_storyMenu[3] = 0;
     SetRow(s_storyMenu, 0, RG_ID_BACK);
     SetRow(s_storyMenu, 1, RG_ID_STORY_NEW);
@@ -3171,8 +3171,9 @@ static S32 StoryMode(void) {
     SetRow(s_storyMenu, 3, RG_ID_STORY_LEVEL);
     SetRow(s_storyMenu, 4, RG_ID_STORY_TWO);
     for (;;) {
-        Page("Story Mode", 270 - (56 * 4) / 2 - 50);
-        Text(UI_CENTER_X, 410 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
+        // (five rows since the Two players row, 2026-11-11: the title and the line under them moved out of their way)
+        Page("Story Mode", 298 - (56 * 5) / 2 - 50);
+        Text(UI_CENTER_X, 462 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
         const S32 select = Menu(s_storyMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         // (the story's difficulty: its page, then back here -- the row says the level chosen)
