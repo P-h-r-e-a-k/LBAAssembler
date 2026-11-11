@@ -4291,6 +4291,8 @@ internal static class RaceTrackBuilder
         foreach (var r in landing.Keys.OrderByDescending(k => landing[k]))
         {
             (double Climb, double FootX, double FootZ, double Ground, double Top, double Tx, double Tz, double Nx, double Nz)? best = null;
+            // (why each place along the road's side by this stretch was turned down: for the log, where none was left)
+            int offStretch = 0, uneven = 0, low = 0, cubeEdge = 0, noCube = 0, clashed = 0;
             foreach (var i in segs)
             {
                 var (a, b) = (road[i], road[i + 1]);
@@ -4306,28 +4308,28 @@ internal static class RaceTrackBuilder
                         double nx = -tz * side, nz = tx * side;
                         double fx = px + nx * (half + LadderOut), fz = pz + nz * (half + LadderOut);
                         double zx = px + nx * (half + (LadderOut + LadderZoneOut) / 2 + 0.2), zz = pz + nz * (half + (LadderOut + LadderZoneOut) / 2 + 0.2);
-                        if (!region.TryGetValue(((int)Math.Floor(zx), (int)Math.Floor(zz)), out var rz) || rz != r) continue;
-                        if (!region.TryGetValue(((int)Math.Floor(fx), (int)Math.Floor(fz)), out var rf) || rf != r) continue;
+                        if (!region.TryGetValue(((int)Math.Floor(zx), (int)Math.Floor(zz)), out var rz) || rz != r) { offStretch++; continue; }
+                        if (!region.TryGetValue(((int)Math.Floor(fx), (int)Math.Floor(fz)), out var rf) || rf != r) { offStretch++; continue; }
                         var g = Ground(fx, fz);
                         var heights = new[] { g, Ground(zx, zz), Ground(zx + tx * LadderZoneAlong, zz + tz * LadderZoneAlong), Ground(zx - tx * LadderZoneAlong, zz - tz * LadderZoneAlong) };
-                        if (heights.Max() - heights.Min() > 600) continue;
-                        if (top - g < LadderLeast) continue;
+                        if (heights.Max() - heights.Min() > 600) { uneven++; continue; }
+                        if (top - g < LadderLeast) { low++; continue; }
                         // (the zone in one cube, a cell clear of its edges; nothing else's box where the ladder stands)
                         double ex0 = Math.Min(fx, px + nx * (half + LadderZoneOut)) - Math.Abs(tx) * LadderZoneAlong, ex1 = Math.Max(fx, px + nx * (half + LadderZoneOut)) + Math.Abs(tx) * LadderZoneAlong;
                         double ez0 = Math.Min(fz, pz + nz * (half + LadderZoneOut)) - Math.Abs(tz) * LadderZoneAlong, ez1 = Math.Max(fz, pz + nz * (half + LadderZoneOut)) + Math.Abs(tz) * LadderZoneAlong;
-                        if ((int)Math.Floor((ex0 - 1) / IslandCube.Cells) != (int)Math.Floor((ex1 + 1) / IslandCube.Cells) || (int)Math.Floor((ez0 - 1) / IslandCube.Cells) != (int)Math.Floor((ez1 + 1) / IslandCube.Cells)) continue;
-                        if (IslandDecors.Locate(island, fx * 512, fz * 512) is not { } at) continue;
+                        if ((int)Math.Floor((ex0 - 1) / IslandCube.Cells) != (int)Math.Floor((ex1 + 1) / IslandCube.Cells) || (int)Math.Floor((ez0 - 1) / IslandCube.Cells) != (int)Math.Floor((ez1 + 1) / IslandCube.Cells)) { cubeEdge++; continue; }
+                        if (IslandDecors.Locate(island, fx * 512, fz * 512) is not { } at) { noCube++; continue; }
                         double hx = (Math.Abs(tx) * LadderHalf + Math.Abs(nx) * LadderThick) / 512.0, hz = (Math.Abs(tz) * LadderHalf + Math.Abs(nz) * LadderThick) / 512.0;
                         int cx = at.X, cz = at.Z;
                         var clash = at.Cube.Decors.Any(d => d.YMax >= d.YMin && d.YMax > g && d.YMin < top
                                                             && d.XMax > cx - hx * 512 - 64 && d.XMin < cx + hx * 512 + 64 && d.ZMax > cz - hz * 512 - 64 && d.ZMin < cz + hz * 512 + 64);
-                        if (clash) continue;
+                        if (clash) { clashed++; continue; }
                         var climb = top - g;
                         if (best is null || climb < best.Value.Climb) best = (climb, fx, fz, g, top, tx, tz, nx, nz);
                     }
                 }
             }
-            if (best is not { } l) { made.Add($"stretch {r} ({landing[r]} cells to land on): no place for a ladder"); continue; }
+            if (best is not { } l) { made.Add($"stretch {r} ({landing[r]} cells to land on): no place for a ladder (turned down: off the stretch {offStretch}, uneven {uneven}, too low {low}, by a cube's edge {cubeEdge}, no cube {noCube}, a decor there {clashed})"); continue; }
             if (IslandDecors.Locate(island, l.FootX * 512, l.FootZ * 512) is not { } spot || spot.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { made.Add($"stretch {r}: its cube is full"); continue; }
             var height = (float)(l.Top - l.Ground);
             var along = new System.Numerics.Vector3((float)l.Tx, 0, (float)l.Tz); var outward = new System.Numerics.Vector3((float)l.Nx, 0, (float)l.Nz);
