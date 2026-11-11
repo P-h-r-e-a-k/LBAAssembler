@@ -125,20 +125,51 @@ internal static partial class RaceTrackStory
         // who stands where: `u` along the tent, `v` from its middle towards its open front (world units)
         var people = new List<(SceneActorModel Actor, double U, double V, int Beta, string Life, string Who)>();
         var start = b.Store.Load(startScene);
-        // three of the racers' cars along the back, nose out (the start line's grid cars' bodies), a mechanic at work by two of them
         var grid = start.Actors.Where(a => a.Entity == RaceTrackScenes.RacerEntity && a.Body >= 0).Take(5).ToList();
-        foreach (var (u, k) in new[] { (-1700.0, 0), (0.0, 2), (1700.0, 4) })
-            if (k < grid.Count)
+        var mechanic = start.Actors.FirstOrDefault(a => a.Entity == 30 && a.Body >= 0);
+        var size = report.GarageSize;
+        // where Baldino and Zoe stand: the tent's ends, or (with its bays) Zoe in Twinsen's bay and Baldino in the aisle before the bays
+        double baldinoU = 2050, baldinoV = 500, zoeU = -2050, zoeV = 500;
+        if (size.Bays > 0)
+        {
+            // A bay for each car (the user, 2026-11-11: "A specific garage space for every car with room around them to be worked on"):
+            // the tent's back, size.Bays of them side by side, each car in the middle of its own nose out, a mechanic at work beside it.
+            // The first bay, the end nearest the start line, is Twinsen's: his car is out on the road, Zoe waits in it with the tools.
+            double hl = size.Long * 256, hd = size.Deep * 256, w = 2 * hl / size.Bays, bayV = -hd + size.BayDeep * 512 / 2;
+            for (var k = 1; k < size.Bays && k - 1 < grid.Count; k++)
             {
-                var car = grid[k].Clone();
+                var u = -hl + w * (k + 0.5);
+                var car = grid[k - 1].Clone();
                 car.Flags &= ~1u;
-                people.Add((car, u, -700, facingOut, stand, "a car"));
+                people.Add((car, u, bayV, facingOut, stand, "a car in its bay"));
+                if (mechanic is not null)
+                {
+                    // (by the car's side, a little towards the front, turned to it -- the car's side alternating bay by bay)
+                    var side = k % 2 == 0 ? 1 : -1;
+                    var mu = u + side * w * 0.3;
+                    var beta = RaceTrackMath.Turn(Math.Atan2(-side * g.AlongX, -side * g.AlongZ));
+                    people.Add((mechanic.Clone(), mu, bayV + 400, beta, stand, "a mechanic"));
+                }
             }
-        if (start.Actors.FirstOrDefault(a => a.Entity == 30 && a.Body >= 0) is { } mechanic)
-            foreach (var u in new[] { -1150.0, 550.0 }) people.Add((mechanic.Clone(), u, -350, (facingOut + 1024) % 4096, stand, "a mechanic"));
-        // Baldino by the right-hand end: the filters, then (fitted) his tune and tip -- while it's garage time
+            zoeU = -hl + w * 0.5; zoeV = bayV + 600;
+            baldinoU = 0; baldinoV = -hd + size.BayDeep * 512 + 900;
+        }
+        else
+        {
+            // three of the racers' cars along the back, nose out (the start line's grid cars' bodies), a mechanic at work by two of them
+            foreach (var (u, k) in new[] { (-1700.0, 0), (0.0, 2), (1700.0, 4) })
+                if (k < grid.Count)
+                {
+                    var car = grid[k].Clone();
+                    car.Flags &= ~1u;
+                    people.Add((car, u, -700, facingOut, stand, "a car"));
+                }
+            if (mechanic is not null)
+                foreach (var u in new[] { -1150.0, 550.0 }) people.Add((mechanic.Clone(), u, -350, (facingOut + 1024) % 4096, stand, "a mechanic"));
+        }
+        // Baldino: the filters, then (fitted) his tune and tip -- while it's garage time
         if (baldino is not null)
-            people.Add((baldino.Clone(), 2050, 500, facingOut, Talker(garageTime, $@"            if (0 == var_game({QFilters}))
+            people.Add((baldino.Clone(), baldinoU, baldinoV, facingOut, Talker(garageTime, $@"            if (0 == var_game({QFilters}))
             {{
                 message({say(DesertLine.BaldinoFilters)});
                 set_var_game({FiltersSlot}, 1);
@@ -154,9 +185,9 @@ internal static partial class RaceTrackStory
                 message({say(DesertLine.BaldinoTuned)});
                 message({say(DesertLine.BaldinoRacing)});
             }}"), "Baldino"));
-        // Zoe by the left-hand end: she fits the filters
+        // Zoe: she fits the filters
         if (Copy(b.Originals, OpeningScene, Zoe) is { } zoe)
-            people.Add((zoe, -2050, 500, facingOut, Talker(desert, $@"            if (1 == var_game({FiltersSlot}))
+            people.Add((zoe, zoeU, zoeV, facingOut, Talker(desert, $@"            if (1 == var_game({FiltersSlot}))
             {{
                 message({say(DesertLine.ZoeFitted)});
                 set_var_game({FiltersSlot}, 0);

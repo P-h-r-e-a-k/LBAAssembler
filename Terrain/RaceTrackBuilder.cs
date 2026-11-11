@@ -707,6 +707,8 @@ internal sealed class RaceTrackReport
     // The racers' garage tent (RaceTrackIsland.GarageTent): its middle on the ground (island cells, the ground's height), the way along the
     // road it stands by (its long side), and the way out of its open front to the road
     public (double X, double Z, double Y, double AlongX, double AlongZ, double OutX, double OutZ)? Garage { get; set; }
+    // ... its size (cells) and its cars' bays along its back: how many, how deep (cells from the back wall)
+    public (double Long, double Deep, int Bays, double BayDeep) GarageSize { get; set; }
     // The island's doors into inside scenes (RaceTrackOptions.DoorBoxes) whose every piece of decor the road took away -- a lift under the
     // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
     // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
@@ -4375,6 +4377,15 @@ internal static class RaceTrackBuilder
         // (square to the island: the road's way at the start line rounded to the nearest axis; the driver's left of it)
         double ax = Math.Abs(s.DirX) >= Math.Abs(s.DirZ) ? Math.Sign(s.DirX) : 0, az = ax == 0 ? Math.Sign(s.DirZ) : 0;
         double lx = -az, lz = ax;
+        // (or where the island says, the size it says: the way to its back given, along the road square to it)
+        var fixedAt = o.Island.GarageAt;
+        double tentLong = TentLong, tentDeep = TentDeep;
+        if (fixedAt is { } fa) { tentLong = fa.Long; tentDeep = fa.Deep; lx = fa.BackX; lz = fa.BackZ; ax = -lz; az = lx; }
+        // (taller as it's deeper: the ridge over the middle; the eaves high enough to drive under)
+        float eave = fixedAt is null ? TentEave : 2600f, ridge = fixedAt is null ? TentRidge : eave + (float)Math.Min(3000, 220 * tentDeep);
+        var bays = fixedAt?.Bays ?? 0;
+        // (a bay: from the back wall this far towards the front, the cars' way out in front of them)
+        var bayDeep = Math.Min(10.0, tentDeep * 0.5);
         double Ground(double x, double z) => IslandOps.Altitude(island, x * 512, z * 512) ?? -1;
         bool Floor(double x, double z)
         {
@@ -4419,18 +4430,32 @@ internal static class RaceTrackBuilder
         // unchanged" -- of the spots that fit, the levellest; the first level enough as it is ends the search)
         var bestSpread = double.MaxValue;
         var level = false;
-        for (int k = 0, i = first; k < n && walked < 40 && !level; k++, i = ((i + step) % n + n) % n)
+        if (fixedAt is { } given)
+        {
+            var heights = new List<double>();
+            for (var u = -tentLong / 2; u <= tentLong / 2; u += 1)
+            for (var v = -tentDeep / 2; v <= tentDeep / 2; v += 1)
+                heights.Add(Ground(given.X + ax * u + lx * v, given.Z + az * u + lz * v));
+            heights.Sort();
+            bestSpread = heights[^1] - heights[0];
+            // (its floor at the ground's middle height across it: the Desert's, 598 -- the low sand by the road 170-255 as the island had
+            // it, the road's verge raised to 900-1000 by the track beside it, a dune 1870 in the middle, the beach 0 at its east end. Its
+            // front's own height, 255, left the road's verge 700 over it; the road's, a platform 700 over the beach)
+            best = (given.X, given.Z, heights[heights.Count / 2]);
+            level = true;
+        }
+        for (int k = 0, i = first; k < n && walked < 40 && !level && fixedAt is null; k++, i = ((i + step) % n + n) % n)
         {
             var j = ((i + step) % n + n) % n;
             walked += Math.Sqrt((report.LapX[j] - report.LapX[i]) * (report.LapX[j] - report.LapX[i]) + (report.LapZ[j] - report.LapZ[i]) * (report.LapZ[j] - report.LapZ[i]));
             if (walked < 3 || report.LapRaised?[i] == true) continue;
             for (var out_ = 2.0; out_ <= 30 && !level; out_ += 0.5)
             {
-                double mx = report.LapX[i] + lx * (out_ + TentDeep / 2), mz = report.LapZ[i] + lz * (out_ + TentDeep / 2);
+                double mx = report.LapX[i] + lx * (out_ + tentDeep / 2), mz = report.LapZ[i] + lz * (out_ + tentDeep / 2);
                 var heights = new List<double>();
                 var fits = true;
-                for (var u = -TentLong / 2 - 0.5; u <= TentLong / 2 + 0.5 && fits; u += 0.5)
-                for (var v = -TentDeep / 2 - 0.5; v <= TentDeep / 2 + 0.5 && fits; v += 0.5)
+                for (var u = -tentLong / 2 - 0.5; u <= tentLong / 2 + 0.5 && fits; u += 0.5)
+                for (var v = -tentDeep / 2 - 0.5; v <= tentDeep / 2 + 0.5 && fits; v += 0.5)
                 {
                     double px = mx + ax * u + lx * v, pz = mz + az * u + lz * v;
                     if (!Floor(px, pz)) { noFloor++; fits = false; break; }
@@ -4447,13 +4472,13 @@ internal static class RaceTrackBuilder
             }
         }
         if (best is not { } at) { report.Notes.Add($"garage tent: no room on the left of the road within 40 cells of the start line (spots tried: {noFloor} not ground, {onBuilt} with something standing, {nearRoad} on a road, {low} under the sea's height)"); return; }
-        if (IslandDecors.Locate(island, at.X * 512, at.Z * 512) is not { } spot || spot.Cube.Decors.Count + 3 > IslandDecors.MaxPerCubeRaceTrack) { report.Notes.Add("garage tent: its cube is full"); return; }
+        if (IslandDecors.Locate(island, at.X * 512, at.Z * 512) is not { } spot || spot.Cube.Decors.Count + 6 > IslandDecors.MaxPerCubeRaceTrack) { report.Notes.Add("garage tent: its cube is full"); return; }
         // the ground levelled: its floor (and a cell round it) at the middle height of what was there, sloping back to the ground as it was
         // over the next Blend cells; no point within a cell of a road's verge moved (the track as it is)
         const double Blend = 3;
         var levelled = 0;
         {
-            double hu = TentLong / 2 + 1, hv = TentDeep / 2 + 1;
+            double hu = tentLong / 2 + 1, hv = tentDeep / 2 + 1;
             int x0 = (int)Math.Floor(at.X - hu - hv - Blend), x1 = (int)Math.Ceiling(at.X + hu + hv + Blend);
             int z0 = (int)Math.Floor(at.Z - hu - hv - Blend), z1 = (int)Math.Ceiling(at.Z + hu + hv + Blend);
             for (var gz = z0; gz <= z1; gz++)
@@ -4473,7 +4498,7 @@ internal static class RaceTrackBuilder
 
         // the tent, round its middle on the ground: `along` the road's way, `back` away from the road (the front open towards it)
         var along = new System.Numerics.Vector3((float)ax, 0, (float)az); var back = new System.Numerics.Vector3((float)lx, 0, (float)lz);
-        float hl = (float)(TentLong * 256), hd = (float)(TentDeep * 256);
+        float hl = (float)(tentLong * 256), hd = (float)(tentDeep * 256);
         const int Red = 66, White = 62, Pole = 57, PoleDark = 54, Top = 55;
         var pts = new List<System.Numerics.Vector3>(); var faces = new List<LbaBodyStudio.Face>();
         int P(System.Numerics.Vector3 v) { pts.Add(v); return pts.Count - 1; }
@@ -4493,39 +4518,88 @@ internal static class RaceTrackBuilder
             faces.Add(new LbaBodyStudio.Face(q, colour, Material: material)); faces.Add(new LbaBodyStudio.Face(q.Reverse().ToArray(), colour, Material: material));
         }
         System.Numerics.Vector3 At(float u, float v, float y) => along * u + back * v + new System.Numerics.Vector3(0, y, 0);
-        const int Stripes = 14;
+        var Stripes = Math.Max(14, (int)Math.Round(tentLong * 1.4 / 2) * 2);
         // poles: the four corners and the back's middle, up to the eaves; the ridge's two up to it
-        foreach (var u in new[] { -hl, 0f, hl })
-            foreach (var v in new[] { -hd, hd })
-                if (u != 0 || v > 0)   // (none in the middle of the open front: the way in)
-                RaceTrackPipes.Box(pts, faces, At(u, v, 0), along * TentPole, back * TentPole, 0, TentEave, Pole, PoleDark, Top);
-        foreach (var u in new[] { -hl, hl }) RaceTrackPipes.Box(pts, faces, At(u, 0, 0), along * TentPole, back * TentPole, 0, TentRidge, Pole, PoleDark, Top);
+        var backPoles = bays > 0 ? Enumerable.Range(0, bays + 1).Select(k => -hl + 2 * hl * k / bays).ToArray() : new[] { -hl, 0f, hl };
+        foreach (var u in backPoles) RaceTrackPipes.Box(pts, faces, At(u, hd, 0), along * TentPole, back * TentPole, 0, eave, Pole, PoleDark, Top);
+        foreach (var u in new[] { -hl, hl }) RaceTrackPipes.Box(pts, faces, At(u, -hd, 0), along * TentPole, back * TentPole, 0, eave, Pole, PoleDark, Top);
+        foreach (var u in new[] { -hl, hl }) RaceTrackPipes.Box(pts, faces, At(u, 0, 0), along * TentPole, back * TentPole, 0, ridge, Pole, PoleDark, Top);
         // the roof: two slopes from the eaves up to the ridge, in stripes across, seen from under it only
         for (var k = 0; k < Stripes; k++)
         {
             float u0 = -hl + 2 * hl * k / Stripes, u1 = -hl + 2 * hl * (k + 1) / Stripes;
             var colour = k % 2 == 0 ? Red : White;
-            Quad(At(u0, -hd, TentEave), At(u1, -hd, TentEave), At(u1, 0, TentRidge), At(u0, 0, TentRidge), colour, -System.Numerics.Vector3.UnitY);
-            Quad(At(u0, hd, TentEave), At(u1, hd, TentEave), At(u1, 0, TentRidge), At(u0, 0, TentRidge), colour, -System.Numerics.Vector3.UnitY);
+            Quad(At(u0, -hd, eave), At(u1, -hd, eave), At(u1, 0, ridge), At(u0, 0, ridge), colour, -System.Numerics.Vector3.UnitY);
+            Quad(At(u0, hd, eave), At(u1, hd, eave), At(u1, 0, ridge), At(u0, 0, ridge), colour, -System.Numerics.Vector3.UnitY);
             // the valance along the front and the back: a striped band hanging from the eaves
-            Quad(At(u0, -hd, TentEave), At(u1, -hd, TentEave), At(u1, -hd, TentEave - TentValance), At(u0, -hd, TentEave - TentValance), colour, null);
-            // the back wall, down to the ground
-            Quad(At(u0, hd, TentEave), At(u1, hd, TentEave), At(u1, hd, 0), At(u0, hd, 0), colour, null);
+            Quad(At(u0, -hd, eave), At(u1, -hd, eave), At(u1, -hd, eave - TentValance), At(u0, -hd, eave - TentValance), colour, null);
+            // the back wall, down to the ground -- with a place given, seen from inside only, as the roof is from under it: the Desert's
+            // opens north to the road and the game's camera looks north from behind its back, through it into the tent (its solid box
+            // still stops a walker)
+            Quad(At(u0, hd, eave), At(u1, hd, eave), At(u1, hd, 0), At(u0, hd, 0), colour, fixedAt is null ? null : -back);
         }
         // the gables and the end walls, in stripes from the front back (the front half of each end open: a way in)
         foreach (var u in new[] { -hl, hl })
         {
-            Tri(At(u, -hd, TentEave), At(u, hd, TentEave), At(u, 0, TentRidge), Red);
-            for (var k = 0; k < 6; k++)
+            Tri(At(u, -hd, eave), At(u, hd, eave), At(u, 0, ridge), Red);
+            var ends = Math.Max(6, (int)Math.Round(tentDeep / 2) * 2);
+            for (var k = 0; k < ends; k++)
             {
-                float v0 = -hd + 2 * hd * k / 6, v1 = -hd + 2 * hd * (k + 1) / 6;
+                float v0 = -hd + 2 * hd * k / ends, v1 = -hd + 2 * hd * (k + 1) / ends;
                 var colour = k % 2 == 0 ? White : Red;
-                var bottom = k < 3 ? TentEave - TentValance : 0;
-                Quad(At(u, v0, TentEave), At(u, v1, TentEave), At(u, v1, bottom), At(u, v0, bottom), colour, null);
+                var bottom = k < ends / 2 ? eave - TentValance : 0;
+                Quad(At(u, v0, eave), At(u, v1, eave), At(u, v1, bottom), At(u, v0, bottom), colour, null);
             }
         }
-        var tent = o.NewBodyBase + report.NewBodies.Count;
-        report.NewBodies.Add(RaceTrackPipes.Write(pts, faces, true));
+        if (bays > 0)
+        {
+            float w = 2 * hl / bays, depth = (float)(bayDeep * 512), line = 70, lift = 8;
+            // (in tiles a cell across at most: the engine leaves out a whole polygon with a corner behind the camera, and the game's camera
+            // stands over the tent's back wall, where the pads and lines begin -- as one polygon each they were never seen)
+            void Up(System.Numerics.Vector3 a, System.Numerics.Vector3 b, System.Numerics.Vector3 c2, System.Numerics.Vector3 d, int colour)
+            {
+                int nu = Math.Max(1, (int)Math.Ceiling((b - a).Length() / 512)), nv = Math.Max(1, (int)Math.Ceiling((d - a).Length() / 512));
+                System.Numerics.Vector3 Pt(int i, int j) => a + (b - a) * i / nu + (d - a) * j / nv;
+                for (var j = 0; j < nv; j++)
+                for (var i = 0; i < nu; i++)
+                    Quad(Pt(i, j), Pt(i + 1, j), Pt(i + 1, j + 1), Pt(i, j + 1), colour, System.Numerics.Vector3.UnitY);
+            }
+            for (var k = 0; k < bays; k++)
+            {
+                float u0 = -hl + w * k, u1 = u0 + w, uc = (u0 + u1) / 2;
+                // the pad, a little in from the lines
+                Up(At(u0 + 160, hd - 120, lift), At(u1 - 160, hd - 120, lift), At(u1 - 160, hd - depth + 120, lift), At(u0 + 160, hd - depth + 120, lift), 51);   // (mid grey, a concrete mat: lower down the poles' ramp -- lit from above, theirs (57) came out white and the lines on it lost, their darker one (54) the sand's colour)
+                // the front line, either side of the way out
+                Up(At(u0, hd - depth, lift + 2), At(uc - w * 0.3f, hd - depth, lift + 2), At(uc - w * 0.3f, hd - depth - line, lift + 2), At(u0, hd - depth - line, lift + 2), White);
+                Up(At(uc + w * 0.3f, hd - depth, lift + 2), At(u1, hd - depth, lift + 2), At(u1, hd - depth - line, lift + 2), At(uc + w * 0.3f, hd - depth - line, lift + 2), White);
+            }
+            for (var k = 0; k <= bays; k++)
+            {
+                float u = -hl + w * k;
+                Up(At(u - line / 2, hd, lift + 2), At(u + line / 2, hd, lift + 2), At(u + line / 2, hd - depth - line, lift + 2), At(u - line / 2, hd - depth - line, lift + 2), White);
+            }
+        }
+        // (in parts, each a body of its own within the engine's points and polygons -- Body.Limit, 550: the Desert's 38-cell tent is three)
+        var partBodies = new List<int>();
+        {
+            var pp = new List<System.Numerics.Vector3>(); var pf = new List<LbaBodyStudio.Face>(); var map = new Dictionary<int, int>();
+            void Flush()
+            {
+                if (pf.Count == 0) return;
+                partBodies.Add(o.NewBodyBase + report.NewBodies.Count);
+                report.NewBodies.Add(RaceTrackPipes.Write(pp, pf, true));
+                pp = new List<System.Numerics.Vector3>(); pf = new List<LbaBodyStudio.Face>(); map = new Dictionary<int, int>();
+            }
+            foreach (var face in faces)
+            {
+                var fresh = face.Points.Distinct().Count(i => !map.ContainsKey(i));
+                if (pp.Count + fresh > 520 || pf.Count + 1 > 520) Flush();
+                var mapped = face.Points.Select(i => { if (!map.TryGetValue(i, out var j)) { j = pp.Count; pp.Add(pts[i]); map[i] = j; } return j; }).ToArray();
+                pf.Add(face with { Points = mapped });
+            }
+            Flush();
+        }
+        var tent = partBodies[0];
         var floor = (int)Math.Round(at.Y);
         // (its solid boxes, world units round the spot: the back wall's, and each end wall's back half)
         (int X0, int Z0, int X1, int Z1) Slab(float u0, float v0, float u1, float v1)
@@ -4538,8 +4612,24 @@ internal static class RaceTrackBuilder
         var tentDecor = IslandDecors.Blank(tent, spot.X, floor, spot.Z, 0);
         var mid = Slab(-TentPole, hd - TentPole, TentPole, hd + TentPole);
         tentDecor.XMin = spot.X + mid.X0; tentDecor.XMax = spot.X + mid.X1; tentDecor.ZMin = spot.Z + mid.Z0; tentDecor.ZMax = spot.Z + mid.Z1;
-        tentDecor.YMin = floor; tentDecor.YMax = floor + (int)TentEave;
+        tentDecor.YMin = floor; tentDecor.YMax = floor + (int)eave;
+        if (fixedAt is not null)
+        {
+            // (a tent this big drawn only, its box over its whole floor, its top under its bottom: drawn while any corner of it is in view
+            // -- a game decor is drawn only with its middle in view, and from the start line its middle could be off the picture while its
+            // front filled it (DECORS.CPP). Its walls' boxes, below, are what stop a walker)
+            var all = Slab(-hl, -hd, hl, hd);
+            tentDecor.XMin = spot.X + all.X0; tentDecor.XMax = spot.X + all.X1; tentDecor.ZMin = spot.Z + all.Z0; tentDecor.ZMax = spot.Z + all.Z1;
+            tentDecor.YMin = floor + (int)ridge; tentDecor.YMax = floor;
+        }
         spot.Cube.Decors.Add(tentDecor);
+        // (its other parts: the same place and box)
+        foreach (var part in partBodies.Skip(1))
+        {
+            var d = IslandDecors.Blank(part, spot.X, floor, spot.Z, 0);
+            d.XMin = tentDecor.XMin; d.XMax = tentDecor.XMax; d.ZMin = tentDecor.ZMin; d.ZMax = tentDecor.ZMax; d.YMin = tentDecor.YMin; d.YMax = tentDecor.YMax;
+            spot.Cube.Decors.Add(d);
+        }
         var stub = o.NewBodyBase + report.NewBodies.Count;
         {
             var wp = new List<System.Numerics.Vector3>(); var wf = new List<LbaBodyStudio.Face>();
@@ -4560,7 +4650,7 @@ internal static class RaceTrackBuilder
                 int lx0 = (int)Math.Round(x0 - cxi * IslandFile.CubeSize), lx1 = (int)Math.Round(x1 - cxi * IslandFile.CubeSize);
                 int lz0 = (int)Math.Round(z0 - czi * IslandFile.CubeSize), lz1 = (int)Math.Round(z1 - czi * IslandFile.CubeSize);
                 var d = IslandDecors.Blank(stub, (lx0 + lx1) / 2, floor, (lz0 + lz1) / 2, 0);
-                d.XMin = lx0; d.XMax = lx1; d.ZMin = lz0; d.ZMax = lz1; d.YMin = floor; d.YMax = floor + (int)TentEave;
+                d.XMin = lx0; d.XMax = lx1; d.ZMin = lz0; d.ZMax = lz1; d.YMin = floor; d.YMax = floor + (int)eave;
                 c.Cube.Decors.Add(d);
                 walls++;
             }
@@ -4568,7 +4658,8 @@ internal static class RaceTrackBuilder
         Solid(Slab(-hl, hd - TentWall, hl, hd + TentWall));
         foreach (var u in new[] { -hl, hl }) Solid(Slab(u - TentWall, 0, u + TentWall, hd));
         report.Garage = (at.X, at.Z, at.Y, ax, az, -lx, -lz);
-        report.Notes.Add($"garage tent: at cell ({at.X:0.0}, {at.Z:0.0}), its floor {floor} (the ground {bestSpread:0} high across it, {levelled} points levelled), {TentLong} by {TentDeep} cells, along ({ax}, {az}), open to the road ({-lx}, {-lz})");
+        report.GarageSize = (tentLong, tentDeep, bays, bayDeep);
+        report.Notes.Add($"garage tent: at cell ({at.X:0.0}, {at.Z:0.0}), its floor {floor} (the ground {bestSpread:0} high across it, {levelled} points levelled), {tentLong} by {tentDeep} cells, along ({ax}, {az}), open to the road ({-lx}, {-lz})" + (fixedAt is null ? "" : $", where the island says, {bays} cars' bays {bayDeep:0.#} cells deep along its back"));
     }
 
     // RaceTrackIsland.GateSill: a gateway walked through again (the White Leaf Desert's School of Magic, 2026-11-07). The gate is the decors

@@ -25,6 +25,11 @@ internal sealed record RaceTrackIsland(
         KeepOffRoadActors = true,
         // (the racers' garage, a big tent on the sand after the start line: the user, 2026-11-07)
         GarageTent = true,
+        // (... where the user chose it, 2026-11-11 -- "Let's make the tent area bigger and slightly to the left ... so it doesn't go over the
+        // small bit of blue that cuts in", then "Let's build it there. A specific garage space for every car with room around them to be
+        // worked on": south of the start straight, just past the line, 38 by 22 cells, open north to the road; a bay for each of the
+        // race's six cars)
+        GarageAt = (571.5, 722.0, 38, 22, 0, 1, 6),
         // (the School of Magic's gates open from the start -- the game unlocks them later, game variable 65, which also shows the open gates'
         // decor: the user, 2026-10-27, "The gates to the school of magic are initially closed on Desert island and get unlocked later in the
         // game, let's just start the game with them open")
@@ -228,6 +233,9 @@ internal sealed record RaceTrackIsland(
     // The racers' garage: a big striped tent on the ground beside the road just after the start line, on the driver's left, open to the
     // road (RaceTrackBuilder.GarageTent; the story's people and cars in it: RaceTrackStory.Garage.cs) -- the White Leaf Desert's
     public bool GarageTent { get; init; }
+    // ... its place, if not looked for (island cells: its middle; its length along the road and its depth; the way from its open front to
+    // its back; how many cars' bays along the back)
+    public (double X, double Z, double Long, double Deep, int BackX, int BackZ, int Bays)? GarageAt { get; init; }
     // The lap's longest water crossing a raised deck over the water, humped for a boat to pass under (RaceTrackBuilder.WaterDeck)
     public bool WaterDeck { get; init; }
     // Walls built up under the raised road where it passes over a building cut down for it: island cells x0 z0 x1 z1 and the height they
