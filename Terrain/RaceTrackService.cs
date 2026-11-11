@@ -320,7 +320,7 @@ internal static class RaceTrackService
     // (WalkerYell, Walkers: Raph's yell at whoever of those entities walks across the storm track ahead of him, RACEMOD.CPP parade_walker=
     // -- RaceTrackStory.RaphWalkerLine)
     public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null, int RaphYell = -1, int RaphEntity = -1, int EggText = -1,
-        int WalkerYell = -1, int[]? Walkers = null, int[]? TiredKeep = null);
+        int WalkerYell = -1, int[]? Walkers = null, int[]? TiredKeep = null, int[]? VictoryStop = null);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the

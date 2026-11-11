@@ -788,6 +788,8 @@ void comportement_1()
         var paul = originals.Load(PaulHouse).Actors.ElementAtOrDefault(PaulActor)?.Clone();
         var start = storm.StartLine[0];
         int[]? raphPark = null;
+        // (where the lap of honour pulls up once Raph's time is beaten -- the race file's victory_lap=: Raph's place beside Zoe, world units)
+        int[]? victoryStop = null;
         if (scenes.StartScene >= 0 && raph is not null && paul is not null)
             Edit(scenes.StartScene, "Raph and Mr. Paul stand by the storm track's start line", model =>
             {
@@ -862,6 +864,8 @@ void comportement_1()
                 {
                     double d = Apart(pr.X, pr.Z, zw.X, zw.Z), bx = zw.X + (pr.X - zw.X) / d * 1.3, bz = zw.Z + (pr.Z - zw.Z) / d * 1.3;
                     raphOut = model.TrackPoints.Count;
+                    // (Raph's car, parked by them on the road: the lap of honour pulls up just short of it)
+                    victoryStop = new[] { (int)Math.Round(pr.X * 512), (int)Math.Round(pr.Z * 512) };
                     model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(bx, model.CubeX), (int)Math.Round(storm.GroundAfter?.Invoke(bx, bz) ?? zw.Y), RaceTrackScenes.CubeLocal(bz, model.CubeY)));
                     // (and the way he runs off to the lighthouse: down the road, the way that goes towards it, out of sight)
                     raphRun = AlongRoad(storm, model, pr.X, pr.Z, LighthouseCells.X, LighthouseCells.Z, 4, 6);
@@ -1116,6 +1120,9 @@ void comportement_1()
                     scripts.SetText(raphIndex, ScriptKind.Track, raphTrack);
                     zoeScript?.Invoke(scripts);
                     paulScript(scripts);
+                    // (Raph's car, parked by the start line: in sight while he stands by Zoe after his time is beaten -- the lap of honour pulls
+                    // up by it, the user, 2026-11-10: "Raph should be standing next to Zoe but Raph's car should be there next to him" -- and
+                    // gone once he has run off to the lighthouse; it went the moment his time was beaten until then)
                     if (car > 0)
                         scripts.SetText(car, ScriptKind.Life, $@"void comportement_0()
 {{
@@ -1127,7 +1134,7 @@ void comportement_1()
 
 void comportement_1()
 {{
-    if (1 == var_game({BeatVar}) || 3 == var_game({KeeperPlot}))
+    if (3 == var_game({KeeperPlot}))
     {{
         invisible(1);
         obj_col(0);
@@ -1274,7 +1281,7 @@ void comportement_1()
         log.Add($"the race-track mode: Mr. Paul's gloves gate the storm track (variable {GlovesSlot}), Raph's time beaten sets {BeatVar}; the town circuit opens once {DayVar} is {Rested}, " +
                 $"{RaceLaps} laps, a win sets {WonVar}; while {DayVar} is {Tired} everyone says text {Id(Line.Tired)}");
         log.Add($"Raph laps the storm track in his car until Twinsen comes to the start line on foot (variable {RaphHere}){(raphPark is null ? " -- no room for his car by the start line: it goes out of sight" : "")}; he tells his time (text {Id(Line.RaphTime)}) once Twinsen has a car (variable {HasCar}) and driving gloves; Mr. Paul puts Twinsen out of his car on the start line without them");
-        return (log, new RaceTrackService.StoryInfo(Id(Line.Tired), TownArrow, RaphTime: Id(Line.RaphTime), RaphPark: raphPark, RaphYell: Id(Line.RaphYell), RaphEntity: raph?.Entity ?? -1,
+        return (log, new RaceTrackService.StoryInfo(Id(Line.Tired), TownArrow, RaphTime: Id(Line.RaphTime), RaphPark: raphPark, VictoryStop: victoryStop, RaphYell: Id(Line.RaphYell), RaphEntity: raph?.Entity ?? -1,
             TiredKeep: TiredKeep(Say)));
     }
 }

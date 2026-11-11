@@ -221,6 +221,8 @@
  *                                (Breakdown, RaceMod_Slide) -- or till the variable reaches <least>: the filters fitted mend it
  *     car_home=<scene> <away var> <fetch var>   (2026-11-11) the away variable 1 while the story car stands abandoned in another scene of
  *                                the island; the fetch variable 1 takes it home (CarHome)
+ *     victory_lap=<x> <z>        (2026-11-11) the time to beat beaten: a lap of honour, the autodrive at the wheel, then the car pulls up
+ *                                near (x, z) (world units) and Twinsen gets out (VictoryFrame)
  *     hover=<entity> <height> <over road> <reach>   (2026-11-08) that entity's actors outside fly at <height> over the ground -- and
  *                                at least <over road> over the lap's road within <reach> units of it -- whatever their tracks' points
  *                                say, with no collisions (the White Leaf Desert's Chedil Amiradoo on his magic carpet: sunk under the
@@ -900,6 +902,22 @@ void RaceMod_InvKinds(void) {
 static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
 static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
 static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
+// victory_lap=<x> <z> (2026-11-11; the user, 2026-11-10: "After Twinsen beats Raph's time let's have the car automatically pull up by Raph
+// and Zoe after automatically driving a scripted celebration lap. Raph should be standing next to Zoe but Raph's car should be there next
+// to him"): the time to beat beaten (beat=), the pilot (the autodrive) takes the car round one more lap, the player's controls kept from
+// him -- and from RACE_VICTORY_SHARE of that lap on, it pulls up within RACE_VICTORY_REACH of (x, z) (world units: where Zoe watches, Raph
+// out of his car beside her, his car parked by them) and Twinsen gets out (the racestop's way), his controls his again
+// (s_victory: 1 lapping, 2 pulling up; s_victoryFrom the player's progress as the time was beaten)
+static int s_victoryOn = 0, s_victory = 0;
+static double s_victoryX = 0, s_victoryZ = 0, s_victoryFrom = 0;
+static S32 s_victoryLap = 0;
+static double s_victoryLineX = 0, s_victoryLineZ = 0;
+#define RACE_VICTORY_TURN_OFF 1400.0      // (the pilot this near the line's point by them: off the line to them)
+#define RACE_VICTORY_GAP 1100.0           // (pulled up this far short of Raph's car)
+static int s_victoryFresh = 0;              // (the lap of honour's halfway mark seen cleared since the time was beaten)
+#define RACE_VICTORY_SHARE 0.6
+#define RACE_VICTORY_SHORT 1500.0
+#define RACE_VICTORY_REACH 900.0          // (of the place short of Raph's car: braking from there)
 // win_stop=: a won race's end, a cut-scene (WinStopStart): its variable, the stage (1 the car braking, 2 Twinsen out and waiting), what
 // the variable held as the race was won, and since when the stage
 // (the file's key, read again with each track; the stage and the variable watched outlive a track loaded again on the way -- the car
@@ -4667,6 +4685,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d", &s_carHome, &s_carAwayVar, &s_carFetchVar) != 3 || s_carAwayVar < 0 || s_carAwayVar > 254 || s_carFetchVar < 0 || s_carFetchVar > 254) s_carHome = -1;
             s_carSeenAt = -2; s_carHomeIsland = -2;
         }
+        else if (!strcmp(key, "victory_lap")) { s_victoryOn = sscanf(v, "%lf %lf", &s_victoryX, &s_victoryZ) == 2; s_victory = 0; }
         else if (!strcmp(key, "breakdown")) {
             int used = 0;
             if (sscanf(v, "%d %d %d %d %n", &s_brkVar, &s_brkLeast, &s_brkCheckpoint, &s_brkSpeed, &used) >= 4 && used > 0) snprintf(s_brkText, sizeof(s_brkText), "%s", v + used);
@@ -5429,6 +5448,11 @@ void RaceMod_Lap(S32 x, S32 z) {
                 ApplySets(s_beatSet, s_nbBeatSet);
                 snprintf(text, sizeof(text), "You beat %s's time!", s_opp[s_beatOpp].Name);
                 Message(text);
+                // (victory_lap=: a lap of honour, the pilot at the wheel, then up by the ones who watched -- VictoryFrame)
+                if (s_victoryOn && Comportement == C_BUGGY && !s_online) {
+                    s_victory = 1; s_victoryFrom = PlayerProgress(); s_victoryLap = s_laps; s_victoryFresh = 0; s_auto = 1;
+                    Log_Info("[racemod] victory_lap: a lap of honour, the pilot driving, then up by (%.0f, %.0f)", s_victoryX, s_victoryZ);
+                }
                 StoryUnlock(s_unlockBeat);
                 Log_Info("[racemod] %s (%.2f s against %.2f s)", text, s_lastLap / 1000.0, target / 1000.0);
             } else if (s_lastLap >= target) {
@@ -6665,7 +6689,59 @@ static U32 WinStopInput(void) {
     return 0;
 }
 
+static void VictoryFrame(void) {
+    if (!s_victory) return;
+    // (out of the car -- pulled up, or got out some other way: the scene changed, a cut-scene): over, the pilot off, the controls his
+    if (Comportement != C_BUGGY) {
+        s_victory = 0; s_auto = 0; s_stopResume = 0;
+        Log_Info("[racemod] victory_lap: over -- Twinsen out of the car, the controls his again");
+        return;
+    }
+    if (s_victory != 1) return;
+    // (past the lap of honour's halfway -- the lap's own mark, s_halfway, cleared at the line where the time was beaten and set again
+    // halfway round)
+    if (!s_halfway) s_victoryFresh = 1;
+    if (!(s_victoryFresh && s_halfway) && s_laps <= s_victoryLap + 1) return;
+    s_victory = 2;
+    // (on the road: the racing line's point nearest (x, z) -- Raph's car, parked by him and Zoe off the line -- RACE_VICTORY_SHORT back along
+    // it, the pilot driving on to there; then off the line, straight to a little short of his car: VictoryNear)
+    double sx = s_victoryX, sz = s_victoryZ;
+    if (const T_RACE_OPPONENT *o = Guide()) {
+        double bd = 1e30;
+        int best = -1;
+        for (int i = 0; i < o->Count; i++) {
+            const double d = (o->X[i] - s_victoryX) * (o->X[i] - s_victoryX) + (o->Z[i] - s_victoryZ) * (o->Z[i] - s_victoryZ);
+            if (d < bd) { bd = d; best = i; }
+        }
+        if (best >= 0) {
+            int k = best;
+            for (int n = 0; n < o->Count && o->Cum[best] - o->Cum[k] + (o->Cum[k] > o->Cum[best] ? o->Length : 0) < RACE_VICTORY_SHORT; n++) k = (k - 1 + o->Count) % o->Count;
+            sx = o->X[k]; sz = o->Z[k];
+        }
+    }
+    s_victoryLineX = sx; s_victoryLineZ = sz;
+    Log_Info("[racemod] victory_lap: halfway round the lap of honour -- the pilot on to (%.0f, %.0f) on the road, then over to (%.0f, %.0f)", sx, sz, s_victoryX, s_victoryZ);
+}
+void RaceMod_Walk(int n, const double *xz, int car, int more);
+// (the pilot near the line's point by them: off the line to just short of Raph's car, and pulled up there -- the racestop's way)
+static void VictoryNear(void) {
+    if (s_victory != 2) return;
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    const double wx = h->Obj.X + CurrentCubeX * 32768.0, wz = h->Obj.Z + CurrentCubeY * 32768.0;
+    if ((wx - s_victoryLineX) * (wx - s_victoryLineX) + (wz - s_victoryLineZ) * (wz - s_victoryLineZ) > RACE_VICTORY_TURN_OFF * RACE_VICTORY_TURN_OFF) return;
+    double dx = s_victoryLineX - s_victoryX, dz = s_victoryLineZ - s_victoryZ;
+    const double d = sqrt(dx * dx + dz * dz);
+    if (d > 1) { dx /= d; dz /= d; }
+    const double to[2] = { s_victoryX + dx * RACE_VICTORY_GAP, s_victoryZ + dz * RACE_VICTORY_GAP };
+    s_victory = 3; s_auto = 0;
+    RaceMod_Walk(1, to, 0, 0);
+    s_stopX = to[0]; s_stopZ = to[1]; s_stopReach = RACE_VICTORY_REACH; s_stopping = 0;
+    Log_Info("[racemod] victory_lap: off the line to (%.0f, %.0f), %.0f short of Raph's car, and pulled up", to[0], to[1], RACE_VICTORY_GAP);
+}
+
 U32 RaceMod_AutoInput(void) {
+    VictoryFrame();
+    VictoryNear();
     if (s_ghostWatch) return 0;
     // (win_stop=: the won race's car braked to a stop and Twinsen out of it -- WinStopInput)
     if (s_winStop == 1 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return WinStopInput();
@@ -13512,6 +13588,7 @@ double RaceMod_JetSteer(void) {
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
     if (s_winStop == 1 && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (win_stop=: the car braked to a stop for him)
+    if (s_victory && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (victory_lap=: the pilot drives the lap of honour)
     if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return 1;   // (the console's racewalk)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) return 1;   // (a ghost played back drives the car: GhostWatch)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
@@ -20926,6 +21003,7 @@ static void ResetTrack(void) {
     // (the suit's behaviours his again, and his outside body off him: his own)
     s_noSuit = 0;
     s_brkVar = -1; s_broken = 0;
+    s_victoryOn = 0;
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_footBody = -1; s_footChecked = 0;
