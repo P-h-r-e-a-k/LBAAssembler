@@ -57,6 +57,8 @@ internal static partial class RaceTrackStory
         PatCheer, FabCheer, BunnyCheer, TwinsenJustOne, LucServes, TwinsenCheers,
         // (Zoe, the car left abandoned in another of the island's scenes: she has had it brought home -- 2026-11-11, LBRA issue #17)
         ZoeCarHome,
+        // (the pharmacy's customer, her umbrella back -- RaceTrackStory.Chapters.cs PharmacyCustomer, 2026-11-11)
+        CustomerThanks, CustomerTip,
     }
     private static readonly string[][] EveningLines =
     {
@@ -356,6 +358,24 @@ internal static partial class RaceTrackStory
             "Por cierto, encontré tu coche abandonado al otro lado de la isla. Lo he hecho traer de vuelta a casa: está bajo el cobertizo.",
             "A proposito, ho trovato la tua macchina abbandonata dall'altra parte dell'isola. L'ho fatta riportare a casa: è sotto la tettoia.",
             "A propósito, encontrei o teu carro abandonado do outro lado da ilha. Mandei-o trazer de volta para casa: está debaixo do telheiro.",
+        },
+        new[]
+        {
+            "My umbrella! You caught him! Thank you, young man. I promised you something useful, and a promise is a promise.",
+            "Mon parapluie ! Vous l'avez attrapé ! Merci, jeune homme. Je vous avais promis quelque chose d'utile, et chose promise, chose due.",
+            "Mein Regenschirm! Sie haben ihn erwischt! Danke, junger Mann. Ich habe Ihnen etwas Nützliches versprochen, und versprochen ist versprochen.",
+            "¡Mi paraguas! ¡Lo ha atrapado! Gracias, joven. Le prometí algo útil, y lo prometido es deuda.",
+            "Il mio ombrello! L'ha preso! Grazie, giovanotto. Le avevo promesso qualcosa di utile, e ogni promessa è debito.",
+            "O meu guarda-chuva! Apanhou-o! Obrigada, meu jovem. Prometi-lhe uma coisa útil, e promessa é dívida.",
+        },
+        new[]
+        {
+            "If you add two vials of gallic acid to your vehicle, it'll help it go at rocket speed!",
+            "Si vous ajoutez deux fioles d'acide gallique à votre véhicule, il ira à la vitesse d'une fusée !",
+            "Wenn Sie Ihrem Fahrzeug zwei Fläschchen Gallussäure geben, fährt es so schnell wie eine Rakete!",
+            "¡Si le añade dos frascos de ácido gálico a su vehículo, irá a la velocidad de un cohete!",
+            "Se aggiunge due fiale di acido gallico al suo veicolo, andrà alla velocità di un razzo!",
+            "Se juntar dois frascos de ácido gálico ao seu veículo, ele vai à velocidade de um foguetão!",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)

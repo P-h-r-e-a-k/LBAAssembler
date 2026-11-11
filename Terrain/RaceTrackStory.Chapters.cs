@@ -185,12 +185,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "A fellow ran past with gloves in one hand and an umbrella in the other -- the one he snatched at the pharmacy, from one of my regulars. Towards the harbour! If you catch him, bring me that umbrella: I'll keep it for her.",
-            "Un type est passé en courant, des gants dans une main et un parapluie dans l'autre -- celui qu'il a chipé à la pharmacie, à une de mes habituées. Vers le port ! Si tu l'attrapes, rapporte-moi ce parapluie : je le lui garderai.",
-            "Ein Kerl ist vorbeigerannt, Handschuhe in der einen Hand und einen Regenschirm in der anderen -- den er in der Apotheke einer meiner Stammgäste weggeschnappt hat. Zum Hafen! Wenn du ihn erwischst, bring mir den Schirm: ich bewahre ihn für sie auf.",
-            "Un tipo pasó corriendo con unos guantes en una mano y un paraguas en la otra -- el que le quitó en la farmacia a una de mis clientas de siempre. ¡Hacia el puerto! Si lo pillas, tráeme ese paraguas: se lo guardaré.",
-            "Un tizio è passato di corsa con dei guanti in una mano e un ombrello nell'altra -- quello che ha soffiato in farmacia a una mia cliente abituale. Verso il porto! Se lo prendi, portami quell'ombrello: glielo terrò da parte.",
-            "Um tipo passou a correr com umas luvas numa mão e um guarda-chuva na outra -- o que ele surripiou na farmácia a uma das minhas clientes. Para o porto! Se o apanhares, traz-me esse guarda-chuva: eu guardo-lho.",
+            "A fellow ran past with gloves in one hand and an umbrella in the other -- the one he snatched at the pharmacy, from one of my regulars. Towards the harbour! If you catch him, take that umbrella back to her: she's waiting in the pharmacy, out of the rain.",
+            "Un type est passé en courant, des gants dans une main et un parapluie dans l'autre -- celui qu'il a chipé à la pharmacie, à une de mes habituées. Vers le port ! Si tu l'attrapes, rapporte-lui ce parapluie : elle attend à la pharmacie, à l'abri de la pluie.",
+            "Ein Kerl ist vorbeigerannt, Handschuhe in der einen Hand und einen Regenschirm in der anderen -- den er in der Apotheke einer meiner Stammgäste weggeschnappt hat. Zum Hafen! Wenn du ihn erwischst, bring ihr den Schirm zurück: Sie wartet in der Apotheke, im Trockenen.",
+            "Un tipo pasó corriendo con unos guantes en una mano y un paraguas en la otra -- el que le quitó en la farmacia a una de mis clientas de siempre. ¡Hacia el puerto! Si lo pillas, devuélvele ese paraguas: te espera en la farmacia, a resguardo de la lluvia.",
+            "Un tizio è passato di corsa con dei guanti in una mano e un ombrello nell'altra -- quello che ha soffiato in farmacia a una mia cliente abituale. Verso il porto! Se lo prendi, riportale quell'ombrello: ti aspetta in farmacia, al riparo dalla pioggia.",
+            "Um tipo passou a correr com umas luvas numa mão e um guarda-chuva na outra -- o que ele surripiou na farmácia a uma das minhas clientes. Para o porto! Se o apanhares, devolve-lhe esse guarda-chuva: ela espera na farmácia, ao abrigo da chuva.",
         },
         new[]
         {
@@ -956,6 +956,36 @@ void comportement_1()
         scripts.SetText(0, ScriptKind.Life, hero);
     });
 
+    // The pharmacy's customer back in out of the rain after chasing the thief (the user, 2026-11-10: "Let's have her coming back into the
+    // pharmacy after chasing the thief so she can stay dry"; "The umbrella can go back to the pharmacy customer. Let's have her offer this
+    // as a tip to Twinsen 'If you add two vials of gallic acid to your vehicle it'll help it go at rocket speed' -- we're not actually
+    // changing the car, it's a reference to a community joke"). The game's (actor 6) follows the thief out and is gone for good once the
+    // umbrella is taken (var 57); a copy of her stands where she stood, from the next visit on: the umbrella given back -- the thief's,
+    // found in the sewers (item 20) -- her thanks and her tip (Q_THIEF UmbrellaBack: Tim off to the secret bar, as before); before it,
+    // her deal again (the game's 254).
+    private const int PharmacyCustomerActor = 6;
+    private static void PharmacyCustomer(StoryParts p)
+    {
+        var customer = Copy(p.Originals, Pharmacy, PharmacyCustomerActor);
+        if (customer is null) { p.Log.Add("the pharmacy's customer back in left out: no customer (scene 22's actor 6)"); return; }
+        p.Edit(Pharmacy, "the pharmacy's customer back in out of the rain once the umbrella's taken: it given back, her thanks and her tip", model =>
+            p.Add(model, customer, Talker("0 != var_game(57) && 3 > chapter()", $@"            if (0 < var_game({Umbrella}) && {UmbrellaBack} > var_game({QThief}))
+            {{
+                message({EveningId(p.Say, EveningLine.CustomerThanks)});
+                message({EveningId(p.Say, EveningLine.CustomerTip)});
+                set_var_game({Umbrella}, 0);
+                set_var_game({QThief}, {UmbrellaBack});
+            }}
+            else if ({UmbrellaBack} == var_game({QThief}))
+            {{
+                message({EveningId(p.Say, EveningLine.CustomerTip)});
+            }}
+            else
+            {{
+                message(254);
+            }}", 1500)));
+    }
+
     // The Weather Wizard's tent (scene 21): the game's trade of the Incandescent Pearl for the Ring of Lightning (item 19) -- its slot is
     // the story's errands' now (RaceTrackStory.Errands.cs). The trade is never started: the pearl stays Twinsen's and nothing gives 19.
     private static void WizardNoRing(StoryParts p) => p.Edit(WizardTent, "the Weather Wizard's tent: no Ring of Lightning for the pearl (item 19 is the errands' slot)", _ => scripts =>
@@ -971,6 +1001,7 @@ void comportement_1()
         Morning(p);
         Thief(p);
         PharmacyAfterThief(p);
+        PharmacyCustomer(p);
         p.Log.AddRange(ErrandsInstall(p.Store.Directory));
         WizardNoRing(p);
         StormPeople(p);
@@ -1476,13 +1507,6 @@ void comportement_1()
                 message({p.Say(ChapterLine.TimLights)});
                 set_var_game({DayVar}, {Tired});
                 {goesHome}
-            }}
-            else if ({GlovesBack} == var_game({QThief}) && 0 < var_game({Umbrella}))
-            {{
-                message({p.Say(ChapterLine.TimUmbrella)});
-                add_gold_pieces({TimReward});
-                set_var_game({Umbrella}, 0);
-                set_var_game({QThief}, {UmbrellaBack});
             }}
             else if ({TimTold} > var_game({QThief}))
             {{
@@ -2072,15 +2096,8 @@ void comportement_{HeroWatching}()
         // (the user, 2026-11-06: "Tim says the umbrella is on a hook by the door, but there's no umbrella there". The hook is on the
         // door's left side (the one the camera sees, inside its arch), the umbrella hanging from it (CitadelProps) while it's back
         // (Q_THIEF 6) and Twinsen hasn't taken it: Action by it, his line and the umbrella his (item 20), gone from the hook.)
-        p.Edit(TavernScene, "the umbrella on its hook by the Tavern's door: Action takes it", model =>
-        {
-            SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Hook, UmbrellaHook.X, UmbrellaHook.Y, UmbrellaHook.Z));
-            return p.Add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Umbrella, UmbrellaHook.X, UmbrellaHook.Y, UmbrellaHook.Z),
-                Talker($"2 <= chapter() && {UmbrellaBack} == var_game({QThief}) && 0 == var_game({Umbrella})", $@"            message_obj(0, {p.Say(ChapterLine.UmbrellaTaken)});
-            found_object({Umbrella});
-            set_var_game({Umbrella}, 1);
-            suicide();", 1100));
-        });
+        // (the umbrella's hook by the Tavern's door, and Tim keeping it for her, gone: the umbrella goes back to its owner in the pharmacy --
+        // PharmacyCustomer; the user, 2026-11-10: "The umbrella can go back to the pharmacy customer")
         p.Edit(TavernScene, "Luc behind his bar: his round after the race", _ => scripts =>
             scripts.SetText(TavernLuc, ScriptKind.Life, Loose(scripts.GetText(TavernLuc, ScriptKind.Life), "message(46);", $@"if (2 == chapter() && 0 < var_game({WonVar}))
             {{
@@ -2097,14 +2114,6 @@ void comportement_{HeroWatching}()
         {{
             set_var_cube({Once1}, 1);
             message({p.Say(ChapterLine.TimTavern)});
-            if ({UmbrellaBack} == var_game({QThief}) && 0 == var_game({Umbrella}))
-            {{
-                message({p.Say(ChapterLine.TimHook)});
-            }}
-            else if ({UmbrellaBack} != var_game({QThief}))
-            {{
-                message({p.Say(ChapterLine.TimNoHook)});
-            }}
             if ({WheelFitted} > var_game({QLucCar}))
             {{
                 message({p.Say(ChapterLine.TimLucAway)});

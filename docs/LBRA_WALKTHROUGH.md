@@ -128,8 +128,8 @@ With the gloves: **Zoe:** "Gloves on? Then go and beat his time! I'll be watchin
 
 **Tim:** "Twenty years I served drinks here, Twinsen, and now look: a car park. They needed the room for the track, they said."
 
-**Tim:** "A fellow ran past with gloves in one hand and a customer's umbrella in the other. Towards the harbour! If you catch him, I want
-that umbrella back. Not that I've anywhere to put it."
+**Tim:** "A fellow ran past with gloves in one hand and an umbrella in the other -- the one he snatched at the pharmacy, from one of my
+regulars. Towards the harbour! If you catch him, take that umbrella back to her: she's waiting in the pharmacy, out of the rain."
 
 The arrow points at the harbour.
 
@@ -169,11 +169,14 @@ The thief drops the umbrella and scrambles up the ladder under the grating. Twin
 
 The same ladder brings Twinsen up onto the quay.
 
-**8. The umbrella (optional).** Back at the Tavern's doorstep, Twinsen gives Tim the umbrella.
+**8. The umbrella (optional).** The pharmacy's customer, who chased the thief out, is back inside out of the rain. Action by her, the
+umbrella in hand:
 
-**Tim:** "Our customer's umbrella! I'd stand you a drink on the house, if I still had a house. Here."
+**Customer:** "My umbrella! You caught him! Thank you, young man. I promised you something useful, and a promise is a promise."
 
-**Found:** 10 kashes.
+**Customer:** "If you add two vials of gallic acid to your vehicle, it'll help it go at rocket speed!"
+
+(A community joke: the car is no faster for it. Asked again, she says the tip again; asked before the umbrella is back, her deal.)
 
 **Secrets (optional, any time this chapter).** Two things on Citadel that pay off in chapter 2: each gives a page for the magic slate. (The racing overalls in the museum are not optional any more: Mr. Paul wants them on the storm track, 2026-11-08.)
 
@@ -389,19 +392,10 @@ Tim is at the door, then behind his bar inside. Twinsen goes in.
 **Tim:** "Twinsen! Look at it! The same bar, the same stools, the same stain on the ceiling... I asked them to leave that out, but they
 said 'exactly as it was'. Come in, come in: the first drink in the new old Tavern is on the house."
 
-If Twinsen gave the umbrella back: **Tim:** "And that umbrella you brought back is on its hook by the door. She never came for it.
-Take it, if you like: you've earned it, and she'd only lose it again."
-
-If he didn't: **Tim:** "And if you ever find my regular's umbrella, there's a hook by the door waiting for it."
-
 While Luc's car is still a wheel short: **Tim:** "Luc's not in yet: he's out in the yard by your house with that barrel car of his, a
 wheel short."
 
-The umbrella hangs on its hook just inside the front door. Action by it:
-
-**Twinsen:** "Her umbrella. After yesterday, I'm not going anywhere without one."
-
-**Found:** the umbrella. (Once Luc's car has its wheel, Luc is back behind his bar too.)
+(Once Luc's car has its wheel, Luc is back behind his bar too.)
 
 (The regulars are back in the Tavern, the Back Room's table is empty, and the Tralu, still at his round table with his tankard, is
 glad of the quiet: **The Tralu:** "Ahhh... quiet at last. The aliens put the Tavern back, and the drums went home with it. The whole
