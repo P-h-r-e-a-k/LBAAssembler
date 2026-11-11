@@ -71,12 +71,12 @@ internal static partial class IslandRetell
         }),
         (8, new[]
         {
-            "You showed up at the right time. The door at the top of the stairs is jammed, and your racing overalls are up there: Zoe lent them to us for the racing exhibition. Free the door, and you can have them back for the races.",
-            "Justement, tu tombes bien. La porte du haut de l'escalier est bloquée, et ta combinaison de course est là-haut : Zoé nous l'a prêtée pour l'exposition sur les courses. Débloque la porte et tu pourras la récupérer pour les courses.",
-            "Du kommst gerade zur rechten Zeit. Die Tür oben an der Treppe klemmt, und dein Rennoverall ist da oben: Zoe hat ihn uns für die Rennausstellung geliehen. Mach die Tür frei, dann bekommst du ihn für die Rennen zurück.",
-            "Llegas justo a tiempo. La puerta de arriba de la escalera está atascada, y tu mono de carreras está allí: Zoe nos lo prestó para la exposición sobre las carreras. Desbloquea la puerta y podrás recuperarlo para las carreras.",
-            "Arrivi al momento giusto. La porta in cima alle scale è bloccata, e la tua tuta da corsa è lassù: Zoe ce l'ha prestata per la mostra sulle corse. Sblocca la porta e te la ridò per le corse.",
-            "Você chegou em boa hora. A porta do alto da escada está emperrada, e seu macacão de corrida está lá em cima: a Zoe o emprestou para a exposição sobre as corridas. Desbloqueie a porta e ele volta a ser seu para as corridas.",
+            "You showed up at the right time. The door at the top of the stairs is jammed, and the controls that open your racing overalls' case are up there: Zoe lent them to us for the racing exhibition. Free the door, and you can have them back for the races.",
+            "Justement, tu tombes bien. La porte du haut de l'escalier est bloquée, et les commandes qui ouvrent la vitrine de ta combinaison de course sont là-haut : Zoé nous l'a prêtée pour l'exposition sur les courses. Débloque la porte et tu pourras la récupérer pour les courses.",
+            "Du kommst gerade zur rechten Zeit. Die Tür oben an der Treppe klemmt, und die Steuerung, die die Vitrine mit deinem Rennoverall öffnet, ist da oben: Zoe hat ihn uns für die Rennausstellung geliehen. Mach die Tür frei, dann bekommst du ihn für die Rennen zurück.",
+            "Llegas justo a tiempo. La puerta de arriba de la escalera está atascada, y los mandos que abren la vitrina de tu mono de carreras están allí: Zoe nos lo prestó para la exposición sobre las carreras. Desbloquea la puerta y podrás recuperarlo para las carreras.",
+            "Arrivi al momento giusto. La porta in cima alle scale è bloccata, e i comandi che aprono la teca della tua tuta da corsa sono lassù: Zoe ce l'ha prestata per la mostra sulle corse. Sblocca la porta e te la ridò per le corse.",
+            "Você chegou em boa hora. A porta do alto da escada está emperrada, e os controles que abrem a vitrine do seu macacão de corrida estão lá em cima: a Zoe o emprestou para a exposição sobre as corridas. Desbloqueie a porta e ele volta a ser seu para as corridas.",
         }),
         (9, new[]
         {
