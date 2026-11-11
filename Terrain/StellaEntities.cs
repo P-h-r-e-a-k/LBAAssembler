@@ -32,6 +32,13 @@ internal static class StellaEntities
     // off the curb, open where the corridor comes in)
     private const double CentreX = 24, CentreZ = 32, Radius = Citadel.CitadelProps.ClubFloorRadius / 512.0, RingFrom = 18.6;
     private const int RingTop = 5;
+    // (the stage's cells: their middles within StageCells of the hall's; the catwalk's, x CatwalkX0-X1 north of the middle)
+    private const double StageCells = 7.2;
+    private const int CatwalkX0 = 23, CatwalkX1 = 24;
+    // the poles round the column (degrees, the room's middle to them: x = cos, z = sin -- all on the audience's side of it, the camera's:
+    // one behind it was drawn over it), the tables', the stools'
+    private static readonly float[] PoleAngles = { 10, 60, 110 }, TableAngles = { 20, 60, 200, 235, 305, 335 };
+    private const float PoleCells = 5, TableCells = 11.5f, StoolCells = 14.2f;
     private const int CorridorX0 = 43, CorridorX1 = 56, CorridorZ0 = 30, CorridorZ1 = 34;
     private const int FootX0 = 55, FootX1 = 60, FootZ0 = 26, FootZ1 = 34;
     // the floor's layer (Rick's), its tile (3 x 1 x 3) and where its 3 x 3 repeats from
@@ -100,7 +107,7 @@ internal static class StellaEntities
             }
         }
         int Mod(int a, int m) => ((a % m) + m) % m;
-        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0;
+        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0;
         for (var z = 0; z < Size; z++)
         for (var x = 0; x < Size; x++)
         {
@@ -111,6 +118,12 @@ internal static class StellaEntities
                 // (the hall's ring of invisible solid cells inside the curb: block 0, collision 1 -- not where the corridor comes in)
                 double dx = x + 0.5 - CentreX, dz = z + 0.5 - CentreZ;
                 var angle = Math.Atan2(dz, dx) * 180 / Math.PI;
+                // (the stage and its catwalk: one layer of invisible solid cells under the props -- the dancers stand on it)
+                if (Hall(x, z) && (Math.Sqrt(dx * dx + dz * dz) <= StageCells || (x >= CatwalkX0 && x <= CatwalkX1 && dz < 0 && Math.Sqrt(dx * dx + dz * dz) < RingFrom)))
+                {
+                    Put(x, FloorLayer + 1, z, 0, 1);
+                    stageCells++;
+                }
                 if (Hall(x, z) && Math.Sqrt(dx * dx + dz * dz) >= RingFrom && !(angle > Citadel.CitadelProps.ClubDoorFrom && angle < Citadel.CitadelProps.ClubDoorTo))
                 {
                     for (var y = FloorLayer + 1; y <= RingTop; y++) Put(x, y, z, 0, 1);
@@ -279,8 +292,18 @@ void comportement_3()
             .Select(g => SceneOps.AddActor(model, LiftActor(g, clubLift.Item1, floorY + ClubDown, clubLift.Item3))).ToArray();
         var clubPlate = clubParts[0];
         // the hall's round wall and curb (CitadelProps.Club), round its middle, drawn into the backdrop
-        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubCurb }
-            .Select(g => SceneOps.AddActor(model, Backdrop(g, (int)(CentreX * 512) - Citadel.CitadelProps.ClubShiftX, floorY, (int)(CentreZ * 512) - Citadel.CitadelProps.ClubShiftZ))).ToArray();
+        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubBoard, Citadel.CitadelProps.ClubFront, Citadel.CitadelProps.ClubCurb, Citadel.CitadelProps.ClubStage, Citadel.CitadelProps.ClubShelf }
+            .Select(g => SceneOps.AddActor(model, Backdrop(g, (int)(CentreX * 512) - Citadel.CitadelProps.ClubShiftX, floorY, (int)(CentreZ * 512) - Citadel.CitadelProps.ClubShiftZ))).ToList();
+        // ... and the room's furniture in its place among the people: the reactor's column on the stage, the poles round it, the bar's
+        // counter, its stools, the tables
+        (int X, int Z) Round(float degrees, float cells) => ((int)Math.Round(CentreX * 512 + cells * 512 * Math.Cos(degrees * Math.PI / 180)), (int)Math.Round(CentreZ * 512 + cells * 512 * Math.Sin(degrees * Math.PI / 180)));
+        var stageTop = floorY + (int)Citadel.CitadelProps.StageHigh;
+        void Furnish(int generic, int x, int y, int z) => round.Add(SceneOps.AddActor(model, Furniture(generic, x, y, z)));
+        Furnish(Citadel.CitadelProps.ClubColumn, (int)(CentreX * 512), stageTop, (int)(CentreZ * 512));
+        foreach (var a in PoleAngles) { var (x, z) = Round(a, PoleCells); Furnish(Citadel.CitadelProps.ClubPole, x, stageTop, z); }
+        foreach (var (generic, a) in Citadel.CitadelProps.CounterAt) { var (x, z) = Round(a, Citadel.CitadelProps.CounterMiddle / 512); Furnish(generic, x, floorY, z); }
+        for (var a = Citadel.CitadelProps.BarFrom + 7; a < Citadel.CitadelProps.BarTo - 3; a += 10) { var (x, z) = Round(a, StoolCells); Furnish(Citadel.CitadelProps.ClubBarStool, x, floorY, z); }
+        foreach (var a in TableAngles) { var (x, z) = Round(a, TableCells); Furnish(Citadel.CitadelProps.ClubTable, x, floorY, z); }
         var clubTrack = $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({clubLow});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
                         $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({clubHigh});\nstop();\n";
         var ride = string.Concat(clubParts.Select(i => $"        set_track_obj({i}, label_{LiftRide});\n"));
@@ -347,7 +370,7 @@ void comportement_3()
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"Stella Entities: scene {Scene} (grid {gridNumber}, Rick's bar's block library {raw[0]}): a round hall {Radius * 2:0} cells across, the corridor and the " +
-                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge; Baldino's cell (scene {Cell}, its grid now " +
+                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk; Baldino's cell (scene {Cell}, its grid now " +
                 $"{cellGridNumber}): the hidden lift in its corner by the door (cells x 32-33, z 31-32), Action on it and down, and back up on the club's");
         return log;
     }
@@ -359,6 +382,14 @@ void comportement_3()
     {
         var a = Citadel.CitadelProps.Actor(generic, x, y, z);
         a.Flags |= ObjBackground | NoPreClip;
+        a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+        return a;
+    }
+
+    // A piece of furniture, drawn among the people
+    private static SceneActorModel Furniture(int generic, int x, int y, int z)
+    {
+        var a = Citadel.CitadelProps.Actor(generic, x, y, z);
         a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
         return a;
     }
