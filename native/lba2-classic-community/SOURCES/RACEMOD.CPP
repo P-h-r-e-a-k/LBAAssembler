@@ -2193,6 +2193,16 @@ typedef struct {
     S32 EyeFrom;                           // ... and since when it eases back to the usual (0: not yet)
 } T_RACE_MARSHAL;
 static T_RACE_MARSHAL s_marshal;
+// (Zoe in the pit box: pit_crew=, PitCrew)
+typedef struct {
+    int On, Ready, Entity, Body, Gen[2], Index[2], Shown, Want;
+    S32 BodyIndex, Beta, WaveUntil;
+    double X, Y, Z;
+    int ServedLap;
+    char Line[128];
+    T_OBJ_3D Obj;
+} T_RACE_PIT;
+static T_RACE_PIT s_pit;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -4399,6 +4409,20 @@ static void Load(const char *path, int carOnly = 0) {
             // (after marshal=, which starts her afresh)
             int body;
             if (sscanf(v, "%d", &body) == 1 && body >= 0) { s_marshal.Plinth = body; s_marshal.HasPlinth = 1; }
+        }
+        else if (!strcmp(key, "pit_crew")) {
+            int f[8];
+            memset(&s_pit, 0, sizeof(s_pit));
+            if (sscanf(v, "%d %d %d %d %d %d %d %d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7]) == 8 && f[0] >= 0) {
+                s_pit.Entity = f[0]; s_pit.Body = f[1]; s_pit.Gen[0] = f[2]; s_pit.Gen[1] = f[3];
+                s_pit.X = f[4]; s_pit.Z = f[5]; s_pit.Y = f[6]; s_pit.Beta = f[7] & 4095;
+                s_pit.ServedLap = -1;
+                s_pit.On = 1;
+            }
+        }
+        else if (!strcmp(key, "pit_line")) {
+            // (after pit_crew=, which starts her afresh)
+            snprintf(s_pit.Line, sizeof(s_pit.Line), "%s", v);
         }
         else if (!strcmp(key, "marshal_start")) {
             int f[4];
@@ -8438,6 +8462,76 @@ static void DrawMarshal(void) {
     BackdropDisplay(o, zr, clut);
 }
 
+// ---- Zoe's pit box (pit_crew=, pit_line=) --------------------------------------------------------------------------------------------
+// The story's pit crew (docs/LBRA_STORY_SCRIPT.md, "Twinsen and Zoe", 2026-11-11): Zoe stands in the pit box by the start line during a
+// race, drawn as the flag marshal is (no actor: seen from any scene), with her toolbox -- standing ready, and waving Twinsen in as his car
+// comes up. Driving slowly through the box beside her (under RACE_PIT_KMH) is a pit stop: a fuel can into the item box (GiveItem), a jolt
+// shaken off (shrunk, skidding on oil), and her line (pit_line=) in the banner. Once a lap at most.
+//   pit_crew=<entity> <body> <idle> <wave> <x> <z> <y> <turn>   her entity, its body and two animations (generic numbers), where she
+//                                                               stands (island units, the floor) and the way she faces
+//   pit_line=<text>                                            what she says at a stop
+#define RACE_PIT_REACH (3.0 * 512.0)       // the box: the car's middle this near her
+#define RACE_PIT_KMH 20                    // ... and slower than this
+#define RACE_PIT_WAVE_NEAR (14.0 * 512.0)  // she waves him in from this far (a lap with no stop yet)
+#define RACE_PIT_WAVE_MS 2500              // ... and on, this long, after a stop
+static int GiveItem(int pu, S32 now);
+
+static void PitCrew(S32 now) {
+    T_RACE_PIT *p = &s_pit;
+    if (!p->On) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int driving = Comportement == C_BUGGY && s_phase == PHASE_RACE;
+    const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    const double d = sqrt((hx - p->X) * (hx - p->X) + (hz - p->Z) * (hz - p->Z));
+    const int kmh = (int)((abs(ListBuggy[0].Speed) * 36 + 2560) / 5120);
+    if (driving && s_laps >= 1 && p->ServedLap != s_laps && d < RACE_PIT_REACH && kmh < RACE_PIT_KMH) {
+        p->ServedLap = s_laps;
+        const int can = GiveItem(PU_FUEL, now);
+        const int jolt = now < s_shrunkUntil || now < s_skidUntil;
+        s_shrunkUntil = 0; s_skidUntil = 0;
+        if (p->Line[0]) Message(p->Line);
+        p->WaveUntil = now + RACE_PIT_WAVE_MS;
+        Log_Info("[racemod] pit stop, lap %d at %d km/h: %s%s", (int)s_laps, kmh, can ? "a fuel can into the item box" : "the item boxes full, no can",
+                 jolt ? ", a jolt shaken off" : "");
+    }
+    const int waving = now < p->WaveUntil || (driving && p->ServedLap != s_laps && d < RACE_PIT_WAVE_NEAR);
+    p->Want = waving ? 1 : 0;
+}
+
+static void DrawPitCrew(void) {
+    T_RACE_PIT *p = &s_pit;
+    if (!p->On) return;
+    T_OBJ_3D *o = &p->Obj;
+    const S32 x = (S32)floor(p->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(p->Y + 0.5), z = (S32)floor(p->Z - CurrentCubeY * 32768.0 + 0.5);
+    if (!p->Ready) {
+        int ok = (p->BodyIndex = EntityEntry(p->Entity, F_BODY, p->Body)) >= 0 && GivePtrBody(p->BodyIndex);
+        for (int k = 0; k < 2 && ok; k++) ok = (p->Index[k] = EntityEntry(p->Entity, F_ANIM, p->Gen[k])) >= 0 && GivePtrAnim(p->Index[k]);
+        if (!ok) {
+            Log_Info("[racemod] the pit crew: entity %d has no body %d or animations %d %d -- left out", p->Entity, p->Body, p->Gen[0], p->Gen[1]);
+            p->On = 0;
+            return;
+        }
+        ObjectReady(o, p->BodyIndex);
+        o->X = x; o->Y = y; o->Z = z; o->Beta = p->Beta;
+        o->Anim.Num = -1;
+        ObjectInitAnim(o, (void *)(uintptr_t)(U32)p->Index[0]);
+        o->Status |= FLAG_BODY;
+        p->Shown = 0;
+        p->Ready = 1;
+        Log_Info("[racemod] the pit crew: body %d (BODY.HQR), animations %d %d (ANIM.HQR), in the pit box at (%.0f,%.0f,%.0f), turned %d", (int)p->BodyIndex,
+                 (int)p->Index[0], (int)p->Index[1], p->X, p->Y, p->Z, (int)p->Beta);
+    }
+    if (p->Want != p->Shown) { ObjectInitAnim(o, (void *)(uintptr_t)(U32)p->Index[p->Want]); p->Shown = p->Want; }
+    o->X = x; o->Y = y; o->Z = z;
+    ObjectSetInterDep(o);
+    o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = p->Beta; o->Gamma = 0;
+    ObjectSetInterFrame(o);
+    LongWorldRotatePoint(x, y + 1500, z);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar + 4000) return;
+    BackdropDisplay(o, zr, SceneClut());
+}
+
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
 static void DrawSpooks(void);
 static void DrawWebs(void);
@@ -8449,6 +8543,7 @@ void RaceMod_DrawBackdrop(void) {
     if (s_nbWebs) DrawWebs();
     if (s_nbJetSignals && s_signalBody[0] >= 0) DrawJetSignals();
     DrawMarshal();
+    DrawPitCrew();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
     if (!s_frog.Ready) {
@@ -13180,19 +13275,24 @@ static U32 WalkInput(void) {
 // The console's racewalk in the car: the car driven through the points (island units) by the keys -- the accelerator held, steered for
 // the next point, which counts as reached within RACE_DRIVE_REACH; the last reached, the keys let go (the step brakes if it wants).
 #define RACE_DRIVE_REACH (2 * 512)
+// The console's drivecap <km/h> (0: none): the console's drive in the car held under that speed -- the brake, not the accelerator, while it
+// is over it (the scripted playthrough by inputs, 2026-11-11: a pit stop in the pit box beside Zoe, under 20 km/h)
+static int s_driveCap = 0;
+extern "C" void RaceMod_DriveCap(int kmh) { s_driveCap = kmh > 0 ? kmh : 0; Log_Info("[racemod] drivecap: %d km/h", s_driveCap); }
 static U32 DriveInput(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const U32 go = s_driveCap && (ListBuggy[0].Speed * 36 + 2560) / 5120 > s_driveCap ? I_DOWN : I_UP;
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
     if (s_walkAt >= s_walkN) { s_walkN = 0; Log_Info("[racemod] racewalk: the car at its last point (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); return 0; }
     const double dx = s_walkX[s_walkAt] - wx, dz = s_walkZ[s_walkAt] - wz;
     if (sqrt(dx * dx + dz * dz) < RACE_DRIVE_REACH) {
         Log_Info("[racemod] racewalk: the car at point %d (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz);
         s_walkAt++;
-        return I_UP;
+        return go;
     }
     const S32 want = TurnRound(atan2(dx, dz));
     const S32 turn = ((want - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
-    U32 in = I_UP;
+    U32 in = go;
     if (turn > 40) in |= I_LEFT; else if (turn < -40) in |= I_RIGHT;
     return in;
 }
@@ -18716,6 +18816,7 @@ void RaceMod_Frame(void) {
     }
     Guards(now, driving, dt);
     Marshal(now);
+    PitCrew(now);
     Shuttles(now, driving);
     // (what is thrown at him, heard coming from its side)
     IncomingHeard(now, driving);
@@ -21020,7 +21121,7 @@ static void ResetTrack(void) {
     s_mapKey = 0;
     s_nbRoadWalls = 0; s_nbJets = 0; s_nbJetSignals = 0; s_signalBody[0] = s_signalBody[1] = -1; s_signalReady[0] = s_signalReady[1] = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
-    s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
+    s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); memset(&s_pit, 0, sizeof(s_pit)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0; s_passageAt = s_passageUntil = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;

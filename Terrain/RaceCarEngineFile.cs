@@ -159,6 +159,12 @@ internal static class RaceCarEngineFile
             if (marshal.Length >= 11 && marshal[10] >= 0) text.Append($"marshal_plinth={marshal[10]}\n");
             if (marshal.Length >= 15) text.Append($"marshal_start={string.Join(' ', marshal.Skip(11).Take(4))}\n");
         }
+        // Zoe in the pit box by the start line, in the story's races from chapter 2 (RaceTrackPitCrew): a pit stop under 20 km/h beside her
+        if (story && track?.PitCrew is { Length: >= 8 } pit && RaceTrackPitCrew.InStory(info?.Island, track.Dream is not null))
+        {
+            text.Append($"pit_crew={string.Join(' ', pit.Take(8))}\n");
+            text.Append($"pit_line={RaceTrackPitCrew.Line}\n");
+        }
         // Twinsen may get out of his car (Space, stopped) and explore while the race goes on (the Temple of Bú's secret party)
         if (track?.OnFoot == true) text.Append("on_foot=1\n");
         if (car.HideRaceSky) text.Append("race_sky=0\n");

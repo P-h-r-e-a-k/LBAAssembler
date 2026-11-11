@@ -2794,6 +2794,12 @@ static void cmd_gotomap(int argc, const char *argv[]) {
 /* turnto <beta> | turnto off: Twinsen turned on the spot by the left / right keys till he faces beta (RACEMOD.CPP RaceMod_TurnTo) --
    the scripted playthrough by inputs, 2026-11-11: facing the water before jumping onto the sewers' floating logs. `walkdone` waits for it. */
 extern "C" void RaceMod_TurnTo(int beta);
+extern "C" void RaceMod_DriveCap(int kmh);
+/* drivecap <km/h> | drivecap 0: the console's drive in the car (racewalk ... car) braked whenever it is over that speed (RACEMOD.CPP) */
+static void cmd_drivecap(int argc, const char *argv[]) {
+    if (argc < 2) { Console_Print("Usage: drivecap <km/h> | drivecap 0"); return; }
+    RaceMod_DriveCap(atoi(argv[1]));
+}
 static void cmd_turnto(int argc, const char *argv[]) {
     if (argc < 2) { Console_Print("Usage: turnto <beta 0..4095> | turnto off"); return; }
     RaceMod_TurnTo(strcasecmp(argv[1], "off") ? atoi(argv[1]) : -1);
@@ -3341,6 +3347,8 @@ void Console_RegisterAll(void) {
                               "walkto <x z>... [actor <n> [reach]] [action] (island units outside, the scene's inside) | walkto off",
                               "Twinsen on foot, in any game, walked through the points (island units) by the keys a player would "
                               "press: turned towards each, walking once it is about ahead. For headless tests that go by inputs alone.");
+    Console_RegisterCommandEx("drivecap", cmd_drivecap, "Hold the console's drive in the car under a speed",
+                              "drivecap <km/h> | drivecap 0", "racewalk ... car brakes instead of accelerating while the car is over it.");
     Console_RegisterCommandEx("turnto", cmd_turnto, "Turn Twinsen on the spot by the keys till he faces a heading",
                               "turnto <beta> | turnto off", "Holds left or right, the shorter way, till he faces within 30 of beta (0 = +z, 1024 = +x, 2048 = -z, 3072 = -x). walkdone waits for it.");
     Console_RegisterCommandEx("racewalk", cmd_racewalk, "Race-track test: walk Twinsen on foot through points, then to his car",
