@@ -25,8 +25,9 @@ internal static class PolarDream
     // Twinsen the digger's key (RACEMOD.CPP chase=, ChaseOpening) -- texts of the island's file after the grobo's own (PolarGrobo, 20-22);
     // FunFrock holds a lead of ChaseLeadCells over Twinsen (chase_lead=), and the race ends the dream whoever gets there first
     // (dream_any_end=): FunFrock, a little ahead, takes the jump into the peak as Twinsen watches
+    // (24 cells, and his push in RACEMOD.CPP eased, since LBRA issue #7, the user: "Make the Polar race with Funfrock marginally easier to win"; 30 until then)
     // ... and starts ChaseHeadCells down the road the moment Twinsen is at the wheel, just short of the first jump, 728 cells on (chase_head=)
-    public const int ChaseFunFrockText = 23, ChaseTwinsenText = 24, ChaseGroboText = 25, ChaseLeadCells = 30, ChaseHeadCells = 690;
+    public const int ChaseFunFrockText = 23, ChaseTwinsenText = 24, ChaseGroboText = 25, ChaseLeadCells = 24, ChaseHeadCells = 690;
     // the game variable a win sets (the race-track mode's win=): 1, Twinsen wakes up in his bed; 2 once Zoe has woken him, 3 as he gets
     // up, 4 as she comes to kiss him (200-204 are the race track story's, nothing in the game uses 205; 206 is the engine's Citadel weather)
     public const int DreamVar = 205;

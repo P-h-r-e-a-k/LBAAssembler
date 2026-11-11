@@ -5732,8 +5732,10 @@ static void ChaseOpening(S32 now) {
 // eases right off, behind he pushes, so Twinsen catches him up and the two come to the end close together, he a little ahead
 // (the user, 2026-11-02: "We want the user to be able to close in on Funfrock even if they don't ever take him, but it's currently too easy": he eases off only well ahead, and pushes on
 // hard with a car close: 1.4 at the most let one past him for good. Logged now and then, to tune)
-#define RACE_CHASE_PUSH 1.85
-#define RACE_CHASE_BEHIND 2.8              // ... and passed, this: a jump took him 80 cells behind a good driver, and he never got them back
+// (LBRA issue #7, the user, 2026-11-09: "Make the Polar race with Funfrock marginally easier to win": 1.85 and 2.8 until then, and a lead
+// of 30 cells -- PolarDream.ChaseLeadCells)
+#define RACE_CHASE_PUSH 1.6
+#define RACE_CHASE_BEHIND 2.3              // ... and passed, this: a jump took him 80 cells behind a good driver, and he never got them back
 #define RACE_CHASE_LOG_MS 4000
 static S32 s_chaseLogAt = 0;
 static double ChaseLead(const T_RACE_OPPONENT *o, int n) {
