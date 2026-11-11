@@ -282,8 +282,8 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
    > **Zoe:** "Twinsen, I am sick of all this rain! Go and find the Weather Wizard and get him to fix it!"
 
    And a new line after it:
-   > **Zoe:** "Oh, and you left your driving gloves on the seat of your car, under the carport. This morning they were gone!
-   > Somebody's been light-fingered again."
+   > **Zoe:** "Oh, and you left your driving gloves on the seat of your car again, under the carport. I've told you before not
+   > to leave them there! This morning they were gone. Somebody's been light-fingered again."
 
    Q_THIEF = 1. The attic shelf shows the darts again, not the gloves.
 

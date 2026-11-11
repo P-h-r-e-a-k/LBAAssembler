@@ -158,12 +158,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Oh, and you left your driving gloves on the seat of your car, under the carport. This morning they were gone! Somebody's been light-fingered again.",
-            "Ah, et tu avais laissé tes gants de pilote sur le siège de ta voiture, sous l'abri. Ce matin, ils avaient disparu ! Quelqu'un a encore eu les doigts crochus.",
-            "Ach, und du hattest deine Fahrhandschuhe auf dem Sitz deines Wagens liegen lassen, unterm Carport. Heute Morgen waren sie weg! Da hat wieder jemand lange Finger gemacht.",
-            "Ah, y te dejaste los guantes de conducir en el asiento del coche, bajo el cobertizo. ¡Esta mañana habían desaparecido! Alguien ha vuelto a tener la mano larga.",
-            "Ah, e avevi lasciato i guanti da guida sul sedile della macchina, sotto la tettoia. Stamattina erano spariti! Qualcuno ha di nuovo le mani lunghe.",
-            "Ah, e deixaste as tuas luvas de condução no banco do carro, debaixo do telheiro. Esta manhã tinham desaparecido! Alguém voltou a ter mão leve.",
+            "Oh, and you left your driving gloves on the seat of your car again, under the carport. I've told you before not to leave them there! This morning they were gone. Somebody's been light-fingered again.",
+            "Ah, et tu as encore laissé tes gants de pilote sur le siège de ta voiture, sous l'abri. Je te l'ai déjà dit, ne les laisse pas là ! Ce matin, ils avaient disparu. Quelqu'un a encore eu les doigts crochus.",
+            "Ach, und du hast deine Fahrhandschuhe schon wieder auf dem Sitz deines Wagens liegen lassen, unterm Carport. Ich hab's dir doch schon mal gesagt, lass sie da nicht liegen! Heute Morgen waren sie weg. Da hat wieder jemand lange Finger gemacht.",
+            "Ah, y otra vez te dejaste los guantes de conducir en el asiento del coche, bajo el cobertizo. ¡Ya te lo he dicho, no los dejes ahí! Esta mañana habían desaparecido. Alguien ha vuelto a tener la mano larga.",
+            "Ah, e hai di nuovo lasciato i guanti da guida sul sedile della macchina, sotto la tettoia. Te l'ho già detto, non lasciarli lì! Stamattina erano spariti. Qualcuno ha di nuovo le mani lunghe.",
+            "Ah, e voltaste a deixar as tuas luvas de condução no banco do carro, debaixo do telheiro. Já te disse para não as deixares lá! Esta manhã tinham desaparecido. Alguém voltou a ter mão leve.",
         },
         new[]
         {
