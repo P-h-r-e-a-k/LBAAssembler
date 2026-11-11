@@ -67,6 +67,13 @@ internal static class StellaEntities
     private const int ClubLiftCellX = 57, ClubLiftCellZ = 27;
 
     private const int Size = 64, Height = 25;
+    // the hall's floor (the top of its floor layer); a place round the hall's middle (degrees: x = cos, z = sin; cells out); the beta that
+    // faces the middle from a place (an actor's beta 0 looks along +z, 1024 along +x)
+    public const int FloorY = (FloorLayer + 1) * 256;
+    public static (int X, int Z) At(float degrees, float cells) =>
+        ((int)Math.Round(CentreX * 512 + cells * 512 * Math.Cos(degrees * Math.PI / 180)), (int)Math.Round(CentreZ * 512 + cells * 512 * Math.Sin(degrees * Math.PI / 180)));
+    public static int FacingMiddle(int x, int z) =>
+        ((int)Math.Round(Math.Atan2(CentreX * 512 - x, CentreZ * 512 - z) * 2048 / Math.PI) + 4096) & 4095;
 
     public static List<string> Install(string gameDirectory)
     {
@@ -107,7 +114,7 @@ internal static class StellaEntities
             }
         }
         int Mod(int a, int m) => ((a % m) + m) % m;
-        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0;
+        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0, counterCells = 0;
         for (var z = 0; z < Size; z++)
         for (var x = 0; x < Size; x++)
         {
@@ -123,6 +130,14 @@ internal static class StellaEntities
                 {
                     Put(x, FloorLayer + 1, z, 0, 1);
                     stageCells++;
+                }
+                // (the bar's counter: invisible solid cells along its curve, two layers)
+                var r = Math.Sqrt(dx * dx + dz * dz);
+                if (Hall(x, z) && r >= Citadel.CitadelProps.CounterIn / 512 - 0.15 && r <= Citadel.CitadelProps.CounterOut / 512 + 0.1 &&
+                    angle >= Citadel.CitadelProps.BarFrom - 3 && angle <= Citadel.CitadelProps.BarTo + 3)
+                {
+                    for (var y = FloorLayer + 1; y <= FloorLayer + 2; y++) Put(x, y, z, 0, 1);
+                    counterCells++;
                 }
                 if (Hall(x, z) && Math.Sqrt(dx * dx + dz * dz) >= RingFrom && !(angle > Citadel.CitadelProps.ClubDoorFrom && angle < Citadel.CitadelProps.ClubDoorTo))
                 {
@@ -370,7 +385,7 @@ void comportement_3()
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"Stella Entities: scene {Scene} (grid {gridNumber}, Rick's bar's block library {raw[0]}): a round hall {Radius * 2:0} cells across, the corridor and the " +
-                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk; Baldino's cell (scene {Cell}, its grid now " +
+                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar; Baldino's cell (scene {Cell}, its grid now " +
                 $"{cellGridNumber}): the hidden lift in its corner by the door (cells x 32-33, z 31-32), Action on it and down, and back up on the club's");
         return log;
     }

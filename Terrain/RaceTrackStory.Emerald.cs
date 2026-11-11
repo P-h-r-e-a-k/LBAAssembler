@@ -44,6 +44,8 @@ internal static partial class RaceTrackStory
         MechanicHalOut,
         // (Zoe as companion's hints -- RaceTrackStory.Companion.cs, 2026-11-11)
         ZoeHintHal, ZoeHintRace,
+        // (Stella Entities' people -- RaceTrackStory.StellaEntities.cs, 2026-11-11)
+        ClubWelcome, ClubStaffOnly, ClubNoBoss, ClubBarman,
     }
     private static readonly string[][] MoonLines =
     {
@@ -273,6 +275,42 @@ internal static partial class RaceTrackStory
             "Le luci di partenza sono accese. Si corre!",
             "As luzes de partida estão acesas. Vamos correr!",
         },
+        new[]
+        {
+            "Welcome to Stella Entities. No charge for a friend of Baldino's. Look all you like -- no touching the dancers.",
+            "Bienvenue au Stella Entities. C'est gratuit pour un ami de Baldino. Regarde tant que tu veux -- on ne touche pas les danseuses.",
+            "Willkommen im Stella Entities. Für einen Freund von Baldino kostet es nichts. Schau, so viel du willst -- Anfassen verboten.",
+            "Bienvenido a Stella Entities. Gratis para un amigo de Baldino. Mira todo lo que quieras -- prohibido tocar a las bailarinas.",
+            "Benvenuto allo Stella Entities. Gratis per un amico di Baldino. Guarda quanto vuoi -- vietato toccare le ballerine.",
+            "Bem-vindo ao Stella Entities. É grátis para um amigo do Baldino. Olha à vontade -- não se tocam as bailarinas.",
+        },
+        new[]
+        {
+            "Staff only past here. The dancers get changed back there.",
+            "Réservé au personnel. Les danseuses se changent là-derrière.",
+            "Nur für Personal. Dahinten ziehen sich die Tänzerinnen um.",
+            "Solo personal a partir de aquí. Las bailarinas se cambian ahí detrás.",
+            "Solo personale da qui in poi. Le ballerine si cambiano là dietro.",
+            "Só pessoal daqui para a frente. As bailarinas mudam de roupa lá atrás.",
+        },
+        new[]
+        {
+            "No touch the Boss!",
+            "Pas toucher le Patron !",
+            "Nicht Boss anfassen!",
+            "¡No tocar al Jefe!",
+            "Non toccare il Capo!",
+            "Não tocar no Chefe!",
+        },
+        new[]
+        {
+            "What'll it be? The Moon Fizz is on the house tonight.",
+            "Qu'est-ce que je te sers ? Le Moon Fizz est offert ce soir.",
+            "Was darf's sein? Der Moon Fizz geht heute aufs Haus.",
+            "¿Qué te pongo? El Moon Fizz invita la casa esta noche.",
+            "Cosa ti servo? Il Moon Fizz stasera lo offre la casa.",
+            "O que vai ser? O Moon Fizz é oferta da casa esta noite.",
+        },
     };
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -464,6 +502,8 @@ void comportement_1()
 
         // the eggs: petanque in low gravity (RaceTrackStory.Eggs.Emerald.cs)
         MoonPetanque(b, report, Say(MoonLine.BowlerUp), Say(MoonLine.BowlerTuesday));
+        // Stella Entities' people: Rick's bouncers, his guard and his barman (RaceTrackStory.StellaEntities.cs)
+        StellaPeople(b, Say);
 
         b.Save();
         log.Add($"the Emerald Moon's race file: gate={QHal} {HalMended} (HAL mended), win={QHal} {HalWon}");

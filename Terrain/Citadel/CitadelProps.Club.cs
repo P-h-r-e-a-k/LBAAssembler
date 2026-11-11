@@ -408,5 +408,8 @@ internal static partial class CitadelProps
     // The club's round pieces: no box Twinsen meets (the room's invisible cells hold him in) -- a speck on the floor at the actor, far back
     // in the room's corner outside it: the engine sorts what it draws by the boxes, back to front, so they are drawn first (a box high
     // over the room was "in front" of Twinsen, and he went into the backdrop with them)
-    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubShelf or ClubFront or ClubBoard ? new short[] { -1, 0, -1, 1, 1, 1 } : null;
+    // (and the bar's counter pieces, a speck at their middles: a curved piece's own box was a square round it, the stools and the floor
+    // in front of the bar inside it -- Twinsen pushed away from the bar; the grid's invisible cells along the curve are the counter's)
+    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubShelf or ClubFront or ClubBoard or ClubCounter or ClubCounter2 or ClubCounter3
+        ? new short[] { -1, 0, -1, 1, 1, 1 } : null;
 }
