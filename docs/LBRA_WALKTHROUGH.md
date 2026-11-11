@@ -280,7 +280,7 @@ lighthouse."
 
 Flick drops the flag. It's one lap against Raph's time, with the rain on the road.
 
-*Tip:* the track is slick. Brake before the bends, not in them, and keep off the puddles at the Tavern corner.
+*Tip:* the track is slick in the rain. Brake before the bends, not in them, and keep to the middle of the road at the Tavern corner.
 
 **10. Raph's time beaten.** Twinsen stops and gets out of his car. Raph has climbed out of his and walked over to Zoe; his car is
 nowhere to be seen. Twinsen goes over and talks to him.
