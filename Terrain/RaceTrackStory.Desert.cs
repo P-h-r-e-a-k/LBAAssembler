@@ -47,6 +47,19 @@ internal static partial class RaceTrackStory
     // comparisons, so "page k not found yet" is the values 0-7 without its bit, one equality each. A spare game variable (75:
     // RaceTrackStory.Eggs.cs's list)
     private const int PagesFoundVar = 75;
+    // (the pages lie on the road from the Desert chapter's start, picked up in any order before the Dean has told of them too: the user,
+    // 2026-11-08, "If they're missing they're missing, we should be able to collect them without speaking to the dean first". Q_PAGES moves
+    // with them only once he has: telling of them, he counts those already found -- Q_PAGES 2 and one more each -- and all three found, the
+    // diploma there and then)
+    private static string PagesBeforeDean() =>
+        $@"if (1 == var_game({PagesFoundVar}) || 2 == var_game({PagesFoundVar}) || 4 == var_game({PagesFoundVar}))
+                {{
+                    set_var_game({QPages}, 3);
+                }}
+                else if (3 == var_game({PagesFoundVar}) || 5 == var_game({PagesFoundVar}) || 6 == var_game({PagesFoundVar}))
+                {{
+                    set_var_game({QPages}, 4);
+                }}";
     private static string PageNotFound(int k) =>
         string.Join(" || ", Enumerable.Range(0, 8).Where(v => (v & (1 << k)) == 0).Select(v => $"{v} == var_game({PagesFoundVar})"));
     private const int PagesModelLike = 38, FirstFreeArrow = 224, LastArrow = 254;
@@ -721,7 +734,7 @@ void comportement_1()
         var pages = new[] { (0.30, DesertLine.Page1), (0.55, DesertLine.Page2), (0.80, DesertLine.Page3) };
         var pagePlaces = pages.Select(p => OnLap(report, p.Item1)).ToArray();
         var pageArrows = PagesInstall(gameDirectory, b.Store, pagePlaces, log);
-        var arrowsOn = string.Concat(pageArrows.Where(a => a >= 0).Select(a => $"\n                set_holo_pos({a});"));
+        var arrowsOn = string.Concat(pageArrows.Select((a, k) => (a, k)).Where(x => x.a >= 0).Select(x => $"\n                if ({PageNotFound(x.k)})\n                {{\n                    set_holo_pos({x.a});\n                }}"));
 
         // the Dean in the School of Magic: a copy of the game's own talks (the game's is out of sight on the Desert's chapters). The hall is
         // the 1996 demo's when the build put it in (Demo96Rooms): its Dean, another actor there, is the one copied -- the actor at the
@@ -730,7 +743,7 @@ void comportement_1()
         if (Copy(b.Store, DeanScene, deanActor) is { } dean)
         {
             b.Hide(DeanScene, deanActor, desert, "Dean");
-            b.Edit(DeanScene, "the Dean: the three pages (Q_PAGES 2), the Wizard's Diploma (item 30, Q_PAGES 6)", model => IslandBeatsA.Add(model, dean, Talker(desert, DeanEggs(Say) + $@"            if (5 == var_game({QPages}))
+            b.Edit(DeanScene, "the Dean: the three pages (Q_PAGES 2), the Wizard's Diploma (item 30, Q_PAGES 6)", model => IslandBeatsA.Add(model, dean, Talker(desert, DeanEggs(Say) + $@"            if (5 == var_game({QPages}) || (2 > var_game({QPages}) && 7 == var_game({PagesFoundVar})))
             {{
                 message({Say(DesertLine.DeanAll)});
                 set_var_game({PagesSlot}, 0);
@@ -743,6 +756,7 @@ void comportement_1()
                 message({Say(DesertLine.DeanShut)});
                 message_zoe({Say(DesertLine.ZoePages)});
                 set_var_game({QPages}, 2);{arrowsOn}
+                {PagesBeforeDean()}
             }}
             else if (5 > var_game({QPages}))
             {{
@@ -850,11 +864,11 @@ void comportement_2()
         // three), its own arrow off, and gone. Which pages are found is a bit each in one variable (PagesFoundVar); the lines go by how many are found,
         // not by which. On the road at its height, and never under the ground there ("check that they're all above ground")
         var lines = pages.Select(pg => pg.Item2).ToArray();
-        string ByCount() => $@"if (3 == var_game({QPages}))
+        string ByCount() => $@"if (1 == var_game({PagesFoundVar}) || 2 == var_game({PagesFoundVar}) || 4 == var_game({PagesFoundVar}))
         {{
             message({Say(lines[0])});
         }}
-        else if (4 == var_game({QPages}))
+        else if (3 == var_game({PagesFoundVar}) || 5 == var_game({PagesFoundVar}) || 6 == var_game({PagesFoundVar}))
         {{
             message({Say(lines[1])});
         }}
@@ -892,7 +906,7 @@ void comportement_2()
 
 void comportement_1()
 {{
-    if (2 > var_game({QPages}) || 5 <= var_game({QPages}))
+    if ({PagesDiploma} <= var_game({QPages}))
     {{
         invisible(1);
     }}
@@ -902,7 +916,10 @@ void comportement_1()
         if (1400 > distance(0))
         {{
             add_var_game({PagesFoundVar}, {bit});
-            add_var_game({QPages}, 1);
+            if (2 <= var_game({QPages}))
+            {{
+                add_var_game({QPages}, 1);
+            }}
             add_var_game({PagesSlot}, 1);{arrowOff}
             {ByCount()}
             invisible(1);
