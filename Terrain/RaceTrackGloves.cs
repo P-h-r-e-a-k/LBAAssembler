@@ -49,7 +49,9 @@ internal static class RaceTrackGloves
                 corners[i] = Place(centre + new Vector3(c.X * cy + c.Z * sy, c.Y, -c.X * sy + c.Z * cy));
             }
             var ids = corners.Select(m.P).ToArray();
-            var inside = corners.Aggregate(Vector3.Zero, (a, b) => a + b) / 8;
+            // (the box's middle as its points are kept -- turned upright for the inventory: the corners' middle before that turn put the
+            // inventory model's faces wound into the box half the time, culled, the background through the gloves -- the user, 2026-11-08)
+            var inside = ids.Aggregate(Vector3.Zero, (a, id) => a + m.At(id)) / 8;
             m.Out(new[] { ids[2], ids[3], ids[7], ids[6] }, top, inside, Flat(top));         // top (+y)
             m.Out(new[] { ids[0], ids[1], ids[5], ids[4] }, bottom, inside, Flat(bottom));   // bottom
             m.Out(new[] { ids[0], ids[2], ids[6], ids[4] }, sides, inside, Flat(sides));     // -x
@@ -111,6 +113,7 @@ internal static class RaceTrackGloves
         // (upright: the hand's +z, the way the fingers point, becomes +y, and its back, +y, faces +z -- the side the inventory shows an
         // item from before it turns it, so the red backs and their white stripes are what it shows first)
         public int P(Vector3 v) { points.Add(upright ? new Vector3(-v.X, v.Z, v.Y) : v); return points.Count - 1; }
+        public Vector3 At(int h) => points[h];
 
         public void Out(int[] hs, int colour, Vector3 inside, bool unlit = false)
         {
