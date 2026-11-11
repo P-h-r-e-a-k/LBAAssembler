@@ -404,7 +404,9 @@ internal static partial class RaceTrackStory
             var edits = new List<Action<SceneScripts>>
             {
                 IslandBeatsA.Add(model, Voice(model, spot, 4), "void comportement_0()\n{\n}\n"),
-                IslandBeatsA.Add(model, Voice(model, spot, 15), "void comportement_0()\n{\n}\n"),
+                // (HAL in his base's voice, HalVoice: 15 is the moon palette's row of odd colours -- his log typed out in a rainbow outside
+                // after the win, the user, 2026-11-09, as it was in the base till ede56f9)
+                IslandBeatsA.Add(model, Voice(model, spot, HalVoice), "void comportement_0()\n{\n}\n"),
                 IslandBeatsA.Add(model, Voice(model, spot, 9), $@"void comportement_0()
 {{
     set_comportement(comportement_1);
