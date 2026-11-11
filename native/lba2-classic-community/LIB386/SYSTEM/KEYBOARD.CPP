@@ -184,7 +184,51 @@ void ManageKeyboard() {
 
 void (*Keyboard_ToggleFullscreen)(void) = NULL;
 
+// --- Typed text --------------------------------------------------------------
+/* What the player types into a page that takes words (RACEGAME.CPP TypePage: a bug report, a chat address), as the keyboard's layout
+ * makes it -- SDL's text input, every character in the order typed, punctuation and capitals included -- and Backspace each time it is
+ * struck or repeats, as ''. Read off the events, not the polled keys: the poll kept one key a frame, so a quick typist's letters
+ * were lost between frames, and only the letters, digits, '.' and '-' had a character (LBRA issue #9, the user, 2026-11-09: "Feature and
+ * bug reports don't allow certain punctuation and keyboard input is too slow"). Printable ASCII only: the page's font has no more. */
+#define TYPED_TEXT_SIZE 256
+static char s_typedText[TYPED_TEXT_SIZE];
+static int s_typedLen = 0, s_typedOn = 0;
+
+void TypedText_Start(void) {
+    s_typedLen = 0;
+    s_typedOn = 1;
+    if (g_platform.input.text_input) g_platform.input.text_input(true);
+}
+
+void TypedText_Stop(void) {
+    s_typedOn = 0;
+    s_typedLen = 0;
+    if (g_platform.input.text_input) g_platform.input.text_input(false);
+}
+
+/* The characters typed since the last call (at most size - 1, NUL-ended): how many */
+S32 TypedText_Take(char *out, S32 size) {
+    S32 n = s_typedLen < size - 1 ? s_typedLen : size - 1;
+    memcpy(out, s_typedText, (size_t)n);
+    out[n] = 0;
+    memmove(s_typedText, s_typedText + n, (size_t)(s_typedLen - n));
+    s_typedLen -= n;
+    return n;
+}
+
+static void TypedText_Note(const PlatformEvent *ev) {
+    if (!s_typedOn) return;
+    if (ev->type == PLATFORM_EVENT_TEXT_INPUT) {
+        for (const char *t = ev->text.text; t && *t; t++) {
+            const unsigned char c = (unsigned char)*t;
+            if (c >= 32 && c < 127 && s_typedLen < TYPED_TEXT_SIZE) s_typedText[s_typedLen++] = (char)c;
+        }
+    }
+    else if (ev->type == PLATFORM_EVENT_KEY_DOWN && ev->key.scancode == 42 && s_typedLen < TYPED_TEXT_SIZE) s_typedText[s_typedLen++] = ''; /* SDL's Backspace */
+}
+
 void HandleEventsKeyboard(const PlatformEvent *event) {
+    TypedText_Note(event);
     // Keyboard state is read through the platform snapshot in UpdateKeyboardState;
     // we don't consume key events to drive TabKeys. The one thing we do here
     // is sample PLATFORM_EVENT_KEY_DOWN to maintain the "last input was keyboard"

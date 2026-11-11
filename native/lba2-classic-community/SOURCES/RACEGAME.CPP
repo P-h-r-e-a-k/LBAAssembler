@@ -3985,26 +3985,42 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
     int n = (int)strlen(value), result = -1;
     if (size > RG_TYPED_MAX + 1) size = RG_TYPED_MAX + 1;
     S32 lastKey = 0, cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    // (the keyboard's own characters, as typed: KEYBOARD.CPP TypedText -- every one, punctuation too, however fast. Once any has come
+    // that way the polled key no longer types, or a letter went in twice; a key put in by the control harness, with no text events,
+    // still types through the poll as before. LBRA issue #9)
+    int typedEvents = 0;
+    TypedText_Start();
     while (result < 0) {
         ManageTime();
         MyGetInput();
         if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+        char typed[64];
+        for (S32 got = TypedText_Take(typed, sizeof(typed)), i = 0; i < got; i++) {
+            typedEvents = 1;
+            const char t = typed[i];
+            if (t == '') { if (n > 0) value[--n] = 0; continue; }
+            // (an address: its letters, digits and . : [ ] - only, no spaces; words: anything printable, no space to begin with)
+            if (address ? !(isalnum((unsigned char)t) || strchr(".:[]-", t)) : (t == ' ' && !n)) continue;
+            if (n < size - 1) { value[n++] = t; value[n] = 0; }
+        }
         const S32 key = MyKey;
         if (key != lastKey) {
             lastKey = key;
             const SDL_Keymod mod = SDL_GetModState();
-            int c = TypedChar(key, mod, address);
-            if (!c && !address && key == K_SPACE && n) c = ' ';
+            int c = typedEvents ? 0 : TypedChar(key, mod, address);
+            if (!c && !typedEvents && !address && key == K_SPACE && n) c = ' ';
             if ((mod & SDL_KMOD_CTRL) && key == K_V) {
-                // (an address sent in a chat)
+                // (an address sent in a chat: no spaces; words keep theirs, a line break a space)
                 if (char *pasted = SDL_GetClipboardText()) {
-                    for (const char *s = pasted; *s && n < size - 1; s++) if (!isspace((unsigned char)*s)) value[n++] = *s;
+                    for (const char *s = pasted; *s && n < size - 1; s++)
+                        if (!isspace((unsigned char)*s)) { if ((unsigned char)*s >= 32 && (unsigned char)*s < 127) value[n++] = *s; }
+                        else if (!address && n && value[n - 1] != ' ') value[n++] = ' ';
                     value[n] = 0;
                     SDL_free(pasted);
                 }
             }
             else if (c && n < size - 1) { value[n++] = (char)c; value[n] = 0; }
-            else if (key == K_BACKSPACE && n > 0) value[--n] = 0;
+            else if (!typedEvents && key == K_BACKSPACE && n > 0) value[--n] = 0;
         }
         S32 mx, my;
         const int click = Clicked(&mx, &my);
@@ -4028,6 +4044,7 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
         // (Enter only: Space is a letter here)
         else if (Input & I_RETURN || MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER) { WaitNoInput(); if (n || mayBeEmpty) result = 1; }
     }
+    TypedText_Stop();
     AsciiMode = FALSE;
     Page(NULL, 0);
     return result;

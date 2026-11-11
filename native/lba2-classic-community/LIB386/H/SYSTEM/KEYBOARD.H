@@ -33,6 +33,10 @@ void EndKeyboard();
 
 // --- Interface ---------------------------------------------------------------
 S32 GetAscii();
+// typed text off the keyboard's layout (KEYBOARD.CPP): start, the characters since the last take (Backspace as ''), stop
+void TypedText_Start(void);
+void TypedText_Stop(void);
+S32 TypedText_Take(char *out, S32 size);
 S32 CheckKey(U32 key);
 void GetKeyScancodeName(char *string, U8 strMaxLen, U32 scanCode);
 
