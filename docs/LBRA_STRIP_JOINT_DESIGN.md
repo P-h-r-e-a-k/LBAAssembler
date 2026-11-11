@@ -51,7 +51,7 @@ office.
   | the Imperial Hotel's Sup in her bikini | Sup | Zeelich | the flag marshal on Zeelich's tracks |
   | a Franco lady | Franco | Zeelich | Otringal's streets |
   | the saucer's stewardess | Sup | Zeelich | the Moon (a Sup lady aboard the saucer) |
-  | Tabitha, the female wizard (the user, 2026-11-11: "There's a female wizard Tabitha lets have her as one of the performers") | -- | -- | where she is in the game: to find (her name isn't in the lines the build's scripts say) |
+  | Tabitha, the female wizard (the user, 2026-11-11: "There's a female wizard Tabitha lets have her as one of the performers") | Wizard | Zeelich | the female wizard who kisses Twinsen inside the statue at the end: Celebration Island's statue, scene 185, the third of the four wizards chained to FunFrock's machine (entity 129) |
 
   Each one a copy of her model made over for the stage: topless, in a thong -- her top's faces in her skin's colour, a thong in place of
   her clothes below. Three on the poles at a time, the others backstage at the mirrors or by the bar between turns, taking turns.
