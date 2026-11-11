@@ -335,6 +335,32 @@ internal static class RaceTrackCommand
     }
 
     // actorbeta <game folder> <scene> <actor> <turn> [dx dz]: turns an actor (and moves it by dx, dz world units) in a (test) game folder's scene
+    // scripts <game> <scene> [actor|setcube]: an actor's life and track scripts as text (all actors without one; setcube: only those whose
+    // life switches a door, SET_CHANGE_CUBE), and the scene's zones
+    public static int Scripts(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var scene = int.Parse(args[2]);
+        var model = store.Load(scene);
+        var scripts = LBAAssembler.LbaScript.SceneScripts.Load(LBAAssembler.Scenes.SceneSerializer.Write(model), scene);
+        var only = args.Length > 3 && int.TryParse(args[3], out var o) ? o : -1;
+        var setCube = args.Length > 3 && args[3] == "setcube";
+        for (var i = 0; i < model.Actors.Count; i++)
+        {
+            if (only >= 0 && i != only) continue;
+            var a = model.Actors[i];
+            string life, track;
+            try { life = scripts.GetText(i, LBAAssembler.LbaScript.ScriptKind.Life); } catch (Exception e) { life = "?? " + e.Message; }
+            try { track = scripts.GetText(i, LBAAssembler.LbaScript.ScriptKind.Track); } catch (Exception e) { track = "?? " + e.Message; }
+            if (setCube && !life.Contains("set_change_cube")) continue;
+            Console.WriteLine($"=== actor {i}: entity {a.Entity} body {a.Body} at ({a.X},{a.Y},{a.Z}) beta {a.Beta} flags 0x{a.Flags:X} move {a.Move}");
+            Console.WriteLine(life); Console.WriteLine("--- track"); Console.WriteLine(track);
+        }
+        foreach (var z in model.Zones) Console.WriteLine($"zone type {z.Type} num {z.Num} ({z.X0},{z.Y0},{z.Z0})-({z.X1},{z.Y1},{z.Z1}) info {string.Join(",", z.Info)}");
+        foreach (var (p, k) in model.TrackPoints.Select((p, k) => (p, k))) Console.WriteLine($"point {k}: ({p.X},{p.Y},{p.Z})");
+        return 0;
+    }
+
     public static int ActorBeta(string[] args)
     {
         var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
@@ -723,6 +749,21 @@ internal static class RaceTrackCommand
         {
             var at = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(library.AsSpan(blk * 4));
             Console.WriteLine($"  block {blk}: {library[at]} x {library[at + 1]} x {library[at + 2]}");
+        }
+        // (each cell's sub-brick: its shape (0 empty, 1 solid, others stairs), its material, its brick -- 0 drawn as nothing)
+        Console.WriteLine("shape/material/brick:");
+        for (var z = z0; z <= z1; z++)
+        {
+            var row = new System.Text.StringBuilder($"z {z,2}:");
+            for (var x = x0; x <= x1; x++)
+            {
+                var c = ((z * 64 + x) * 25 + y) * 2;
+                int blk = cells[c], pos = cells[c + 1];
+                if (blk == 0) { row.Append("      .      "); continue; }
+                var at = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(library.AsSpan(blk * 4)) + 3 + pos * 4;
+                row.Append($" {library[at],2}/{library[at + 1],-3}/{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(library.AsSpan(at + 2)),-4}");
+            }
+            Console.WriteLine(row.ToString());
         }
         return 0;
     }

@@ -36,6 +36,7 @@ extern S32 GfxDitherShading;
 /* HOLO.H lacks include guards and is pulled in transitively by DEFINES.H. */
 #include "../INVENT.H"
 #include "../OBJECT.H" // SetAnim (teleport stops the hero's carried animation)
+#include "../GRILLE.H" // colat: WorldColBrick, BufCube
 #include "../RES_CATALOG.H"
 #include "../RES_SWITCH.H"
 #include "CONSOLE_CMD.H" // Console_ApplyPendingResSwitch: res_do_switch's own deferred-apply companion
@@ -1825,6 +1826,20 @@ static void cmd_actorpos(int argc, const char *argv[]) {
     Console_Print("actorpos: actor %d at (%d,%d,%d) beta %d", n, (int)a->Obj.X, (int)a->Obj.Y, (int)a->Obj.Z, (int)a->Obj.Beta);
 }
 
+/* colat <x> <y> <z>: the scene's collision there, as the engine reads it -- WorldColBrick's answer, WorldColBrickFull's for the hero's
+   height, and the grid buffer's two bytes (block, sub-brick) of that cell's column from the layer below to four over (2026-11-11: Stella
+   Entities' lift, Twinsen held at the shaft's edge) */
+static void cmd_colat(int argc, const char *argv[]) {
+    if (argc < 4) { Console_Print("colat <x> <y> <z>"); return; }
+    const S32 x = atoi(argv[1]), y = atoi(argv[2]), z = atoi(argv[3]);
+    const int col = WorldColBrick(x, y, z), full = WorldColBrickFull(x, y, z, ListObjet[NUM_PERSO].YMax);
+    const int cx = x >> 9, cy = y >> 8, cz = z >> 9;
+    char line[256]; int n = snprintf(line, sizeof line, "colat (%d,%d,%d) cell %d,%d,%d: col %d full %d |", (int)x, (int)y, (int)z, cx, cy, cz, col, full);
+    for (int k = cy - 1; k <= cy + 4 && n < (int)sizeof line - 16; k++)
+        if (cx >= 0 && cx < 64 && cz >= 0 && cz < 64 && k >= 0 && k < 25) { const U32 i = cx * 50 + k * 2 + cz * 3200; n += snprintf(line + n, sizeof line - n, " L%d %d:%d", k, BufCube[i], BufCube[i + 1]); }
+    Console_Print("%s", line);
+}
+
 // herobody <generic>: the hero's body, as a script's body_obj(0, n) -- GEN_BODY_TUNIQUE (1) his tunic's (the race story's overalls) once
 // he has item 4, else his everyday clothes (ChoiceHeroBody)
 static void cmd_herobody(int argc, const char *argv[]) {
@@ -3263,6 +3278,7 @@ void Console_RegisterAll(void) {
                               "'actor <n>' jumps onto actor n. Within-cube only.");
     Console_RegisterCommandEx("actorpos", cmd_actorpos, "Put an actor at a place in the scene", "actorpos <n> <x> <y> <z> [beta]",
                               "Sets actor n's coords (and beta) directly; its scripts go on.");
+    Console_RegisterCommandEx("colat", cmd_colat, "The collision at a place", "colat <x> <y> <z>", "WorldColBrick, WorldColBrickFull and the grid buffer's bytes there.");
     Console_RegisterCommandEx("herobody", cmd_herobody, "Read/set the hero's body", "herobody [generic]",
                               "InitBody(generic, NUM_PERSO), as body_obj(0, n): 1 is his tunic's once he has item 4.");
     Console_RegisterCommandEx("newgame", cmd_newgame, "Start a new game, as the main menu's New Game", "newgame", "InitGame(1).");

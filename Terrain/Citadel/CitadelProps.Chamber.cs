@@ -338,6 +338,32 @@ internal static partial class CitadelProps
         }
         return m.ToBody(header);
     }
+    // The Emerald Moon's hidden lift (Stella Entities, Baldino's old cell -- the user, 2026-11-11: "I'd like him on an elevator that only
+    // activates when he uses action"): a steel plate over the shaft cut in the cell's floor, flush with it, LiftSize square, ribbed, a dark
+    // rim round it and its sides down to its foot -- and the same plate, on rails, at the shaft's foot under the club (StellaEntities).
+    public const int MoonLiftPlatform = 106, MoonPlate = Steel, MoonRib = Rubber, MoonRim = Rubber;
+    public static Body BuildMoonLiftPlatform(byte[] header)
+    {
+        var m = new CarMesh("the moon's lift", new[] { -1 });
+        m.Light = 0.8f;
+        const float H = LiftSize / 2f, R = 36, Y = LiftTop;
+        m.Up(new[] { m.P(0, new Vector3(-H + R, Y, -H + R)), m.P(0, new Vector3(H - R, Y, -H + R)), m.P(0, new Vector3(H - R, Y, H - R)), m.P(0, new Vector3(-H + R, Y, H - R)) }, MoonPlate);
+        // (ribs across it, a hair over the plate)
+        for (var k = 1; k < 6; k++)
+        {
+            var z = -H + R + k * (LiftSize - 2 * R) / 6f;
+            m.Up(new[] { m.P(0, new Vector3(-H + R + 30, Y + 2, z - 10)), m.P(0, new Vector3(H - R - 30, Y + 2, z - 10)), m.P(0, new Vector3(H - R - 30, Y + 2, z + 10)), m.P(0, new Vector3(-H + R + 30, Y + 2, z + 10)) }, MoonRib);
+        }
+        // the rim: four strips round the plate, and the sides
+        foreach (var (x0, x1, z0, z1) in new[] { (-H, H, -H, -H + R), (-H, H, H - R, H), (-H, -H + R, -H + R, H - R), (H - R, H, -H + R, H - R) })
+            m.Up(new[] { m.P(0, new Vector3(x0, Y, z0)), m.P(0, new Vector3(x1, Y, z0)), m.P(0, new Vector3(x1, Y, z1)), m.P(0, new Vector3(x0, Y, z1)) }, MoonRim);
+        foreach (var s in new[] { -H, H })
+        {
+            m.Plate(0, MoonRim, new Vector3(s, 0, -H), new Vector3(s, 0, H), new Vector3(s, Y, H), new Vector3(s, Y, -H));
+            m.Plate(0, MoonRim, new Vector3(-H, 0, s), new Vector3(H, 0, s), new Vector3(H, Y, s), new Vector3(-H, Y, s));
+        }
+        return m.ToBody(header);
+    }
     // The lighthouse's telescope (the user, 2026-11-08: "it's sticking out too far, we could probably mount it on the side of the lighthouse
     // instead of it having its own post"): a small brass-banded spyglass on a bracket clamped to the balcony's west railing, its tube out
     // west over the sea, tilted a little up, its eyepiece back over the balcony towards whoever stands to use it. Its foot (0) the
@@ -401,7 +427,7 @@ internal static partial class CitadelProps
     // (the rail's sides' boxes: thin, as high as the rail)
     public static short[]? LiftBox(int generic) => generic switch
     {
-        LiftPlatform or HouseLiftPlatform => new short[] { -512, 0, -512, 511, LiftTop, 511 },
+        LiftPlatform or HouseLiftPlatform or MoonLiftPlatform => new short[] { -512, 0, -512, 511, LiftTop, 511 },
         LiftRailBack => new short[] { -512, 0, -512, 511, LiftTop + RailHigh + 20, -460 },
         LiftRailLeft => new short[] { -512, 0, -512, -460, LiftTop + RailHigh + 20, 511 },
         LiftRailRight => new short[] { 460, 0, -512, 511, LiftTop + RailHigh + 20, 511 },

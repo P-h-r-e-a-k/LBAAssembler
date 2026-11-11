@@ -88,6 +88,7 @@ internal static class Program
             "islandcast" => IslandCast.Run(args),
             "driverinfo" => RaceTrackCommand.DriverInfo(args),
             "actorbeta" => RaceTrackCommand.ActorBeta(args),
+            "scripts" => RaceTrackCommand.Scripts(args),
             "initbuggy" => RaceTrackCommand.InitBuggy(args),
             "scripttext" => RaceTrackCommand.ScriptText(args),
             "colscan" => ColScanCommand.Run(args),
