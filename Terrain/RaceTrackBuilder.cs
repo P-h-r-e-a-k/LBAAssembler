@@ -702,6 +702,8 @@ internal sealed class RaceTrackReport
     // The ladders up to the raised road (RaceTrackIsland.Ladders): each one's climbing zone, world units -- a type 6 zone in the scene of
     // its cube (RaceTrackScenes) -- and where it stands: its foot (island cells) and the way out from the road it faces
     public List<(int X0, int Z0, int X1, int Z1, int Y0, int Y1, double FootX, double FootZ, double OutX, double OutZ)> Ladders { get; } = new();
+    // (each ladder's zone number, where it is switched by a script: RaceTrackIsland.TwinLadders; none, or 0, for the rest -- always on)
+    public Dictionary<int, int> LadderZones { get; } = new();
     // The racers' garage tent (RaceTrackIsland.GarageTent): its middle on the ground (island cells, the ground's height), the way along the
     // road it stands by (its long side), and the way out of its open front to the road
     public (double X, double Z, double Y, double AlongX, double AlongZ, double OutX, double OutZ)? Garage { get; set; }
@@ -3773,6 +3775,42 @@ internal static class RaceTrackBuilder
     // set against the road's bank at To, and a lift on the road above down into it, as the storm file's (the user, 2026-10-27: "In citabau.ile
     // we removed the museum to make way for the track, let's add the museum back in ... just add in the side wall, and the front door, and add
     // an elevator in on the road above the same as we did for citadel.ile")
+    // RaceTrackIsland.TwinLadders: a ladder at each place given, from the ground at its foot up to the highest ground a cell and a half
+    // in front of its back (the top it climbs to), built as the raised road's ladders are, its zone numbered for the story to switch
+    public static void FixedLadders(IslandFile island, IEnumerable<(double FootX, double FootZ, double OutX, double OutZ, int Zone)> ladders, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.NewBodyBase < 0) return;
+        double Ground(double x, double z) => IslandOps.Altitude(island, x * 512, z * 512) ?? 0;
+        foreach (var (fx, fz, nx, nz, zone) in ladders)
+        {
+            double tx = -nz, tz = nx;
+            var g = Ground(fx, fz);
+            var top = new[] { 0.6, 0.9, 1.2, 1.5 }.Max(s => Ground(fx - nx * s, fz - nz * s));
+            if (top - g < LadderLeast || IslandDecors.Locate(island, fx * 512, fz * 512) is not { } spot) { report.Notes.Add($"a ladder at cell ({fx:0.0}, {fz:0.0}): no climb there ({top - g:0})"); continue; }
+            var height = (float)(top - g);
+            var along = new System.Numerics.Vector3((float)tx, 0, (float)tz); var outward = new System.Numerics.Vector3((float)nx, 0, (float)nz);
+            var pts = new List<System.Numerics.Vector3>(); var faces = new List<LbaBodyStudio.Face>();
+            foreach (var s in new[] { 1f, -1f })
+                RaceTrackPipes.Box(pts, faces, along * s * (LadderHalf - LadderRail), along * LadderRail, outward * LadderRail, 0, height, RaceTrackPipes.SupportLight, RaceTrackPipes.SupportDark, RaceTrackPipes.SupportTop);
+            for (var y = LadderRung; y < height - 60; y += LadderRung)
+                RaceTrackPipes.Box(pts, faces, System.Numerics.Vector3.Zero, along * (LadderHalf - LadderRail), outward * (LadderRail * 0.6f), y, y + 50, RaceTrackPipes.SupportLight, RaceTrackPipes.SupportDark, RaceTrackPipes.SupportTop);
+            var body = o.NewBodyBase + report.NewBodies.Count;
+            report.NewBodies.Add(RaceTrackPipes.Write(pts, faces, true));
+            var decor = IslandDecors.Blank(body, spot.X, (int)Math.Round(g), spot.Z, 0);
+            int halfX = (int)Math.Round(Math.Abs(tx) * LadderHalf + Math.Abs(nx) * LadderThick), halfZ = (int)Math.Round(Math.Abs(tz) * LadderHalf + Math.Abs(nz) * LadderThick);
+            decor.XMin = spot.X - halfX; decor.XMax = spot.X + halfX; decor.ZMin = spot.Z - halfZ; decor.ZMax = spot.Z + halfZ;
+            decor.YMin = (int)Math.Round(g); decor.YMax = (int)Math.Round(top);
+            spot.Cube.Decors.Add(decor);
+            double faceX = fx + nx * LadderThick / 512.0, faceZ = fz + nz * LadderThick / 512.0;
+            double farX = fx + nx * (LadderZoneOut - LadderOut), farZ = fz + nz * (LadderZoneOut - LadderOut);
+            int zx0 = (int)Math.Round((Math.Min(faceX, farX) - Math.Abs(tx) * LadderZoneAlong) * 512), zx1 = (int)Math.Round((Math.Max(faceX, farX) + Math.Abs(tx) * LadderZoneAlong) * 512);
+            int zz0 = (int)Math.Round((Math.Min(faceZ, farZ) - Math.Abs(tz) * LadderZoneAlong) * 512), zz1 = (int)Math.Round((Math.Max(faceZ, farZ) + Math.Abs(tz) * LadderZoneAlong) * 512);
+            report.LadderZones[report.Ladders.Count] = zone;
+            report.Ladders.Add((zx0, zz0, zx1, zz1, (int)Math.Round(g) - 256, (int)Math.Round(top), fx, fz, nx, nz));
+            report.Notes.Add($"a ladder at cell ({fx:0.0}, {fz:0.0}), from {g:0} up {top - g:0}, facing ({nx:0.#}, {nz:0.#}), its zone {zone} switched by the story");
+        }
+    }
+
     public static void PlaceTwinMuseum(IslandFile island, (IslandDecor Decor, int CubeX, int CubeZ) front, RaceTrackOptions o, RaceTrackReport report)
     {
         if (o.Island.TwinMuseum is not { } m) return;

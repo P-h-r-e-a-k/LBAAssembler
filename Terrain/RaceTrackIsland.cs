@@ -92,6 +92,8 @@ internal sealed record RaceTrackIsland(
         // moved there, and a lift on the road above -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently
         // facing": scene 48 at (10966, 31375), facing west)
         TwinMuseum = (38, 520.5, 570.5, 525.5, 572.4, 521.5, 573.3),
+        // (the Tralu's cave's door, scene 45: its ledge at 5,625, x 506-511, z 470-474; the ladder against the road's side at its east end)
+        TwinLadders = new[] { (511.05, 470.95, -1.0, 0.0, RaceTrackStory.TraluLadderZone) },
         // (the lifts the sewer lift by the storm track's start line: its striped frame, decor body 47 of the storm's file there, and its grate,
         // scene 42's actor 21 -- the user, 2026-10-28: "They should look like and replicate the behaviour of the elevator that goes down into
         // the sewer")
@@ -240,6 +242,11 @@ internal sealed record RaceTrackIsland(
     // moved to ToX, ToZ (island cells; its door zone and way out moved with it, RaceTrackScenes), and a lift on the road at LiftX, LiftZ
     // into the building as DeckLifts' first
     public (int Body, double FromX, double FromZ, double ToX, double ToZ, double LiftX, double LiftZ)? TwinMuseum { get; init; }
+    // Ladders at places of their own in the other weather's file (RaceTrackBuilder.FixedLadders): each one's foot (cells), the way its
+    // face looks (out from the slope it stands against), and its climbing zone's number -- switched on by the story only in that weather,
+    // the scene being both files' (LBRA issue #12, the user: "unable to reach the Tralu cave in citabau.ile -- solution add a ladder by
+    // the cave entrance": the town circuit's road was built over the ledge's way in, at x 509-516, z 469-474, 2,700 above it)
+    public (double FootX, double FootZ, double OutX, double OutZ, int Zone)[]? TwinLadders { get; init; }
     // The look of the lifts DeckLifts and TwinMuseum make: the retail lift whose frame is decor FrameBody of the island's own file nearest
     // FrameX, FrameZ (island cells) and whose grate is actor Actor of Scene (RaceTrackBuilder.AddLiftPad, RaceTrackScenes)
     public (int Scene, int Actor, int FrameBody, double FrameX, double FrameZ)? LiftLook { get; init; }

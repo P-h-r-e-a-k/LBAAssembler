@@ -56,7 +56,9 @@ internal static partial class RaceTrackStory
     public const int GlovesSlot = 7, FerryTicket = 13;
     // the harbour (scene 43): the ferry, and Twinsen's own script that takes him aboard with the ticket; Citadel Island's weather (1 fine:
     // RACEMOD.CPP RaceMod_CitadelWeather)
-    private const int FerryScene = 43, WeatherVar = 206;
+    private const int FerryScene = 43, WeatherVar = 206, TraluLedgeScene = 45;
+    // (the ladder's zone number up from the Tralu's cave's ledge: RaceTrackIsland.TwinLadders)
+    internal const int TraluLadderZone = 5;
     public const int DayVar = 200, Tired = 1, Rested = 2, WonVar = 201, BeatVar = 202;
     // Celebration Island's lava lake: the souvenir seller beaten (1; 2 once he has told what he saw) and his race run (won or not), 203-204
     public const int SellerBeaten = 203, SellerRaced = 204;
@@ -1217,6 +1219,23 @@ void comportement_1()
         // Twinsen take the ferry in the rain by selecting his ferry ticket from his inventory, let's add a fix so this doesn't happen, and
         // keep the ferry invisible until after the Citabau track is beaten") -- the ferry hidden, and the ticket shown to the ferryman or
         // used at the quay doing nothing, until then
+        // The ladder from the Tralu's cave's ledge up to the town circuit's road (RaceTrackIsland.TwinLadders: in the fine weather's file
+        // only, where the road was built over the ledge's way in): its zone on only in the fine weather -- the storm's file has no ladder
+        // there, and its ledge runs on east under where the zone is (LBRA issue #12)
+        Edit(TraluLedgeScene, $"the ladder up from the Tralu's cave's ledge: its zone ({TraluLadderZone}) on in the fine weather only", model =>
+            Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), $@"void comportement_0()
+{{
+    if (1 == var_game({WeatherVar}))
+    {{
+        echelle({TraluLadderZone}, 1);
+    }}
+    else
+    {{
+        echelle({TraluLadderZone}, 0);
+    }}
+}}
+"));
+
         Edit(FerryScene, "the ferry is there, and the ticket takes Twinsen aboard, only in the fine weather once the town circuit is won", _ => scripts =>
         {
             var hero = scripts.GetText(0, ScriptKind.Life);

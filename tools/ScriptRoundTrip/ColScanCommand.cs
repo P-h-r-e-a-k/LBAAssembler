@@ -11,6 +11,15 @@ internal static class ColScanCommand
     {
         var built = IslandFile.Load(args[1]);
         var original = IslandFile.Load(args[2]);
+        // (colscan <A .ILE> <B .ILE> heights gx0 gz0 gx1 gz1: the two islands' ground heights at each vertex, A/B, a row a line)
+        if (args.Length > 7 && args[3] == "heights")
+        {
+            int hx0 = int.Parse(args[4]), hz0 = int.Parse(args[5]), hx1 = int.Parse(args[6]), hz1 = int.Parse(args[7]);
+            Console.WriteLine("gz\\gx " + string.Join(" ", Enumerable.Range(hx0, hx1 - hx0 + 1).Select(x => $"{x,11}")));
+            for (var gz = hz0; gz <= hz1; gz++)
+                Console.WriteLine($"{gz,5} " + string.Join(" ", Enumerable.Range(hx0, hx1 - hx0 + 1).Select(x => $"{built.HeightAt(x, gz)?.ToString() ?? "-",5}/{original.HeightAt(x, gz)?.ToString() ?? "-",-5}")));
+            return 0;
+        }
         int x0 = 0, z0 = 0, x1 = IslandFile.GridSize, z1 = IslandFile.GridSize;
         if (args.Length > 6) { x0 = int.Parse(args[3]); z0 = int.Parse(args[4]); x1 = int.Parse(args[5]); z1 = int.Parse(args[6]); }
         bool Blocked(IslandFile f, int gx, int gz, out int code)

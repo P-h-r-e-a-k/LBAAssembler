@@ -1035,12 +1035,14 @@ internal static class RaceTrackScenes
                 }
             // (a ladder up the raised road's side, RaceTrackReport.Ladders: its climbing zone, the game's ladder zone -- type 6, Info1 on)
             foreach (var t in tracks)
-                foreach (var l in t.Report.Ladders)
+                foreach (var (l, li) in t.Report.Ladders.Select((l, li) => (l, li)))
                 {
                     double mx = (l.X0 + l.X1) / 1024.0, mz = (l.Z0 + l.Z1) / 1024.0;
                     if (!InCube(model, mx, mz)) continue;
                     int ox = model.CubeX * IslandFile.CubeSize, oz = model.CubeY * IslandFile.CubeSize;
-                    model.Zones.Add(new SceneZoneModel { Type = 6, Num = 0, X0 = l.X0 - ox, X1 = l.X1 - ox, Y0 = l.Y0, Y1 = l.Y1, Z0 = l.Z0 - oz, Z1 = l.Z1 - oz, Info = new[] { 1, 1, 1, 0, 0, 0, 0, 1 } });
+                    // (one switched by the story -- RaceTrackIsland.TwinLadders, in one weather's file only: its number, off until switched on)
+                    var num = t.Report.LadderZones.TryGetValue(li, out var n) ? n : 0;
+                    model.Zones.Add(new SceneZoneModel { Type = 6, Num = num, X0 = l.X0 - ox, X1 = l.X1 - ox, Y0 = l.Y0, Y1 = l.Y1, Z0 = l.Z0 - oz, Z1 = l.Z1 - oz, Info = new[] { num > 0 ? 0 : 1, 1, 1, 0, 0, 0, 0, 1 } });
                     log.Add($"scene {scene}: a ladder's zone up to the raised road, x {l.X0 - ox}..{l.X1 - ox} z {l.Z0 - oz}..{l.Z1 - oz} y {l.Y0}..{l.Y1}");
                 }
             // (a lift on the raised road, RaceTrackReport.DeckLifts: a door zone over its pad, into its building's scene)

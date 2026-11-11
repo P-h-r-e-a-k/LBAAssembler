@@ -831,6 +831,7 @@ internal static class RaceTrackService
         var report = RaceTrackBuilder.Build(twin, plan, twinOptions);
         NoteLostDoors(twin, twinOptions.DoorBoxes, atDoors, report);
         if (museum is { } front) RaceTrackBuilder.PlaceTwinMuseum(twin, front, twinOptions, report);
+        if (options.Island.TwinLadders is { } ladders) RaceTrackBuilder.FixedLadders(twin, ladders, twinOptions, report);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)
