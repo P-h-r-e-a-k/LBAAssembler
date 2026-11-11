@@ -234,6 +234,35 @@ internal static class Demo96Rooms
         return log;
     }
 
+    // Doors within a room whose landing the story moves: (scene, the demo's landing) -> its own. A door lands Twinsen where he is in its
+    // box from that corner (OBJECT.CPP GereZoneChangeCube: the landing plus his place in the zone), so the landing is chosen for where he
+    // comes into it. The sewers' ladder (scene 17): climbing it at x 512-1536, z ~27927 into the door at its top (box x 512.., z 27648..,
+    // y 2704..) -- the demo's (9728, 512, 7168) put him in the pillar top's shaft (cells x 19-20, z 14-15, empty to the bottom), down onto
+    // the door back to the ladder; now on the shaft's north rim (cells x 19-20, z 13, its top 1536), the ladder's width along it.
+    private static readonly Dictionary<(int Scene, int X, int Y, int Z), (int X, int Y, int Z)> DoorLandings = new()
+    {
+        [(17, 9728, 512, 7168)] = (9728, 1536, 6633),
+    };
+
+    // The top of what a ladder zone climbs: in each cell under it, the solid run of the grid from the zone's foot up (past any air at the
+    // foot), its top a layer over -- the highest of them; null where there's none
+    private static int? LadderTop(byte[] grid, SceneZoneModel zone)
+    {
+        var shape = Lba2GridBackend.ToLba1Shape(grid);
+        int? best = null;
+        for (var cx = Math.Max(0, zone.X0 / 512); cx <= Math.Min(63, (zone.X1 - 1) / 512); cx++)
+            for (var cz = Math.Max(0, zone.Z0 / 512); cz <= Math.Min(63, (zone.Z1 - 1) / 512); cz++)
+            {
+                var y = Math.Max(0, zone.Y0 / 256);
+                while (y < 25 && Lba1GridEdit.Get(shape, cx, y, cz).Block == 0) y++;
+                if (y >= 25) continue;
+                while (y < 25 && Lba1GridEdit.Get(shape, cx, y, cz).Block != 0) y++;
+                var top = y * 256 + 256;
+                if (best is null || top > best) best = top;
+            }
+        return best;
+    }
+
     public static List<string> Install(string gameDirectory, string converted, IReadOnlyList<Room> rooms, IReadOnlyDictionary<int, int>? texts = null)
     {
         var log = new List<string>();
@@ -254,6 +283,7 @@ internal static class Demo96Rooms
         var backend = new Lba2GridBackend(gameDirectory);
         var gridOf = rooms.ToDictionary(r => r.Slot, r => backend.GridOfScene(r.Slot) ?? throw new SceneEditException($"Scene {r.Slot} has no interior grid."));
         var oldFragments = rooms.ToDictionary(r => r.Slot, r => backend.RawGrid(gridOf[r.Slot])[1]);
+        var finalGrids = new Dictionary<int, byte[]>();
         foreach (var r in rooms)
         {
             var map = MapInstall.ExportLba2Interior(converted, r.DemoScene, r.Name);
@@ -305,6 +335,7 @@ internal static class Demo96Rooms
             var header = bkg.Read(0);
             int gri = BinaryPrimitives.ReadUInt16LittleEndian(header);
             bkg.SetStored(gri + gridOf[r.Slot], grid);
+            finalGrids[r.Slot] = grid;
             if (header.Length >= 16 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12)) < (uint)grid.Length)
             { BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), (uint)grid.Length); bkg.SetStored(0, header); }
             log.Add($"{r.Name} (scene {r.Slot}): the demo's scene {r.DemoScene}'s interior in grid {gridOf[r.Slot]}, its block library LBA_BKG's library {library}");
@@ -340,9 +371,24 @@ internal static class Demo96Rooms
                     { zone = open.Clone(); log.Add($"  scene {r.Slot}: the door to scene {open.Num} the demo shut is the game's"); }
                     else if (to < 0) { log.Add($"  scene {r.Slot}: the door to the demo's scene {zone.Num} (none in the game) shut"); zone.X1 = zone.X0 - 1; }
                     else zone.Num = to;
+                    // (a door within the room landing Twinsen in a shaft -- DoorLandings: the sewers' ladder's door, scene 17, put him in the
+                    // pillar top's shaft, down which he fell into the door back to the ladder, in mid-air: "keeps falling when he gets to the top")
+                    if (zone.Num == r.Slot && DoorLandings.TryGetValue((r.Slot, zone.Info[0], zone.Info[1], zone.Info[2]), out var land))
+                    {
+                        log.Add($"  scene {r.Slot}: the door at x {zone.X0}..{zone.X1} z {zone.Z0}..{zone.Z1} landed Twinsen in a shaft at ({zone.Info[0]}, {zone.Info[1]}, {zone.Info[2]}): now at ({land.X}, {land.Y}, {land.Z})");
+                        zone.Info[0] = land.X; zone.Info[1] = land.Y; zone.Info[2] = land.Z;
+                    }
                 }
                 // (a text zone's number a text too)
                 if (zone.Type == 5 && texts is not null && texts.TryGetValue(zone.Num, out var said)) zone.Num = said;
+                // (a ladder up to its column's top: the demo's sewers' ladder up the pillar (scene 17, cells x 1-2, z 53) stopped at 3584,
+                // the pillar's top 4608 -- Twinsen climbed it and fell back off the top, again and again: the user, 2026-11-10, "Twinsen
+                // climbs up the ladder but keeps falling when he gets to the top")
+                if (zone.Type == 6 && finalGrids.TryGetValue(r.Slot, out var ladderGrid) && LadderTop(ladderGrid, zone) is { } top && top > zone.Y1)
+                {
+                    log.Add($"  scene {r.Slot}: the ladder at x {zone.X0}..{zone.X1} z {zone.Z0}..{zone.Z1} up to {top} (the demo's stopped at {zone.Y1})");
+                    zone.Y1 = top;
+                }
                 model.Zones.Add(zone);
             }
             var record = SceneSerializer.Write(model);
