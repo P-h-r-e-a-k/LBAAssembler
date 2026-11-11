@@ -22,6 +22,8 @@
 //   EVENT   reliable   to all: a mushroom taken, an item used, a car hit (T_RACENET_EVENT)
 //   FINISH  reliable   to all: this player's time
 //   PING    as it may  each player to each, once a second, and PONG back: how far behind its samples arrive
+//   STORY   reliable   Story Mode with two players (2026-11-11, player 2 is Zoe): player 1's game to player 2's -- a save to load (the story kept
+//                      as player 1 entered a scene: its path, the same PC), or the game's and the scene's variables as they are now
 // Each car is drawn where it is now, RACENET_DELAY_MS ago at most: cars touch by what the player sees, and at 150 km/h 100 ms is two car lengths. So the clock is the
 // sender's, moved on by half the round trip, and past the newest sample the car goes on as it was going (RACENET_AHEAD_MS at most), the jump a late sample
 // would make eased out (RACENET_EASE_MS).
@@ -57,7 +59,8 @@
 #define RACENET_QUAL_AFTER_MS 30000         // qualifying: how long the others have once the first is over the line ...
 #define RACENET_QUAL_MOST_MS 240000         // ... and how long it can go on at all
 
-enum { M_HELLO = 1, M_TRACK, M_READY, M_GO, M_CAR, M_FINISH, M_ASK, M_PASS, M_WRONG, M_EVENT, M_PING, M_PONG, M_STAGE, M_VOTE, M_CHOSEN, M_INRACE, M_GRID, M_QDONE, M_CHAT };
+enum { M_HELLO = 1, M_TRACK, M_READY, M_GO, M_CAR, M_FINISH, M_ASK, M_PASS, M_WRONG, M_EVENT, M_PING, M_PONG, M_STAGE, M_VOTE, M_CHOSEN, M_INRACE, M_GRID, M_QDONE, M_CHAT, M_STORY };
+enum { RN_STORY_LOAD = 1, RN_STORY_VARS };
 
 typedef struct {
     uint32_t T;                             // the sender's clock
@@ -115,6 +118,12 @@ static int s_qualifying = 0, s_qualOver = 0;
 static uint32_t s_firstOverAt = 0;
 static char s_chat[RACENET_CHAT_LINES][RACENET_NAME + RACENET_CHAT + 3];
 static int s_chatN = 0;                     // said so far: the newest is s_chat[(s_chatN - 1) % RACENET_CHAT_LINES]
+// (Story Mode's two players: the newest save to load and variables, as player 1's game sent them -- taken once each by player 2's)
+static char s_storyLoad[RACENET_STORY_PATH] = "";
+static int s_storyLoadCube = -1, s_storyLoadNew = 0;
+static int16_t s_storyVars[RACENET_STORY_VARS];
+static uint8_t s_storyCubeVars[RACENET_STORY_CUBE_VARS];
+static int s_storyVarsCube = -1, s_storyVarsNew = 0;
 typedef struct { uint32_t Id; int Ms; } T_RN_GRID;
 static T_RN_GRID s_grid[RACENET_MAX_OTHERS + 1];
 static int s_gridN = 0;
@@ -431,6 +440,25 @@ static void Take(const NetKitMessage *m) {
     case M_CHAT:
         if (peer && end > p) ChatAdd(peer->Name, (const char *)p, (int)(end - p));
         break;
+    case M_STORY:
+        if (end - p >= 3) {
+            const int kind = *p++;
+            const int cube = Get16(&p);
+            if (kind == RN_STORY_LOAD) {
+                int n = (int)(end - p);
+                if (n >= RACENET_STORY_PATH) n = RACENET_STORY_PATH - 1;
+                memcpy(s_storyLoad, p, n);
+                s_storyLoad[n] = 0;
+                s_storyLoadCube = cube;
+                s_storyLoadNew = 1;
+            } else if (kind == RN_STORY_VARS && end - p >= 2 * RACENET_STORY_VARS + RACENET_STORY_CUBE_VARS) {
+                for (int i = 0; i < RACENET_STORY_VARS; i++) s_storyVars[i] = (int16_t)Get16(&p);
+                memcpy(s_storyCubeVars, p, RACENET_STORY_CUBE_VARS);
+                s_storyVarsCube = cube;
+                s_storyVarsNew = 1;
+            }
+        }
+        break;
     default:
         break;
     }
@@ -565,6 +593,9 @@ int RaceNet_HostLocal(const char *name, unsigned short port) {
 
 int RaceNet_Local(void) { return s_kit != NULL && s_local; }
 
+// (Story Mode with two players: player 2's game started as Zoe -- LBA2_STORY_ZOE, RACEGAME.CPP StoryZoePage)
+static int s_spawnStory = 0;
+void RaceNet_SpawnStory(int on) { s_spawnStory = on ? 1 : 0; }
 int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y, int w, int h, int resW, int resH, int pad, int titled) {
     char exe[1024], text[64], res[32];
 #ifdef _WIN32
@@ -584,6 +615,8 @@ int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y,
     if (!env) return 0;
     snprintf(text, sizeof(text), "%d", port);
     SDL_SetEnvironmentVariable(env, "LBA2_PLAYER2", text, true);
+    if (s_spawnStory) SDL_SetEnvironmentVariable(env, "LBA2_STORY_ZOE", "1", true);
+    else SDL_UnsetEnvironmentVariable(env, "LBA2_STORY_ZOE");
     snprintf(text, sizeof(text), "%d,%d,%d,%d", x, y, w, h);
     SDL_SetEnvironmentVariable(env, "LBA2_WINDOW_RECT", text, true);
     if (titled) SDL_SetEnvironmentVariable(env, "LBA2_WINDOW_TITLED", "1", true);
@@ -819,6 +852,59 @@ int RaceNet_Votes(int *counts, int size, int *players) {
     SDL_UnlockMutex(s_lock);
     if (players) *players = can;
     return voted;
+}
+
+// ---- Story Mode with two players: player 1's game tells player 2's what to load, and the variables as they are
+void RaceNet_StoryLoad(const char *path, int cube) {
+    if (!s_kit) return;
+    uint8_t b[4 + RACENET_STORY_PATH], *p = b;
+    int n = (int)strlen(path);
+    if (n >= RACENET_STORY_PATH) n = RACENET_STORY_PATH - 1;
+    *p++ = M_STORY;
+    *p++ = RN_STORY_LOAD;
+    Put16(&p, cube);
+    memcpy(p, path, n);
+    p += n;
+    SDL_LockMutex(s_lock);
+    NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
+    SDL_UnlockMutex(s_lock);
+}
+
+void RaceNet_StoryVars(int cube, const int16_t *vars, const uint8_t *cubeVars) {
+    if (!s_kit) return;
+    uint8_t b[4 + 2 * RACENET_STORY_VARS + RACENET_STORY_CUBE_VARS], *p = b;
+    *p++ = M_STORY;
+    *p++ = RN_STORY_VARS;
+    Put16(&p, cube);
+    for (int i = 0; i < RACENET_STORY_VARS; i++) Put16(&p, vars[i]);
+    memcpy(p, cubeVars, RACENET_STORY_CUBE_VARS);
+    p += RACENET_STORY_CUBE_VARS;
+    SDL_LockMutex(s_lock);
+    NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
+    SDL_UnlockMutex(s_lock);
+}
+
+int RaceNet_TakeStoryLoad(char *path, int size, int *cube) {
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    const int got = s_storyLoadNew;
+    if (got) { snprintf(path, size, "%s", s_storyLoad); *cube = s_storyLoadCube; s_storyLoadNew = 0; }
+    SDL_UnlockMutex(s_lock);
+    return got;
+}
+
+int RaceNet_TakeStoryVars(int *cube, int16_t *vars, uint8_t *cubeVars) {
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    const int got = s_storyVarsNew;
+    if (got) {
+        *cube = s_storyVarsCube;
+        memcpy(vars, s_storyVars, sizeof(s_storyVars));
+        memcpy(cubeVars, s_storyCubeVars, sizeof(s_storyCubeVars));
+        s_storyVarsNew = 0;
+    }
+    SDL_UnlockMutex(s_lock);
+    return got;
 }
 
 void RaceNet_Say(const char *text) {

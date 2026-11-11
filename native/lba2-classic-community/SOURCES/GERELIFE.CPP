@@ -133,6 +133,8 @@ void DoFuncLife(T_OBJET *ptrobj) {
         //---------------------------------------------------------------------------
     case LF_ACTION:
         Value = ActionNormal;
+        // (Story Mode's player 2, Zoe: her Action reaches no one but herself -- RACEMOD.CPP RaceMod_ActionFor)
+        { extern int RaceMod_ActionFor(const T_OBJET *obj); if (Value && !RaceMod_ActionFor(ptrobj)) Value = 0; }
         break;
 
         //---------------------------------------------------------------------------

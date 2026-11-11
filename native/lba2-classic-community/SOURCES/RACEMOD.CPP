@@ -1325,6 +1325,10 @@ static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = 
 // actor of that entity whose armour is that mark, in any scene, put beside Twinsen as the scene starts and as he gets out of his car
 // (Companion); her script does the rest (following him, out of sight while he drives or while the scene has a Zoe of its own)
 static int s_compEntity = -1, s_compMark = 0, s_compCube = -2, s_compWasCar = 0;
+// (two_players=: Story Mode with two players -- StoryTwo)
+static int s_twoVar = -1, s_dblEntity = -1, s_dblMark = 0, s_compInMark = 0;
+static void PitServe(S32 now, int kmh, const char *who);
+static void DrawStoryCar(void);
 #define RACE_WALK_OVER 118                  // (an actor's armour that has others walk over it: RaceMod_NoCollide)
 #define RACE_COMPANION_BACK 700.0          // beside him: this far behind ...
 #define RACE_COMPANION_SIDE 450.0          // ... and this far to his left
@@ -4717,6 +4721,9 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "no_suit")) s_noSuit = atoi(v) != 0;
         else if (!strcmp(key, "hover")) { if (sscanf(v, "%d %d %d %d", &s_hoverEntity, &s_hoverHeight, &s_hoverRoad, &s_hoverReach) < 4) s_hoverEntity = -1; }
         else if (!strcmp(key, "companion")) { if (sscanf(v, "%d %d", &s_compEntity, &s_compMark) != 2) s_compEntity = -1; s_compCube = -2; }
+        else if (!strcmp(key, "two_players")) {
+            if (sscanf(v, "%d %d %d %d", &s_twoVar, &s_dblEntity, &s_dblMark, &s_compInMark) != 4 || s_twoVar < 0 || s_twoVar > 254) { s_twoVar = -1; s_dblEntity = -1; }
+        }
         else if (!strcmp(key, "car_home")) {
             if (sscanf(v, "%d %d %d", &s_carHome, &s_carAwayVar, &s_carFetchVar) != 3 || s_carAwayVar < 0 || s_carAwayVar > 254 || s_carFetchVar < 0 || s_carFetchVar > 254) s_carHome = -1;
             s_carSeenAt = -2; s_carHomeIsland = -2;
@@ -5856,8 +5863,10 @@ static void ChaseStart(void) {
 // again whenever the scene, the car's scene or the car changes: LoadSceneIsland reads the scene's file); the fetch variable set to 1 --
 // Zoe's line -- takes the car away from there: NumBuggy 0, so the home scene's car script makes it again under the carport
 // (RaceTrackScenes.StartBuggyScript: init_buggy(1) at its home), and nowhere else shows one.
+static int TwoOn(void);
+static void StoryTwo(void);
 static void Companion(void) {
-    if (s_compEntity < 0 || NewCube != -1) return;
+    if (s_compEntity < 0 || NewCube != -1 || TwoOn()) return;
     const int inCar = Comportement == C_BUGGY;
     int idx = -1;
     for (int n = 1; n < (int)NbObjets && idx < 0; n++)
@@ -5930,6 +5939,7 @@ void RaceMod_Story(void) {
     if (!RaceMod_Active()) return;
     CarHome();
     Companion();
+    StoryTwo();
     const S32 now = TimerRefHR;
     // (clovers_fill=: the clovers filled to the boxes -- the lava lake's dive, after the life it cost)
     if (s_cloversFill >= 0 && ListVarGame[s_cloversFill] == 2) {
@@ -8484,23 +8494,29 @@ static void PitCrew(S32 now) {
     const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
     const double d = sqrt((hx - p->X) * (hx - p->X) + (hz - p->Z) * (hz - p->Z));
     const int kmh = (int)((abs(ListBuggy[0].Speed) * 36 + 2560) / 5120);
-    if (driving && s_laps >= 1 && p->ServedLap != s_laps && d < RACE_PIT_REACH && kmh < RACE_PIT_KMH) {
-        p->ServedLap = s_laps;
-        const int can = GiveItem(PU_FUEL, now);
-        const int jolt = now < s_shrunkUntil || now < s_skidUntil;
-        s_shrunkUntil = 0; s_skidUntil = 0;
-        if (p->Line[0]) Message(p->Line);
-        p->WaveUntil = now + RACE_PIT_WAVE_MS;
-        Log_Info("[racemod] pit stop, lap %d at %d km/h: %s%s", (int)s_laps, kmh, can ? "a fuel can into the item box" : "the item boxes full, no can",
-                 jolt ? ", a jolt shaken off" : "");
-    }
+    // (with two players the stop is player 2's Zoe's to give -- her Action, StoryTwo)
+    if (!TwoOn() && driving && s_laps >= 1 && p->ServedLap != s_laps && d < RACE_PIT_REACH && kmh < RACE_PIT_KMH) PitServe(now, kmh, "a slow drive through the box");
     const int waving = now < p->WaveUntil || (driving && p->ServedLap != s_laps && d < RACE_PIT_WAVE_NEAR);
     p->Want = waving ? 1 : 0;
 }
 
+static void PitServe(S32 now, int kmh, const char *who) {
+    T_RACE_PIT *p = &s_pit;
+    if (s_phase != PHASE_RACE || s_laps < 1 || p->ServedLap == s_laps) return;
+    p->ServedLap = s_laps;
+    const int can = GiveItem(PU_FUEL, now);
+    const int jolt = now < s_shrunkUntil || now < s_skidUntil;
+    s_shrunkUntil = 0; s_skidUntil = 0;
+    if (p->Line[0]) Message(p->Line);
+    p->WaveUntil = now + RACE_PIT_WAVE_MS;
+    Log_Info("[racemod] pit stop (%s), lap %d at %d km/h: %s%s", who, (int)s_laps, kmh, can ? "a fuel can into the item box" : "the item boxes full, no can",
+             jolt ? ", a jolt shaken off" : "");
+}
+
 static void DrawPitCrew(void) {
     T_RACE_PIT *p = &s_pit;
-    if (!p->On) return;
+    // (with two players, player 2 is Zoe in the pit box: the drawn one left out)
+    if (!p->On || TwoOn()) return;
     T_OBJ_3D *o = &p->Obj;
     const S32 x = (S32)floor(p->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(p->Y + 0.5), z = (S32)floor(p->Z - CurrentCubeY * 32768.0 + 0.5);
     if (!p->Ready) {
@@ -8544,6 +8560,7 @@ void RaceMod_DrawBackdrop(void) {
     if (s_nbJetSignals && s_signalBody[0] >= 0) DrawJetSignals();
     DrawMarshal();
     DrawPitCrew();
+    DrawStoryCar();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
     if (!s_frog.Ready) {
@@ -13695,6 +13712,7 @@ void RaceMod_LoadFile(const char *path) {
     s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
+    s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -16384,6 +16402,8 @@ static void NoteScene(void) {
     s_sceneLeft = s_sceneNow; s_sceneNow = (S32)NumCube; s_sceneAt = TimerRefHR;
 }
 S32 RaceMod_CubeChangeAllowed(S32 scene) {
+    // (Story Mode's player 2, Zoe: no door takes her anywhere -- she goes where Twinsen goes, by the save his game sends, StoryTwo)
+    if (RaceGame_StoryZoe()) return 0;
     if (!RaceMod_Active() || Comportement != C_BUGGY) return 1;
     // (a ghost played back: the scene changes are its own, made where its lap made them -- GhostWatch; a zone's, a step early or late with
     // the car put half a cell on, sent it back and forth between two scenes, each change a flash)
@@ -17919,6 +17939,220 @@ static void DrawNetCars(void) {
         if (zr > 0 && PtrProjectPoint(lx, ly + 1400, lz)) HudSmall(Xp - SizeFont(who.Name) / 2, Yp, who.Name, -1);
     }
 }
+
+
+// ---- Story Mode with two players: player 2 is Zoe (2026-11-11) ----------------------------------------------------------------------
+// docs/LBRA_STORY_SCRIPT.md "Two players": "player 2 *is* Zoe ... On foot she walks herself ... In races she is not on the grid ... Player
+// 2's Zoe is the pit crew in the pit box: Twinsen's pit stop is hers to give. She presses Action as his car comes through the box". Two
+// games at one PC, as two players' races are (NETRACE.CPP): player 1's owns the story -- it tells player 2's what to load as it enters a
+// scene (RaceGame_SceneEntered) and sends the variables as they change; player 2's loads, takes the variables, changes no scene by
+// itself (RaceMod_CubeChangeAllowed), and its Action reaches only Zoe (RaceMod_ActionFor: her hint lines). Each game sends its hero 30
+// times a second (a story sample: the scene, the place, the generic animation; in the car, the car's ghost sample) and shows the other
+// by a real actor of the scene, glued to the other's sample -- so it is drawn and sorted as any actor, in a room as out of doors: in
+// player 1's game the companion Zoe (companion=, out of doors; two_players='s indoor one); in player 2's the Twinsen double
+// (two_players=), Zoe herself glued to player 2's hero, who is not drawn. The story's scripts see var two_players= 1 (the companion's
+// walking after Twinsen stops: the engine moves her).
+//   two_players=<var> <double's entity> <double's mark> <indoor companion's mark>
+static int s_twoWas = 0, s_twoShared = 0;
+static S32 s_twoSentAt = 0, s_twoVarsAt = 0;
+static S16 s_twoVarsSent[MAX_VARS_GAME];
+static U8 s_twoCubeSent[MAX_VARS_CUBE];
+static int s_twoActionWas = 0;
+extern void LoadGameNumCube(void);
+#define RACE_TWO_VARS_MS 300               // the variables looked at this often (sent when changed, and every RACE_TWO_VARS_ALL_MS anyway)
+#define RACE_TWO_VARS_ALL_MS 3000
+#define RACE_TWO_DRIVING 4                 // a story sample's flag: in the car (its ghost sample: island units, the car's body)
+#define RACE_PIT_GIVE_REACH (5.0 * 512.0)  // Zoe's Action gives the stop with Twinsen's car this near her
+
+static int TwoOn(void) { return RaceGame_StoryTwo() || RaceGame_StoryZoe(); }
+
+static int FindMarked(int entity, int mark) {
+    if (entity < 0) return -1;
+    for (int n = 1; n < (int)NbObjets; n++)
+        if (ListObjet[n].IndexFile3D == entity && ListObjet[n].Armure == mark && !(ListObjet[n].WorkFlags & OBJ_DEAD)) return n;
+    return -1;
+}
+static void HideActor(int idx) {
+    if (idx < 0) return;
+    ListObjet[idx].Flags |= INVISIBLE;
+    ListObjet[idx].Flags &= ~CHECK_OBJ_COL;
+}
+// An actor put where the other player is, turned their way, its generic animation `gen` (played on, not restarted while it is the same)
+static void Glue(int idx, S32 x, S32 y, S32 z, S32 beta, int gen) {
+    if (idx < 0) return;
+    T_OBJET *o = &ListObjet[idx];
+    o->Flags &= ~INVISIBLE;
+    o->Flags &= ~CHECK_OBJ_COL;
+    o->Obj.X = x; o->Obj.Y = y; o->Obj.Z = z; o->Obj.Beta = beta & 4095;
+    if (o->GenAnim != gen) InitAnim((U16)gen, ANIM_REPEAT, (U8)idx);
+}
+// Zoe's walk for the hero's walking (forward or back), else her standing (her entity has no more of the hero's)
+static int ZoeGen(int heroGen) { return heroGen == GEN_ANIM_MARCHE || heroGen == GEN_ANIM_RECULE ? GEN_ANIM_MARCHE : GEN_ANIM_RIEN; }
+
+// Whether a life script's action() sees the Action key: player 2's Zoe talks to no one but herself -- the companion's hint lines
+int RaceMod_ActionFor(const T_OBJET *obj) {
+    if (!RaceGame_StoryZoe() || s_compEntity < 0) return 1;
+    return obj->IndexFile3D == s_compEntity && (obj->Armure == s_compMark || obj->Armure == s_compInMark);
+}
+
+static void PitServe(S32 now, int kmh, const char *who);
+
+static void StoryTwo(void) {
+    const int two = TwoOn();
+    const int zoe = RaceGame_StoryZoe();
+    const S32 now = TimerRefHR;
+    int comp = FindMarked(s_compEntity, s_compMark);
+    if (comp < 0) comp = FindMarked(s_compEntity, s_compInMark);
+    const int indoor = comp >= 0 && ListObjet[comp].Armure == s_compInMark;
+    const int dbl = FindMarked(s_dblEntity, s_dblMark);
+    if (s_twoVar >= 0 && !zoe) ListVarGame[s_twoVar] = (S16)(RaceGame_StoryTwo() ? 1 : 0);
+    if (two != s_twoWas) {
+        Log_Info("[racemod] two players: %s", two ? (zoe ? "this game is Zoe's" : "player 2 (Zoe) has joined") : "one player again");
+        s_twoWas = two;
+        s_twoShared = 0;
+    }
+    if (!two) {
+        // (one player: the double and the indoor companion out of sight -- the outdoor one is Companion()'s)
+        HideActor(dbl);
+        if (indoor) HideActor(comp);
+        return;
+    }
+    if (NewCube != -1) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int driving = Comportement == C_BUGGY;
+    // ---- player 1's game: the story shared as player 2 joins, the variables as they change
+    if (!zoe) {
+        if (!s_twoShared) { s_twoShared = 1; RaceGame_StoryShare(); }
+        if (now - s_twoVarsAt >= RACE_TWO_VARS_MS) {
+            const int changed = memcmp(s_twoVarsSent, ListVarGame, sizeof(s_twoVarsSent)) || memcmp(s_twoCubeSent, ListVarCube, sizeof(s_twoCubeSent));
+            static S32 all = 0;
+            if (changed || now - all >= RACE_TWO_VARS_ALL_MS) {
+                memcpy(s_twoVarsSent, ListVarGame, sizeof(s_twoVarsSent));
+                memcpy(s_twoCubeSent, ListVarCube, sizeof(s_twoCubeSent));
+                RaceNet_StoryVars((int)NumCube, (const int16_t *)s_twoVarsSent, s_twoCubeSent);
+                all = now;
+            }
+            s_twoVarsAt = now;
+        }
+        // (Zoe's Action in the pit box: Twinsen's stop)
+        T_RACENET_EVENT e;
+        while (RaceNet_NextEvent(&e))
+            if (e.Type == RACENET_EV_PIT) {
+                const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
+                const double d = sqrt((hx - e.X) * (hx - e.X) + (hz - e.Z) * (hz - e.Z));
+                Log_Info("[racemod] two players: Zoe's Action in the pit box, Twinsen's car %.0f off", d);
+                if (driving && s_pit.On && d < RACE_PIT_GIVE_REACH) PitServe(now, (int)((abs(ListBuggy[0].Speed) * 36 + 2560) / 5120), "Zoe, player 2");
+            }
+    }
+    // ---- player 2's game: what player 1's sends -- a save to load (the scene Twinsen entered), the variables
+    else {
+        char load[RACENET_STORY_PATH];
+        int cube = -1;
+        if (RaceNet_TakeStoryLoad(load, sizeof(load), &cube)) {
+            snprintf(GamePathname, ADELINE_MAX_PATH, "%s", load);
+            FlagLoadGame = TRUE;
+            DbgConsoleLoad = 1;
+            LoadGameNumCube();
+            Log_Info("[racemod] two players: Zoe follows Twinsen into scene %d (%s)", cube, load);
+            return;
+        }
+        static S16 vars[MAX_VARS_GAME];
+        static U8 cubeVars[MAX_VARS_CUBE];
+        if (RaceNet_TakeStoryVars(&cube, (int16_t *)vars, cubeVars) && cube == (int)NumCube) {
+            memcpy(ListVarGame, vars, sizeof(vars));
+            memcpy(ListVarCube, cubeVars, sizeof(cubeVars));
+        }
+        // (her Action by Twinsen's car: the pit stop, his game's to give)
+        const int action = (Input & I_ACTION_M) != 0;
+        if (action && !s_twoActionWas) {
+            T_RACENET_CAR c;
+            if (RaceNet_CarOf(0, &c) && (c.Flags & RACE_TWO_DRIVING)) {
+                T_RACENET_EVENT e;
+                memset(&e, 0, sizeof(e));
+                e.Type = RACENET_EV_PIT;
+                e.X = (S32)(hero->Obj.X + CurrentCubeX * 32768.0); e.Y = hero->Obj.Y; e.Z = (S32)(hero->Obj.Z + CurrentCubeY * 32768.0);
+                RaceNet_SendEvent(&e);
+                Log_Info("[racemod] two players: Zoe's Action, Twinsen's car about -- the pit stop asked for");
+            }
+        }
+        s_twoActionWas = action;
+    }
+    // ---- this game's hero, to the other's: 30 times a second
+    if (now - s_twoSentAt >= RACE_NET_EVERY) {
+        s_twoSentAt = now;
+        T_RACENET_CAR c;
+        memset(&c, 0, sizeof(c));
+        if (driving && CubeMode == CUBE_EXTERIEUR) {
+            T_RACE_LAPGHOST_PT p;
+            GhostSampleNow(&p, 0);
+            c.X = p.X; c.Y = p.Y; c.Z = p.Z; c.Alpha = p.Alpha; c.Beta = p.Beta; c.Gamma = p.Gamma;
+            c.Body = p.Body; c.Anim = p.Anim; c.Island = p.Island;
+            c.Flags = RACENET_CAR_STORY | RACE_TWO_DRIVING;
+        } else {
+            c.X = hero->Obj.X; c.Y = hero->Obj.Y; c.Z = hero->Obj.Z; c.Beta = hero->Obj.Beta;
+            c.Body = -1; c.Anim = -1; c.Island = Island;
+            c.Flags = RACENET_CAR_STORY;
+        }
+        c.Lap = (S32)NumCube; c.Progress = hero->GenAnim;
+        RaceNet_SendCar(&c);
+    }
+    // ---- the other player, shown by an actor of the scene
+    T_RACENET_CAR o;
+    const int seen = RaceNet_CarOf(0, &o) && (o.Flags & RACENET_CAR_STORY) && o.Lap == (S32)NumCube && !(o.Flags & RACE_TWO_DRIVING);
+    if (!zoe) {
+        // (player 1's: Zoe where player 2 is)
+        if (seen) Glue(comp, o.X, o.Y, o.Z, o.Beta, ZoeGen(o.Progress));
+        else HideActor(comp);
+        HideActor(dbl);
+    } else {
+        // (player 2's: Zoe on its own hero, who isn't drawn; Twinsen where player 1 is -- in his car, the car drawn as two players' races draw it)
+        hero->Flags |= INVISIBLE;
+        Glue(comp, hero->Obj.X, hero->Obj.Y, hero->Obj.Z, hero->Obj.Beta, ZoeGen(hero->GenAnim));
+        if (seen) Glue(dbl, o.X, o.Y, o.Z, o.Beta, o.Progress >= 0 && o.Progress < 256 ? o.Progress : 0);
+        else HideActor(dbl);
+    }
+}
+
+// Player 1's car, in player 2's game (out of doors): drawn as two players' races draw the other's (DrawNetCars)
+static T_RACE_NETCAR s_twoCar;
+static void DrawStoryCar(void) {
+    if (!RaceGame_StoryZoe() || CubeMode != CUBE_EXTERIEUR) return;
+    T_RACENET_CAR c;
+    if (!RaceNet_CarOf(0, &c) || !(c.Flags & RACENET_CAR_STORY) || !(c.Flags & RACE_TWO_DRIVING) || c.Island != Island || c.Body < 0) return;
+    T_RACE_NETCAR *m = &s_twoCar;
+    if (!m->Ready || c.Body != m->Body || c.Anim != m->Anim) {
+        if (!GivePtrBody(c.Body) || (c.Anim >= 0 && !GivePtrAnim(c.Anim))) return;
+        ObjectReady(&m->Obj, c.Body);
+        m->Obj.Anim.Num = -1;
+        if (c.Anim >= 0) ObjectInitAnim(&m->Obj, (void *)(uintptr_t)(U32)c.Anim);
+        m->Obj.Status |= FLAG_BODY;
+        m->Body = c.Body; m->Anim = c.Anim; m->Ready = 1;
+    }
+    const S32 lx = c.X - CurrentCubeX * 32768, ly = c.Y, lz = c.Z - CurrentCubeY * 32768;
+    T_OBJ_3D *ob = &m->Obj;
+    ob->X = lx; ob->Y = ly; ob->Z = lz;
+    if (c.Anim >= 0) {
+        ObjectSetInterDep(ob);
+        if (ob->Status & FLAG_LAST_FRAME) { ob->Anim.Num = -1; ObjectInitAnim(ob, (void *)(uintptr_t)(U32)c.Anim); }
+        ob->X = lx; ob->Y = ly; ob->Z = lz;
+    }
+    ob->Alpha = c.Alpha; ob->Beta = c.Beta; ob->Gamma = c.Gamma;
+    if (c.Anim >= 0) ObjectSetInterFrame(ob);
+    else memset(ob->CurrentFrame, 0, sizeof(ob->CurrentFrame));
+    LongWorldRotatePoint(lx, ly, lz);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar + 4000) return;
+    const T_RACE_DRAW kept = DrawKept();
+    SetCLUT(FogClut(zr));
+    Switch_Fillers(FILL_POLY_FOG_NZW);
+    if (ObjectDisplay(ob)) {
+        SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+        if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+        UnsetClip();
+    }
+    DrawBack(&kept);
+}
+
 
 // The list of the players, in the order of the race (finished first, by time), down the left of the screen
 static void DrawNetBoard(S32 now) {

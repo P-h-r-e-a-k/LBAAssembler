@@ -24,7 +24,8 @@ enum {
     RACENET_EV_MUSHROOM = 1,                // A: which mushroom it took
     RACENET_EV_ITEM,                        // A: the power-up used. X Y Z: where (a drop's landing, a ball's thrower); B: facing. Target: a red ball's car
     RACENET_EV_GONE,                        // A: a slick (0), penguin (1) or fake mushroom (2) its car took or set off, at X Y Z
-    RACENET_EV_STRUCK                       // its car hit, at X Y Z
+    RACENET_EV_STRUCK,                      // its car hit, at X Y Z
+    RACENET_EV_PIT                          // (Story Mode, two players) Zoe gives Twinsen his pit stop: Action in the pit box
 };
 
 typedef struct {
@@ -55,6 +56,7 @@ int RaceNet_HostLocal(const char *name, unsigned short port);   // ... two playe
 int RaceNet_Local(void);                    // hosting that way
 // Starts the second player's game: a copy of this one, with its own saves in `userDir`, in the rectangle given, on pad `pad`. It joins on `port` by itself
 int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y, int w, int h, int resW, int resH, int pad, int titled);
+void RaceNet_SpawnStory(int on);           // the next player 2 started plays Zoe in Story Mode (LBA2_STORY_ZOE)
 int RaceNet_Join(const char *address, const char *name);   // "81.2.3.4" or "81.2.3.4:21997" or a name
 void RaceNet_Stop(void);
 int RaceNet_On(void);
@@ -111,6 +113,16 @@ uint32_t RaceNet_SelfId(void);
 void RaceNet_Ready(void);
 int RaceNet_Go(void);
 void RaceNet_SendCar(const T_RACENET_CAR *car);
+// Story Mode with two players (2026-11-11: player 2 is Zoe): player 1's game sends a save to load as it enters a scene (the same PC: its
+// path), and the game's and the scene's variables as they change; player 2's takes each once
+#define RACENET_STORY_PATH 260
+#define RACENET_STORY_VARS 256
+#define RACENET_STORY_CUBE_VARS 80
+#define RACENET_CAR_STORY 2                 // a story sample: on foot or in the car, Lap the scene, Progress the hero's generic animation
+void RaceNet_StoryLoad(const char *path, int cube);
+void RaceNet_StoryVars(int cube, const int16_t *vars, const uint8_t *cubeVars);
+int RaceNet_TakeStoryLoad(char *path, int size, int *cube);
+int RaceNet_TakeStoryVars(int *cube, int16_t *vars, uint8_t *cubeVars);
 int RaceNet_CarOf(int i, T_RACENET_CAR *out);   // where the other player's car is to be drawn now: 0 none yet, or it has gone quiet
 void RaceNet_Finished(int ms);
 void RaceNet_SendEvent(const T_RACENET_EVENT *e);

@@ -207,6 +207,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_FEEDBACK 2468                 // the main menu's Feedback (FeedbackPage)
 #define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
 #define RG_ID_SHARED 2470                   // ... its Shared tracks (TracksPage(1))
+#define RG_ID_STORY_TWO 2471                // Story Mode's Two players row: player 2 is Zoe (StoryMode, 2026-11-11)
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -274,6 +275,10 @@ static char s_storyFile[ADELINE_MAX_PATH] = "";   // story_file=: Story Mode's s
 static char s_storyCode[24] = "";           // story_code=: Story Mode asks for it (none: open)
 static int s_storyOpen = 0;                 // ... given right this run
 static int s_localGuest = -1;               // this game is the second player's at one PC (-1: not looked yet)
+// Story Mode with two players (2026-11-11, docs/LBRA_STORY_SCRIPT.md "Two players": player 2 *is* Zoe): this game, player 1's, has started
+// player 2's for the story; or this game is player 2's, Zoe, following player 1's story (LBA2_STORY_ZOE) -- it loads what player 1's sends
+// (RaceNet_TakeStoryLoad), saves nothing, and changes no scene by itself (RACEMOD.CPP StoryTwo)
+static int s_storyTwo = 0, s_storyZoe = 0;
 static int s_gameMenus = 0;                 // in the race game's menus (RaceGame_Menu)
 static int s_storyOn = 0;                   // the story is what is being played (Story Mode's New story or Continue, not a race since)
 #define RG_STORY_SAVE "story.lba"           // the story's own save, in the saves' folder
@@ -1315,6 +1320,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
+    case RG_ID_STORY_TWO: Label(string, s_storyTwo && RaceNet_Local() ? "Two players: Zoe is player 2" : "Two players"); return 1;
     case RG_ID_STORY_LEVEL: {
         char row[64];
         snprintf(row, sizeof(row), "Difficulty: %s", s_levelName[s_storyLevel >= 0 && s_storyLevel <= 2 ? s_storyLevel : 1]);
@@ -2955,7 +2961,8 @@ static int TrackSelect(void) {
 // (2026-10-29: LBA2 played as a game, every island's track raced where the story has it -- RACEMOD.CPP's set, story_file= -- behind a
 // code, story_code=)
 
-static U16 s_storyMenu[4 + 2 * 4];
+static U16 s_storyMenu[4 + 2 * 5];
+static int LocalPage(int story);
 static int LevelPage(int story);
 static void StorySave(char *path) { GetSavePath(path, ADELINE_MAX_PATH, RG_STORY_SAVE); }
 static int HasStorySave(void) {
@@ -2996,11 +3003,28 @@ static void KeepStory(void) {
 // round would put him back in his car mid-lap with nothing of the race. Nor with the run's autosaves off (--no-autosave), nor once he is
 // dead: a game over keeps the scene before.
 void RaceGame_SceneEntered(void) {
+    // (player 2's Zoe keeps nothing: the story is player 1's)
+    if (s_storyZoe) return;
     if (!s_storyOn || Save_AutoDisabled() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
     char story[ADELINE_MAX_PATH];
     StorySave(story);
     CurrentSaveGameTo(RG_STORY_SAVE);
     Log_Info("[racegame] the story kept as scene %d was entered: %s", (int)NumCube, story);
+    // (and with two players, player 2's game told to load it: Zoe in the scene Twinsen has entered)
+    if (RaceGame_StoryTwo()) { RaceNet_StoryLoad(story, (int)NumCube); Log_Info("[racegame] two players: player 2 told to load the story at scene %d", (int)NumCube); }
+}
+
+// Story Mode with two players: this game is player 1's with player 2's joined (RaceNet_Local: hosting at this PC), or player 2's (Zoe)
+int RaceGame_StoryTwo(void) { return s_storyOn && s_storyTwo && RaceNet_Local() && RaceNet_Others() > 0; }
+int RaceGame_StoryZoe(void) { return s_storyZoe; }
+// (player 1's: the story kept now and player 2's told to load it -- as player 2 first joins; not mid-race)
+void RaceGame_StoryShare(void) {
+    if (!RaceGame_StoryTwo() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
+    char story[ADELINE_MAX_PATH];
+    StorySave(story);
+    CurrentSaveGameTo(RG_STORY_SAVE);
+    RaceNet_StoryLoad(story, (int)NumCube);
+    Log_Info("[racegame] two players: the story kept and player 2 told to load it, scene %d", (int)NumCube);
 }
 
 // (tests: the run played as Story Mode's story -- the console's `storymode` -- as if the menu had started it: its scene changes keep
@@ -3055,6 +3079,39 @@ static int StoryResolved(char *out) {
 
 // Story Mode from the main menu: its code first when RACEGAME.TXT asks one (once a run), then New story or Continue (with a story kept).
 // RACEGAME_STORY_NEW or RACEGAME_STORY_CONTINUE, the story's set loaded; 0 back.
+// Player 2's game, Zoe, in Story Mode with two players (LBA2_STORY_ZOE): no lobby -- it waits for player 1's game to send the story
+// (RaceNet_TakeStoryLoad: its save, as player 1 entered a scene or as this game joined), puts it in current.lba and goes on with it as
+// Continue does, Story Mode's set loaded. Later loads are taken in the game (RACEMOD.CPP StoryTwo). The session ended: quit.
+static S32 StoryZoePage(void) {
+    s_storyZoe = 1;
+    S32 padDir;
+    PageLoopStart(&padDir);
+    Log_Info("[racegame] two players: this game is Zoe's -- waiting for player 1's story");
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        if (RaceNet_Error()[0] || !RaceNet_On()) { AsciiMode = FALSE; return RG_ID_QUIT; }
+        char load[RACENET_STORY_PATH], cur[ADELINE_MAX_PATH], path[ADELINE_MAX_PATH];
+        int cube = -1;
+        if (RaceNet_TakeStoryLoad(load, sizeof(load), &cube)) {
+            GetSavePath(cur, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
+            if (!CopyWhole(load, cur)) { Log_Warn("[racegame] two players: player 1's story %s could not be put in %s", load, cur); continue; }
+            if (!StoryResolved(path)) { AsciiMode = FALSE; return RG_ID_QUIT; }
+            RaceMod_LoadFile(path);
+            s_storyOn = 1;
+            s_raceSp = -1; s_raceOver = 0; s_raceCar = NULL; s_raceWatch[0] = 0; s_raceLevel = -1;
+            Log_Info("[racegame] two players: Zoe joins the story at scene %d (%s)", cube, load);
+            AsciiMode = FALSE;
+            Page(NULL, 0);
+            return RACEGAME_STORY_CONTINUE;
+        }
+        Page(NULL, 0);
+        Text(UI_CENTER_X, 220 + UI_VCENTER_OFS, "You are Zoe", RG_ORANGE);
+        Text(UI_CENTER_X, 270 + UI_VCENTER_OFS, "Waiting for Twinsen's story", RG_GREY);
+        Present();
+    }
+}
+
 static S32 StoryMode(void) {
     if (!s_story || !s_storyFile[0]) return 0;
     if (s_storyCode[0] && !s_storyOpen) {
@@ -3064,13 +3121,14 @@ static S32 StoryMode(void) {
     const int saved = HasStorySave();
     ReadSettings();
     s_storyMenu[0] = (U16)(saved ? 2 : 1);
-    s_storyMenu[1] = 4;
+    s_storyMenu[1] = 5;
     s_storyMenu[2] = 270;
     s_storyMenu[3] = 0;
     SetRow(s_storyMenu, 0, RG_ID_BACK);
     SetRow(s_storyMenu, 1, RG_ID_STORY_NEW);
     SetRow(s_storyMenu, 2, RG_ID_STORY_CONTINUE);
     SetRow(s_storyMenu, 3, RG_ID_STORY_LEVEL);
+    SetRow(s_storyMenu, 4, RG_ID_STORY_TWO);
     for (;;) {
         Page("Story Mode", 270 - (56 * 4) / 2 - 50);
         Text(UI_CENTER_X, 410 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
@@ -3078,6 +3136,12 @@ static S32 StoryMode(void) {
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         // (the story's difficulty: its page, then back here -- the row says the level chosen)
         if (select == RG_ID_STORY_LEVEL) { LevelPage(1); s_storyMenu[0] = 3; continue; }
+        // (two players: player 2's game started on its half or screen, as Zoe -- then New story or Continue as with one)
+        if (select == RG_ID_STORY_TWO) {
+            if (!(s_storyTwo && RaceNet_Local()) && LocalPage(1)) s_storyTwo = 1;
+            s_storyMenu[0] = (U16)(saved ? 2 : 1);
+            continue;
+        }
         if (select != RG_ID_STORY_NEW && select != RG_ID_STORY_CONTINUE) continue;
         // (a new story: its difficulty first -- the one chosen last first; Esc there is Story Mode's page again)
         if (select == RG_ID_STORY_NEW && LevelPage(1) < 0) { s_storyMenu[0] = 1; continue; }
@@ -4396,7 +4460,7 @@ S32 RaceGame_LocalAlone(void) {
 }
 
 // Two players on this PC. Non-zero: a race is set up
-static int LocalPage(void) {
+static int LocalPage(int story) {
     s_localMenu[0] = 1;
     s_localMenu[1] = 4;
     s_localMenu[2] = 280;
@@ -4437,7 +4501,12 @@ static int LocalPage(void) {
         else continue;
         // (the name saved for internet games stays as it is: the lobby's laps, WriteOnline, would have saved "Player 1" over it. This game
         // is Player 1 to the session by RaceNet_HostLocal, and in its lobby by RaceNet_Local)
-        if (!LocalStart(&one, &two)) continue;
+        // (for the story, player 2's game started as Zoe: its own page waits for the story -- StoryZoePage)
+        RaceNet_SpawnStory(story);
+        const int started = LocalStart(&one, &two);
+        RaceNet_SpawnStory(0);
+        if (!started) continue;
+        if (story) { Page(NULL, 0); return 1; }
         if (LobbyPage()) return 1;
     }
 }
@@ -4893,7 +4962,7 @@ static int OnlinePage(void) {
         const S32 select = Menu(s_onlineMenu);
         if (select == RG_ID_ONLINE_BACK || select == 1000) { Page(NULL, 0); return 0; }
         if (select == RG_ID_LOCAL) {
-            if (LocalPage()) return 1;
+            if (LocalPage(0)) return 1;
             continue;
         }
         if (select != RG_ID_ONLINE_HOST && select != RG_ID_ONLINE_JOIN) continue;
@@ -5169,6 +5238,7 @@ static S32 GameMenu(S32 inGame) {
             if (!RaceNet_Join(address, s_netName)) return RG_ID_QUIT;
         }
     }
+    if (s_localGuest && !resume && getenv("LBA2_STORY_ZOE")) return StoryZoePage();
     if (s_localGuest && !resume) return LobbyPage() ? RACEGAME_START : RG_ID_QUIT;
     // (an online race over: back with its players)
     if (RaceNet_On() && !resume && OnlinePage()) return RACEGAME_START;

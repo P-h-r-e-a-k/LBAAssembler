@@ -660,6 +660,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"car_home={RaceTrackStory.CarScene} {RaceTrackStory.CarAwayVar} {RaceTrackStory.CarFetchVar}\n");
             // (Zoe as companion, from chapter 2: RaceTrackStory.Companion.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"companion={RaceTrackStory.CompanionEntityId} {RaceTrackStory.CompanionArmour}\n");
+            // (Story Mode with two players, player 2 Zoe: the variable the scripts see, the Twinsen double, Zoe's indoor mark -- RACEMOD.CPP StoryTwo)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"two_players={RaceTrackStory.TwoPlayersVar} {RaceTrackStory.DoubleEntityId} {RaceTrackStory.DoubleArmour} {RaceTrackStory.CompanionIndoorArmour}\n");
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");
             // (the racing gear's one slot: the gloves, then the gloves and the helmet -- Citadel/CitadelOveralls.GearModel)
