@@ -656,6 +656,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"companion={RaceTrackStory.CompanionEntityId} {RaceTrackStory.CompanionArmour}\n");
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");
+            // (the racing gear's one slot: the gloves, then the gloves and the helmet -- Citadel/CitadelOveralls.GearModel)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.HelmetSlot}\n");
             // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)
             if (t.Dream is not null && island.Dream && t.StartScene >= 0) text.Append($"dream={t.StartScene}\n");
         }

@@ -109,15 +109,15 @@ internal static class CitadelOveralls
             "Dentro la conchiglia gigante: un casco da corsa! Qualche pilota deve averlo perso facendo immersioni. Ora puoi correre nel deserto.",
             "Dentro da concha gigante: um capacete de corrida! Algum piloto deve tê-lo perdido mergulhando. Agora você pode correr no deserto.",
         }),
-        (HelmetSlot + 100, new[] { "Racing helmet", "Casque de course", "Rennhelm", "Casco de carreras", "Casco da corsa", "Capacete de corrida" }),
+        (HelmetSlot + 100, new[] { "Racing gloves and helmet", "Gants et casque de course", "Rennhandschuhe und Rennhelm", "Guantes y casco de carreras", "Guanti e casco da corsa", "Luvas e capacete de corrida" }),
         (HelmetSlot + 200, new[]
         {
-            "A racing helmet, from the giant clam's sea cave. No helmet, no race: Flick lets nobody onto the Desert track without one.",
-            "Un casque de course, trouvé dans la grotte marine du coquillage géant. Pas de casque, pas de course : Flick ne laisse personne sur la piste du Désert sans casque.",
-            "Ein Rennhelm aus der Meeresgrotte der Riesenmuschel. Ohne Helm kein Rennen: Flick läßt niemanden ohne Helm auf die Wüstenstrecke.",
-            "Un casco de carreras, de la gruta marina del molusco gigante. Sin casco no hay carrera: Flick no deja a nadie entrar en la pista del Desierto sin él.",
-            "Un casco da corsa, dalla grotta marina della conchiglia gigante. Niente casco, niente corsa: Flick non lascia nessuno sulla pista del Deserto senza.",
-            "Um capacete de corrida, da gruta marinha da concha gigante. Sem capacete, sem corrida: o Flick não deixa ninguém entrar na pista do Deserto sem um.",
+            "Your driving gloves, and a racing helmet from the giant clam's sea cave. No helmet, no race: Flick lets nobody onto the Desert track without one.",
+            "Tes gants de pilote, et un casque de course trouvé dans la grotte marine du coquillage géant. Pas de casque, pas de course : Flick ne laisse personne sur la piste du Désert sans casque.",
+            "Deine Fahrhandschuhe und ein Rennhelm aus der Meeresgrotte der Riesenmuschel. Ohne Helm kein Rennen: Flick läßt niemanden ohne Helm auf die Wüstenstrecke.",
+            "Tus guantes de conducir, y un casco de carreras de la gruta marina del molusco gigante. Sin casco no hay carrera: Flick no deja a nadie entrar en la pista del Desierto sin él.",
+            "I tuoi guanti da guida, e un casco da corsa dalla grotta marina della conchiglia gigante. Niente casco, niente corsa: Flick non lascia nessuno sulla pista del Deserto senza.",
+            "As tuas luvas de condução, e um capacete de corrida da gruta marinha da concha gigante. Sem capacete, sem corrida: o Flick não deixa ninguém entrar na pista do Deserto sem um.",
         }),
     };
 
@@ -201,8 +201,8 @@ internal static class CitadelOveralls
         var objfixPath = Path.Combine(gameDirectory, "OBJFIX.HQR");
         var header = Body.Read(bodies.Read(30), 2, allowStatic: true).Header;
         HqrWriter.ReplaceInFile(objfixPath, OverallsSlot, InventorySized(OverallsModel(header)).Write());
-        HqrWriter.ReplaceInFile(objfixPath, HelmetSlot, InventorySized(HelmetModel(header)).Write());
-        log.Add($"OBJFIX.HQR {OverallsSlot}: the racing overalls (the tunic's model); {HelmetSlot}: the racing helmet (the pearl's)");
+        HqrWriter.ReplaceInFile(objfixPath, HelmetSlot, InventorySized(GearModel(header)).Write());
+        log.Add($"OBJFIX.HQR {OverallsSlot}: the racing overalls (the tunic's model); {HelmetSlot}: the racing gloves and helmet together (the pearl's) -- the gloves' slot's second kind");
 
         // ---- their texts: found, name, description
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -580,6 +580,35 @@ internal static class CitadelOveralls
     }
 
     // A model at the inventory's size: centred on its middle and scaled so its widest side is InventoryExtent (RaceTrackStory.Errands.cs)
+    // The racing gear in one inventory slot (the user, 2026-11-08: "the gloves and helmet should share one slot"): the gloves' slot (7) is
+    // 1 with the gloves, 2 with the gloves and the helmet -- the race file's inv_kinds=7 7 5 shows OBJFIX 7 (the gloves) or this, 5 (the
+    // pearl's, the helmet's till then), with 5's texts. The gloves and the helmet side by side, the helmet as tall as the gloves.
+    internal static Body GearModel(byte[] header)
+    {
+        var gloves = RaceTrackGloves.Build(RaceTrackGloves.InventoryScale, upright: true);
+        var helmet = HelmetModel(header);
+        Vector3[] gw = gloves.World(), hw = helmet.World();
+        static (Vector3 Lo, Vector3 Hi) Box(Vector3[] w) => (w.Aggregate(new Vector3(float.MaxValue), Vector3.Min), w.Aggregate(new Vector3(float.MinValue), Vector3.Max));
+        var (gl, gh) = Box(gw); var (hl, hh) = Box(hw);
+        var k = (gh.Y - gl.Y) / MathF.Max(1, hh.Y - hl.Y);
+        var gap = (gh.X - gl.X) * 0.12f;
+        var gMid = (gl + gh) / 2; var hMid = (hl + hh) / 2;
+        var points = gw.Select(p => p - gMid - new Vector3((gh.X - gl.X) / 2 + gap / 2, 0, 0))
+            .Concat(hw.Select(p => (p - hMid) * k + new Vector3((hh.X - hl.X) * k / 2 + gap / 2, 0, 0))).ToArray();
+        var body = new Body { Game = 2, Lit = true, Static = true, Header = header };
+        body.Bones.Add(new Bone(0, points.Length, 0, -1, new byte[8]));
+        body.Vertices.AddRange(points);
+        body.SetWorld(points);
+        foreach (var f in gloves.Faces) body.Faces.Add(f with { PointNormals = null, FaceNormal = -1 });
+        foreach (var f in helmet.Faces) body.Faces.Add(f with { Points = f.Points.Select(i => i + gw.Length).ToArray(), PointNormals = null, FaceNormal = -1 });
+        foreach (var sp in helmet.Spheres) body.Spheres.Add(sp with { Point = sp.Point + gw.Length, Radius = (int)Math.Round(sp.Radius * k) });
+        foreach (var ln in helmet.Lines) body.Lines.Add(ln with { A = ln.A + gw.Length, B = ln.B + gw.Length });
+        body.Validate();
+        return body;
+    }
+    // the gloves' slot and its value with the helmet too
+    public const int GlovesSlot = 7, GearBoth = 2;
+
     private static Body InventorySized(Body body)
     {
         var v = body.Vertices;

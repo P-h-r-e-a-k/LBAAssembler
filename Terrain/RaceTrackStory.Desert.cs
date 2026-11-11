@@ -86,7 +86,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.HelmetSlot} 1 Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n" + GarageRaceLines()
+        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\n"
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -719,11 +719,11 @@ void comportement_1()
             {{
                 message({Say(DesertLine.FlickPages)});
             }}
-            else if ({PagesWon} > var_game({QPages}) && 0 != var_game({Citadel.CitadelOveralls.HelmetSlot}))
+            else if ({PagesWon} > var_game({QPages}) && {Citadel.CitadelOveralls.GearBoth} <= var_game({Citadel.CitadelOveralls.GlovesSlot}))
             {{
                 message({Say(DesertLine.FlickOpen)});
             }}
-            if (0 == var_game({Citadel.CitadelOveralls.HelmetSlot}))
+            if ({Citadel.CitadelOveralls.GearBoth} > var_game({Citadel.CitadelOveralls.GlovesSlot}))
             {{
                 message({Say(DesertLine.FlickHelmet)});
                 set_holo_pos({PearlCave});
@@ -854,8 +854,11 @@ void comportement_2()
             hero = Loose(hero, "if (21 == l_track_obj(5) && 0 == var_game(169) && 0 == var_game(19) && 0 == var_game(3) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\nset_var_game(83, 11);\n}",
                 "if (21 == l_track_obj(5) && 0 == var_game(169) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\n}");
             scripts.SetText(0, ScriptKind.Life, hero);
-            scripts.SetText(PearlClam, ScriptKind.Life, Loose(scripts.GetText(PearlClam, ScriptKind.Life),
-                "if (1 == var_game(3) || 1 == var_game(19) || 1 == var_game(169))", "if (1 == var_game(169))"));
+            // (and the helmet into the gloves' slot, its second kind -- Citadel/CitadelOveralls.GearModel: one slot for the racing gear)
+            var clam = Loose(scripts.GetText(PearlClam, ScriptKind.Life), "if (1 == var_game(3) || 1 == var_game(19) || 1 == var_game(169))", "if (1 == var_game(169))");
+            clam = Loose(clam, "set_var_game(5, 1);\nstate_inventory(5, 0);\nfound_object(5);",
+                $"set_var_game({Citadel.CitadelOveralls.GlovesSlot}, {Citadel.CitadelOveralls.GearBoth});\nfound_object({Citadel.CitadelOveralls.GlovesSlot});");
+            scripts.SetText(PearlClam, ScriptKind.Life, clam);
         });
 
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in any order (the user, 2026-11-08: "can we
