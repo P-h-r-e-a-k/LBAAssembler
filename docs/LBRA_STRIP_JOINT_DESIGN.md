@@ -1,4 +1,6 @@
-# The strip joint -- design (draft 2, 2026-11-11)
+# Stella Entities, the strip joint -- design (agreed, 2026-11-11)
+
+Its name, over its door: **Stella Entities** (the user, 2026-11-11).
 
 The user, 2026-11-11: "Design a strip joint. This should be based on the look and feel of the bar and casino on Otringal. This should have a
 stage area with poles. Some bouncers -- we can reuse the ones from the bar. An office area. A bar. And a back stage area for our performers
@@ -70,7 +72,7 @@ About a day and a half: the round grid and the dancers' animations are the bigge
 
 ## Questions for the user
 
-1. **A name** for the club, over its door.
+None left: the name is Stella Entities.
 
 (The seven performers above confirmed, Tabitha the third chained wizard of scene 185: the user, 2026-11-11.)
 
