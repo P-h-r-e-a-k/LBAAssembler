@@ -2366,7 +2366,15 @@ stop();
             {{
                 message({p.Say(ChapterLine.LucRound)});
             }}", 1200, $"    set_var_cube({Once2}, 0);\n"));
-            var zoeLife = p.Add(model, zoe, Talker("2 == chapter()", $@"            if (0 == var_cube({Once2}) && {tyre})
+            // (first, the car left abandoned in another of the island's scenes -- RACEMOD.CPP car_home=: she has had it brought home, and it
+            // is made again under the carport the next time the yard is entered. LBRA issues #17 and #16, the user: "when the car is in a
+            // different scene she tells us she found it abandoned and returned it to the house")
+            var zoeLife = p.Add(model, zoe, Talker("2 == chapter()", $@"            if (0 == var_cube({Once2}) && 1 == var_game({CarAwayVar}))
+            {{
+                message({EveningId(p.Say, EveningLine.ZoeCarHome)});
+                set_var_game({CarFetchVar}, 1);
+            }}
+            else if (0 == var_cube({Once2}) && {tyre})
             {{
 {fitted}
             }}

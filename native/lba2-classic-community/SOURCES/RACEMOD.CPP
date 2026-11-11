@@ -219,6 +219,8 @@
  *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
  *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
  *                                (Breakdown, RaceMod_Slide) -- or till the variable reaches <least>: the filters fitted mend it
+ *     car_home=<scene> <away var> <fetch var>   (2026-11-11) the away variable 1 while the story car stands abandoned in another scene of
+ *                                the island; the fetch variable 1 takes it home (CarHome)
  *     hover=<entity> <height> <over road> <reach>   (2026-11-08) that entity's actors outside fly at <height> over the ground -- and
  *                                at least <over road> over the lap's road within <reach> units of it -- whatever their tracks' points
  *                                say, with no collisions (the White Leaf Desert's Chedil Amiradoo on his magic carpet: sunk under the
@@ -1287,6 +1289,9 @@ static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 // breakdown= (2026-11-08): its variable (-1 none), the least it wants, after which checkpoint, the speed then, its words; broken down
 // this race, and the last puff of smoke
 static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000, s_broken = 0;
+// car_home= (2026-11-11): the story car's home scene (-1 none), the variable told whether the car stands abandoned in another scene of the
+// island, the variable that fetches it home; what the last look saw (the scene, the car's scene, NumBuggy)
+static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = -2, s_carSeenCube = -2, s_carSeenNum = -1;
 // hover= (2026-11-08): the entity (-1 none), its height over the ground, over the road, and how near the road that holds
 static int s_hoverEntity = -1, s_hoverHeight = 300, s_hoverRoad = 1600, s_hoverReach = 3072;
 static char s_brkText[96];
@@ -4651,6 +4656,10 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
         else if (!strcmp(key, "no_suit")) s_noSuit = atoi(v) != 0;
         else if (!strcmp(key, "hover")) { if (sscanf(v, "%d %d %d %d", &s_hoverEntity, &s_hoverHeight, &s_hoverRoad, &s_hoverReach) < 4) s_hoverEntity = -1; }
+        else if (!strcmp(key, "car_home")) {
+            if (sscanf(v, "%d %d %d", &s_carHome, &s_carAwayVar, &s_carFetchVar) != 3 || s_carAwayVar < 0 || s_carAwayVar > 254 || s_carFetchVar < 0 || s_carFetchVar > 254) s_carHome = -1;
+            s_carSeenAt = -2;
+        }
         else if (!strcmp(key, "breakdown")) {
             int used = 0;
             if (sscanf(v, "%d %d %d %d %n", &s_brkVar, &s_brkLeast, &s_brkCheckpoint, &s_brkSpeed, &used) >= 4 && used > 0) snprintf(s_brkText, sizeof(s_brkText), "%s", v + used);
@@ -5774,6 +5783,32 @@ static void ChaseStart(void) {
 // Called once a frame from the main loop, before the scene is drawn (PERSO.CPP), where a dialog can be opened as the life scripts do:
 // the intro as the grid forms, a sprint's end followed up -- a win wakes Twinsen up (out of the car, in the waking scene), a loss runs
 // the race again from the grid -- and the wake line said a moment after he has woken up.
+// car_home=<home scene> <away var> <fetch var> (2026-11-11; LBRA issue #17, the user: "Talking to Zoe when the car is in a different scene she
+// tells us she found it abandoned and returned it to the house" -- and #16, a car left where it can't be driven out): the away variable
+// 1 while the car stands, without Twinsen in it, in another scene of this island than its home and than the one Twinsen is in (looked at
+// again whenever the scene, the car's scene or the car changes: LoadSceneIsland reads the scene's file); the fetch variable set to 1 --
+// Zoe's line -- takes the car away from there: NumBuggy 0, so the home scene's car script makes it again under the carport
+// (RaceTrackScenes.StartBuggyScript: init_buggy(1) at its home), and nowhere else shows one.
+static void CarHome(void) {
+    if (s_carHome < 0) return;
+    const S32 driving = ListObjet[NUM_PERSO].Move == MOVE_BUGGY || ListObjet[NUM_PERSO].Move == MOVE_BUGGY_MANUAL;
+    if (ListVarGame[s_carFetchVar]) {
+        ListVarGame[s_carFetchVar] = 0;
+        if (NumBuggy && !driving && ListBuggy[0].Cube != NumCube) {
+            Log_Info("[racemod] car_home: the car fetched home from scene %d: made again under the carport in scene %d", (int)ListBuggy[0].Cube, s_carHome);
+            NumBuggy = 0;
+        }
+        s_carSeenAt = -2;
+    }
+    if (NumCube == s_carSeenAt && ListBuggy[0].Cube == s_carSeenCube && NumBuggy == s_carSeenNum) return;
+    s_carSeenAt = NumCube; s_carSeenCube = ListBuggy[0].Cube; s_carSeenNum = NumBuggy;
+    S32 away = 0;
+    if (NumBuggy && !driving && ListBuggy[0].Cube >= 0 && ListBuggy[0].Cube != s_carHome && ListBuggy[0].Cube != NumCube)
+        away = LoadSceneIsland(ListBuggy[0].Cube) == Island;
+    ListVarGame[s_carAwayVar] = (S16)away;
+    if (away) Log_Info("[racemod] car_home: the car left in scene %d", (int)ListBuggy[0].Cube);
+}
+
 void RaceMod_Story(void) {
     // (a car lapping on its own, parade=: the whole picture drawn again -- this runs just before the frame is drawn, AffScene(FirstTime))
     if (s_paradeFlip) { FirstTime = AFF_ALL_FLIP; s_paradeFlip = 0; }
@@ -5787,6 +5822,7 @@ void RaceMod_Story(void) {
         FadeWhiteToPalAndSamples(PtrPal);
     }
     if (!RaceMod_Active()) return;
+    CarHome();
     const S32 now = TimerRefHR;
     // (clovers_fill=: the clovers filled to the boxes -- the lava lake's dive, after the life it cost)
     if (s_cloversFill >= 0 && ListVarGame[s_cloversFill] == 2) {
@@ -13387,6 +13423,7 @@ void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
     s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;

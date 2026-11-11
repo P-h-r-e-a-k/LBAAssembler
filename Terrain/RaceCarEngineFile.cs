@@ -648,6 +648,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}{string.Concat((s.TiredKeep ?? Array.Empty<int>()).Select(k => $" {k}"))}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
+            // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"car_home={RaceTrackStory.CarScene} {RaceTrackStory.CarAwayVar} {RaceTrackStory.CarFetchVar}\n");
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");
             // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)

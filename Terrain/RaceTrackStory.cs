@@ -83,6 +83,9 @@ internal static partial class RaceTrackStory
     private const int AliensScene = 42, Alien = 6, AlienGreeting = 388, EsmerGreeting = 384, ArrivalPoint = 20;
     // the gloves: the attic, its shelf actor, and the darts' display entity and its body
     internal const int Attic = 1, Shelf = 8, DartsEntity = 18, DartsBody = 31, CarScene = 49;
+    // the race file's car_home= (RACEMOD.CPP CarHome): 1 while the story car stands abandoned in another of the island's scenes, and 1 to fetch
+    // it home (the game's own leave 212 unused and 252, FLAG_VEHICULE_PRIS, named but never read or written)
+    internal const int CarAwayVar = 212, CarFetchVar = 252;
     private const int CitadelTexts = 3, HolomapTexts = 2;
     private const byte LabelAttribute = 17;          // the holomap labels' own (text 501 "Downtown Pharmacy.")
     private const int ArrowRecordSize = 32;

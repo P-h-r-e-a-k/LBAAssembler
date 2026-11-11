@@ -55,6 +55,8 @@ internal static partial class RaceTrackStory
         TraluEvening,
         // (the bar's celebration the evening after the lighthouse: the regulars cheer Twinsen's win, Luc brings him a drink -- 2026-11-10)
         PatCheer, FabCheer, BunnyCheer, TwinsenJustOne, LucServes, TwinsenCheers,
+        // (Zoe, the car left abandoned in another of the island's scenes: she has had it brought home -- 2026-11-11, LBRA issue #17)
+        ZoeCarHome,
     }
     private static readonly string[][] EveningLines =
     {
@@ -345,6 +347,15 @@ internal static partial class RaceTrackStory
             "¡Salud a todos!",
             "Salute a tutti!",
             "Saúde, pessoal!",
+        },
+        new[]
+        {
+            "By the way, I found your car abandoned on the other side of the island. I've had it brought back to the house: it's under the carport.",
+            "Au fait, j'ai trouvé ta voiture abandonnée de l'autre côté de l'île. Je l'ai fait ramener à la maison : elle est sous l'abri.",
+            "Übrigens, ich hab dein Auto verlassen auf der anderen Seite der Insel gefunden. Ich hab's zum Haus zurückbringen lassen: Es steht unterm Carport.",
+            "Por cierto, encontré tu coche abandonado al otro lado de la isla. Lo he hecho traer de vuelta a casa: está bajo el cobertizo.",
+            "A proposito, ho trovato la tua macchina abbandonata dall'altra parte dell'isola. L'ho fatta riportare a casa: è sotto la tettoia.",
+            "A propósito, encontrei o teu carro abandonado do outro lado da ilha. Mandei-o trazer de volta para casa: está debaixo do telheiro.",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)
