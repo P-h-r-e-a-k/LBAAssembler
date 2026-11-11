@@ -56,27 +56,15 @@ internal static class Demo96Rooms
     // the big walkway (x 12-31, layer 4) by the wall at x 32, and that walkway parted from the far tunnel's door's platform (x 0-3, z 17-21,
     // layer 5) by the deadly water at x 4-10 -- the far tunnel couldn't be walked to at all, the scripted playthrough found (2026-11-07):
     // the way the thief went, following his painted footprints (the user, 2026-11-10). A doorway through the wall at x 32, z 36-37, its
-    // floor a step (layer 5) between the two walkways, the big walkway's edge there plain floor; and a bridge over the water at z 17-21 (five cells wide: the sewer bat knocks Twinsen about there), x 4-16, the big walkway's floor (layer 4))
+    // floor a step (layer 5) between the two walkways, the big walkway's edge there plain floor. Over the water, the demo's own floating logs going round in circles (a bridge, 2026-11-11,
+    // came out again: the user, "there are floating logs that go around in circles for the player to use to get to the other side"))
     public static readonly Room[] Sewers =
     {
         new(17, 17, "the sewers", (20357, 1536, 15140), MorePaves: new Paving[]
         {
             new(32, 32, 36, 37, 4, 36, 4, LikeX: 28, LikeLayer: 3, Over: 12),
             new(31, 31, 36, 37, 3, 36, 3, LikeX: 28, LikeLayer: 3),
-            new(4, 16, 17, 21, 3, 18, 3, LikeX: 20, LikeLayer: 3),
-            new(13, 15, 22, 23, 3, 18, 3, LikeX: 20, LikeLayer: 3),   // (the bridge's corner with the walkway filled: the bat knocked him into it)
-            // (and a parapet two layers high along the bridge's open sides, the walkway's own wall bricks: the sewer bat knocks Twinsen about
-            // there, into the deadly water)
-            new(4, 12, 16, 16, 4, 35, 4, LikeX: 32, LikeLayer: 5),
-            new(4, 12, 16, 16, 5, 35, 5, LikeX: 32, LikeLayer: 5),
-            new(4, 12, 22, 22, 4, 35, 4, LikeX: 32, LikeLayer: 5),
-            new(4, 12, 22, 22, 5, 35, 5, LikeX: 32, LikeLayer: 5),
-            new(12, 12, 23, 23, 4, 35, 4, LikeX: 32, LikeLayer: 5),
-            new(12, 12, 23, 23, 5, 35, 5, LikeX: 32, LikeLayer: 5),
-            new(13, 15, 24, 24, 4, 35, 4, LikeX: 32, LikeLayer: 5),
-            new(13, 15, 24, 24, 5, 35, 5, LikeX: 32, LikeLayer: 5),
-            // (and the door's platform brought down to the bridge's floor: a whole layer up from it was a step Twinsen can't walk up)
-            new(0, 3, 17, 21, 3, 18, 3, LikeX: 20, LikeLayer: 3, Over: 4),
+            // (no bridge over the water: the demo's floating logs, going round in circles, carry Twinsen across -- the user, 2026-11-11)
         }),
         new(18, 18, "the sewers' far halls"),
     };
@@ -264,12 +252,9 @@ internal static class Demo96Rooms
     // comes into it. The sewers' ladder (scene 17): climbing it at x 512-1536, z ~27927 into the door at its top (box x 512.., z 27648..,
     // y 2704..) -- the demo's (9728, 512, 7168) put him in the pillar top's shaft (cells x 19-20, z 14-15, empty to the bottom), down onto
     // the door back to the ladder; now on the shaft's north rim (cells x 19-20, z 13, its top 1536), the ladder's width along it.
-    // (and doors whose box's foot the story lowers, to a floor it lowered: (scene, the door's scene, its box's x0, z0) -> its y0 -- the
-    // sewers' far tunnel's door, its platform brought down a layer to the bridge's floor)
-    private static readonly Dictionary<(int Scene, int To, int X0, int Z0), int> DoorFloors = new()
-    {
-        [(17, 18, 0, 9216)] = 1024,
-    };
+    // (and doors whose box's foot the story lowers, to a floor it lowered: (scene, the door's scene, its box's x0, z0) -> its y0 -- none
+    // now: the sewers' far tunnel's door's platform was brought down to a bridge's floor, and the bridge has gone, 2026-11-11)
+    private static readonly Dictionary<(int Scene, int To, int X0, int Z0), int> DoorFloors = new();
 
     private static readonly Dictionary<(int Scene, int X, int Y, int Z), (int X, int Y, int Z)> DoorLandings = new()
     {

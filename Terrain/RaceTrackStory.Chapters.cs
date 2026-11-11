@@ -989,8 +989,8 @@ void comportement_1()
     // The thief's footprints in the painter's wet paint (the user, 2026-11-10: "the story outline mentions Twinsen following the thief's paint
     // footsteps through the sewers, but these don't exist, nor does the painter's line about them" -- the line, "...trod on my wet paint.
     // Follow the footprints.", is the painter's second): a trail of painted prints (CitadelProps.Footprints, a pair a stride) from the
-    // painter's walkway the way the thief went -- through the doorway down onto the big walkway, across it and the bridge to the far
-    // tunnel's door (scene 17, Demo96Rooms' way), then on through the far halls to the dead end where he's cornered (scene 18) -- each
+    // painter's walkway the way the thief went -- through the doorway down onto the big walkway, across it, over the water on the floating logs (no
+    // prints on the water) to the far tunnel's door (scene 17, Demo96Rooms' way), then on through the far halls to the dead end where he's cornered (scene 18) -- each
     // pair on the floor there (the scene's grid), turned the way he ran, walked over (no collisions). From his going down the hatch (Q_THIEF
     // ThiefDown), in chapter 1.
     private static readonly (int Scene, (int X, int Y, int Z)[] Way)[] ThiefWay =
@@ -1011,7 +1011,8 @@ void comportement_1()
                 var shape = backend.GridOfScene(scene) is { } g ? LBAAssembler.Grids.Lba2GridBackend.ToLba1Shape(backend.RawGrid(g)) : null;
                 // (the floor under a place: of the column's floors he could stand on -- a brick, three free layers over it -- the one nearest
                 // the height the way says he walks at: not the top of the wall beside it)
-                int Floor(int x, int y, int z)
+                // (none -- no print -- where no floor is within two layers of it: the sewer's water, which he crossed on the floating logs)
+                int? Floor(int x, int y, int z)
                 {
                     if (shape is null) return y;
                     int cx = Math.Clamp(x / 512, 0, 63), cz = Math.Clamp(z / 512, 0, 63);
@@ -1019,7 +1020,7 @@ void comportement_1()
                     int? best = null;
                     for (var t = 1; t < 23; t++)
                         if (Solid(t - 1) && !Solid(t) && !Solid(t + 1) && !Solid(t + 2) && (best is null || Math.Abs(t * 256 - y) < Math.Abs(best.Value - y))) best = t * 256;
-                    return best ?? y;
+                    return best is { } f && Math.Abs(f - y) <= 512 ? f : null;
                 }
                 var edits = new List<Action<SceneScripts>>();
                 var carry = TrailStride / 2.0;
@@ -1032,7 +1033,8 @@ void comportement_1()
                     for (var t = carry; t < len; t += TrailStride)
                     {
                         int x = (int)Math.Round(a.X + dx * t / len), z = (int)Math.Round(a.Z + dz * t / len);
-                        var print = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Footprints, x, Floor(x, a.Y, z), z, beta);
+                        if (Floor(x, a.Y, z) is not { } floor) continue;
+                        var print = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Footprints, x, floor, z, beta);
                         print.Armor = WalkOverArmour;   // (walked over: RACEMOD.CPP RaceMod_NoCollide -- as boxes they stopped him dead)
                         edits.Add(p.Add(model, print, $@"void comportement_0()
 {{
