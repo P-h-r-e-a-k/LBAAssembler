@@ -218,7 +218,7 @@
  *     breakdown=<var> <least> <checkpoint> <speed> <text>   (2026-11-08) the player's car breaks down while game variable <var> is under
  *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
  *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
- *                                (Breakdown, RaceMod_Slide) -- a race he can't win; raced again once the filters are in
+ *                                (Breakdown, RaceMod_Slide) -- or till the variable reaches <least>: the filters fitted mend it
  *     hover=<entity> <height> <over road> <reach>   (2026-11-08) that entity's actors outside fly at <height> over the ground -- and
  *                                at least <over road> over the lap's road within <reach> units of it -- whatever their tracks' points
  *                                say, with no collisions (the White Leaf Desert's Chedil Amiradoo on his magic carpet: sunk under the
@@ -13074,7 +13074,13 @@ static void SlideSmoke(const T_OBJET *hero) {
 // BUGGY.CPP MoveBuggy, every frame of the player's car after its steering: the slide the handbrake starts, and its end.
 void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
     const S32 now = TimerRefHR;
-    // (broken down, breakdown=: no faster than its speed, and smoking -- a dark puff from the engine every so often)
+    // (broken down, breakdown=: no faster than its speed, and smoking -- a dark puff from the engine every so often -- until what it
+    // wants is in: Zoe fitting the sand filters mends it there and then. LBRA issue #14, the user, 2026-11-10: "After the car breaks
+    // down on Desert island Zoe fitting the sand filters doesn't fix it" -- it stayed broken down to the race's end)
+    if (s_broken && s_brkVar >= 0 && ListVarGame[s_brkVar] >= s_brkLeast) {
+        s_broken = 0;
+        Log_Info("[racemod] breakdown: mended (game variable %d is %d)", s_brkVar, (int)ListVarGame[s_brkVar]);
+    }
     if (s_broken) {
         if (*speed > s_brkSpeed) *speed = s_brkSpeed;
         if (*speed < -s_brkSpeed) *speed = -s_brkSpeed;
