@@ -461,6 +461,16 @@ internal static partial class RaceTrackStory
     private static readonly (int X, int Y, int Z)[] RaphDownHill = { (17800, 2950, 11250), (18300, 2500, 12500), (17550, 1700, 13850), (16400, 1500, 13950) };
     // (Twinsen's own, Zoe's and Raph's labels and behaviours there: new)
     internal const int RaphHome = 170, RaphHomeDone = 171, RaphGoes = 2, WizardGoes = 5, WizardGone = 12, WizardHomeLabel = 11;
+    // (Raph on the top for the spell: put there in its fade -- Chapters.cs Lighthouse -- at the walkway's point 8, east of Twinsen and Zoe,
+    // facing them; after it he goes in at the lamp room's door, gone once there or after some 5 seconds, a scene variable counting his
+    // frames as Zoe's does. The user, 2026-11-10: "Raph doesn't seem to be present at the top of the lighthouse during this scene, but he
+    // still appears to speak" -- he spoke from the door at its foot, the camera down there for his line)
+    internal const int RaphOnTop = 172, RaphTopPoint = 8;
+    private const int RaphLeaving = 47;
+    // (Zoe's question asked of her own once the Wizard and Raph have gone -- some 5 seconds after the spell, a scene variable counting her
+    // frames -- Twinsen held still till then: the user, 2026-11-10, "After the wizard and Raph have gone, let's have Zoe automatically
+    // talk to Twinsen and ask him the question of if he's coming home or not before giving the player control again")
+    private const int ZoeWaits = 45, ZoeAsksAfter = 240;   // (a scene variable holds 255 at most)
     private const int ZoeDown = 190, ZoeGoneDown = 191;
     // (her way down ahead of him, certain to end: F13, the user's game, 2026-11-08 -- Twinsen in the doorway, she walked into him and
     // stood wedged there for good, and with her the way down; the user: "we just need to make sure she reaches the door and correctly
@@ -530,7 +540,7 @@ void comportement_1()
     if (1 == var_cube({Once5}))
     {{
         invisible(0);
-        set_comportement(comportement_2);
+        set_comportement(comportement_5);
     }}
 }}
 
@@ -561,6 +571,20 @@ void comportement_4()
 {{
     invisible(1);
     suicide();
+}}
+
+void comportement_5()
+{{
+    add_var_cube({ZoeWaits}, 1);
+    if ({ZoeAsksAfter} < var_cube({ZoeWaits}))
+    {{
+        set_comportement(comportement_2);
+        set_dir_obj(0, MOVE_MANUAL);
+        if (0 == var_game({QEvening}))
+        {{
+            {Question(true, down)}
+        }}
+    }}
 }}
 ";
             var zoeLife = p.Add(model, zoe, ZoeLife(""));
@@ -598,7 +622,8 @@ stop();
 
 void comportement_{RaphGoes}()
 {{
-    if ({RaphHomeDone} == l_track())
+    add_var_cube({RaphLeaving}, 1);
+    if ({RaphHomeDone} == l_track() || 250 < var_cube({RaphLeaving}))
     {{
         invisible(1);
         suicide();
@@ -607,13 +632,21 @@ void comportement_{RaphGoes}()
 ");
                 scripts.SetText(LighthouseKeeper, ScriptKind.Track, scripts.GetText(LighthouseKeeper, ScriptKind.Track).TrimEnd() + $@"
 
+label({RaphOnTop});
+pos_point({RaphTopPoint});
+beta(3072);
+anim(0);
+stop();
+
 label({RaphHome});
 anim(1);
-{string.Join("\n", Enumerable.Range(downHill, RaphDownHill.Length).Select(k => $"goto_point({k});"))}
+goto_point({door});
 
 label({RaphHomeDone});
 stop();
 ");
+                // (Raph up on the top with them for the spell's lines, put there in its fade -- RaphOnTop: his track's label is there now)
+                scripts.SetText(0, ScriptKind.Life, Loose(scripts.GetText(0, ScriptKind.Life), "body_obj(12, 0);", $"body_obj(12, 0);\n        set_track_obj({LighthouseKeeper}, label_{RaphOnTop});"));
                 // the Wizard (actor 4): there for the spell only, not after it in the storm; after it, his word and home in a flash
                 var wizard = scripts.GetText(LighthouseWizard, ScriptKind.Life);
                 wizard = Loose(wizard, "else if (2 > chapter() && 2 < var_game(56))", "else if (2 > chapter() && 3 == var_game(56))");

@@ -1606,7 +1606,7 @@ void comportement_2()
         // of them in one body on the top (actor 12) each their own again, Zoe beside him; Raph off down the hill, the Wizard home
         // (RaceTrackStory.Evening.cs, LighthouseEvening). And his controls back: the Wizard's "Follow me!" held him (set_dir_obj NO_MOVE),
         // and the change of scene let him go -- left on the top, he stood there frozen.
-        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(1);\n        comportement_hero(0);\n        set_dir(MOVE_MANUAL);\n        cinema_mode(0);\n        cam_follow(0);\n        set_change_cube(1, 1);");
+        hero = Loose(hero, "comportement_hero(0);\nchange_cube(42);", "body(1);\n        comportement_hero(0);\n        set_dir(NO_MOVE);\n        cinema_mode(0);\n        cam_follow(0);\n        set_change_cube(1, 1);");
         scripts.SetText(0, ScriptKind.Life, hero);
     });
 
