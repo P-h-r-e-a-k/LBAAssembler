@@ -41,6 +41,7 @@ internal static class CitadelOveralls
     // the 66 of the tunic's blue that 14's driver has)
     private const int Eyes = 197, WheelTunicFaces = 66;
     private const int TunicColour = 192;
+    private const int MuseumCase = 105, CaseTunicColour = 162, CaseMedallion = 66;
     // (the racing gloves' colours, RaceTrackGloves: the red lit along its ramp, the white and the dark flat)
     private const int Red = 64, White = 62, Dark = 49;
     // (on Twinsen: a ramp's start is its darkest -- 64 came out maroon -- so his overalls' red six shades up it, as his jeans' blue is
@@ -149,6 +150,22 @@ internal static class CitadelOveralls
             HqrWriter.ReplaceInFile(bodyPath, t, bytes);
             others.Add((t, n));
         }
+        // (and the museum's case, the overalls on show until Twinsen takes them: entity 62's body, BODY.HQR 105 -- 106 the case empty --
+        // whose tunic is the palette's 162, its blue a little lighter behind the glass. LBRA issue #4, the user: "The container in the
+        // museum that contains Twinsen's racing outfit appears as his magic tunic until he collects it")
+        // The tunic's shape is the overalls' (OverallsInCase); where the writer can't take the case so, its tunic only in the suit's colour.
+        if (Entry(MuseumCase) is { } caseBytes)
+        {
+            byte[]? shaped = null;
+            try { shaped = OverallsInCase(caseBytes, Body.Read(bodies.Read(Everyday), 2)); }
+            catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { log.Add($"the museum's case: the overalls' shape left out ({e.Message}), the tunic in the suit's colour"); }
+            if (shaped is not null) { HqrWriter.ReplaceInFile(bodyPath, MuseumCase, shaped); log.Add($"the museum's case (BODY.HQR {MuseumCase}): the overalls on its stand in place of the tunic"); }
+            else if (RecolourPolygons(caseBytes, CaseTunicColour, Math.Min(Suit.Ramp + 15, Bright + 2)) is > 0 and var caseFaces)
+            {
+                HqrWriter.ReplaceInFile(bodyPath, MuseumCase, caseBytes);
+                others.Add((MuseumCase, caseFaces));
+            }
+        }
         HqrWriter.ReplaceInFile(bodyPath, Tunic, overalls.Write());
         foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, body.Write());
         // (the helmeted one: its entry again on a second pass, else one more at the file's end, and the hero's entity told of it)
@@ -218,6 +235,79 @@ internal static class CitadelOveralls
             body.Faces[i] = stripe ? f with { Colour = White, Material = 0, Texture = null } : f with { Colour = Bright, Material = -1, Texture = null };
         }
         return body;
+    }
+
+    // The museum's case with the overalls in it: the tunic's polygons (the palette's 162) out, and in their place the overalls -- the
+    // shirt's, the jeans' and the belt's polygons of Twinsen's everyday body made overalls, standing as he stands with no pose -- scaled
+    // to the tunic's height (no wider than it), on the same feet and middle, in the bone the tunic was in. Its little bits of the 66
+    // inside the tunic's box (its medallion) go with it. Behind the case's glass all of it is the glass's cyan, but the shape is the suit's.
+    // Null where the case has no tunic, or its polygons don't read in their blocks' order.
+    // (Written lit, every polygon of the case's as the type it had -- the glass see-through, the frames shaded: Body.Read keeps no types,
+    // and written as read the whole case came out flat and dark, its glass opaque -- the overalls' Gouraud, their white flat, as on him)
+    internal static byte[]? OverallsInCase(byte[] caseBytes, Body everyday)
+    {
+        var caseBody = Body.Read(caseBytes, 2);
+        var types = PolygonTypes(caseBytes);
+        if (types is null || types.Count != caseBody.Faces.Count || types.Where((t, i) => t.Colour != caseBody.Faces[i].Colour).Any()) return null;
+        if (types.Any(t => t.Type > 7)) return null;
+        // (its type 1 -- lit flat, from the face normals, which the writer doesn't keep: the frame's uprights came out dark -- lit from its
+        // points' normals instead, type 4, the game's own normals put back below)
+        for (var i = 0; i < caseBody.Faces.Count; i++) caseBody.Faces[i] = caseBody.Faces[i] with { Lba2Type = types[i].Type == 1 ? 4 : types[i].Type };
+        caseBody.Lit = true;
+        var clothes = Enumerable.Range(0, everyday.Faces.Count).Where(i => everyday.Faces[i].Colour is Shirt or Jeans or Belt).ToList();
+        var suit = Overalls(everyday);
+        var tunic = caseBody.Faces.Where(f => f.Colour == CaseTunicColour).ToList();
+        if (tunic.Count == 0 || clothes.Count == 0) return null;
+        var world = caseBody.World().ToList();
+        static (Vector3 Min, Vector3 Max) Box(IEnumerable<Vector3> ps) => (ps.Aggregate(new Vector3(float.MaxValue), Vector3.Min), ps.Aggregate(new Vector3(float.MinValue), Vector3.Max));
+        var (tMin, tMax) = Box(tunic.SelectMany(f => f.Points).Distinct().Select(p => world[p]).ToList());
+        var sw = suit.World();
+        var used = clothes.SelectMany(i => suit.Faces[i].Points).Distinct().ToList();
+        var (sMin, sMax) = Box(used.Select(p => sw[p]).ToList());
+        var size = sMax - sMin; var room = tMax - tMin;
+        var scale = MathF.Min(room.Y / MathF.Max(1, size.Y), MathF.Min(room.X / MathF.Max(1, size.X), room.Z / MathF.Max(1, size.Z)) * 1.15f);
+        var sMid = (sMin + sMax) / 2; var tMid = (tMin + tMax) / 2;
+        Vector3 Place(Vector3 p) => new(tMid.X + (p.X - sMid.X) * scale, tMin.Y + (p.Y - sMin.Y) * scale, tMid.Z + (p.Z - sMid.Z) * scale);
+        var local = used.Select((p, k) => (p, k)).ToDictionary(x => x.p, x => x.k);
+        var points = used.Select(p => Place(sw[p])).ToList();
+        var faces = clothes.Select(i => (suit.Faces[i].Points.Select(p => local[p]).ToArray(), suit.Faces[i].Colour)).ToList();
+        var bone = caseBody.Bones.FindIndex(b => tunic[0].Points[0] >= b.Start && tunic[0].Points[0] < b.Start + b.Count);
+        if (bone < 0) return null;
+        bool Inside(Vector3 p) => p.X >= tMin.X - 1 && p.X <= tMax.X + 1 && p.Y >= tMin.Y - 1 && p.Y <= tMax.Y + 1 && p.Z >= tMin.Z - 1 && p.Z <= tMax.Z + 1;
+        caseBody.Faces.RemoveAll(f => f.Colour == CaseTunicColour || f.Colour == CaseMedallion && f.Points.All(p => Inside(world[p])));
+        var at = caseBody.Bones[bone].Start + caseBody.Bones[bone].Count;
+        var shaped = AddToBone(caseBody, world, bone, points, faces);
+        for (var i = 0; i < shaped.Faces.Count; i++)
+            if (shaped.Faces[i].Lba2Type < 0) shaped.Faces[i] = shaped.Faces[i] with { Lba2Type = shaped.Faces[i].Colour == Bright ? 4 : 0 };
+        var bytes = shaped.Write();
+        // (the case's own points their own light: the normals the game's body had -- the writer's, worked out from the polygons, left
+        // its gold frames dark -- the overalls' points the writer's; a normal 8 bytes, in the points' order, the header's count at 48 and
+        // place at 52)
+        int oldCount = BitConverter.ToInt32(caseBytes, 48), oldAt = BitConverter.ToInt32(caseBytes, 52), newAt = BitConverter.ToInt32(bytes, 52);
+        if (BitConverter.ToInt32(bytes, 48) != oldCount + points.Count) return null;
+        for (var i = 0; i < oldCount; i++)
+            Array.Copy(caseBytes, oldAt + i * 8, bytes, newAt + (i < at ? i : i + points.Count) * 8, 8);
+        return bytes;
+    }
+
+    // An LBA2 body's polygons' types and colours, in their blocks' order (RecolourPolygons' walk); null if it doesn't read so
+    private static List<(int Type, int Colour)>? PolygonTypes(byte[] b)
+    {
+        if (b.Length < 96) return null;
+        int p = BitConverter.ToInt32(b, 68), end = BitConverter.ToInt32(b, 76);
+        if (p < 96 || end > b.Length || p > end) return null;
+        var list = new List<(int, int)>();
+        while (p < end)
+        {
+            if (p + 8 > end) return null;
+            int type = BitConverter.ToUInt16(b, p), count = BitConverter.ToUInt16(b, p + 2);
+            p += 8;
+            bool quad = (type & 32768) != 0, env = (type & 16384) != 0, texture = (type & 255) > 7;
+            var stride = env ? 16 : texture ? (quad ? 32 : 24) : 12;
+            if ((type & 255) > 23 || p + count * stride > end) return null;
+            for (var i = 0; i < count; i++, p += stride) list.Add((type & 255, b[p + 8]));
+        }
+        return list;
     }
 
     // The helmet on his head: a shell round the head bone's points -- red, a white stripe over the top, a dark visor across the face, the
