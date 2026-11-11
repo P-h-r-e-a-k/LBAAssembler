@@ -27,7 +27,11 @@ internal static class StellaEntities
 {
     public const int Scene = 390, Cell = 54, RickBar = 136, MoonIsland = 3;
     // the hall: round, its middle and radius (cells); the corridor (x, z); the lift's foot
-    private const double CentreX = 24, CentreZ = 32, Radius = 20;
+    // (the hall's floor: the cells whose middles are within the props' floor radius -- CitadelProps.Club: the round wall and the curb
+    // over the floor's stepped edge; inside the curb a ring of invisible solid cells, RingFrom out, ring layers high, holds Twinsen
+    // off the curb, open where the corridor comes in)
+    private const double CentreX = 24, CentreZ = 32, Radius = Citadel.CitadelProps.ClubFloorRadius / 512.0, RingFrom = 18.6;
+    private const int RingTop = 5;
     private const int CorridorX0 = 43, CorridorX1 = 56, CorridorZ0 = 30, CorridorZ1 = 34;
     private const int FootX0 = 55, FootX1 = 60, FootZ0 = 26, FootZ1 = 34;
     // the floor's layer (Rick's), its tile (3 x 1 x 3) and where its 3 x 3 repeats from
@@ -77,6 +81,9 @@ internal static class StellaEntities
 
         // where the floor is: the hall, the corridor, the lift's foot
         bool Hall(int x, int z) => (x + 0.5 - CentreX) * (x + 0.5 - CentreX) + (z + 0.5 - CentreZ) * (z + 0.5 - CentreZ) < Radius * Radius;
+        // (the corridor's and the lift foot's floor: their walls are Rick's bricks; the hall's are the props)
+        bool Passage(int x, int z) => x is >= 0 and < Size && z is >= 0 and < Size && !Hall(x, z) &&
+            ((x >= CorridorX0 && x <= CorridorX1 && z >= CorridorZ0 && z <= CorridorZ1) || (x >= FootX0 && x <= FootX1 && z >= FootZ0 && z <= FootZ1));
         bool Floor(int x, int z) => x is >= 0 and < Size && z is >= 0 and < Size &&
             (Hall(x, z) || (x >= CorridorX0 && x <= CorridorX1 && z >= CorridorZ0 && z <= CorridorZ1) || (x >= FootX0 && x <= FootX1 && z >= FootZ0 && z <= FootZ1));
         var edits = new List<Lba1GridCell>();
@@ -93,7 +100,7 @@ internal static class StellaEntities
             }
         }
         int Mod(int a, int m) => ((a % m) + m) % m;
-        int floors = 0, northWalls = 0, westWalls = 0, rims = 0;
+        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0;
         for (var z = 0; z < Size; z++)
         for (var x = 0; x < Size; x++)
         {
@@ -101,20 +108,35 @@ internal static class StellaEntities
             {
                 Put(x, FloorLayer, z, Tile, Mod(x - 1, 3) + 3 * Mod(z - 1, 3));
                 floors++;
+                // (the hall's ring of invisible solid cells inside the curb: block 0, collision 1 -- not where the corridor comes in)
+                double dx = x + 0.5 - CentreX, dz = z + 0.5 - CentreZ;
+                var angle = Math.Atan2(dz, dx) * 180 / Math.PI;
+                if (Hall(x, z) && Math.Sqrt(dx * dx + dz * dz) >= RingFrom && !(angle > Citadel.CitadelProps.ClubDoorFrom && angle < Citadel.CitadelProps.ClubDoorTo))
+                {
+                    for (var y = FloorLayer + 1; y <= RingTop; y++) Put(x, y, z, 0, 1);
+                    rings++;
+                }
                 continue;
             }
             // a wall where the floor's beside it: the north and west sides Rick's walls, the south and east a low wall
-            if (Floor(x, z + 1) || (Floor(x + 1, z + 1) && !Floor(x + 1, z)))
+            // (the corridor's walls low -- Rick's stone foot, as round the hall's open side: tall, they stood in front of the hall's
+            // north-east from the camera; the lift's foot keeps his tall walls)
+            if (x < FootX0 - 1 && (Passage(x, z + 1) || Passage(x + 1, z) || Passage(x + 1, z + 1)))
+            {
+                Put(x, FloorLayer + 1, z, LowWall, Mod(x + z, 2));
+                rims++;
+            }
+            else if (Passage(x, z + 1) || (Passage(x + 1, z + 1) && !Floor(x + 1, z)))
             {
                 Column(x, z, y => (North.X + Mod(x - North.X, 3), North.Z));
                 northWalls++;
             }
-            else if (Floor(x + 1, z))
+            else if (Passage(x + 1, z))
             {
                 Column(x, z, y => (West.X, West.Z + Mod(z - West.Z, y >= WestUpper ? 3 : 4)));
                 westWalls++;
             }
-            else if (Floor(x, z - 1) || Floor(x - 1, z) || Floor(x - 1, z - 1) || Floor(x + 1, z - 1) || Floor(x - 1, z + 1))
+            else if (Passage(x, z - 1) || Passage(x - 1, z) || Passage(x - 1, z - 1) || Passage(x + 1, z - 1) || Passage(x - 1, z + 1))
             {
                 Put(x, FloorLayer + 1, z, LowWall, Mod(x + z, 2));
                 rims++;
@@ -256,6 +278,9 @@ void comportement_3()
         var clubParts = new[] { Citadel.CitadelProps.MoonLiftPlatform, Citadel.CitadelProps.LiftRailBack, Citadel.CitadelProps.LiftRailLeft, Citadel.CitadelProps.LiftRailRight }
             .Select(g => SceneOps.AddActor(model, LiftActor(g, clubLift.Item1, floorY + ClubDown, clubLift.Item3))).ToArray();
         var clubPlate = clubParts[0];
+        // the hall's round wall and curb (CitadelProps.Club), round its middle, drawn into the backdrop
+        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubCurb }
+            .Select(g => SceneOps.AddActor(model, Backdrop(g, (int)(CentreX * 512) - Citadel.CitadelProps.ClubShiftX, floorY, (int)(CentreZ * 512) - Citadel.CitadelProps.ClubShiftZ))).ToArray();
         var clubTrack = $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({clubLow});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
                         $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({clubHigh});\nstop();\n";
         var ride = string.Concat(clubParts.Select(i => $"        set_track_obj({i}, label_{LiftRide});\n"));
@@ -308,6 +333,7 @@ void comportement_3()
         var clubScripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), Scene);
         clubScripts.SetText(0, LbaScript.ScriptKind.Life, heroLife);
         foreach (var i in clubParts) { clubScripts.SetText(i, LbaScript.ScriptKind.Life, Still()); clubScripts.SetText(i, LbaScript.ScriptKind.Track, clubTrack); }
+        foreach (var i in round) { clubScripts.SetText(i, LbaScript.ScriptKind.Life, Still()); clubScripts.SetText(i, LbaScript.ScriptKind.Track, "label(0);\nstop();\n"); }
         var clubBuilt = clubScripts.Build();
         if (!clubBuilt.Ok) { log.AddRange(clubBuilt.Errors.Select(e => $"Stella Entities left out: the club's lift script: {e}")); return log; }
 
@@ -321,9 +347,20 @@ void comportement_3()
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"Stella Entities: scene {Scene} (grid {gridNumber}, Rick's bar's block library {raw[0]}): a round hall {Radius * 2:0} cells across, the corridor and the " +
-                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall; Baldino's cell (scene {Cell}, its grid now " +
+                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge; Baldino's cell (scene {Cell}, its grid now " +
                 $"{cellGridNumber}): the hidden lift in its corner by the door (cells x 32-33, z 31-32), Action on it and down, and back up on the club's");
         return log;
+    }
+
+    // A piece of the room drawn into the backdrop as bricks are (OBJ_BACKGROUND, and NO_PRE_CLIP: a big body whose middle may be off the
+    // screen while it is on it), no shadow
+    private const uint ObjBackground = 1u << 13, NoPreClip = 1u << 19;
+    private static SceneActorModel Backdrop(int generic, int x, int y, int z)
+    {
+        var a = Citadel.CitadelProps.Actor(generic, x, y, z);
+        a.Flags |= ObjBackground | NoPreClip;
+        a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+        return a;
     }
 
     // A lift's part: a carrier on its own track, run from the scene's start (an actor's track starts by itself only when it moves by it)
