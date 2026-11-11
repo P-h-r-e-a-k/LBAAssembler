@@ -219,6 +219,8 @@
  *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
  *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
  *                                (Breakdown, RaceMod_Slide) -- or till the variable reaches <least>: the filters fitted mend it
+ *     companion=<entity> <armour> (2026-11-11) that entity's actor with that armour, in any scene: put beside Twinsen as the scene starts
+ *                                and as he gets out of his car (Companion: the story's Zoe from chapter 2)
  *     car_home=<scene> <away var> <fetch var>   (2026-11-11) the away variable 1 while the story car stands abandoned in another scene of
  *                                the island; the fetch variable 1 takes it home (CarHome)
  *     victory_lap=<x> <z>        (2026-11-11) the time to beat beaten: a lap of honour, the autodrive at the wheel, then the car pulls up
@@ -1317,6 +1319,12 @@ static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000
 // car_home= (2026-11-11): the story car's home scene (-1 none), the variable told whether the car stands abandoned in another scene of the
 // island, the variable that fetches it home; what the last look saw (the scene, the car's scene, NumBuggy)
 static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = -2, s_carSeenCube = -2, s_carSeenNum = -1, s_carHomeIsland = -2;
+// companion=<entity> <armour> (2026-11-11): the story's companion -- Zoe, from chapter 2 (docs/LBRA_STORY_SCRIPT.md, "Twinsen and Zoe"): the
+// actor of that entity whose armour is that mark, in any scene, put beside Twinsen as the scene starts and as he gets out of his car
+// (Companion); her script does the rest (following him, out of sight while he drives or while the scene has a Zoe of its own)
+static int s_compEntity = -1, s_compMark = 0, s_compCube = -2, s_compWasCar = 0;
+#define RACE_COMPANION_BACK 700.0          // beside him: this far behind ...
+#define RACE_COMPANION_SIDE 450.0          // ... and this far to his left
 // hover= (2026-11-08): the entity (-1 none), its height over the ground, over the road, and how near the road that holds
 static int s_hoverEntity = -1, s_hoverHeight = 300, s_hoverRoad = 1600, s_hoverReach = 3072;
 static char s_brkText[96];
@@ -4681,6 +4689,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
         else if (!strcmp(key, "no_suit")) s_noSuit = atoi(v) != 0;
         else if (!strcmp(key, "hover")) { if (sscanf(v, "%d %d %d %d", &s_hoverEntity, &s_hoverHeight, &s_hoverRoad, &s_hoverReach) < 4) s_hoverEntity = -1; }
+        else if (!strcmp(key, "companion")) { if (sscanf(v, "%d %d", &s_compEntity, &s_compMark) != 2) s_compEntity = -1; s_compCube = -2; }
         else if (!strcmp(key, "car_home")) {
             if (sscanf(v, "%d %d %d", &s_carHome, &s_carAwayVar, &s_carFetchVar) != 3 || s_carAwayVar < 0 || s_carAwayVar > 254 || s_carFetchVar < 0 || s_carFetchVar > 254) s_carHome = -1;
             s_carSeenAt = -2; s_carHomeIsland = -2;
@@ -5820,6 +5829,43 @@ static void ChaseStart(void) {
 // again whenever the scene, the car's scene or the car changes: LoadSceneIsland reads the scene's file); the fetch variable set to 1 --
 // Zoe's line -- takes the car away from there: NumBuggy 0, so the home scene's car script makes it again under the carport
 // (RaceTrackScenes.StartBuggyScript: init_buggy(1) at its home), and nowhere else shows one.
+static void Companion(void) {
+    if (s_compEntity < 0 || NewCube != -1) return;
+    const int inCar = Comportement == C_BUGGY;
+    int idx = -1;
+    for (int n = 1; n < (int)NbObjets && idx < 0; n++)
+        if (ListObjet[n].IndexFile3D == s_compEntity && ListObjet[n].Armure == s_compMark && !(ListObjet[n].WorkFlags & OBJ_DEAD)) idx = n;
+    if (idx >= 0 && (s_compCube != (int)NumCube || (s_compWasCar && !inCar))) {
+        T_OBJ_3D *h = &ListObjet[NUM_PERSO].Obj, *c = &ListObjet[idx].Obj;
+        const double a = (h->Beta & 4095) * 2 * 3.14159265358979 / 4096, fx = sin(a), fz = cos(a);
+        c->X = (S32)(h->X - fx * RACE_COMPANION_BACK + fz * RACE_COMPANION_SIDE);
+        c->Z = (S32)(h->Z - fz * RACE_COMPANION_BACK - fx * RACE_COMPANION_SIDE);
+        c->Y = h->Y;
+        c->Beta = h->Beta;
+        Log_Info("[racemod] companion: actor %d beside Twinsen at (%d,%d,%d) in scene %d%s", idx, (int)c->X, (int)c->Y, (int)c->Z, (int)NumCube,
+                 s_compCube != (int)NumCube ? "" : ", out of the car");
+    }
+    // (in sight on foot only, and where the scene has no Zoe of its own in sight -- the story's own Zoes, its scenes': one Zoe at a time)
+    if (idx >= 0) {
+        int other = 0;
+        for (int n = 1; n < (int)NbObjets && !other; n++)
+            if (n != idx && ListObjet[n].IndexFile3D == s_compEntity && !(ListObjet[n].Flags & INVISIBLE) && !(ListObjet[n].WorkFlags & OBJ_DEAD)
+                && ListObjet[n].Obj.Y > RACE_OUT_OF_SIGHT_Y) other = 1;
+        T_OBJET *c = &ListObjet[idx];
+        if (inCar || other) { c->Flags |= INVISIBLE; c->Flags &= ~CHECK_OBJ_COL; }
+        else if (c->Flags & INVISIBLE) {
+            c->Flags &= ~INVISIBLE; c->Flags |= CHECK_OBJ_COL;
+            // (back in sight: beside him, wherever she was left)
+            T_OBJ_3D *h = &ListObjet[NUM_PERSO].Obj;
+            const double a = (h->Beta & 4095) * 2 * 3.14159265358979 / 4096, fx = sin(a), fz = cos(a);
+            c->Obj.X = (S32)(h->X - fx * RACE_COMPANION_BACK + fz * RACE_COMPANION_SIDE);
+            c->Obj.Z = (S32)(h->Z - fz * RACE_COMPANION_BACK - fx * RACE_COMPANION_SIDE);
+            c->Obj.Y = h->Y;
+        }
+    }
+    s_compCube = (int)NumCube; s_compWasCar = inCar;
+}
+
 static void CarHome(void) {
     if (s_carHome < 0) return;
     const S32 driving = ListObjet[NUM_PERSO].Move == MOVE_BUGGY || ListObjet[NUM_PERSO].Move == MOVE_BUGGY_MANUAL;
@@ -5856,6 +5902,7 @@ void RaceMod_Story(void) {
     }
     if (!RaceMod_Active()) return;
     CarHome();
+    Companion();
     const S32 now = TimerRefHR;
     // (clovers_fill=: the clovers filled to the boxes -- the lava lake's dive, after the life it cost)
     if (s_cloversFill >= 0 && ListVarGame[s_cloversFill] == 2) {
@@ -13527,6 +13574,7 @@ void RaceMod_LoadFile(const char *path) {
     ResetTrack();
     s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
+    s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;

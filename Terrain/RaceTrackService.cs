@@ -920,6 +920,14 @@ internal static class RaceTrackService
     public static (List<string> Log, StoryInfo? Info) Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes,
         List<RaceTrackStory.PendingTravel>? travels = null)
     {
+        var told = IslandStory(gameDirectory, report, options, town, scenes, travels);
+        // (and Zoe with Twinsen from chapter 2, in every outside scene of the island: RaceTrackStory.Companion.cs)
+        if (options.Story) told.Log.AddRange(RaceTrackStory.Companion(gameDirectory, options.Island));
+        return told;
+    }
+    private static (List<string> Log, StoryInfo? Info) IslandStory(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes,
+        List<RaceTrackStory.PendingTravel>? travels)
+    {
         if (!options.Story) return (new List<string>(), null);
         if (options.Island.IleFile == RaceTrackIsland.Citadel.IleFile && town is { Own: true } && scenes.Twin is { } townScenes)
         {
