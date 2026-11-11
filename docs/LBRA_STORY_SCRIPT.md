@@ -40,6 +40,13 @@ Twinsen is the one you play, always. There's no switching.
   - Racing each other is for the Track select races outside the story, where two-player mode is as it is today.
   - This is built on the two-player mode that already exists (two game processes, the second drawn in the first as a ghost car). In the
     story, the second process plays Zoe; the first owns the story.
+  - **As built (2026-11-11):** Story Mode's page has a **Two players** row (the screens chosen as for two players' races), then New
+    story or Continue. Player 2's window waits ("You are Zoe"). Player 1's game saves the story for her (`zoe.lba`) as she joins and as
+    Twinsen enters each scene, and hers loads it: she is put beside him. The game's and the scene's variables follow, and the two
+    players see each other through the scene's own actors (Zoe, and a Twinsen double in her game), so indoors too. Her Action gives
+    her hint lines and reaches no one else; in a race, Action with his car coming by the pit box gives his stop. She can't go through
+    a door by herself. Not done yet: Action at a pickup (her fetching), and the story's own Zoes (the yard's, the house's) are still
+    there beside her. Engine: RACEMOD.CPP `StoryTwo`; docs/LBA2_ONLINE_RACES.md "Story Mode with two players".
 - **Where she is in a scene:** with one player, the companion actor stands beside Twinsen when a scene loads. She's left out of a few
   places:
   - the dream (chapter 0);

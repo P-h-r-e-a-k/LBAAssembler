@@ -51,6 +51,24 @@ all globals, so a second view in one game would mean rewriting the renderer's st
 
 `LBA2_LOCAL_AREA` and `LBA2_LOCAL_PADS` are for tests: a part of the screen in place of all of it, with no focus taken, and a count of pads.
 
+## Story Mode with two players
+
+Player 2 is Zoe (docs/LBRA_STORY_SCRIPT.md "Two players"). Story Mode's **Two players** row starts player 2's game as for races, with `LBA2_STORY_ZOE`
+(`RaceNet_SpawnStory`); it waits on its own page (`StoryZoePage`) instead of the lobby. Player 1's game owns the story:
+
+- **STORY** (reliable, player 1 to player 2): a save to load, `zoe.lba` in player 1's saves (`RaceGame_StoryShare`): as player 2 joins, and as player 1 enters a scene
+  (not a race's laps). Or the game's 256 and the scene's 80 variables, when they change (every 300 ms at most) and every 3 s anyway.
+- Both games send their hero 30 times a second as a car sample with `RACENET_CAR_STORY`: on foot the scene (`Lap`), the place, the facing and the generic animation (`Progress`);
+  in the car, the car's ghost sample.
+- Each game shows the other by an actor of the scene glued to the other's sample (RACEMOD.CPP `StoryTwo`), so it is drawn and sorted as any actor, in rooms too:
+  player 1's game the companion Zoe, player 2's a Twinsen double (the hero's entity), Zoe herself glued to player 2's hero, who isn't drawn. Player 1's car in player 2's
+  game is drawn as two players' races draw the other's (`DrawStoryCar`). The build puts both actors in every scene of the story's islands (`two_players=`, RaceTrackStory.Companion.cs).
+- Player 2's game: puts Zoe beside Twinsen after each load, changes no scene by itself (`RaceMod_CubeChangeAllowed`), keeps nothing, and quits when player 1's goes.
+  Its Action reaches only Zoe (`RaceMod_ActionFor`: her hint lines); with Twinsen's car coming by and her in the pit box, it sends an EVENT (`RACENET_EV_PIT`) and player 1's
+  game gives the pit stop (`PitServe`). With two players the drawn pit crew and the slow drive-through stop are off.
+- Tests: the console's `storytwo [x y w h]` (no windows moved), `LBA2_P2_HEADLESS`, `LBA2_P2_LISTEN`; player 2 with no race game menu (a scripted run) joins and waits before its
+  menus (`RaceGame_StoryZoeWait`). E:\dump\TEMP\nov11\two_run.sh (the scripted playthrough plus player 2's console) and run_story2.ps1 (the real menus).
+
 ## How it works
 
 `NETRACE.CPP` is the game's side. An online race is a time trial's race file with `online=1`, no ghost, and its race's power-ups added (`CopyPowerUps`), so there are no
