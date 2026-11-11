@@ -692,6 +692,41 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // gridblocks <game> <scene> <layer> <x0> <z0> <x1> <z1>: the real block numbers of a region of a scene's grid at one layer (0 empty),
+    // then the sizes of the blocks seen (cells x, layers y, cells z) -- for laying out a room of the scene's own library (2026-11-11)
+    public static int GridBlocks(string[] args)
+    {
+        var backend = new LBAAssembler.Grids.Lba2GridBackend(args[1]);
+        if (backend.GridOfScene(int.Parse(args[2])) is not { } grid) { Console.WriteLine("no grid"); return 1; }
+        var raw = backend.RawGrid(grid);
+        var cells = LBAAssembler.Lba1.Lba1GridCodec.Decode(LBAAssembler.Grids.Lba2GridBackend.ToLba1Shape(raw));
+        int y = int.Parse(args[3]), x0 = int.Parse(args[4]), z0 = int.Parse(args[5]), x1 = int.Parse(args[6]), z1 = int.Parse(args[7]);
+        var seen = new SortedSet<int>();
+        Console.WriteLine($"layer {y}, x {x0}-{x1} (columns), z {z0}-{z1} (rows); block:pos");
+        for (var z = z0; z <= z1; z++)
+        {
+            var row = new System.Text.StringBuilder($"z {z,2}:");
+            for (var x = x0; x <= x1; x++)
+            {
+                var at = ((z * 64 + x) * 25 + y) * 2;
+                int blk = cells[at], pos = cells[at + 1];
+                row.Append(blk == 0 ? "   .   " : $" {blk,3}:{pos,-2}");
+                if (blk != 0) seen.Add(blk);
+            }
+            Console.WriteLine(row.ToString());
+        }
+        var bkg = LBAAssembler.HqrFile.Parse(System.IO.File.ReadAllBytes(System.IO.Path.Combine(args[1], "LBA_BKG.HQR")));
+        var header = new LBAAssembler.Maps.MapBricks.BkgHeader(bkg.Read(0));
+        var library = bkg.Read(header.Bll + raw[0]);
+        Console.WriteLine($"library {raw[0]}:");
+        foreach (var blk in seen)
+        {
+            var at = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(library.AsSpan(blk * 4));
+            Console.WriteLine($"  block {blk}: {library[at]} x {library[at + 1]} x {library[at + 2]}");
+        }
+        return 0;
+    }
+
     // objfixsize <game> <entry>...: each OBJFIX.HQR model's extent (x, y, z, min and max), to size a new inventory object as the game's are
     public static int ObjFixSize(string[] args)
     {

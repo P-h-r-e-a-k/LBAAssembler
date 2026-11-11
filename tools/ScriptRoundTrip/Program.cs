@@ -96,6 +96,7 @@ internal static class Program
             "bodyname" => RaceTrackCommand.BodyName(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
             "gridtop" => RaceTrackCommand.GridTop(args),
+            "gridblocks" => RaceTrackCommand.GridBlocks(args),
             "spankposes" => RaceTrackCommand.SpankPoses(args),
             "trackgrep" => RaceTrackCommand.TrackGrep(args),
             "griddump" => RaceTrackCommand.GridDump(args),
