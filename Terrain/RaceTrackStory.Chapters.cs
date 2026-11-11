@@ -2054,6 +2054,54 @@ void comportement_{HeroWatching}()
         });
     }
 
+    // The landing's three islanders: one Action, one answer -- the nearest's (the user, 2026-11-10's leftovers: at the aliens' landing one
+    // Action was answered by all three in reach, each in turn). A script can't compare distances to others, so it's done in rings over
+    // the frames after the Action: any of them in reach (1500) asks (var_cube CrowdAsk); the first of them, the clock, widens the ring a
+    // frame at a time -- 600, 1000, 1500 from Twinsen -- and the first inside it answers (CrowdSaid), the rest keep quiet; the clock clears
+    // all three once one has answered or the ring is past 1500.
+    private const int CrowdAsk = 61, CrowdRing = 62, CrowdSaid = 63;
+    private static string CrowdTalker(bool clock, string talk) => $@"void comportement_0()
+{{
+    if (2 == chapter())
+    {{
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+{(clock ? $@"    if (1 == var_cube({CrowdSaid}) || 3 < var_cube({CrowdRing}))
+    {{
+        set_var_cube({CrowdAsk}, 0);
+        set_var_cube({CrowdRing}, 0);
+        set_var_cube({CrowdSaid}, 0);
+    }}
+    if (1 == var_cube({CrowdAsk}))
+    {{
+        add_var_cube({CrowdRing}, 1);
+    }}
+" : "")}    swif (1 == action())
+    {{
+        if (1500 > distance(0) && {Driving} != comportement_hero())
+        {{
+            set_var_cube({CrowdAsk}, 1);
+        }}
+    }}
+    if (1 == var_cube({CrowdAsk}) && 0 == var_cube({CrowdSaid}))
+    {{
+        if ((1 == var_cube({CrowdRing}) && 600 > distance(0)) || (2 == var_cube({CrowdRing}) && 1000 > distance(0)) || (3 == var_cube({CrowdRing}) && 1500 > distance(0)))
+        {{
+            set_var_cube({CrowdSaid}, 1);
+{talk}
+        }}
+    }}
+}}
+";
+
     // ---- chapter 2's people in town (scenes 42, 3, 43, 8) ---------------------------------------------------------------------------
     private static void TownPeople(StoryParts p)
     {
@@ -2063,7 +2111,7 @@ void comportement_{HeroWatching}()
         {
             (CopyOf(p.Originals, AliensScene, CrowdQuetch), ChapterLine.Quetch, 2.5),
             (CopyOf(p.Originals, AliensScene, CrowdGrobo), ChapterLine.Grobo, -2.5),
-            (Copy(p.Originals, TavernScene, TavernRabbibunny), ChapterLine.Rabbibunny, 4.5),
+            (Copy(p.Originals, TavernScene, TavernRabbibunny), ChapterLine.Rabbibunny, 6.0),   // (6: 3.5 cells from the quetch -- at 4.5, 2, walking up to her came nearer the quetch, who answered: one Action, the nearest)
         };
         p.Edit(AliensScene, "three islanders round the Esmers' landing, each with a word on the night's work", model =>
         {
@@ -2074,7 +2122,7 @@ void comportement_{HeroWatching}()
                 if (who is null || OffRoad(p.Town, esmer.X + side, esmer.Z + 1.5, 1, 4) is not { } at) continue;
                 if ((int)Math.Floor(at.X / 64) != model.CubeX || (int)Math.Floor(at.Z / 64) != model.CubeY) continue;
                 Place(who, model, Facing(at, esmer.X, esmer.Z));
-                edits.Add(p.Add(model, who, Talker("2 == chapter()", $"            message({p.Say(line)});")));
+                edits.Add(p.Add(model, who, CrowdTalker(edits.Count == 0, $"            message({p.Say(line)});")));
             }
             if (edits.Count == 0) throw new NotTheGames("no room round the landing");
             return scripts => { foreach (var e in edits) e(scripts); };
