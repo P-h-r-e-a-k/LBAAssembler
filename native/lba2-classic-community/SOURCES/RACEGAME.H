@@ -33,7 +33,7 @@ void RaceGame_TestKeys(int down);           // (tests: player 2's keys as if dow
 void RaceGame_SceneEntered(void);           // OBJECT.CPP: a scene entered (the autosave's moment) -- Story Mode's story.lba kept there
 int RaceGame_StoryTwo(void);              // Story Mode with two players: player 1's game, player 2's joined (2026-11-11, player 2 is Zoe)
 int RaceGame_StoryZoe(void);              // ... player 2's game, Zoe's, following player 1's story
-void RaceGame_StoryShare(void);
+int RaceGame_StoryShare(void);
 void RaceGame_StoryZoeJoin(void);
 int RaceGame_StoryZoeWait(char *path, int size);   // ... before the menus (tests): the first save to load waited for          // ... player 2's started straight into a game (tests): joined from it
 int RaceGame_StoryTwoTest(int x, int y, int w, int h);   // (tests: the console's storytwo)           // ... player 1's: the story kept now and player 2's told to load it

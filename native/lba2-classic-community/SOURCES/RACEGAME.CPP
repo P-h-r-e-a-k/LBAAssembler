@@ -282,6 +282,7 @@ static int s_storyTwo = 0, s_storyZoe = 0;
 static int s_gameMenus = 0;                 // in the race game's menus (RaceGame_Menu)
 static int s_storyOn = 0;                   // the story is what is being played (Story Mode's New story or Continue, not a race since)
 #define RG_STORY_SAVE "story.lba"           // the story's own save, in the saves' folder
+#define RG_ZOE_SAVE "zoe.lba"               // ... and with two players, the story as player 2's game is told to load it (RaceGame_StoryShare)
 static int s_lastSp = 0, s_lastTrial = 0;
 static int s_lastTrack = -1;                // the track chosen last (its place in s_sp)
 static int s_level = 1;                     // the difficulty chosen last: 0 easy, 1 medium, 2 hard (RACEGAME_SETTINGS.TXT)
@@ -3005,8 +3006,8 @@ static void KeepStory(void) {
 void RaceGame_SceneEntered(void) {
     // (player 2's Zoe keeps nothing: the story is player 1's)
     if (s_storyZoe) return;
-    // (with two players, player 1's game keeps it and tells player 2's to load it whatever the run's autosaves -- RaceGame_StoryShare)
-    if (RaceGame_StoryTwo()) { RaceGame_StoryShare(); return; }
+    // (with two players, player 2's game told to load the scene too, whatever the run's autosaves -- not a race's laps: RaceGame_StoryShare)
+    if (RaceGame_StoryTwo() && !RaceMod_CarRacing()) RaceGame_StoryShare();
     if (!s_storyOn || Save_AutoDisabled() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
     char story[ADELINE_MAX_PATH];
     StorySave(story);
@@ -3055,14 +3056,16 @@ void RaceGame_StoryZoeJoin(void) {
     s_storyZoe = 1; s_storyOn = 1; s_localGuest = 1;
     Log_Info("[racegame] two players: this game is Zoe's, joined from the game -- waiting for player 1's story");
 }
-// (player 1's: the story kept now and player 2's told to load it -- as player 2 first joins; not mid-race)
-void RaceGame_StoryShare(void) {
-    if (!RaceGame_StoryTwo() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
-    char story[ADELINE_MAX_PATH];
-    StorySave(story);
-    CurrentSaveGameTo(RG_STORY_SAVE);
-    RaceNet_StoryLoad(story, (int)NumCube);
-    Log_Info("[racegame] two players: the story kept and player 2 told to load it, scene %d", (int)NumCube);
+// (player 1's: the story as it is now saved for player 2's game -- a save of its own, zoe.lba, player 1's own story.lba left as it is -- and
+// player 2's told to load it: as player 2 joins (even in his car), and as each scene is entered. Non-zero: told)
+int RaceGame_StoryShare(void) {
+    if (!RaceGame_StoryTwo() || ListObjet[NUM_PERSO].LifePoint <= 0) return 0;
+    char zoe[ADELINE_MAX_PATH];
+    GetSavePath(zoe, ADELINE_MAX_PATH, RG_ZOE_SAVE);
+    CurrentSaveGameTo(RG_ZOE_SAVE);
+    RaceNet_StoryLoad(zoe, (int)NumCube);
+    Log_Info("[racegame] two players: player 2 told to load the story at scene %d (%s)", (int)NumCube, zoe);
+    return 1;
 }
 
 // (tests: the run played as Story Mode's story -- the console's `storymode` -- as if the menu had started it: its scene changes keep
