@@ -133,7 +133,9 @@ internal static class MapInstall
         var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
         var beforeGrid = InstalledBefore(map, directory) is [var was] ? new Lba2GridBackend(directory).GridOfScene(was) : null;
         // (its own block library, bricks and fragments first -- MapBricks: they move the entries after them; the grid's header names them)
-        var (library, fragments) = MapBricks.Install(map, bkg);
+        // (a folder the race tracks were built into runs the race engine, which takes 65535 bricks -- and holds over 20000 once built)
+        var (library, fragments) = MapBricks.Install(map, bkg,
+            File.Exists(Path.Combine(directory, LBAAssembler.Terrain.RaceTrackService.InfoFile)) ? MapBricks.RaceEngineMaxBricks : MapBricks.RetailMaxBricks);
         var gridBytes = (byte[])map.Grid!.Clone();
         gridBytes[0] = (byte)library; gridBytes[1] = (byte)fragments;
         var header = bkg.Read(0);

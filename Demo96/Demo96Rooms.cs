@@ -257,7 +257,8 @@ internal static class Demo96Rooms
         foreach (var r in rooms)
         {
             var map = MapInstall.ExportLba2Interior(converted, r.DemoScene, r.Name);
-            var (library, fragments) = MapBricks.Install(map, bkg);
+            // (the race mod only: its engine, which LBRA and the editor ship, takes 65535 bricks -- a folder already built holds over 20000)
+            var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
             grid[0] = (byte)library; grid[1] = map.Fragments is null ? oldFragments[r.Slot] : (byte)fragments;
             if (r.Pave is { } pave)

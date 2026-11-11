@@ -73,8 +73,11 @@ internal static class RaceTrackService
     public static bool PrivateCars { get; set; } = true;
     // What every build changes, whichever island it is on; the island's own ground and decor bodies are added to these (RaceTrackIsland).
     public static readonly string[] Files = { "SCENE.HQR" };
-    // (and the holomap's pictures and arrows, and the texts the story adds to)
-    public static readonly string[] ExtraFiles = { "ANIM.HQR", "RESS.HQR", "BODY.HQR", RaceTrackHolomap.File, "TEXT.HQR", "OBJFIX.HQR" };
+    // (and the holomap's pictures and arrows, and the texts the story adds to; and LBA_BKG.HQR, the interiors' bricks and grids the story's
+    // rooms go into -- the 1996 demo's, the night house, the museum, the lift, the Tralu's bar: kept and started from like the rest, or
+    // every build added its bricks again after the last build's, ~950 a build, until the 1996 demo's rooms stopped a rebuild at the
+    // retail engine's 20000 (the user, 2026-11-10: "Nothing was changed: The map's bricks would make 21545 in LBA_BKG.HQR"))
+    public static readonly string[] ExtraFiles = { "ANIM.HQR", "RESS.HQR", "BODY.HQR", RaceTrackHolomap.File, "TEXT.HQR", "OBJFIX.HQR", "LBA_BKG.HQR" };
     public static string[] FilesFor(RaceTrackIsland island) => Files.Concat(island.KeptFiles).ToArray();
     public static string[] AllFiles => Files.Concat(ExtraFiles).Concat(RaceTrackIsland.All.SelectMany(i => i.KeptFiles)).Distinct().ToArray();
     public const string InfoFile = "RACETRACK.JSON";
