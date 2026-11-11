@@ -1323,6 +1323,7 @@ static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = 
 // actor of that entity whose armour is that mark, in any scene, put beside Twinsen as the scene starts and as he gets out of his car
 // (Companion); her script does the rest (following him, out of sight while he drives or while the scene has a Zoe of its own)
 static int s_compEntity = -1, s_compMark = 0, s_compCube = -2, s_compWasCar = 0;
+#define RACE_WALK_OVER 118                  // (an actor's armour that has others walk over it: RaceMod_NoCollide)
 #define RACE_COMPANION_BACK 700.0          // beside him: this far behind ...
 #define RACE_COMPANION_SIDE 450.0          // ... and this far to his left
 // hover= (2026-11-08): the entity (-1 none), its height over the ground, over the road, and how near the road that holds
@@ -12460,7 +12461,13 @@ S32 RaceMod_CarThrough(S32 num) {
     return 1;
 }
 
+// (and not stood on, nor bumped by anything moving: OBJECT.CPP's other collision loops -- the footprints' box is the props' entity's)
+S32 RaceMod_WalkOver(S32 numobj) { return numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER; }
+
 S32 RaceMod_NoCollide(S32 numobj) {
+    // (anything marked to be walked over -- its armour RACE_WALK_OVER: the race story's painted footprints in the sewers, flat on the floor, which
+    // stopped Twinsen dead as boxes; any scene, outside or in)
+    if (numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER) return 1;
     // (the car lapping on its own, parade=, is solid, as the opponents' cars are: it went through Twinsen and his car alike until the
     // user's test, 2026-11-04, "Raph's car has no collision". It still keeps to its line whatever is in its way -- what it runs into is
     // pushed out of it, as by an opponent's. Except as it rolls into its park, a short drive straight there from beside Twinsen: across

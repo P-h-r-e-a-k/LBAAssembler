@@ -986,6 +986,79 @@ void comportement_1()
             }}", 1500)));
     }
 
+    // The thief's footprints in the painter's wet paint (the user, 2026-11-10: "the story outline mentions Twinsen following the thief's paint
+    // footsteps through the sewers, but these don't exist, nor does the painter's line about them" -- the line, "...trod on my wet paint.
+    // Follow the footprints.", is the painter's second): a trail of painted prints (CitadelProps.Footprints, a pair a stride) from the
+    // painter's walkway the way the thief went -- through the doorway down onto the big walkway, across it and the bridge to the far
+    // tunnel's door (scene 17, Demo96Rooms' way), then on through the far halls to the dead end where he's cornered (scene 18) -- each
+    // pair on the floor there (the scene's grid), turned the way he ran, walked over (no collisions). From his going down the hatch (Q_THIEF
+    // ThiefDown), in chapter 1.
+    private static readonly (int Scene, (int X, int Y, int Z)[] Way)[] ThiefWay =
+    {
+        (Sewers, new[] { (17664, 1536, 15616), (17152, 1536, 15616), (17152, 1536, 18688), (16640, 1280, 18688), (16128, 1024, 18688), (13568, 1024, 18688),
+                         (13568, 1024, 15616), (9472, 1024, 15616), (9472, 1024, 15104), (8448, 1024, 15104), (8448, 1024, 9984), (768, 1024, 9984) }),
+        (FarSewer, new[] { (31860, 1280, 2632), (27392, 1280, 2816), (27392, 1280, 1280), (16128, 1280, 1280), (16128, 1280, 1792), (13568, 1280, 1792),
+                           (13568, 1280, 2304), (13056, 1280, 2300) }),
+    };
+    private const int TrailStride = 768;
+    internal const int WalkOverArmour = 118;
+    private static void ThiefTrail(StoryParts p)
+    {
+        foreach (var (scene, way) in ThiefWay)
+            p.Edit(scene, $"the thief's painted footprints, {way.Length} points of his way", model =>
+            {
+                var backend = new LBAAssembler.Grids.Lba2GridBackend(p.Store.Directory);
+                var shape = backend.GridOfScene(scene) is { } g ? LBAAssembler.Grids.Lba2GridBackend.ToLba1Shape(backend.RawGrid(g)) : null;
+                // (the floor under a place: of the column's floors he could stand on -- a brick, three free layers over it -- the one nearest
+                // the height the way says he walks at: not the top of the wall beside it)
+                int Floor(int x, int y, int z)
+                {
+                    if (shape is null) return y;
+                    int cx = Math.Clamp(x / 512, 0, 63), cz = Math.Clamp(z / 512, 0, 63);
+                    bool Solid(int layer) => layer is >= 0 and < 25 && LBAAssembler.Lba1.Lba1GridEdit.Get(shape, cx, layer, cz).Block != 0;
+                    int? best = null;
+                    for (var t = 1; t < 23; t++)
+                        if (Solid(t - 1) && !Solid(t) && !Solid(t + 1) && !Solid(t + 2) && (best is null || Math.Abs(t * 256 - y) < Math.Abs(best.Value - y))) best = t * 256;
+                    return best ?? y;
+                }
+                var edits = new List<Action<SceneScripts>>();
+                var carry = TrailStride / 2.0;
+                for (var i = 0; i + 1 < way.Length; i++)
+                {
+                    var (a, c) = (way[i], way[i + 1]);
+                    double dx = c.X - a.X, dz = c.Z - a.Z, len = Math.Sqrt(dx * dx + dz * dz);
+                    if (len < 1) continue;
+                    var beta = RaceTrackMath.Turn(Math.Atan2(dx, dz));
+                    for (var t = carry; t < len; t += TrailStride)
+                    {
+                        int x = (int)Math.Round(a.X + dx * t / len), z = (int)Math.Round(a.Z + dz * t / len);
+                        var print = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Footprints, x, Floor(x, a.Y, z), z, beta);
+                        print.Armor = WalkOverArmour;   // (walked over: RACEMOD.CPP RaceMod_NoCollide -- as boxes they stopped him dead)
+                        edits.Add(p.Add(model, print, $@"void comportement_0()
+{{
+    if (2 > chapter() && {ThiefDown} <= var_game({QThief}))
+    {{
+        obj_col(0);
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+}}
+"));
+                        carry = t + TrailStride - len;
+                    }
+                    if (carry < 0) carry = 0;
+                }
+                return scripts => { foreach (var e in edits) e(scripts); };
+            });
+    }
+
     // The Weather Wizard's tent (scene 21): the game's trade of the Incandescent Pearl for the Ring of Lightning (item 19) -- its slot is
     // the story's errands' now (RaceTrackStory.Errands.cs). The trade is never started: the pearl stays Twinsen's and nothing gives 19.
     private static void WizardNoRing(StoryParts p) => p.Edit(WizardTent, "the Weather Wizard's tent: no Ring of Lightning for the pearl (item 19 is the errands' slot)", _ => scripts =>
@@ -1002,6 +1075,7 @@ void comportement_1()
         Thief(p);
         PharmacyAfterThief(p);
         PharmacyCustomer(p);
+        ThiefTrail(p);
         p.Log.AddRange(ErrandsInstall(p.Store.Directory));
         WizardNoRing(p);
         StormPeople(p);

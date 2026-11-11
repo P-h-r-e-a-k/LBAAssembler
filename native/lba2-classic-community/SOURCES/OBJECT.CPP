@@ -1977,7 +1977,7 @@ S32 CheckObjCol(U8 numobj) {
             if ((n != numobj)
                     AND(ptrobjt->Obj.Body.Num != -1)
                         AND(!(ptrobjt->Flags & INVISIBLE))
-                            AND(ptrobjt->CarryBy != numobj)) {
+                            AND(ptrobjt->CarryBy != numobj) AND !RaceMod_WalkOver(n)) {
                 xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
                 xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
                 yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;
@@ -2016,7 +2016,7 @@ S32 CheckObjCol(U8 numobj) {
             if ((n != numobj)
                     AND(ptrobjt->Obj.Body.Num != -1)
                         AND(!(ptrobjt->Flags & INVISIBLE))
-                            AND(ptrobjt->CarryBy != numobj)) {
+                            AND(ptrobjt->CarryBy != numobj) AND !RaceMod_WalkOver(n)) {
                 xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
                 xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
                 yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;
@@ -2071,7 +2071,7 @@ U8 IsObjCol(U8 numobj) {
     for (n = 0; n < NbObjets; n++, ptrobjt++) {
         if ((n != numobj)
                 AND(ptrobjt->Obj.Body.Num != -1)
-                    AND(ptrobjt->CarryBy != numobj)) {
+                    AND(ptrobjt->CarryBy != numobj) AND !RaceMod_WalkOver(n)) {
             xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
             xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
             yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;
@@ -2204,7 +2204,7 @@ S32 CheckValidObjPos(U8 numobj, U8 owner) {
         if ((n != numobj) AND(n != owner)
                 AND(ptrobjt->Obj.Body.Num != -1)
                     AND(!(ptrobjt->Flags & INVISIBLE))
-                        AND(ptrobjt->CarryBy != numobj)) {
+                        AND(ptrobjt->CarryBy != numobj) AND !RaceMod_WalkOver(n)) {
             xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
             xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
             yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;
