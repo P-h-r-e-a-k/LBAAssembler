@@ -125,17 +125,49 @@ internal static class CitadelMuseum
             var page = ramp == 3 && shade >= 8 || ramp == 14 && shade >= 9;
             var print = ramp == 3 && shade == 7 || ramp == 14 && shade == 8 || ramp == 13 && shade >= 8;
             if (!page && !print) return colour;
-            // (a sheet lying flat, seen as the floor is: u along the world's x, v along its z. On it the track's loop, round the sheet's
-            // middle, and its ruled grid across both ways)
+            // (a sheet lying flat, seen as the floor is: u along the world's x, v along its z. On it Polar Island's track as it is built
+            // -- the dock, round the island's head, the jump, the zigzag up the terraces, the high road, the ramp onto the peak -- with a
+            // dot at its start, and its ruled grid across both ways. The user, 2026-11-10: "update the blueprints so the line on them
+            // reflects the actual Polar Island track layout"; it was an ellipse)
             int u = x + 2 * y, v = 2 * y - x;
-            double du = (u - 164) / 27.0, dv = (v - 41) / 36.0, ring = du * du + dv * dv;
-            if (ring > 0.74 && ring < 1.0) return line;
+            if (OnPolarRoute(u, v)) return line;
             if ((u % 12 + 12) % 12 < 2 || (v % 12 + 12) % 12 < 2) return grid;
             // (the print a shade darker: the drawings under the grid)
             if (print) return deep;
             var bright = ramp == 3 ? shade - 8 : shade - 9;
             return bright >= 2 ? light : bright >= 1 ? mid : deep;
         };
+    }
+
+    // Polar Island's track (its plan, RaceTrackPlan.Polar.json) in the sheet's u, v: every 40th point, scaled to fit (keeping its shape) in
+    // the box the ellipse took (u 137-191, v 5-77), the island's x along u and z along v
+    private static readonly Lazy<(double U, double V)[]> PolarRoute = new(() =>
+    {
+        using var stream = typeof(CitadelMuseum).Assembly.GetManifestResourceStream("RaceTrackPlan.Polar.json");
+        if (stream is null) return Array.Empty<(double, double)>();
+        var points = RaceTrackPlan.Read(stream).Points;
+        var picked = Enumerable.Range(0, points.Length).Where(i => i % 40 == 0 || i == points.Length - 1).Select(i => (X: points[i][0], Z: points[i][1])).ToList();
+        double x0 = picked.Min(p => p.X), x1 = picked.Max(p => p.X), z0 = picked.Min(p => p.Z), z1 = picked.Max(p => p.Z);
+        var scale = Math.Min(54 / Math.Max(1, x1 - x0), 72 / Math.Max(1, z1 - z0));
+        return picked.Select(p => (164 + (p.X - (x0 + x1) / 2) * scale, 41 + (p.Z - (z0 + z1) / 2) * scale)).ToArray();
+    });
+
+    // (a picture point on the route's line, about 2.5 of the sheet's units wide -- its pixels lie about 2 apart; any wider and the zigzags
+    // run into one blot -- or on the start's dot)
+    private static bool OnPolarRoute(int u, int v)
+    {
+        var route = PolarRoute.Value;
+        if (route.Length == 0) return false;
+        if (Math.Pow(u - route[0].U, 2) + Math.Pow(v - route[0].V, 2) <= 6) return true;
+        for (var i = 1; i < route.Length; i++)
+        {
+            var (au, av) = route[i - 1]; var (bu, bv) = route[i];
+            double eu = bu - au, ev = bv - av, len = eu * eu + ev * ev;
+            var t = len == 0 ? 0 : Math.Clamp(((u - au) * eu + (v - av) * ev) / len, 0, 1);
+            double du = au + t * eu - u, dv = av + t * ev - v;
+            if (du * du + dv * dv <= 1.5) return true;
+        }
+        return false;
     }
 
     // ---- the trophy painting: the portrait's canvas inside its gold frame (in Repaint's picture of the portrait block: x 27-47, its top

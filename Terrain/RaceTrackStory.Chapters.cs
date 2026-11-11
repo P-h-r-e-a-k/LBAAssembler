@@ -230,12 +230,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "A file of blueprints: \"ICE ISLAND CIRCUIT. Construction plans. Not to be built.\" @ A road climbing a snowy island, a loop, jumps, and a ramp leaping onto a rocky peak.",
-            "Un dossier de plans : \"CIRCUIT DE L'ÎLE DES GLACES. Plans de construction. À ne pas construire.\" @ Une route qui grimpe sur une île enneigée, une boucle, des sauts, et un tremplin qui s'élance sur un pic rocheux.",
-            "Eine Mappe mit Bauplänen: \"EISINSEL-KURS. Baupläne. Nicht bauen.\" @ Eine Straße, die eine verschneite Insel hinaufführt, ein Looping, Sprünge und eine Rampe, die auf einen Felsgipfel springt.",
-            "Una carpeta de planos: \"CIRCUITO DE LA ISLA DE HIELO. Planos de construcción. No construir.\" @ Una carretera que sube por una isla nevada, un rizo, saltos y una rampa que salta a un pico rocoso.",
-            "Una cartella di progetti: \"CIRCUITO DELL'ISOLA DEI GHIACCI. Progetti di costruzione. Da non costruire.\" @ Una strada che sale su un'isola innevata, un giro della morte, dei salti e una rampa che balza su un picco roccioso.",
-            "Uma pasta de plantas: \"CIRCUITO DA ILHA DO GELO. Planos de construção. Não construir.\" @ Uma estrada que sobe uma ilha nevada, um looping, saltos e uma rampa que salta para um pico rochoso.",
+            "A file of blueprints: \"POLAR ISLAND CIRCUIT. Construction plans. Not to be built.\" @ A road from the dock round the island's rocky head, a jump, a zigzag climb up the terraces, a high road along the cliffs, and a ramp leaping onto the peak.",
+            "Un dossier de plans : \"CIRCUIT DE L'ÎLE POLAIRE. Plans de construction. À ne pas construire.\" @ Une route qui part du quai et fait le tour de la pointe rocheuse de l'île, un saut, une montée en lacets sur les terrasses, une route en corniche le long des falaises, et un tremplin qui s'élance sur le pic.",
+            "Eine Mappe mit Bauplänen: \"POLARINSEL-KURS. Baupläne. Nicht bauen.\" @ Eine Straße vom Steg um die felsige Spitze der Insel, ein Sprung, ein Zickzack-Anstieg über die Terrassen, eine Höhenstraße an den Klippen entlang und eine Rampe, die auf den Gipfel springt.",
+            "Una carpeta de planos: \"CIRCUITO DE LA ISLA POLAR. Planos de construcción. No construir.\" @ Una carretera que sale del muelle y rodea el cabo rocoso de la isla, un salto, una subida en zigzag por las terrazas, una carretera alta junto a los acantilados y una rampa que salta a la cima.",
+            "Una cartella di progetti: \"CIRCUITO DELL'ISOLA POLARE. Progetti di costruzione. Da non costruire.\" @ Una strada che parte dal molo e gira attorno al promontorio roccioso dell'isola, un salto, una salita a zigzag sui terrazzi, una strada alta lungo le scogliere e una rampa che balza sulla vetta.",
+            "Uma pasta de plantas: \"CIRCUITO DA ILHA POLAR. Planos de construção. Não construir.\" @ Uma estrada que sai do cais e contorna o promontório rochoso da ilha, um salto, uma subida em zigue-zague pelos terraços, uma estrada alta ao longo das falésias e uma rampa que salta para o pico.",
         },
         new[]
         {

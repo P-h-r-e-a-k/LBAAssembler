@@ -359,8 +359,8 @@ the final. **To build:** FunFrock's head start (his car let go before Twinsen's 
 
      In the hall, under the window, a display case like the one with the old book (the museum's own bricks, Citadel/CitadelMuseum):
      under its glass a sheet of blueprints (Action by the case):
-     > *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps,
-     > and a ramp leaping onto a rocky peak.*
+     > *A file of blueprints: "POLAR ISLAND CIRCUIT. Construction plans. Not to be built." A road from the dock round the island's rocky
+     > head, a jump, a zigzag climb up the terraces, a high road along the cliffs, and a ramp leaping onto the peak.*
      >
      > **Twinsen:** "That's the track from my dream! Every bend of it. If only I had something to copy it onto."
 

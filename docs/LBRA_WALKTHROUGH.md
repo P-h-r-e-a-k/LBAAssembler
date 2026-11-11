@@ -32,7 +32,7 @@ Island, the Island under Celebration, Island CX, the Emperor's palace and Celebr
 
 **Track:** Polar Island. **To beat:** FunFrock.
 
-**1. The dock.** The game opens in a dream. Twinsen stands on the dock of a snowy island beside his car. FunFrock is already in his own
+**1. The dock.** The game opens in a dream. Twinsen stands on the dock of a rocky island beside his car. FunFrock is already in his own
 car, a big black one, revving the engine.
 
 **FunFrock:** "You'll never catch me! Whoever makes it to the Sendells first will get all of their magical powers!"
@@ -198,8 +198,8 @@ The same ladder brings Twinsen up onto the quay.
   In the hall, under the window, a display case like the one with the old book beside it: under its glass, a sheet of blueprints
   (Action by the case).
 
-  *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps, and
-  a ramp leaping onto a rocky peak.*
+  *A file of blueprints: "POLAR ISLAND CIRCUIT. Construction plans. Not to be built." A road from the dock round the island's rocky head,
+  a jump, a zigzag climb up the terraces, a high road along the cliffs, and a ramp leaping onto the peak.*
 
   **Twinsen:** "That's the track from my dream! Every bend of it. If only I had something to copy it onto."
 
