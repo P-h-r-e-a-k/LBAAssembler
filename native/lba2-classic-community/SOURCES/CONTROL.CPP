@@ -1,4 +1,5 @@
 #include "CONTROL.H"
+#include <limits.h>
 
 #include "C_EXTERN.H" /* pulls DEFINES.H (T_OBJET) + game globals */
 
@@ -1048,6 +1049,10 @@ static void control_run_exec_at(long tick) {
    seconds slower, a line a little longer, no longer throws a step's later commands off. */
 typedef struct {
     int until, what, n, op, v, every, left, done;
+    int x, z; /* (what 6: the place an actor comes within v of) */
+    int ox, oz; /* (what 6, by another actor: the place that far off it -- `near N actor M R offset OX OZ`) */
+    unsigned long long actors; /* (what 6: any of these actors, a bit each -- `near 2,4,10 ...`; 0: n alone) */
+    int guard, also; /* (`<cond> & <cond>`: guard, the second condition's own entry, never run; also, the first's: that entry's index, or -1) */
     long next;
     char cmds[CONTROL_EXEC_MAX];
 } T_CONTROL_WATCH;
@@ -1067,7 +1072,7 @@ int Control_AddWatch(int until, int what, int n, int op, int v, int every, int m
         s_watch_room = room;
     }
     T_CONTROL_WATCH *w = &s_watch[s_watch_count++];
-    w->until = until; w->what = what; w->n = n; w->op = op; w->v = v;
+    w->until = until; w->what = what; w->n = n; w->op = op; w->v = v; w->x = w->z = 0; w->guard = 0; w->also = -1; w->actors = 0; w->ox = w->oz = 0;
     if (what == 3) { w->op = 3; w->v = StoryLog_SaidCount(n); } /* (said once more than it had been) */
     w->every = every > 0 ? every : 1; w->left = max > 0 ? max : 0; w->done = 0;
     w->next = s_watch_tick; /* (until: the first try now) */
@@ -1075,9 +1080,62 @@ int Control_AddWatch(int until, int what, int n, int op, int v, int every, int m
     return 1;
 }
 
+/* (the last watch added: the place its `near` condition is about -- cmd_watch, `near <actor> <x> <z> <r>`) */
+void Control_WatchPlace(int x, int z) {
+    if (s_watch_count > 0) { s_watch[s_watch_count - 1].x = x; s_watch[s_watch_count - 1].z = z; }
+}
+/* (the last watch added: its `near` is about any of a list of actors -- `near 2,4,10,12 ...`) */
+void Control_WatchOffset(int ox, int oz) {
+    if (s_watch_count > 0) { s_watch[s_watch_count - 1].ox = ox; s_watch[s_watch_count - 1].oz = oz; }
+}
+void Control_WatchActors(unsigned long long actors) {
+    if (s_watch_count > 0) s_watch[s_watch_count - 1].actors = actors;
+}
+/* (the last watch added is the second condition of the one before it: `when <cond> & <cond> | cmds` -- cmd_watch) */
+void Control_WatchAlso(void) {
+    if (s_watch_count < 2) return;
+    s_watch[s_watch_count - 1].guard = 1;
+    s_watch[s_watch_count - 2].also = s_watch_count - 1;
+}
+
 extern int RaceMod_Walking(void);   /* (RACEMOD.CPP: a console walk -- racewalk, walkto, goto -- still going) */
+static int n_beta_of_hero(void) { return (int)(ListObjet[NUM_PERSO].Obj.Beta & 4095); }
+/* (a watch and the conditions chained to it with `&` all hold) */
+static int control_watch_holds(const T_CONTROL_WATCH *w);
+static int control_watch_all(int i) {
+    for (int k = i; k >= 0; k = s_watch[k].also)
+        if (!control_watch_holds(&s_watch[k])) return 0;
+    return 1;
+}
 static int control_watch_holds(const T_CONTROL_WATCH *w) {
     S32 have;
+    /* (7: facing -- Twinsen's heading within v of n) */
+    if (w->what == 7) {
+        const int off = (int)(((n_beta_of_hero() - w->n) + 6144) % 4096) - 2048;
+        return abs(off) <= w->v;
+    }
+    /* (6: near -- actor n within v of (x, z), on the ground's plane: a floating log come by, 2026-11-11, the sewers' crossing by inputs) */
+    if (w->what == 6 && w->actors) {
+        T_CONTROL_WATCH one = *w;
+        one.actors = 0;
+        for (int a = 0; a < 64 && a < NbObjets; a++)
+            if ((w->actors >> a) & 1ULL) {
+                one.n = a;
+                if (control_watch_holds(&one)) return 1;
+            }
+        return 0;
+    }
+    if (w->what == 6) {
+        if (w->n < 0 || w->n >= NbObjets) return 0;
+        /* (or within v of another actor: x the actor, z INT_MIN -- `near N actor M R`, a log come alongside the one he rides) */
+        int px = w->x, pz = w->z;
+        if (w->z == INT_MIN) {
+            if (w->x < 0 || w->x >= NbObjets) return 0;
+            px = ListObjet[w->x].Obj.X + w->ox; pz = ListObjet[w->x].Obj.Z + w->oz;
+        }
+        const double dx = (double)ListObjet[w->n].Obj.X - px, dz = (double)ListObjet[w->n].Obj.Z - pz;
+        return dx * dx + dz * dz <= (double)w->v * w->v;
+    }
     /* (4: walkdone -- no console walk going; 5: incar / onfoot -- Twinsen at the wheel or not: 2026-11-07, the playthrough by inputs) */
     if (w->what == 4) have = RaceMod_Walking() ? 1 : 0;
     else if (w->what == 5) have = Comportement == C_BUGGY ? 1 : 0;
@@ -1099,9 +1157,9 @@ static void control_run_watches(long tick) {
     char cmds[CONTROL_EXEC_MAX];
     s_watch_tick = tick;
     for (int i = 0; i < s_watch_count; i++) {
-        if (s_watch[i].done)
+        if (s_watch[i].done || s_watch[i].guard)
             continue;
-        if (control_watch_holds(&s_watch[i])) {
+        if (control_watch_all(i)) {
             s_watch[i].done = 1;
             if (!s_watch[i].until) {
                 Log_Info("[control] when: holds at tick %ld -- %s", tick, s_watch[i].cmds);

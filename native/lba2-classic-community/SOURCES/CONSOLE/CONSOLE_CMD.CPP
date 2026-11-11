@@ -1,3 +1,4 @@
+#include <limits.h>
 #include "../AUDIO_CONSOLE.H"
 #include <SYSTEM/INPUT_FLOW.H>
 #include "CONSOLE.H"
@@ -2149,6 +2150,19 @@ static void cmd_storylog(int argc, const char *argv[]) {
    <cond>: cube <n> | notcube <n> | var <n> <op> <v> | varcube <n> <op> <v>, op one of = != < > <= >=. The commands after the bars
    (';' already splits a console line, so '|' here) run once as the condition holds (when), or every <ticks> until it does (until:
    default every 30, no limit). For scripted runs (CONTROL.CPP Control_AddWatch). */
+/* (`near 2,4,10,12 ...`: a bit for each actor of a list; 0 for one actor alone) */
+static unsigned long long watch_actor_list(const char *s) {
+    if (!strchr(s, ',')) return 0;
+    unsigned long long m = 0;
+    for (const char *p = s; *p;) {
+        const int a = atoi(p);
+        if (a >= 0 && a < 64) m |= 1ULL << a;
+        const char *c = strchr(p, ',');
+        if (!c) break;
+        p = c + 1;
+    }
+    return m;
+}
 static void cmd_watch(int until, int argc, const char *argv[]) {
     char line[1024] = "", cmds[1024];
     for (int a = 1; a < argc; a++) {
@@ -2169,6 +2183,13 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
     for (char *p = cmds; *p; p++)
         if (*p == '|')
             *p = ';';
+    /* (`<cond> & <cond>`: both must hold -- the second set as a guard entry of its own, Control_WatchAlso) */
+    char *amp = strchr(line, '&');
+    char second[512] = "";
+    if (amp) {
+        *amp = '\0';
+        snprintf(second, sizeof(second), "%s", amp + 1);
+    }
     const char *tok[16];
     int nt = 0;
     for (char *t = strtok(line, " \t"); t && nt < 16; t = strtok(NULL, " \t"))
@@ -2181,6 +2202,10 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
         what = 4; op = 0; v = 0; used = 1; /* (no racewalk / walkto / goto going any more) */
     } else if (nt >= 1 && (!strcasecmp(tok[0], "incar") || !strcasecmp(tok[0], "onfoot"))) {
         what = 5; op = 0; v = strcasecmp(tok[0], "incar") ? 0 : 1; used = 1; /* (Twinsen at the wheel of his car, or not) */
+    } else if (nt >= 3 && !strcasecmp(tok[0], "facing")) {
+        what = 7; n = atoi(tok[1]); op = 0; v = atoi(tok[2]); used = 3; /* (Twinsen's heading within v of n) */
+    } else if (nt >= 5 && !strcasecmp(tok[0], "near")) {
+        what = 6; n = atoi(tok[1]); op = 0; v = atoi(tok[4]); used = 5; /* (actor n within r of x z: Control_WatchPlace) */
     } else if (nt >= 2 && !strcasecmp(tok[0], "said")) {
         what = 3; n = atoi(tok[1]); used = 2; /* (a line said from now on: Control_AddWatch) */
     } else if (nt >= 4 && (!strcasecmp(tok[0], "var") || !strcasecmp(tok[0], "varcube"))) {
@@ -2191,7 +2216,7 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
                 op = k;
     }
     if (what < 0 || op < 0) {
-        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V | said N | walkdone | incar | onfoot)", until ? "until" : "when");
+        Console_Print("%s: what condition is that? (cube N | notcube N | var N op V | varcube N op V | said N | walkdone | incar | onfoot | near ACTOR X Z R)", until ? "until" : "when");
         return;
     }
     for (int k = used; k + 1 < nt; k += 2) {
@@ -2201,6 +2226,46 @@ static void cmd_watch(int until, int argc, const char *argv[]) {
     if (!Control_AddWatch(until, what, n, op, v, every, max, cmds)) {
         Console_Print("%s: out of memory", until ? "until" : "when");
         return;
+    }
+    if (what == 6) {
+        Control_WatchPlace(atoi(tok[2 + (strcasecmp(tok[2], "actor") ? 0 : 1)]), strcasecmp(tok[2], "actor") ? atoi(tok[3]) : INT_MIN);
+        Control_WatchActors(watch_actor_list(tok[1]));
+        for (int k = 5; k + 2 < nt; k++)
+            if (!strcasecmp(tok[k], "offset")) Control_WatchOffset(atoi(tok[k + 1]), atoi(tok[k + 2]));
+    }
+    for (char *part = second[0] ? second : NULL, *rest = NULL; part; part = rest) {
+        /* (each further condition, chained: `near`, `facing`, the scene, the variables -- parsed as the first) */
+        char *a2 = strchr(part, '&');
+        rest = NULL;
+        if (a2) { *a2 = '\0'; rest = a2 + 1; }
+        const char *t2[16];
+        int n2t = 0;
+        for (char *t = strtok(part, " \t"); t && n2t < 16; t = strtok(NULL, " \t"))
+            t2[n2t++] = t;
+        int w2 = -1, nn = 0, o2 = 0, v2 = 0;
+        if (n2t >= 5 && !strcasecmp(t2[0], "near")) {
+            w2 = 6; nn = atoi(t2[1]); v2 = atoi(t2[4]);
+        } else if (n2t >= 3 && !strcasecmp(t2[0], "facing")) {
+            w2 = 7; nn = atoi(t2[1]); v2 = atoi(t2[2]);
+        } else if (n2t >= 2 && (!strcasecmp(t2[0], "cube") || !strcasecmp(t2[0], "notcube"))) {
+            w2 = 0; o2 = strcasecmp(t2[0], "cube") ? 1 : 0; v2 = atoi(t2[1]);
+        } else if (n2t >= 4 && (!strcasecmp(t2[0], "var") || !strcasecmp(t2[0], "varcube"))) {
+            w2 = strcasecmp(t2[0], "var") ? 2 : 1; nn = atoi(t2[1]); v2 = atoi(t2[3]); o2 = -1;
+            for (int k = 0; k < 6; k++)
+                if (!strcmp(t2[2], ops[k]) || (k == 0 && !strcmp(t2[2], "==")))
+                    o2 = k;
+        }
+        if (w2 < 0 || o2 < 0 || !Control_AddWatch(0, w2, nn, o2, v2, 1, 0, "")) {
+            Console_Print("%s: what condition after & is that? (near ACTOR X Z R | near ACTOR actor M R | facing BETA D | cube N | notcube N | var N op V | varcube N op V)", until ? "until" : "when");
+        } else {
+            if (w2 == 6) {
+                Control_WatchPlace(atoi(t2[2 + (strcasecmp(t2[2], "actor") ? 0 : 1)]), strcasecmp(t2[2], "actor") ? atoi(t2[3]) : INT_MIN);
+                Control_WatchActors(watch_actor_list(t2[1]));
+                for (int k = 5; k + 2 < n2t; k++)
+                    if (!strcasecmp(t2[k], "offset")) Control_WatchOffset(atoi(t2[k + 1]), atoi(t2[k + 2]));
+            }
+            Control_WatchAlso();
+        }
     }
     Console_Print("%s: set (%s)", until ? "until" : "when", cmds);
 }
@@ -2726,6 +2791,13 @@ static void cmd_gotomap(int argc, const char *argv[]) {
     Console_Print("gotomap: %s", argv[1]);
 }
 
+/* turnto <beta> | turnto off: Twinsen turned on the spot by the left / right keys till he faces beta (RACEMOD.CPP RaceMod_TurnTo) --
+   the scripted playthrough by inputs, 2026-11-11: facing the water before jumping onto the sewers' floating logs. `walkdone` waits for it. */
+extern "C" void RaceMod_TurnTo(int beta);
+static void cmd_turnto(int argc, const char *argv[]) {
+    if (argc < 2) { Console_Print("Usage: turnto <beta 0..4095> | turnto off"); return; }
+    RaceMod_TurnTo(strcasecmp(argv[1], "off") ? atoi(argv[1]) : -1);
+}
 static void cmd_racewalk(int argc, const char *argv[]) {
     extern void RaceMod_Walk(int n, const double *xz, int car, int more);
     extern void RaceMod_WalkThen(int actor, double reach, int action);
@@ -3269,6 +3341,8 @@ void Console_RegisterAll(void) {
                               "walkto <x z>... [actor <n> [reach]] [action] (island units outside, the scene's inside) | walkto off",
                               "Twinsen on foot, in any game, walked through the points (island units) by the keys a player would "
                               "press: turned towards each, walking once it is about ahead. For headless tests that go by inputs alone.");
+    Console_RegisterCommandEx("turnto", cmd_turnto, "Turn Twinsen on the spot by the keys till he faces a heading",
+                              "turnto <beta> | turnto off", "Holds left or right, the shorter way, till he faces within 30 of beta (0 = +z, 1024 = +x, 2048 = -z, 3072 = -x). walkdone waits for it.");
     Console_RegisterCommandEx("racewalk", cmd_racewalk, "Race-track test: walk Twinsen on foot through points, then to his car",
                               "racewalk [+] <x z>... [car] [actor <n> [reach]] [action] | racewalk off",
                               "With a race file's on_foot=1 and Twinsen out of his car, walks him through the points (island "

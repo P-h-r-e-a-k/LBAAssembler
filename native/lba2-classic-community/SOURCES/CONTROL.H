@@ -391,6 +391,10 @@ S32 Control_LoadSettled(void);
 /* Console `when` / `until`: commands run once a condition holds (until: again every `every` ticks till it does, `max` tries, 0 no
    limit). what: 0 the scene, 1 game variable n, 2 scene variable n; op: 0 = 1 != 2 < 3 > 4 <= 5 >=. 0 if out of memory. */
 int Control_AddWatch(int until, int what, int n, int op, int v, int every, int max, const char *cmds);
+void Control_WatchPlace(int x, int z);
+void Control_WatchAlso(void);
+void Control_WatchActors(unsigned long long actors);
+void Control_WatchOffset(int ox, int oz);
 
 /* The save-format version the engine is holding, for a caller that has to restore it
    around a load it drove. */

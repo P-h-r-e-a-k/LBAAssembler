@@ -931,6 +931,8 @@ S32 RaceMod_OnFoot(void);
 static int FootRescue(const char *where);
 static int FootCross(void);
 static U32 WalkInput(void);
+static U32 TurnInput(void);   // (the console's turnto: s_turnTo)
+static int s_turnTo = -1;
 static U32 DriveInput(void);
 static int s_trial = 0;                    // trial=
 static int s_online = 0;                   // online=: another player's car on the road with this one (NETRACE.CPP); a time trial's race file, with no ghost, with its race's mushrooms
@@ -6791,6 +6793,8 @@ U32 RaceMod_AutoInput(void) {
     VictoryFrame();
     VictoryNear();
     if (s_ghostWatch) return 0;
+    // (the console's turnto: on foot, turned on the spot)
+    if (s_turnTo >= 0 && Comportement != C_BUGGY) return TurnInput();
     // (win_stop=: the won race's car braked to a stop and Twinsen out of it -- WinStopInput)
     if (s_winStop == 1 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return WinStopInput();
     // (the console's racewalk: on foot, through its points -- on_foot=; and its points anywhere Twinsen is on foot, outside or in: the
@@ -12751,8 +12755,17 @@ void RaceMod_WalkThen(int actor, double reach, int action) {
     WalkBegun();
     Log_Info("[racemod] racewalk: then%s%s", actor >= 0 ? " to an actor" : "", action ? ", the action key" : "");
 }
+// The console's turnto <beta>: Twinsen turned on the spot by the keys, left or right the shorter way, till he faces within
+// RACE_TURN_NEAR of it (the scripted playthrough by inputs, 2026-11-11: facing the water before a jump onto the sewers' floating logs)
+#define RACE_TURN_NEAR 30
+extern "C" void RaceMod_TurnTo(int beta) { s_turnTo = beta < 0 ? -1 : (beta & 4095); Log_Info("[racemod] turnto: %d", s_turnTo); }
+static U32 TurnInput(void) {
+    const S32 turn = ((s_turnTo - (S32)(ListObjet[NUM_PERSO].Obj.Beta & 4095)) + 6144) % 4096 - 2048;
+    if (abs(turn) <= RACE_TURN_NEAR) { Log_Info("[racemod] turnto: facing %d", (int)(ListObjet[NUM_PERSO].Obj.Beta & 4095)); s_turnTo = -1; return 0; }
+    return turn > 0 ? I_LEFT : I_RIGHT;
+}
 extern "C" int RaceMod_Walking(void) {   // (C: CONTROL.CPP's watches ask)
- return s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN; }
+ return s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN || s_turnTo >= 0; }
 
 
 // ---- the console's "goto": a walk planned round what is in the way (2026-11-07, the scripted playthrough by inputs alone) ----------
