@@ -1197,7 +1197,14 @@ static int LaserExtra(int model, S32 x, S32 y, S32 z);
 typedef struct {
     int On, Kind, Owner, Target, Extra; double X, Y, Z, Hx, Hz, S, Side, SideV, Travelled; S32 T0, Trail;
     int Line, Mode; double Gap, TS, Prog, Range; int Into; double Mouth; int Branch, Seg; double T; int Rescues; double Least; S32 SaidAt;
+    double StillX, StillY, StillZ; S32 StillAt;
 } T_RACE_SHOT;
+// A shot that has stood still this long, or flown this long, is spent: its ball no longer hangs in the air where it stopped (the user,
+// 2026-11-09, the Emerald Moon: a red ball hanging in mid-air under the start gantry; 2026-11-10, Polar Island's dream: "this single round
+// blue ball always in the same place towards the end of the track")
+#define RACE_SHOT_STILL_MS 1500
+#define RACE_SHOT_STILL_MOVE 40.0
+#define RACE_SHOT_MOST_MS 30000
 static T_RACE_SHOT s_shots[RACE_MAX_SHOTS];
 static T_RACE_SHOT *LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now);
 static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now);
@@ -11432,6 +11439,14 @@ static void Shots(S32 now, int driving) {
                 ListExtra[sh->Extra].PosX = lx; ListExtra[sh->Extra].PosY = (S32)sh->Y; ListExtra[sh->Extra].PosZ = lz;
                 if (laser) ListExtra[sh->Extra].Beta = (S16)(TurnOf(atan2(sh->Hx, sh->Hz)));
             }
+        }
+        // (stood still, or out too long: spent -- its sprite goes with it, below)
+        if (!done) {
+            if (fabs(sh->X - sh->StillX) + fabs(sh->Z - sh->StillZ) + fabs(sh->Y - sh->StillY) > RACE_SHOT_STILL_MOVE) { sh->StillX = sh->X; sh->StillY = sh->Y; sh->StillZ = sh->Z; sh->StillAt = now; }
+            else if (sh->StillAt && now - sh->StillAt > RACE_SHOT_STILL_MS) { done = 1; Log_Info("[racemod] the %s stood still at (%.0f, %.0f, %.0f) for %.1f s: spent", names[sh->Kind], sh->X, sh->Y, sh->Z, (now - sh->StillAt) / 1000.0); }
+            if (!sh->StillAt) sh->StillAt = now;
+            if (!done && age > RACE_SHOT_MOST_MS) { done = 1; Log_Info("[racemod] the %s out for %.0f s: spent", names[sh->Kind], age / 1000.0); }
+            if (done && sh->Extra >= 0 && sh->Extra < MAX_EXTRAS) { ListExtra[sh->Extra].Sprite = -1; sh->Extra = -1; }
         }
         if (done) sh->On = 0;
     }
