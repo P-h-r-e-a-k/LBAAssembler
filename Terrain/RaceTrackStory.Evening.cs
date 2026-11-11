@@ -769,6 +769,12 @@ stop();
     // between the props' two flames a tenth of a second at a time, and out at the goodnights (the user, 2026-11-07: "make sure the
     // candle is actually lit")
     private static readonly (int X, int Y, int Z) Wick = (12 * 512 + 276, 12 * 256 + 220, 1 * 512 + 236);
+    // the back room's flickering candle flame (scene 1's actor 6, one of its three alike on candles of bricks: body 28, its flicker's
+    // animation), put on the bedside candle's wick in place of the props' flame -- as it stands on its own candle there: at its top brick's
+    // corner, (16, 144, -16) from it (scene 1: the candle's bricks at cell 1, layers 7-8, z 4; the flame at (528, 2192, 2032)), its model
+    // reaching to the wick; the bedside candle the same bricks at cell 12, layers 11-12, z 1
+    private const int BackRoom = 1, BackRoomCandle = 6;
+    private static readonly (int X, int Y, int Z) BackFlameAt = (12 * 512 + 16, 12 * 256 + 144, 1 * 512 - 16);
     private static void NightHouseStory(StoryParts p)
     {
         if (!p.Store.SceneExists(NightHouse)) { p.Log.Add($"home at night left out: no scene {NightHouse} (Citadel/CitadelNightHouse)"); return; }
@@ -812,7 +818,13 @@ stop();
             (zoe.X, zoe.Y, zoe.Z) = ZoeWaiting;
             zoe.Flags |= RaceTrackScenes.CarrierFlag;   // (a carrier: goto_point_3d glides her up the shaft with the platform)
             zoe.Beta = RaceTrackMath.Turn(Math.Atan2(BedSpot.X - ZoeWaiting.X, BedSpot.Z - ZoeWaiting.Z));
-            var flame = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Flame, Wick.X, Wick.Y, Wick.Z);
+            // (the candle's flame: the back room's flickering one -- an actor on its candle's bricks there -- copied onto the wick of the
+            // bedside table's candle (bricks too): the user, 2026-11-11, "The candle I meant that flickers is the one in Twinsen's back room
+            // directly opposite the door ... replace the one by the bed with the one that flickers". Its own animation flickers it. Without
+            // it, the props' flame on the wick, flickered by its track)
+            var backCandle = Copy(p.Originals, BackRoom, BackRoomCandle);
+            var flame = backCandle ?? Citadel.CitadelProps.Actor(Citadel.CitadelProps.Flame, Wick.X, Wick.Y, Wick.Z);
+            if (backCandle is not null) (flame.X, flame.Y, flame.Z) = BackFlameAt;
             var flameIndex = model.Actors.Count;
             var flameLife = p.Add(model, flame, $@"void comportement_0()
 {{
@@ -859,7 +871,7 @@ void comportement_1()
             return scripts =>
             {
                 flameLife(scripts);
-                scripts.SetText(flameIndex, ScriptKind.Track, $@"label(0);
+                if (backCandle is null) scripts.SetText(flameIndex, ScriptKind.Track, $@"label(0);
 body({Citadel.CitadelProps.Flame});
 wait_nb_dizieme(1);
 body({Citadel.CitadelProps.Flame2});
