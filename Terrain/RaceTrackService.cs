@@ -528,6 +528,8 @@ internal static class RaceTrackService
                 // (and the stairs up to the back gate's ledge in the caves' first scene, scene 2)
                 made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.InstallStairs(gameDirectory));
             }
+            // (and Stella Entities, the club under the Emerald Moon's reactor, its hidden lift in Baldino's old cell: StellaEntities)
+            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Emerald.IleFile)) made.AddRange(StellaEntities.Install(gameDirectory));
             if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
             if (islands.Contains(RaceTrackIsland.Palace))
