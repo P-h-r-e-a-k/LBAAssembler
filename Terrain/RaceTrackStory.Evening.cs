@@ -59,6 +59,8 @@ internal static partial class RaceTrackStory
         ZoeCarHome,
         // (the pharmacy's customer, her umbrella back -- RaceTrackStory.Chapters.cs PharmacyCustomer, 2026-11-11)
         CustomerThanks, CustomerTip,
+        // (Zoe as companion's hints, chapter 2 -- RaceTrackStory.Companion.cs, 2026-11-11)
+        ZoeHintWheel, ZoeHintRace, ZoeHintFerry,
     }
     private static readonly string[][] EveningLines =
     {
@@ -376,6 +378,33 @@ internal static partial class RaceTrackStory
             "¡Si le añade dos frascos de ácido gálico a su vehículo, irá a la velocidad de un cohete!",
             "Se aggiunge due fiale di acido gallico al suo veicolo, andrà alla velocità di un razzo!",
             "Se juntar dois frascos de ácido gálico ao seu veículo, ele vai à velocidade de um foguetão!",
+        },
+        new[]
+        {
+            "Luc's barrel car is a wheel short. Old Bob at the harbour's scrap heap might have a tyre.",
+            "La voiture-tonneau de Luc n'a plus qu'une roue arrière. Le vieux Bob, au tas de ferraille du port, aura peut-être un pneu.",
+            "Lucs Fasswagen fehlt ein Rad. Der alte Bob am Schrotthaufen im Hafen hat vielleicht einen Reifen.",
+            "Al coche-barril de Luc le falta una rueda. El viejo Bob, en la chatarra del puerto, quizá tenga un neumático.",
+            "Alla macchina-botte di Luc manca una ruota. Il vecchio Bob, al mucchio di rottami del porto, forse ha uno pneumatico.",
+            "Ao carro-barril do Luc falta uma roda. O velho Bob, na sucata do porto, talvez tenha um pneu.",
+        },
+        new[]
+        {
+            "The town circuit's open, Twinsen. Let's go and win that race!",
+            "Le circuit de la ville est ouvert, Twinsen. Allons gagner cette course !",
+            "Die Stadtstrecke ist offen, Twinsen. Gewinnen wir das Rennen!",
+            "El circuito de la ciudad está abierto, Twinsen. ¡Vamos a ganar esa carrera!",
+            "Il circuito della città è aperto, Twinsen. Andiamo a vincere quella corsa!",
+            "O circuito da cidade está aberto, Twinsen. Vamos ganhar essa corrida!",
+        },
+        new[]
+        {
+            "We've won here! Mr. Paul's ticket takes us on the ferry from the harbour, to the desert.",
+            "On a gagné ici ! Le billet de M. Paul nous fait prendre le ferry au port, vers le désert.",
+            "Hier haben wir gewonnen! Mit Herrn Pauls Fahrkarte geht's vom Hafen mit der Fähre in die Wüste.",
+            "¡Aquí hemos ganado! El billete del señor Paul nos lleva en el ferry del puerto, al desierto.",
+            "Qui abbiamo vinto! Il biglietto del signor Paul ci porta col traghetto dal porto, al deserto.",
+            "Aqui ganhámos! O bilhete do Sr. Paul leva-nos no ferry do porto, até ao deserto.",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)

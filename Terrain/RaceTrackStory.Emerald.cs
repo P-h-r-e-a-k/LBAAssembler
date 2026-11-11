@@ -42,6 +42,8 @@ internal static partial class RaceTrackStory
         HalDaisy, HalDiagnostic, BowlerUp, BowlerTuesday,
         // (one HAL at a time, 2026-11-07: a mechanic's word while he is out at the track)
         MechanicHalOut,
+        // (Zoe as companion's hints -- RaceTrackStory.Companion.cs, 2026-11-11)
+        ZoeHintHal, ZoeHintRace,
     }
     private static readonly string[][] MoonLines =
     {
@@ -253,6 +255,24 @@ internal static partial class RaceTrackStory
             "HAL si è caricato in un'auto da corsa ed è andato in pista. Quell'armadio è solo una scatola finché non torna.",
             "O HAL carregou-se num carro de corrida e foi para a pista. Aquele armário é só uma caixa até ele voltar.",
         },
+        new[]
+        {
+            "The base's computer, HAL, has locked the start gate. Let's have a look inside the base.",
+            "L'ordinateur de la base, HAL, a verrouillé la grille de départ. Allons voir à l'intérieur de la base.",
+            "Der Computer der Basis, HAL, hat das Starttor verriegelt. Schauen wir uns in der Basis um.",
+            "El ordenador de la base, HAL, ha bloqueado la puerta de salida. Echemos un vistazo dentro de la base.",
+            "Il computer della base, HAL, ha bloccato il cancello di partenza. Diamo un'occhiata dentro la base.",
+            "O computador da base, o HAL, trancou o portão de partida. Vamos ver dentro da base.",
+        },
+        new[]
+        {
+            "The start lights are on. Let's race!",
+            "Les feux de départ sont allumés. En course !",
+            "Die Startampel ist an. Auf zum Rennen!",
+            "Las luces de salida están encendidas. ¡A correr!",
+            "Le luci di partenza sono accese. Si corre!",
+            "As luzes de partida estão acesas. Vamos correr!",
+        },
     };
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -263,6 +283,15 @@ internal static partial class RaceTrackStory
         if (first < 0) return log;
         int Say(MoonLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Emerald, log);
+        // (Zoe as companion's hints on the Emerald Moon: HAL, then the race -- RaceTrackStory.Companion.cs)
+        CompanionTalks[RaceTrackIsland.Emerald.IleFile] = $@"            if ({HalMended} > var_game({QHal}))
+            {{
+                message({Say(MoonLine.ZoeHintHal)});
+            }}
+            else
+            {{
+                message({Say(MoonLine.ZoeHintRace)});
+            }}";
         const string moon = "4 == chapter()";
 
         // the radio, on the track's outside scenes (the copies of the moon's: 229 on)

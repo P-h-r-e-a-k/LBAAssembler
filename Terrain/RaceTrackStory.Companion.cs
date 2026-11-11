@@ -10,7 +10,9 @@ namespace LBAAssembler.Terrain;
 // (RACEMOD.CPP Companion). Her script follows him: turned to him, walking when he's more than a few steps off, standing by him
 // otherwise. Not in the dream (chapter 0) nor the storm (chapter 1), when she's at home, nor on the Elevator Platform (chapter 8) or at
 // the final (14), as the design has it.
-// Still to come (the design): her hint for the step Twinsen is on when he talks to her, and the pit box in races.
+// Talked to (Action beside her), she gives a hint for the step Twinsen is on where the island's story has given her some (CompanionTalks:
+// each island's story puts its lines in its own text file and her script here; Citadel Island's chapter 2, the Desert, the Emerald Moon).
+// Still to come (the design): the pit box in races, and player 2 as Zoe.
 internal static partial class RaceTrackStory
 {
     internal const int CompanionArmour = 117;   // (a signed byte in the scene record: 117, which no one of the game's has)
@@ -20,6 +22,9 @@ internal static partial class RaceTrackStory
     private const int CompanionWalkFrom = 1300, CompanionStandAt = 900;
 
     internal static string CompanionWhen => "2 <= chapter() && 8 != chapter() && 14 > chapter()";
+    // (each island's hints for her, the script's lines that say them -- by the island's file, set by its story as it puts its lines in)
+    internal static readonly Dictionary<string, string> CompanionTalks = new(StringComparer.OrdinalIgnoreCase);
+    private const int CompanionTalkReach = 1100;
 
     // Her in every outside scene of `island` (its scenes as built). Returns lines for the log.
     internal static List<string> Companion(string gameDirectory, RaceTrackIsland island)
@@ -42,7 +47,7 @@ internal static partial class RaceTrackStory
             GiveVoice(her);
             var index = SceneOps.AddActor(model, her);
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
-            scripts.SetText(index, ScriptKind.Life, CompanionLife);
+            scripts.SetText(index, ScriptKind.Life, CompanionLife(CompanionTalks.GetValueOrDefault(island.IleFile)));
             scripts.SetText(index, ScriptKind.Track, "label(0);\nstop();\n");
             var built = scripts.Build();
             if (!built.Ok) { log.Add($"scene {scene}: Zoe as companion left out: {string.Join("; ", built.Errors.Take(2))}"); continue; }
@@ -53,7 +58,7 @@ internal static partial class RaceTrackStory
         return log;
     }
 
-    private static string CompanionLife => $@"void comportement_0()
+    private static string CompanionLife(string? talk) => $@"void comportement_0()
 {{
     if ({CompanionWhen})
     {{
@@ -76,6 +81,13 @@ void comportement_1()
     {{
         anim(0);
     }}
-}}
+{(talk is null ? "" : $@"    swif (1 == action())
+    {{
+        if ({CompanionTalkReach} > distance(0) && {Driving} != comportement_hero())
+        {{
+{talk}
+        }}
+    }}
+")}}}
 ";
 }

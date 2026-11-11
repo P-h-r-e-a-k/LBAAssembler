@@ -1076,6 +1076,19 @@ void comportement_1()
         PharmacyAfterThief(p);
         PharmacyCustomer(p);
         ThiefTrail(p);
+        // (Zoe as companion's hints on Citadel Island, chapter 2: the wheel, the race, the ferry -- RaceTrackStory.Companion.cs)
+        CompanionTalks[RaceTrackIsland.Citadel.IleFile] = $@"            if ({WheelFitted} > var_game({QLucCar}))
+            {{
+                message({EveningId(p.Say, EveningLine.ZoeHintWheel)});
+            }}
+            else if (0 == var_game({WonVar}))
+            {{
+                message({EveningId(p.Say, EveningLine.ZoeHintRace)});
+            }}
+            else
+            {{
+                message({EveningId(p.Say, EveningLine.ZoeHintFerry)});
+            }}";
         p.Log.AddRange(ErrandsInstall(p.Store.Directory));
         WizardNoRing(p);
         StormPeople(p);

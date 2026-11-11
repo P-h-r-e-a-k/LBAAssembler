@@ -287,6 +287,8 @@ void comportement_1()
         FlickHelmet,
         // (the racers' garage, 2026-11-08: RaceTrackStory.Garage.cs)
         BaldinoFilters, ZoeFitted, ZoeNoFilters, ZoeReady,
+        // (Zoe as companion's hints -- RaceTrackStory.Companion.cs, 2026-11-11)
+        ZoeHintDean, ZoeHintPages, ZoeHintFilters, ZoeHintHelmet, ZoeHintRace,
     }
     private static readonly string[][] DesertLines =
     {
@@ -608,6 +610,51 @@ void comportement_1()
             "Filtri montati, gomme controllate. La tua macchina è pronta, Twinsen. Vai e vinci!",
             "Filtros montados, pneus verificados. O teu carro está pronto, Twinsen. Vai e ganha!",
         },
+        new[]
+        {
+            "Flick says the Dean has shut the track. Let's go and see him at the School of Magic.",
+            "Flick dit que le Doyen a fermé la piste. Allons le voir à l'École de Magie.",
+            "Flick sagt, der Dekan hat die Strecke gesperrt. Besuchen wir ihn in der Zauberschule.",
+            "Flick dice que el Decano ha cerrado la pista. Vamos a verlo a la Escuela de Magia.",
+            "Flick dice che il Rettore ha chiuso la pista. Andiamo a trovarlo alla Scuola di Magia.",
+            "O Flick diz que o Reitor fechou a pista. Vamos vê-lo à Escola de Magia.",
+        },
+        new[]
+        {
+            "The Dean's exam pages blew all over the track. Find all three and take them back to him.",
+            "Les pages d'examen du Doyen se sont envolées sur la piste. Trouve-les toutes les trois et rapporte-les-lui.",
+            "Die Prüfungsblätter des Dekans sind über die ganze Strecke geweht. Finde alle drei und bring sie ihm zurück.",
+            "Las hojas de examen del Decano volaron por toda la pista. Encuentra las tres y llévaselas.",
+            "Le pagine d'esame del Rettore sono volate su tutta la pista. Trovale tutte e tre e riportagliele.",
+            "As folhas de exame do Reitor voaram por toda a pista. Encontra as três e leva-lhas.",
+        },
+        new[]
+        {
+            "The sand will choke the engine. Baldino has sand filters in the racers' garage tent.",
+            "Le sable va étouffer le moteur. Baldino a des filtres à sable sous la tente des pilotes.",
+            "Der Sand erstickt den Motor. Baldino hat Sandfilter im Werkstattzelt der Fahrer.",
+            "La arena ahogará el motor. Baldino tiene filtros de arena en la carpa de los pilotos.",
+            "La sabbia soffocherà il motore. Baldino ha dei filtri per la sabbia nella tenda dei piloti.",
+            "A areia vai sufocar o motor. O Baldino tem filtros de areia na tenda dos pilotos.",
+        },
+        new[]
+        {
+            "No helmet, no race. The giant clam's sea cave in the cliffs is the place to look.",
+            "Pas de casque, pas de course. La grotte marine du coquillage géant, dans les falaises, voilà où chercher.",
+            "Kein Helm, kein Rennen. Die Meeresgrotte der Riesenmuschel in den Klippen, da müssen wir suchen.",
+            "Sin casco no hay carrera. La gruta marina del molusco gigante, en los acantilados, es donde hay que buscar.",
+            "Niente casco, niente corsa. La grotta marina della conchiglia gigante, nelle scogliere, è il posto dove cercare.",
+            "Sem capacete, sem corrida. A gruta marinha da concha gigante, nas falésias, é onde procurar.",
+        },
+        new[]
+        {
+            "Everything's ready, Twinsen. Let's go and win the desert race!",
+            "Tout est prêt, Twinsen. Allons gagner la course du désert !",
+            "Alles ist bereit, Twinsen. Gewinnen wir das Wüstenrennen!",
+            "Todo está listo, Twinsen. ¡Vamos a ganar la carrera del desierto!",
+            "È tutto pronto, Twinsen. Andiamo a vincere la corsa del deserto!",
+            "Está tudo pronto, Twinsen. Vamos ganhar a corrida do deserto!",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -682,6 +729,31 @@ void comportement_1()
         if (first < 0) return log;
         int Say(DesertLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Desert, log);
+        // (Zoe as companion's hints on the Desert: the Dean, his pages, the sand filters, the helmet, the race -- RaceTrackStory.Companion.cs)
+        CompanionTalks[RaceTrackIsland.Desert.IleFile] = $@"            if (2 > var_game({QPages}) && 7 != var_game({PagesFoundVar}))
+            {{
+                message({Say(DesertLine.ZoeHintDean)});
+            }}
+            else if ({PagesDiploma} > var_game({QPages}) && 7 != var_game({PagesFoundVar}))
+            {{
+                message({Say(DesertLine.ZoeHintPages)});
+            }}
+            else if ({PagesDiploma} > var_game({QPages}))
+            {{
+                message({Say(DesertLine.ZoeHintDean)});
+            }}
+            else if ({FiltersFitted} > var_game({QFilters}))
+            {{
+                message({Say(DesertLine.ZoeHintFilters)});
+            }}
+            else if ({Citadel.CitadelOveralls.GearBoth} > var_game({Citadel.CitadelOveralls.GlovesSlot}))
+            {{
+                message({Say(DesertLine.ZoeHintHelmet)});
+            }}
+            else
+            {{
+                message({Say(DesertLine.ZoeHintRace)});
+            }}";
         const string desert = "4 > chapter()";
 
         // the radio, on every outside scene: arriving from Citadel Island (the game still at chapter 2, the town circuit's) is chapter 3.
