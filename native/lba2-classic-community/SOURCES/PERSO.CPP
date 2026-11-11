@@ -3199,6 +3199,9 @@ int Lba2Main(int argc, char *argv[]) {
         return 0;
     }
 
+    // (Story Mode's player 2, Zoe, with no race game menu to wait in -- a test's run: player 1's story waited for and loaded -- RACEGAME.CPP)
+    { extern int RaceGame_StoryZoeWait(char *path, int size); if (!load && RaceGame_StoryZoeWait(GamePathname, ADELINE_MAX_PATH)) load = TRUE; }
+
     MainGameMenu(load, FALSE);
 
 #ifdef DEMO

@@ -606,10 +606,12 @@ int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y,
     snprintf(res, sizeof(res), "%dx%d", resW, resH);
     // (the music once: the second game is silent. And a test's way to reach it: LBA2_P2_LISTEN)
     const char *listen = getenv("LBA2_P2_LISTEN");
-    const char *args[12];
+    const char *args[14];
     int n = 0;
     args[n++] = exe; args[n++] = "--user-dir"; args[n++] = userDir; args[n++] = "--resolution"; args[n++] = res; args[n++] = "--no-audio"; args[n++] = "--ignore-focus";
     if (listen) { args[n++] = "--listen"; args[n++] = listen; }
+    // (a test's: player 2's game headless too -- LBA2_P2_HEADLESS)
+    if (getenv("LBA2_P2_HEADLESS")) args[n++] = "--headless";
     args[n] = NULL;
     SDL_Environment *env = SDL_CreateEnvironment(true);
     if (!env) return 0;

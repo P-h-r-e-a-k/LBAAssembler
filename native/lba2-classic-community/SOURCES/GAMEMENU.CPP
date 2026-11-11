@@ -4034,8 +4034,9 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
         goto load_game;
     }
 #else
-    // (the race game has no introduction: its menu first, RACEGAME.CPP)
-    if (!resumeInGame AND !RaceGame_On() AND IsFirstGameLaunched()) {
+    // (the race game has no introduction: its menu first, RACEGAME.CPP. Nor a save asked for: that first -- Story Mode's player 2, Zoe,
+    // started with player 1's story to load, PERSO.CPP; its user folder new, the introduction had played and a new game begun instead)
+    if (!resumeInGame AND !load AND !RaceGame_On() AND IsFirstGameLaunched()) {
         FlagPlayAcf = TRUE;
         goto new_game;
     }

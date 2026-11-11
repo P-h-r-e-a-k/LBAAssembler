@@ -17998,6 +17998,7 @@ int RaceMod_ActionFor(const T_OBJET *obj) {
 static void PitServe(S32 now, int kmh, const char *who);
 
 static void StoryTwo(void) {
+    RaceGame_StoryZoeJoin();
     const int two = TwoOn();
     const int zoe = RaceGame_StoryZoe();
     const S32 now = TimerRefHR;
@@ -18046,6 +18047,8 @@ static void StoryTwo(void) {
     }
     // ---- player 2's game: what player 1's sends -- a save to load (the scene Twinsen entered), the variables
     else {
+        // (player 1's game gone: Zoe's goes too -- it keeps nothing of the story)
+        if (RaceNet_Error()[0] || !RaceNet_On()) { Log_Info("[racemod] two players: player 1's game has gone -- Zoe's goes too (%s)", RaceNet_Error()); exit(0); }
         char load[RACENET_STORY_PATH];
         int cube = -1;
         if (RaceNet_TakeStoryLoad(load, sizeof(load), &cube)) {

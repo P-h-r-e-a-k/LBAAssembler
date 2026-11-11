@@ -2458,6 +2458,12 @@ static void cmd_dialshot(int argc, const char *argv[]) {
 
 /* storymode <0|1>: the run played as the race game's Story Mode story, as if its menu had started it (RACEGAME.CPP
    RaceGame_StoryTest) -- a headless run has no menu to choose it from. Its scene changes then keep story.lba. */
+/* storytwo [x y w h]: tests -- Story Mode with two players: this game hosts at this PC and starts player 2's as Zoe (RACEGAME.CPP
+   RaceGame_StoryTwoTest; player 2's window at x y w h, default 0 0 640 480; LBA2_P2_HEADLESS for none, LBA2_P2_LISTEN for its console) */
+static void cmd_storytwo(int argc, const char *argv[]) {
+    const int x = argc >= 5 ? atoi(argv[1]) : 0, y = argc >= 5 ? atoi(argv[2]) : 0, w = argc >= 5 ? atoi(argv[3]) : 640, h = argc >= 5 ? atoi(argv[4]) : 480;
+    Console_Print("storytwo: %s", RaceGame_StoryTwoTest(x, y, w, h) ? "player 2's game started as Zoe" : "failed (see the log)");
+}
 static void cmd_storymode(int argc, const char *argv[]) {
     const int on = argc >= 2 ? atoi(argv[1]) : 1;
     RaceGame_StoryTest(on);
@@ -3455,6 +3461,8 @@ void Console_RegisterAll(void) {
                               "Saves the screen a few steps into the next dialogue (8, or its page's end), its "
                               "speaker the script's own (who is on screen while someone speaks); with skipmodals "
                               "on the dialogue runs on to the picture and ends there.");
+    Console_RegisterCommandEx("storytwo", cmd_storytwo, "Race game test: Story Mode with two players, player 2 as Zoe",
+                              "storytwo [x y w h]", "Hosts at this PC and starts player 2's game as Zoe (LBA2_P2_HEADLESS, LBA2_P2_LISTEN).");
     Console_RegisterCommandEx("storymode", cmd_storymode, "Race game test: play the run as Story Mode's story",
                               "storymode <0|1>",
                               "As if the race game's Story Mode had started the game: each scene entered keeps "

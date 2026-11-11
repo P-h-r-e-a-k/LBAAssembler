@@ -3005,18 +3005,56 @@ static void KeepStory(void) {
 void RaceGame_SceneEntered(void) {
     // (player 2's Zoe keeps nothing: the story is player 1's)
     if (s_storyZoe) return;
+    // (with two players, player 1's game keeps it and tells player 2's to load it whatever the run's autosaves -- RaceGame_StoryShare)
+    if (RaceGame_StoryTwo()) { RaceGame_StoryShare(); return; }
     if (!s_storyOn || Save_AutoDisabled() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
     char story[ADELINE_MAX_PATH];
     StorySave(story);
     CurrentSaveGameTo(RG_STORY_SAVE);
     Log_Info("[racegame] the story kept as scene %d was entered: %s", (int)NumCube, story);
-    // (and with two players, player 2's game told to load it: Zoe in the scene Twinsen has entered)
-    if (RaceGame_StoryTwo()) { RaceNet_StoryLoad(story, (int)NumCube); Log_Info("[racegame] two players: player 2 told to load the story at scene %d", (int)NumCube); }
 }
 
 // Story Mode with two players: this game is player 1's with player 2's joined (RaceNet_Local: hosting at this PC), or player 2's (Zoe)
 int RaceGame_StoryTwo(void) { return s_storyOn && s_storyTwo && RaceNet_Local() && RaceNet_Others() > 0; }
+static void IdentifyGame(void);
 int RaceGame_StoryZoe(void) { return s_storyZoe; }
+// (player 2's game, Zoe, started straight into a game -- a test's run, with no race game menu to wait in (StoryZoePage): it joins from the
+// game, once, and the first save player 1's sends replaces whatever it began)
+// (... and before the game's menus at all, with no race game menu to wait in -- a test's run, PERSO.CPP: joined, the first save player
+// 1's sends waited for (two minutes at most) and its path put in `path`. Non-zero: there is one to load)
+int RaceGame_StoryZoeWait(char *path, int size) {
+    if (!getenv("LBA2_STORY_ZOE") || RaceGame_On()) return 0;
+    RaceGame_StoryZoeJoin();
+    if (!s_storyZoe) return 0;
+    char load[RACENET_STORY_PATH];
+    int cube = -1;
+    for (int ms = 0; ms < 120000; ms += 50) {
+        SDL_PumpEvents();
+        if (RaceNet_Error()[0]) break;
+        if (RaceNet_TakeStoryLoad(load, sizeof(load), &cube)) {
+            snprintf(path, size, "%s", load);
+            Log_Info("[racegame] two players: Zoe starts in the story at scene %d (%s)", cube, load);
+            return 1;
+        }
+        SDL_Delay(50);
+    }
+    Log_Warn("[racegame] two players: no story from player 1's game");
+    return 0;
+}
+
+void RaceGame_StoryZoeJoin(void) {
+    static int tried = 0;
+    if (tried || s_storyZoe || !getenv("LBA2_STORY_ZOE")) return;
+    tried = 1;
+    const char *port = getenv("LBA2_PLAYER2");
+    if (!port || atoi(port) <= 0) return;
+    char address[32];
+    snprintf(address, sizeof(address), "127.0.0.1:%s", port);
+    IdentifyGame();
+    if (!RaceNet_Join(address, "Zoe")) { Log_Warn("[racegame] two players: Zoe's game could not join player 1's: %s", RaceNet_Error()); return; }
+    s_storyZoe = 1; s_storyOn = 1; s_localGuest = 1;
+    Log_Info("[racegame] two players: this game is Zoe's, joined from the game -- waiting for player 1's story");
+}
 // (player 1's: the story kept now and player 2's told to load it -- as player 2 first joins; not mid-race)
 void RaceGame_StoryShare(void) {
     if (!RaceGame_StoryTwo() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
@@ -4299,6 +4337,30 @@ static void LocalEnd(void) {
 }
 
 // The two rectangles taken: the second game started, this one moved. Non-zero: both ready
+// (tests: Story Mode with two players started from the console -- `storytwo` -- as the Story Mode page's Two players row does, but with
+// no windows moved: hosting at this PC and player 2's game started as Zoe at `x,y,w,h` (LBA2_P2_HEADLESS: headless). Non-zero: started)
+int RaceGame_StoryTwoTest(int x, int y, int w, int h) {
+    IdentifyGame();
+    if (!RaceNet_HostLocal("Player 1", RG_LOCAL_PORT)) { Log_Warn("[racegame] tests: two players: %s", RaceNet_Error()); return 0; }
+    char folder[ADELINE_MAX_PATH], from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH];
+    GetCfgPath(folder, ADELINE_MAX_PATH, "Player2");
+    SDL_CreateDirectory(folder);
+    static const char *const kept[] = {"lba2.cfg", "RACEGAME_SETTINGS.TXT"};
+    for (size_t i = 0; i < sizeof(kept) / sizeof(kept[0]); i++) {
+        GetCfgPath(from, ADELINE_MAX_PATH, kept[i]);
+        snprintf(to, sizeof(to), "%s/%s", folder, kept[i]);
+        SDL_CopyFile(from, to);
+    }
+    RaceNet_SpawnStory(1);
+    const int ok = RaceNet_SpawnPlayer2(RG_LOCAL_PORT, folder, x, y, w, h, w & ~7, h & ~1, 0, 1);
+    RaceNet_SpawnStory(0);
+    if (!ok) { Log_Warn("[racegame] tests: two players: %s", RaceNet_Error()); RaceNet_Stop(); return 0; }
+    s_storyTwo = 1;
+    s_storyOn = 1;
+    Log_Info("[racegame] tests: Story Mode with two players -- player 2's game started as Zoe");
+    return 1;
+}
+
 static int LocalStart(const SDL_Rect *oneWhole, const SDL_Rect *twoWhole) {
     SDL_Rect oneAt = *oneWhole, twoAt = *twoWhole;
     const SDL_Rect *one = &oneAt, *two = &twoAt;
