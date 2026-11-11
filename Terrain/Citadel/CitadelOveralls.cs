@@ -27,6 +27,8 @@ internal static class CitadelOveralls
     // the Nov 7 notes, the user: "Twinsen wears his racing suit and helmet instead of the spacesuit")
     public const int HelmetBody = 18;
     private const int HeroEntity = 0, Head = 14;
+    // the hero's sporty, aggressive and discreet behaviours' entities (RESS.HQR 44: each behaviour its own, with the same body numbers)
+    private static readonly int[] BehaviourEntities = { 1, 2, 3 };
     // the hero's bodies: his everyday clothes, the tunic's, the tunic's with a weapon
     private const int Everyday = 0, Tunic = 1, FirstArmed = 2, LastArmed = 6;
     // The game's other bodies of Twinsen in his tunic (the user, 2026-11-08: "Twinsen in his racing suit everywhere he's still in the
@@ -171,13 +173,25 @@ internal static class CitadelOveralls
         // (the helmeted one: its entry again on a second pass, else one more at the file's end, and the hero's entity told of it)
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
-        if (RaceTrackGuards.BodyOf(table, HeroEntity, HelmetBody) is { } had) HqrWriter.ReplaceInFile(bodyPath, had, helmeted.Write());
+        int helmetEntry;
+        if (RaceTrackGuards.BodyOf(table, HeroEntity, HelmetBody) is { } had) { HqrWriter.ReplaceInFile(bodyPath, had, helmeted.Write()); helmetEntry = had; }
         else
         {
-            var index = HqrArchive.CountEntries(bodyPath);
+            helmetEntry = HqrArchive.CountEntries(bodyPath);
             HqrWriter.AppendToFile(bodyPath, helmeted.Write());
-            HqrWriter.ReplaceInFile(ressPath, 44, RaceTrackBaldinoCar.WithBody(table, HeroEntity, HelmetBody, index));
+            table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, HelmetBody, helmetEntry);
+            HqrWriter.ReplaceInFile(ressPath, 44, table);
         }
+        // (and his other behaviours' entities -- sporty, aggressive, discreet: each behaviour is an entity of its own, its bodies the
+        // same numbers -- told of it too: the race file's foot_body= asks for body 18 in whichever he's in, and found none outside the
+        // normal one, so in the others the helmet came off -- the user, 2026-11-09, the Emerald Moon, "it only keeps him in the racing
+        // outfit in normal mode")
+        foreach (var e in BehaviourEntities)
+            if (RaceTrackGuards.BodyOf(table, e, HelmetBody) is null)
+            {
+                table = RaceTrackBaldinoCar.WithBody(table, e, HelmetBody, helmetEntry);
+                HqrWriter.ReplaceInFile(ressPath, 44, table);
+            }
         log.Add($"Twinsen's other bodies in his tunic in the suit's colour: BODY.HQR {string.Join(", ", others.Select(o => $"{o.Entry} ({o.Faces})"))}");
         log.Add($"Twinsen's racing overalls with the helmet on: the hero's body {HelmetBody} ({helmeted.Vertices.Count} points, {helmeted.Faces.Count} polygons)");
         log.Add($"Twinsen's racing overalls ({Suit.Name}, the palette's {Bright}): BODY.HQR {Tunic} (the tunic's) his everyday body in the suit's colour with a white belt and stripes " +

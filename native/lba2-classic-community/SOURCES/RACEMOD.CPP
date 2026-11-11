@@ -11769,7 +11769,10 @@ static void HeroLook(S32 now, int driving) {
             Log_Info("[racemod] foot_body: Twinsen outside on foot in his body %d", s_footBody);
         }
         const S32 g = hero->GenBody;
-        if (CubeMode == CUBE_EXTERIEUR && (g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE)) InitBody((U8)s_footBody, NUM_PERSO);
+        // (and his tunic's with a weapon -- the sabre, the blowpipes, the glove, the laser pistol, the ball's throw -- which the game's
+        // ChoiceHeroBody gives him for the weapon in hand when a behaviour puts his tunic back on: in any but the normal behaviour the moon's
+        // helmet came off, the user, 2026-11-09, "it only keeps him in the racing outfit in normal mode". Not the Wizard's robe, 7-9, 11)
+        if (CubeMode == CUBE_EXTERIEUR && g != s_footBody && (g <= GEN_BODY_PISTOLASER || g == GEN_BODY_TUNIQUE_TIR)) InitBody((U8)s_footBody, NUM_PERSO);
         else if (CubeMode != CUBE_EXTERIEUR && g == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     }
 }
