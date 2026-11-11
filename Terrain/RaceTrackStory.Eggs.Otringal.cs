@@ -62,7 +62,11 @@ internal static partial class RaceTrackStory
     // (on the deck at the pool's south side, a few cells from where the dive lands -- (18278, 1536, 18432) -- facing the water)
     private static readonly (int X, int Y, int Z, int Beta) LyraAt = (20480, 2048, 20736, 2048);
 
-    private static void LyraPoolScore(IslandBeatsA b, string when, int nine, int eight)
+    // (`talk`: Lyra's at the start line, the same by the pool: Twinsen who met her there first couldn't reach her to talk -- the user,
+    // 2026-11-09/11: "the only thing to work on for Otringal is being able to talk to Lyra so we don't have a softlock": the steward sells
+    // no Travel Token till Lyra has told of the fee, Q_FEE 1. From the pool's edge: LyraPoolReach)
+    private const int LyraPoolReach = 3200;
+    private static void LyraPoolScore(IslandBeatsA b, string when, int nine, int eight, string talk)
     {
         if (!b.Store.SceneExists(HotelScene)) { b.Log.Add($"Lyra by the pool left out: no Imperial Hotel (scene {HotelScene})"); return; }
         // (a script compares a value with a number: the clovers kept, and compared, one number at a time)
@@ -104,6 +108,13 @@ void comportement_1()
 
 void comportement_2()
 {{
+    swif (1 == action())
+    {{
+        if ({LyraPoolReach} > distance(0))
+        {{
+{talk}
+        }}
+    }}
 {fewer}}}
 
 void comportement_3()

@@ -1291,7 +1291,7 @@ static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000, s_broken = 0;
 // car_home= (2026-11-11): the story car's home scene (-1 none), the variable told whether the car stands abandoned in another scene of the
 // island, the variable that fetches it home; what the last look saw (the scene, the car's scene, NumBuggy)
-static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = -2, s_carSeenCube = -2, s_carSeenNum = -1;
+static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = -2, s_carSeenCube = -2, s_carSeenNum = -1, s_carHomeIsland = -2;
 // hover= (2026-11-08): the entity (-1 none), its height over the ground, over the road, and how near the road that holds
 static int s_hoverEntity = -1, s_hoverHeight = 300, s_hoverRoad = 1600, s_hoverReach = 3072;
 static char s_brkText[96];
@@ -4658,7 +4658,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "hover")) { if (sscanf(v, "%d %d %d %d", &s_hoverEntity, &s_hoverHeight, &s_hoverRoad, &s_hoverReach) < 4) s_hoverEntity = -1; }
         else if (!strcmp(key, "car_home")) {
             if (sscanf(v, "%d %d %d", &s_carHome, &s_carAwayVar, &s_carFetchVar) != 3 || s_carAwayVar < 0 || s_carAwayVar > 254 || s_carFetchVar < 0 || s_carFetchVar > 254) s_carHome = -1;
-            s_carSeenAt = -2;
+            s_carSeenAt = -2; s_carHomeIsland = -2;
         }
         else if (!strcmp(key, "breakdown")) {
             int used = 0;
@@ -5803,7 +5803,9 @@ static void CarHome(void) {
     if (NumCube == s_carSeenAt && ListBuggy[0].Cube == s_carSeenCube && NumBuggy == s_carSeenNum) return;
     s_carSeenAt = NumCube; s_carSeenCube = ListBuggy[0].Cube; s_carSeenNum = NumBuggy;
     S32 away = 0;
-    if (NumBuggy && !driving && ListBuggy[0].Cube >= 0 && ListBuggy[0].Cube != s_carHome && ListBuggy[0].Cube != NumCube)
+    // (on the home's island only: Otringal's car, Twinsen on Otringal, is no business of Citadel's Zoe)
+    if (s_carHomeIsland == -2) s_carHomeIsland = LoadSceneIsland(s_carHome);
+    if (NumBuggy && !driving && Island == s_carHomeIsland && ListBuggy[0].Cube >= 0 && ListBuggy[0].Cube != s_carHome && ListBuggy[0].Cube != NumCube)
         away = LoadSceneIsland(ListBuggy[0].Cube) == Island;
     ListVarGame[s_carAwayVar] = (S16)away;
     if (away) Log_Info("[racemod] car_home: the car left in scene %d", (int)ListBuggy[0].Cube);

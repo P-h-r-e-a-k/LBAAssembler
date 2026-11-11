@@ -319,7 +319,7 @@ void comportement_1()
         // Lyra at her plinth: the fee and the Esmers' 10 zlitos (Q_FEE 1), the steward, the token. And the translator (item 29), which the
         // control tower's staff and the space port's mechanic answer only to: the game gives it in Baldino's old cell on the moon, which
         // the story doesn't open (the sweep of 2026-11-05)
-        MarshalA(b, report, otringal, $@"            if (0 == var_game({QFee}))
+        var lyraTalk = $@"            if (0 == var_game({QFee}))
             {{
                 message({Say(OtringalLine.LyraZeelich)});
                 add_gold_pieces({StarterZlitos});
@@ -339,7 +339,8 @@ void comportement_1()
             else if ({FeeWon} > var_game({QFee}))
             {{
                 message({Say(OtringalLine.LyraOpen)});
-            }}", "Lyra");
+            }}";
+        MarshalA(b, report, otringal, lyraTalk, "Lyra");
 
         // the steward beside the start line: a copy of the Casino's doorman
         var start = report.StartLine[0];
@@ -489,7 +490,7 @@ void comportement_1()
 
         // the eggs: Rick in the Casino, Lyra by the hotel's pool (RaceTrackStory.Eggs.Otringal.cs)
         RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid));
-        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight));
+        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight), lyraTalk);
 
         b.Save();
         log.Add($"Otringal's race file: gate={QFee} {FeePaid} (the Travel Token), win={QFee} {FeeWon}");
