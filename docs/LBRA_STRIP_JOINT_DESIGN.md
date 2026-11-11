@@ -31,11 +31,30 @@ cloud walls, octagon tiles, brass lamps and green tables, Rick's office's teal a
 | **Backstage** | north, off the rim, where the catwalk starts | The performers' dressing room: mirrors with lights, a clothes rail, lockers, a folding screen. A "staff only" bouncer at its door to the floor. |
 | **Office** | north-east, off the rim | Rick's office look: desk and globe lamp, sofa and armchair, a picture; a bouncer (entity 302, "No touch the Boss!") at its door. |
 
+## Getting in
+
+The user, 2026-11-11: "Twinsen can access this area at any time whilst on Emerald moon. There's no charge to get in." The lift works from
+the moment he arrives on the Moon (chapter 4 on); the bouncers at the entrance let him through and only keep him out of backstage and the
+office.
+
 ## The people
 
 - **Bouncers**: Rick's, entity 297 (two at the entrance, one at backstage) and 302 (the office).
-- **Performers**: the bikini Sup and the rabbibunny marshal models, in their stage costumes, on the poles. They need a few new
-  animations: a pole spin, a sway, a walk down the catwalk.
+- **Performers** (the user: "a few female characters of different species from both worlds, they should be topless just wearing thongs"):
+  women of the game's own cast, all of them clearly adults -- none of those the game calls a girl:
+
+  | Performer | Species | World | From |
+  |---|---|---|---|
+  | the Hacienda's bather | Grobo | Twinsun | the Desert (the grobo lady in the bath) |
+  | the School of Magic's assistant | Rabbibunny | Twinsun | the flag marshal on Twinsun's tracks |
+  | the pharmacy's customer | Quetch | Twinsun | Citadel Island (the umbrella's owner) |
+  | the Imperial Hotel's Sup in her bikini | Sup | Zeelich | the flag marshal on Zeelich's tracks |
+  | a Franco lady | Franco | Zeelich | Otringal's streets |
+  | the saucer's stewardess | Sup | Zeelich | the Moon (a Sup lady aboard the saucer) |
+
+  Each one a copy of her model made over for the stage: topless, in a thong -- her top's faces in her skin's colour, a thong in place of
+  her clothes below. Three on the poles at a time, the others backstage at the mirrors or by the bar between turns, taking turns.
+  New animations: a pole spin, a sway, a walk along the catwalk.
 - **The owner** in the office, a barman, customers at the tables.
 
 ## How it's built
@@ -50,8 +69,8 @@ About a day and a half: the round grid and the dancers' animations are the bigge
 
 ## Questions for the user
 
-1. **The lift's corner**: the yellow mark in moon\cell_lift.png, just inside the door by the corner pillar -- is that the corner you mean?
-2. **When** can Twinsen use the lift: from chapter 4 (the Emerald Moon's chapter), or only after the race, or only once Baldino tells him?
-3. **Getting in** at the club's door: open to anyone, or the bouncers want something (kashes, a password)?
-4. **The performers**: the bikini Sup and the rabbibunny, or others? How many on the poles at once?
-5. **A name** for the club, over its door.
+1. **The lift's corner**: the second guess, moon\cell_lift2.png -- inside the cell, left of the door, behind the stone pillar beside it?
+2. **The performers**: the six above, or others in or out?
+3. **A name** for the club, over its door.
+
+(Answered: any time on the Moon; no charge; women of several species from both worlds, topless, in thongs.)
