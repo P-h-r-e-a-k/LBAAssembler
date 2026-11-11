@@ -90,6 +90,7 @@ internal static class Program
             "actorbeta" => RaceTrackCommand.ActorBeta(args),
             "initbuggy" => RaceTrackCommand.InitBuggy(args),
             "scripttext" => RaceTrackCommand.ScriptText(args),
+            "colscan" => ColScanCommand.Run(args),
             "storytexts" => StoryTextsCommand.Run(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),

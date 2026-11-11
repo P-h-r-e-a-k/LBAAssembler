@@ -5972,7 +5972,10 @@ internal static class RaceTrackBuilder
                 painter.PaintKerb(gx, gz, kerb with { Under = KerbUnder(gx, gz), Land = LandNear(gx, gz) });
             else if (kind is Kind.Sand or Kind.Wall or Kind.Rock && LandNear(gx, gz) is { } land2)
             {
-                painter.Keep(gx, gz, land2.A, land2.B, kind == Kind.Wall);
+                // (a wall Twinsen could walk up -- a steep verge of grass, not a cliff's face -- is walled for the cars only, as the steep banks
+                // are: LBRA issue #5, the user, 2026-11-09: "The steep grass section in Citadel 1 at the edge of the race track lets make it
+                // walkable" -- the north end's verges, x 537-560 z 519-542, had become blocking ground the island hadn't had)
+                painter.Keep(gx, gz, land2.A, land2.B, kind == Kind.Wall, carsOnly: kind == Kind.Wall && CellRise(field, gx, gz) <= FootClimb);
                 kept++;
             }
             else painter.Paint(gx, gz, kind, kind == Kind.Asphalt && arrows.TryGetValue((gx, gz), out var arrow) ? arrow : null);
@@ -6222,6 +6225,8 @@ internal static class RaceTrackBuilder
     // the cliff to the next terrace. So every cell of the shaping that it left steeper than SteepBank (rise over run) is painted as the
     // blocking rock. A verge cell holding a step of more than SteepVerge is the same (PaintRoad).
     private const double SteepBank = 1.0, SteepVerge = 300, BankNearRoad = 12;
+    // the most a verge wall's cell may rise for Twinsen to walk it (a cars-only wall); a steeper one is a cliff's face and blocks him too
+    private const double FootClimb = 1200;
     // the game code of a triangle walled for the cars only (RaceTrackIsland.SoftBanks; the engine's CJ_CAR_WALL)
     public const int CarWall = 10;
 
@@ -6602,11 +6607,11 @@ internal static class RaceTrackBuilder
         }
 
         // A verge or bank cell drawn as the land it was, or the land near it, blocking or not
-        public void Keep(int gx, int gz, IslandPolygon a, IslandPolygon b, bool col)
+        public void Keep(int gx, int gz, IslandPolygon a, IslandPolygon b, bool col, bool carsOnly = false)
         {
             var cube = island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells)!;
-            cube.SetPolygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0, a.With(col: col).Raw);
-            cube.SetPolygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 1, b.With(col: col).Raw);
+            cube.SetPolygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0, (carsOnly ? a.With(col: true, codeJeu: CarWall) : a.With(col: col)).Raw);
+            cube.SetPolygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 1, (carsOnly ? b.With(col: true, codeJeu: CarWall) : b.With(col: col)).Raw);
             NoWater(gx, gz);
         }
 
