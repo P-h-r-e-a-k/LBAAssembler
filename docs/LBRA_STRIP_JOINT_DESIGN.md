@@ -69,8 +69,8 @@ About a day and a half: the round grid and the dancers' animations are the bigge
 
 ## Questions for the user
 
-1. **The lift's corner**: the second guess, moon\cell_lift2.png -- inside the cell, left of the door, behind the stone pillar beside it?
-2. **The performers**: the six above, or others in or out?
-3. **A name** for the club, over its door.
+1. **The performers**: the six above, or others in or out?
+2. **A name** for the club, over its door.
 
-(Answered: any time on the Moon; no charge; women of several species from both worlds, topless, in thongs.)
+(Answered: any time on the Moon; no charge; women of several species from both worlds, topless, in thongs; the lift's corner is the one in
+moon\cell_lift2.png -- inside the cell, left of the door, hidden behind the stone pillar beside it.)
