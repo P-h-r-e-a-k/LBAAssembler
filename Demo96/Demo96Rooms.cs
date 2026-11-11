@@ -28,11 +28,13 @@ internal static class Demo96Rooms
 {
     // (Arrival: where a door of the game's into the slot lands Twinsen when the demo has no door from that place -- its own way in;
     // Pave: cells of the demo's grid paved over -- Paving; Wade: cells of its water made water Twinsen can stand in -- Wading)
-    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null, Paving? Pave = null, Wading? Wade = null);
+    public sealed record Room(int DemoScene, int Slot, string Name, (int X, int Y, int Z)? Arrival = null, Paving? Pave = null, Wading? Wade = null,
+        Paving[]? MorePaves = null);
 
     // The cells x X0-X1, z Z0-Z1 floored at `Layer` as the row z `Like` is there, cell for cell (its blocks and places), and emptied under
-    // it down to `Under`
-    public sealed record Paving(int X0, int X1, int Z0, int Z1, int Layer, int Like, int Under);
+    // it down to `Under`. Or as one cell is, all of them (`LikeX`, at `LikeLayer`: -1, the same x and layer); and emptied over it up to
+    // `Over` (-1: not)
+    public sealed record Paving(int X0, int X1, int Z0, int Z1, int Layer, int Like, int Under, int LikeX = -1, int LikeLayer = -1, int Over = -1);
 
     // The cells x X0-X1, z Z0-Z1 at `Layer` drawn as they are, but water Twinsen can stand in (the game code CJ_FOOT_WATER, 12, for the
     // demo's water's 1): each block there copied once at the end of the room's library with that code, the cells set to the copy
@@ -50,9 +52,32 @@ internal static class Demo96Rooms
     // the same places do (the Tavern's cellar lift, scenes 21 and 34, the lift down from the harbour, 48, into the far halls); the
     // storm track's lift (scene 42), which the demo hasn't, lands where the demo starts Twinsen in them (on the cellar lift's
     // platform the demo's lift ride starts, and Twinsen, come any other way, fell from it and drowned).
+    // (the sewers, scene 17: the hatch from the quay brings Twinsen onto the painter's walkway (cells x 33-42, floor layer 6), walled off from
+    // the big walkway (x 12-31, layer 4) by the wall at x 32, and that walkway parted from the far tunnel's door's platform (x 0-3, z 17-21,
+    // layer 5) by the deadly water at x 4-10 -- the far tunnel couldn't be walked to at all, the scripted playthrough found (2026-11-07):
+    // the way the thief went, following his painted footprints (the user, 2026-11-10). A doorway through the wall at x 32, z 36-37, its
+    // floor a step (layer 5) between the two walkways, the big walkway's edge there plain floor; and a bridge over the water at z 17-21 (five cells wide: the sewer bat knocks Twinsen about there), x 4-16, the big walkway's floor (layer 4))
     public static readonly Room[] Sewers =
     {
-        new(17, 17, "the sewers", (20357, 1536, 15140)),
+        new(17, 17, "the sewers", (20357, 1536, 15140), MorePaves: new Paving[]
+        {
+            new(32, 32, 36, 37, 4, 36, 4, LikeX: 28, LikeLayer: 3, Over: 12),
+            new(31, 31, 36, 37, 3, 36, 3, LikeX: 28, LikeLayer: 3),
+            new(4, 16, 17, 21, 3, 18, 3, LikeX: 20, LikeLayer: 3),
+            new(13, 15, 22, 23, 3, 18, 3, LikeX: 20, LikeLayer: 3),   // (the bridge's corner with the walkway filled: the bat knocked him into it)
+            // (and a parapet two layers high along the bridge's open sides, the walkway's own wall bricks: the sewer bat knocks Twinsen about
+            // there, into the deadly water)
+            new(4, 12, 16, 16, 4, 35, 4, LikeX: 32, LikeLayer: 5),
+            new(4, 12, 16, 16, 5, 35, 5, LikeX: 32, LikeLayer: 5),
+            new(4, 12, 22, 22, 4, 35, 4, LikeX: 32, LikeLayer: 5),
+            new(4, 12, 22, 22, 5, 35, 5, LikeX: 32, LikeLayer: 5),
+            new(12, 12, 23, 23, 4, 35, 4, LikeX: 32, LikeLayer: 5),
+            new(12, 12, 23, 23, 5, 35, 5, LikeX: 32, LikeLayer: 5),
+            new(13, 15, 24, 24, 4, 35, 4, LikeX: 32, LikeLayer: 5),
+            new(13, 15, 24, 24, 5, 35, 5, LikeX: 32, LikeLayer: 5),
+            // (and the door's platform brought down to the bridge's floor: a whole layer up from it was a step Twinsen can't walk up)
+            new(0, 3, 17, 21, 3, 18, 3, LikeX: 20, LikeLayer: 3, Over: 4),
+        }),
         new(18, 18, "the sewers' far halls"),
     };
 
@@ -239,6 +264,13 @@ internal static class Demo96Rooms
     // comes into it. The sewers' ladder (scene 17): climbing it at x 512-1536, z ~27927 into the door at its top (box x 512.., z 27648..,
     // y 2704..) -- the demo's (9728, 512, 7168) put him in the pillar top's shaft (cells x 19-20, z 14-15, empty to the bottom), down onto
     // the door back to the ladder; now on the shaft's north rim (cells x 19-20, z 13, its top 1536), the ladder's width along it.
+    // (and doors whose box's foot the story lowers, to a floor it lowered: (scene, the door's scene, its box's x0, z0) -> its y0 -- the
+    // sewers' far tunnel's door, its platform brought down a layer to the bridge's floor)
+    private static readonly Dictionary<(int Scene, int To, int X0, int Z0), int> DoorFloors = new()
+    {
+        [(17, 18, 0, 9216)] = 1024,
+    };
+
     private static readonly Dictionary<(int Scene, int X, int Y, int Z), (int X, int Y, int Z)> DoorLandings = new()
     {
         [(17, 9728, 512, 7168)] = (9728, 1536, 6633),
@@ -291,19 +323,20 @@ internal static class Demo96Rooms
             var (library, fragments) = MapBricks.Install(map, bkg, MapBricks.RaceEngineMaxBricks);
             var grid = (byte[])map.Grid!.Clone();
             grid[0] = (byte)library; grid[1] = map.Fragments is null ? oldFragments[r.Slot] : (byte)fragments;
-            if (r.Pave is { } pave)
+            foreach (var pave in new[] { r.Pave }.Concat(r.MorePaves ?? Array.Empty<Paving>()).OfType<Paving>())
             {
                 var shape = Lba2GridBackend.ToLba1Shape(grid);
                 var edits = new List<Lba1GridCell>();
                 for (var z = pave.Z0; z <= pave.Z1; z++)
                     for (var x = pave.X0; x <= pave.X1; x++)
                     {
-                        var like = Lba1GridEdit.Get(shape, x, pave.Layer, pave.Like);
+                        var like = Lba1GridEdit.Get(shape, pave.LikeX >= 0 ? pave.LikeX : x, pave.LikeLayer >= 0 ? pave.LikeLayer : pave.Layer, pave.Like);
                         edits.Add(new Lba1GridCell(x, pave.Layer, z, like.Block, like.Pos));
                         for (var y = pave.Under; y < pave.Layer; y++) edits.Add(new Lba1GridCell(x, y, z, 0, 0));
+                        for (var y = pave.Layer + 1; y <= pave.Over; y++) edits.Add(new Lba1GridCell(x, y, z, 0, 0));
                     }
                 grid = Lba2GridBackend.FromLba1Shape(grid, Lba1GridEdit.SetCells(shape, edits));
-                log.Add($"  scene {r.Slot}: cells x {pave.X0}-{pave.X1}, z {pave.Z0}-{pave.Z1} paved at layer {pave.Layer} as row z {pave.Like} is");
+                log.Add($"  scene {r.Slot}: cells x {pave.X0}-{pave.X1}, z {pave.Z0}-{pave.Z1} paved at layer {pave.Layer} as {(pave.LikeX >= 0 ? $"cell ({pave.LikeX}, {pave.Like})" : $"row z {pave.Like}")} is{(pave.Over >= 0 ? $", emptied over it to layer {pave.Over}" : "")}");
             }
             if (r.Wade is { } wade)
             {
@@ -373,6 +406,11 @@ internal static class Demo96Rooms
                     else zone.Num = to;
                     // (a door within the room landing Twinsen in a shaft -- DoorLandings: the sewers' ladder's door, scene 17, put him in the
                     // pillar top's shaft, down which he fell into the door back to the ladder, in mid-air: "keeps falling when he gets to the top")
+                    if (DoorFloors.TryGetValue((r.Slot, zone.Num, zone.X0, zone.Z0), out var floor) && floor < zone.Y0)
+                    {
+                        log.Add($"  scene {r.Slot}: the door to scene {zone.Num} at x {zone.X0}, z {zone.Z0}: its foot from {zone.Y0} down to {floor} (its floor lowered)");
+                        zone.Y0 = floor;
+                    }
                     if (zone.Num == r.Slot && DoorLandings.TryGetValue((r.Slot, zone.Info[0], zone.Info[1], zone.Info[2]), out var land))
                     {
                         log.Add($"  scene {r.Slot}: the door at x {zone.X0}..{zone.X1} z {zone.Z0}..{zone.Z1} landed Twinsen in a shaft at ({zone.Info[0]}, {zone.Info[1]}, {zone.Info[2]}): now at ({land.X}, {land.Y}, {land.Z})");
