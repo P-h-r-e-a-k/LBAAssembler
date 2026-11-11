@@ -37,7 +37,9 @@ internal static partial class RaceTrackStory
         // ground nor stopped by its decors, and well over the road wherever he comes near it -- F14, the user, 2026-11-08: "raise his
         // actors path above ground", "check that during a race he won't be in the way of the track at any point": RACEMOD.CPP hover=)
         $"hover={CarpetPeddler} 0 {CarpetOverRoad} {CarpetRoadReach}\n";
-    private const int CarpetPeddler = 169, CarpetOverRoad = 1600, CarpetRoadReach = 5000;
+    // (1200 over the road -- a car clears under him -- within half the reach of the lap's line, easing down to his own height over the
+    // ground at 3200: the user, 2026-11-08, "Our wizard fix has left him high in the air" -- 1600 anywhere within 5000, over the beach too)
+    private const int CarpetPeddler = 169, CarpetOverRoad = 1200, CarpetRoadReach = 3200;
 
     private static readonly string[][] FiltersTexts =
     {

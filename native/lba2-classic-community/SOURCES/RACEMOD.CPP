@@ -11796,7 +11796,14 @@ static void Hover(void) {
                 const double d = (g->X[i] - wx) * (g->X[i] - wx) + (g->Z[i] - wz) * (g->Z[i] - wz);
                 if (d < bd) { bd = d; best = i; }
             }
-            if (best >= 0 && bd < (double)s_hoverReach * s_hoverReach && g->Y[best] + s_hoverRoad > want) want = g->Y[best] + s_hoverRoad;
+            // (the road's clearance in full within half the reach, easing to his own height over the ground at its edge: he swoops up over
+            // the road and down again, not hanging high beside it -- the user, 2026-11-08, of Chedil's carpet: "left him high in the air")
+            if (best >= 0 && bd < (double)s_hoverReach * s_hoverReach && g->Y[best] + s_hoverRoad > want) {
+                const double d = sqrt(bd), full = s_hoverReach * 0.5;
+                double k = d <= full ? 1 : (s_hoverReach - d) / (s_hoverReach - full);
+                k = k < 0 ? 0 : k > 1 ? 1 : k * k * (3 - 2 * k);
+                want += (g->Y[best] + s_hoverRoad - want) * k;
+            }
         }
         // (eased: a carpet rising over the road, not jumping)
         const S32 step = 40, gap = (S32)want - a->Obj.Y;
