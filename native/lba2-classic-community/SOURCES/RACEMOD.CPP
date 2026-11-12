@@ -18118,11 +18118,35 @@ static void StoryTwo(void) {
     // ---- the other player, shown by an actor of the scene
     T_RACENET_CAR o;
     const int seen = RaceNet_CarOf(0, &o) && (o.Flags & RACENET_CAR_STORY) && o.Lap == (S32)NumCube && !(o.Flags & RACE_TWO_DRIVING);
+    // (the story's own Zoes -- the yard's, the house's -- hidden while player 2 plays her: the companions' marks are the engine's)
+    if (s_compEntity >= 0)
+        for (int n = 1; n < (int)NbObjets; n++)
+            if (ListObjet[n].IndexFile3D == s_compEntity && ListObjet[n].Armure != s_compMark && ListObjet[n].Armure != s_compInMark && !(ListObjet[n].WorkFlags & OBJ_DEAD)) HideActor(n);
     if (!zoe) {
-        // (player 1's: Zoe where player 2 is)
+        // (player 1's: Zoe where player 2 is. Her samples stop while her dialog is up -- her game is in the box's own loop -- so she stays where
+        // she was last seen, in this scene, for a few seconds rather than vanishing: the user's list, 2026-11-11)
+        static S32 lastAt = -100000;
+        static T_RACENET_CAR last;
+        static S32 lastCube = -1;
+        if (seen) { last = o; lastAt = now; lastCube = (S32)NumCube; }
         if (seen) Glue(comp, o.X, o.Y, o.Z, o.Beta, ZoeGen(o.Progress));
+        else if (lastCube == (S32)NumCube && now - lastAt < 8000 && last.Lap == (S32)NumCube && !(last.Flags & RACE_TWO_DRIVING)) Glue(comp, last.X, last.Y, last.Z, last.Beta, GEN_ANIM_RIEN);
         else HideActor(comp);
         HideActor(dbl);
+        // ---- her fetching (the user's list: "her fetching at pickups"): a pickup lying within two cells of her -- money, hearts, magic, keys,
+        // clovers -- is brought to Twinsen as she picks it up: it goes to where he stands, and he takes it as he would a thing lying by him
+        static S32 fetchAt = 0;
+        if (comp >= 0 && !(ListObjet[comp].Flags & INVISIBLE) && now - fetchAt >= 200) {
+            fetchAt = now;
+            for (int n = 0; n < MAX_EXTRAS; n++) {
+                T_EXTRA *x = &ListExtra[n];
+                if (x->Sprite == -1 || !(x->Flags & EXTRA_TAKABLE) || (x->Flags & EXTRA_FLY)) continue;
+                const double dx = x->PosX - ListObjet[comp].Obj.X, dz = x->PosZ - ListObjet[comp].Obj.Z;
+                if (dx * dx + dz * dz > 1024.0 * 1024.0) continue;
+                x->PosX = hero->Obj.X; x->PosY = hero->Obj.Y + 100; x->PosZ = hero->Obj.Z;
+                Log_Info("[racemod] two players: Zoe fetched a pickup (sprite %d) for Twinsen", (int)x->Sprite);
+            }
+        }
     } else {
         // (player 2's: Zoe on its own hero, who isn't drawn; Twinsen where player 1 is -- in his car, the car drawn as two players' races draw it.
         // After a load she starts beside him, a little behind and to his left, as the companion does: the save has the place he came into
