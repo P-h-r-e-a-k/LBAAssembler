@@ -530,6 +530,8 @@ internal static class RaceTrackService
                 made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.Install(gameDirectory));
                 // (and the stairs up to the back gate's ledge in the caves' first scene, scene 2)
                 made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.InstallStairs(gameDirectory));
+                // (and the Tavern's plant out of its corner at the end of the bar, for the dartboard: Citadel/TavernPlant)
+                made.Add(LBAAssembler.Terrain.Citadel.TavernPlant.Remove(gameDirectory));
             }
             // (and Stella Entities, the club under the Emerald Moon's reactor, its hidden lift in Baldino's old cell: StellaEntities)
             if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Emerald.IleFile)) { made.AddRange(StellaEntities.Install(gameDirectory)); made.AddRange(StellaRooms.Install(gameDirectory)); }

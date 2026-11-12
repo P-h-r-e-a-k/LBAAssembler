@@ -60,6 +60,7 @@ internal static class Program
             "interiorall" => InteriorAllTest.Run(args),
             "audio" => AudioTests.Run(args),
             "decorprobe" => DecorProbe.Run(args),
+            "tavgrid" => TavernGridProbe.Run(args),
             "racetrack" => RaceTrackProbe.Run(args),
             "buildtrack" => RaceTrackCommand.Run(args),
             "herostart" => RaceTrackCommand.HeroStart(args),
