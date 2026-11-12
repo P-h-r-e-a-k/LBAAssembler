@@ -2910,8 +2910,7 @@ static S32 AchievementsPage(void) {
     SetRow(menu, 0, RG_ID_BACK);
     for (int i = 0; i < RG_ACH_N; i++) SetRow(menu, 1 + i, (U16)(RG_ID_ACH_FIRST + i));
     for (;;) {
-        Page("Achievements", 16);
-        Text(UI_CENTER_X, 462 + UI_VCENTER_OFS, "Choose one you have earned to watch or explore it again", RG_GREY);
+        Page(NULL, 0);   // (eight rows fill the screen: no heading; an earned one with a replay can be chosen to watch or explore it again)
         const S32 select = Menu(menu);
         if (select == MENU_RELAYOUT) continue;
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
