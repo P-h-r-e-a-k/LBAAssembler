@@ -378,7 +378,9 @@ void comportement_1()
             scripts.SetText(FontaineActor, ScriptKind.Life, Loose(scripts.GetText(FontaineActor, ScriptKind.Life),
                 "if (0 == var_game(55) && 0 == var_game(31))", $"if ({FuelWon} > var_game({QFuel}) || (0 == var_game(55) && 0 == var_game({FragmentFrancos})))")));
 
+        var pads = FrancoTunnelEdits(b, report);
         b.Save();
+        if (pads is not null) log.AddRange(FrancoTunnels.Install(gameDirectory, pads));
         log.Add($"the Island of the Francos' race file: gate={QFuel} {FuelOpen} (De La Fontaine told), win={QFuel} {FuelWon}");
         return log;
     }
