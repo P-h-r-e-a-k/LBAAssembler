@@ -106,26 +106,32 @@ internal static class BowlingAlley
         hero.Life = new byte[] { 0 }; hero.Track = new byte[] { 0 };
         const int DontReadjust = 1;
         var padFoot = (X: PadX, Y: PadY - CitadelProps.LiftTop, Z: PadZ);
-        var clubTop = FloorY + ClubDown + 300;
+        var clubTop = FloorY + ClubUp - 100;
+        const int Big = 1024;   // (the platform: four plates two by two, where Twinsen arrives on it being where he stood in the pad's door)
         model.Zones.Add(new SceneZoneModel
         {
-            Type = 0, Num = Outside, X0 = clubLift.Item1 - 512, X1 = clubLift.Item1 + 511, Z0 = clubLift.Item3 - 512, Z1 = clubLift.Item3 + 511, Y0 = clubTop, Y1 = clubTop + 3000,
-            Info = new[] { padFoot.X - 512, padFoot.Y + CitadelProps.LiftTop - CellUp + 4, padFoot.Z - 512, 0, 0, 0, DontReadjust, 1 },
+            Type = 0, Num = Outside, X0 = clubLift.Item1 - Big, X1 = clubLift.Item1 + Big - 1, Z0 = clubLift.Item3 - Big, Z1 = clubLift.Item3 + Big - 1, Y0 = clubTop, Y1 = clubTop + 3000,
+            Info = new[] { PadX - Big, PadY + 40, PadZ - Big, 0, 0, 0, 0, 1 },
         });
-        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = clubLift.Item1 - 512, X1 = clubLift.Item1 + 511, Z0 = clubLift.Item3 - 512, Z1 = clubLift.Item3 + 511, Y0 = FloorY - 100, Y1 = FloorY + 800, Info = new int[8] });
-        model.Zones.Add(new SceneZoneModel { Type = 2, Num = ArrivalZone, X0 = clubLift.Item1 - 512, X1 = clubLift.Item1 + 511, Z0 = clubLift.Item3 - 512, Z1 = clubLift.Item3 + 511, Y0 = FloorY + ClubDown - 200, Y1 = FloorY + ClubDown + 400, Info = new int[8] });
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = clubLift.Item1 - Big, X1 = clubLift.Item1 + Big - 1, Z0 = clubLift.Item3 - Big, Z1 = clubLift.Item3 + Big - 1, Y0 = FloorY - 100, Y1 = FloorY + 800, Info = new int[8] });
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = ArrivalZone, X0 = clubLift.Item1 - Big, X1 = clubLift.Item1 + Big - 1, Z0 = clubLift.Item3 - Big, Z1 = clubLift.Item3 + Big - 1, Y0 = FloorY + ClubDown - 300, Y1 = FloorY + ClubDown + 900, Info = new int[8] });
         // the lift's parts (carriers, as Stella Entities'): the plate and its rails, on a track up into the dark
-        var clubLow = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1, FloorY, clubLift.Item3));
-        var clubHigh = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1, FloorY + ClubUp, clubLift.Item3));
-        var parts = new[] { CitadelProps.MoonLiftPlatform, CitadelProps.LiftRailBack, CitadelProps.LiftRailLeft, CitadelProps.LiftRailRight }.Select(g =>
+        // (track point 0 and actor 1 go unused: a goto to point 0 never arrived, and the first plate, as actor 1, was taken for the game's buggy and
+        // stayed up where it started, Twinsen waiting on it for ever)
+        SceneOps.AddTrackPoint(model, new SceneTrackPoint(0, FloorY, 0));
+        Text(SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(0, FloorY, 0)), Still(), "label(0);\nstop();\n");
+        var parts = new List<int>();
+        foreach (var (dx, dz) in new[] { (-512, -512), (512, -512), (-512, 512), (512, 512) })
         {
-            var a = CitadelProps.Actor(g, clubLift.Item1, FloorY + ClubDown, clubLift.Item3);
+            var low = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1 + dx, FloorY, clubLift.Item3 + dz));
+            var high = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1 + dx, FloorY + ClubUp, clubLift.Item3 + dz));
+            var a = CitadelProps.Actor(CitadelProps.MoonLiftPlatform, clubLift.Item1 + dx, FloorY + ClubDown, clubLift.Item3 + dz);
             a.Flags |= RaceTrackScenes.CarrierFlag; a.Move = 3; a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
-            return SceneOps.AddActor(model, a);
-        }).ToArray();
-        var clubTrack = $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({clubLow});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
-                        $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({clubHigh});\nstop();\n";
-        foreach (var i in parts) Text(i, Still(), clubTrack);
+            var plate = SceneOps.AddActor(model, a);
+            parts.Add(plate);
+            Text(plate, Still(), $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({low});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
+                                 $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({high});\nstop();\n");
+        }
         var ride = string.Concat(parts.Select(i => $"            set_track_obj({i}, label_{LiftRide});\n"));
         var heroLife = $@"void comportement_0()
 {{
@@ -318,14 +324,14 @@ void comportement_3()
     public static Action<SceneScripts> OutsideLift(SceneModel model)
     {
         var helper = SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(PadX, PadY, PadZ));
-        const int DontReadjust = 1, ArriveOver = 40, Under = 60;
+        const int DontReadjust = 1, Big = 1024, Tall = 700;   // (the ground slopes: tall zones; arriving he falls onto the plate from a little over it)
         var clubArrival = (X: (FootX + 1) * 512, Y: FloorY + CitadelProps.LiftTop + ClubDown, Z: (FootZ + 1) * 512);
         model.Zones.Add(new SceneZoneModel
         {
-            Type = 0, Num = Scene, X0 = PadX - 512, X1 = PadX + 511, Z0 = PadZ - 512, Z1 = PadZ + 511, Y0 = PadY - Under, Y1 = PadY + 700,
-            Info = new[] { clubArrival.X - 512, clubArrival.Y - Under + ArriveOver, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
+            Type = 0, Num = Scene, X0 = PadX - Big, X1 = PadX + Big - 1, Z0 = PadZ - Big, Z1 = PadZ + Big - 1, Y0 = PadY - Tall, Y1 = PadY + Tall,
+            Info = new[] { clubArrival.X - Big, clubArrival.Y - Tall + 100, clubArrival.Z - Big, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
-        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = PadX - 512, X1 = PadX + 511, Z0 = PadZ - 512, Z1 = PadZ + 511, Y0 = PadY - 100, Y1 = PadY + 800, Info = new int[8] });
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = PadX - Big, X1 = PadX + Big - 1, Z0 = PadZ - Big, Z1 = PadZ + Big - 1, Y0 = PadY - Tall, Y1 = PadY + Tall, Info = new int[8] });
         var life = $@"void comportement_0()
 {{
     swif (1 == action())
