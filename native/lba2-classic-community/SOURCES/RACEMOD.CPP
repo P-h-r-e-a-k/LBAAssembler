@@ -18466,6 +18466,9 @@ static void DeckLiftFrame(S32 now) {
                     hero->WorkFlags &= ~FALLING;
                     InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
                     ClearRealAngle(hero);
+                    // (the user, 2026-11-12: "leaving via the window should have us rise up on an elevator back onto the road": he and the grate start
+                    // RACE_LIFT_DROP down and rise with it, as the plain pad's lift does)
+                    s_lift = i; s_liftDir = 1; s_liftAt = now; s_liftOff = -RACE_LIFT_DROP; s_liftPhase = 0;
                     Log_Info("[racemod] lift: up onto its grate in scene %d", (int)NumCube);
                     continue;
                 }
@@ -18491,6 +18494,7 @@ static void DeckLiftFrame(S32 now) {
     s_liftOff = s_liftDir < 0 ? -RACE_LIFT_DROP * e : -RACE_LIFT_DROP * (1 - e);
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     hero->Obj.X = s_lifts[i].X; hero->Obj.Z = s_lifts[i].Z; hero->Obj.Y = s_lifts[i].Y + (S32)s_liftOff;
+    if (T_OBJET *rising = LiftGrate(i)) rising->Obj.Y = s_lifts[i].Y + (S32)s_liftOff;   // (the grate under him, rising with him)
     hero->WorkFlags &= ~FALLING;
     // (standing on it as it moves: not the fall the engine would play below the road)
     if (hero->GenAnim != GEN_ANIM_RIEN) InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
