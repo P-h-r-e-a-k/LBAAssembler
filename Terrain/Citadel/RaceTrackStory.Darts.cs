@@ -9,10 +9,10 @@ namespace LBAAssembler.Terrain;
 // player 2, in a game with two players.
 internal static partial class RaceTrackStory
 {
-    // the board on the Tavern's wall (scene 3), on the stairs' wall in the corner at the end of the bar where the potted plant stood (the user,
+    // the board on the Tavern's wall (scene 3), on the window wall in the corner at the end of the bar where the potted plant stood (the user,
     // 2026-11-12: "remove plant from the corner at the end of the bar and put the dart board against that wall instead"; the plant is
-    // Citadel/TavernPlant's), facing the floor (beta 0: toward +z) -- and where Twinsen stands to play, a few steps out in front of it
-    internal const int DartsX = 1024, DartsZ = 7240, DartsBeta = 0, DartsReach = 1500;
+    // Citadel/TavernPlant's), facing the floor (beta 1024: toward +x) -- and where Twinsen stands to play, a few steps out in front of it
+    internal const int DartsX = 584, DartsZ = 7680, DartsBeta = 1024, DartsReach = 1500;
     // a foe: its body and standing animation (to be shown beside the board), its name, how steady its hand is (the tenths of the board's
     // radius its darts scatter by: smaller is better) -- Luc behind his bar and Baldino best, Pat the worst
     internal static readonly (int Body, int Anim, string Name, int Scatter)[] DartFoes =

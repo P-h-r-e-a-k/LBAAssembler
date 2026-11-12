@@ -28,6 +28,11 @@ internal static class TavernPlant
             for (var x = X0; x <= X1; x++)
                 for (var y = FloorLayer + 1; y < Height; y++)
                     if (cells[((z * Size + x) * Height + y) * 2] == PlantBlock) edits.Add(new Lba1GridCell(x, y, z, 0, 0));
+        // (the flagstones under it were its shadow's darker tiles: the floor's own, as in the rows round it -- block 3, position 8 in the column
+        // at x 1 on even rows and 4 on odd, 6 at x 2)
+        for (var z = Z0; z <= Z1; z++)
+            for (var x = X0; x <= X1; x++)
+                if (edits.Count > 0) edits.Add(new Lba1GridCell(x, FloorLayer, z, 3, x == 1 ? (z % 2 == 0 ? 8 : 4) : 6));
         if (edits.Count == 0) return "the Tavern's plant: gone already (or the grid isn't the game's)";
         var stored = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
         bkg.SetStored(entry, stored);
