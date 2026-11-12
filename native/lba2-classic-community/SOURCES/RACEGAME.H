@@ -10,7 +10,9 @@
 #define RACEGAME_STORY_NEW 2398             // ... Story Mode's set loaded (story_file=): a new game of LBA2's, its introduction first
 #define RACEGAME_STORY_CONTINUE 2397        // ... the same, the story's own save (story.lba) put in current.lba: the game resumed from it
 
-S32 RaceGame_On(void);                      // RACEGAME.TXT read: the main menu is the race game's
+S32 RaceGame_On(void);
+// An achievement earned (RACEMOD.CPP achieve=): its title in `title`, non-zero when it is new -- kept for the player, ACHIEVEMENTS.TXT
+S32 RaceGame_Achieve(const char *id, char *title, S32 size);                      // RACEGAME.TXT read: the main menu is the race game's
 // The race game's main menu, and its pages (Specials, a race or a time trial, the car, Best times): what MainGameMenu does next --
 // 70 resume (1000 for Esc with a race on), 74 the options, 75 quit, RACEGAME_START a race, RACEGAME_STORY_NEW / _CONTINUE Story Mode.
 // `inGame`: a race (or the story) is on to resume.

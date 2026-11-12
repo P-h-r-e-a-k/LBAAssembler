@@ -670,6 +670,8 @@ internal static class RaceCarEngineFile
                 foreach (var (x0, z0, x1, z1) in Citadel.CitadelProps.PoolBasin) text.Append($"pool={RaceTrackStory.HotelSceneNumber} {x0} {z0} {x1} {z1} {Citadel.CitadelProps.PoolFloor} {Citadel.CitadelProps.PoolSurface}\n");
                 text.Append($"pool_board={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.BoardX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.BoardTipX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.BoardHigh + 60} {Citadel.CitadelProps.BoardLandX} {Citadel.CitadelProps.BoardZ}\n");
                 text.Append($"pool_splash={RaceTrackStory.PoolSplash}\npool_anims={PoolSwim.Swim} {PoolSwim.Tread} {PoolSwim.Dive} {PoolSwim.Flip}\n");
+                // (the achievements: RaceTrackStory.Achievements -- a game variable at a value, or a scene entered)
+                foreach (var line in RaceTrackStory.Achievements) text.Append(line + "\n");
             }
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");

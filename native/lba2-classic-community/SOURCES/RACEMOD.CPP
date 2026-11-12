@@ -762,6 +762,14 @@ static void SetAtLeast(int var, int value, const char *why) {
 // RaceGame_StoryUnlock keeps them; said on the display once the race's own word is over (s_sayNext)
 static char s_unlockWin[24] = "", s_unlockBeat[24] = "";
 static char s_sayNext[64] = "";
+// achieve=<id> var <game variable> <value>, achieve=<id> scene <scene>: an achievement earned when the variable reaches the value or the scene is
+// entered (RaceGame_Achieve keeps it for the player; the banner says so) -- the story file's, 2026-11-12
+#define RACE_MAX_ACH 16
+typedef struct { char Id[24]; int Kind, A, B; } T_RACE_ACH;
+static T_RACE_ACH s_achs[RACE_MAX_ACH];
+static int s_nbAchs = 0;
+static S32 s_achsAt = 0, s_achUntil = 0;
+static char s_achText[96] = "";
 // A sprint (sprint=, finishline=): the race from the start line to the finish line, once. Each opponent's line ends where it crosses the
 // finish (FinishS); the race's end -- the player over the line, or the one to beat there first -- is followed, RACE_SPRINT_END_MS later,
 // by the dream's waking up (wake=) or the race run again (a loss).
@@ -4222,6 +4230,14 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "pool_board")) s_hasBoard = sscanf(v, "%d %d %d %d %d %d %d %d", &s_board[0], &s_board[1], &s_board[2], &s_board[3], &s_board[4], &s_board[5], &s_board[6], &s_board[7]) == 8;
         else if (!strcmp(key, "pool_anims")) sscanf(v, "%d %d %d %d", &s_poolSwimAnim, &s_poolTreadAnim, &s_poolDiveAnim, &s_poolFlipAnim);
         else if (!strcmp(key, "pool_splash")) s_poolSplash = atoi(v);
+        else if (!strcmp(key, "achieve") && s_nbAchs < RACE_MAX_ACH) {
+            char kind[12];
+            T_RACE_ACH *ac = &s_achs[s_nbAchs];
+            ac->A = ac->B = 0;
+            const int got = sscanf(v, "%23s %11s %d %d", ac->Id, kind, &ac->A, &ac->B);
+            if (got >= 3 && !strcmp(kind, "scene")) { ac->Kind = 1; s_nbAchs++; }
+            else if (got == 4 && !strcmp(kind, "var")) { ac->Kind = 0; s_nbAchs++; }
+        }
         else if (!strcmp(key, "foot_edge")) s_footEdge = atoi(v);
         else if (!strcmp(key, "foot_gap") && s_nbFootGaps < RACE_MAX_FOOT_GAPS) {
             if (sscanf(v, "%d %d %d %d", &s_footGaps[s_nbFootGaps][0], &s_footGaps[s_nbFootGaps][1], &s_footGaps[s_nbFootGaps][2], &s_footGaps[s_nbFootGaps][3]) == 4) s_nbFootGaps++;
@@ -13743,7 +13759,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -18611,6 +18627,17 @@ static void PoolAnim(T_OBJET *hero, int gen) {
     if (gen < 0 || hero->GenAnim == (U8)gen) return;
     InitAnim((U16)gen, ANIM_REPEAT, NUM_PERSO);
 }
+// The achievements (achieve=), looked at a few times a second: a game variable at its value, or the scene he is in
+static void AchievementsFrame(S32 now) {
+    if (!s_nbAchs || now - s_achsAt < 400 || NewCube != -1) return;
+    s_achsAt = now;
+    for (int i = 0; i < s_nbAchs; i++) {
+        const T_RACE_ACH *ac = &s_achs[i];
+        const int hit = ac->Kind == 0 ? ac->A >= 0 && ac->A < MAX_VARS_GAME && ListVarGame[ac->A] >= ac->B : (S32)NumCube == ac->A;
+        char title[64];
+        if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "Achievement: %s", title); s_achUntil = now + 6000; }
+    }
+}
 // Whether Twinsen is in the pool's water -- the basin's box, or the dive on its way -- where he swims and does not drown (OBJECT.CPP's water)
 S32 RaceMod_PoolSwims(void) {
     if (!RaceMod_Active() || !s_nbPools || CubeMode != CUBE_INTERIEUR) return 0;
@@ -19137,6 +19164,7 @@ void RaceMod_Frame(void) {
     DeckLiftFrame(TimerRefHR);
     FootEdgeFrame();
     PoolFrame(TimerRefHR);
+    AchievementsFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -21310,6 +21338,11 @@ void RaceMod_Draw(void) {
     if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
     DrawFarItems();
     DrawWindow();
+    // (an achievement's banner, on foot or in the car, out of doors or in: along the top)
+    if (s_achText[0] && TimerRefHR < s_achUntil) {
+        const S32 w = (S32)ModeDesiredX;
+        HudLine(w / 2 - SizeFont(s_achText) / 2, 24, s_achText, -1);
+    }
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !NoItems() && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,

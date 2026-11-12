@@ -208,6 +208,17 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
 #define RG_ID_SHARED 2470                   // ... its Shared tracks (TracksPage(1))
 #define RG_ID_STORY_TWO 2471                // Story Mode's Two players row: player 2 is Zoe (StoryMode, 2026-11-11)
+#define RG_ID_PLAYER 2472                   // the main menu's Player: <name> (PlayersPage), Achievements (AchievementsPage)
+#define RG_ID_ACHIEVEMENTS 2473
+#define RG_ID_PLAYER_NEW 2474               // PlayersPage's New player; its players 2475 .. 2480
+#define RG_ID_PLAYER_FIRST 2475
+#define RG_ID_PLAYER_LAST 2480
+static const char *PlayerNow(void);
+static const char *PlayerNameAt(int k);
+static int PlayerIndexNow(void);
+static int AchievementsEarned(void);
+static int AchievementsAll(void);
+static void AchievementsPage(void);
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -1316,8 +1327,19 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_STORY_TWO))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST))) return 0;
+    // (a player's row: its name, marked when it is this game's)
+    if (num >= RG_ID_PLAYER_FIRST && num <= RG_ID_PLAYER_LAST) {
+        const int k = num - RG_ID_PLAYER_FIRST;
+        char row[96];
+        snprintf(row, sizeof(row), "%s%s", k == PlayerIndexNow() ? "* " : "", PlayerNameAt(k));
+        Label(string, row);
+        return 1;
+    }
     switch (num) {
+    case RG_ID_PLAYER: { char row[96]; snprintf(row, sizeof(row), "Player: %s", PlayerNow()); Label(string, row); return 1; }
+    case RG_ID_ACHIEVEMENTS: { char row[64]; snprintf(row, sizeof(row), "Achievements: %d of %d", AchievementsEarned(), AchievementsAll()); Label(string, row); return 1; }
+    case RG_ID_PLAYER_NEW: Label(string, "New player..."); return 1;
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
@@ -2598,6 +2620,228 @@ static void ReportBugPage(int feature) {
 }
 
 // Feedback, the main menu's (the user, 2026-11-02: "put this under a 'Feedback' menu, then have the options on a second menu")
+// ---- players and achievements (the user, 2026-11-11/12) ----------------------------------------------------------------------------
+// A player is a user folder of the game's: its saves, best times, ghosts, settings, unlocks and achievements all in it, and the game's
+// configuration copied there as it was made. The folder the game had before players (User\LBA2) is the first player's, "Player 1" --
+// nothing moved, nothing lost; the others' are User\Players\<name>. Choosing another player starts the game again on that folder
+// (RaceUpdate_Relaunch: --user-dir) and this one goes. With more than one player the game asks who is playing as it starts.
+#define RG_PLAYERS_MAX 4
+static char s_plName[RG_PLAYERS_MAX][48], s_plDir[RG_PLAYERS_MAX][ADELINE_MAX_PATH];
+static int s_nbPlayers = 0, s_plNow = -1, s_plAsked = 0;
+static char s_plRoot[ADELINE_MAX_PATH], s_plMine[ADELINE_MAX_PATH], s_plNowName[48] = "Player 1";
+
+static void Slashes(char *s) { for (; *s; s++) if (*s == '\\') *s = '/'; }
+static void TrimSep(char *s) { size_t n = strlen(s); while (n > 1 && (s[n - 1] == '/' || s[n - 1] == '\\')) s[--n] = 0; }
+
+// The player's name kept in its folder (PLAYER.TXT), or the first player's own
+static void NameIn(const char *dir, char *name, size_t size, const char *otherwise) {
+    char path[ADELINE_MAX_PATH];
+    snprintf(path, sizeof(path), "%s/PLAYER.TXT", dir);
+    snprintf(name, size, "%s", otherwise);
+    if (FILE *f = fopen(path, "r")) {
+        char line[64];
+        if (fgets(line, sizeof(line), f)) { Trim(line); if (line[0]) snprintf(name, size, "%s", line); }
+        fclose(f);
+    }
+}
+
+static SDL_EnumerationResult SDLCALL PlayerFolder(void *, const char *dirname, const char *fname) {
+    if (s_nbPlayers >= RG_PLAYERS_MAX || fname[0] == '.') return SDL_ENUM_CONTINUE;
+    char dir[ADELINE_MAX_PATH];
+    snprintf(dir, sizeof(dir), "%s/%s", s_plRoot, fname);
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(dir, &info) || info.type != SDL_PATHTYPE_DIRECTORY) return SDL_ENUM_CONTINUE;
+    snprintf(s_plName[s_nbPlayers], sizeof(s_plName[0]), "%s", fname);
+    snprintf(s_plDir[s_nbPlayers], sizeof(s_plDir[0]), "%s", dir);
+    s_nbPlayers++;
+    return SDL_ENUM_CONTINUE;
+}
+
+// The players there are: the first (the game's own folder from before them), then each of User\Players
+static void ListPlayers(void) {
+    char me[ADELINE_MAX_PATH], parent[ADELINE_MAX_PATH], legacy[ADELINE_MAX_PATH];
+    GetCfgPath(me, ADELINE_MAX_PATH, "");
+    Slashes(me);
+    TrimSep(me);
+    snprintf(s_plMine, sizeof(s_plMine), "%s", me);
+    snprintf(parent, sizeof(parent), "%s", me);
+    if (char *slash = strrchr(parent, '/')) *slash = 0;
+    const char *last = strrchr(parent, '/');
+    if (last && !strcasecmp(last + 1, "Players")) {
+        snprintf(s_plRoot, sizeof(s_plRoot), "%s", parent);
+        char up[ADELINE_MAX_PATH];
+        snprintf(up, sizeof(up), "%s", parent);
+        if (char *slash = strrchr(up, '/')) *slash = 0;
+        snprintf(legacy, sizeof(legacy), "%s/LBA2", up);
+    } else {
+        snprintf(s_plRoot, sizeof(s_plRoot), "%s/Players", parent);
+        snprintf(legacy, sizeof(legacy), "%s", me);
+    }
+    s_nbPlayers = 0;
+    SDL_PathInfo info;
+    if (SDL_GetPathInfo(legacy, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
+        NameIn(legacy, s_plName[0], sizeof(s_plName[0]), "Player 1");
+        snprintf(s_plDir[0], sizeof(s_plDir[0]), "%s", legacy);
+        s_nbPlayers = 1;
+    }
+    SDL_EnumerateDirectory(s_plRoot, PlayerFolder, NULL);
+    s_plNow = -1;
+    for (int i = 0; i < s_nbPlayers; i++) if (!strcasecmp(s_plDir[i], s_plMine)) s_plNow = i;
+    if (s_plNow >= 0) snprintf(s_plNowName, sizeof(s_plNowName), "%s", s_plName[s_plNow]);
+}
+static const char *PlayerNameAt(int k) { return k >= 0 && k < s_nbPlayers ? s_plName[k] : ""; }
+static int PlayerIndexNow(void) { return s_plNow; }
+static const char *PlayerNow(void) {
+    if (s_plNow < 0 && !s_nbPlayers) ListPlayers();
+    return s_plNowName;
+}
+
+// A new player: a folder of its own with the game's configuration as this one has it
+static int MakePlayer(const char *name) {
+    char dir[ADELINE_MAX_PATH], cfgFrom[ADELINE_MAX_PATH], cfgTo[ADELINE_MAX_PATH], card[ADELINE_MAX_PATH];
+    snprintf(dir, sizeof(dir), "%s/%s", s_plRoot, name);
+    SDL_CreateDirectory(s_plRoot);
+    SDL_CreateDirectory(dir);
+    snprintf(cfgFrom, sizeof(cfgFrom), "%s/lba2.cfg", s_plMine);
+    snprintf(cfgTo, sizeof(cfgTo), "%s/lba2.cfg", dir);
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(cfgTo, &info))
+        if (FILE *in = fopen(cfgFrom, "rb")) {
+            if (FILE *out = fopen(cfgTo, "wb")) {
+                char buf[4096];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
+                fclose(out);
+            }
+            fclose(in);
+        }
+    snprintf(card, sizeof(card), "%s/PLAYER.TXT", dir);
+    if (FILE *f = fopen(card, "w")) { fprintf(f, "%s\n", name); fclose(f); }
+    Log_Info("[racegame] a new player: %s (%s)", name, dir);
+    return SDL_GetPathInfo(dir, &info);
+}
+
+// Who is playing: the players, and New player. Non-zero: another player's chosen and the game started again on its folder -- this one's to go.
+static int PlayersPage(void) {
+    static U16 menu[4 + 2 * (RG_PLAYERS_MAX + 3)];
+    for (;;) {
+        ListPlayers();
+        const int shown = s_nbPlayers > RG_PLAYERS_MAX ? RG_PLAYERS_MAX : s_nbPlayers;
+        const int rows = 2 + shown + (s_nbPlayers < RG_PLAYERS_MAX ? 1 : 0);
+        menu[0] = (U16)(s_plNow >= 0 ? 2 + s_plNow : 0);
+        menu[1] = (U16)rows;
+        menu[2] = (U16)(rows > 6 ? 270 : 290);
+        menu[3] = 0;
+        int r = 0;
+        SetRow(menu, r++, RG_ID_BACK);
+        SetRow(menu, r++, RG_ID_ACHIEVEMENTS);
+        for (int i = 0; i < shown; i++) SetRow(menu, r++, (U16)(RG_ID_PLAYER_FIRST + i));
+        if (s_nbPlayers < RG_PLAYERS_MAX) SetRow(menu, r++, RG_ID_PLAYER_NEW);
+        Page("Player", 290 - (56 * rows) / 2 - 50);
+        const S32 select = Menu(menu);
+        if (select == MENU_RELAYOUT) continue;
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select == RG_ID_ACHIEVEMENTS) { AchievementsPage(); continue; }
+        const char *dir = NULL;
+        if (select >= RG_ID_PLAYER_FIRST && select < RG_ID_PLAYER_FIRST + shown) dir = s_plDir[select - RG_ID_PLAYER_FIRST];
+        else if (select == RG_ID_PLAYER_NEW) {
+            char name[40] = "";
+            if (!TypePage("New player", "Your name", name, sizeof(name), 0, 0)) continue;
+            char clean[40];
+            int n = 0;
+            for (const char *c = name; *c && n < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[n++] = *c;
+            clean[n] = 0;
+            Trim(clean);
+            if (!clean[0]) continue;
+            // (a name taken: that player)
+            int found = -1;
+            for (int i = 0; i < s_nbPlayers; i++) if (!strcasecmp(s_plName[i], clean)) found = i;
+            if (found >= 0) dir = s_plDir[found];
+            else if (MakePlayer(clean)) { static char made[ADELINE_MAX_PATH]; snprintf(made, sizeof(made), "%s/%s", s_plRoot, clean); dir = made; }
+        }
+        if (!dir) continue;
+        if (!strcasecmp(dir, s_plMine)) { Page(NULL, 0); return 0; }
+        if (RaceUpdate_Relaunch(dir)) return 1;
+        SayPage("Who is playing?", "The game could not be started again for that player");
+    }
+}
+
+// ---- achievements -------------------------------------------------------------------------------------------------------------------
+// Hidden until discovered: each has its island's heading; one not earned yet is shown with its words unreadable, a hint at where to look.
+// Earned by the race file's achieve= lines (RACEMOD.CPP: a game variable at a value, or a scene entered), kept in ACHIEVEMENTS.TXT in the player's folder.
+typedef struct { const char *Id, *Group, *Title; } T_RG_ACH;
+static const T_RG_ACH s_ach[] = {
+    {"spanked", "Citadel", "Got spanked by Zoe"},
+    {"telescope", "Citadel", "Watched the Wizard and the cow"},
+    {"stella", "Moon", "Found Stella Entities"},
+    {"bowling", "Otringal", "Found the hidden bowling alley"},
+    {"dinofly", "Polar", "Spoke to the Dinofly"},
+    {"dungeon", "Palace", "Found the palace dungeon"},
+    {"postcards", "Anywhere", "Found every postcard"},
+};
+#define RG_ACH_N ((int)(sizeof(s_ach) / sizeof(s_ach[0])))
+static U8 s_achGot[RG_ACH_N];
+static int s_achRead = 0;
+static void AchPath(char *out) { GetCfgPath(out, ADELINE_MAX_PATH, "ACHIEVEMENTS.TXT"); }
+static void ReadAch(void) {
+    if (s_achRead) return;
+    s_achRead = 1;
+    memset(s_achGot, 0, sizeof(s_achGot));
+    char path[ADELINE_MAX_PATH], line[128];
+    AchPath(path);
+    if (FILE *f = fopen(path, "r")) {
+        while (fgets(line, sizeof(line), f)) {
+            Trim(line);
+            for (int i = 0; i < RG_ACH_N; i++) if (!strcmp(line, s_ach[i].Id)) s_achGot[i] = 1;
+        }
+        fclose(f);
+    }
+}
+static int AchievementsEarned(void) { ReadAch(); int n = 0; for (int i = 0; i < RG_ACH_N; i++) n += s_achGot[i]; return n; }
+static int AchievementsAll(void) { return RG_ACH_N; }
+S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
+    if (!id) return 0;
+    ReadAch();
+    for (int i = 0; i < RG_ACH_N; i++) {
+        if (strcmp(id, s_ach[i].Id) || s_achGot[i]) continue;
+        s_achGot[i] = 1;
+        char path[ADELINE_MAX_PATH];
+        AchPath(path);
+        if (FILE *f = fopen(path, "a")) { fprintf(f, "%s\n", id); fclose(f); }
+        if (title && size > 0) snprintf(title, (size_t)size, "%s", s_ach[i].Title);
+        Log_Info("[racegame] achievement earned: %s (%s)", id, s_ach[i].Title);
+        return 1;
+    }
+    return 0;
+}
+
+// The achievements by island: the earned ones in white, the others unreadable
+static void AchievementsPage(void) {
+    static U16 menu[4 + 2];
+    s_achRead = 0;
+    ReadAch();
+    menu[0] = 0; menu[1] = 1; menu[2] = 440; menu[3] = 0;
+    SetRow(menu, 0, RG_ID_BACK);
+    for (;;) {
+        Page("Achievements", 92);
+        int y = 140 + UI_VCENTER_OFS;
+        for (int i = 0; i < RG_ACH_N; i++) {
+            // (by island, one a line: the island's name, then the words -- or, not earned, a row of marks in their place)
+            char text[128], shown[200], cp[256];
+            snprintf(text, sizeof(text), "%s", s_ach[i].Title);
+            if (!s_achGot[i]) snprintf(text, sizeof(text), "##########");
+            snprintf(shown, sizeof(shown), "%s: %s", s_ach[i].Group, text);
+            Label(cp, shown);
+            TextAt(UI_CENTER_X - 330, y, cp, s_achGot[i] ? LBAWHITE : RG_GREY);
+            y += 30;
+        }
+        const S32 select = Menu(menu);
+        if (select == MENU_RELAYOUT) continue;
+        Page(NULL, 0);
+        return;
+    }
+}
+
 static void FeedbackPage(void) {
     static U16 menu[4 + 2 * 3];
     menu[0] = 1; menu[1] = 3; menu[2] = 280; menu[3] = 0;
@@ -5304,6 +5548,12 @@ static S32 GameMenu(S32 inGame) {
             if (!RaceNet_Join(address, s_netName)) return RG_ID_QUIT;
         }
     }
+    // (more than one player, and none chosen yet this run: who is playing -- not in a test run or a second player's game)
+    if (!inGame && !s_plAsked && !s_localGuest && !getenv("LBRA_PLAYER_CHOSEN") && !RaceUpdate_Tested()) {
+        s_plAsked = 1;
+        ListPlayers();
+        if (s_nbPlayers > 1 && PlayersPage()) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
+    }
     if (s_localGuest && !resume && getenv("LBA2_STORY_ZOE")) return StoryZoePage();
     if (s_localGuest && !resume) return LobbyPage() ? RACEGAME_START : RG_ID_QUIT;
     // (an online race over: back with its players)
@@ -5323,6 +5573,8 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_RACING);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
+    // (who is playing and what they have found: not in a race going on -- another player means the game started again)
+    if (!inGame) SetRow(s_mainMenu, nb++, RG_ID_PLAYER);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
     s_mainMenu[1] = (U16)nb;
@@ -5351,6 +5603,9 @@ static S32 GameMenu(S32 inGame) {
             return select;
         case RG_ID_FEEDBACK:
             FeedbackPage();
+            break;
+        case RG_ID_PLAYER:
+            if (PlayersPage()) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
             break;
         case RG_ID_QUIT:
             if (QuitPage()) {

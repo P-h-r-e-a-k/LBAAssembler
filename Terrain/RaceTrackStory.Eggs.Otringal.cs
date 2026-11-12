@@ -58,6 +58,17 @@ internal static partial class RaceTrackStory
     // else there takes one in chapter 5. With no clover left the game is over, and nobody scores.)
     // (var_cube 74: Twinsen has gone into the pool's water -- the engine's pool_splash=)
     internal const int PoolSplash = 74;
+    // The achievements (RACEGAME.CPP's list; the race file's achieve= lines): Zoe's spanking is the chamber's var 96 at Scolded, the postcards the last card
+    // variable at its reward, the Dinofly's talk var 194 (PolarDinofly), Stella Entities and the telescope's field the scenes. Not yet: the palace dungeon
+    // and the bowling alley (the achievements' ids are in the engine's list already).
+    internal static readonly string[] Achievements =
+    {
+        $"achieve=spanked var {Drunk} {Scolded}",
+        $"achieve=postcards var {EggLastCard} {PostcardsRewarded}",
+        $"achieve=dinofly var {Terrain.Polar.PolarDinofly.TalkedVar} 1",
+        $"achieve=stella scene {StellaEntities.Scene}",
+        "achieve=telescope scene 47",
+    };
     private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40, LyraReady = 660, LyraRaise = 661;
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)
     private const int Clovers = 251, MostClovers = 10;

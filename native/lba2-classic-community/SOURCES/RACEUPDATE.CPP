@@ -26,6 +26,51 @@ static int Wide(const char *utf8, wchar_t *out, DWORD size) {
 // A test run, driven through --listen: no update checks, and nothing reported (a test stopped by force would look like a crash)
 int RaceUpdate_Tested(void) { return strstr(GetCommandLineA(), "--listen") != NULL; }
 
+// The game started again with the player's folder (--user-dir), told the choice is made (LBRA_PLAYER_CHOSEN: no "who is playing" page)
+int RaceUpdate_Relaunch(const char *userDirUtf8) {
+    wchar_t dir[MAX_PATH * 4], exe[MAX_PATH * 4];
+    if (!Wide(userDirUtf8, dir, MAX_PATH * 4)) return 0;
+    if (!GetModuleFileNameW(NULL, exe, MAX_PATH * 4)) return 0;
+    static wchar_t cmd[MAX_PATH * 12];
+    // (the command line as it is, a --user-dir of it and its value taken out)
+    wchar_t *line = GetCommandLineW();
+    wchar_t *at = wcsstr(line, L"--user-dir");
+    size_t keep = at ? (size_t)(at - line) : wcslen(line);
+    wchar_t rest[MAX_PATH * 6];
+    rest[0] = 0;
+    if (at) {
+        wchar_t *p = at + 10;
+        while (*p == L' ' || *p == L'=') p++;
+        if (*p == L'"') { p++; while (*p && *p != L'"') p++; if (*p) p++; }
+        else while (*p && *p != L' ') p++;
+        wcsncpy(rest, p, sizeof(rest) / sizeof(rest[0]) - 1);
+        rest[sizeof(rest) / sizeof(rest[0]) - 1] = 0;
+    }
+    wchar_t head[MAX_PATH * 6];
+    if (keep >= sizeof(head) / sizeof(head[0])) return 0;
+    wcsncpy(head, line, keep);
+    head[keep] = 0;
+    swprintf(cmd, sizeof(cmd) / sizeof(cmd[0]), L"%ls --user-dir \"%ls\"%ls", head, dir, rest);
+    SetEnvironmentVariableW(L"LBRA_PLAYER_CHOSEN", L"1");
+    wchar_t work[MAX_PATH * 4];
+    wcscpy(work, exe);
+    wchar_t *slash = wcsrchr(work, L'\\');
+    if (slash) *slash = 0;
+    STARTUPINFOW si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&pi, sizeof(pi));
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, slash ? work : NULL, &si, &pi)) {
+        Log_Warn("[racegame] the game could not be started again for the player's folder: error %lu", (unsigned long)GetLastError());
+        return 0;
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    Log_Info("[racegame] the game started again (pid %lu) for the player's folder %s", (unsigned long)pi.dwProcessId, userDirUtf8);
+    return 1;
+}
+
 int RaceUpdate_Exists(const char *pathUtf8) {
     wchar_t path[MAX_PATH * 4];
     if (!Wide(pathUtf8, path, MAX_PATH * 4)) return 0;
@@ -169,6 +214,7 @@ int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char
 }
 
 #else
+int RaceUpdate_Relaunch(const char *) { return 0; }
 
 void RaceUpdate_PlaceConsole(void) {}
 

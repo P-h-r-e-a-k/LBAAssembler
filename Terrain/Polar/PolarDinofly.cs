@@ -23,6 +23,8 @@ internal static class PolarDinofly
     public const int Lba1X = 21184, Lba1Y = 512, Lba1Z = 15168;
     private const int Lba1FromX = 17 * 512, Lba1FromZ = 18704;
     public static int Beta => (int)Math.Round(Math.Atan2(Lba1X - Lba1FromX, Lba1Z - Lba1FromZ) * 4096 / (2 * Math.PI)) & 4095;
+    // (the game variable his talk sets: the achievement "Spoke to the Dinofly", RACEMOD.CPP achieve=)
+    public const int TalkedVar = 194;
     public const int AskText = 26, BrundleText = 27, TippetText = 28, NotThisGameText = 29;
 
     private static readonly string[] Ask =
@@ -72,6 +74,7 @@ internal static class PolarDinofly
         add_choice({TippetText});
         ask_choice_obj({index}, {AskText});
         message_obj({index}, {NotThisGameText});
+        set_var_game({TalkedVar}, 1);
     }}
 }}
 ";
