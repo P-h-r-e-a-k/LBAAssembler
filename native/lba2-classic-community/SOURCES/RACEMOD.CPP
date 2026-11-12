@@ -12661,6 +12661,12 @@ S32 RaceMod_CarThrough(S32 num) {
 S32 RaceMod_WalkOver(S32 numobj) { return numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER; }
 
 S32 RaceMod_NoCollide(S32 numobj) {
+    // (the companion Zoe's and the Twinsen double's places, kept out of sight when there's no second player -- still there in the room, at its
+    // door: the shopkeeper on Citadel Island, running out of the door at a Meca-penguin, kept stopping at the invisible Zoe in it, the user,
+    // 2026-11-12: "he's consistently getting stuck at the side of the door")
+    if (numobj > 0 && numobj < (S32)NbObjets && (ListObjet[numobj].Flags & INVISIBLE) && s_compEntity >= 0 &&
+        ((ListObjet[numobj].IndexFile3D == s_compEntity && (ListObjet[numobj].Armure == s_compMark || ListObjet[numobj].Armure == s_compInMark)) ||
+         (s_dblEntity >= 0 && ListObjet[numobj].IndexFile3D == s_dblEntity && ListObjet[numobj].Armure == s_dblMark))) return 1;
     // (anything marked to be walked over -- its armour RACE_WALK_OVER: the race story's painted footprints in the sewers, flat on the floor, which
     // stopped Twinsen dead as boxes; any scene, outside or in)
     if (numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER) return 1;
