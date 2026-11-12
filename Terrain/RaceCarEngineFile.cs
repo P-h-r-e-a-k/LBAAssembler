@@ -398,6 +398,8 @@ internal static class RaceCarEngineFile
         if (info is not null) foreach (var (n, reach) in RaceTrackIsland.ByName(info.Island).CheckpointReach ?? Array.Empty<(int, int)>()) text.Append($"checkpoint_reach={n} {reach}\n");
         // ... and the lifts on the raised road (Result.DeckLifts)
         foreach (var lift in info?.DeckLifts ?? new()) text.Append($"deck_lift={lift}\n");
+        // ... and where on foot he may leave the road's edge, the Emerald Moon's ladders (TrackInfo.FootGaps)
+        if (info?.FootGaps is { } gaps) { text.Append("foot_edge=1\n"); foreach (var g in gaps) text.Append($"foot_gap={g[0]} {g[1]} {g[2]} {g[3]}\n"); }
         return text.ToString();
     }
 

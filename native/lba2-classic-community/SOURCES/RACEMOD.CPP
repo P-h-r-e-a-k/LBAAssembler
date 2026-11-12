@@ -822,6 +822,10 @@ static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16];
 static int s_liftPhase = 0;                // 0 Twinsen's animation, 1 the grate sinking
 static S32 s_liftGrateY = 0;
 static int s_nbLifts = 0, s_lift = -1, s_liftDir = 0, s_liftScene = -1;
+// foot_edge=1, foot_gap= (the Emerald Moon, 2026-11-12): Twinsen on foot can't walk off the raised road's edge, except by a ladder
+#define RACE_MAX_FOOT_GAPS 64
+static int s_footEdge = 0, s_nbFootGaps = 0;
+static S32 s_footGaps[RACE_MAX_FOOT_GAPS][4];
 static S32 s_liftAt = 0;
 static double s_liftOff = 0;
 static S32 s_armChgCube = 0;               // FlagChgCube for the scene change a lift asked for, set after the frame (RaceMod_ArmCubeChange)
@@ -4198,6 +4202,10 @@ static void Load(const char *path, int carOnly = 0) {
                 if (!strcmp(s_lifts[s_nbLifts].File, "*")) s_lifts[s_nbLifts].File[0] = 0;
                 s_nbLifts++;
             }
+        }
+        else if (!strcmp(key, "foot_edge")) s_footEdge = atoi(v);
+        else if (!strcmp(key, "foot_gap") && s_nbFootGaps < RACE_MAX_FOOT_GAPS) {
+            if (sscanf(v, "%d %d %d %d", &s_footGaps[s_nbFootGaps][0], &s_footGaps[s_nbFootGaps][1], &s_footGaps[s_nbFootGaps][2], &s_footGaps[s_nbFootGaps][3]) == 4) s_nbFootGaps++;
         }
         else if (!strcmp(key, "door_to") && s_nbDoorsTo < RACE_MAX_DOORS_OFF) {
             if (sscanf(v, "%15s %d %d %d %d %d %d %d %d", s_doorsTo[s_nbDoorsTo].File, &s_doorsTo[s_nbDoorsTo].Scene, &s_doorsTo[s_nbDoorsTo].X0, &s_doorsTo[s_nbDoorsTo].Z0,
@@ -18513,6 +18521,33 @@ static void DeckLiftFrame(S32 now) {
     s_armChgCube = 1;
     s_lift = -1; s_liftOff = 0;
 }
+// Twinsen on foot on the raised road (foot_edge=1: the Emerald Moon): he can't walk off its edge, except where a ladder goes down (foot_gap=
+// <x0> <z0> <x1> <z1>, a box of island units about each ladder's top; the user, 2026-11-11: "if there's no land below the track there's no
+// need for a ladder. Perhaps we limit the edge of the track, so Twinsen can only go down in certain places"): past FOOT_EDGE_IN of the
+// road's side he is put back on it, along the side -- an invisible rail the cars never meet (they have their own: RaceMod_Rail).
+#define FOOT_EDGE_IN 160
+static void FootEdgeFrame(void) {
+    if (!s_footEdge || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement == C_BUGGY || s_lift >= 0 || NewCube != -1) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    for (int i = 0; i < s_nbFootGaps; i++)
+        if (wx >= s_footGaps[i][0] && wx <= s_footGaps[i][2] && wz >= s_footGaps[i][1] && wz <= s_footGaps[i][3]) return;
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!RaisedAt(wx, wz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t)) return;
+    // (on the deck, not under or far over it; a stretch with a strip beside it -- the pit lane -- has no edge)
+    if (hero->Obj.Y < f - 100 || hero->Obj.Y > f + 900) return;
+    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+    if (a->StripLo != a->StripHi || c->StripLo != c->StripHi) return;
+    const double half = a->Half + (c->Half - a->Half) * t - FOOT_EDGE_IN;
+    if (half <= 0 || fabs(lat) <= half) return;
+    const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
+    if (len <= 0) return;
+    const double px = a->X + sx * t, pz = a->Z + sz * t, nx = -sz / len, nz = sx / len, want = lat < 0 ? -half : half;
+    hero->Obj.X = (S32)floor(px + nx * want - CurrentCubeX * 32768.0 + 0.5);
+    hero->Obj.Z = (S32)floor(pz + nz * want - CurrentCubeY * 32768.0 + 0.5);
+}
 // After AffScene's end (OBJECT.CPP), which clears FlagChgCube: the scene change asked for from inside it (DeckLiftFrame) given its flag back
 void RaceMod_ArmCubeChange(void) {
     if (s_armChgCube && NewCube != -1) FlagChgCube = s_armChgCube;
@@ -18941,6 +18976,7 @@ void RaceMod_Frame(void) {
         StoryUnlock(s_unlockAt);
     }
     DeckLiftFrame(TimerRefHR);
+    FootEdgeFrame();
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -21404,7 +21440,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
-    s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0; s_nbDoorsTo = 0;
+    s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0; s_nbDoorsTo = 0; s_footEdge = 0; s_nbFootGaps = 0;
     s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_trialHide[0] = s_trialHide[1] = -1; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0; s_raceRun = 0;

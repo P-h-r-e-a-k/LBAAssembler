@@ -31,6 +31,8 @@ internal static class RaceTrackScenes
         public List<string>? ActorsAt { get; init; }
         // the lifts on the raised road, each "<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z>" (RACEMOD.CPP deck_lift=)
         public List<string>? DeckLifts { get; init; }
+        // where on foot he may leave the raised road's edge: each ladder's box (RACEMOD.CPP foot_edge=, foot_gap=); null: anywhere
+        public List<int[]>? FootGaps { get; init; }
         // the island's story's people at the start, each [scene, actor] -- Polar Island's grobo with the key and FunFrock beside his car:
         // out of sight in a race with no one to beat (RaceCarEngineFile: hide_actor=)
         public List<int[]>? StoryPeople { get; init; }
@@ -1349,8 +1351,11 @@ internal static class RaceTrackScenes
             ? actorsAt.Select(a => $"{a.File} {a.Scene} {a.Actor} {a.X} {a.Y} {a.Z}").Concat(pointsAt.Distinct().Select(q => $"{q.File} {q.Scene} p{q.Point} {q.X} {q.Y} {q.Z}")).ToList()
             : null;
         var lifts = deckLifts.Count > 0 ? deckLifts : null;
+        // (the ladders' tops: where on foot he may leave the road's edge -- a box a few cells round each ladder's zone)
+        const int GapReach = 1800;
+        var footGaps = options.Island.FootEdge ? tracks.SelectMany(t => t.Report.Ladders).Select(l => new[] { l.X0 - GapReach, l.Z0 - GapReach, l.X1 + GapReach, l.Z1 + GapReach }).Concat((options.Island.FootGapsMore ?? Array.Empty<(int X0, int Z0, int X1, int Z1)>()).Select(g => new[] { g.X0, g.Z0, g.X1, g.Z1 })).ToList() : null;
         var inWay = actorsInWay.Count > 0 ? actorsInWay : null;
-        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts, ActorsInWay = inWay } : null) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts, ActorsInWay = inWay };
+        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts, ActorsInWay = inWay, FootGaps = footGaps } : null) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts, ActorsInWay = inWay, FootGaps = footGaps };
     }
 
     // The place `back` cells behind the start line along the lap's centre line (the built one: RaceTrackReport.LapX/LapZ), `side` cells

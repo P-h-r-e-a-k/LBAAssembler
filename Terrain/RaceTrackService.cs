@@ -291,7 +291,10 @@ internal static class RaceTrackService
         // 2026-10-29
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Lanes = null,
         // PitCrew: Zoe in the pit box by the start line, the story's races (RaceTrackPitCrew.Place; RACEMOD.CPP pit_crew=) -- 2026-11-11
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? PitCrew = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? PitCrew = null,
+        // FootGaps: where Twinsen on foot may go off the raised road's edge, each ladder's box [x0, z0, x1, z1] in island units, and none at all when
+        // null (RaceTrackIsland.FootEdge; RACEMOD.CPP foot_edge=, foot_gap=) -- 2026-11-12
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? FootGaps = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -1331,7 +1334,7 @@ internal static class RaceTrackService
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
             RailOpens: OrNull(report.RailOpens),
-            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople, ActorsInWay: scenes.ActorsInWay,
+            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople, ActorsInWay: scenes.ActorsInWay, FootGaps: scenes.FootGaps,
             Lanes: report.Lanes.Count > 2 ? report.Lanes : null, PitCrew: report.PitCrew);
     }
 

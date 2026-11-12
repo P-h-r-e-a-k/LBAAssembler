@@ -230,6 +230,10 @@ internal sealed record RaceTrackIsland(
     // Ladders up the raised road's side from the ground under it, one into every stretch of ground Twinsen can land on jumping off it
     // and walk about without reaching another (RaceTrackBuilder.Ladders): the Emerald Moon's
     public bool Ladders { get; init; }
+    // Twinsen on foot can't walk off the raised road's edge but at a ladder's top (the Emerald Moon, 2026-11-12; RACEMOD.CPP foot_edge=, foot_gap=)
+    public bool FootEdge { get; init; }
+    // ... and places besides the ladders' where he may (island units, x0 z0 x1 z1): the way the story goes down to the X building's door under the road
+    public (int X0, int Z0, int X1, int Z1)[]? FootGapsMore { get; init; }
     // The racers' garage: a big striped tent on the ground beside the road just after the start line, on the driver's left, open to the
     // road (RaceTrackBuilder.GarageTent; the story's people and cars in it: RaceTrackStory.Garage.cs) -- the White Leaf Desert's
     public bool GarageTent { get; init; }
@@ -326,7 +330,9 @@ internal sealed record RaceTrackIsland(
         CopiesScenes = (74, 4), NoHolomap = true, Roster = RaceDriver.Emerald,
         // (ladders up from the ground under the road: the user, 2026-11-06, "jumping off the raised track on foot can strand Twinsen in low
         // areas with no way back" -- and the moon base's doors come out on the crater's floor, 5,000 under the road)
-        Ladders = true,
+        Ladders = true, FootEdge = true,
+        // (chapter 4's way to the X building's door: off the road's north edge at x 273144, down onto a ledge and the ground -- ch04/02_deck)
+        FootGapsMore = new[] { (270500, 246500, 275500, 251500) },
         Title = "The Emerald Moon: over the reactor, round the base",
     };
 
