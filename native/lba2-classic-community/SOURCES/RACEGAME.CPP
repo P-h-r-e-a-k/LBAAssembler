@@ -1641,6 +1641,7 @@ static void StatsSized(S32 cx, S32 y, S32 step, const T_RG_CAR *c, S32 starR, S3
 #define RG_STAT_LINE 26
 static void Padlock(S32 cx, S32 cy);
 static void PageLoopStart(S32 *padDir);
+static int Nav(S32 *padDir, S32 *dx, S32 *dy);
 static int CarPage(const char *what, int trial) {
     if (s_nbCars <= 0) return -1;
     if (s_car < 0 || s_car >= s_nbCars) s_car = 0;
@@ -2902,25 +2903,80 @@ static S32 BowlingPage(const T_RG_REPLAY *r) {
 }
 // The achievements by island, one row each: an earned one with a replay can be chosen; one not earned yet has its words unreadable.
 // Non-zero: a replay or a game started (the page's value is what the menu returns)
+// The achievements' page (the user, 2026-11-12: "add the heading back for the achievements page, along with a scrollbar, and ... the hint at the
+// bottom ... we'll need the scrollbar as we'll be adding more achievements"): Track select's kind of page -- a heading, the list in a frame
+// scrolling past the rows that fit (up and down, the mouse wheel, a click or a drag on the scrollbar down its right edge), a line of what an
+// earned one can do, the keys. Enter, or a click, on an earned one with a replay: watched or explored again.
+#define RG_ACH_LINE 34
 static S32 AchievementsPage(void) {
-    static U16 menu[4 + 2 * (1 + 7)];
-    s_achRead = 0;
     ReadAch();
-    menu[0] = 0; menu[1] = 1 + RG_ACH_N; menu[2] = 262; menu[3] = 0;
-    SetRow(menu, 0, RG_ID_BACK);
-    for (int i = 0; i < RG_ACH_N; i++) SetRow(menu, 1 + i, (U16)(RG_ID_ACH_FIRST + i));
+    int at = 0, first = 0;
     for (;;) {
-        Page(NULL, 0);   // (eight rows fill the screen: no heading; an earned one with a replay can be chosen to watch or explore it again)
-        const S32 select = Menu(menu);
-        if (select == MENU_RELAYOUT) continue;
-        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
-        if (select >= RG_ID_ACH_FIRST && select < RG_ID_ACH_FIRST + RG_ACH_N) {
-            const int k = select - RG_ID_ACH_FIRST;
-            const T_RG_REPLAY *r = ReplayOf(k);
-            if (!r || AchRowDisabled(k)) continue;
-            if (!strcmp(r->Id, "bowling")) { if (const S32 go = BowlingPage(r)) return go; }
-            else if (const S32 go = StartReplay(r, -1)) return go;
+        S32 padDir;
+        PageLoopStart(&padDir);
+        S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+        int chosen = -2;
+        while (chosen == -2) {
+            ManageTime();
+            MyGetInput();
+            if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+            const S32 top = RG_PAGE_TOP + oy + 50, keysY = RG_PAGE_BOTTOM + oy - 32, hintY = keysY - 52;
+            const int n = RG_ACH_N;
+            int rows = (int)((hintY - 16 - top) / RG_ACH_LINE);
+            if (rows < 1) rows = 1;
+            S32 dx, dy;
+            if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
+            if (at < first) first = at;
+            if (at >= first + rows) first = at - rows + 1;
+            const S32 lx0 = cx - RG_PAGE_HALF + 14, lx1 = cx + RG_PAGE_HALF - 14;
+            const S32 bx0 = lx1 - 16, bx1 = lx1 - 2, by0 = top - 2, by1 = top + rows * RG_ACH_LINE - 10;
+            const int scrolls = n > rows;
+            if (scrolls) {
+                const S32 wheel = ConsumeMouseWheelY();
+                if (wheel) first -= wheel;
+                if (FlagMenuMouse && (Click & 1) && (S32)MouseX >= bx0 - 6 && (S32)MouseX <= bx1 + 6 && (S32)MouseY >= by0 && (S32)MouseY <= by1)
+                    first = (int)(((S32)MouseY - by0) * (n - rows + 1) / (by1 - by0 + 1));
+                if (first < 0) first = 0;
+                if (first > n - rows) first = n - rows;
+                if (at < first) at = first;
+                if (at >= first + rows) at = first + rows - 1;
+            }
+            S32 mx, my;
+            const int click = Clicked(&mx, &my);
+            if (click == 2) chosen = -1;
+            else if (click == 1 && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
+                const int row = (int)((my - (top - 4)) / RG_ACH_LINE);
+                if (row < rows && first + row < n) { at = first + row; if (!AchRowDisabled(at)) chosen = at; }
+            }
+            PageFrame("Achievements");
+            for (int r = 0; r < rows && first + r < n; r++) {
+                const int k = first + r;
+                char line[160], text[256];
+                AchRowLabel(k, line, sizeof(line));
+                Label(text, line);
+                TextAt(lx0 + 12, top + r * RG_ACH_LINE, text, k == at ? RG_ORANGE : (AchRowDisabled(k) ? RG_GREY : LBAWHITE));
+            }
+            if (scrolls) {
+                ShadeBoxBlk(bx0, by0, bx1, by1, 10);
+                DrawCadre(bx0, by0, bx1, by1, ALL_ANGLES);
+                const S32 h = by1 - by0 - 4, thumb = h * rows / n > 18 ? h * rows / n : 18;
+                const S32 ty = by0 + 2 + (h - thumb) * first / (n - rows);
+                Box(bx0 + 3, ty, bx1 - 3, ty + thumb, RG_ORANGE);
+            }
+            SmallWrapped(cx - RG_PAGE_HALF + 30, hintY - 6, 2 * RG_PAGE_HALF - 60, 22, "Choose one you have earned to watch or explore it again", RG_GREY, 2);
+            Text(cx, keysY, "Enter: choose    Esc: back", RG_GREY);
+            Present();
+            if (chosen != -2) break;
+            if (Confirmed()) { WaitNoInput(); if (!AchRowDisabled(at)) chosen = at; }
+            else if (Escaped()) chosen = -1;
         }
+        AsciiMode = FALSE;
+        Page(NULL, 0);
+        if (chosen < 0) return 0;
+        const T_RG_REPLAY *r = ReplayOf(chosen);
+        if (!r) continue;
+        if (!strcmp(r->Id, "bowling")) { if (const S32 go = BowlingPage(r)) return go; }
+        else if (const S32 go = StartReplay(r, -1)) return go;
     }
 }
 
