@@ -496,6 +496,10 @@ void comportement_1()
                 return scripts => { addWater(scripts); addBoard(scripts); };
             });
 
+        // the bowling alley's lift in the prison exit's platform (BowlingAlley: scene 393 below it)
+        if (b.Store.SceneExists(BowlingAlley.Outside) && b.Store.SceneExists(BowlingAlley.Scene))
+            b.Edit(BowlingAlley.Outside, "the hidden bowling alley's lift in the prison exit's platform", BowlingAlley.OutsideLift);
+
         // the gazogem seller in the Lower City: sold out to a fellow in a black car (IslandRetell's 245), and that's all -- not the game's
         // arrow to the Francos' refinery, nor its variable 123, which puts "The island of the Francos" on the taxis' list (the sweep of
         // 2026-11-05)

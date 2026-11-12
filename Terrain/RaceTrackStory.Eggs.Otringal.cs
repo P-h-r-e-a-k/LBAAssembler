@@ -68,6 +68,7 @@ internal static partial class RaceTrackStory
         $"achieve=dinofly var {Terrain.Polar.PolarDinofly.TalkedVar} 1",
         $"achieve=stella scene {StellaEntities.Scene}",
         "achieve=telescope scene 47",
+        $"achieve=bowling scene {BowlingAlley.Scene}",
     };
     private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40, LyraReady = 660, LyraRaise = 661;
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)

@@ -23,7 +23,7 @@ internal static partial class CitadelProps
     private const int PoolWaterColour = 192, BoardStand = 50, BoardPlank = 63, BoardGrip = 196;
 
     public const int PoolMiddleX = 21000, PoolMiddleZ = 13500;
-    public static short[]? PoolBox(int generic) => null;
+    public static short[]? PoolBox(int generic) => generic == BowlingLanes ? new short[] { -1, 0, -1, 1, 1, 1 } : null;   // (the bowling lanes' boards: no box to be walked round)
 
     public static Body BuildPoolWater(byte[] header)
     {
