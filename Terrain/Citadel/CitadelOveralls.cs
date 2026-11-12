@@ -43,6 +43,8 @@ internal static class CitadelOveralls
     // the 66 of the tunic's blue that 14's driver has)
     private const int Eyes = 197, WheelTunicFaces = 66;
     private const int TunicColour = 192;
+    // (the buggy's two drivers: BODY.HQR 18 and 19)
+    private static readonly int[] BuggyDrivers = { 18, 19 };
     private const int MuseumCase = 105, CaseTunicColour = 162, CaseMedallion = 66;
     // (the racing gloves' colours, RaceTrackGloves: the red lit along its ramp, the white and the dark flat)
     private const int Red = 64, White = 62, Dark = 49;
@@ -136,6 +138,8 @@ internal static class CitadelOveralls
             var n = 0;
             for (var i = 0; i < body.Faces.Count; i++)
                 if (body.Faces[i].Colour is >= TunicBlue and < TunicBlue + 16) { body.Faces[i] = body.Faces[i] with { Colour = Math.Min(Suit.Ramp + 15, Bright + body.Faces[i].Colour - TunicBlue), Texture = null }; n++; }
+            // (his shape the suit's, not the tunic's robe: the weapon and what hangs on him -- the bones past his own -- carried over)
+            body = WithExtras(WithBackPatch(Overalls(Body.Read(bodies.Read(Everyday), 2))), body);
             armed.Add((b, body, n));
         }
         var helmeted = WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2))));
@@ -167,6 +171,20 @@ internal static class CitadelOveralls
                 HqrWriter.ReplaceInFile(bodyPath, MuseumCase, caseBytes);
                 others.Add((MuseumCase, caseFaces));
             }
+        }
+        // (the buggy's drivers, the laser cars' Twinsen at the wheel: the racing suit and the helmet, his strap and horn kept)
+        foreach (var d in BuggyDrivers)
+        {
+            if (d >= bodies.Count || Entry(d) is not { } driverBytes) continue;
+            try
+            {
+                var driver = WithExtras(WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2)), 8, 4)), Body.Read(driverBytes, 2));
+                log.Add($"the buggy's driver (BODY.HQR {d}): {driver.Vertices.Count} points, {driver.Faces.Count} polygons, {driver.Lines.Count} lines, {driver.Spheres.Count} spheres, {driver.Bones.Count} bones");
+                HqrWriter.ReplaceInFile(bodyPath, d, driver.Write());
+                log.Add($"the buggy's driver (BODY.HQR {d}): the racing suit and helmet, {driver.Vertices.Count} points, {driver.Bones.Count} bones");
+            }
+            catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException)
+            { log.Add($"the buggy's driver (BODY.HQR {d}) left in the tunic's shape: {e.Message}"); }
         }
         HqrWriter.ReplaceInFile(bodyPath, Tunic, overalls.Write());
         foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, body.Write());
@@ -326,7 +344,7 @@ internal static class CitadelOveralls
 
     // The helmet on his head: a shell round the head bone's points -- red, a white stripe over the top, a dark visor across the face, the
     // padding dark inside the rim -- its points the head's (added after the head's own, every later bone's moved along)
-    internal static Body WithHelmet(Body body)
+    internal static Body WithHelmet(Body body, int around = 12, int down = 6)
     {
         var world = body.World().ToList();
         var head = body.Bones[Head];
@@ -339,8 +357,8 @@ internal static class CitadelOveralls
         var hi = new Vector3(own.Max(p => p.X), own.Max(p => p.Y), own.Max(p => p.Z));
         var centre = new Vector3((lo.X + hi.X) / 2, (lo.Y + hi.Y) / 2 + 10, (lo.Z + hi.Z) / 2);
         var radius = new Vector3((hi.X - lo.X) / 2 + 30, (hi.Y - lo.Y) / 2 + 28, (hi.Z - lo.Z) / 2 + 22);
-        const int Around = 12, Down = 6;
-        float Lat(int k) => (75 - k * 22) * MathF.PI / 180;   // 75 down to -35
+        int Around = around, Down = down;
+        float Lat(int k) => (75 - k * 110f / (Down - 1)) * MathF.PI / 180;   // 75 down to -35
         var points = new List<Vector3>();
         var faces = new List<(int[] Points, int Colour)>();
         Vector3 On(float lat, float a, float shrink = 1) =>
@@ -384,6 +402,48 @@ internal static class CitadelOveralls
         }
 
         return AddToBone(body, world, Head, points, faces);
+    }
+
+    // Twinsen in his tunic holding or wearing something (the blowpipes, the laser pistol, the buggy's strap and horn: a tunic body's
+    // bones past his own 19) made the suit's: `suit` (his racing overalls, his own 19 bones) with the tunic body's extra bones, their points
+    // and polygons added after -- the user, 2026-11-12: "Twinsen's buggy with the green and red lasers we need to recreate a version of Twinsen
+    // in his racing outfit". The extra bones hang from the same bones; a pivot or a line's end on one of his own is the suit's nearest point
+    // of that bone (the rest pose is the same).
+    internal static Body WithExtras(Body suit, Body tunic)
+    {
+        const int Own = 19;
+        if (tunic.Bones.Count <= Own || suit.Bones.Count != Own) return suit;
+        var extraStart = tunic.Bones[Own].Start;
+        var tunicWorld = tunic.World();
+        var suitWorld = suit.World().ToList();
+        var suitCount = suitWorld.Count;
+        int Nearest(int tunicPoint)
+        {
+            var bone = tunic.Bones.FindIndex(x => tunicPoint >= x.Start && tunicPoint < x.Start + x.Count);
+            var b = suit.Bones[Math.Min(bone, Own - 1)];
+            var best = b.Start; var bestD = float.MaxValue;
+            for (var i = b.Start; i < b.Start + b.Count; i++)
+            {
+                var d = Vector3.DistanceSquared(suitWorld[i], tunicWorld[tunicPoint]);
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            return best;
+        }
+        int Map(int p) => p >= extraStart ? p - extraStart + suitCount : Nearest(p);
+        suitWorld.AddRange(tunicWorld.Skip(extraStart));
+        for (var b = Own; b < tunic.Bones.Count; b++)
+        {
+            var t = tunic.Bones[b];
+            suit.Bones.Add(t with { Start = t.Start - extraStart + suitCount, Pivot = Map(t.Pivot), Parent = t.Parent });
+        }
+        foreach (var f in tunic.Faces)
+            if (f.Points.All(p => p >= extraStart)) suit.Faces.Add(f with { Points = f.Points.Select(Map).ToArray(), PointNormals = null });
+        foreach (var l in tunic.Lines) suit.Lines.Add(l with { A = Map(l.A), B = Map(l.B) });
+        foreach (var s in tunic.Spheres) if (s.Point >= extraStart) suit.Spheres.Add(s with { Point = Map(s.Point) });
+        if (suit.LightScale is { } scales) suit.LightScale = scales.Take(suitCount).Concat(Enumerable.Repeat(1f, suitWorld.Count - suitCount)).ToArray();
+        suit.Vertices = Enumerable.Repeat(Vector3.Zero, suitWorld.Count).ToList();
+        suit.SetWorld(suitWorld.ToArray());
+        return suit;
     }
 
     // `points` (world) into bone `bone` after its own, every later index moved along by as many, and `faces` on them (their indexes
