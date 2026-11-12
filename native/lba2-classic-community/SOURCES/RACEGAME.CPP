@@ -212,13 +212,21 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_ACHIEVEMENTS 2473
 #define RG_ID_PLAYER_NEW 2474               // PlayersPage's New player; its players 2475 .. 2480
 #define RG_ID_PLAYER_FIRST 2475
-#define RG_ID_PLAYER_LAST 2480
+#define RG_ID_ACH_FIRST 2481                // the achievements' rows (AchievementsPage): seven; the bowling page's rows: its four bowlers, and a walk round
+#define RG_ID_BOWL_FIRST 2488
+#define RG_ID_BOWL_WALK 2492
+#define RG_ID_PLAYER_LAST 2492
+static int StoryResolved(char *out);
+static int AchRowDisabled(int k);
+static void AchRowLabel(int k, char *out, size_t size);
+static const char *BowlerName(int k);
 static const char *PlayerNow(void);
 static const char *PlayerNameAt(int k);
 static int PlayerIndexNow(void);
 static int AchievementsEarned(void);
 static int AchievementsAll(void);
-static void AchievementsPage(void);
+static S32 AchievementsPage(void);
+static S32 s_replayCode = 0;
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -1320,6 +1328,7 @@ S32 RaceGame_RowDisabled(S32 num) {
     if (num == RG_ID_GHOST_OWN) return !s_gpLap[0];
     if ((num >= RG_ID_GHOST_EASY && num <= RG_ID_GHOST_HARD) || num == RG_ID_GHOST_EXTREME) return !s_gpLap[GhostRowK(num)] || !GhostLevelOpen(GhostRowK(num) - 1);
     if (num == RG_ID_STORY_CONTINUE) return !HasStorySave();
+    if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) return AchRowDisabled(num - RG_ID_ACH_FIRST);
     return (num == RG_ID_STORY && (!s_story || !s_storyFile[0])) || (num == RG_ID_TRACKS && (!s_tracks || !s_nbTracks));
 }
 
@@ -1329,7 +1338,11 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
     if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST))) return 0;
     // (a player's row: its name, marked when it is this game's)
-    if (num >= RG_ID_PLAYER_FIRST && num <= RG_ID_PLAYER_LAST) {
+    // (an achievement's row, a bowler's, the walk round the alley)
+    if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) { char row[160]; AchRowLabel(num - RG_ID_ACH_FIRST, row, sizeof(row)); Label(string, row); return 1; }
+    if (num >= RG_ID_BOWL_FIRST && num < RG_ID_BOWL_FIRST + 4) { Label(string, BowlerName(num - RG_ID_BOWL_FIRST)); return 1; }
+    if (num == RG_ID_BOWL_WALK) { Label(string, "Walk round the alley"); return 1; }
+    if (num >= RG_ID_PLAYER_FIRST && num <= RG_ID_PLAYER_FIRST + 3) {
         const int k = num - RG_ID_PLAYER_FIRST;
         char row[96];
         snprintf(row, sizeof(row), "%s%s", k == PlayerIndexNow() ? "* " : "", PlayerNameAt(k));
@@ -2741,7 +2754,7 @@ static int PlayersPage(void) {
         const S32 select = Menu(menu);
         if (select == MENU_RELAYOUT) continue;
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
-        if (select == RG_ID_ACHIEVEMENTS) { AchievementsPage(); continue; }
+        if (select == RG_ID_ACHIEVEMENTS) { s_replayCode = AchievementsPage(); if (s_replayCode) return 2; continue; }
         const char *dir = NULL;
         if (select >= RG_ID_PLAYER_FIRST && select < RG_ID_PLAYER_FIRST + shown) dir = s_plDir[select - RG_ID_PLAYER_FIRST];
         else if (select == RG_ID_PLAYER_NEW) {
@@ -2815,30 +2828,100 @@ S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
     return 0;
 }
 
-// The achievements by island: the earned ones in white, the others unreadable
-static void AchievementsPage(void) {
-    static U16 menu[4 + 2];
-    s_achRead = 0;
+// ---- re-watching and re-exploring (the user, 2026-11-12: "allow a player to either rewatch an Easter egg such as the spanking scene or the wizard
+// with the cow, or for special areas such as bowling or the strip club to re-explore them once these things have been unlocked in-game") ----
+// An earned achievement with a replay is a row to choose: the story's set started afresh at the egg's scene, its variables as they stood (the race
+// file's replay_set=, replay_gold=, applied as the scene loads) -- or, for the bowling alley, a game of bowling as one of its four bowlers.
+typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; } T_RG_REPLAY;
+static const T_RG_REPLAY s_replays[] = {
+    {"spanked", 193, 0, 3, {{253, 1}, {200, 1}, {96, 1}}},          // the night house, drunk, Zoe waiting
+    {"telescope", 46, 50, 3, {{253, 2}, {56, 5}, {51, 4}}},        // the lighthouse's door, the spell cast, kashes for the telescope
+    {"stella", 390, 0, 1, {{253, 4}}},                             // Stella Entities
+    {"bowling", 393, 0, 1, {{253, 5}}},                            // the bowling alley
+};
+static const T_RG_REPLAY *ReplayOf(int k) {
+    for (size_t i = 0; i < sizeof(s_replays) / sizeof(s_replays[0]); i++) if (!strcmp(s_replays[i].Id, s_ach[k].Id)) return &s_replays[i];
+    return NULL;
+}
+static int AchRowDisabled(int k) { ReadAch(); return k < 0 || k >= RG_ACH_N || !s_achGot[k] || !ReplayOf(k) || !s_story || !s_storyFile[0]; }
+static void AchRowLabel(int k, char *out, size_t size) {
     ReadAch();
-    menu[0] = 0; menu[1] = 1; menu[2] = 440; menu[3] = 0;
+    if (k < 0 || k >= RG_ACH_N) { out[0] = 0; return; }
+    snprintf(out, size, "%s: %s", s_ach[k].Group, s_achGot[k] ? s_ach[k].Title : "##########");
+}
+static const char *BowlerName(int k) {
+    static const char *const names[4] = {"The monkey monster", "The Emperor's soldier", "The swordsman monkey", "The Dark Monk"};
+    return k >= 0 && k < 4 ? names[k] : "";
+}
+// The best bowling score of a bowler, kept (BOWLING.TXT in the player's folder, four numbers): `score` kept if better (-1: only asked)
+S32 RaceGame_BowlingBest(S32 bowler, S32 score) {
+    if (bowler < 0 || bowler > 3) return 0;
+    int best[4] = {0, 0, 0, 0};
+    char path[ADELINE_MAX_PATH];
+    GetCfgPath(path, ADELINE_MAX_PATH, "BOWLING.TXT");
+    if (FILE *f = fopen(path, "r")) { for (int i = 0; i < 4; i++) if (fscanf(f, "%d", &best[i]) != 1) break; fclose(f); }
+    if (score > best[bowler]) {
+        best[bowler] = score;
+        if (FILE *f = fopen(path, "w")) { fprintf(f, "%d %d %d %d\n", best[0], best[1], best[2], best[3]); fclose(f); }
+    }
+    return best[bowler];
+}
+// The story's set started afresh at a replay's scene (and, for a game of bowling, the bowler)
+static S32 StartReplay(const T_RG_REPLAY *r, int bowler) {
+    char path[ADELINE_MAX_PATH];
+    if (!StoryResolved(path)) return 0;
+    if (FILE *f = fopen(path, "a")) {
+        fprintf(f, "# a replay (RACEGAME.CPP): %s\nstart_scene=%d\n", r->Id, r->Scene);
+        for (int i = 0; i < r->NVars; i++) fprintf(f, "replay_set=%d %d\n", r->Vars[i][0], r->Vars[i][1]);
+        if (r->Gold > 0) fprintf(f, "replay_gold=%d\n", r->Gold);
+        if (bowler >= 0) fprintf(f, "bowling_game=%d\n", bowler);
+        fclose(f);
+    }
+    RaceMod_LoadFile(path);
+    s_storyOn = 1;
+    s_raceSp = -1; s_raceOver = 0; s_raceCar = NULL; s_raceWatch[0] = 0; s_raceLevel = -1;
+    Log_Info("[racegame] a replay: %s at scene %d%s", r->Id, r->Scene, bowler >= 0 ? " (a game of bowling)" : "");
+    Page(NULL, 0);
+    return RACEGAME_STORY_NEW;
+}
+// The bowling alley: a game as one of its four, or a walk round it as Twinsen
+static S32 BowlingPage(const T_RG_REPLAY *r) {
+    static U16 menu[4 + 2 * 6];
+    menu[0] = 1; menu[1] = 6; menu[2] = 290; menu[3] = 0;
     SetRow(menu, 0, RG_ID_BACK);
+    for (int i = 0; i < 4; i++) SetRow(menu, 1 + i, (U16)(RG_ID_BOWL_FIRST + i));
+    SetRow(menu, 5, RG_ID_BOWL_WALK);
     for (;;) {
-        Page("Achievements", 92);
-        int y = 140 + UI_VCENTER_OFS;
-        for (int i = 0; i < RG_ACH_N; i++) {
-            // (by island, one a line: the island's name, then the words -- or, not earned, a row of marks in their place)
-            char text[128], shown[200], cp[256];
-            snprintf(text, sizeof(text), "%s", s_ach[i].Title);
-            if (!s_achGot[i]) snprintf(text, sizeof(text), "##########");
-            snprintf(shown, sizeof(shown), "%s: %s", s_ach[i].Group, text);
-            Label(cp, shown);
-            TextAt(UI_CENTER_X - 330, y, cp, s_achGot[i] ? LBAWHITE : RG_GREY);
-            y += 30;
-        }
+        Page("Bowling", 290 - (56 * 6) / 2 - 50);
         const S32 select = Menu(menu);
         if (select == MENU_RELAYOUT) continue;
-        Page(NULL, 0);
-        return;
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select >= RG_ID_BOWL_FIRST && select < RG_ID_BOWL_FIRST + 4) { if (const S32 go = StartReplay(r, select - RG_ID_BOWL_FIRST)) return go; }
+        else if (select == RG_ID_BOWL_WALK) { if (const S32 go = StartReplay(r, -1)) return go; }
+    }
+}
+// The achievements by island, one row each: an earned one with a replay can be chosen; one not earned yet has its words unreadable.
+// Non-zero: a replay or a game started (the page's value is what the menu returns)
+static S32 AchievementsPage(void) {
+    static U16 menu[4 + 2 * (1 + 7)];
+    s_achRead = 0;
+    ReadAch();
+    menu[0] = 0; menu[1] = 1 + RG_ACH_N; menu[2] = 262; menu[3] = 0;
+    SetRow(menu, 0, RG_ID_BACK);
+    for (int i = 0; i < RG_ACH_N; i++) SetRow(menu, 1 + i, (U16)(RG_ID_ACH_FIRST + i));
+    for (;;) {
+        Page("Achievements", 16);
+        Text(UI_CENTER_X, 462 + UI_VCENTER_OFS, "Choose one you have earned to watch or explore it again", RG_GREY);
+        const S32 select = Menu(menu);
+        if (select == MENU_RELAYOUT) continue;
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select >= RG_ID_ACH_FIRST && select < RG_ID_ACH_FIRST + RG_ACH_N) {
+            const int k = select - RG_ID_ACH_FIRST;
+            const T_RG_REPLAY *r = ReplayOf(k);
+            if (!r || AchRowDisabled(k)) continue;
+            if (!strcmp(r->Id, "bowling")) { if (const S32 go = BowlingPage(r)) return go; }
+            else if (const S32 go = StartReplay(r, -1)) return go;
+        }
     }
 }
 
@@ -5552,7 +5635,7 @@ static S32 GameMenu(S32 inGame) {
     if (!inGame && !s_plAsked && !s_localGuest && !getenv("LBRA_PLAYER_CHOSEN") && !RaceUpdate_Tested()) {
         s_plAsked = 1;
         ListPlayers();
-        if (s_nbPlayers > 1 && PlayersPage()) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
+        if (s_nbPlayers > 1) { const int pl = PlayersPage(); if (pl == 1) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; } if (pl == 2) return s_replayCode; }
     }
     if (s_localGuest && !resume && getenv("LBA2_STORY_ZOE")) return StoryZoePage();
     if (s_localGuest && !resume) return LobbyPage() ? RACEGAME_START : RG_ID_QUIT;
@@ -5605,7 +5688,7 @@ static S32 GameMenu(S32 inGame) {
             FeedbackPage();
             break;
         case RG_ID_PLAYER:
-            if (PlayersPage()) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
+            { const int pl = PlayersPage(); if (pl == 1) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; } if (pl == 2) return s_replayCode; }
             break;
         case RG_ID_QUIT:
             if (QuitPage()) {

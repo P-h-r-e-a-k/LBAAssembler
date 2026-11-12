@@ -844,6 +844,20 @@ static S32 s_board[8];
 static int s_swimming = 0, s_poolDive = 0, s_poolActionWas = 0;
 static S32 s_diveAt = 0, s_poolLast = 0, s_diveFromX = 0, s_diveFromY = 0, s_diveFromZ = 0;
 static U32 s_poolInput = 0;
+// bowling_game=<bowler 0-3>: the alley's game (RACEGAME.CPP's Bowling page; BowlFrame): the player is one of the four bowlers, not Twinsen
+// replay_set=<var> <value> (any number), replay_gold=<n>: a replayed egg's variables, set once as the first scene loads (RaceMod_FootArrive)
+typedef struct { S32 Cx, FoulZ, PinsZ, Ball, Pin[6]; } T_BOWL_LANE;
+typedef struct { S32 Lane, Actor, Throw, Cheer, Shrug, Dismay; char Name[40]; } T_BOWLER;
+static T_BOWL_LANE s_bl[2];
+static T_BOWLER s_bw[4];
+static int s_blN = 0, s_bwN = 0, s_blScene = -1, s_blVar = 99, s_blFloor = 1064, s_blHalf = 1000, s_bowlLoaded = 0;
+static int s_bowlGame = -1, s_bowlInit = 0, s_bowlState = 0, s_bowlActWas = 0, s_bowlOverSaid = 0;
+static double s_bowlX = 0, s_bowlPower = 0, s_bowlFinalX = 0, s_bowlStartX = 0;
+static S32 s_bowlAt = 0, s_bowlLast = 0, s_bowlMsgUntil = 0, s_bowlBest = 0;
+static int s_bowlDown[6], s_bowlHome[6][2], s_bowlRolls[21], s_bowlNRolls = 0, s_bowlThisBall = 0, s_bowlReact = 0;
+static char s_bowlMsg[64] = "";
+static U32 s_bowlInput = 0;
+static int s_replaySet[8][2], s_nbReplay = 0, s_replayGold = -1, s_replayPending = 0;
 static double s_poolX = 0, s_poolZ = 0, s_poolY = 0;   // (where he is in the water: held by PoolFrame, the engine's pushes between frames undone)
 static int s_poolSplash = -1;   // (pool_splash=: the scene variable set as he goes into the water)
 static S32 s_liftAt = 0;
@@ -4223,6 +4237,9 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbLifts++;
             }
         }
+        else if (!strcmp(key, "bowling_game")) s_bowlGame = atoi(v);
+        else if (!strcmp(key, "replay_set") && s_nbReplay < 8) { if (sscanf(v, "%d %d", &s_replaySet[s_nbReplay][0], &s_replaySet[s_nbReplay][1]) == 2) s_nbReplay++; }
+        else if (!strcmp(key, "replay_gold")) s_replayGold = atoi(v);
         else if (!strcmp(key, "pool") && s_nbPools < RACE_MAX_POOLS) {
             T_RACE_POOL *pl = &s_pools[s_nbPools];
             if (sscanf(v, "%d %d %d %d %d %d %d", &pl->Scene, &pl->X0, &pl->Z0, &pl->X1, &pl->Z1, &pl->Floor, &pl->Surface) == 7) s_nbPools++;
@@ -12833,6 +12850,14 @@ S32 RaceMod_StepUp(void) { return RaceMod_OnFoot() ? RACE_FOOT_STEP_UP : 0; }
 
 // OBJECT.CPP ChangeCube, as he comes into a scene on foot (his height kept): onto the floor he came in inside (FootFloorUp).
 void RaceMod_FootArrive(void) {
+    // (a replayed egg: its variables, once, as the scene loads before its scripts run)
+    if (s_replayPending) {
+        s_replayPending = 0;
+        for (int i = 0; i < s_nbReplay; i++)
+            if (s_replaySet[i][0] >= 0 && s_replaySet[i][0] < 256) ListVarGame[s_replaySet[i][0]] = (S16)s_replaySet[i][1];
+        if (s_replayGold >= 0) NbGoldPieces = s_replayGold;
+        if (s_nbReplay) Log_Info("[racemod] a replayed egg: %d variables set as scene %d loads", s_nbReplay, (int)NewCube);
+    }
     if (!RaceMod_OnFoot() || CubeMode != CUBE_EXTERIEUR) return;
     S32 top = 0;
     T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -13687,6 +13712,8 @@ U32 RaceMod_FilterInput(U32 input) {
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) input &= ~(U32)(I_JOY | I_FIRE | I_ACTION | I_ESQUIVE);
     // (swimming and diving: his keys are the pool's -- PoolFrame moves him itself)
     s_poolInput = input;
+    s_bowlInput = input;
+    if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     if (s_nbPools && (s_swimming || s_poolDive)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     // (a lift on the raised road: the action key on its pad takes him down; while it moves, no key does anything -- deck_lift=)
     // (the key's last state is kept in every scene, and a press counts only RACE_LIFT_ARRIVE_MS after a scene starts: out of the museum
@@ -13759,7 +13786,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -18638,6 +18665,253 @@ static void AchievementsFrame(S32 now) {
         if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "Achievement: %s", title); s_achUntil = now + 6000; }
     }
 }
+// ---- the bowling game (the user, 2026-11-12: "we control one of the four bowling characters and not Twinsen") ----------------------------------------
+// Six pins, ten frames: the player is the bowler chosen, Twinsen's own body hidden and glued to him (the camera follows). Left and Right slide him along
+// the foul line, Space starts the power bar, Space again throws: the ball rolls at the power's speed, drifting toward the one side when thrown too hard
+// and the other too soft, and the pins it reaches fall -- and those they reach, more of them the harder it was thrown. A strike (all six first ball)
+// or a spare (the rest the second) as the game scores them, the scores of the pin game with six for ten. Its lane's scripts wait (var_cube
+// BOWLMAP's); the other lane's bowlers bowl on. The game ended, the menu comes after a few seconds; the best score of the bowler is kept by RACEGAME.CPP.
+#define BOWL_PINS 6
+static void HudLine(S32 x, S32 y, const char *text, int align);
+static void BowlLoad(void) {
+    if (s_bowlLoaded) return;
+    s_bowlLoaded = 1;
+    char path[260], line[256];
+    GetResPath(path, sizeof(path), "BOWLMAP.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) { Log_Warn("[racemod] bowling: %s could not be read", path); return; }
+    while (fgets(line, sizeof(line), f)) {
+        int a, b, c, d, e, g, h2, k, m, n2, o;
+        char name[40];
+        if (sscanf(line, "scene %d %d %d %d", &a, &b, &c, &d) == 4) { s_blScene = a; s_blVar = b; s_blFloor = c; s_blHalf = d; }
+        else if (sscanf(line, "bowler %d %d %d %d %d %d %d %39s", &a, &b, &c, &d, &e, &g, &h2, name) == 8 && a >= 0 && a < 4) {
+            s_bw[a].Lane = b; s_bw[a].Actor = c; s_bw[a].Throw = d; s_bw[a].Cheer = e; s_bw[a].Shrug = g; s_bw[a].Dismay = h2;
+            snprintf(s_bw[a].Name, sizeof(s_bw[a].Name), "%s", name);
+            for (char *q = s_bw[a].Name; *q; q++) if (*q == '_') *q = ' ';
+            if (a + 1 > s_bwN) s_bwN = a + 1;
+        }
+        else if (sscanf(line, "lane %d %d %d %d %d %d %d %d %d %d %d", &a, &b, &c, &d, &e, &g, &h2, &k, &m, &n2, &o) == 11 && a >= 0 && a < 2) {
+            s_bl[a].Cx = b; s_bl[a].FoulZ = c; s_bl[a].PinsZ = d; s_bl[a].Ball = e;
+            s_bl[a].Pin[0] = g; s_bl[a].Pin[1] = h2; s_bl[a].Pin[2] = k; s_bl[a].Pin[3] = m; s_bl[a].Pin[4] = n2; s_bl[a].Pin[5] = o;
+            if (a + 1 > s_blN) s_blN = a + 1;
+        }
+    }
+    fclose(f);
+    Log_Info("[racemod] bowling: %d lanes, %d bowlers (scene %d)", s_blN, s_bwN, s_blScene);
+}
+// The game's frames and rolls as the rolls so far make them: the frame it is, the ball of it (1 or 2, 3 in the tenth), whether it is over, the score
+static void BowlState(int *frame, int *ball, int *over, int *score) {
+    int r = 0, total = 0, f;
+    *over = 0; *ball = 1;
+    const int n = s_bowlNRolls;
+    for (f = 0; f < 10; f++) {
+        if (f < 9) {
+            if (r >= n) { *frame = f + 1; *ball = 1; goto done; }
+            if (s_bowlRolls[r] == BOWL_PINS) {
+                if (r + 2 < n) total += BOWL_PINS + s_bowlRolls[r + 1] + s_bowlRolls[r + 2];
+                r++;
+            } else {
+                if (r + 1 >= n) { *frame = f + 1; *ball = 2; goto done; }
+                if (s_bowlRolls[r] + s_bowlRolls[r + 1] == BOWL_PINS) { if (r + 2 < n) total += BOWL_PINS + s_bowlRolls[r + 2]; }
+                else total += s_bowlRolls[r] + s_bowlRolls[r + 1];
+                r += 2;
+            }
+        } else {
+            // (the tenth: two balls, a third for a strike or a spare)
+            if (r >= n) { *frame = 10; *ball = 1; goto done; }
+            if (r + 1 >= n) { *frame = 10; *ball = 2; goto done; }
+            const int a = s_bowlRolls[r], b = s_bowlRolls[r + 1];
+            if (a == BOWL_PINS || a + b == BOWL_PINS) {
+                if (r + 2 >= n) { *frame = 10; *ball = 3; goto done; }
+                total += a + b + s_bowlRolls[r + 2];
+                r += 3;
+            } else { total += a + b; r += 2; }
+            *over = 1;
+        }
+    }
+    *frame = 10;
+done:
+    *score = total;
+    (void)f;
+}
+static int BowlFrameEnded(void) {
+    // whether the roll just made ended its frame (the pins are put up again): a strike, or a second ball; in the tenth, after a strike or a spare
+    int r = 0;
+    for (int f = 0; f < 10; f++) {
+        if (f < 9) {
+            if (r >= s_bowlNRolls) return 0;
+            if (s_bowlRolls[r] == BOWL_PINS) { r++; if (r == s_bowlNRolls) return 1; }
+            else { r += 2; if (r == s_bowlNRolls) return 1; if (r > s_bowlNRolls) return 0; }
+        } else {
+            const int left = s_bowlNRolls - r;
+            if (left <= 0) return 0;
+            if (left == 1) return s_bowlRolls[r] == BOWL_PINS;
+            if (left == 2) return s_bowlRolls[r] + s_bowlRolls[r + 1] >= BOWL_PINS;
+            return 1;
+        }
+    }
+    return 1;
+}
+static void BowlSay(S32 now, const char *text) { snprintf(s_bowlMsg, sizeof(s_bowlMsg), "%s", text); s_bowlMsgUntil = now + 2600; }
+static void BowlFrame(S32 now) {
+    if (s_bowlGame < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1) return;
+    BowlLoad();
+    if (s_blN < 2 || s_bwN <= s_bowlGame || (S32)NumCube != s_blScene) return;
+    const T_BOWLER *me = &s_bw[s_bowlGame];
+    const T_BOWL_LANE *ln = &s_bl[me->Lane];
+    T_OBJET *bo = &ListObjet[me->Actor], *hero = &ListObjet[NUM_PERSO], *ball = &ListObjet[ln->Ball];
+    const double dt = fmin(0.1, fmax(0.0, (now - s_bowlLast) / 1000.0));
+    s_bowlLast = now;
+    ListVarCube[s_blVar] = 1;
+    if (!s_bowlInit) {
+        s_bowlInit = 1; s_bowlState = 0; s_bowlX = ln->Cx; s_bowlNRolls = 0; s_bowlOverSaid = 0;
+        for (int i = 0; i < BOWL_PINS; i++) { s_bowlDown[i] = 0; s_bowlHome[i][0] = ListObjet[ln->Pin[i]].Obj.X; s_bowlHome[i][1] = ListObjet[ln->Pin[i]].Obj.Z; }
+        s_bowlBest = RaceGame_BowlingBest(s_bowlGame, -1);
+        BowlSay(now, "Left and Right to aim, Space to throw");
+        Log_Info("[racemod] bowling: the game starts, %s on lane %d", me->Name, (int)me->Lane);
+    }
+    // (Twinsen's own body away: he is the bowler, the camera on him)
+    hero->Flags |= INVISIBLE | NO_SHADOW;
+    hero->Obj.Y = s_blFloor; hero->WorkFlags &= ~FALLING;
+    const int act = (s_bowlInput & I_ACTION_M) != 0, pressed = act && !s_bowlActWas;
+    s_bowlActWas = act;
+    const S32 foul = ln->FoulZ + 1000;
+    int frame, bl, over, score;
+    BowlState(&frame, &bl, &over, &score);
+    bo->Obj.Y = s_blFloor; bo->Obj.Z = foul; bo->Obj.Beta = 2048; bo->WorkFlags &= ~FALLING;
+    bo->Obj.X = (S32)s_bowlX;
+    // (the camera follows him: the bowler, the ball on its way, then the pins it reached)
+    if (s_bowlState == 2) { hero->Obj.X = ball->Obj.X; hero->Obj.Z = ball->Obj.Z; }
+    else if (s_bowlState >= 3) { hero->Obj.X = ln->Cx; hero->Obj.Z = ln->PinsZ + 1600; }
+    else { hero->Obj.X = bo->Obj.X; hero->Obj.Z = bo->Obj.Z - 1200; }
+    if (s_bowlState == 0 || s_bowlState == 1) {
+        // aiming, then the power bar
+        if (s_bowlInput & I_LEFT) s_bowlX -= 900 * dt;
+        if (s_bowlInput & I_RIGHT) s_bowlX += 900 * dt;
+        if (s_bowlX < ln->Cx - s_blHalf + 160) s_bowlX = ln->Cx - s_blHalf + 160;
+        if (s_bowlX > ln->Cx + s_blHalf - 160) s_bowlX = ln->Cx + s_blHalf - 160;
+        bo->Obj.X = (S32)s_bowlX;
+        if (bo->GenAnim != 0) InitAnim(0, ANIM_REPEAT, me->Actor);
+        ball->Obj.X = (S32)s_bowlX; ball->Obj.Z = ln->FoulZ + 400; ball->Obj.Y = s_blFloor;
+        if (s_bowlState == 0 && pressed) { s_bowlState = 1; s_bowlAt = now; }
+        else if (s_bowlState == 1) {
+            const double t = fmod((double)(now - s_bowlAt), 2000.0) / 1000.0;
+            s_bowlPower = t < 1 ? t : 2 - t;
+            if (pressed) {
+                // thrown: the ball's way, to where it is when it reaches the pins
+                s_bowlStartX = s_bowlX;
+                s_bowlFinalX = s_bowlX + (s_bowlPower - 0.65) * 1400 + (double)((now / 7) % 240) - 120;
+                s_bowlState = 2; s_bowlAt = now;
+                InitAnim((U16)me->Throw, ANIM_REPEAT, me->Actor);
+                InitAnim(1, ANIM_REPEAT, ln->Ball);
+                Log_Info("[racemod] bowling: thrown at power %.2f from %d, to %d", s_bowlPower, (int)s_bowlX, (int)s_bowlFinalX);
+            }
+        }
+    } else if (s_bowlState == 2) {
+        // rolling
+        const double travel = 3200 - 2000 * s_bowlPower;
+        double u = (now - s_bowlAt) / travel;
+        if (u > 1) u = 1;
+        const double z0 = ln->FoulZ + 400, z1 = s_bowlPower < 0.15 ? ln->PinsZ + 2600 : ln->PinsZ - 200;
+        ball->Obj.X = (S32)(s_bowlStartX + (s_bowlFinalX - s_bowlStartX) * u);
+        ball->Obj.Z = (S32)(z0 + (z1 - z0) * u);
+        ball->Obj.Y = s_blFloor;
+        bo->Obj.X = (S32)s_bowlX;
+        if (u >= 1) {
+            // the pins it reaches, and the ones they reach
+            int knocked[BOWL_PINS] = {0}, hit = 0;
+            const int gutter = fabs(s_bowlFinalX - ln->Cx) > s_blHalf - 60, weak = s_bowlPower < 0.15;
+            if (!gutter && !weak) {
+                for (int i = 0; i < BOWL_PINS; i++) if (!s_bowlDown[i] && fabs(s_bowlHome[i][0] - s_bowlFinalX) < 380) { knocked[i] = 1; hit++; }
+                if (hit) {
+                    const int chance = s_bowlPower > 0.55 ? 75 : s_bowlPower > 0.3 ? 50 : 20;
+                    for (int i = 0; i < BOWL_PINS; i++) {
+                        if (s_bowlDown[i] || knocked[i]) continue;
+                        for (int j = 0; j < BOWL_PINS; j++) {
+                            if (!knocked[j] || j == i) continue;
+                            const double dx = s_bowlHome[i][0] - s_bowlHome[j][0], dz = s_bowlHome[i][1] - s_bowlHome[j][1];
+                            if (dx * dx + dz * dz < 800.0 * 800.0 && (int)((now / 20 + i * 131 + j * 17) % 100) < chance) { knocked[i] = 1; break; }
+                        }
+                    }
+                }
+            }
+            int down = 0;
+            for (int i = 0; i < BOWL_PINS; i++) if (knocked[i]) {
+                s_bowlDown[i] = 1; down++;
+                InitAnim(10, ANIM_FINAL, ln->Pin[i]);
+            }
+            s_bowlRolls[s_bowlNRolls < 21 ? s_bowlNRolls++ : 20] = down;
+            int standing = 0;
+            for (int i = 0; i < BOWL_PINS; i++) if (!s_bowlDown[i]) standing++;
+            char said[64];
+            if (gutter) snprintf(said, sizeof(said), "Gutter ball");
+            else if (weak) snprintf(said, sizeof(said), "Too soft: it never reached them");
+            else if (!standing && bl == 1) snprintf(said, sizeof(said), "Strike!");
+            else if (!standing) snprintf(said, sizeof(said), "Spare!");
+            else snprintf(said, sizeof(said), "%d pin%s", down, down == 1 ? "" : "s");
+            BowlSay(now, said);
+            s_bowlReact = !standing ? me->Cheer : down >= 3 ? me->Shrug : me->Dismay;
+            InitAnim((U16)s_bowlReact, ANIM_REPEAT, me->Actor);
+            ball->Obj.Z = ln->PinsZ - 900;
+            s_bowlState = 3; s_bowlAt = now;
+            Log_Info("[racemod] bowling: %d down (%s)", down, said);
+        }
+    } else if (s_bowlState == 3) {
+        // the pins fallen, the bowler's say; then the next ball, the frame's pins up again, or the end
+        if (now - s_bowlAt > 2600) {
+            BowlState(&frame, &bl, &over, &score);
+            if (over) {
+                s_bowlState = 4; s_bowlAt = now;
+                const int best = RaceGame_BowlingBest(s_bowlGame, score);
+                s_bowlBest = best;
+                char text[64];
+                snprintf(text, sizeof(text), "Game over: %d (best %d)", score, best);
+                BowlSay(now, text);
+                s_bowlMsgUntil = now + 60000;
+                s_menuAt = now + 7000;
+            } else {
+                if (BowlFrameEnded() || s_bowlNRolls == 0) {
+                    for (int i = 0; i < BOWL_PINS; i++) {
+                        T_OBJET *pin = &ListObjet[ln->Pin[i]];
+                        pin->Obj.X = s_bowlHome[i][0]; pin->Obj.Z = s_bowlHome[i][1]; pin->Obj.Y = s_blFloor;
+                        InitAnim(0, ANIM_REPEAT, ln->Pin[i]);
+                        s_bowlDown[i] = 0;
+                    }
+                }
+                s_bowlState = 0;
+                ball->Obj.Z = ln->FoulZ + 400;
+                InitAnim(0, ANIM_REPEAT, ln->Ball);
+                BowlSay(now, "Left and Right to aim, Space to throw");
+            }
+        }
+    }
+}
+// The game's display: frame, ball, score, the rolls so far, the power bar, what was said
+static void BowlDraw(void) {
+    if (s_bowlGame < 0 || !s_bowlInit || (S32)NumCube != s_blScene) return;
+    int frame, bl, over, score;
+    BowlState(&frame, &bl, &over, &score);
+    char text[160];
+    snprintf(text, sizeof(text), "%s", s_bw[s_bowlGame].Name);
+    HudLine(16, 12, text, -1);
+    snprintf(text, sizeof(text), "Frame %d of 10   Ball %d", frame, bl);
+    HudLine(16, 40, text, -1);
+    snprintf(text, sizeof(text), "Score %d   Best %d", score, s_bowlBest);
+    HudLine(16, 68, text, -1);
+    char rolls[96] = "";
+    for (int r = 0; r < s_bowlNRolls && strlen(rolls) < 80; r++) {
+        char one[8];
+        snprintf(one, sizeof(one), "%d ", s_bowlRolls[r]);
+        strcat(rolls, one);
+    }
+    if (rolls[0]) HudLine(16, 96, rolls, -1);
+    if (s_bowlState == 1) {
+        char bar[64];
+        snprintf(bar, sizeof(bar), "Power %d", (int)(s_bowlPower * 100));
+        HudLine(16, 124, bar, -1);
+    }
+    if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine((S32)ModeDesiredX / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
+}
 // Whether Twinsen is in the pool's water -- the basin's box, or the dive on its way -- where he swims and does not drown (OBJECT.CPP's water)
 S32 RaceMod_PoolSwims(void) {
     if (!RaceMod_Active() || !s_nbPools || CubeMode != CUBE_INTERIEUR) return 0;
@@ -19165,6 +19439,7 @@ void RaceMod_Frame(void) {
     FootEdgeFrame();
     PoolFrame(TimerRefHR);
     AchievementsFrame(TimerRefHR);
+    BowlFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -21343,6 +21618,7 @@ void RaceMod_Draw(void) {
         const S32 w = (S32)ModeDesiredX;
         HudLine(w / 2 - SizeFont(s_achText) / 2, 24, s_achText, -1);
     }
+    BowlDraw();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !NoItems() && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,

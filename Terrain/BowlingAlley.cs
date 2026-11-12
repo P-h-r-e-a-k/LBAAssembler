@@ -38,6 +38,9 @@ internal static class BowlingAlley
     private const int Franco = 56, Sphero = 28, MonkeyMonster = 275, SwordMonkey = 252, EmperorSoldier = 184, DarkMonk = 217;
     private const int StandAnim = 0, FallAnim = 10, RollAnim = 1, WalkAnim = 1, ThrowMonster = 15, SwingSword = 52, PullAnim = 6;
 
+    // (the game of bowling the engine plays -- RACEMOD.CPP bowling_game=: it holds this scene variable, and the lane scripts wait)
+    public const int GameVar = 99;
+
     private static string Still() => "void comportement_0()\n{\n}\n";
 
     public static List<string> Install(string gameDirectory)
@@ -187,7 +190,7 @@ void comportement_3()
             {
                 sb.Append($"void comportement_{k}()\n{{\n");
                 if (k < steps.Length)
-                    sb.Append($"    if ({steps[k].Phase} == l_track_obj({helper}))\n    {{\n        {steps[k].Do}\n        set_comportement(comportement_{k + 1});\n    }}\n");
+                    sb.Append($"    if ({steps[k].Phase} == l_track_obj({helper}) && 0 == var_cube({GameVar}))\n    {{\n        {steps[k].Do}\n        set_comportement(comportement_{k + 1});\n    }}\n");
                 else
                     sb.Append("    set_comportement(comportement_0);\n");
                 sb.Append("}\n\n");
@@ -199,6 +202,8 @@ void comportement_3()
         static string ByOutcome(int outcome, int strike, int some, int gutter) =>
             $"if (2 == var_cube({outcome})) {{ set_track(label_{gutter}); }} else if (1 == var_cube({outcome})) {{ set_track(label_{some}); }} else {{ set_track(label_{strike}); }}";
         var lane = 0;
+        var map = new List<string> { $"scene {Scene} {GameVar} {FloorY + CitadelProps.LaneTop} {CitadelProps.LaneHalf}" };
+        var bowlerNumber = 0;
         // the four bowlers, two to a lane taking turns: what they throw, how they cheer a strike, shrug at some pins, and curse a gutter ball; the
         // chances of each (tenths: a strike under `Strike`, some pins under `Some`, else the gutter) and how fast the ball goes
         var bowlers = new (int Lane, int X, int Entity, string Name, int Throw, int Cheer, int Shrug, int Dismay, int Strike, int Some, int Speed)[]
@@ -242,6 +247,7 @@ void comportement_3()
             var wait = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx - 1900, onFloor, CitadelProps.FoulZ + 2200));
             var atLever = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx + 1250, onFloor, CitadelProps.FoulZ + 900));
             var turn = 0;
+            var pinActors = new List<int>();
             foreach (var b in bowlers.Where(b => b.Lane == lane - 1))
             {
                 var first = turn == 0;
@@ -256,6 +262,7 @@ void comportement_3()
                     ? new[] { (1, Go(1)), (2, react), (3, Go(3)), (0, Go(5)), (4, Go(7)), (0, Go(6) + $" set_var_cube({who}, 0);") }
                     : new[] { (4, Go(7)), (0, Go(6) + $" set_var_cube({who}, 1);"), (1, Go(1)), (2, react), (3, Go(3)), (0, Go(5)) };
                 Text(actor, Chain(helper, steps), track);
+                map.Add($"bowler {bowlerNumber++} {lane - 1} {actor} {b.Throw} {b.Cheer} {b.Shrug} {b.Dismay} {b.Name.Replace(' ', '_')}");
                 turn++;
             }
             // the pins: six Franco guards, a helmet and chain over each, in a triangle at the far end; the ones the ball reaches go down in turn,
@@ -268,6 +275,7 @@ void comportement_3()
                     var stand = SceneOps.AddTrackPoint(model, new SceneTrackPoint(px, onFloor, pz));
                     var up = SceneOps.AddTrackPoint(model, new SceneTrackPoint(px, onFloor + 900, pz));
                     var pin = Mk(Franco, 0, px, pz, 0, StandAnim, "a pin");
+                    pinActors.Add(pin);
                     var chain = Prop(CitadelProps.PinChain, px, onFloor, pz);
                     // (a ball to the side of the pins takes the ones from the middle to that side)
                     var falls = off >= 0;
@@ -277,7 +285,9 @@ void comportement_3()
                     Text(chain, Chain(helper, (4, Go(4)), (0, "")), $"label(0);\nstop();\n\nlabel(4);\nspeed(600);\ngoto_point_3d({up});\ngoto_point_3d({stand});\nstop();\n");
                     k++;
                 }
+            map.Add($"lane {lane - 1} {cx} {CitadelProps.FoulZ} {CitadelProps.PinsZ} {ball} {string.Join(' ', pinActors)}");
         }
+        File.WriteAllLines(Path.Combine(gameDirectory, "BOWLMAP.TXT"), map);
 
         // ---- the scripts
         var built = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), Scene);

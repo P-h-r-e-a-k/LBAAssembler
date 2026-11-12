@@ -1,0 +1,2 @@
+bash: quick.sh: No such file or directory
+done
