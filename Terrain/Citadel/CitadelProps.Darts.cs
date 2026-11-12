@@ -11,7 +11,7 @@ internal static partial class CitadelProps
 {
     public const int Dartboard = 126;
     // (the board's radius and how high its middle is over the floor; where the post stands in the room is the scene's)
-    public const int DartRadius = 460, DartMiddleHigh = 1500;
+    public const int DartRadius = 460, DartMiddleHigh = 1400;
     // the standard order round from the top, clockwise
     public static readonly int[] DartOrder = { 20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5 };
     // the rings' edges as fractions of the radius: the bull, the outer bull, the inner single, the treble, the outer single, the double
@@ -22,9 +22,7 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("the Tavern's dartboard", new[] { -1 });
         m.Light = 0.9f;
-        // the post and its foot
-        m.Box(0, new Vector3(0, 650, -40), new Vector3(120, 1300, 90), DartWood);
-        m.Box(0, new Vector3(0, 40, -40), new Vector3(700, 80, 520), DartWood);
+        // (hung on a wall: a round wooden backing behind it, no post)
         // the backing, a little wider than the board
         Vector3 At(double r, double a) => new((float)(r * DartRadius * Math.Sin(a)), (float)(DartMiddleHigh + r * DartRadius * Math.Cos(a)), 0);
         m.Plate(0, DartBlack, Enumerable.Range(0, 24).Select(k => At(1.12, k * 2 * Math.PI / 24)).ToArray()[..4]);
