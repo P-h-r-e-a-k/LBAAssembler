@@ -670,6 +670,8 @@ void comportement_1()
         log.AddRange(Citadel.CitadelLighthouse.Install(gameDirectory));
         // (chapter 2's props: the old tyre, the umbrella on its hook, the tin of bait -- Citadel/CitadelProps)
         log.AddRange(Citadel.CitadelProps.Install(gameDirectory));
+        // (Stella Entities' seven performers: bodies and dances of the hero's entity)
+        log.AddRange(StellaPerformers.Install(gameDirectory));
         // (the people copied are the game's own, from the scenes as they were before any track's build)
         var originals = RaceTrackService.OriginalScenes(store);
 
