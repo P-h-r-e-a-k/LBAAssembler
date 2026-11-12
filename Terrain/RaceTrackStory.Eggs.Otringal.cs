@@ -56,6 +56,8 @@ internal static partial class RaceTrackStory
     // been in the pool: her score, raising her flags -- the first dive of a visit's, then the other's (var_cube LyraDives, kept: the scene
     // is saved again when Twinsen next leaves the ground). (A clover lost to anything else in the hotel would be a dive to her: nothing
     // else there takes one in chapter 5. With no clover left the game is over, and nobody scores.)
+    // (var_cube 74: Twinsen has gone into the pool's water -- the engine's pool_splash=)
+    internal const int PoolSplash = 74;
     private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40, LyraReady = 660, LyraRaise = 661;
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)
     private const int Clovers = 251, MostClovers = 10;
@@ -75,15 +77,14 @@ internal static partial class RaceTrackStory
         set_var_cube({LyraClovers}, {k});
     }}
 "));
-        var fewer = string.Concat(Enumerable.Range(1, MostClovers).Select(k => $@"    if ({k} == var_cube({LyraClovers}) && {k} > var_game({Clovers}))
+        // (Twinsen swims in the pool now -- PoolSwim, RACEMOD.CPP pool_splash= -- and the dive no longer costs a clover: the engine sets var_cube
+        // PoolSplash as he goes into the water, and she scores it)
+        var fewer = $@"    if (1 == var_cube({PoolSplash}))
     {{
+        set_var_cube({PoolSplash}, 0);
         set_comportement(comportement_3);
     }}
-    else if ({k} == var_cube({LyraClovers}) && {k} < var_game({Clovers}))
-    {{
-        set_comportement(comportement_1);
-    }}
-"));
+";
         b.Edit(HotelScene, $"Lyra by the hotel's pool: her score for the dive, a clover after it (var_cube {LyraClovers}, {LyraDives})", model =>
         {
             var lyra = SceneOps.BlankActor(SceneGame.Lba2, LyraAt.X, LyraAt.Y, LyraAt.Z, LyraEntity);

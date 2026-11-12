@@ -3139,6 +3139,8 @@ S32 GereCodesJeu(U8 numobj) {
             switch (numobj) {
             case NUM_PERSO:
                 // (a race-track mod's car: put back on the road instead, RACEMOD.CPP RaceMod_Rescue)
+                // (the Imperial Hotel's pool: Twinsen swims in it, he does not drown -- RACEMOD.CPP pool=)
+                { extern S32 RaceMod_PoolSwims(void); if (RaceMod_PoolSwims()) break; }
                 if (RaceMod_Rescue()) break;
                 validepos = FALSE;
 

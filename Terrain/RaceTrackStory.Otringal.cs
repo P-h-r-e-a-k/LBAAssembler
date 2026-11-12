@@ -22,6 +22,8 @@ internal static partial class RaceTrackStory
     // Q_FEE: 1 Lyra has told (the 10 zlitos given), 2 the Travel Token bought, 3 the race won, 4 Lyra and the priest have spoken, 5 Johnny
     // has flown them on
     public const int QFee = 217, FeePaid = 2, FeeWon = 3, FeeTold = 4, FeeDone = 5;
+    // (the Imperial Hotel's scene, for the race file's pool=)
+    internal const int HotelSceneNumber = 81;
     private const int TravelToken = 24, FragmentSups = 32, Fee = 30, StarterZlitos = 10, CasinoScene = 135, Doorman = 8, HotelScene = 81,
                       JohnnyActor = 3, SpacePort = 92, SellerStall = 95;
     // the translator (the game's item), and the Lower City's gazogem seller (scene 89's actor 3)
@@ -480,6 +482,19 @@ void comportement_1()
             else log.Add("Johnny Rocket left out: no room off the road by the space port's pad");
         }
         else log.Add("Johnny Rocket left out: no Johnny in the hotel (scene 81's actor 3), or no space port scene");
+
+        // the Imperial Hotel's pool (the user, 2026-11-11: swimming in it, and a diving board): the water over the basin, drawn into the
+        // backdrop, and the board on the deck by it -- the engine does the swimming and the dive (pool=, pool_board=: RaceCarEngineFile)
+        if (b.Store.SceneExists(HotelScene))
+            b.Edit(HotelScene, "the hotel pool's water and a diving board (Twinsen swims in it: RACEMOD.CPP pool=)", model =>
+            {
+                var water = Citadel.CitadelProps.Actor(Citadel.CitadelProps.PoolWater, Citadel.CitadelProps.PoolMiddleX, Citadel.CitadelProps.PoolSurface, Citadel.CitadelProps.PoolMiddleZ);
+                var board = Citadel.CitadelProps.Actor(Citadel.CitadelProps.DivingBoard, Citadel.CitadelProps.BoardX, Citadel.CitadelProps.PoolDeck, Citadel.CitadelProps.BoardZ, Citadel.CitadelProps.BoardBeta);
+                const string Still = "void comportement_0()\n{\n}\n";
+                var addWater = IslandBeatsA.Add(model, water, Still);
+                var addBoard = IslandBeatsA.Add(model, board, Still);
+                return scripts => { addWater(scripts); addBoard(scripts); };
+            });
 
         // the gazogem seller in the Lower City: sold out to a fellow in a black car (IslandRetell's 245), and that's all -- not the game's
         // arrow to the Francos' refinery, nor its variable 123, which puts "The island of the Francos" on the taxis' list (the sweep of

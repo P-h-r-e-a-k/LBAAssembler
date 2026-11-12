@@ -664,6 +664,13 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"companion={RaceTrackStory.CompanionEntityId} {RaceTrackStory.CompanionArmour}\n");
             // (Story Mode with two players, player 2 Zoe: the variable the scripts see, the Twinsen double, Zoe's indoor mark -- RACEMOD.CPP StoryTwo)
             if (t.Story is { TiredText: >= 0 }) text.Append($"two_players={RaceTrackStory.TwoPlayersVar} {RaceTrackStory.DoubleEntityId} {RaceTrackStory.DoubleArmour} {RaceTrackStory.CompanionIndoorArmour}\n");
+            // (Twinsen swims in the Imperial Hotel's pool, and dives from its board: Citadel/CitadelProps.Pool, PoolSwim -- RACEMOD.CPP pool=)
+            if (t.Story is { TiredText: >= 0 })
+            {
+                foreach (var (x0, z0, x1, z1) in Citadel.CitadelProps.PoolBasin) text.Append($"pool={RaceTrackStory.HotelSceneNumber} {x0} {z0} {x1} {z1} {Citadel.CitadelProps.PoolFloor} {Citadel.CitadelProps.PoolSurface}\n");
+                text.Append($"pool_board={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.BoardX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.BoardTipX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.BoardHigh + 60} {Citadel.CitadelProps.BoardLandX} {Citadel.CitadelProps.BoardZ}\n");
+                text.Append($"pool_splash={RaceTrackStory.PoolSplash}\npool_anims={PoolSwim.Swim} {PoolSwim.Tread} {PoolSwim.Dive} {PoolSwim.Flip}\n");
+            }
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");
             // (the racing gear's one slot: the gloves, then the gloves and the helmet -- Citadel/CitadelOveralls.GearModel)
