@@ -857,6 +857,16 @@ static S32 s_bowlAt = 0, s_bowlLast = 0, s_bowlMsgUntil = 0, s_bowlBest = 0;
 static int s_bowlDown[6], s_bowlHome[6][2], s_bowlRolls[21], s_bowlNRolls = 0, s_bowlThisBall = 0, s_bowlReact = 0;
 static char s_bowlMsg[64] = "";
 static U32 s_bowlInput = 0;
+// darts=<scene> <spot x> <spot z> <reach> <board x> <board z> <board y>, dart_foe=<body> <anim> <scatter> <name>, dart_zoe=<same>: the Tavern's darts (DartFrame)
+typedef struct { S32 Body, Anim, Scatter; char Name[24]; } T_DART_FOE;
+static T_DART_FOE s_dtFoes[8], s_dtZoe;
+static int s_nbDtFoe = 0, s_dtHasZoe = 0, s_dtScene = -1, s_dtSpot[3], s_dtBoard[3];
+static int s_dtOn = 0, s_dtState = 0, s_dtTurn = 0, s_dtLeft = 3, s_dtScore[2], s_dtStartScore[2], s_dtFoe = -1, s_dtN = 0, s_dtActWas = 0, s_dtZoePress = 0, s_dtThrown = 0;
+static double s_dtAimX = 0, s_dtAimY = 0, s_dtMark[3][2], s_dtFx = 0, s_dtFy = 0;
+static S32 s_dtAt = 0, s_dtMsgUntil = 0, s_dtLast = 0, s_dtThrowAt = 0;
+static char s_dtMsg[64] = "";
+static U32 s_dtInput = 0;
+static U32 s_dtSeed = 12345;
 static int s_replaySet[8][2], s_nbReplay = 0, s_replayGold = -1, s_replayPending = 0;
 static double s_poolX = 0, s_poolZ = 0, s_poolY = 0;   // (where he is in the water: held by PoolFrame, the engine's pushes between frames undone)
 static int s_poolSplash = -1;   // (pool_splash=: the scene variable set as he goes into the water)
@@ -4235,6 +4245,16 @@ static void Load(const char *path, int carOnly = 0) {
                        s_lifts[s_nbLifts].File, &s_lifts[s_nbLifts].Grate) >= 10) {
                 if (!strcmp(s_lifts[s_nbLifts].File, "*")) s_lifts[s_nbLifts].File[0] = 0;
                 s_nbLifts++;
+            }
+        }
+        else if (!strcmp(key, "darts")) { if (sscanf(v, "%d %d %d %d %d %d %d", &s_dtScene, &s_dtSpot[0], &s_dtSpot[1], &s_dtSpot[2], &s_dtBoard[0], &s_dtBoard[1], &s_dtBoard[2]) != 7) s_dtScene = -1; }
+        else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
+            T_DART_FOE f;
+            memset(&f, 0, sizeof(f));
+            if (sscanf(v, "%d %d %d %23s", &f.Body, &f.Anim, &f.Scatter, f.Name) == 4) {
+                for (char *q = f.Name; *q; q++) if (*q == '_') *q = ' ';
+                if (!strcmp(key, "dart_zoe")) { s_dtZoe = f; s_dtHasZoe = 1; }
+                else if (s_nbDtFoe < 8) s_dtFoes[s_nbDtFoe++] = f;
             }
         }
         else if (!strcmp(key, "bowling_game")) s_bowlGame = atoi(v);
@@ -13713,6 +13733,8 @@ U32 RaceMod_FilterInput(U32 input) {
     // (swimming and diving: his keys are the pool's -- PoolFrame moves him itself)
     s_poolInput = input;
     s_bowlInput = input;
+    s_dtInput = input;
+    if (s_dtOn && (S32)NumCube == s_dtScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     if (s_nbPools && (s_swimming || s_poolDive)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     // (a lift on the raised road: the action key on its pad takes him down; while it moves, no key does anything -- deck_lift=)
@@ -13786,7 +13808,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -18116,7 +18138,8 @@ static void StoryTwo(void) {
         }
         // (Zoe's Action in the pit box: Twinsen's stop)
         T_RACENET_EVENT e;
-        while (RaceNet_NextEvent(&e))
+        while (RaceNet_NextEvent(&e)) {
+            if (e.Type == RACENET_EV_PIT && e.Y == -77777) { s_dtZoePress = 1; continue; }
             if (e.Type == RACENET_EV_PIT) {
                 const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
                 const double d = sqrt((hx - e.X) * (hx - e.X) + (hz - e.Z) * (hz - e.Z));
@@ -18125,6 +18148,7 @@ static void StoryTwo(void) {
                 Log_Info("[racemod] two players: Zoe's Action, %.0f from the pit box, Twinsen's car %.0f off her", box, d);
                 if (driving && box < RACE_PIT_REACH * 2 && d < RACE_PIT_GIVE_REACH) PitServe(now, (int)((abs(ListBuggy[0].Speed) * 36 + 2560) / 5120), "Zoe, player 2");
             }
+        }
     }
     // ---- player 2's game: what player 1's sends -- a save to load (the scene Twinsen entered), the variables
     else {
@@ -18158,6 +18182,13 @@ static void StoryTwo(void) {
                 e.X = (S32)(hero->Obj.X + CurrentCubeX * 32768.0); e.Y = hero->Obj.Y; e.Z = (S32)(hero->Obj.Z + CurrentCubeY * 32768.0);
                 RaceNet_SendEvent(&e);
                 Log_Info("[racemod] two players: Zoe's Action, Twinsen's car about -- the pit stop asked for");
+            } else {
+                // (not in a car: her Action is a dart thrown, if the Tavern's match is on -- the pit event's with a place that is none)
+                T_RACENET_EVENT e;
+                memset(&e, 0, sizeof(e));
+                e.Type = RACENET_EV_PIT;
+                e.Y = -77777;
+                RaceNet_SendEvent(&e);
             }
         }
         s_twoActionWas = action;
@@ -18912,6 +18943,190 @@ static void BowlDraw(void) {
     }
     if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine((S32)ModeDesiredX / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
 }
+// ---- the Tavern's darts (the user: "Twinsen to play against a random character from the car, or in two player mode with Zoe ... against Zoe") ----
+// 301 down to nothing, three darts a turn, a turn over-thrown (below nothing) not counted. Action by the board (DartsReach) starts a match against a
+// foe of the race file's, chosen at random -- or against Zoe, her darts thrown by player 2's Action, when the game has two players. The board is
+// drawn over the screen (Line), the aim a cross swaying on it: the arrows move it, Action throws where it is that moment (the sway is the skill);
+// the foes' darts fall where their aim and their scatter (steadiness) take them, on the same board.
+static void HudLine(S32 x, S32 y, const char *text, int align);
+static double DartRnd(void) { s_dtSeed = s_dtSeed * 1664525u + 1013904223u; return ((s_dtSeed >> 8) & 0xFFFF) / 65536.0; }
+// The score of a dart at (x, y) in the board's radii (the top 20, clockwise): its value and its words
+static int DartScore(double x, double y, char *words, size_t size) {
+    static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
+    const double r = sqrt(x * x + y * y);
+    if (r > 1.0) { snprintf(words, size, "Missed the board"); return 0; }
+    if (r < 0.045) { snprintf(words, size, "Bull!"); return 50; }
+    if (r < 0.11) { snprintf(words, size, "Outer bull"); return 25; }
+    double a = atan2(x, -y);
+    if (a < 0) a += 2 * 3.14159265358979;
+    const int sector = (int)floor((a + 3.14159265358979 / 20) / (3.14159265358979 / 10)) % 20;
+    const int v = order[sector];
+    if (r >= 0.58 && r <= 0.65) { snprintf(words, size, "Treble %d", v); return 3 * v; }
+    if (r >= 0.91) { snprintf(words, size, "Double %d", v); return 2 * v; }
+    snprintf(words, size, "%d", v);
+    return v;
+}
+static const T_DART_FOE *DartOpponent(void) { return s_dtFoe >= 0 ? &s_dtFoes[0] + s_dtFoe : &s_dtZoe; }
+static void DartSay(S32 now, const char *text, int ms) { snprintf(s_dtMsg, sizeof(s_dtMsg), "%s", text); s_dtMsgUntil = now + ms; }
+// A dart thrown by the one whose turn it is at (x, y): the score taken, the turn ended or the match won
+static void DartLand(S32 now, double x, double y) {
+    char words[48], said[64];
+    const int who = s_dtTurn, value = DartScore(x, y, words, sizeof(words));
+    if (s_dtN < 3) { s_dtMark[s_dtN][0] = x; s_dtMark[s_dtN][1] = y; s_dtN++; }
+    const int rest = s_dtScore[who] - value;
+    s_dtLeft--;
+    int endTurn = s_dtLeft == 0;
+    if (rest < 0) { s_dtScore[who] = s_dtStartScore[who]; snprintf(said, sizeof(said), "%s: over, the turn does not count", words); endTurn = 1; }
+    else { s_dtScore[who] = rest; snprintf(said, sizeof(said), "%s: %d", words, value); }
+    DartSay(now, said, 2200);
+    s_dtThrown = 1; s_dtThrowAt = now;
+    if (rest == 0) {
+        s_dtState = 4; s_dtAt = now;
+        snprintf(said, sizeof(said), who == 0 ? "You win!" : "%s wins", DartOpponent()->Name);
+        if (who) snprintf(said, sizeof(said), "%s wins", DartOpponent()->Name);
+        DartSay(now, said, 6000);
+        Log_Info("[racemod] darts: %s", said);
+        return;
+    }
+    s_dtState = 2; s_dtAt = now;   // the dart's moment over, then the next
+    if (endTurn) s_dtLeft = 0;
+}
+// A foe's aim for what it has left: the triple 20 while far off, else the single it needs (or the 20), and the scatter of its hand
+static void DartFoeThrow(S32 now) {
+    const T_DART_FOE *f = DartOpponent();
+    const int rem = s_dtScore[1];
+    double ax, ay;
+    // the aim: a point on the board -- the number's sector at the middle of the treble ring, or the single's
+    static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
+    int want = rem >= 60 ? 20 : rem <= 20 && rem >= 1 ? rem : 20;
+    const double r = rem >= 60 ? 0.615 : 0.78;
+    int sec = 0;
+    for (int i = 0; i < 20; i++) if (order[i] == want) sec = i;
+    const double a = sec * 3.14159265358979 / 10;
+    ax = r * sin(a); ay = -r * cos(a);
+    if (rem <= 50 && rem > 20 && (rem % 2) == 0 && rem <= 40) { want = rem / 2; for (int i = 0; i < 20; i++) if (order[i] == want) sec = i; ax = 0.95 * sin(sec * 3.14159265358979 / 10); ay = -0.95 * cos(sec * 3.14159265358979 / 10); }
+    const double sigma = f->Scatter / 100.0;
+    const double ex = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma, ey = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma;
+    s_dtFx = ax + ex; s_dtFy = ay + ey;
+    DartLand(now, s_dtFx, s_dtFy);
+}
+static void DartFrame(S32 now) {
+    if (s_dtScene < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene || RaceGame_StoryZoe()) { if (s_dtOn && (S32)NumCube != s_dtScene) s_dtOn = 0; return; }
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double dt = fmin(0.1, fmax(0.0, (now - s_dtLast) / 1000.0));
+    s_dtLast = now;
+    const int act = (s_dtInput & I_ACTION_M) != 0, pressed = act && !s_dtActWas;
+    s_dtActWas = act;
+    if (!s_dtOn) {
+        const double dx = hero->Obj.X - s_dtSpot[0], dz = hero->Obj.Z - s_dtSpot[1];
+        if (pressed && ListVarGame[FLAG_CHAPTER] >= 2 && Comportement != C_BUGGY && !(hero->WorkFlags & FALLING) && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) {
+            // a match: against Zoe (player 2) when the game has two players, else one of the foes at random
+            s_dtSeed ^= (U32)now * 2654435761u;
+            const int two = RaceGame_StoryTwo() && s_dtHasZoe;
+            s_dtFoe = two ? -1 : s_nbDtFoe ? (int)(DartRnd() * s_nbDtFoe) % s_nbDtFoe : -1;
+            if (!two && s_dtFoe < 0) return;
+            s_dtOn = 1; s_dtState = 0; s_dtTurn = 0; s_dtLeft = 3; s_dtN = 0;
+            s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = 301;
+            s_dtAimX = 0; s_dtAimY = 0; s_dtThrown = 0;
+            hero->Obj.Beta = (S32)(atan2((double)(s_dtBoard[0] - hero->Obj.X), (double)(s_dtBoard[1] - hero->Obj.Z)) * 4096 / (2 * 3.14159265358979)) & 4095;
+            ClearRealAngle(hero);
+            DartSay(now, "Arrows aim, Action throws", 3000);
+            Log_Info("[racemod] darts: a match against %s", DartOpponent()->Name);
+        }
+        return;
+    }
+    // (Twinsen's dart thrown: his own animation, then standing again)
+    if (s_dtThrown && now - s_dtThrowAt > 800) { s_dtThrown = 0; InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO); }
+    hero->WorkFlags &= ~FALLING;
+    const double t = now / 1000.0;
+    if (s_dtState == 0) {
+        // the player's aim: the arrows, and the sway over it
+        if (s_dtInput & I_LEFT) s_dtAimX -= 0.7 * dt;
+        if (s_dtInput & I_RIGHT) s_dtAimX += 0.7 * dt;
+        if (s_dtInput & I_UP) s_dtAimY -= 0.7 * dt;
+        if (s_dtInput & I_DOWN) s_dtAimY += 0.7 * dt;
+        if (s_dtAimX < -1.1) s_dtAimX = -1.1; if (s_dtAimX > 1.1) s_dtAimX = 1.1;
+        if (s_dtAimY < -1.1) s_dtAimY = -1.1; if (s_dtAimY > 1.1) s_dtAimY = 1.1;
+        s_dtFx = s_dtAimX + 0.07 * sin(t * 1.9) + 0.04 * sin(t * 4.1); s_dtFy = s_dtAimY + 0.07 * cos(t * 2.3) + 0.04 * cos(t * 3.7);
+        if (pressed) {
+            InitAnim(GEN_ANIM_DART, ANIM_REPEAT, NUM_PERSO);
+            DartLand(now, s_dtFx + (DartRnd() - 0.5) * 0.03, s_dtFy + (DartRnd() - 0.5) * 0.03);
+        }
+    } else if (s_dtState == 1) {
+        // Zoe's turn with two players: a cross sweeping the board, her Action (player 2's) throwing where it is; or the foe's after a moment
+        if (s_dtFoe < 0) {
+            s_dtFx = 0.8 * sin(t * 1.4); s_dtFy = 0.8 * sin(t * 2.1 + 1.0);
+            if (s_dtZoePress || now - s_dtAt > 7000) { s_dtZoePress = 0; DartLand(now, s_dtFx, s_dtFy); }
+        } else if (now - s_dtAt > 1500) DartFoeThrow(now);
+    } else if (s_dtState == 2) {
+        // between darts: the next of the turn, or the turn passed
+        if (now - s_dtAt > 1500) {
+            if (s_dtLeft > 0) s_dtState = s_dtTurn == 0 ? 0 : 1;
+            else {
+                s_dtTurn = 1 - s_dtTurn; s_dtLeft = 3; s_dtN = 0; s_dtStartScore[s_dtTurn] = s_dtScore[s_dtTurn];
+                s_dtState = s_dtTurn == 0 ? 0 : 1;
+                DartSay(now, s_dtTurn == 0 ? "Your turn" : "Their turn", 1500);
+            }
+            s_dtAt = now;
+        }
+    } else if (s_dtState == 4 && now - s_dtAt > 6000) {
+        s_dtOn = 0;
+        InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+    }
+}
+extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure, S32 anim);
+static void DartCircle(S32 cx, S32 cy, double r, int colour) {
+    S32 px = cx + (S32)r, py = cy;
+    for (int k = 1; k <= 48; k++) {
+        const double a = k * 2 * 3.14159265358979 / 48;
+        const S32 x = cx + (S32)(r * cos(a)), y = cy + (S32)(r * sin(a));
+        Line(px, py, x, y, colour);
+        px = x; py = y;
+    }
+}
+// The darts' display: the board and the darts on it, the aim, the scores, the foe beside it, what was said
+static void DartDraw(void) {
+    if (s_dtScene < 0 || (S32)NumCube != s_dtScene || CubeMode != CUBE_INTERIEUR || RaceGame_StoryZoe()) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+    if (!s_dtOn) {
+        const double dx = hero->Obj.X - s_dtSpot[0], dz = hero->Obj.Z - s_dtSpot[1];
+        if (ListVarGame[FLAG_CHAPTER] >= 2 && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) HudLine(w / 2 - SizeFont("Action: play darts") / 2, h - 60, "Action: play darts", -1);
+        return;
+    }
+    const S32 cx = w - 150, cy = h / 2 + 10, R = 115;
+    BoxMovingAdd(cx - R - 4, cy - R - 4, cx + R + 4, cy + R + 4);
+    static const double rings[6] = {0.045, 0.11, 0.58, 0.65, 0.91, 1.0};
+    for (int i = 0; i < 6; i++) DartCircle(cx, cy, rings[i] * R, i == 2 || i == 3 ? 133 : i >= 4 ? 72 : 55);
+    for (int k = 0; k < 20; k++) {
+        const double a = (k + 0.5) * 3.14159265358979 / 10;
+        Line(cx + (S32)(0.11 * R * sin(a)), cy - (S32)(0.11 * R * cos(a)), cx + (S32)(R * sin(a)), cy - (S32)(R * cos(a)), 53);
+    }
+    static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
+    for (int k = 0; k < 20; k++) {
+        char n[8];
+        snprintf(n, sizeof(n), "%d", order[k]);
+        const double a = k * 3.14159265358979 / 10;
+        HudLine(cx + (S32)(1.12 * R * sin(a)) - SizeFont(n) / 2, cy - (S32)(1.12 * R * cos(a)) - 10, n, -1);
+    }
+    for (int i = 0; i < s_dtN; i++) {
+        const S32 x = cx + (S32)(s_dtMark[i][0] * R), y = cy + (S32)(s_dtMark[i][1] * R);
+        Line(x - 5, y - 5, x + 5, y + 5, 106); Line(x - 5, y + 5, x + 5, y - 5, 106);
+    }
+    if (s_dtState == 0 || (s_dtState == 1 && s_dtFoe < 0)) {
+        const S32 x = cx + (S32)(s_dtFx * R), y = cy + (S32)(s_dtFy * R);
+        Line(x - 9, y, x + 9, y, LBAWHITE); Line(x, y - 9, x, y + 9, LBAWHITE);
+    }
+    const T_DART_FOE *f = DartOpponent();
+    char line[96];
+    snprintf(line, sizeof(line), "You %d", s_dtScore[0]); HudLine(16, 12, line, -1);
+    snprintf(line, sizeof(line), "%s %d", f->Name, s_dtScore[1]); HudLine(16, 40, line, -1);
+    snprintf(line, sizeof(line), "%s: %d dart%s left", s_dtTurn == 0 ? "You" : f->Name, s_dtLeft, s_dtLeft == 1 ? "" : "s"); HudLine(16, 68, line, -1);
+    if (s_dtState == 1 && s_dtFoe < 0) HudLine(16, 96, "Zoe: press Action!", -1);
+    if (TimerRefHR < s_dtMsgUntil && s_dtMsg[0]) HudLine(w / 2 - SizeFont(s_dtMsg) / 2, h - 60, s_dtMsg, -1);
+    // (the one played against, drawn beside the scores)
+    if (f->Body >= 0) RaceMod_DrawBody(16, 140, 196, 330, f->Body, 3400, 0, f->Anim);
+}
 // Whether Twinsen is in the pool's water -- the basin's box, or the dive on its way -- where he swims and does not drown (OBJECT.CPP's water)
 S32 RaceMod_PoolSwims(void) {
     if (!RaceMod_Active() || !s_nbPools || CubeMode != CUBE_INTERIEUR) return 0;
@@ -19440,6 +19655,7 @@ void RaceMod_Frame(void) {
     PoolFrame(TimerRefHR);
     AchievementsFrame(TimerRefHR);
     BowlFrame(TimerRefHR);
+    DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -21619,6 +21835,7 @@ void RaceMod_Draw(void) {
         HudLine(w / 2 - SizeFont(s_achText) / 2, 24, s_achText, -1);
     }
     BowlDraw();
+    DartDraw();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !NoItems() && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,

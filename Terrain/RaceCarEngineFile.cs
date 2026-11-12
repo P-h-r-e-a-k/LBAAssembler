@@ -671,6 +671,8 @@ internal static class RaceCarEngineFile
                 text.Append($"pool_board={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.BoardX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.BoardTipX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.BoardHigh + 60} {Citadel.CitadelProps.BoardLandX} {Citadel.CitadelProps.BoardZ}\n");
                 text.Append($"pool_splash={RaceTrackStory.PoolSplash}\npool_anims={PoolSwim.Swim} {PoolSwim.Tread} {PoolSwim.Dive} {PoolSwim.Flip}\n");
                 // (the achievements: RaceTrackStory.Achievements -- a game variable at a value, or a scene entered)
+                // (the Tavern's darts: RaceTrackStory.Darts)
+                foreach (var line in RaceTrackStory.DartsLines()) text.Append(line + "\n");
                 foreach (var line in RaceTrackStory.Achievements) text.Append(line + "\n");
             }
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)

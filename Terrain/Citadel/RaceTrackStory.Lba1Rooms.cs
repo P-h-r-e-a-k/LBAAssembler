@@ -132,6 +132,7 @@ internal static partial class RaceTrackStory
         if (doorway) SecretRoom(p, Say);
         else p.Log.Add("LBA1's secret sewer room left out: no doorway in the sewers' wall (scene 17 isn't the 1996 demo's sewers)");
         if (cellar) TavernCellar(p, Say);
+        DartsTavern(p);
     }
 
     // a prop of the build's (CitadelLba1Rooms' bodies): the mushroom's entity with that body, standing still, no shadow (Twinsen walks
