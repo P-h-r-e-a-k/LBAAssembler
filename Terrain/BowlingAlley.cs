@@ -35,7 +35,7 @@ internal static class BowlingAlley
     private const int LiftRide = 1, LiftDown = 2, LiftRise = 3, LiftRisen = 4, LiftSpeed = 600, LiftStart = 506, LiftStop = 510;
     private const int CellDown = 1600, CellUp = 1200, ClubDown = 1200, ClubUp = 1800;
     // the animations: the Franco's standing and its fall (entity 297), the Sphero's rolling, the bowlers' throw and swing
-    private const int Franco = 56, Sphero = 28, MonkeyMonster = 275, SwordMonkey = 252;
+    private const int Franco = 56, Sphero = 28, MonkeyMonster = 275, SwordMonkey = 252, EmperorSoldier = 184, DarkMonk = 217;
     private const int StandAnim = 0, FallAnim = 10, RollAnim = 1, WalkAnim = 1, ThrowMonster = 15, SwingSword = 52, PullAnim = 6;
 
     private static string Still() => "void comportement_0()\n{\n}\n";
@@ -179,44 +179,87 @@ void comportement_3()
             a.Flags |= RaceTrackScenes.CarrierFlag; a.Move = 3; a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
             return SceneOps.AddActor(model, a);
         }
-        // a life that waits for the helper's phases in turn: at each, its own track's label -- and for the helper's 0 again, from the first
-        static string Poll(int helper, params (int Phase, int Label)[] steps)
+        // a life that waits for the lane's phases in turn -- the lever's track's labels -- and at each does its piece of script; after the last, round again
+        static string Chain(int helper, params (int Phase, string Do)[] steps)
         {
             var sb = new System.Text.StringBuilder();
             for (var k = 0; k <= steps.Length; k++)
             {
                 sb.Append($"void comportement_{k}()\n{{\n");
                 if (k < steps.Length)
-                    sb.Append($"    if ({steps[k].Phase} == l_track_obj({helper}))\n    {{\n        set_var_cube({40 + k}, 1);\n        set_track(label_{steps[k].Label});\n        set_comportement(comportement_{k + 1});\n    }}\n");
+                    sb.Append($"    if ({steps[k].Phase} == l_track_obj({helper}))\n    {{\n        {steps[k].Do}\n        set_comportement(comportement_{k + 1});\n    }}\n");
                 else
-                    sb.Append($"    if (0 == l_track_obj({helper}))\n    {{\n        set_comportement(comportement_0);\n    }}\n");
+                    sb.Append("    set_comportement(comportement_0);\n");
                 sb.Append("}\n\n");
             }
             return sb.ToString();
         }
-        var laneCount = 0;
-        foreach (var (cx, bowlerEntity, throwAnim, name) in new[] { (CitadelProps.LaneX0, MonkeyMonster, ThrowMonster, "the monkey monster"), (CitadelProps.LaneX1, SwordMonkey, SwingSword, "the swordsman monkey") })
+        static string Go(int label) => $"set_track(label_{label});";
+        // by how the throw went (var_cube `outcome`: 0 a strike, 1 some pins, 2 the gutter): one of three labels
+        static string ByOutcome(int outcome, int strike, int some, int gutter) =>
+            $"if (2 == var_cube({outcome})) {{ set_track(label_{gutter}); }} else if (1 == var_cube({outcome})) {{ set_track(label_{some}); }} else {{ set_track(label_{strike}); }}";
+        var lane = 0;
+        // the four bowlers, two to a lane taking turns: what they throw, how they cheer a strike, shrug at some pins, and curse a gutter ball; the
+        // chances of each (tenths: a strike under `Strike`, some pins under `Some`, else the gutter) and how fast the ball goes
+        var bowlers = new (int Lane, int X, int Entity, string Name, int Throw, int Cheer, int Shrug, int Dismay, int Strike, int Some, int Speed)[]
         {
-            laneCount++;
+            (0, CitadelProps.LaneX0, MonkeyMonster, "the monkey monster", ThrowMonster, 133, 222, 6, 5, 8, 3200),      // strong: strikes, and wild
+            (0, CitadelProps.LaneX0, EmperorSoldier, "the Emperor's soldier", 436, 434, 433, 6, 3, 8, 2500),         // steady: more often some pins
+            (1, CitadelProps.LaneX1, SwordMonkey, "the swordsman monkey", SwingSword, 532, 129, 6, 6, 9, 2800),      // precise
+            (1, CitadelProps.LaneX1, DarkMonk, "the Dark Monk", 488, 485, 489, 492, 3, 5, 1900),                    // slow and erratic
+        };
+        foreach (var cx in new[] { CitadelProps.LaneX0, CitadelProps.LaneX1 })
+        {
             var onFloor = FloorY + CitadelProps.LaneTop;
+            var who = 10 + lane; var outcome = 12 + lane;
+            lane++;
             // the giant lever beside the lane keeps the round (an invisible helper's track did not run): a phase a label of its track, its arm
             // thrown down in the third as the bowler pulls it
             var helper = Prop(CitadelProps.LeverUp, cx + 1750, FloorY, CitadelProps.FoulZ + 500);
-            Text(helper, Still(), $"label(0);\nwait_nb_second(2);\nlabel(1);\nwait_nb_second(4);\nlabel(2);\nwait_nb_second(3);\nlabel(3);\nwait_nb_second(2);\nbody({CitadelProps.LeverDown});\nwait_nb_second(1);\nbody({CitadelProps.LeverUp});\nwait_nb_second(1);\nlabel(4);\nwait_nb_second(3);\ngoto(label_0);\n");
-            // the ball: a live Sphero at the bowler's feet; he throws, it rolls down the lane into the pit, and is back when the pins are
+            Text(helper, "", $"label(0);\nwait_nb_second(2);\nlabel(1);\nwait_nb_second(4);\nlabel(2);\nwait_nb_second(3);\nlabel(3);\nwait_nb_second(2);\nbody({CitadelProps.LeverDown});\nwait_nb_second(1);\nbody({CitadelProps.LeverUp});\nwait_nb_second(1);\nlabel(4);\nwait_nb_second(3);\ngoto(label_0);\n");
+            // (and each round the throw's luck is rolled while the bowlers change places, in tenths by whose turn it is)
+            var rolls = string.Concat(bowlers.Where(b => b.Lane == lane - 1).Select((b, i) =>
+                $"        if ({i} == var_cube({who}))\n        {{\n            if ({b.Strike} > rnd(10)) {{ set_var_cube({outcome}, 0); }}\n            else if ({b.Some} > rnd(10)) {{ set_var_cube({outcome}, 1); }}\n            else {{ set_var_cube({outcome}, 2); }}\n        }}\n"));
+            texts[helper] = ($"void comportement_0()\n{{\n    if (0 == l_track_obj({helper}))\n    {{\n{rolls}    }}\n}}\n", texts[helper].Track);
+            // the ball: a live Sphero at the lane's foul line; it rolls to the pins, to one side of them, or into the gutter, and is back when the pins are
             var ballStart = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx, onFloor, CitadelProps.FoulZ + 400));
             var ballEnd = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx, onFloor, CitadelProps.PinsZ - 500));
-            var ball = Mk(Sphero, 0, cx, CitadelProps.FoulZ + 400, 2048, StandAnim, "a Sphero"); model.Actors[ball].Flags = 0x1000 | RaceTrackScenes.CarrierFlag;   // (no collisions: the ball rolls through whoever is in its way)
-            Text(ball, Poll(helper, (1, 1), (4, 4)),
-                $"label(0);\nstop();\n\nlabel(1);\nanim({RollAnim});\nspeed(2600);\ngoto_point_3d({ballEnd});\nanim({StandAnim});\nstop();\n\nlabel(4);\npos_point({ballStart});\nanim({StandAnim});\nstop();\n");
-            // the bowler: the evil one at the foul line, throwing, then to the lever
-            var bowlerHome = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx, onFloor, CitadelProps.FoulZ + 1200));
-            var bowlerLever = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx + 1250, onFloor, CitadelProps.FoulZ + 900));
-            var bowler = Mk(bowlerEntity, 0, cx, CitadelProps.FoulZ + 1200, 2048, StandAnim, name);
-            Text(bowler, Poll(helper, (1, 1), (3, 3)),
-                $"label(0);\nstop();\n\nlabel(1);\nanim({throwAnim});\nwait_anim();\nanim({StandAnim});\nstop();\n\n" +
-                $"label(3);\nspeed(900);\nanim({StandAnim});\ngoto_point_3d({bowlerLever});\nanim({PullAnim});\nwait_nb_second(1);\nwait_anim();\nanim({StandAnim});\ngoto_point_3d({bowlerHome});\nbeta(2048);\nanim({StandAnim});\nstop();\n");
-            // the pins: six Francos, a helmet and chain over each, in a triangle at the far end; they fall in turn, and the chains haul them up
+            var ballSide = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx + 520, onFloor, CitadelProps.PinsZ - 500));
+            var ballGutter = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx + CitadelProps.LaneHalf + 130, onFloor, CitadelProps.PinsZ - 500));
+            var ball = Mk(Sphero, 0, cx, CitadelProps.FoulZ + 400, 2048, StandAnim, "a Sphero");
+            model.Actors[ball].Flags = 0x1000 | RaceTrackScenes.CarrierFlag;
+            // (the speed of the ball is the bowler's: set by whoever bowls -- var_cube `who`: first or second of the lane)
+            var firstSpeed = bowlers.First(b => b.Lane == lane - 1).Speed; var secondSpeed = bowlers.Last(b => b.Lane == lane - 1).Speed;
+            // (labels 1, 9, 8 for the first bowler's speed, 11, 19, 18 for the second's: a track has no ifs)
+            string Roll(int label, int to, int speed) =>
+                $"label({label});\nanim({RollAnim});\nspeed({speed});\ngoto_point_3d({to});\nanim({StandAnim});\nstop();\n\n";
+            var rollLife = $"if (0 == var_cube({who})) {{ {ByOutcome(outcome, 1, 9, 8)} }} else {{ {ByOutcome(outcome, 11, 19, 18)} }}";
+            Text(ball, Chain(helper, (1, rollLife), (4, Go(4)), (0, "")),
+                "label(0);\nstop();\n\n" + Roll(1, ballEnd, firstSpeed) + Roll(9, ballSide, firstSpeed) + Roll(8, ballGutter, firstSpeed) +
+                Roll(11, ballEnd, secondSpeed) + Roll(19, ballSide, secondSpeed) + Roll(18, ballGutter, secondSpeed) + $"label(4);\npos_point({ballStart});\nanim({StandAnim});\nstop();\n");
+            // the bowlers
+            var home = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx, onFloor, CitadelProps.FoulZ + 1200));
+            var wait = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx - 1900, onFloor, CitadelProps.FoulZ + 2200));
+            var atLever = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx + 1250, onFloor, CitadelProps.FoulZ + 900));
+            var turn = 0;
+            foreach (var b in bowlers.Where(b => b.Lane == lane - 1))
+            {
+                var first = turn == 0;
+                var actor = Mk(b.Entity, 0, first ? cx : cx - 1900, first ? CitadelProps.FoulZ + 1200 : CitadelProps.FoulZ + 2200, 2048, StandAnim, b.Name);
+                string React(int label, int anim) => $"label({label});\nanim({anim});\nwait_anim();\nanim({StandAnim});\nstop();\n\n";
+                var track = "label(0);\nstop();\n\n" + $"label(1);\nanim({b.Throw});\nwait_anim();\nanim({StandAnim});\nspeed(900);\ngoto_point_3d({home});\nbeta(2048);\nstop();\n\n" +
+                            React(20, b.Cheer) + React(21, b.Shrug) + React(22, b.Dismay) +
+                            $"label(3);\nspeed(900);\nanim({StandAnim});\ngoto_point_3d({atLever});\nanim({PullAnim});\nwait_nb_second(1);\nwait_anim();\nanim({StandAnim});\ngoto_point_3d({home});\nbeta(2048);\nstop();\n\n" +
+                            $"label(5);\nspeed(900);\ngoto_point_3d({wait});\nbeta(2048);\nstop();\n\nlabel(6);\nspeed(900);\ngoto_point_3d({home});\nbeta(2048);\nstop();\n\nlabel(7);\nstop();\n";
+                var react = ByOutcome(outcome, 20, 21, 22);
+                var steps = first
+                    ? new[] { (1, Go(1)), (2, react), (3, Go(3)), (0, Go(5)), (4, Go(7)), (0, Go(6) + $" set_var_cube({who}, 0);") }
+                    : new[] { (4, Go(7)), (0, Go(6) + $" set_var_cube({who}, 1);"), (1, Go(1)), (2, react), (3, Go(3)), (0, Go(5)) };
+                Text(actor, Chain(helper, steps), track);
+                turn++;
+            }
+            // the pins: six Franco guards, a helmet and chain over each, in a triangle at the far end; the ones the ball reaches go down in turn,
+            // and the chains haul them all up
             var k = 0;
             foreach (var (row, offsets) in new[] { (0, new[] { -700, 0, 700 }), (1, new[] { -350, 350 }), (2, new[] { 0 }) })
                 foreach (var off in offsets)
@@ -226,10 +269,12 @@ void comportement_3()
                     var up = SceneOps.AddTrackPoint(model, new SceneTrackPoint(px, onFloor + 900, pz));
                     var pin = Mk(Franco, 0, px, pz, 0, StandAnim, "a pin");
                     var chain = Prop(CitadelProps.PinChain, px, onFloor, pz);
-                    Text(pin, Poll(helper, (2, 2), (4, 4)),
+                    // (a ball to the side of the pins takes the ones from the middle to that side)
+                    var falls = off >= 0;
+                    Text(pin, Chain(helper, (2, falls ? $"if (2 != var_cube({outcome})) {{ set_track(label_2); }}" : $"if (0 == var_cube({outcome})) {{ set_track(label_2); }}"), (4, Go(4)), (0, "")),
                         $"label(0);\nstop();\n\nlabel(2);\nwait_nb_dizieme({1 + 2 * k});\nanim({FallAnim});\nwait_anim();\nstop();\n\n" +
                         $"label(4);\npos_point({stand});\nanim({StandAnim});\nspeed(600);\ngoto_point_3d({up});\ngoto_point_3d({stand});\nstop();\n");
-                    Text(chain, Poll(helper, (4, 4)), $"label(0);\nstop();\n\nlabel(4);\nspeed(600);\ngoto_point_3d({up});\ngoto_point_3d({stand});\nstop();\n");
+                    Text(chain, Chain(helper, (4, Go(4)), (0, "")), $"label(0);\nstop();\n\nlabel(4);\nspeed(600);\ngoto_point_3d({up});\ngoto_point_3d({stand});\nstop();\n");
                     k++;
                 }
         }
