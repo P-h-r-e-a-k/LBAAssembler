@@ -950,6 +950,7 @@ void RaceMod_InvKinds(void) {
     }
 }
 static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
+static int s_stopByVictory = 0;   // (the stop below armed by a lap of honour, not by the console)
 static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
 static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
 // victory_lap=<x> <z> (2026-11-11; the user, 2026-11-10: "After Twinsen beats Raph's time let's have the car automatically pull up by Raph
@@ -6858,6 +6859,7 @@ static void VictoryFrame(void) {
     // (out of the car -- pulled up, or got out some other way: the scene changed, a cut-scene): over, the pilot off, the controls his
     if (Comportement != C_BUGGY) {
         s_victory = 0; s_auto = 0; s_stopResume = 0;
+        s_stopping = 0; s_stopReach = 0;   // (the stop is done: left armed, it got him out of the car again each time he got back in by Raph's -- the user, 2026-11-12)
         Log_Info("[racemod] victory_lap: over -- Twinsen out of the car, the controls his again");
         return;
     }
@@ -6899,7 +6901,7 @@ static void VictoryNear(void) {
     const double to[2] = { s_victoryX + dx * RACE_VICTORY_GAP, s_victoryZ + dz * RACE_VICTORY_GAP };
     s_victory = 3; s_auto = 0;
     RaceMod_Walk(1, to, 0, 0);
-    s_stopX = to[0]; s_stopZ = to[1]; s_stopReach = RACE_VICTORY_REACH; s_stopping = 0;
+    s_stopX = to[0]; s_stopZ = to[1]; s_stopReach = RACE_VICTORY_REACH; s_stopping = 0; s_stopByVictory = 1;
     Log_Info("[racemod] victory_lap: off the line to (%.0f, %.0f), %.0f short of Raph's car, and pulled up", to[0], to[1], RACE_VICTORY_GAP);
 }
 
@@ -6916,6 +6918,11 @@ U32 RaceMod_AutoInput(void) {
     if ((s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
     // (... and in his car, driven through them: DriveInput)
     if (s_walkN > 0 && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return DriveInput();
+    // (the console's racestop, done: Twinsen is out of the car it stopped -- over, not to get him out of the car again when he is back in it)
+    if (s_stopReach > 0 && s_stopping == 2 && Comportement != C_BUGGY) { s_stopping = 0; s_stopReach = 0; }
+    // (armed by nothing now -- no lap of honour on (s_victory), no pilot or walk driving the car: a stop left over by a victory lap that ended some other
+    // way took Twinsen out of his car whenever it slowed near the place, 'when I'm letting go of a direction key Twinsen gets out', the user, 2026-11-12)
+    if (s_stopReach > 0 && s_stopByVictory && !s_stopping && !s_victory) { s_stopReach = 0; s_stopByVictory = 0; }
     // (the console's racestop: the test pilot's car stopped where it comes within reach of a place, and Twinsen out of it)
     if (s_stopReach > 0 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) {
         const T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -12919,7 +12926,7 @@ static int FootRescue(const char *where) {
 // The console's racestop <x> <z> <reach>: the test pilot (autodrive) stops the car once it comes within reach of the place (island units)
 // and gets Twinsen out (on_foot=); its autodrive off till he is back in.
 void RaceMod_StopAt(double x, double z, double reach) {
-    s_stopX = x; s_stopZ = z; s_stopReach = reach; s_stopping = 0;
+    s_stopX = x; s_stopZ = z; s_stopReach = reach; s_stopping = 0; s_stopByVictory = 0;
     Log_Info("[racemod] racestop: the car to stop within %.0f of (%.0f,%.0f)", reach, x, z);
 }
 
