@@ -1783,6 +1783,9 @@ void comportement_2()
     // (none of it till the spell's evening on the top is over -- Zoe's question asked: the spell leaves Twinsen standing in DoorFront, and
     // an Action pressed through the scene took him down in the middle of it, for good; RaceTrackStory.Evening.cs ZoeWaits)
     private const int LampDoor = 62, DoorFront = 63, TopAway = 49;
+    // (the storm night's telescope: the Esmers' ship the first time this visit, the Wizard and the cow after it -- the user, 2026-11-13: "if
+    // Twinsen uses it once let's have the spaceship come down, if Twinsen uses it a second time let's show the wizard/cow scene")
+    private const int ShipSeen = 51;
     // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
@@ -1871,8 +1874,9 @@ void comportement_1()
                     if (2 < nb_gold_pieces())
                     {{
                         give_gold_pieces(3);
-                        if (1 == chapter())
+                        if (1 == chapter() && 0 == var_cube({ShipSeen}))
                         {{
+                            set_var_cube({ShipSeen}, 1);
                             set_var_cube({StormLook}, 1);
                         }}
                         else
@@ -1899,8 +1903,9 @@ void comportement_1()
                         if (2 < nb_gold_pieces())
                         {{
                             give_gold_pieces(3);
-                            if (1 == chapter())
+                            if (1 == chapter() && 0 == var_cube({ShipSeen}))
                             {{
+                                set_var_cube({ShipSeen}, 1);
                                 set_var_cube({StormLook}, 1);
                             }}
                             else

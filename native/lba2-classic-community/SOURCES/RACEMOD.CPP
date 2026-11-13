@@ -6987,7 +6987,9 @@ U32 RaceMod_AutoInput(void) {
     if (s_stopReach > 0 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) {
         const T_OBJET *h = &ListObjet[NUM_PERSO];
         const double dx = h->Obj.X + CurrentCubeX * 32768.0 - s_stopX, dz = h->Obj.Z + CurrentCubeY * 32768.0 - s_stopZ;
-        if (s_stopping || dx * dx + dz * dz < s_stopReach * s_stopReach) {
+        // (the lap of honour's pull-up: wherever its drive to the place ended -- its own reach is the drive's, wider than the stop's: ended
+        // outside the stop's, the car went on for good)
+        if (s_stopping || dx * dx + dz * dz < s_stopReach * s_stopReach || (s_stopByVictory && s_victory == 3 && s_walkN == 0)) {
             if (!s_stopping) Log_Info("[racemod] racestop: the car within %.0f of (%.0f,%.0f) at %d -- stopping", sqrt(dx * dx + dz * dz), s_stopX, s_stopZ, (int)ListBuggy[0].Speed);
             if (!s_stopping) s_stopResume = s_auto;
             s_stopping = 1; s_auto = 0;
@@ -13500,6 +13502,9 @@ static U32 WalkInput(void) {
 // The console's racewalk in the car: the car driven through the points (island units) by the keys -- the accelerator held, steered for
 // the next point, which counts as reached within RACE_DRIVE_REACH; the last reached, the keys let go (the step brakes if it wants).
 #define RACE_DRIVE_REACH (2 * 512)
+#define RACE_DRIVE_PASSED (6 * 512)        // (... or gone by within this, it beside or behind the car)
+#define RACE_DRIVE_SLOW_FROM 6000.0        // (the last point: slowed from this far off ...
+#define RACE_DRIVE_SLOW_KMH 25             // ... to this)
 // The console's drivecap <km/h> (0: none): the console's drive in the car held under that speed -- the brake, not the accelerator, while it
 // is over it (the scripted playthrough by inputs, 2026-11-11: a pit stop in the pit box beside Zoe, under 20 km/h)
 static int s_driveCap = 0;
@@ -13510,14 +13515,20 @@ static U32 DriveInput(void) {
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
     if (s_walkAt >= s_walkN) { s_walkN = 0; Log_Info("[racemod] racewalk: the car at its last point (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); return 0; }
     const double dx = s_walkX[s_walkAt] - wx, dz = s_walkZ[s_walkAt] - wz;
-    if (sqrt(dx * dx + dz * dz) < RACE_DRIVE_REACH) {
-        Log_Info("[racemod] racewalk: the car at point %d (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz);
+    const double away = sqrt(dx * dx + dz * dz);
+    const S32 want = TurnRound(atan2(dx, dz));
+    const S32 turn = ((want - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
+    // (reached within RACE_DRIVE_REACH -- or gone by it near enough, it beside or behind the car: at speed the car can't turn tightly
+    // enough to come within reach of a point beside it, and drove round and round it -- the lap of honour's pull-up by Raph's car, the
+    // user, 2026-11-13, "he got back to the start/finish line then started to drive around in circles")
+    if (away < RACE_DRIVE_REACH || (away < RACE_DRIVE_PASSED && abs(turn) > 1024)) {
+        Log_Info("[racemod] racewalk: the car at point %d (%.0f,%d,%.0f)%s", s_walkAt + 1, wx, (int)hero->Obj.Y, wz, away < RACE_DRIVE_REACH ? "" : ", gone by it");
         s_walkAt++;
         return go;
     }
-    const S32 want = TurnRound(atan2(dx, dz));
-    const S32 turn = ((want - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
     U32 in = go;
+    // (and slowed for the last one, so it can turn onto it)
+    if (s_walkAt == s_walkN - 1 && away < RACE_DRIVE_SLOW_FROM && (ListBuggy[0].Speed * 36 + 2560) / 5120 > RACE_DRIVE_SLOW_KMH) in = I_DOWN;
     if (turn > 40) in |= I_LEFT; else if (turn < -40) in |= I_RIGHT;
     return in;
 }

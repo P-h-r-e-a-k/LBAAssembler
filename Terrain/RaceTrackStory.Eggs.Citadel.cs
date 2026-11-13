@@ -175,12 +175,14 @@ void comportement_2()
     }}
 }}
 ");
-            var track = new System.Text.StringBuilder("label(0);\nstop();\n\n");
+            var track = new System.Text.StringBuilder($"label(0);\npos_point({firstPoint});\nstop();\n\n");
             track.Append($"label({ShipLook});\nanim({ShipHover});\n");
             for (var k = 0; k <= ShipSteps; k++)
                 track.Append($"pos_point({firstPoint + k});\nbody({(k % 2 == 0 ? 58 : 59)});\nwait_nb_dizieme(2);\n");
             track.Append("wait_nb_second(2);\n\n");
-            track.Append($"label({ShipLooked});\npos_point({firstPoint});\nstop();\n");
+            // (back up to the clouds only once it's out of sight again, after Twinsen's words: put back there as its look ended, it was drawn
+            // there through his words while the picture still held it over the waves -- two ships, the user, 2026-11-13)
+            track.Append($"label({ShipLooked});\nstop();\n");
             return scripts =>
             {
                 life(scripts);
