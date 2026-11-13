@@ -23,7 +23,9 @@ internal static partial class RaceTrackStory
     internal const int CompanionArmour = 117;   // (a signed byte in the scene record: 117, which no one of the game's has)
     // (two players: Zoe indoors, and the Twinsen double -- the hero's entity, normal behaviour -- each by a mark no one of the game's has; the
     // game variable the story's scripts see 1 in with two players: a spare one, RaceTrackStory.Eggs.cs's list)
-    internal const int CompanionIndoorArmour = 115, DoubleArmour = 116, DoubleEntityId = 0, TwoPlayersVar = 96;
+    // (TwoPlayersVar was 96 until 2026-11-13, the same variable as the night out's Drunk (SecretChamber): the engine sets it every frame, so Drunk
+    // never held and Zoe's spanking never came -- 114 is free, RaceTrackStory.Eggs.cs's spare list)
+    internal const int CompanionIndoorArmour = 115, DoubleArmour = 116, DoubleEntityId = 0, TwoPlayersVar = 114;
     // (Zoe's entity in the game: scene 0's Zoe's, every Zoe of the story's a copy of her)
     internal const int CompanionEntityId = 15;
     // (her steps: walking once he's this far off, standing again this near)

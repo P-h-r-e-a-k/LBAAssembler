@@ -96,6 +96,9 @@ void comportement_1()
 ");
             var key = RaceTrackScenes.InvisibleHelper(KeyAt.X, KeyAt.Y, KeyAt.Z);
             key.OptionFlags = 0x80; key.NbBonus = 1;
+            // (the key jumps out at Action by the sign whether or not Luc has told of it: waiting on his word, the seal gave nothing to a
+            // Twinsen who hadn't talked to him -- the user, 2026-11-12: "the sendell seal was giving Twinsen a key for the back gate, but that
+            // seems broken now")
             // (and the key used on it: Twinsen touching it with one, as the game's own gate's)
             var addKey = p.Add(model, key, $@"void comportement_0()
 {{
@@ -112,7 +115,7 @@ void comportement_1()
     }}
     swif (1 == action())
     {{
-        if ({KeyReach} > distance(0) && {BackKeyTold} <= var_game({BackGateVar}) && {BackGateOpen} > var_game({BackGateVar}) && 0 == nb_little_keys())
+        if ({KeyReach} > distance(0) && {BackGateOpen} > var_game({BackGateVar}) && 0 == nb_little_keys())
         {{
             give_bonus(0);
         }}
