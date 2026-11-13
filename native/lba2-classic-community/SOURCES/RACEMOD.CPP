@@ -770,6 +770,7 @@ static T_RACE_ACH s_achs[RACE_MAX_ACH];
 static int s_nbAchs = 0;
 static S32 s_achsAt = 0, s_achUntil = 0;
 static char s_achText[96] = "";
+static char s_achId[24] = "";                // (the achievement shown: its icon in the toast -- AchToast)
 // A sprint (sprint=, finishline=): the race from the start line to the finish line, once. Each opponent's line ends where it crosses the
 // finish (FinishS); the race's end -- the player over the line, or the one to beat there first -- is followed, RACE_SPRINT_END_MS later,
 // by the dream's waking up (wake=) or the race run again (a loss).
@@ -18739,7 +18740,7 @@ static void AchievementsFrame(S32 now) {
         const T_RACE_ACH *ac = &s_achs[i];
         const int hit = ac->Kind == 0 ? ac->A >= 0 && ac->A < MAX_VARS_GAME && ListVarGame[ac->A] >= ac->B : (S32)NumCube == ac->A;
         char title[64];
-        if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "Achievement: %s", title); s_achUntil = now + 6000; }
+        if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "%s", title); snprintf(s_achId, sizeof(s_achId), "%s", ac->Id); s_achUntil = now + 6000; }
     }
 }
 // ---- the bowling game (the user, 2026-11-12: "we control one of the four bowling characters and not Twinsen") ----------------------------------------
@@ -20226,6 +20227,80 @@ static void HudLineIn(S32 x, S32 y, const char *text, int align, S32 colour) {
     BoxMovingAdd(x0 - 4, y - 4, x0 + w + 6, y + RACE_LINE_STEP + 4);
 }
 static void HudLine(S32 x, S32 y, const char *text, int align) { HudLineIn(x, y, text, align, LBAWHITE); }
+
+// An achievement's toast (the user, 2026-11-12: "Let's have achievements pop up as a small toast in the bottom right corner. Let's add a
+// small image that represents the achievement along with brief text"): a dark box with a frame in the screen's bottom right corner, a little
+// picture of the achievement drawn in lines on its left -- a heart, a spyglass, a star, a bowling pin, a wing, a key, a stamped card -- and
+// "Achievement unlocked" over its title; it slides in from the right and out again.
+static double HeartX(double a) { return 16 * pow(sin(a), 3); }
+static double HeartY(double a) { return -(13 * cos(a) - 5 * cos(2 * a) - 2 * cos(3 * a) - cos(4 * a)); }
+static void AchIcon(S32 cx, S32 cy, const char *id) {
+    const S32 gold = 107, white = LBAWHITE, red = 70, brown = 22, blue = 196;
+    if (!strcmp(id, "spanked")) {                       // a heart
+        for (int k = 0; k < 64; k++) {
+            const double t = k * 2 * 3.14159265 / 64, t2 = (k + 1) * 2 * 3.14159265 / 64;
+            Line(cx + (S32)HeartX(t), cy + (S32)HeartY(t), cx + (S32)HeartX(t2), cy + (S32)HeartY(t2), red);
+        }
+        for (int y = -8; y <= 10; y += 3) Line(cx - 12 + abs(y), cy + y, cx + 12 - abs(y), cy + y, red);
+    } else if (!strcmp(id, "telescope")) {               // a spyglass on its stand
+        for (int w = -3; w <= 3; w++) Line(cx - 18, cy + 8 + w / 2, cx + 14, cy - 10 + w / 2, gold);
+        Line(cx + 14, cy - 14, cx + 18, cy - 6, gold); Line(cx - 20, cy + 6, cx - 18, cy + 12, gold);
+        Line(cx - 2, cy + 1, cx - 8, cy + 18, brown); Line(cx - 2, cy + 1, cx + 6, cy + 18, brown);
+    } else if (!strcmp(id, "stella")) {                  // a five-pointed star
+        S32 px = 0, py = 0;
+        for (int k = 0; k <= 10; k++) {
+            const double a = k * 3.14159265 / 5 - 3.14159265 / 2, r = k % 2 ? 7 : 18;
+            const S32 x = cx + (S32)(r * cos(a)), y = cy + (S32)(r * sin(a));
+            if (k) Line(px, py, x, y, gold);
+            px = x; py = y;
+        }
+    } else if (!strcmp(id, "bowling")) {                 // a pin
+        for (int y = -18; y <= 18; y++) {
+            const double r = y < -8 ? 4 + 0.4 * (y + 18) * (y < -12 ? 1 : 0) : y < -4 ? 3 : 7 - 0.02 * y * y;
+            Line(cx - (S32)r, cy + y, cx + (S32)r, cy + y, white);
+        }
+        Line(cx - 4, cy - 6, cx + 4, cy - 6, red); Line(cx - 5, cy - 3, cx + 5, cy - 3, red);
+    } else if (!strcmp(id, "dinofly")) {                 // a wing, its feathers
+        for (int k = 0; k < 5; k++) Line(cx - 16, cy + 10, cx - 10 + k * 7, cy - 14 + k * 5, blue);
+        Line(cx - 16, cy + 10, cx + 18, cy + 10, blue);
+    } else if (!strcmp(id, "dungeon")) {                 // a key
+        for (int k = 0; k < 24; k++) {
+            const double a = k * 2 * 3.14159265 / 24, a2 = (k + 1) * 2 * 3.14159265 / 24;
+            Line(cx - 10 + (S32)(7 * cos(a)), cy + (S32)(7 * sin(a)), cx - 10 + (S32)(7 * cos(a2)), cy + (S32)(7 * sin(a2)), gold);
+        }
+        Line(cx - 3, cy, cx + 18, cy, gold); Line(cx + 12, cy, cx + 12, cy + 6, gold); Line(cx + 17, cy, cx + 17, cy + 5, gold);
+    } else {                                             // a postcard, its stamp and its lines
+        Line(cx - 18, cy - 12, cx + 18, cy - 12, white); Line(cx + 18, cy - 12, cx + 18, cy + 12, white);
+        Line(cx + 18, cy + 12, cx - 18, cy + 12, white); Line(cx - 18, cy + 12, cx - 18, cy - 12, white);
+        Box(cx + 8, cy - 9, cx + 15, cy - 2, red);
+        for (int k = 0; k < 3; k++) Line(cx - 14, cy - 4 + k * 5, cx + 4, cy - 4 + k * 5, white);
+    }
+}
+static void AchToast(S32 now) {
+    if (!s_achText[0] || now >= s_achUntil) return;
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+    // (the display's smaller font, the box as wide as its words need and no wider than the screen)
+    char head[32] = "Achievement unlocked", title[96];
+    snprintf(title, sizeof(title), "%s", s_achText);
+    const S32 words = (SizeFont(title) > SizeFont(head) ? SizeFont(title) : SizeFont(head)) * 3 / 4;
+    const S32 margin = 14, boxH = 64;
+    S32 boxW = 70 + words + 16;
+    if (boxW > w - 2 * margin) boxW = w - 2 * margin;
+    // (in over its first half second, out over its last)
+    const S32 left = s_achUntil - now, shown = 6000 - left;
+    S32 slide = 0;
+    if (shown < 500) slide = (boxW + margin) * (500 - shown) / 500;
+    else if (left < 500) slide = (boxW + margin) * (500 - left) / 500;
+    const S32 x0 = w - margin - boxW + slide, y0 = h - margin - boxH, x1 = x0 + boxW, y1 = y0 + boxH;
+    if (x0 >= w) return;
+    ShadeBoxBlk(x0, y0, x1 < w ? x1 : w - 1, y1, 12);
+    DrawCadre(x0, y0, x1 < w ? x1 : w - 1, y1, ALL_ANGLES);
+    AchIcon(x0 + 38, y0 + boxH / 2, s_achId);
+    HudSmallIn(x0 + 70, y0 + 8, head, -1, 107);
+    HudSmall(x0 + 70, y0 + 34, title, -1);
+    BoxMovingAdd(x0 - 2, y0 - 2, w - 1, y1 + 2);
+}
+
 
 // A display line at 3/4 of the font's size (the user, 2026-10-20: "decrease the font size for Lap information and best time"): the font
 // has one size, so the line is drawn at it over a patch filled with a colour the text hasn't got, read back, the scene put back, and drawn
@@ -21875,11 +21950,8 @@ void RaceMod_Draw(void) {
     if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
     DrawFarItems();
     DrawWindow();
-    // (an achievement's banner, on foot or in the car, out of doors or in: along the top)
-    if (s_achText[0] && TimerRefHR < s_achUntil) {
-        const S32 w = (S32)ModeDesiredX;
-        HudLine(w / 2 - SizeFont(s_achText) / 2, 24, s_achText, -1);
-    }
+    // (an achievement's toast, on foot or in the car, out of doors or in: the screen's bottom right corner)
+    AchToast(TimerRefHR);
     BowlDraw();
     DartDraw();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
