@@ -1335,6 +1335,8 @@ S32 RaceGame_RowDisabled(S32 num) {
 static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256, utf8); }
 
 S32 RaceGame_MenuText(S32 num, char *string) {
+    // (the main menu's Quit: this player's game left for the player menu, whose own Quit ends the game -- the user, 2026-11-12)
+    if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
     if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST))) return 0;
     // (a player's row: its name, marked when it is this game's)
@@ -2573,6 +2575,7 @@ static int s_reportMarked = 0, s_lastRunCrashed = 0;
 static int AskPage(const char *what, const char *line, const char *keys);
 static int TypePage(const char *what, const char *hint, char *value, int size, int address, int mayBeEmpty);
 static void SayPage(const char *what, const char *line);
+static int QuitPage(void);
 
 static void ReportClean(void) {
     if (!s_reportMarked) return;
@@ -2735,36 +2738,101 @@ static int MakePlayer(const char *name) {
     return SDL_GetPathInfo(dir, &info);
 }
 
-// Who is playing: the players, and New player. Non-zero: another player's chosen and the game started again on its folder -- this one's to go.
+// A player's folder and everything in it, gone (Delete on the player menu, once asked)
+static SDL_EnumerationResult SDLCALL RemoveIn(void *, const char *dirname, const char *fname) {
+    char path[ADELINE_MAX_PATH];
+    snprintf(path, sizeof(path), "%s/%s", dirname, fname);
+    TrimSep(path);
+    SDL_PathInfo info;
+    if (SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY) SDL_EnumerateDirectory(path, RemoveIn, NULL);
+    SDL_RemovePath(path);
+    return SDL_ENUM_CONTINUE;
+}
+static int RemoveFolder(const char *dir) {
+    SDL_EnumerateDirectory(dir, RemoveIn, NULL);
+    return SDL_RemovePath(dir);
+}
+// (a player of User\Players -- not the first, the game's own folder from before players, which holds the game's settings)
+static int PlayerOfFolder(int k) {
+    const size_t n = strlen(s_plRoot);
+    return k >= 0 && k < s_nbPlayers && !strncasecmp(s_plDir[k], s_plRoot, n) && (s_plDir[k][n] == '/' || s_plDir[k][n] == '\\');
+}
+
+// The player menu, the first the game shows (the user, 2026-11-12: "Our first menu needs to be a Player menu ... We should be able to quit
+// the currently loaded players game, and go back to the player menu, with a further quit option from this menu to actually exit the game";
+// and before: "They may either select an existing user, or create a new user. They should also be able to delete a user account by pressing
+// delete, which we should confirm deletion"): the players, New player, Quit the game. Enter (or a click) on a player: this one's, on to
+// the main menu -- another's, the game started again on its folder; Delete on a player: asked, then their folder gone; Quit the game (or
+// Esc): asked, then the game ends.
+// Returns 0: on, this player; 1: started again for another (this game to go); 3: quit the game.
+#define RG_PL_LINE 44
 static int PlayersPage(void) {
-    static U16 menu[4 + 2 * (RG_PLAYERS_MAX + 3)];
+    int at = -1;
     for (;;) {
         ListPlayers();
         const int shown = s_nbPlayers > RG_PLAYERS_MAX ? RG_PLAYERS_MAX : s_nbPlayers;
-        const int rows = 2 + shown + (s_nbPlayers < RG_PLAYERS_MAX ? 1 : 0);
-        menu[0] = (U16)(s_plNow >= 0 ? 2 + s_plNow : 0);
-        menu[1] = (U16)rows;
-        menu[2] = (U16)(rows > 6 ? 270 : 290);
-        menu[3] = 0;
-        int r = 0;
-        SetRow(menu, r++, RG_ID_BACK);
-        SetRow(menu, r++, RG_ID_ACHIEVEMENTS);
-        for (int i = 0; i < shown; i++) SetRow(menu, r++, (U16)(RG_ID_PLAYER_FIRST + i));
-        if (s_nbPlayers < RG_PLAYERS_MAX) SetRow(menu, r++, RG_ID_PLAYER_NEW);
-        Page("Player", 290 - (56 * rows) / 2 - 50);
-        const S32 select = Menu(menu);
-        if (select == MENU_RELAYOUT) continue;
-        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
-        if (select == RG_ID_ACHIEVEMENTS) { s_replayCode = AchievementsPage(); if (s_replayCode) return 2; continue; }
+        const int canNew = s_nbPlayers < RG_PLAYERS_MAX;
+        const int n = shown + canNew + 1;
+        if (at < 0) at = s_plNow >= 0 && s_plNow < shown ? s_plNow : 0;
+        if (at >= n) at = n - 1;
+        S32 padDir;
+        PageLoopStart(&padDir);
+        S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+        int chosen = -2, del = 0;
+        while (chosen == -2) {
+            ManageTime();
+            MyGetInput();
+            if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+            const S32 top = RG_PAGE_TOP + oy + 70, keysY = RG_PAGE_BOTTOM + oy - 32;
+            S32 dx, dy;
+            if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
+            S32 mx, my;
+            const int click = Clicked(&mx, &my);
+            if (click == 1 && my >= top - 8) {
+                const int row = (int)((my - (top - 8)) / RG_PL_LINE);
+                if (row < n) { at = row; chosen = row; }
+            } else if (click == 2) chosen = n - 1;
+            PageFrame("Who is playing?");
+            for (int r = 0; r < n; r++) {
+                char line[96];
+                if (r < shown) snprintf(line, sizeof(line), r == s_plNow ? "%s  (playing)" : "%s", s_plName[r]);
+                else if (r == shown && canNew) snprintf(line, sizeof(line), "New player...");
+                else snprintf(line, sizeof(line), "Quit the game");
+                Text(cx, top + r * RG_PL_LINE, line, r == at ? RG_ORANGE : LBAWHITE);
+            }
+            Text(cx, keysY, at < shown ? "Enter: play   Del: delete   Esc: quit" : "Enter: choose   Esc: quit", RG_GREY);
+            Present();
+            if (chosen != -2) break;
+            if (MyKey == K_SUPPR && at < shown) { WaitNoInput(); del = 1; chosen = at; }
+            else if (Confirmed()) { WaitNoInput(); chosen = at; }
+            else if (Escaped()) { WaitNoInput(); chosen = n - 1; }
+        }
+        AsciiMode = FALSE;
+        Page(NULL, 0);
+        if (del) {
+            if (chosen == s_plNow) { SayPage("Delete a player", "That is the player playing now. Choose another player first, then delete this one from there."); continue; }
+            if (!PlayerOfFolder(chosen)) { SayPage("Delete a player", "The first player holds the game's own settings and can't be deleted."); continue; }
+            char line[200];
+            snprintf(line, sizeof(line), "Delete %s? Their saves, ghosts, best laps and achievements go with them, for good.", s_plName[chosen]);
+            if (AskPage("Delete a player", line, "Enter: delete    Esc: keep")) {
+                char name[48];
+                snprintf(name, sizeof(name), "%s", s_plName[chosen]);
+                if (RemoveFolder(s_plDir[chosen])) Log_Info("[racegame] player deleted: %s (%s)", name, s_plDir[chosen]);
+                else { Log_Info("[racegame] player not deleted: %s (%s): %s", name, s_plDir[chosen], SDL_GetError()); SayPage("Delete a player", "That player's folder could not be deleted."); }
+                at = -1;
+            }
+            continue;
+        }
+        if (chosen == n - 1) { if (QuitPage()) return 3; continue; }
         const char *dir = NULL;
-        if (select >= RG_ID_PLAYER_FIRST && select < RG_ID_PLAYER_FIRST + shown) dir = s_plDir[select - RG_ID_PLAYER_FIRST];
-        else if (select == RG_ID_PLAYER_NEW) {
+        if (chosen < shown) dir = s_plDir[chosen];
+        else {
             char name[40] = "";
             if (!TypePage("New player", "Your name", name, sizeof(name), 0, 0)) continue;
             char clean[40];
-            int n = 0;
-            for (const char *c = name; *c && n < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[n++] = *c;
-            clean[n] = 0;
+            int k = 0;
+            for (const char *c = name; *c && k < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[k++] = *c;
+            clean[k] = 0;
             Trim(clean);
             if (!clean[0]) continue;
             // (a name taken: that player)
@@ -5686,11 +5754,12 @@ static S32 GameMenu(S32 inGame) {
             if (!RaceNet_Join(address, s_netName)) return RG_ID_QUIT;
         }
     }
-    // (more than one player, and none chosen yet this run: who is playing -- not in a test run or a second player's game)
+    // (the first menu met: who is playing -- not in a test run or a second player's game, nor once a player is chosen and the game started
+    // again for them, LBRA_PLAYER_CHOSEN)
     if (!inGame && !s_plAsked && !s_localGuest && !getenv("LBRA_PLAYER_CHOSEN") && !RaceUpdate_Tested()) {
         s_plAsked = 1;
-        ListPlayers();
-        if (s_nbPlayers > 1) { const int pl = PlayersPage(); if (pl == 1) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; } if (pl == 2) return s_replayCode; }
+        const int pl = PlayersPage();
+        if (pl == 1 || pl == 3) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
     }
     if (s_localGuest && !resume && getenv("LBA2_STORY_ZOE")) return StoryZoePage();
     if (s_localGuest && !resume) return LobbyPage() ? RACEGAME_START : RG_ID_QUIT;
@@ -5711,8 +5780,8 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_RACING);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
-    // (who is playing and what they have found: not in a race going on -- another player means the game started again)
-    if (!inGame) SetRow(s_mainMenu, nb++, RG_ID_PLAYER);
+    // (what this player has found: not in a race going on -- who is playing is the player menu's, behind Quit)
+    if (!inGame) SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
     s_mainMenu[1] = (U16)nb;
@@ -5742,15 +5811,19 @@ static S32 GameMenu(S32 inGame) {
         case RG_ID_FEEDBACK:
             FeedbackPage();
             break;
-        case RG_ID_PLAYER:
-            { const int pl = PlayersPage(); if (pl == 1) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; } if (pl == 2) return s_replayCode; }
+        case RG_ID_ACHIEVEMENTS:
+            { s_replayCode = AchievementsPage(); if (s_replayCode) return s_replayCode; }
             break;
         case RG_ID_QUIT:
-            if (QuitPage()) {
-                // (the port taken off the router: a game that crashes leaves it to its lease)
-                RaceNet_Stop();
-                LocalEnd();
-                return select;
+            // (this player's game left for the player menu, whose own Quit ends the game -- the user, 2026-11-12)
+            {
+                const int pl = PlayersPage();
+                if (pl == 1 || pl == 3) {
+                    // (the port taken off the router: a game that crashes leaves it to its lease)
+                    RaceNet_Stop();
+                    LocalEnd();
+                    return RG_ID_QUIT;
+                }
             }
             break;
         case RG_ID_RACING:
