@@ -223,8 +223,14 @@ internal static class TraluBarRoom
         for (var x = Thicket.X0; x <= Thicket.X1; x++)
             for (var z = Thicket.Z0; z <= Thicket.Z1; z++)
                 for (var y = FloorLayer + 1; y <= LandingLayer; y++) Set(x, y, z, 0, 0);
+        // (each step solid under it down to the floor -- invisible cells, block 0 with collision: with nothing under them Twinsen dropped
+        // into the stairs from a step's low edge, the user, 2026-11-13, "Twinsen keeps falling through them")
         for (var k = 0; k < LandingLayer - FloorLayer; k++)
-            for (var z = UpZ0; z <= UpZ1; z++) Set(UpFrom + k, FloorLayer + 1 + k, z, UpStep, (z - UpZ0) % 2);
+            for (var z = UpZ0; z <= UpZ1; z++)
+            {
+                for (var y = FloorLayer + 1; y < FloorLayer + 1 + k; y++) Set(UpFrom + k, y, z, 0, 1);
+                Set(UpFrom + k, FloorLayer + 1 + k, z, UpStep, (z - UpZ0) % 2);
+            }
 
         // (a column of the north wall, built as the room's own north wall (z 6) is -- the old back wall's columns are capped for a wall
         // along z, their caps two cells along z, and showed their stones' tops along x: its foot (layers 9-12, block 57, as the back wall's),
