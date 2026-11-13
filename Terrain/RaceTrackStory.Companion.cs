@@ -20,6 +20,11 @@ namespace LBAAssembler.Terrain;
 // TwoPlayersVar 1: her walking after Twinsen stops (the engine moves her to player 2), and she is there whatever the chapter.
 internal static partial class RaceTrackStory
 {
+    // (OFF since 2026-11-13 -- the user: "Let's scrap companion Zoe for now, we may bring it back later": no Zoe following Twinsen, no
+    // hints from her, no player 2 as Zoe (the race file's companion= and two_players= are left out, Story Mode's Two players row hidden by
+    // RACEGAME.CPP RG_STORY_TWO_ON). Everything stays in place: true here and RG_STORY_TWO_ON 1 bring it back. The pit box is its own
+    // (RaceTrackPitCrew) and stays.)
+    internal const bool CompanionOn = false;
     internal const int CompanionArmour = 117;   // (a signed byte in the scene record: 117, which no one of the game's has)
     // (two players: Zoe indoors, and the Twinsen double -- the hero's entity, normal behaviour -- each by a mark no one of the game's has; the
     // game variable the story's scripts see 1 in with two players: a spare one, RaceTrackStory.Eggs.cs's list)

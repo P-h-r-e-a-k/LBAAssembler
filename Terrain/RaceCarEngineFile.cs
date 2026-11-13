@@ -667,9 +667,9 @@ internal static class RaceCarEngineFile
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)
             if (t.Story is { TiredText: >= 0 }) text.Append($"car_home={RaceTrackStory.CarScene} {RaceTrackStory.CarAwayVar} {RaceTrackStory.CarFetchVar}\n");
             // (Zoe as companion, from chapter 2: RaceTrackStory.Companion.cs)
-            if (t.Story is { TiredText: >= 0 }) text.Append($"companion={RaceTrackStory.CompanionEntityId} {RaceTrackStory.CompanionArmour}\n");
+            if (t.Story is { TiredText: >= 0 } && RaceTrackStory.CompanionOn) text.Append($"companion={RaceTrackStory.CompanionEntityId} {RaceTrackStory.CompanionArmour}\n");
             // (Story Mode with two players, player 2 Zoe: the variable the scripts see, the Twinsen double, Zoe's indoor mark -- RACEMOD.CPP StoryTwo)
-            if (t.Story is { TiredText: >= 0 }) text.Append($"two_players={RaceTrackStory.TwoPlayersVar} {RaceTrackStory.DoubleEntityId} {RaceTrackStory.DoubleArmour} {RaceTrackStory.CompanionIndoorArmour}\n");
+            if (t.Story is { TiredText: >= 0 } && RaceTrackStory.CompanionOn) text.Append($"two_players={RaceTrackStory.TwoPlayersVar} {RaceTrackStory.DoubleEntityId} {RaceTrackStory.DoubleArmour} {RaceTrackStory.CompanionIndoorArmour}\n");
             // (Twinsen swims in the Imperial Hotel's pool, and dives from its board: Citadel/CitadelProps.Pool, PoolSwim -- RACEMOD.CPP pool=)
             if (t.Story is { TiredText: >= 0 })
             {

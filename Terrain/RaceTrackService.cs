@@ -933,7 +933,7 @@ internal static class RaceTrackService
     {
         var told = IslandStory(gameDirectory, report, options, town, scenes, travels);
         // (and Zoe with Twinsen from chapter 2, in every outside scene of the island: RaceTrackStory.Companion.cs)
-        if (options.Story) told.Log.AddRange(RaceTrackStory.Companion(gameDirectory, options.Island));
+        if (options.Story && RaceTrackStory.CompanionOn) told.Log.AddRange(RaceTrackStory.Companion(gameDirectory, options.Island));
         return told;
     }
     private static (List<string> Log, StoryInfo? Info) IslandStory(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes,

@@ -208,6 +208,9 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
 #define RG_ID_SHARED 2470                   // ... its Shared tracks (TracksPage(1))
 #define RG_ID_STORY_TWO 2471                // Story Mode's Two players row: player 2 is Zoe (StoryMode, 2026-11-11)
+// (companion Zoe and player 2 as Zoe OFF since 2026-11-13, the user: "Let's scrap companion Zoe for now, we may bring it back later" --
+// the row hidden; 1 here and RaceTrackStory.CompanionOn bring it back)
+#define RG_STORY_TWO_ON 0
 #define RG_ID_REPLAY_END 2493               // the in-game menu's row in a replay: back to the Achievements page
 #define RG_ID_PLAYER 2472                   // the main menu's Player: <name> (PlayersPage), Achievements (AchievementsPage)
 #define RG_ID_ACHIEVEMENTS 2473
@@ -3658,17 +3661,18 @@ static S32 StoryMode(void) {
     const int saved = HasStorySave();
     ReadSettings();
     s_storyMenu[0] = (U16)(saved ? 2 : 1);
-    s_storyMenu[1] = 5;
+    const int rows = RG_STORY_TWO_ON ? 5 : 4;
+    s_storyMenu[1] = (U16)rows;
     s_storyMenu[2] = 298;
     s_storyMenu[3] = 0;
     SetRow(s_storyMenu, 0, RG_ID_BACK);
     SetRow(s_storyMenu, 1, RG_ID_STORY_NEW);
     SetRow(s_storyMenu, 2, RG_ID_STORY_CONTINUE);
     SetRow(s_storyMenu, 3, RG_ID_STORY_LEVEL);
-    SetRow(s_storyMenu, 4, RG_ID_STORY_TWO);
+    if (RG_STORY_TWO_ON) SetRow(s_storyMenu, 4, RG_ID_STORY_TWO);
     for (;;) {
         // (five rows since the Two players row, 2026-11-11: the title and the line under them moved out of their way)
-        Page("Story Mode", 298 - (56 * 5) / 2 - 50);
+        Page("Story Mode", 298 - (56 * rows) / 2 - 50);
         Text(UI_CENTER_X, 462 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
         const S32 select = Menu(s_storyMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
