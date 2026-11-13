@@ -31,7 +31,9 @@ internal static class StellaEntities
     // over the floor's stepped edge; inside the curb a ring of invisible solid cells, RingFrom out, ring layers high, holds Twinsen
     // off the curb, open where the corridor comes in)
     private const double CentreX = 24, CentreZ = 32, Radius = Citadel.CitadelProps.ClubFloorRadius / 512.0, RingFrom = 18.6;
-    private const int RingTop = 5;
+    // (the ring of invisible cells inside the curb up to the wall's top, 3,800 -- at 5 (1,536) a jump at the wall landed Twinsen on top of them,
+    // hanging in front of the wall in his fall: the user, 2026-11-13, "Jumping towards the edge of the wall leaves twinsen stuck in a falling animation")
+    private const int RingTop = Citadel.CitadelProps.ClubWallTop / 256;
     // (the stage's cells: their middles within StageCells of the hall's; the catwalk's, x CatwalkX0-X1 north of the middle)
     private const double StageCells = 7.2;
     private const int CatwalkX0 = 23, CatwalkX1 = 24;
