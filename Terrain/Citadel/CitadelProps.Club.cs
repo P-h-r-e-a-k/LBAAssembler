@@ -126,7 +126,9 @@ internal static partial class CitadelProps
     //   - a table (114): Rick's round green card table on its brass foot, three chairs round it.
     public const int ClubStage = 109, ClubColumn = 110, ClubPole = 111, ClubCounter = 112, ClubShelf = 113, ClubTable = 114, ClubBarStool = 115, ClubCounter2 = 116, ClubCounter3 = 117;
     public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 115), (ClubCounter2, 135), (ClubCounter3, 155) };
-    public const float StageRadius = 7.5f * 512, StageHigh = 256, CatwalkHalf = 512, CatwalkTo = 18.2f * 512;
+    // (StageHigh: about Twinsen's chest -- three layers, 768; it was one, 256: the user, 2026-11-13, "The stage area needs raising to about
+    // the height of Twinsen's chest")
+    public const float StageRadius = 7.5f * 512, StageHigh = 768, CatwalkHalf = 512, CatwalkTo = 18.2f * 512;
     public const float CounterIn = 15.0f * 512, CounterOut = 16.0f * 512, CounterArc = 20, CounterMiddle = 15.5f * 512, ShelfIn = 17.3f * 512, ShelfOut = 17.9f * 512;
     public const float BarFrom = 105, BarTo = 165;
     public const int PoleHigh = 3900, ColumnHigh = 5200;

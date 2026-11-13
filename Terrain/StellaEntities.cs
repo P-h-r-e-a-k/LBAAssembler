@@ -125,10 +125,10 @@ internal static class StellaEntities
                 // (the hall's ring of invisible solid cells inside the curb: block 0, collision 1 -- not where the corridor comes in)
                 double dx = x + 0.5 - CentreX, dz = z + 0.5 - CentreZ;
                 var angle = Math.Atan2(dz, dx) * 180 / Math.PI;
-                // (the stage and its catwalk: one layer of invisible solid cells under the props -- the dancers stand on it)
+                // (the stage and its catwalk: invisible solid cells under the props, up to its top -- the dancers stand on it)
                 if (Hall(x, z) && (Math.Sqrt(dx * dx + dz * dz) <= StageCells || (x >= CatwalkX0 && x <= CatwalkX1 && dz < 0 && Math.Sqrt(dx * dx + dz * dz) < RingFrom)))
                 {
-                    Put(x, FloorLayer + 1, z, 0, 1);
+                    for (var y = FloorLayer + 1; y <= FloorLayer + (int)(Citadel.CitadelProps.StageHigh / 256); y++) Put(x, y, z, 0, 1);
                     stageCells++;
                 }
                 // (the bar's counter: invisible solid cells along its curve, two layers)
@@ -192,29 +192,8 @@ internal static class StellaEntities
         table = bkg.Read(header.Brk + header.MaxBrk);
         if (table.Length < (Scene + 1) * 2) Array.Resize(ref table, (Scene + 1) * 2);
         table[Scene * 2] = type; table[Scene * 2 + 1] = (byte)gridNumber;
-        // the cell's grid, its own copy (whoever else shares it keeps the floor): the shaft under the plate, its floor's bricks taken out
-        var cellRaw = bkg.Read(header.Gri + table[Cell * 2 + 1]);
-        var cellShape = Lba2GridBackend.ToLba1Shape(cellRaw);
-        var cellCells = Lba1GridCodec.Decode(cellShape);
-        var shaft = new List<Lba1GridCell>();
-        for (var z = LiftCellZ; z <= LiftCellZ + 1; z++)
-            for (var x = LiftCellX; x <= LiftCellX + 1; x++)
-            {
-                if (cellCells[At(x, CellFloorLayer, z)] == 0) { log.Add("Stella Entities left out: Baldino's cell's floor isn't where it was"); return log; }
-                shaft.Add(new Lba1GridCell(x, CellFloorLayer, z, 0, 0));
-                // (and its floor's brick at the shaft's foot, layer 0: a column with nothing in it at all is no way, the engine's -- Twinsen
-                // was held at its edge, the plate over it or not; the house's shaft keeps its floor under it)
-                shaft.Add(new Lba1GridCell(x, 0, z, cellCells[At(x, CellFloorLayer, z)], cellCells[At(x, CellFloorLayer, z) + 1]));
-            }
-        var cellGrid = Lba2GridBackend.FromLba1Shape(cellRaw, Lba1GridEdit.SetCells(cellShape, shaft));
-        cellGrid[0] = cellRaw[0];
-        var cellGridNumber = header.Grm - header.Gri;
-        if (cellGridNumber > 255) { log.Add("Stella Entities left out: LBA_BKG.HQR has 256 grids already"); return log; }
-        bkg.InsertAt(header.Grm, cellGrid);
-        header.Grm += 1; header.Bll += 1; header.Brk += 1;
-        if (header.MaxGri < (uint)cellGrid.Length) header.MaxGri = (uint)cellGrid.Length;
-        bkg.SetStored(0, header.Bytes);
-        table[Cell * 2 + 1] = (byte)cellGridNumber;
+        // (the cell keeps its floor whole: no shaft, nothing in it to show -- the lift is hidden, the user, 2026-11-13: "the elevator down can be
+        // seen inside Baldino's cell, it shouldn't be visible at all")
         bkg.SetStored(header.Brk + header.MaxBrk, table);
 
         // the scene: Rick's bar's header (its light, its music), the Moon's, Twinsen arriving on the lift
@@ -230,57 +209,32 @@ internal static class StellaEntities
         var hero = model.Hero;
         (hero.X, hero.Y, hero.Z) = clubArrival;
         hero.Life = new byte[] { 0 }; hero.Track = new byte[] { 0 };
-        // (the cell's way down: under its floor, off till the Action -- he comes into it from its top, falling with the plate, and out that
-        // far over the club's plate, his height in it taken off; not put on a floor under him: ZONE_DONT_REAJUST_POS_TWINSEN, Info6 bit 1)
-        const int DoorTop = CellFloor - 750, DoorBottom = DoorTop - 500, ArriveOver = 40, DontReadjust = 1;
+        // (the cell's way down: a door over the spot at Twinsen's feet, off till Action there (LiftSwitch), which takes him onto the club's
+        // lift high in its shaft -- where on the club's platform is where he stood on the spot; tall, as the floor's a step lower at its edge)
+        const int Tall = 700, Big = 1024, DontReadjust = 1;
         cell.Zones.RemoveAll(zn => zn.Type == 0 && zn.Num == Scene);
         cell.Zones.Add(new SceneZoneModel
         {
-            Type = 0, Num = Scene, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = DoorBottom, Y1 = DoorTop,
-            Info = new[] { clubArrival.X - 512, clubArrival.Y - (DoorTop - DoorBottom) + ArriveOver, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
+            Type = 0, Num = Scene, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall,
+            Info = new[] { clubArrival.X - 512, clubArrival.Y + 100 - Tall, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
-        cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - 100, Y1 = CellFloor + 800, Info = new int[8] });
-        cell.Zones.Add(new SceneZoneModel { Type = 2, Num = ShaftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFoot.Y - CellUp - 300, Y1 = CellFoot.Y - 200, Info = new int[8] });
+        cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
         // (the club's way up: over its lift, higher than he comes in on it, on from the start; out on the cell's plate down its shaft)
-        var clubTop = floorY + ClubDown + 300;
+        var clubTop = floorY + ClubUp - 100;
         model.Zones.Add(new SceneZoneModel
         {
-            Type = 0, Num = Cell, X0 = clubLift.Item1 - 512, X1 = clubLift.Item1 + 511, Z0 = clubLift.Item3 - 512, Z1 = clubLift.Item3 + 511, Y0 = clubTop, Y1 = clubTop + 3000,
-            Info = new[] { CellFoot.X - 512, CellFoot.Y + Citadel.CitadelProps.LiftTop - CellUp + 4, CellFoot.Z - 512, 0, 0, 0, DontReadjust, 1 },
+            Type = 0, Num = Cell, X0 = clubLift.Item1 - Big, X1 = clubLift.Item1 + Big - 1, Z0 = clubLift.Item3 - Big, Z1 = clubLift.Item3 + Big - 1, Y0 = clubTop, Y1 = clubTop + 3000,
+            Info = new[] { CellFoot.X - Big, CellFloor + 30, CellFoot.Z - Big, 0, 0, 0, 0, 1 },
         });
-        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = clubLift.Item1 - 512, X1 = clubLift.Item1 + 511, Z0 = clubLift.Item3 - 512, Z1 = clubLift.Item3 + 511, Y0 = floorY - 100, Y1 = floorY + 800, Info = new int[8] });
-        model.Zones.Add(new SceneZoneModel { Type = 2, Num = ArrivalZone, X0 = clubLift.Item1 - 512, X1 = clubLift.Item1 + 511, Z0 = clubLift.Item3 - 512, Z1 = clubLift.Item3 + 511, Y0 = floorY + ClubDown - 200, Y1 = floorY + ClubDown + 400, Info = new int[8] });
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = clubLift.Item1 - Big, X1 = clubLift.Item1 + Big - 1, Z0 = clubLift.Item3 - Big, Z1 = clubLift.Item3 + Big - 1, Y0 = floorY - 100, Y1 = floorY + 800, Info = new int[8] });
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = ArrivalZone, X0 = clubLift.Item1 - Big, X1 = clubLift.Item1 + Big - 1, Z0 = clubLift.Item3 - Big, Z1 = clubLift.Item3 + Big - 1, Y0 = floorY + ClubDown - 300, Y1 = floorY + ClubDown + 900, Info = new int[8] });
 
-        // the lifts' actors: the cell's plate and its helper; the club's plate and rails
-        var cellPlate = cell.Actors.Count;
-        var cellLow = SceneOps.AddTrackPoint(cell, new SceneTrackPoint(CellFoot.X, CellFoot.Y, CellFoot.Z));
-        var cellBottom = SceneOps.AddTrackPoint(cell, new SceneTrackPoint(CellFoot.X, CellFoot.Y - CellDown, CellFoot.Z));
-        var cellUnder = SceneOps.AddTrackPoint(cell, new SceneTrackPoint(CellFoot.X, CellFoot.Y - CellUp, CellFoot.Z));
-        SceneOps.AddActor(cell, LiftActor(Citadel.CitadelProps.MoonLiftPlatform, CellFoot.X, CellFoot.Y, CellFoot.Z));
+        // the lifts' actors: the cell's helper (Action on the spot); the club's platform, four plates two by two
         var cellHelper = SceneOps.AddActor(cell, RaceTrackScenes.InvisibleHelper(CellFoot.X, CellFloor, CellFoot.Z));
-        var cellTrack = $"label(0);\nstop();\n\nlabel({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({cellBottom});\nstop();\n\n" +
-                        $"label({LiftRise});\npos_point({cellUnder});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({cellLow});\nsample({LiftStop});\n\nlabel({LiftRisen});\nstop();\n";
         var cellLife = $@"void comportement_0()
 {{
-    if ({ShaftZone} == zone_obj(0))
-    {{
-        set_dir_obj(0, NO_MOVE);
-        set_track_obj({cellPlate}, label_{LiftRise});
-        set_comportement(comportement_2);
-    }}
-    else
-    {{
-        set_comportement(comportement_1);
-    }}
-}}
-
-void comportement_2()
-{{
-    if ({LiftRisen} == l_track_obj({cellPlate}))
-    {{
-        set_dir_obj(0, MOVE_MANUAL);
-        set_comportement(comportement_1);
-    }}
+    set_change_cube({LiftSwitch}, 0);
+    set_comportement(comportement_1);
 }}
 
 void comportement_1()
@@ -289,9 +243,7 @@ void comportement_1()
     {{
         if ({LiftZone} == zone_obj(0))
         {{
-            set_dir_obj(0, NO_MOVE);
             set_change_cube({LiftSwitch}, 1);
-            set_track_obj({cellPlate}, label_{LiftRide});
             set_comportement(comportement_3);
         }}
     }}
@@ -301,10 +253,15 @@ void comportement_3()
 {{
 }}
 ";
-        var clubLow = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1, floorY, clubLift.Item3));
-        var clubHigh = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1, floorY + ClubUp, clubLift.Item3));
-        var clubParts = new[] { Citadel.CitadelProps.MoonLiftPlatform, Citadel.CitadelProps.LiftRailBack, Citadel.CitadelProps.LiftRailLeft, Citadel.CitadelProps.LiftRailRight }
-            .Select(g => SceneOps.AddActor(model, LiftActor(g, clubLift.Item1, floorY + ClubDown, clubLift.Item3))).ToArray();
+        var clubParts = new List<int>();
+        var clubTracks = new List<(int Low, int High)>();
+        foreach (var (dx, dz) in new[] { (-512, -512), (512, -512), (-512, 512), (512, 512) })
+        {
+            var low = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1 + dx, floorY, clubLift.Item3 + dz));
+            var high = SceneOps.AddTrackPoint(model, new SceneTrackPoint(clubLift.Item1 + dx, floorY + ClubUp, clubLift.Item3 + dz));
+            clubParts.Add(SceneOps.AddActor(model, LiftActor(Citadel.CitadelProps.MoonLiftPlatform, clubLift.Item1 + dx, floorY + ClubDown, clubLift.Item3 + dz)));
+            clubTracks.Add((low, high));
+        }
         var clubPlate = clubParts[0];
         // the hall's round wall and curb (CitadelProps.Club), round its middle, drawn into the backdrop
         var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubBoard, Citadel.CitadelProps.ClubFront, Citadel.CitadelProps.ClubCurb, Citadel.CitadelProps.ClubStage, Citadel.CitadelProps.ClubShelf }
@@ -319,8 +276,8 @@ void comportement_3()
         foreach (var (generic, a) in Citadel.CitadelProps.CounterAt) { var (x, z) = Round(a, Citadel.CitadelProps.CounterMiddle / 512); Furnish(generic, x, floorY, z); }
         for (var a = Citadel.CitadelProps.BarFrom + 7; a < Citadel.CitadelProps.BarTo - 3; a += 10) { var (x, z) = Round(a, StoolCells); Furnish(Citadel.CitadelProps.ClubBarStool, x, floorY, z); }
         foreach (var a in TableAngles) { var (x, z) = Round(a, TableCells); Furnish(Citadel.CitadelProps.ClubTable, x, floorY, z); }
-        var clubTrack = $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({clubLow});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
-                        $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({clubHigh});\nstop();\n";
+        string ClubTrack((int Low, int High) t) => $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({t.Low});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
+                        $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({t.High});\nstop();\n";
         var ride = string.Concat(clubParts.Select(i => $"        set_track_obj({i}, label_{LiftRide});\n"));
         var heroLife = $@"void comportement_0()
 {{
@@ -362,15 +319,13 @@ void comportement_3()
 ";
         static string Still() => "void comportement_0()\n{\n}\n";
         var cellScripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(cell), Cell);
-        cellScripts.SetText(cellPlate, LbaScript.ScriptKind.Life, Still());
-        cellScripts.SetText(cellPlate, LbaScript.ScriptKind.Track, cellTrack);
         cellScripts.SetText(cellHelper, LbaScript.ScriptKind.Life, cellLife);
         cellScripts.SetText(cellHelper, LbaScript.ScriptKind.Track, "label(0);\nstop();\n");
         var cellBuilt = cellScripts.Build();
         if (!cellBuilt.Ok) { log.AddRange(cellBuilt.Errors.Select(e => $"Stella Entities left out: the cell's lift script: {e}")); return log; }
         var clubScripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), Scene);
         clubScripts.SetText(0, LbaScript.ScriptKind.Life, heroLife);
-        foreach (var i in clubParts) { clubScripts.SetText(i, LbaScript.ScriptKind.Life, Still()); clubScripts.SetText(i, LbaScript.ScriptKind.Track, clubTrack); }
+        for (var q = 0; q < clubParts.Count; q++) { clubScripts.SetText(clubParts[q], LbaScript.ScriptKind.Life, Still()); clubScripts.SetText(clubParts[q], LbaScript.ScriptKind.Track, ClubTrack(clubTracks[q])); }
         foreach (var i in round) { clubScripts.SetText(i, LbaScript.ScriptKind.Life, Still()); clubScripts.SetText(i, LbaScript.ScriptKind.Track, "label(0);\nstop();\n"); }
         var clubBuilt = clubScripts.Build();
         if (!clubBuilt.Ok) { log.AddRange(clubBuilt.Errors.Select(e => $"Stella Entities left out: the club's lift script: {e}")); return log; }
@@ -385,8 +340,8 @@ void comportement_3()
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"Stella Entities: scene {Scene} (grid {gridNumber}, Rick's bar's block library {raw[0]}): a round hall {Radius * 2:0} cells across, the corridor and the " +
-                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar; Baldino's cell (scene {Cell}, its grid now " +
-                $"{cellGridNumber}): the hidden lift in its corner by the door (cells x 32-33, z 31-32), Action on it and down, and back up on the club's");
+                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar; Baldino's cell (scene {Cell}, its floor whole): " +
+                $"the hidden lift in its corner by the door (cells x 32-33, z 31-32): Action on the spot and down onto the club's platform, and back up onto the spot");
         return log;
     }
 
