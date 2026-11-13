@@ -273,6 +273,21 @@ internal static class StellaPerformers
         return r;
     }
 
+    // Her routine from her own place in it: those sharing a routine each start an equal share of it further on, so no two do the same move
+    // at the same time (the user, 2026-11-13: "put each stripper into a different point in their animation cycle") -- the routine is a
+    // loop, so its keys taken from there round to there are the same dance
+    private static List<Pose> Phased(Spec s, List<Pose> routine)
+    {
+        var mates = All.Where(o => o.Pole == s.Pole).ToList();
+        var share = mates.IndexOf(s);
+        if (share <= 0 || routine.Count < 2) return routine;
+        var total = routine.Sum(q => q.Ms);
+        var want = total * share / mates.Count;
+        int from = 0, at = 0;
+        while (from < routine.Count - 1 && at + routine[from].Ms <= want) at += routine[from++].Ms;
+        return routine.Skip(from).Concat(routine.Take(from)).ToList();
+    }
+
     // A routine as her animation: her bones' turns (and the one shift) key by key
     public static CharacterAnim Animation(Spec s, byte[] body, int generic, List<Pose>? routineGiven = null)
     {
@@ -280,7 +295,7 @@ internal static class StellaPerformers
         var world = p.World();
         int bones = p.Bones.Count;
         var rig = s.Rig;
-        var routine = routineGiven ?? (s.Pole ? PoleRoutine() : StageRoutine());
+        var routine = routineGiven ?? Phased(s, s.Pole ? PoleRoutine() : StageRoutine());
         var a = new CharacterAnim { Generic = generic, Name = $"stella {s.Name}" };
         foreach (var q in routine)
         {

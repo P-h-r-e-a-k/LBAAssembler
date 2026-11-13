@@ -15,6 +15,7 @@ internal static partial class RaceTrackStory
     private const int RickBar = 136, RickOffice = 137, BouncerEntity = 297, BossGuardEntity = 302, MoonBase = 23, BaseMechanic = 14;
     // (the club's scene variables: whether each has had his word this time he came near)
     private const int ClubSaidFirst = 10;
+    private const uint NoShadowFlag = 1u << 12;
 
     private static void StellaPeople(IslandBeatsA b, Func<MoonLine, int> say)
     {
@@ -73,7 +74,10 @@ internal static partial class RaceTrackStory
             Place(barman, StellaEntities.At(142, 16.6f), say(MoonLine.ClubBarman), 1700, onAction: true);
             // the seven performers (StellaPerformers: the game's own bodies recoloured, bodies of the hero's entity, each her own dance): three
             // on the poles (10, 60 and 110 degrees -- the actor on the pole's spot: her body stands beside it, her dance takes her round,
-            // up and over it), four on the stage's other sides, strutting along its edge; no one's blows stopped by them (CHECK_OBJ_COL off)
+            // up and over it), four on the stage's other sides, strutting along its edge; no one's blows stopped by them (CHECK_OBJ_COL off).
+            // Their boxes take in the room their dances use, far bigger than they are: walked over (WalkOverArmour, RACEMOD.CPP
+            // RaceMod_NoCollide), or Twinsen bumped into them and stood on top of them off the stage, and fell from them for ever; and no shadow,
+            // which the engine sizes by the box (a big round one beside her, not under her)
             void Perform(int who, float degrees, float cells, bool atPole)
             {
                 var a = bouncer.Clone();
@@ -83,6 +87,8 @@ internal static partial class RaceTrackStory
                 a.Body = StellaPerformers.Body0 + who;
                 a.Anim = StellaPerformers.AnimOf(who);
                 a.Flags &= ~1u;
+                a.Flags |= NoShadowFlag;
+                a.Armor = WalkOverArmour;
                 a.Beta = (StellaEntities.FacingMiddle(x, z) + 2048) & 4095;
                 a.Move = 0;
                 adds.Add(IslandBeatsA.Add(model, a, "void comportement_0()\n{\n}\n"));

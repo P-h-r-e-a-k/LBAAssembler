@@ -128,7 +128,8 @@ internal static partial class CitadelProps
     public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 115), (ClubCounter2, 135), (ClubCounter3, 155) };
     // (StageHigh: about Twinsen's chest -- three layers, 768; it was one, 256: the user, 2026-11-13, "The stage area needs raising to about
     // the height of Twinsen's chest")
-    public const float StageRadius = 7.5f * 512, StageHigh = 768, CatwalkHalf = 512, CatwalkTo = 18.2f * 512;
+    // (the catwalk right up to the wall, under the backstage door: the user, 2026-11-13, "This stage should also go right to the edge of the room")
+    public const float StageRadius = 7.5f * 512, StageHigh = 768, CatwalkHalf = 512, CatwalkTo = ClubWallRadius - 40;
     public const float CounterIn = 15.0f * 512, CounterOut = 16.0f * 512, CounterArc = 20, CounterMiddle = 15.5f * 512, ShelfIn = 17.3f * 512, ShelfOut = 17.9f * 512;
     public const float BarFrom = 105, BarTo = 165;
     public const int PoleHigh = 3900, ColumnHigh = 5200;
@@ -172,6 +173,38 @@ internal static partial class CitadelProps
             m.Ball(0, new Vector3(x0 + 70, StageHigh + 30, z), 40, ClubGlow);
             m.Ball(0, new Vector3(x1 - 70, StageHigh + 30, z), 40, ClubGlow);
         }
+        return m.ToBody(header);
+    }
+
+    // The steps up onto the catwalk by the backstage door (body 97, into the backdrop as the stage; the user, 2026-11-13: "Let's add a few steps
+    // right by the door"): on the catwalk's east side (+x) from its edge out StepsCells cells, between StepsZ0 and StepsZ1 (world cells, the
+    // hall's grid) -- six treads down from the catwalk's top to the floor over the grid's slope cells (StellaEntities: a ramp each cell a
+    // layer), each tread at the ramp's height in its middle
+    public const int ClubSteps = 97, StepsCellX = 25, StepsCells = 3, StepsZ0 = 14, StepsZ1 = 15;
+    public static Body BuildClubSteps(byte[] header)
+    {
+        var m = new CarMesh("Stella Entities' steps", new[] { -1 });
+        m.Light = 0.85f;
+        // (the body's frame: the hall's middle at ClubMiddle, as the stage's -- a world place less the actor's, which stands at the hall's
+        // middle less ClubShift)
+        float worldToBodyX = ClubShiftX - 24 * 512, worldToBodyZ = ClubShiftZ - 32 * 512;
+        float x0 = StepsCellX * 512 + worldToBodyX, z0 = StepsZ0 * 512 + worldToBodyZ, z1 = (StepsZ1 + 1) * 512 + worldToBodyZ;
+        const int Treads = 6;
+        var depth = StepsCells * 512f / Treads;
+        int P(float x, float y, float z) => m.P(0, new Vector3(x, y, z));
+        for (var j = 0; j < Treads; j++)
+        {
+            float a = x0 + j * depth, b = a + depth, top = StageHigh - StageHigh * (j + 0.5f) / Treads;
+            m.Up(new[] { P(a, top, z0), P(b, top, z0), P(b, top, z1), P(a, top, z1) }, j % 2 == 0 ? ClubWoodLight : ClubWoodLight + 1);
+            // (its riser, facing out, down to the next tread; its sides down to the floor)
+            var next = j + 1 < Treads ? StageHigh - StageHigh * (j + 1.5f) / Treads : 0;
+            m.Out(new[] { P(b, next, z0), P(b, next, z1), P(b, top, z1), P(b, top, z0) }, ClubVelvet, new Vector3(a, top / 2, (z0 + z1) / 2));
+            foreach (var (z, outward) in new[] { (z0, -1f), (z1, 1f) })
+                m.Out(new[] { P(a, 0, z), P(b, 0, z), P(b, top, z), P(a, top, z) }, ClubVelvet, new Vector3((a + b) / 2, top / 2, z - outward * 100));
+        }
+        // (lights on every other tread's outer corner)
+        for (var j = 0; j < Treads; j += 2)
+            m.Ball(0, new Vector3(x0 + (j + 0.5f) * depth, StageHigh - StageHigh * (j + 0.5f) / Treads + 30, z1 - 60), 35, ClubGlow);
         return m.ToBody(header);
     }
 
@@ -412,6 +445,6 @@ internal static partial class CitadelProps
     // over the room was "in front" of Twinsen, and he went into the backdrop with them)
     // (and the bar's counter pieces, a speck at their middles: a curved piece's own box was a square round it, the stools and the floor
     // in front of the bar inside it -- Twinsen pushed away from the bar; the grid's invisible cells along the curve are the counter's)
-    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubShelf or ClubFront or ClubBoard or ClubCounter or ClubCounter2 or ClubCounter3
+    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubShelf or ClubFront or ClubBoard or ClubCounter or ClubCounter2 or ClubCounter3 or ClubSteps
         ? new short[] { -1, 0, -1, 1, 1, 1 } : null;
 }

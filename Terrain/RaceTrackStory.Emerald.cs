@@ -277,12 +277,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Welcome to Stella Entities. No charge for a friend of Baldino's. Look all you like -- no touching the dancers.",
-            "Bienvenue au Stella Entities. C'est gratuit pour un ami de Baldino. Regarde tant que tu veux -- on ne touche pas les danseuses.",
-            "Willkommen im Stella Entities. Für einen Freund von Baldino kostet es nichts. Schau, so viel du willst -- Anfassen verboten.",
-            "Bienvenido a Stella Entities. Gratis para un amigo de Baldino. Mira todo lo que quieras -- prohibido tocar a las bailarinas.",
-            "Benvenuto allo Stella Entities. Gratis per un amico di Baldino. Guarda quanto vuoi -- vietato toccare le ballerine.",
-            "Bem-vindo ao Stella Entities. É grátis para um amigo do Baldino. Olha à vontade -- não se tocam as bailarinas.",
+            "Welcome to Stella Entities. No charge, HAL's added your name to the list for one night only. Look all you like -- no touching the dancers.",
+            "Bienvenue au Stella Entities. C'est gratuit, HAL a mis ton nom sur la liste pour une nuit seulement. Regarde tant que tu veux -- on ne touche pas les danseuses.",
+            "Willkommen im Stella Entities. Kostet nichts, HAL hat deinen Namen für eine Nacht auf die Liste gesetzt. Schau, so viel du willst -- Anfassen verboten.",
+            "Bienvenido a Stella Entities. Gratis, HAL ha puesto tu nombre en la lista solo por una noche. Mira todo lo que quieras -- prohibido tocar a las bailarinas.",
+            "Benvenuto allo Stella Entities. Gratis, HAL ha messo il tuo nome in lista solo per una notte. Guarda quanto vuoi -- vietato toccare le ballerine.",
+            "Bem-vindo ao Stella Entities. É grátis, o HAL pôs o teu nome na lista só por uma noite. Olha à vontade -- não se tocam as bailarinas.",
         },
         new[]
         {

@@ -34,8 +34,9 @@ internal static class StellaEntities
     // (the ring of invisible cells inside the curb up to the wall's top, 3,800 -- at 5 (1,536) a jump at the wall landed Twinsen on top of them,
     // hanging in front of the wall in his fall: the user, 2026-11-13, "Jumping towards the edge of the wall leaves twinsen stuck in a falling animation")
     private const int RingTop = Citadel.CitadelProps.ClubWallTop / 256;
-    // (the stage's cells: their middles within StageCells of the hall's; the catwalk's, x CatwalkX0-X1 north of the middle)
-    private const double StageCells = 7.2;
+    // (the stage's cells: any part within StageCells of the hall's middle -- Twinsen, stopped about half a cell off the cells, then stays just off the round's edge (7.5) all round, never in its skirt; the catwalk's, x
+    // CatwalkX0-X1 north of the middle)
+    private const double StageCells = 7.0;
     private const int CatwalkX0 = 23, CatwalkX1 = 24;
     // the poles round the column (degrees, the room's middle to them: x = cos, z = sin -- all on the audience's side of it, the camera's:
     // one behind it was drawn over it), the tables', the stools'
@@ -116,7 +117,7 @@ internal static class StellaEntities
             }
         }
         int Mod(int a, int m) => ((a % m) + m) % m;
-        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0, counterCells = 0;
+        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0, counterCells = 0, barEnds = 0;
         for (var z = 0; z < Size; z++)
         for (var x = 0; x < Size; x++)
         {
@@ -127,8 +128,11 @@ internal static class StellaEntities
                 // (the hall's ring of invisible solid cells inside the curb: block 0, collision 1 -- not where the corridor comes in)
                 double dx = x + 0.5 - CentreX, dz = z + 0.5 - CentreZ;
                 var angle = Math.Atan2(dz, dx) * 180 / Math.PI;
-                // (the stage and its catwalk: invisible solid cells under the props, up to its top -- the dancers stand on it)
-                if (Hall(x, z) && (Math.Sqrt(dx * dx + dz * dz) <= StageCells || (x >= CatwalkX0 && x <= CatwalkX1 && dz < 0 && Math.Sqrt(dx * dx + dz * dz) < RingFrom)))
+                // (the stage and its catwalk: invisible solid cells under the props, up to its top -- the dancers stand on it. Every cell the
+                // stage's round covers, not only those whose middles it does: with those, Twinsen walked into its skirt where the round reached
+                // past a cell -- the user, 2026-11-13, "it should be solid and high all the way around")
+                var nearX = Math.Clamp(CentreX, x, x + 1.0) - CentreX; var nearZ = Math.Clamp(CentreZ, z, z + 1.0) - CentreZ;
+                if (Hall(x, z) && (Math.Sqrt(nearX * nearX + nearZ * nearZ) < StageCells || (x >= CatwalkX0 && x <= CatwalkX1 && dz < 0 && Math.Sqrt(dx * dx + dz * dz) < RingFrom)))
                 {
                     for (var y = FloorLayer + 1; y <= FloorLayer + (int)(Citadel.CitadelProps.StageHigh / 256); y++) Put(x, y, z, 0, 1);
                     stageCells++;
@@ -140,6 +144,16 @@ internal static class StellaEntities
                 {
                     for (var y = FloorLayer + 1; y <= FloorLayer + 2; y++) Put(x, y, z, 0, 1);
                     counterCells++;
+                }
+                // (behind the bar, the barman's side: shut at both ends of the counter, up to the wall's top as the ring -- Twinsen walked in
+                // between the counter and the bottles, and the pieces drawn by their boxes put him under them: the user, 2026-11-13, "Twinsen
+                // disappears under the bar")
+                var behind = r > Citadel.CitadelProps.CounterOut / 512 - 0.2 && r < RingFrom + 0.5;
+                if (Hall(x, z) && behind && ((angle >= Citadel.CitadelProps.BarFrom - 4 && angle <= Citadel.CitadelProps.BarFrom + 1) ||
+                                             (angle >= Citadel.CitadelProps.BarTo - 1 && angle <= Citadel.CitadelProps.BarTo + 4)))
+                {
+                    for (var y = FloorLayer + 1; y <= RingTop; y++) Put(x, y, z, 0, 1);
+                    barEnds++;
                 }
                 if (Hall(x, z) && Math.Sqrt(dx * dx + dz * dz) >= RingFrom && !(angle > Citadel.CitadelProps.ClubDoorFrom && angle < Citadel.CitadelProps.ClubDoorTo))
                 {
@@ -172,6 +186,18 @@ internal static class StellaEntities
                 rims++;
             }
         }
+        // the steps up onto the catwalk by the backstage door (CitadelProps.ClubSteps): a ramp down east from the catwalk's edge, a layer a
+        // cell -- each column solid up to its slope (collision 5: full height at its west side, nothing at its east: OBJECT.CPP ReajustPos)
+        const int SlopeDownEast = 5;
+        var stageLayers = (int)(Citadel.CitadelProps.StageHigh / 256);
+        for (var k = 0; k < Citadel.CitadelProps.StepsCells; k++)
+            for (var z = Citadel.CitadelProps.StepsZ0; z <= Citadel.CitadelProps.StepsZ1; z++)
+            {
+                var x = Citadel.CitadelProps.StepsCellX + k;
+                var top = FloorLayer + stageLayers - k;
+                for (var y = FloorLayer + 1; y < top; y++) Put(x, y, z, 0, 1);
+                Put(x, top, z, 0, SlopeDownEast);
+            }
         for (var z = 0; z < Size; z++)
         for (var y = 0; y < Height; y++)
         for (var x = 0; x < Size; x++)
@@ -266,7 +292,7 @@ void comportement_3()
         }
         var clubPlate = clubParts[0];
         // the hall's round wall and curb (CitadelProps.Club), round its middle, drawn into the backdrop
-        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubBoard, Citadel.CitadelProps.ClubFront, Citadel.CitadelProps.ClubCurb, Citadel.CitadelProps.ClubStage, Citadel.CitadelProps.ClubShelf }
+        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubBoard, Citadel.CitadelProps.ClubFront, Citadel.CitadelProps.ClubCurb, Citadel.CitadelProps.ClubStage, Citadel.CitadelProps.ClubSteps, Citadel.CitadelProps.ClubShelf }
             .Select(g => SceneOps.AddActor(model, Backdrop(g, (int)(CentreX * 512) - Citadel.CitadelProps.ClubShiftX, floorY, (int)(CentreZ * 512) - Citadel.CitadelProps.ClubShiftZ))).ToList();
         // ... and the room's furniture in its place among the people: the reactor's column on the stage, the poles round it, the bar's
         // counter, its stools, the tables
@@ -342,7 +368,7 @@ void comportement_3()
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"Stella Entities: scene {Scene} (grid {gridNumber}, Rick's bar's block library {raw[0]}): a round hall {Radius * 2:0} cells across, the corridor and the " +
-                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar; Baldino's cell (scene {Cell}, its floor whole): " +
+                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar, {barEnds} shutting its ends; Baldino's cell (scene {Cell}, its floor whole): " +
                 $"the hidden lift in its corner by the door (cells x 32-33, z 31-32): Action on the spot and down onto the club's platform, and back up onto the spot");
         return log;
     }

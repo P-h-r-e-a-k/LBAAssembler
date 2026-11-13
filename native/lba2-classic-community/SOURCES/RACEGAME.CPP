@@ -2895,7 +2895,7 @@ typedef struct { const char *Id, *Group, *Title; } T_RG_ACH;
 static const T_RG_ACH s_ach[] = {
     {"spanked", "Citadel", "Got spanked by Zoe"},
     {"telescope", "Citadel", "Watched the Wizard and the cow"},
-    {"stella", "Moon", "Found Stella Entities"},
+    {"stella", "Moon", "Stella EnTitties"},
     {"bowling", "Otringal", "Found the hidden bowling alley"},
     {"dinofly", "Polar", "Spoke to the Dinofly"},
     {"dungeon", "Palace", "Found the palace dungeon"},
