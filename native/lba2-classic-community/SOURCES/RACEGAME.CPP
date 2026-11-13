@@ -2771,8 +2771,40 @@ static int PlayerOfFolder(int k) {
 // Esc): asked, then the game ends.
 // Returns 0: on, this player; 1: started again for another (this game to go); 3: quit the game.
 #define RG_PL_LINE 44
+// An install from before players (the user, 2026-11-12: "If a user doesn't already have a player created because they're on an old version
+// let's have our updater to ask them their name, and we can put everything that already exists under this player, this will mainly be ghost
+// times"): its first player is the game's own folder, with everything played so far -- ghosts, best laps, the story, achievements -- and no
+// name. The first time the player menu comes up after the update, asked once: the name becomes that player's (PLAYER.TXT in it), all of it
+// kept under it. (Share my ghosts' name, if there is one, offered.)
+static void LegacyName(void) {
+    static int asked = 0;
+    if (asked) return;
+    asked = 1;
+    ListPlayers();
+    if (s_nbPlayers < 1 || PlayerOfFolder(0)) return;
+    char card[ADELINE_MAX_PATH];
+    snprintf(card, sizeof(card), "%s/PLAYER.TXT", s_plDir[0]);
+    SDL_PathInfo info;
+    if (SDL_GetPathInfo(card, &info)) return;
+    char name[40] = "";
+    if (!strcasecmp(s_plDir[0], s_plMine)) GhostOwnerName(name, sizeof(name));
+    SayPage("Who is playing?", "LBRA now keeps a player for each person who plays. Everything played here so far -- your ghost times, best laps, story and achievements -- will be kept under your name.");
+    if (!TypePage("Your name", "Type your name, then Enter", name, sizeof(name), 0, 0)) name[0] = 0;
+    char clean[40];
+    int k = 0;
+    for (const char *c = name; *c && k < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[k++] = *c;
+    clean[k] = 0;
+    Trim(clean);
+    if (!clean[0]) snprintf(clean, sizeof(clean), "Player 1");
+    if (FILE *f = fopen(card, "w")) { fprintf(f, "%s\n", clean); fclose(f); }
+    Log_Info("[racegame] the first player (from before players) named: %s (%s)", clean, s_plDir[0]);
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+}
+
 static int PlayersPage(void) {
     int at = -1;
+    LegacyName();
     for (;;) {
         ListPlayers();
         const int shown = s_nbPlayers > RG_PLAYERS_MAX ? RG_PLAYERS_MAX : s_nbPlayers;
