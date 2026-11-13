@@ -369,9 +369,10 @@ internal static partial class CitadelProps
     // west over the sea, tilted a little up, its eyepiece back over the balcony towards whoever stands to use it. Its foot (0) the
     // railing's top; -x out to sea.
     // The thief's footprints in the sewers' wet paint (the user, 2026-11-10: "the story outline mentions Twinsen following the thief's paint
-    // footsteps through the sewers, but these don't exist"): a pair of shoe prints flat on the floor, cream paint, unlit, the left a
+    // footsteps through the sewers, but these don't exist"): a pair of shoe prints flat on the floor, white paint (cream until the user, 2026-11-12: "change the colour of the paint to white"), unlit, the left a
     // stride behind the right, toes to +z (RaceTrackStory.Chapters.cs ThiefTrail lays them, turned the way he ran)
     public const int Footprints = 105;
+    private const int PaintWhite = 62;
     public static Body BuildFootprints(byte[] header)
     {
         var m = new CarMesh("the thief's painted footprints", new[] { -1 });
@@ -386,14 +387,14 @@ internal static partial class CitadelProps
                 var w = MathF.Cos(a) > 0 ? 84f : 68f;
                 sole[k] = m.P(0, new Vector3(x + w * MathF.Sin(a), 6, z + 48 + 112 * MathF.Cos(a)));
             }
-            m.Cap(sole, m.P(0, new Vector3(x, 6, z + 48)), Cream, new Vector3(x, -50, z), unlit: true);
+            m.Cap(sole, m.P(0, new Vector3(x, 6, z + 48)), PaintWhite, new Vector3(x, -50, z), unlit: true);
             var heel = new int[N];
             for (var k = 0; k < N; k++)
             {
                 var a = 2 * MathF.PI * k / N;
                 heel[k] = m.P(0, new Vector3(x + 58 * MathF.Sin(a), 6, z - 131 + 48 * MathF.Cos(a)));
             }
-            m.Cap(heel, m.P(0, new Vector3(x, 6, z - 131)), Cream, new Vector3(x, -50, z), unlit: true);
+            m.Cap(heel, m.P(0, new Vector3(x, 6, z - 131)), PaintWhite, new Vector3(x, -50, z), unlit: true);
         }
         return m.ToBody(header);
     }

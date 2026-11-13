@@ -62,8 +62,9 @@ internal static class Demo96Rooms
     {
         new(17, 17, "the sewers", (20357, 1536, 15140), MorePaves: new Paving[]
         {
-            new(32, 32, 36, 37, 4, 36, 4, LikeX: 28, LikeLayer: 3, Over: 12),
-            new(31, 31, 36, 37, 3, 36, 3, LikeX: 28, LikeLayer: 3),
+            // (no doorway through the wall at x 32 either: the way round is on the logs, no shortcut -- the user, 2026-11-12, "you've put a hole
+            // in the fence that we don't need ... The idea for the player is that they navigate the water all the way around by using the
+            // moving logs instead of taking shortcuts")
             // (no bridge over the water: the demo's floating logs, going round in circles, carry Twinsen across -- the user, 2026-11-11)
         }),
         new(18, 18, "the sewers' far halls"),

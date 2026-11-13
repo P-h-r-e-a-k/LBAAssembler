@@ -993,6 +993,26 @@ void comportement_1()
     // prints on the water) to the far tunnel's door (scene 17, Demo96Rooms' way), then on through the far halls to the dead end where he's cornered (scene 18) -- each
     // pair on the floor there (the scene's grid), turned the way he ran, walked over (no collisions). From his going down the hatch (Q_THIEF
     // ThiefDown), in chapter 1.
+    // (not one long trail -- the user, 2026-11-12: "We don't need one long continuous path of steps, just enough in each scene for the user to be
+    // able to follow a trail of bread crumbs" -- a few prints at a time where the way goes on: on the painter's walkway, the way he went to
+    // the water's edge; up the far tunnel's stairs from their bottom step and through its door ("instead let's have them leading up from the
+    // bottom step and through the door"); and in the far halls at their turns, to the dead end)
+    private static readonly (int Scene, (int X, int Y, int Z)[][] Crumbs)[] ThiefCrumbs =
+    {
+        (Sewers, new[]
+        {
+            new[] { (20224, 1536, 16128), (18432, 1536, 19200), (17664, 1536, 20992) },
+            new[] { (1536, 512, 13824), (1536, 512, 12800), (1536, 768, 11904), (1536, 1024, 11392), (1536, 1280, 10496), (768, 1280, 9984), (256, 1280, 9984) },
+        }),
+        (FarSewer, new[]
+        {
+            new[] { (31860, 1280, 2632), (29696, 1280, 2700) },
+            new[] { (27392, 1280, 2400), (27392, 1280, 1280), (25600, 1280, 1280) },
+            new[] { (17408, 1280, 1280), (16128, 1280, 1280), (16128, 1280, 1792), (14848, 1280, 1792) },
+            new[] { (13568, 1280, 2048), (13056, 1280, 2300) },
+        }),
+    };
+    // (the long way once laid end to end -- kept for its places)
     private static readonly (int Scene, (int X, int Y, int Z)[] Way)[] ThiefWay =
     {
         (Sewers, new[] { (17664, 1536, 15616), (17152, 1536, 15616), (17152, 1536, 18688), (16640, 1280, 18688), (16128, 1024, 18688), (13568, 1024, 18688),
@@ -1004,8 +1024,8 @@ void comportement_1()
     internal const int WalkOverArmour = 118;
     private static void ThiefTrail(StoryParts p)
     {
-        foreach (var (scene, way) in ThiefWay)
-            p.Edit(scene, $"the thief's painted footprints, {way.Length} points of his way", model =>
+        foreach (var (scene, crumbs) in ThiefCrumbs)
+            p.Edit(scene, $"the thief's painted footprints, {crumbs.Length} short trails of breadcrumbs", model =>
             {
                 var backend = new LBAAssembler.Grids.Lba2GridBackend(p.Store.Directory);
                 var shape = backend.GridOfScene(scene) is { } g ? LBAAssembler.Grids.Lba2GridBackend.ToLba1Shape(backend.RawGrid(g)) : null;
@@ -1023,6 +1043,8 @@ void comportement_1()
                     return best is { } f && Math.Abs(f - y) <= 512 ? f : null;
                 }
                 var edits = new List<Action<SceneScripts>>();
+                foreach (var way in crumbs)
+                {
                 var carry = TrailStride / 2.0;
                 for (var i = 0; i + 1 < way.Length; i++)
                 {
@@ -1056,6 +1078,7 @@ void comportement_1()
                         carry = t + TrailStride - len;
                     }
                     if (carry < 0) carry = 0;
+                }
                 }
                 return scripts => { foreach (var e in edits) e(scripts); };
             });
