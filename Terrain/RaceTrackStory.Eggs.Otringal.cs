@@ -71,6 +71,9 @@ internal static partial class RaceTrackStory
         // "should fire when we watch the wizard with the cow through the telescope, not when we're close to the cow")
         $"achieve=telescope var {ScopeVar} 1",
         $"achieve=bowling scene {BowlingAlley.Scene}",
+        // (the palace's dungeon, five layers under its rooms 159 and 163, its floor at 6,800: Twinsen in either, under 7,400)
+        "achieve=dungeon below 159 7400",
+        "achieve=dungeon below 163 7400",
     };
     private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40, LyraReady = 660, LyraRaise = 661;
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)

@@ -44,3 +44,23 @@ internal static class ObjFixColours
         return 0;
     }
 }
+
+// a probe: the scenes with an actor of entity E (and body B, -1 any) -- args: gamedir entity body
+internal static class FindActor
+{
+    public static int Run(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        int entity = int.Parse(args[2]), body = int.Parse(args[3]);
+        for (var s = 0; s < 420; s++)
+        {
+            if (!store.SceneExists(s)) continue;
+            LBAAssembler.Scenes.SceneModel m;
+            try { m = store.Load(s); } catch { continue; }
+            for (var i = 0; i < m.Actors.Count; i++)
+                if (m.Actors[i].Entity == entity && (body < 0 || m.Actors[i].Body == body))
+                    Console.WriteLine($"scene {s} (island {m.Island}, cube {m.CubeX},{m.CubeY}): actor {i} at ({m.Actors[i].X},{m.Actors[i].Y},{m.Actors[i].Z})");
+        }
+        return 0;
+    }
+}

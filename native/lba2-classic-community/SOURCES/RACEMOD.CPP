@@ -4290,6 +4290,8 @@ static void Load(const char *path, int carOnly = 0) {
             const int got = sscanf(v, "%23s %11s %d %d", ac->Id, kind, &ac->A, &ac->B);
             if (got >= 3 && !strcmp(kind, "scene")) { ac->Kind = 1; s_nbAchs++; }
             else if (got == 4 && !strcmp(kind, "var")) { ac->Kind = 0; s_nbAchs++; }
+            // (below <scene> <y>: in that scene, under that height -- the palace's dungeon, under its rooms 159 and 163)
+            else if (got == 4 && !strcmp(kind, "below")) { ac->Kind = 2; s_nbAchs++; }
         }
         else if (!strcmp(key, "foot_edge")) s_footEdge = atoi(v);
         else if (!strcmp(key, "foot_gap") && s_nbFootGaps < RACE_MAX_FOOT_GAPS) {
@@ -18738,7 +18740,9 @@ static void AchievementsFrame(S32 now) {
     s_achsAt = now;
     for (int i = 0; i < s_nbAchs; i++) {
         const T_RACE_ACH *ac = &s_achs[i];
-        const int hit = ac->Kind == 0 ? ac->A >= 0 && ac->A < MAX_VARS_GAME && ListVarGame[ac->A] >= ac->B : (S32)NumCube == ac->A;
+        const int hit = ac->Kind == 0 ? ac->A >= 0 && ac->A < MAX_VARS_GAME && ListVarGame[ac->A] >= ac->B
+                      : ac->Kind == 2 ? (S32)NumCube == ac->A && ListObjet[NUM_PERSO].Obj.Y < ac->B
+                      : (S32)NumCube == ac->A;
         char title[64];
         if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "%s", title); snprintf(s_achId, sizeof(s_achId), "%s", ac->Id); s_achUntil = now + 6000; }
     }

@@ -62,6 +62,7 @@ internal static class Program
             "decorprobe" => DecorProbe.Run(args),
             "tavgrid" => TavernGridProbe.Run(args),
             "objfixcolours" => ObjFixColours.Run(args),
+            "findactor" => FindActor.Run(args),
             "racetrack" => RaceTrackProbe.Run(args),
             "buildtrack" => RaceTrackCommand.Run(args),
             "herostart" => RaceTrackCommand.HeroStart(args),

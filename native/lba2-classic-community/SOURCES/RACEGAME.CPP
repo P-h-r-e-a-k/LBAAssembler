@@ -2916,6 +2916,9 @@ static const T_RG_REPLAY s_replays[] = {
     {"telescope", 47, 0, 4, {{253, 2}, {56, 5}, {51, 4}, {227, 1}}, 5000},
     {"stella", 390, 0, 1, {{253, 4}}},                             // Stella Entities
     {"bowling", 393, 0, 1, {{253, 5}}},                            // the bowling alley
+    {"dinofly", 254, 0, 1, {{253, 0}}},                            // the dream's Polar Island, the Dino-Fly on its jetty
+    {"dungeon", 159, 0, 1, {{253, 13}}},                           // the Emperor's palace, the room whose fireplace is the way down
+    {"postcards", 95, 0, 3, {{253, 14}, {196, 13}, {197, 14}}},    // Celebration Island, every postcard found: the reward told
 };
 static const T_RG_REPLAY *ReplayOf(int k) {
     for (size_t i = 0; i < sizeof(s_replays) / sizeof(s_replays[0]); i++) if (!strcmp(s_replays[i].Id, s_ach[k].Id)) return &s_replays[i];
