@@ -37,7 +37,7 @@ internal static class TraluBarRoom
     // the massive table: x 36-37, z 40-51 (three tables end to end); its benches at x 35 and 38
     public const int TableX = 36, TableZ0 = 40, TableZ1 = 51, BenchWest = 35, BenchEast = 38;
     // the round tables (barrels): their north-west cells
-    public static readonly (int X, int Z)[] Barrels = { (29, 37), (29, 44), (29, 50), (41, 51), (43, 36) };
+    public static readonly (int X, int Z)[] Barrels = { (29, 37), (29, 44), (29, 50), (41, 51), (44, 31) };
     // what stands on them and on the table: (x, z, block) -- plates 108 109, bowls 102 104, bottles 105 106 107, the oil lamp 110 (the
     // tall ones on the table's near half, x 37: on the far half they hid the sitters on the far bench from the camera)
     private static readonly (int X, int Z, int Block)[] OnTable =
@@ -262,7 +262,7 @@ internal static class TraluBarRoom
     // north wall, its north-west cell (43, 36), at its front cell on the camera's side (43, 37: its bottle taken off for it), the Tralu on
     // its far side (RaceTrackStory.TraluTavern), half as big again as a mug for Twinsen would be.
     public const int TankardGeneric = 47;
-    public static readonly (int X, int Y, int Z) TankardAt = (44 * 512, (FloorLayer + 5) * 256, 37 * 512);
+    public static readonly (int X, int Y, int Z) TankardAt = (45 * 512, (FloorLayer + 5) * 256, 32 * 512);
     // a barrel's top: the middle of its four cells, at its top
     public static (int X, int Y, int Z) BarrelTop((int X, int Z) barrel) => ((barrel.X + 1) * 512, (FloorLayer + 5) * 256, (barrel.Z + 1) * 512);
 

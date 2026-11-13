@@ -64,7 +64,9 @@ internal static partial class RaceTrackStory
     // the Tralu in the bar: in the corner behind the round table by the old room's north wall (its barrel's cells x 43-44, z 36-37), the
     // wall and the foot of the stairs behind him, facing the camera with the barrel and his tankard on it in front of him (the user,
     // 2026-11-08: "in the corner ... It fits him being moody about the bar being there"; he stood east of the barrel, in front of it)
-    private static readonly (int X, int Z) TraluAt = (Cell(42.5), Cell(35.8));
+    // (moved, the user, 2026-11-12 with a picture: into the corner past the steps' east side, against the back wall -- his barrel's cells x 44-45,
+    // z 31-32 (TraluBarRoom.Barrels), he behind it in the corner)
+    private static readonly (int X, int Z) TraluAt = (Cell(44.4), Cell(30.5));
     // the regulars' own lines in the game's Tavern (Citadel Island's texts): the rabbibunny's, Pat's, Fab's
     private const int TavernBunnyLine = 53, TavernPatLine = 106, TavernFabLine = 48;
     // the celebration: Twinsen's seat on the west bench (cells 35.5, 47 -- its top 512 over the floor), where he stands up to; Luc's way

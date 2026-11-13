@@ -1402,6 +1402,9 @@ static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
 // he too tells Twinsen to go home: the user, 2026-11-08)
 #define RACE_MAX_TIRED_KEEP 8
 static int s_tiredKeep[RACE_MAX_TIRED_KEEP], s_nbTiredKeep = 0;
+// tired_skip=<scene>...: scenes where tired= says nothing for anyone -- the Tralu's secret bar, whose regulars say their own lines at the
+// evening's celebration (the user, 2026-11-12: "all the NPCs are repeating their line twice for Twinsen to go home and have a nap")
+static int s_tiredSkip[RACE_MAX_TIRED_KEEP], s_nbTiredSkip = 0;
 // dark_scene=<scene> <percent>: a scene at night -- the actors' light at that share of the game's (DarkFrame)
 static int s_darkScene = -1, s_darkPct = 100;
 typedef struct { int Island, When, First, Last; char Path[260]; } T_RACE_TRACK;
@@ -4905,6 +4908,13 @@ static void Load(const char *path, int carOnly = 0) {
                 int keep;
                 s_nbTiredKeep = 0;
                 for (const char *q = v + used; s_nbTiredKeep < RACE_MAX_TIRED_KEEP && sscanf(q, "%d%n", &keep, &used) == 1; q += used) s_tiredKeep[s_nbTiredKeep++] = keep;
+            }
+        }
+        else if (!strcmp(key, "tired_skip")) {
+            int scene, used = 0;
+            if (!setRead) {
+                s_nbTiredSkip = 0;
+                for (const char *q = v; s_nbTiredSkip < RACE_MAX_TIRED_KEEP && sscanf(q, "%d%n", &scene, &used) == 1; q += used) s_tiredSkip[s_nbTiredSkip++] = scene;
             }
         }
         else if (!strcmp(key, "dark_scene")) {
@@ -13830,7 +13840,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -22276,6 +22286,7 @@ S32 RaceMod_Dial(S32 num) {
     if (!RaceMod_Active() || s_tiredVar < 0 || s_tiredVar > 255 || Island != 0 || NumObjDial == NUM_PERSO) return num;
     if (ListVarGame[s_tiredVar] != s_tiredValue) return num;
     for (int k = 0; k < s_nbTiredKeep; k++) if (num == s_tiredKeep[k]) return num;
+    for (int k = 0; k < s_nbTiredSkip; k++) if ((S32)NumCube == s_tiredSkip[k]) return num;
     Log_Info("[racemod] text %d said as the tired line %d", (int)num, s_tiredText);
     return s_tiredText;
 }
