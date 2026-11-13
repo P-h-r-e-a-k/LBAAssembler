@@ -1494,6 +1494,8 @@ static int s_onlyNear = -1;                // RaisedAt looks only at the road's 
 #define RAIL_CAMERA_NEAREST 2560            // ... but no nearer than this
 #define RAISED_UNDER 650                   // how far under such a level's surface the following camera's eye stays (its slab is 200)
 static int s_rescueOn = 1;                 // rescue=: a car in the lava or the sea is put back on the road (RaceMod_Rescue)
+static int s_roamFree = 0;                 // roam_free=1: the car driven anywhere off the race -- no rescue then (RescueOn)
+static int RaceOn(void);
 // island_file=<island> <name>: while racing, that island is drawn from the file <name> instead of its own -- a track on an island file the
 // game never loads (MOON.ILE, the Emerald Moon's older copy, raced as island 3's)
 static int s_fileIsland = -1;
@@ -4301,6 +4303,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
         else if (!strcmp(key, "rescue")) s_rescueOn = atoi(v);
+        else if (!strcmp(key, "roam_free")) s_roamFree = atoi(v);
         else if (!strcmp(key, "gravity")) s_gravity = atof(v);
         else if (!strcmp(key, "jump_speed")) {
             if (sscanf(v, "%lf %lf", &s_jumpLo, &s_jumpHi) != 2) s_jumpHi = 0;
@@ -9693,11 +9696,21 @@ S32 RaceMod_SoftLanding(void) {
     return 1;
 }
 
+// Whether the car is put back on the road (rescue=) -- not while Twinsen drives his car freely off the race, on an island where it may
+// roam (roam_free=, Citadel Island's): before the first lap is begun or once the race is over, no race on (the user, 2026-11-12: "If Twinsen
+// is driving around on citadel island can we stop the 'Back on the road' script from activating")
+static int RescueOn(void) {
+    if (!s_rescueOn) return 0;
+    // (the test pilot at the wheel, autodrive, is put back as ever: it drives to the line and round, and has no one to back it out of a corner)
+    if (s_roamFree && !s_auto && !RaceOn() && (s_laps == 0 || s_place)) return 0;
+    return 1;
+}
+
 S32 RaceMod_Rescue(void) {
     if (FootRescue("into the sea or the lava")) return 1;
     // (a ghost played back: never drowned, nor put back on the road -- it is where its lap had it, GhostWatch)
     if (RaceMod_Active() && Comportement == C_BUGGY && s_ghostWatch) return 1;
-    if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
+    if (!RaceMod_Active() || !RescueOn() || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
     if (!s_rescue) {
         const T_OBJET *hero = &ListObjet[NUM_PERSO];
         Log_Info("[racemod] into the lava or the sea at (%.0f,%d,%.0f)%s: back on the road", hero->Obj.X + CurrentCubeX * 32768.0, (int)hero->Obj.Y,
@@ -9944,7 +9957,7 @@ static int SideArea(const T_RACE_OPPONENT *o, int a) {
 static void FallenBelow(S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const T_RACE_OPPONENT *o = Guide();
-    if (!s_nbRaised || !s_rescueOn || !o || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
+    if (!s_nbRaised || !RescueOn() || !o || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
             || now < s_jetUntil || s_rescue || s_rescueArrive >= 0 || (hero->WorkFlags & FALLING) || s_safeIndex < 0
             || s_wheel.DropOn || OnWheel(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0)) { s_belowSince = 0; return; }
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
@@ -9980,7 +9993,7 @@ static void FallenBelow(S32 now) {
 S32 RaceMod_OffIsland(void) {
     if (FootRescue("off the island's edge")) return 1;
     if (RaceMod_Active() && Comportement == C_BUGGY && s_ghostWatch) return 1;   // (a ghost played back: held, GhostWatch places it)
-    if (!RaceMod_Active() || Comportement != C_BUGGY || !s_rescueOn || !Guide()) return 0;
+    if (!RaceMod_Active() || Comportement != C_BUGGY || !RescueOn() || !Guide()) return 0;
     if (!s_rescue) Log_Info("[racemod] off the island's edge: back on the road");
     s_rescue = 1;
     return 1;
@@ -10011,7 +10024,7 @@ static S32 s_stuckSince = 0;
 static double s_stuckX = 0, s_stuckY = 0, s_stuckZ = 0;
 static void StuckCar(S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
-    if (!s_rescueOn || !Guide() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || (!(Input & I_UP) && abs(ListBuggy[0].Speed) < RACE_STUCK_SPEED)
+    if (!RescueOn() || !Guide() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || (!(Input & I_UP) && abs(ListBuggy[0].Speed) < RACE_STUCK_SPEED)
             || RaceMod_Held() || now < s_skidUntil || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
             || s_loopState != LOOP_NONE || s_rescue || s_rescueArrive >= 0 || s_safeIndex < 0 || NewCube != -1
             || (hero->WorkFlags & FALLING) || s_wheel.DropOn) { s_stuckSince = 0; return; }
@@ -22104,7 +22117,7 @@ static void ResetTrack(void) {
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_barrelModel = -1; s_monkeyThrows = 0; s_leafBorder = -1; s_nbSpills = 0; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
-    s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
+    s_rescueOn = 1; s_roamFree = 0; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");
     s_hbOn = 1; s_hbBrake = RACE_HB_BRAKE; s_hbSteer = RACE_HB_STEER; s_hbGrip = RACE_HB_GRIP_HELD; s_hbSlip = RACE_HB_SLIP;

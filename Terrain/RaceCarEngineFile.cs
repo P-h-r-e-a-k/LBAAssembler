@@ -89,6 +89,8 @@ internal static class RaceCarEngineFile
         if (raisedFile is not null && info is not null && RaceTrackIsland.ByName(info.Island) is { RailHeld: true }) text.Append("rail_held=1\n");
         // (the Island of the Francos: every car on Gazogem fuel all race, none from a mushroom)
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { FuelAlways: true }) text.Append("fuel_always=1\n");
+        // (the car driven freely off the race: no rescue back onto the road -- Citadel Island's)
+        if (info is not null && RaceTrackIsland.ByName(info.Island) is { RoamFree: true }) text.Append("roam_free=1\n");
         // (game variables held while it races: travel cutscenes kept from playing -- Otringal's Dino-Fly landing)
         // (the story's file: not those the story leaves to the game's own scripts -- Wannies Island's elevator ride, StoryUnheldVars)
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { } heldOn)

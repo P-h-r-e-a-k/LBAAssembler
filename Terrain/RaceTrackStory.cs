@@ -144,12 +144,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Sorry Twinsen, for safety reasons you'll need some driving gloves to take part.",
-            "Désolé Twinsen, pour des raisons de sécurité il te faut des gants de pilote pour participer.",
-            "Tut mir leid, Twinsen, aus Sicherheitsgründen brauchst du Fahrhandschuhe, um mitzumachen.",
-            "Lo siento, Twinsen, por razones de seguridad necesitas unos guantes de conducir para participar.",
-            "Mi dispiace, Twinsen, per motivi di sicurezza ti servono dei guanti da guida per partecipare.",
-            "Desculpa, Twinsen, por razões de segurança precisas de luvas de condução para participar.",
+            "Sorry Twinsen, you'll need some driving gloves before you can set a time on the track.",
+            "Désolé Twinsen, il te faut des gants de pilote avant de pouvoir faire un temps sur le circuit.",
+            "Tut mir leid, Twinsen, du brauchst Fahrhandschuhe, bevor du auf der Strecke eine Zeit fahren kannst.",
+            "Lo siento, Twinsen, necesitas unos guantes de conducir antes de poder marcar un tiempo en el circuito.",
+            "Mi dispiace, Twinsen, ti servono dei guanti da guida prima di poter segnare un tempo sulla pista.",
+            "Desculpa, Twinsen, precisas de luvas de condução antes de poderes fazer um tempo na pista.",
         },
         new[]
         {
@@ -1097,14 +1097,9 @@ void comportement_2()
 
 void comportement_1()
 {{
-    if ({Driving} == comportement_hero() && 0 == var_game({GlovesSlot}) && 1 == var_game({GateShut}) && {startZone} == zone_obj(0))
-    {{
-        set_dir_obj(0, MOVE_MANUAL);
-        message({Id(Line.PaulStop)});
-    }}
     swif (1 == action())
     {{
-        if (1500 > distance(0) && {Driving} != comportement_hero())
+        if (1500 > distance(0))
         {{
             if (0 == var_game({GlovesSlot}))
             {{

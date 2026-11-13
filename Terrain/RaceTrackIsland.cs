@@ -58,6 +58,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Citadel = new("Citadel Island", "CITADEL.ILE", "CITADEL.OBL", 0, 42, 50, 27,
         "RaceTrackPlan.CitadelStorm.json", null)
     {
+        RoamFree = true,
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
         // (58.6 frames a second at 848 x 480 to 60.2 at the island's own 60,000, 2026-11-02)
         View = (200000, 150000),
@@ -420,6 +421,10 @@ internal sealed record RaceTrackIsland(
     // Every car on Gazogem fuel all race, and no mushroom gives it (the race-track mode's fuel_always=): the Island of the Francos', where
     // the fuel is made (the user, 2026-10-07).
     public bool FuelAlways { get; init; }
+    // The car driven anywhere off the race (the race-track mode's roam_free=): no "Back on the road" while Twinsen explores the island in his
+    // car before a lap or after the race -- Citadel Island's (the user, 2026-11-12: "This should allow Twinsen to still drive around in his car and
+    // explore the island without getting stopped")
+    public bool RoamFree { get; init; }
     // Game variables the race-track mode holds at a value while it runs (the car file's vargame=): travel cutscenes kept from playing --
     // Otringal's square island's Dino-Fly landing, which holds Twinsen at its pad while variable 83 is under 2 (2026-10-08; held at 4 since
     // 2026-11-05).
