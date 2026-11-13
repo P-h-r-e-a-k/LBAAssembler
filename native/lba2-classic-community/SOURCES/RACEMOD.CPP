@@ -1442,6 +1442,26 @@ static int s_tiredKeep[RACE_MAX_TIRED_KEEP], s_nbTiredKeep = 0;
 // tired_skip=<scene>...: scenes where tired= says nothing for anyone -- the Tralu's secret bar, whose regulars say their own lines at the
 // evening's celebration (the user, 2026-11-12: "all the NPCs are repeating their line twice for Twinsen to go home and have a nap")
 static int s_tiredSkip[RACE_MAX_TIRED_KEEP], s_nbTiredSkip = 0;
+// zlitos_scene=<scene>...: scenes whose money is Zeelich's, wherever they are (MONEY_ZLITOS: what the scripts count and pay, and what the
+// counter shows) -- Stella Entities under the Emerald Moon's reactor, its prices in zlitos (the user, 2026-11-13: a private show "250
+// zlitos"); exchange=<game variable>: set to 1 by a script, the change machine's: Twinsen's kashes changed for zlitos, two for one, and
+// the variable back to 0
+#define RACE_MAX_ZLITO_SCENES 8
+static int s_zlitoScenes[RACE_MAX_ZLITO_SCENES], s_nbZlitoScenes = 0, s_exchangeVar = -1;
+S32 RaceMod_Zlitos(void) {
+    for (int k = 0; k < s_nbZlitoScenes; k++) if ((S32)NumCube == s_zlitoScenes[k]) return 1;
+    return 0;
+}
+static void ExchangeFrame(void) {
+    if (s_exchangeVar < 0 || s_exchangeVar > 255 || ListVarGame[s_exchangeVar] == 0) return;
+    ListVarGame[s_exchangeVar] = 0;
+    int z = NbGoldPieces / 2;
+    if (NbZlitosPieces + z > 999) z = 999 - NbZlitosPieces;
+    if (z < 0) z = 0;
+    NbGoldPieces -= z * 2;
+    NbZlitosPieces += z;
+    Log_Info("[racemod] exchange: %d kashes for %d zlitos (now %d kashes, %d zlitos)", z * 2, z, (int)NbGoldPieces, (int)NbZlitosPieces);
+}
 // dark_scene=<scene> <percent>: a scene at night -- the actors' light at that share of the game's (DarkFrame)
 static int s_darkScene = -1, s_darkPct = 100;
 typedef struct { int Island, When, First, Last; char Path[260]; } T_RACE_TRACK;
@@ -4952,6 +4972,14 @@ static void Load(const char *path, int carOnly = 0) {
                 for (const char *q = v + used; s_nbTiredKeep < RACE_MAX_TIRED_KEEP && sscanf(q, "%d%n", &keep, &used) == 1; q += used) s_tiredKeep[s_nbTiredKeep++] = keep;
             }
         }
+        else if (!strcmp(key, "zlitos_scene")) {
+            int scene, used = 0;
+            if (!setRead) {
+                s_nbZlitoScenes = 0;
+                for (const char *q = v; s_nbZlitoScenes < RACE_MAX_ZLITO_SCENES && sscanf(q, "%d%n", &scene, &used) == 1; q += used) s_zlitoScenes[s_nbZlitoScenes++] = scene;
+            }
+        }
+        else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
         else if (!strcmp(key, "tired_skip")) {
             int scene, used = 0;
             if (!setRead) {
@@ -6043,6 +6071,20 @@ static void Companion(void) {
     s_compCube = (int)NumCube; s_compWasCar = inCar;
 }
 
+// (the carport's car in car_home='s scene, its place and flags as the scene loads it -- InitBuggy moves it to stand for the car where it
+// was left; the car fetched home while Twinsen is in that scene goes back there at once: the scene isn't loaded again till he leaves.
+// Left where it stood for the car far away, at the scene's corner, he got into it there and it was stuck -- the user, 2026-11-13, "After
+// getting into the car after Zoe returning the car, the car seems glitched and Twinsen is unable to move, we also appear to have teleported")
+static int s_carportObj = -1, s_carportCube = -1;
+static S32 s_carportX, s_carportY, s_carportZ, s_carportBeta;
+static U32 s_carportFlags;
+void RaceMod_CarportSeen(S32 numobj) {
+    if (s_carHome < 0 || (S32)NumCube != s_carHome || numobj <= 0 || numobj >= (S32)NbObjets) return;
+    const T_OBJET *o = &ListObjet[numobj];
+    s_carportObj = numobj; s_carportCube = (int)NumCube;
+    s_carportX = o->Obj.X; s_carportY = o->Obj.Y; s_carportZ = o->Obj.Z; s_carportBeta = o->Obj.Beta; s_carportFlags = o->Flags;
+}
+
 static void CarHome(void) {
     if (s_carHome < 0) return;
     const S32 driving = ListObjet[NUM_PERSO].Move == MOVE_BUGGY || ListObjet[NUM_PERSO].Move == MOVE_BUGGY_MANUAL;
@@ -6051,6 +6093,18 @@ static void CarHome(void) {
         if (NumBuggy && !driving && ListBuggy[0].Cube != NumCube) {
             Log_Info("[racemod] car_home: the car fetched home from scene %d: made again under the carport in scene %d", (int)ListBuggy[0].Cube, s_carHome);
             NumBuggy = 0;
+            if ((int)NumCube == s_carHome && s_carportCube == s_carHome && s_carportObj > 0 && s_carportObj < (int)NbObjets) {
+                T_OBJET *o = &ListObjet[s_carportObj];
+                S_BUGGY *ptb = &ListBuggy[0];
+                o->Obj.X = ptb->X = s_carportX; o->Obj.Y = ptb->Y = s_carportY; o->Obj.Z = ptb->Z = s_carportZ;
+                o->Obj.Beta = ptb->Beta = s_carportBeta;
+                ptb->Cube = NumCube;
+                o->Flags = s_carportFlags | PUSHABLE | CHECK_CODE_JEU;
+                InitBody(GEN_BODY_NORMAL, (U8)s_carportObj);
+                ClearRealAngle(o);
+                NumBuggy = (U8)(s_carportObj | BUGGY_PRESENT);
+                Log_Info("[racemod] car_home: Twinsen here, the car under the carport at once (%d,%d,%d)", (int)s_carportX, (int)s_carportY, (int)s_carportZ);
+            }
         }
         s_carSeenAt = -2;
     }
@@ -13935,7 +13989,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -20018,6 +20072,7 @@ static void DarkFrame(void) {
 
 void RaceMod_Frame(void) {
     DarkFrame();
+    ExchangeFrame();
     RaceMod_InvKinds();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }

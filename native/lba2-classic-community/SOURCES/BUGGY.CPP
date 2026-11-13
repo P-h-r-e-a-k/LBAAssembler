@@ -35,6 +35,9 @@ void InitBuggy(U8 numobj, U32 flaginit) {
     S_BUGGY *ptb = &ListBuggy[0];
     T_OBJET *ptrobj = &ListObjet[numobj];
 
+    // (the carport's own place, as the scene has it, kept by a race-track mod's car_home= before anything here moves it: RACEMOD.CPP)
+    if (flaginit) RaceMod_CarportSeen(numobj);
+
     // Pour que les objets suivent leurs tracks sans etre interrompus
     // par le buggy (tant pis, il sera poussé)
     ptrobj->Flags |= (PUSHABLE | CHECK_CODE_JEU);
