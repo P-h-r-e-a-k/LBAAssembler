@@ -768,6 +768,9 @@ stop();
     internal static readonly (int X0, int X1, int Z0, int Z1)[] BedSides = { (3840, 6143, 512, 3327), (6144, 6911, 1024, 3327) };
     internal const int BedY0 = 2048, BedY1 = 3839;
     private const int IntoBed = 200, InBed = 201, Goodnight = 202, CandleOut = 203;
+    // (his goodnight said lying down: his talking animation the sleeping one for it -- the game's own, 28, back after; a hero who talks
+    // plays it, and he stood up out of bed to answer Zoe's "Don't forget the candle": the user, 2026-11-13)
+    private const int TalkAnim = 28;
     // (the front door's scenario zone, round its door, and a per-visit flag: Zoe's locked door said once each time he comes to it)
     private const int FrontDoorTry = 71, Once6 = 45;
     // the candle's flame on the bedside table (Citadel/CitadelNightHouse's candle: cell 12, layer 12, z 1 -- its wick's top), flickering
@@ -963,7 +966,9 @@ void comportement_3()
     if ({CandleOut} == l_track())
     {{
         {Aside($"message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeGoodnight)});")}
+        set_anim_dial({Asleep});
         message({EveningId(p.Say, EveningLine.TwinsenGoodnight)});
+        set_anim_dial({TalkAnim});
         kill_obj({flameIndex});
         fade_to_pal(3);
         set_var_game({DayVar}, {Night});
