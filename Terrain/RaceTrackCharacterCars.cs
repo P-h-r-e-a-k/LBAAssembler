@@ -500,6 +500,28 @@ internal static partial class RaceTrackCharacterCars
 
     public const string FunFrockEmptyName = "FunFrock's car, empty";
 
+    // The cars kept empty too, for their drivers standing beside them: the Desert racers' garage (the user, 2026-11-12: "let's just have each
+    // racer next to their car instead") and Raph's at the storm track's victory stop ("we'll need an empty copy of Raph's car") -- each the car
+    // with its driver (the seat's bone, 13, and every one after it: Finish) left out, the racer's entity's body EmptyFirst + its place here
+    public const int EmptyFirst = 64, DriverSeatBone = 13;
+    public static Car[] EmptyOnes => All.Where(c => c.Island == Desert).Append(Raph).Distinct().Take(100 - EmptyFirst).ToArray();
+    public static int? EmptyGeneric(int generic)
+    {
+        var k = Array.FindIndex(EmptyOnes, c => c.Generic == generic);
+        return k < 0 ? null : EmptyFirst + k;
+    }
+    public static Car? OfGeneric(int generic) => All.FirstOrDefault(c => c.Generic == generic);
+    public static Body WithoutDriver(Body car)
+    {
+        if (car.Bones.Count <= DriverSeatBone) return car;
+        var from = car.Bones[DriverSeatBone].Start;
+        bool Driver(int point) => point >= from;
+        car.Faces.RemoveAll(f => f.Points.All(Driver));
+        car.Lines.RemoveAll(l => Driver(l.A) && Driver(l.B));
+        car.Spheres.RemoveAll(sp => Driver(sp.Point));
+        return car;
+    }
+
     // Adds the cars to a game folder: each body at the end of BODY.HQR and, in the entity table (RESS.HQR entry 44), a body record giving it
     // to the racer's entity as its body 2, 3 or 4 (as RaceTrackBaldinoCar.Install). Returns the BODY.HQR indices and lines for the build's log.
     // (`only`: some of the cars, for a look at them while they are being made)
@@ -522,6 +544,16 @@ internal static partial class RaceTrackCharacterCars
             index[car.Name] = next;
             log.Add($"{car.Name}: BODY.HQR entry {next} ({body.Faces.Count} polygons, {body.Lines.Count} lines, {body.Spheres.Count} spheres, {body.Vertices.Count} points), " +
                     $"the racer's entity ({RaceTrackBaldinoCar.RacerEntity}) body {car.Generic}, {car.Driver} driving ({car.Island})");
+            next++;
+        }
+        // (the cars kept empty too: EmptyOnes)
+        foreach (var (car, body) in cars.Where(c => EmptyOnes.Contains(c.Car)))
+        {
+            var empty = WithoutDriver(Body.Read(body.Write(), 2));
+            bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(empty.Write()));
+            table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, EmptyGeneric(car.Generic)!.Value, next);
+            index[car.Name + ", empty"] = next;
+            log.Add($"{car.Name}, empty: BODY.HQR entry {next}, the racer's entity's body {EmptyGeneric(car.Generic)}");
             next++;
         }
         // (and FunFrock's car empty, for Polar Island's story's start: no entity's, the race-track mode draws it by its entry -- chase_car=)

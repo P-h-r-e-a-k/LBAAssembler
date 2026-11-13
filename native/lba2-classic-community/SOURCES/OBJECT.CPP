@@ -1256,6 +1256,8 @@ void ChangeCube() {
 
     // lance usine
     LoadScene(NewCube);
+    // (the race mod's actors past the cube's edges, put there: RACEMOD.CPP cube_shift_marks)
+    { extern void RaceMod_ScenePastEdge(void); RaceMod_ScenePastEdge(); }
 
     /* CubeMode is only known once the scene header is parsed, and the buffers
        resized here have to be in place before InitGrille fills them below. */
@@ -3849,10 +3851,14 @@ void DoAnim(U8 numobj) {
         APtObj->Col |= 128;
 
     /* protege sortie du cube */
+    // (but not the race mod's actors put past the cube's edges: RACEMOD.CPP cube_shift_marks)
+    extern S32 RaceMod_PastEdge(S32 num);
+    S32 pastEdge;
+    pastEdge = RaceMod_PastEdge(numobj);
 
-    if (Nxw < DEMI_BRICK_XZ)
+    if (Nxw < DEMI_BRICK_XZ AND !pastEdge)
         Nxw = DEMI_BRICK_XZ;
-    if (Nzw < DEMI_BRICK_XZ)
+    if (Nzw < DEMI_BRICK_XZ AND !pastEdge)
         Nzw = DEMI_BRICK_XZ;
 
     // mettre a jour test a 0
@@ -3863,9 +3869,9 @@ void DoAnim(U8 numobj) {
 
     // a mettre en commentaire ????
     // peut-etre pour les objets sortants du cube
-    if (Nxw > 64 * SIZE_BRICK_XZ - DEMI_BRICK_XZ)
+    if (Nxw > 64 * SIZE_BRICK_XZ - DEMI_BRICK_XZ AND !pastEdge)
         Nxw = 64 * SIZE_BRICK_XZ - DEMI_BRICK_XZ;
-    if (Nzw > 64 * SIZE_BRICK_XZ - DEMI_BRICK_XZ)
+    if (Nzw > 64 * SIZE_BRICK_XZ - DEMI_BRICK_XZ AND !pastEdge)
         Nzw = 64 * SIZE_BRICK_XZ - DEMI_BRICK_XZ;
 
     /* ok enregistre position */

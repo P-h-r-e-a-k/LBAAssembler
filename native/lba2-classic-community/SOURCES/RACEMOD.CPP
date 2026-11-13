@@ -647,6 +647,9 @@ static int s_beatText = -1;
 static int s_paradeOpp = -1, s_paradeVar = -1, s_paradeValue = 0;
 static int s_paradeScene[RACE_MAX_PARADE], s_paradeActor[RACE_MAX_PARADE], s_nbParade = 0;
 static int s_paradeParkScene = -1;
+// parade_empty=<generic>: the parade car's own body with no one in it (its entity's), shown while its driver -- parade_stop='s entity -- stands
+// out of it beside it (the user, 2026-11-12: "We also have Raph both in his car and standing up ... we'll need an empty copy of Raph's car")
+static int s_paradeEmpty = -1, s_paradeFullGen = -1, s_paradeEmptyOn = 0;
 static S32 s_paradeParkX, s_paradeParkY, s_paradeParkZ, s_paradeParkBeta;
 static double s_paradeS = 0, s_paradeSpeed = 0;
 static int s_paradeActorNow = -1;          // (its car in this scene -- solid, as the opponents' are: until 2026-11-05 nothing collided with it)
@@ -901,6 +904,17 @@ static int DeckLiftAction(int pressed);
 #define RACE_MAX_ACTORS_AT 256
 static struct { char File[16]; int Scene, Actor, X, Y, Z; } s_actorsAt[RACE_MAX_ACTORS_AT];      // (Actor -1 - n: the scene's point n)
 static int s_nbActorsAt = 0, s_actorsAtScene = -1;
+// cube_shift_marks=1: an actor whose scene puts it at a height of RACE_SHIFT or more stands past one of its cube's edges, a cube on: the
+// height's band of RACE_SHIFT_BAND says which -- +x, +z, -x, -z -- and its height in the band is its own. A scene's file can't put it there
+// (its places are 16-bit), nor would the engine leave it there (OBJECT.CPP keeps everything inside its cube): the racers' garage over the
+// Desert's cube edge, its people and cars copied into the scene on each side, all seen from either (the user, 2026-11-12: "not all racers
+// are in view at the same time, some of them turn invisible"). Moved there as the scene loads, and left standing: no falling, no bricks
+// tested out there, not kept inside the cube (RaceMod_PastEdge).
+#define RACE_SHIFT 24576
+#define RACE_SHIFT_BAND 2048
+static int s_cubeShiftMarks = 0;
+static U8 s_pastEdge[MAX_OBJETS];
+static int s_pastEdgeDue = 0;   // (a scene loaded: its marks read on the first frame -- the island's track file, with the key, may come after)
 #define RACE_CHASE_PAUSE_MS 2600           // FunFrock driving off before Twinsen speaks
 #define RACE_DREAM_END_FLIGHT_MS 1600      // dream_any_end=: the one to beat over the jump this long before the dream fades
 static int s_fadeFromWhite = 0;             // the waking scene fades in from white (set by the wake; RaceMod_FadeFromWhite takes it)
@@ -4258,6 +4272,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d", &s_chaseEmpty, &s_chaseEmptyAnim, &s_chaseDriverEnt) != 3) s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1;
         }
         else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
+        else if (!strcmp(key, "cube_shift_marks")) s_cubeShiftMarks = atoi(v);
         else if (!strcmp(key, "actor_at") && s_nbActorsAt >= RACE_MAX_ACTORS_AT) Log_Warn("[racemod] too many actor_at lines: %s left out", v);
         else if (!strcmp(key, "actor_at") && s_nbActorsAt < RACE_MAX_ACTORS_AT) {
             char who[16];
@@ -4985,6 +5000,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "parade_actor")) {
             if (s_nbParade < RACE_MAX_PARADE && sscanf(v, "%d %d", &s_paradeScene[s_nbParade], &s_paradeActor[s_nbParade]) == 2) s_nbParade++;
         }
+        else if (!strcmp(key, "parade_empty")) { s_paradeEmpty = atoi(v); s_paradeFullGen = -1; s_paradeEmptyOn = 0; }
         else if (!strcmp(key, "parade_park")) {
             int scene, x, y, z, beta;
             if (sscanf(v, "%d %d %d %d %d", &scene, &x, &y, &z, &beta) == 5) { s_paradeParkScene = scene; s_paradeParkX = x; s_paradeParkY = y; s_paradeParkZ = z; s_paradeParkBeta = beta; }
@@ -7387,6 +7403,24 @@ static void ParadeStep(S32 now, S32 dt) {
     car->Obj.Alpha = 0; car->Obj.Gamma = 0;
     ClearRealAngle(car);
     if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
+    // (its driver standing out of it, beside it -- seen, not inside it: the car empty; else as it is)
+    if (s_paradeEmpty >= 0 && s_paradeTalker >= 0) {
+        // (and once out, empty till it drives again: he's walked off, not back in it)
+        int out = !moving && s_paradeEmptyOn;
+        if (!moving)
+            for (int i = 1; i < NbObjets && !out; i++) {
+                const T_OBJET *d = &ListObjet[i];
+                if (i == index || d->IndexFile3D != s_paradeTalker || (d->Flags & INVISIBLE) || d->LifePoint <= 0) continue;
+                const double ddx = d->Obj.X - car->Obj.X, ddz = d->Obj.Z - car->Obj.Z, dd = ddx * ddx + ddz * ddz;
+                if (dd > 400.0 * 400.0 && dd < 6000.0 * 6000.0 && abs(d->Obj.Y - car->Obj.Y) < 1500) out = 1;
+            }
+        if (out != s_paradeEmptyOn) {
+            if (out && s_paradeFullGen < 0) s_paradeFullGen = car->GenBody;
+            if (out || s_paradeFullGen >= 0) InitBody((U8)(out ? s_paradeEmpty : s_paradeFullGen), (U8)index);
+            s_paradeEmptyOn = out;
+            Log_Info("[racemod] parade: the car %s (body %d)", out ? "empty, its driver out beside it" : "with its driver in it", (int)car->GenBody);
+        }
+    }
 }
 
 // MESSAGE.CPP GetText: the text that tells the time to beat (beat_text=), its "##" made the time -- the opponent's planned lap at the
@@ -12790,7 +12824,10 @@ S32 RaceMod_NoTopSpeed(void) {
 }
 
 // EXTFUNC.CPP DoAnimExt: an opponent's car, placed where it is on the lap, not kept inside the player's cube.
+S32 RaceMod_PastEdge(S32 num);
 S32 RaceMod_FreeOfCube(S32 numobj) {
+    // (and the actors put past the cube's edges: cube_shift_marks)
+    if (RaceMod_PastEdge(numobj)) return 1;
     if (!RaceMod_Active() || numobj <= 0 || s_carsScene != (S32)NumCube) return 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_carActor[n] == numobj) return 1;
     return 0;
@@ -19558,7 +19595,36 @@ static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count);
 
 // The actors in the way of this weather's road only (actor_at=), put aside as their scene starts: its first frame, after the scripts'
 // own first placing
+// (as the scene loads -- OBJECT.CPP ChangeCube: the marks to be read; on its first frame, read: cube_shift_marks)
+void RaceMod_ScenePastEdge(void) {
+    memset(s_pastEdge, 0, sizeof(s_pastEdge));
+    s_pastEdgeDue = 1;
+}
+static void PastEdgeMarks(void) {
+    if (!s_pastEdgeDue || NewCube != -1) return;
+    s_pastEdgeDue = 0;
+    if (!s_cubeShiftMarks || CubeMode != CUBE_EXTERIEUR) return;
+    int moved = 0;
+    for (int i = 1; i < NbObjets && i < MAX_OBJETS; i++) {
+        T_OBJET *a = &ListObjet[i];
+        if (a->Obj.Y < RACE_SHIFT || a->Obj.Y >= RACE_SHIFT + 4 * RACE_SHIFT_BAND) continue;
+        const int band = (a->Obj.Y - RACE_SHIFT) / RACE_SHIFT_BAND;
+        a->Obj.Y -= RACE_SHIFT + band * RACE_SHIFT_BAND;
+        if (band == 0) a->Obj.X += 32768;
+        else if (band == 1) a->Obj.Z += 32768;
+        else if (band == 2) a->Obj.X -= 32768;
+        else a->Obj.Z -= 32768;
+        a->Flags &= ~(U32)(OBJ_FALLABLE | CHECK_BRICK_COL);
+        s_pastEdge[i] = 1;
+        Log_Info("[racemod] cube_shift_marks: actor %d to (%d,%d,%d)", i, (int)a->Obj.X, (int)a->Obj.Y, (int)a->Obj.Z);
+        moved++;
+    }
+    if (moved) Log_Info("[racemod] cube_shift_marks: %d actors of scene %d past the cube's edges", moved, (int)NumCube);
+}
+S32 RaceMod_PastEdge(S32 num) { return num > 0 && num < MAX_OBJETS && s_pastEdge[num]; }
+
 static void ActorsAt(void) {
+    PastEdgeMarks();
     if (NewCube != -1 || (S32)NumCube == s_actorsAtScene) return;
     s_actorsAtScene = NumCube;
     for (int i = 0; i < s_nbActorsAt; i++) {
@@ -22487,13 +22553,13 @@ static void ResetTrack(void) {
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0; s_pullQuiet = 0; s_pullAway = 0;
     s_nbWalkers = 0; s_walkerText = s_walker = -1; s_walkerRest = 0;
-    s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
+    s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeEmpty = -1; s_paradeFullGen = -1; s_paradeEmptyOn = 0; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_nbFootRooms = 0; s_footRoom = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_unlockWin[0] = s_unlockBeat[0] = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
-    s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
+    s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1; s_cubeShiftMarks = 0;
     s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0; s_nbDoorsTo = 0; s_footEdge = 0; s_nbFootGaps = 0; s_swimming = s_poolDive = 0;
     s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_trialHide[0] = s_trialHide[1] = -1; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;

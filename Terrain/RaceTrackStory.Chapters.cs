@@ -1766,7 +1766,8 @@ void comportement_2()
     // user, 2026-11-08, "The lighthouse's ground-floor door doesn't work in CITABAU.ILE ... teleport Twinsen to the top and back down again
     // when he uses the doors". Only once he's been out of its zone since he last came through it: DoorAway.)
     public const int ScopeVar = 227;
-    private const int CowScene = 47, LighthouseTop = 60, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
+    // (ScopeSide: the balcony by the telescope, west of the spell's place, LighthouseTop)
+    private const int CowScene = 47, LighthouseTop = 60, ScopeSide = 61, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
     private const int Hops = 40, HopLabel = 10, Hopped = 11, Watch = 12, Watched = 13, HeroWatching = 20;
     private static readonly (int X, int Y, int Z) WizardAtCow = (22600, 8700, 23552), DoorStep = (16600, 3300, 11152);
@@ -1791,6 +1792,9 @@ void comportement_2()
             model.TrackPoints.Add(new SceneTrackPoint(DoorStep.X, DoorStep.Y, DoorStep.Z));
             int upTo = arrive, downTo = arrive + 1;
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = LighthouseTop, X0 = top.X - 300, X1 = top.X + 400, Z0 = top.Z - 350, Z1 = top.Z + 400, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
+            // (and the balcony by the telescope itself, west of that: the telescope stands outside the spell's place -- walked up to it,
+            // Action did nothing; the user, 2026-11-12, "The telescope doesn't appear to work immediately after the cut scene")
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = ScopeSide, X0 = top.X - 1100, X1 = top.X - 301, Z0 = top.Z - 1250, Z1 = top.Z + 400, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
             var scope = RaceTrackScenes.InvisibleHelper(Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY + 900, Citadel.CitadelLighthouse.ScopeZ, 9);
             var index = model.Actors.Count;
             var life = p.Add(model, scope, $@"void comportement_0()
@@ -1832,9 +1836,9 @@ void comportement_1()
                 set_track_obj(0, label_{Up});
                 set_comportement(comportement_2);
             }}
-            else if ({LighthouseTop} == zone_obj(0))
+            else if ({ScopeSide} == zone_obj(0) || {LighthouseTop} == zone_obj(0))
             {{
-                if (1536 < beta_obj(0) && 2560 > beta_obj(0))
+                if ({ScopeSide} == zone_obj(0) || (2150 < beta_obj(0) && 3072 > beta_obj(0)))
                 {{
                     add_choice({ScopeNo});
                     add_choice({ScopeYes});
@@ -1860,7 +1864,7 @@ void comportement_1()
                         }}
                     }}
                 }}
-                else if (512 < beta_obj(0) && 1536 > beta_obj(0))
+                else if (512 < beta_obj(0) && 2150 > beta_obj(0))
                 {{
                     set_dir_obj(0, NO_MOVE);
                     set_track_obj(0, label_{Down});

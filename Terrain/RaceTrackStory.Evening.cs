@@ -734,8 +734,8 @@ stop();
                 scripts.SetText(zoeIndex, ScriptKind.Life, ZoeLife($"set_dir_obj(0, NO_MOVE);\n                set_track_obj(0, label_{Down});\n                set_comportement_obj({helper}, comportement_2);"));
                 var down = $"set_dir_obj(0, NO_MOVE);\n            set_track_obj(0, label_{Down});\n            set_comportement(comportement_2);";
                 var text = scripts.GetText(helper, ScriptKind.Life);
-                text = Loose(text, $"else if (512 < beta_obj(0) && 1536 > beta_obj(0))\n{{\nset_dir_obj(0, NO_MOVE);\nset_track_obj(0, label_{Down});\nset_comportement(comportement_2);\n}}",
-                    $@"else if (512 < beta_obj(0) && 1536 > beta_obj(0))
+                text = Loose(text, $"else if (512 < beta_obj(0) && 2150 > beta_obj(0))\n{{\nset_dir_obj(0, NO_MOVE);\nset_track_obj(0, label_{Down});\nset_comportement(comportement_2);\n}}",
+                    $@"else if (512 < beta_obj(0) && 2150 > beta_obj(0))
                 {{
                     if (2 > chapter() && {Tired} == var_game({DayVar}) && 0 == var_game({QEvening}))
                     {{

@@ -26,13 +26,16 @@ internal static partial class RaceTrackStory
     // Q_FILTERS: 0 nothing, 1 Baldino has given the filters, 2 Zoe has fitted them (a spare game variable: RaceTrackStory.Eggs.cs's list)
     public const int QFilters = 106, FiltersGiven = 1, FiltersFitted = 2;
     public const int FiltersSlot = 39, FiltersModel = 156;
+    // (an actor's height in its scene's file over CubeShift: a cube past one of its cube's edges -- the band of CubeShiftBand it's in: +x, +z,
+    // -x, -z -- its height in the band its own: RACEMOD.CPP cube_shift_marks)
+    internal const int CubeShift = 24576, CubeShiftBand = 2048;
     // the breakdown: after which checkpoint of the first lap, and how fast the car goes then (units a second: about 13 km/h)
     private const int BreakdownCheckpoint = 2, BreakdownSpeed = 1800;
     private const string BreakdownText = "Sand in the engine! Zoe needs Baldino's sand filters: back to the garage.";
 
     // The Desert race file's lines for the filters
     internal static string GarageRaceLines() =>
-        $"inv_kinds={FiltersSlot} {FiltersModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\n" +
+        $"cube_shift_marks=1\ninv_kinds={FiltersSlot} {FiltersModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\n" +
         // (and Chedil Amiradoo on his magic carpet, round the island: on the ground as the game had him, but never under the track's raised
         // ground nor stopped by its decors, and well over the road wherever he comes near it -- F14, the user, 2026-11-08: "raise his
         // actors path above ground", "check that during a race he won't be in the way of the track at any point": RACEMOD.CPP hover=)
@@ -133,23 +136,31 @@ internal static partial class RaceTrackStory
         if (size.Bays > 0)
         {
             // A bay for each car (the user, 2026-11-11: "A specific garage space for every car with room around them to be worked on"):
-            // the tent's back, size.Bays of them side by side, each car in the middle of its own nose out, a mechanic at work beside it.
+            // the tent's back, size.Bays of them side by side, each car in the middle of its own nose out, its racer standing beside it --
+            // the car empty (RaceTrackCharacterCars.EmptyOnes), no Esmer mechanics (the user, 2026-11-12: "There's also an Esmer Sup with a gun
+            // standing next to each racer, let's just have each racer next to their car instead").
             // The first bay, the end nearest the start line, is Twinsen's: his car is out on the road, Zoe waits in it with the tools.
             double hl = size.Long * 256, hd = size.Deep * 256, w = 2 * hl / size.Bays, bayV = -hd + size.BayDeep * 512 / 2;
+            var kinds = Lba2EntityTable.Load(gameDirectory);
             for (var k = 1; k < size.Bays && k - 1 < grid.Count; k++)
             {
                 var u = -hl + w * (k + 0.5);
                 var car = grid[k - 1].Clone();
                 car.Flags &= ~1u;
-                people.Add((car, u, bayV, facingOut, stand, "a car in its bay"));
-                if (mechanic is not null)
+                var who = RaceTrackCharacterCars.OfGeneric(car.Body);
+                var empty = RaceTrackCharacterCars.EmptyGeneric(car.Body);
+                var racer = who is not null && kinds?.KindForBody(who.Character) is { } kind ? kind : ((int Entity, int Body, int Anim)?)null;
+                if (empty is { } e && racer is not null) car.Body = e;
+                people.Add((car, u, bayV, facingOut, stand, empty is not null && racer is not null ? $"{who!.Name}, empty" : "a car in its bay"));
+                if (racer is { } r && empty is not null && mechanic is not null)
                 {
-                    // (by the car's side, a little towards the front, turned to it -- the car's side alternating bay by bay)
+                    // (its racer by its side, a little towards the front, turned to the tent's way out -- the side alternating bay by bay)
                     var side = k % 2 == 0 ? 1 : -1;
-                    var mu = u + side * w * 0.3;
-                    var beta = RaceTrackMath.Turn(Math.Atan2(-side * g.AlongX, -side * g.AlongZ));
-                    people.Add((mechanic.Clone(), mu, bayV + 400, beta, stand, "a mechanic"));
+                    var man = mechanic.Clone();
+                    man.Entity = r.Entity; man.Body = r.Body; man.Anim = r.Anim;
+                    people.Add((man, u + side * w * 0.3, bayV + 500, facingOut, stand, who!.Driver));
                 }
+                else log.Add($"the racers' garage: bay {k + 1}'s car (body {grid[k - 1].Body}) has no empty copy or no racer to stand by it -- the car as it is");
             }
             zoeU = -hl + w * 0.5; zoeV = bayV + 600;
             baldinoU = 0; baldinoV = -hd + size.BayDeep * 512 + 900;
@@ -201,24 +212,37 @@ internal static partial class RaceTrackStory
             {{
                 message({say(DesertLine.ZoeReady)});
             }}"), "Zoe"));
-        // each into its cube's scene
-        var scenes = b.OutsideScenes.ToDictionary(s => (b.Store.Load(s).CubeX, b.Store.Load(s).CubeY));
-        foreach (var group in people.GroupBy(p =>
-                 {
-                     double wx = g.X * 512 + g.AlongX * p.U + g.OutX * p.V, wz = g.Z * 512 + g.AlongZ * p.U + g.OutZ * p.V;
-                     return ((int)Math.Floor(wx / IslandFile.CubeSize), (int)Math.Floor(wz / IslandFile.CubeSize));
-                 }))
+        // each into the scene of every cube the tent reaches, so all are seen from any of them (the user, 2026-11-12: "not all racers are in
+        // view at the same time, some of them turn invisible" -- the tent stands over the cube's edge); placed past a cube's far edge, the
+        // scene's file can't hold it: marked by its height (RACEMOD.CPP cube_shift_marks, the race file's: RaceKeysA)
+        double hlong = size.Long * 256 + 512, hdeep = size.Deep * 256 + 512;
+        var reached = new HashSet<(int, int)>();
+        foreach (var (cu, cv) in new[] { (-1, -1), (-1, 1), (1, -1), (1, 1), (0, 0) })
         {
-            if (!scenes.TryGetValue(group.Key, out var scene)) { log.Add($"the racers' garage: no outside scene for cube {group.Key} -- {string.Join(", ", group.Select(p => p.Who))} left out"); continue; }
-            b.Edit(scene, $"the racers' garage: {string.Join(", ", group.Select(p => p.Who))}", model =>
+            double wx = g.X * 512 + g.AlongX * hlong * cu + g.OutX * hdeep * cv, wz = g.Z * 512 + g.AlongZ * hlong * cu + g.OutZ * hdeep * cv;
+            reached.Add(((int)Math.Floor(wx / IslandFile.CubeSize), (int)Math.Floor(wz / IslandFile.CubeSize)));
+        }
+        var scenes = b.OutsideScenes.ToDictionary(s => (b.Store.Load(s).CubeX, b.Store.Load(s).CubeY));
+        foreach (var cube in reached)
+        {
+            if (!scenes.TryGetValue(cube, out var scene)) { log.Add($"the racers' garage: no outside scene for cube {cube}"); continue; }
+            b.Edit(scene, $"the racers' garage: {string.Join(", ", people.Select(p => p.Who))}", model =>
             {
                 var edits = new List<Action<SceneScripts>>();
-                foreach (var (actor, u, v, beta, life, _) in group)
+                foreach (var (actor0, u, v, beta, life, who) in people)
                 {
+                    var actor = actor0.Clone();
                     double wx = g.X * 512 + g.AlongX * u + g.OutX * v, wz = g.Z * 512 + g.AlongZ * u + g.OutZ * v;
-                    actor.X = (int)Math.Round(wx - group.Key.Item1 * IslandFile.CubeSize);
-                    actor.Z = (int)Math.Round(wz - group.Key.Item2 * IslandFile.CubeSize);
-                    actor.Y = (int)Math.Round(g.Y);
+                    int x = (int)Math.Round(wx - cube.Item1 * IslandFile.CubeSize), z = (int)Math.Round(wz - cube.Item2 * IslandFile.CubeSize), y = (int)Math.Round(g.Y);
+                    // (one cube past an edge: its band's height over CubeShift, the place a cube back -- or, inside, as it is)
+                    int band = x >= IslandFile.CubeSize ? 0 : z >= IslandFile.CubeSize ? 1 : x < 0 ? 2 : z < 0 ? 3 : -1;
+                    if (band >= 0)
+                    {
+                        if (band == 0) x -= IslandFile.CubeSize; else if (band == 1) z -= IslandFile.CubeSize; else if (band == 2) x += IslandFile.CubeSize; else z += IslandFile.CubeSize;
+                        if (x < 0 || z < 0 || x >= IslandFile.CubeSize || z >= IslandFile.CubeSize || y < 0 || y >= CubeShiftBand) { log.Add($"the racers' garage: {who} too far from scene {scene}'s cube"); continue; }
+                        y += CubeShift + band * CubeShiftBand;
+                    }
+                    actor.X = x; actor.Y = y; actor.Z = z;
                     actor.Beta = beta;
                     edits.Add(IslandBeatsA.Add(model, actor, life));
                 }
