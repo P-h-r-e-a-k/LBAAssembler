@@ -208,6 +208,7 @@ internal static class PolarDream
         set_var_game(94, 1);
         set_var_game(253, 1);
         cinema_mode(1);
+        comportement_hero(0);
         pos_point({bed});
         beta({bedBeta});
         shadow_obj(0, 0);

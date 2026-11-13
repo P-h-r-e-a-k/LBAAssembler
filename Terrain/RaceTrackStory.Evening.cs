@@ -933,6 +933,7 @@ void comportement_1()
             message({p.Said(Line.Sleep)});
             fade_to_pal(3);
             shadow_obj(0, 0);
+            comportement_hero(0);
             pos_point({bed});
             beta(0);
             anim({Asleep});

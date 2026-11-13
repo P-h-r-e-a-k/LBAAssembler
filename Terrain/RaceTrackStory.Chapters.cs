@@ -1243,6 +1243,7 @@ void comportement_1()
     if ({Night} == var_game({DayVar}))
     {{
         cinema_mode(1);
+        comportement_hero(0);
         pos_point({bed});
         beta(0);
         shadow_obj(0, 0);
