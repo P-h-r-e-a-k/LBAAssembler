@@ -664,6 +664,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"tired_skip={Citadel.TraluBarRoom.Scene}\n");
             // (Stella Entities' money is zlitos, the hall's and the private room's, and its change machine -- RaceTrackStory.StellaLounge.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"zlitos_scene={StellaEntities.Scene} {StellaRooms.Private}\nexchange={RaceTrackStory.ExchangeVar}\n");
+            // (the Dino-Fly's "Where do you want to go?" on Polar Island: Esc is "I'm staying here.", its last answer -- Polar/PolarDinofly.cs)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"{Polar.PolarDinofly.EscLastLine(RaceTrackIsland.Polar.IslandByte)}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

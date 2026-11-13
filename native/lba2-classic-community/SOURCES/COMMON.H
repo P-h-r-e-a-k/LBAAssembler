@@ -554,7 +554,8 @@ S32 RaceMod_RainChoice(void), RaceMod_SnowChoice(void);
 // Pour definir si on utilise des Kashes ou des Zlitos
 // Zlitos are the money of Zeelich (Planet 2), of the world under its gas (3) and of the Emerald Moon (1); Kashes of Twinsun (0).
 S32 RaceMod_Zlitos(void);
-void RaceMod_CarportSeen(S32 numobj);   // (RACEMOD.CPP car_home=: the carport's car's place as its scene loads)   // (RACEMOD.CPP zlitos_scene=: a scene whose money is zlitos, wherever it is)
+void RaceMod_CarportSeen(S32 numobj);
+S32 RaceMod_EscLast(S32 dial);   // (RACEMOD.CPP esc_last=: a question whose Esc takes its last answer)   // (RACEMOD.CPP car_home=: the carport's car's place as its scene loads)   // (RACEMOD.CPP zlitos_scene=: a scene whose money is zlitos, wherever it is)
 #define	MONEY_ZLITOS	(Planet>=1 || RaceMod_Zlitos())
 #define	SPRITE_PIECE	(SPRITE_KASHES+(MONEY_ZLITOS?1:0))
 

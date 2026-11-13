@@ -4598,10 +4598,12 @@ void GameAskChoice(S32 nummess) {
     if (DoGameMenu(GameChoiceMenu) != 1000)
         GameChoice = GameListChoice[GameChoiceMenu[0]]; // ret num mess
     else {
-        GameChoice = GameListChoice[0]; // ESC
+        // (a race-track mod's question can have Esc take its last answer: esc_last=, RACEMOD.CPP)
+        const S32 esc = RaceMod_EscLast(nummess) ? GameNbChoices - 1 : 0;
+        GameChoice = GameListChoice[esc]; // ESC
 
         // redessine curseur
-        GameChoiceMenu[0] = 0;
+        GameChoiceMenu[0] = (U16)esc;
         DrawGameMenu(GameChoiceMenu, FALSE);
     }
 

@@ -1452,6 +1452,14 @@ S32 RaceMod_Zlitos(void) {
     for (int k = 0; k < s_nbZlitoScenes; k++) if ((S32)NumCube == s_zlitoScenes[k]) return 1;
     return 0;
 }
+// esc_last=<island> <dial>: a question (its text, on that island) whose Esc takes its last answer, not the first -- the Dino-Fly's on Polar
+// Island, its last "I'm staying here." (the user, 2026-11-13: "The user pressing escape on this dialog should select I'm staying here.")
+#define RACE_MAX_ESC_LAST 8
+static int s_escLast[RACE_MAX_ESC_LAST][2], s_nbEscLast = 0;
+S32 RaceMod_EscLast(S32 dial) {
+    for (int k = 0; k < s_nbEscLast; k++) if (s_escLast[k][0] == (int)Island && s_escLast[k][1] == (int)dial) return 1;
+    return 0;
+}
 static void ExchangeFrame(void) {
     if (s_exchangeVar < 0 || s_exchangeVar > 255 || ListVarGame[s_exchangeVar] == 0) return;
     ListVarGame[s_exchangeVar] = 0;
@@ -4980,6 +4988,10 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
+        else if (!strcmp(key, "esc_last")) {
+            int isl, dial;
+            if (!setRead && s_nbEscLast < RACE_MAX_ESC_LAST && sscanf(v, "%d %d", &isl, &dial) == 2) { s_escLast[s_nbEscLast][0] = isl; s_escLast[s_nbEscLast][1] = dial; s_nbEscLast++; }
+        }
         else if (!strcmp(key, "tired_skip")) {
             int scene, used = 0;
             if (!setRead) {
@@ -7474,8 +7486,11 @@ static void ParadeStep(S32 now, S32 dt) {
                 const double ddx = d->Obj.X - car->Obj.X, ddz = d->Obj.Z - car->Obj.Z, dd = ddx * ddx + ddz * ddz;
                 if (dd > 400.0 * 400.0 && dd < 6000.0 * 6000.0 && abs(d->Obj.Y - car->Obj.Y) < 1500) out = 1;
             }
-        if (out != s_paradeEmptyOn) {
-            if (out && s_paradeFullGen < 0) s_paradeFullGen = car->GenBody;
+        // (and again whenever the car has its driver in while it should be empty: the scene loaded again -- Twinsen back at the start line
+        // -- makes the car afresh with him in it, and the flag alone said it was empty already: Raph in his car and beside it, the user,
+        // 2026-11-13, "We still have Raph both in the car, and by the car")
+        if (out != s_paradeEmptyOn || (out && car->GenBody != s_paradeEmpty)) {
+            if (out && car->GenBody != s_paradeEmpty) s_paradeFullGen = car->GenBody;
             if (out || s_paradeFullGen >= 0) InitBody((U8)(out ? s_paradeEmpty : s_paradeFullGen), (U8)index);
             s_paradeEmptyOn = out;
             Log_Info("[racemod] parade: the car %s (body %d)", out ? "empty, its driver out beside it" : "with its driver in it", (int)car->GenBody);
@@ -13989,7 +14004,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)

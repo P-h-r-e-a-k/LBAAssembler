@@ -26,6 +26,10 @@ internal static class PolarDinofly
     // (the game variable his talk sets: the achievement "Spoke to the Dinofly", RACEMOD.CPP achieve=)
     public const int TalkedVar = 194;
     public const int AskText = 26, BrundleText = 27, TippetText = 28, NotThisGameText = 29;
+    // (the user, 2026-11-13: four answers, in this order -- "To the Hamalayi mountains", "To Tippett island", "To Brundle island", "I'm staying
+    // here." -- the first three his line, the last nothing; Esc the last: RACEMOD.CPP esc_last=, the race file's, EscLastLine)
+    public const int HamalayiText = 30, StayText = 31;
+    public static string EscLastLine(int island) => $"esc_last={island} {AskText}";
 
     private static readonly string[] Ask =
     {
@@ -33,11 +37,19 @@ internal static class PolarDinofly
     };
     private static readonly string[] Brundle =
     {
-        "Brundle Island", "Île de Brundle", "Brundle-Insel", "Isla Brundle", "Isola di Brundle", "Ilha de Brundle",
+        "To Brundle island", "Vers l'île de Brundle", "Zur Brundle-Insel", "A la isla Brundle", "All'isola di Brundle", "Para a ilha de Brundle",
     };
     private static readonly string[] Tippet =
     {
-        "Tippet Island", "Île de Tippet", "Tippet-Insel", "Isla Tippet", "Isola di Tippet", "Ilha de Tippet",
+        "To Tippett island", "Vers l'île de Tippett", "Zur Tippett-Insel", "A la isla Tippett", "All'isola di Tippett", "Para a ilha de Tippett",
+    };
+    private static readonly string[] Hamalayi =
+    {
+        "To the Hamalayi mountains", "Vers les monts Hamalayi", "Zu den Hamalayi-Bergen", "A las montañas Hamalayi", "Ai monti Hamalayi", "Para as montanhas Hamalayi",
+    };
+    private static readonly string[] Stay =
+    {
+        "I'm staying here.", "Je reste ici.", "Ich bleibe hier.", "Me quedo aquí.", "Resto qui.", "Fico aqui.",
     };
     private static readonly string[] NotThisGame =
     {
@@ -56,6 +68,8 @@ internal static class PolarDinofly
         yield return (BrundleText, Brundle[words]);
         yield return (TippetText, Tippet[words]);
         yield return (NotThisGameText, NotThisGame[words]);
+        yield return (HamalayiText, Hamalayi[words]);
+        yield return (StayText, Stay[words]);
     }
 
     // He stands at (x, y, z) in `model`, facing `beta`, his script compiled
@@ -68,13 +82,21 @@ internal static class PolarDinofly
         var index = model.Actors.Count - 1;
         var life = $@"void comportement_0()
 {{
-    if (1 == action() && 1500 > distance(0))
+    swif (1 == action())
     {{
-        add_choice({BrundleText});
-        add_choice({TippetText});
-        ask_choice_obj({index}, {AskText});
-        message_obj({index}, {NotThisGameText});
-        set_var_game({TalkedVar}, 1);
+        if (1500 > distance(0))
+        {{
+            add_choice({HamalayiText});
+            add_choice({TippetText});
+            add_choice({BrundleText});
+            add_choice({StayText});
+            ask_choice_obj({index}, {AskText});
+            if ({StayText} != choice())
+            {{
+                message_obj({index}, {NotThisGameText});
+            }}
+            set_var_game({TalkedVar}, 1);
+        }}
     }}
 }}
 ";
