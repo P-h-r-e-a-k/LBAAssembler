@@ -503,7 +503,10 @@ internal static partial class RaceTrackCharacterCars
     // The cars kept empty too, for their drivers standing beside them: the Desert racers' garage (the user, 2026-11-12: "let's just have each
     // racer next to their car instead") and Raph's at the storm track's victory stop ("we'll need an empty copy of Raph's car") -- each the car
     // with its driver (the seat's bone, 13, and every one after it: Finish) left out, the racer's entity's body EmptyFirst + its place here
-    public const int EmptyFirst = 64, DriverSeatBone = 13;
+    // (from 80: the special cars -- the toy truck, the monsters' coffin, broomstick and hearse, the digger, the turkey, the goose, the gold
+    // black car -- are the racer's entity's 65-72, made later in the build, and took these numbers over: Raph's empty car came out the
+    // pardoned turkey's platter, the user, 2026-11-13, "Raph's car on the start line has appeared to turn into a turkey car")
+    public const int EmptyFirst = 80, DriverSeatBone = 13;
     public static Car[] EmptyOnes => All.Where(c => c.Island == Desert).Append(Raph).Distinct().Take(100 - EmptyFirst).ToArray();
     public static int? EmptyGeneric(int generic)
     {
