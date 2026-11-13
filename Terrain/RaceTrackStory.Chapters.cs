@@ -1775,6 +1775,14 @@ void comportement_2()
     // (walked into the door at the foot only once he has been out of its zone since he last came through it: come down, he stands in it,
     // and turning round there -- or the way on west, round the tower -- took him straight back up)
     private const int DoorAway = 48;
+    // (the lamp room's door at the top, LampDoor (pressed against it) and DoorFront (in front of it): walked into -- once he's been out of it since he came up, TopAway -- it takes him down,
+    // as the door at the foot takes him up; and Action anywhere in it goes down whichever way he faces. Only the balcony beside the telescope,
+    // ScopeSide, or facing the telescope elsewhere on the top asks about the telescope. The way down was Action in the spell's place facing
+    // the door alone -- a box round where the spell left him, the door due north of it on the line between "facing the door" and "facing
+    // the telescope": the user, 2026-11-13, a third time, "The door to go down at the top of the lighthouse still doesn't work")
+    // (none of it till the spell's evening on the top is over -- Zoe's question asked: the spell leaves Twinsen standing in DoorFront, and
+    // an Action pressed through the scene took him down in the middle of it, for good; RaceTrackStory.Evening.cs ZoeWaits)
+    private const int LampDoor = 62, DoorFront = 63, TopAway = 49;
     // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
@@ -1795,6 +1803,11 @@ void comportement_2()
             // (and the balcony by the telescope itself, west of that: the telescope stands outside the spell's place -- walked up to it,
             // Action did nothing; the user, 2026-11-12, "The telescope doesn't appear to work immediately after the cut scene")
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = ScopeSide, X0 = top.X - 1100, X1 = top.X - 301, Z0 = top.Z - 1250, Z1 = top.Z + 400, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
+            // (the lamp room's door: on the walkway's east side, its face at the spell's place's x -- Twinsen walked up to it stands at
+            // about (13482, 10622), against it; LampDoor the strip he stands in pressed against it, DoorFront the walkway in front of it, west
+            // of that -- neither overlapping the other zones, as only one zone is his at a time)
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = LampDoor, X0 = 13440, X1 = 13900, Z0 = 10350, Z1 = 10771, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = DoorFront, X0 = 13250, X1 = 13439, Z0 = 10350, Z1 = 10771, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
             var scope = RaceTrackScenes.InvisibleHelper(Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY + 900, Citadel.CitadelLighthouse.ScopeZ, 9);
             var index = model.Actors.Count;
             var life = p.Add(model, scope, $@"void comportement_0()
@@ -1826,6 +1839,14 @@ void comportement_1()
         set_track_obj(0, label_{Up});
         set_comportement(comportement_2);
     }}
+    if ({LampDoor} != zone_obj(0))
+    {{
+        set_var_cube({TopAway}, 1);
+    }}
+    if (1 == var_cube({TopAway}) && 4 < var_game({KeeperPlot}) && {Driving} != comportement_hero() && {LampDoor} == zone_obj(0) && (0 == var_cube({Once5}) || {ZoeAsksAfter} < var_cube({ZoeWaits})))
+    {{
+        set_comportement(comportement_3);
+    }}
     swif (1 == action())
     {{
         if (4 < var_game({KeeperPlot}) && {Driving} != comportement_hero())
@@ -1835,6 +1856,36 @@ void comportement_1()
                 set_dir_obj(0, NO_MOVE);
                 set_track_obj(0, label_{Up});
                 set_comportement(comportement_2);
+            }}
+            else if ((0 == var_cube({Once5}) || {ZoeAsksAfter} < var_cube({ZoeWaits})) && ({LampDoor} == zone_obj(0) || ({DoorFront} == zone_obj(0) && (2151 > beta_obj(0) || 3583 < beta_obj(0)))))
+            {{
+                set_comportement(comportement_3);
+            }}
+            else if ({DoorFront} == zone_obj(0))
+            {{
+                add_choice({ScopeNo});
+                add_choice({ScopeYes});
+                ask_choice_obj({index}, {ScopeAsk});
+                if ({ScopeYes} == choice())
+                {{
+                    if (2 < nb_gold_pieces())
+                    {{
+                        give_gold_pieces(3);
+                        if (1 == chapter())
+                        {{
+                            set_var_cube({StormLook}, 1);
+                        }}
+                        else
+                        {{
+                            set_var_game({ScopeVar}, 1);
+                            change_cube({CowScene});
+                        }}
+                    }}
+                    else
+                    {{
+                        message_obj(0, {NoKashes});
+                    }}
+                }}
             }}
             else if ({ScopeSide} == zone_obj(0) || {LighthouseTop} == zone_obj(0))
             {{
@@ -1864,11 +1915,9 @@ void comportement_1()
                         }}
                     }}
                 }}
-                else if (512 < beta_obj(0) && 2150 > beta_obj(0))
+                else
                 {{
-                    set_dir_obj(0, NO_MOVE);
-                    set_track_obj(0, label_{Down});
-                    set_comportement(comportement_2);
+                    set_comportement(comportement_3);
                 }}
             }}
         }}
@@ -1880,9 +1929,17 @@ void comportement_2()
     if ({UpDone} == l_track_obj(0) || {DownDone} == l_track_obj(0))
     {{
         set_var_cube({DoorAway}, 0);
+        set_var_cube({TopAway}, 0);
         set_dir_obj(0, MOVE_MANUAL);
         set_comportement(comportement_1);
     }}
+}}
+
+void comportement_3()
+{{
+    set_dir_obj(0, NO_MOVE);
+    set_track_obj(0, label_{Down});
+    set_comportement(comportement_2);
 }}
 ");
             // (the telescope itself, on the balcony's west railing: CitadelLighthouse)
