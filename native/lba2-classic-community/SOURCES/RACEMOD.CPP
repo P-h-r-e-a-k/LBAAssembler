@@ -868,6 +868,20 @@ static S32 s_dtAt = 0, s_dtMsgUntil = 0, s_dtLast = 0, s_dtThrowAt = 0;
 static char s_dtMsg[64] = "";
 static U32 s_dtInput = 0;
 static U32 s_dtSeed = 12345;
+// dart_board=<face x> <face z> <radius> <beta> <wait x> <wait z>: the board's face on the wall (where the darts stick: the game's own darts,
+// ListDart, drawn in the scene as the target in Twinsen's house has them) and the place the one waiting stands (its actor the opponent's)
+static int s_dtFace[6], s_dtHasFace = 0, s_dtStand = -1, s_dtStandCube = -1;
+static int s_dtHist[2][40], s_dtNHist[2];       // each turn's score left, for the blackboard
+static S32 s_dtMarkAt[3];                        // when each dart of the turn left the hand (its flight)
+static double s_dtFrom[3][3];                    // ... and where from
+static T_DART s_dtMemo[MAX_DARTS];               // Twinsen's own darts as they were before the match: given back after it
+static S32 s_dtMemoVar = 0, s_dtSwapAt = 0;
+static int s_dtMemoOn = 0, s_dtHeroWalk = -1, s_dtNextState = 0;
+static U8 *s_dtPic = NULL;                        // the board drawn once at its size on the screen (0xFF: not the board)
+static S32 s_dtPicR = 0;
+#define DART_FLY_MS 260
+#define DART_SWAP_MS 1100
+#define DART_START 501
 static int s_replaySet[8][2], s_nbReplay = 0, s_replayGold = -1, s_replayPending = 0;
 // replay_ms=<ms>: a replay that is a clip, over that long after its first scene loads -- back to the menu (s_menuAt), RaceMod_ReplayOver
 static S32 s_replayMs = 0, s_replayOver = 0, s_replayEndAt = 0;
@@ -4262,6 +4276,7 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbLifts++;
             }
         }
+        else if (!strcmp(key, "dart_board")) s_dtHasFace = sscanf(v, "%d %d %d %d %d %d", &s_dtFace[0], &s_dtFace[1], &s_dtFace[2], &s_dtFace[3], &s_dtFace[4], &s_dtFace[5]) == 6;
         else if (!strcmp(key, "darts")) { if (sscanf(v, "%d %d %d %d %d %d %d", &s_dtScene, &s_dtSpot[0], &s_dtSpot[1], &s_dtSpot[2], &s_dtBoard[0], &s_dtBoard[1], &s_dtBoard[2]) != 7) s_dtScene = -1; }
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
@@ -13857,7 +13872,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -18995,7 +19010,7 @@ static void BowlDraw(void) {
     if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine((S32)ModeDesiredX / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
 }
 // ---- the Tavern's darts (the user: "Twinsen to play against a random character from the car, or in two player mode with Zoe ... against Zoe") ----
-// 301 down to nothing, three darts a turn, a turn over-thrown (below nothing) not counted. Action by the board (DartsReach) starts a match against a
+// 501 down to nothing (the user, 2026-11-12: "have the dart game playing from 501 not 301"), three darts a turn, a turn over-thrown (below nothing) not counted. Action by the board (DartsReach) starts a match against a
 // foe of the race file's, chosen at random -- or against Zoe, her darts thrown by player 2's Action, when the game has two players. The board is
 // drawn over the screen (Line), the aim a cross swaying on it: the arrows move it, Action throws where it is that moment (the sway is the skill);
 // the foes' darts fall where their aim and their scatter (steadiness) take them, on the same board.
@@ -19019,20 +19034,131 @@ static int DartScore(double x, double y, char *words, size_t size) {
 }
 static const T_DART_FOE *DartOpponent(void) { return s_dtFoe >= 0 ? &s_dtFoes[0] + s_dtFoe : &s_dtZoe; }
 static void DartSay(S32 now, const char *text, int ms) { snprintf(s_dtMsg, sizeof(s_dtMsg), "%s", text); s_dtMsgUntil = now + ms; }
+// ---- the darts in the scene: the game's own (ListDart, BODY_3D_DART -- the target in Twinsen's house has them stuck in it), thrown from
+// the hand and stuck in the board where they scored; Twinsen's own darts kept aside for the match and given back after it
+static void DartWorld(double x, double y, double *wx, double *wy, double *wz) {
+    const double b = s_dtFace[3] * 2 * 3.14159265358979 / 4096, R = s_dtFace[2];
+    // (the board's own right, seen from in front of it: its body's +x, turned by its facing)
+    *wx = s_dtFace[0] + x * R * cos(b); *wz = s_dtFace[1] - x * R * sin(b); *wy = s_dtBoard[2] - y * R;
+}
+static void DartsKeep(void) {
+    if (s_dtMemoOn) return;
+    memcpy(s_dtMemo, ListDart, sizeof(s_dtMemo)); s_dtMemoVar = ListVarGame[FLAG_DART]; s_dtMemoOn = 1;
+}
+static void DartsGiveBack(void) {
+    if (!s_dtMemoOn) return;
+    memcpy(ListDart, s_dtMemo, sizeof(s_dtMemo)); ListVarGame[FLAG_DART] = (S16)s_dtMemoVar; s_dtMemoOn = 0;
+}
+static void DartsPulled(void) {
+    if (!s_dtMemoOn) return;
+    for (int i = 0; i < MAX_DARTS; i++) { ListDart[i].Flags |= DART_TAKEN; ListDart[i].NumCube = -1; }
+}
+// (the turn's darts where they are this moment: in the air from the hand, or stuck in the board)
+static void DartsFly(S32 now) {
+    if (!s_dtMemoOn || !s_dtHasFace) return;
+    for (int i = 0; i < MAX_DARTS; i++) {
+        T_DART *d = &ListDart[i];
+        if (i >= s_dtN) { d->Flags |= DART_TAKEN; d->NumCube = -1; continue; }
+        double tx, ty, tz;
+        DartWorld(s_dtMark[i][0], s_dtMark[i][1], &tx, &ty, &tz);
+        double u = (double)(now - s_dtMarkAt[i]) / DART_FLY_MS;
+        if (u < 0) u = 0;
+        if (u > 1) u = 1;
+        const double x = s_dtFrom[i][0] + (tx - s_dtFrom[i][0]) * u, z = s_dtFrom[i][2] + (tz - s_dtFrom[i][2]) * u;
+        const double y = s_dtFrom[i][1] + (ty - s_dtFrom[i][1]) * u + 260.0 * 4 * u * (1 - u);
+        d->Flags &= ~DART_TAKEN; d->NumCube = (S32)NumCube;
+        d->PosX = (S32)x; d->PosY = (S32)y; d->PosZ = (S32)z;
+        d->Beta = (s_dtFace[3] + 3072) & 4095; d->Alpha = 0;   // (the dart body lies along its own x: turned three quarters from the board's facing, its flights out into the room)
+    }
+}
+
+// ---- the opponent: the actor at the waiting place (dart_board=), the foe's body given it for the match, hidden but in one; the thrower at
+// the oche and the other behind, changing places at each turn (the user, 2026-11-12: "Twinsen's opponent let's have them standing behind
+// him, and watch them alternate positions")
+static T_OBJET *DartStand(void) {
+    if (!s_dtHasFace) return NULL;
+    if (s_dtStandCube != (S32)NumCube) {
+        s_dtStandCube = (S32)NumCube; s_dtStand = -1;
+        double best = 400.0 * 400.0;
+        for (int i = 1; i < NbObjets; i++) {
+            const double dx = ListObjet[i].Obj.X - s_dtFace[4], dz = ListObjet[i].Obj.Z - s_dtFace[5];
+            if (dx * dx + dz * dz < best) { best = dx * dx + dz * dz; s_dtStand = i; }
+        }
+        if (s_dtStand >= 0) Log_Info("[racemod] darts: the opponent's place is actor %d", s_dtStand);
+    }
+    return s_dtStand > 0 && s_dtStand < NbObjets ? &ListObjet[s_dtStand] : NULL;
+}
+static S32 DartFacing(double x, double z) {
+    return (S32)(atan2((double)s_dtFace[0] - x, (double)s_dtFace[1] - z) * 4096 / (2 * 3.14159265358979)) & 4095;
+}
+static void DartHeroAnim(int walk) {
+    if (walk == s_dtHeroWalk) return;
+    s_dtHeroWalk = walk;
+    InitAnim(walk ? GEN_ANIM_MARCHE : GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+}
+// (where each stands: at rest, the thrower on the spot and the other at the waiting place; changing places, on their way -- passing either side)
+static void DartPlaces(S32 now) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO], *foe = s_dtFoe >= 0 ? DartStand() : NULL;
+    const double sx = s_dtSpot[0], sz = s_dtSpot[1], wx = s_dtFace[4], wz = s_dtFace[5];
+    double u = 1;
+    if (s_dtState == 5) { u = (double)(now - s_dtSwapAt) / DART_SWAP_MS; if (u > 1) u = 1; }
+    const double ease = u * u * (3 - 2 * u), side = sin(u * 3.14159265358979) * 450;
+    const double len = sqrt((wx - sx) * (wx - sx) + (wz - sz) * (wz - sz)) + 1, px = -(wz - sz) / len, pz = (wx - sx) / len;
+    // (player 0 Twinsen, 1 the foe: who goes to the spot this turn)
+    for (int who = 0; who < 2; who++) {
+        const int toSpot = s_dtTurn == who;
+        const double fx = toSpot ? wx : sx, fz = toSpot ? wz : sz, tx = toSpot ? sx : wx, tz = toSpot ? sz : wz;
+        const double x = fx + (tx - fx) * ease + px * side * (toSpot ? 1 : -1), z = fz + (tz - fz) * ease + pz * side * (toSpot ? 1 : -1);
+        const int moving = s_dtState == 5 && u < 1;
+        const S32 beta = moving ? (S32)(atan2(tx - fx, tz - fz) * 4096 / (2 * 3.14159265358979)) & 4095 : DartFacing(x, z);
+        if (who == 0) {
+            if (!foe) continue;   // (against Zoe, player 2's, he keeps the spot)
+            hero->Obj.X = (S32)x; hero->Obj.Z = (S32)z; hero->Obj.Beta = beta; ClearRealAngle(hero);
+            if (!s_dtThrown) DartHeroAnim(moving);
+        } else if (foe) {
+            foe->Obj.X = (S32)x; foe->Obj.Z = (S32)z; foe->Obj.Beta = beta; ClearRealAngle(foe);
+        }
+    }
+}
+static void DartStandShow(int on) {
+    T_OBJET *foe = DartStand();
+    if (!foe) return;
+    if (on && s_dtFoe >= 0) {
+        const T_DART_FOE *f = &s_dtFoes[s_dtFoe];
+        if (GivePtrBody(f->Body) && (f->Anim < 0 || GivePtrAnim(f->Anim))) {
+            foe->Obj.Body.Num = -1; ObjectInitBody(&foe->Obj, (void *)(uintptr_t)(U32)f->Body);
+            if (f->Anim >= 0) { foe->Obj.Anim.Num = -1; ObjectInitAnim(&foe->Obj, (void *)(uintptr_t)(U32)f->Anim); }
+            foe->Flags &= ~INVISIBLE;
+            foe->Obj.X = s_dtFace[4]; foe->Obj.Z = s_dtFace[5];
+            return;
+        }
+    }
+    foe->Flags |= INVISIBLE;
+    foe->Obj.X = s_dtFace[4]; foe->Obj.Z = s_dtFace[5];
+}
+
 // A dart thrown by the one whose turn it is at (x, y): the score taken, the turn ended or the match won
 static void DartLand(S32 now, double x, double y) {
     char words[48], said[64];
     const int who = s_dtTurn, value = DartScore(x, y, words, sizeof(words));
-    if (s_dtN < 3) { s_dtMark[s_dtN][0] = x; s_dtMark[s_dtN][1] = y; s_dtN++; }
+    if (s_dtN < 3) {
+        s_dtMark[s_dtN][0] = x; s_dtMark[s_dtN][1] = y; s_dtMarkAt[s_dtN] = now;
+        // (from the thrower's hand: on the spot, at his shoulder's height, a little toward the board)
+        const T_OBJET *t = who == 1 && s_dtFoe >= 0 && DartStand() ? DartStand() : &ListObjet[NUM_PERSO];
+        const double b = DartFacing(t->Obj.X, t->Obj.Z) * 2 * 3.14159265358979 / 4096;
+        s_dtFrom[s_dtN][0] = t->Obj.X + 250 * sin(b) + 120 * cos(b); s_dtFrom[s_dtN][1] = t->Obj.Y + 950; s_dtFrom[s_dtN][2] = t->Obj.Z + 250 * cos(b) - 120 * sin(b);
+        s_dtN++;
+    }
     const int rest = s_dtScore[who] - value;
     s_dtLeft--;
     int endTurn = s_dtLeft == 0;
-    if (rest < 0) { s_dtScore[who] = s_dtStartScore[who]; snprintf(said, sizeof(said), "%s: over, the turn does not count", words); endTurn = 1; }
+    if (rest < 0) { s_dtScore[who] = s_dtStartScore[who]; snprintf(said, sizeof(said), "%s: bust, the turn does not count", words); endTurn = 1; }
     else { s_dtScore[who] = rest; snprintf(said, sizeof(said), "%s: %d", words, value); }
     DartSay(now, said, 2200);
     s_dtThrown = 1; s_dtThrowAt = now;
     if (rest == 0) {
         s_dtState = 4; s_dtAt = now;
+        if (s_dtNHist[who] < 40) s_dtHist[who][s_dtNHist[who]++] = 0;
         snprintf(said, sizeof(said), who == 0 ? "You win!" : "%s wins", DartOpponent()->Name);
         if (who) snprintf(said, sizeof(said), "%s wins", DartOpponent()->Name);
         DartSay(now, said, 6000);
@@ -19040,7 +19166,10 @@ static void DartLand(S32 now, double x, double y) {
         return;
     }
     s_dtState = 2; s_dtAt = now;   // the dart's moment over, then the next
-    if (endTurn) s_dtLeft = 0;
+    if (endTurn) {
+        s_dtLeft = 0;
+        if (s_dtNHist[who] < 40) s_dtHist[who][s_dtNHist[who]++] = s_dtScore[who];
+    }
 }
 // A foe's aim for what it has left: the triple 20 while far off, else the single it needs (or the 20), and the scatter of its hand
 static void DartFoeThrow(S32 now) {
@@ -19061,14 +19190,26 @@ static void DartFoeThrow(S32 now) {
     s_dtFx = ax + ex; s_dtFy = ay + ey;
     DartLand(now, s_dtFx, s_dtFy);
 }
+// (the match over or left: the opponent hidden, Twinsen's own darts given back)
+static void DartEnd(void) {
+    s_dtOn = 0;
+    DartStandShow(0);
+    DartsGiveBack();
+    s_dtHeroWalk = -1;
+}
 static void DartFrame(S32 now) {
-    if (s_dtScene < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene || RaceGame_StoryZoe()) { if (s_dtOn && (S32)NumCube != s_dtScene) s_dtOn = 0; return; }
+    if (s_dtScene < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene || RaceGame_StoryZoe()) {
+        if (s_dtOn && (S32)NumCube != s_dtScene) { s_dtOn = 0; DartsGiveBack(); s_dtHeroWalk = -1; }
+        return;
+    }
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double dt = fmin(0.1, fmax(0.0, (now - s_dtLast) / 1000.0));
     s_dtLast = now;
     const int act = (s_dtInput & I_ACTION_M) != 0, pressed = act && !s_dtActWas;
     s_dtActWas = act;
     if (!s_dtOn) {
+        // (the opponent's place empty but in a match)
+        { T_OBJET *st = DartStand(); if (st && !(st->Flags & INVISIBLE)) DartStandShow(0); }
         const double dx = hero->Obj.X - s_dtSpot[0], dz = hero->Obj.Z - s_dtSpot[1];
         if (pressed && ListVarGame[FLAG_CHAPTER] >= 2 && Comportement != C_BUGGY && !(hero->WorkFlags & FALLING) && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) {
             // a match: against Zoe (player 2) when the game has two players, else one of the foes at random
@@ -19077,17 +19218,22 @@ static void DartFrame(S32 now) {
             s_dtFoe = two ? -1 : s_nbDtFoe ? (int)(DartRnd() * s_nbDtFoe) % s_nbDtFoe : -1;
             if (!two && s_dtFoe < 0) return;
             s_dtOn = 1; s_dtState = 0; s_dtTurn = 0; s_dtLeft = 3; s_dtN = 0;
-            s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = 301;
-            s_dtAimX = 0; s_dtAimY = 0; s_dtThrown = 0;
-            hero->Obj.Beta = (S32)(atan2((double)(s_dtBoard[0] - hero->Obj.X), (double)(s_dtBoard[1] - hero->Obj.Z)) * 4096 / (2 * 3.14159265358979)) & 4095;
+            s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = DART_START;
+            s_dtNHist[0] = s_dtNHist[1] = 0;
+            s_dtAimX = 0; s_dtAimY = 0; s_dtThrown = 0; s_dtHeroWalk = -1;
+            DartsKeep(); DartsPulled();
+            // (Twinsen to the spot behind the oche, the opponent behind him)
+            hero->Obj.X = s_dtSpot[0]; hero->Obj.Z = s_dtSpot[1];
+            hero->Obj.Beta = DartFacing(hero->Obj.X, hero->Obj.Z);
             ClearRealAngle(hero);
+            DartStandShow(1);
             DartSay(now, "Arrows aim, Action throws", 3000);
-            Log_Info("[racemod] darts: a match against %s", DartOpponent()->Name);
+            Log_Info("[racemod] darts: a match of %d against %s (opponent's actor %d)", DART_START, DartOpponent()->Name, s_dtStand);
         }
         return;
     }
     // (Twinsen's dart thrown: his own animation, then standing again)
-    if (s_dtThrown && now - s_dtThrowAt > 800) { s_dtThrown = 0; InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO); }
+    if (s_dtThrown && now - s_dtThrowAt > 800) { s_dtThrown = 0; s_dtHeroWalk = -1; DartHeroAnim(0); }
     hero->WorkFlags &= ~FALLING;
     const double t = now / 1000.0;
     if (s_dtState == 0) {
@@ -19100,6 +19246,7 @@ static void DartFrame(S32 now) {
         if (s_dtAimY < -1.1) s_dtAimY = -1.1; if (s_dtAimY > 1.1) s_dtAimY = 1.1;
         s_dtFx = s_dtAimX + 0.07 * sin(t * 1.9) + 0.04 * sin(t * 4.1); s_dtFy = s_dtAimY + 0.07 * cos(t * 2.3) + 0.04 * cos(t * 3.7);
         if (pressed) {
+            s_dtHeroWalk = -1;
             InitAnim(GEN_ANIM_DART, ANIM_REPEAT, NUM_PERSO);
             DartLand(now, s_dtFx + (DartRnd() - 0.5) * 0.03, s_dtFy + (DartRnd() - 0.5) * 0.03);
         }
@@ -19110,32 +19257,82 @@ static void DartFrame(S32 now) {
             if (s_dtZoePress || now - s_dtAt > 7000) { s_dtZoePress = 0; DartLand(now, s_dtFx, s_dtFy); }
         } else if (now - s_dtAt > 1500) DartFoeThrow(now);
     } else if (s_dtState == 2) {
-        // between darts: the next of the turn, or the turn passed
-        if (now - s_dtAt > 1500) {
+        // between darts: the next of the turn, or the turn passed -- the darts seen in the board, pulled out, the two changing places
+        if (now - s_dtAt > (s_dtLeft > 0 ? 1500 : 2600)) {
             if (s_dtLeft > 0) s_dtState = s_dtTurn == 0 ? 0 : 1;
             else {
                 s_dtTurn = 1 - s_dtTurn; s_dtLeft = 3; s_dtN = 0; s_dtStartScore[s_dtTurn] = s_dtScore[s_dtTurn];
-                s_dtState = s_dtTurn == 0 ? 0 : 1;
+                DartsPulled();
+                s_dtNextState = s_dtTurn == 0 ? 0 : 1;
+                s_dtState = 5; s_dtSwapAt = now;
                 DartSay(now, s_dtTurn == 0 ? "Your turn" : "Their turn", 1500);
             }
             s_dtAt = now;
         }
+    } else if (s_dtState == 5) {
+        // (changing places)
+        if (now - s_dtSwapAt > DART_SWAP_MS) { s_dtState = s_dtNextState; s_dtAt = now; s_dtHeroWalk = -1; DartHeroAnim(0); }
     } else if (s_dtState == 4 && now - s_dtAt > 6000) {
-        s_dtOn = 0;
+        DartEnd();
         InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+        return;
     }
+    DartPlaces(now);
+    DartsFly(now);
 }
 extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure, S32 anim);
-static void DartCircle(S32 cx, S32 cy, double r, int colour) {
-    S32 px = cx + (S32)r, py = cy;
-    for (int k = 1; k <= 48; k++) {
-        const double a = k * 2 * 3.14159265358979 / 48;
-        const S32 x = cx + (S32)(r * cos(a)), y = cy + (S32)(r * sin(a));
-        Line(px, py, x, y, colour);
-        px = x; py = y;
-    }
+// The board as the screen shows it, drawn once at its size (s_dtPic, (2R+1) squared, 0xFF off it): the singles black and cream, the double
+// and treble rings red and green with them, the bulls green and red, a dark rim round it with the numbers on -- the real board's colours (the
+// user, 2026-11-12: "Let's add correct colouring to the dart board, move it to the centre of the screen")
+#define DART_PIC_BLACK 0
+#define DART_PIC_CREAM 63
+#define DART_PIC_RED 71
+#define DART_PIC_GREEN 134
+#define DART_PIC_RIM 49
+#define DART_PIC_WIRE 56
+static void DartPicMake(S32 R) {
+    const S32 Rr = (S32)(R * 1.22), n = 2 * Rr + 1;
+    free(s_dtPic);
+    s_dtPic = (U8 *)malloc((size_t)n * n);
+    s_dtPicR = R;
+    if (!s_dtPic) return;
+    for (S32 py = 0; py < n; py++)
+        for (S32 px = 0; px < n; px++) {
+            const double x = (px - Rr) / (double)R, y = (py - Rr) / (double)R, r = sqrt(x * x + y * y);
+            U8 c = 0xFF;
+            if (r <= 1.22) c = DART_PIC_RIM;
+            if (r <= 1.0) {
+                double a = atan2(x, -y);
+                if (a < 0) a += 2 * 3.14159265358979;
+                const double f = (a + 3.14159265358979 / 20) / (3.14159265358979 / 10);
+                const int sector = (int)floor(f) % 20, dark = sector % 2 == 0;
+                const double edge = fabs(f - floor(f + 0.5)) * 3.14159265358979 / 10 * r * R;   // (pixels from the nearest wire between sectors)
+                if (r < 0.045) c = DART_PIC_RED;
+                else if (r < 0.11) c = DART_PIC_GREEN;
+                else if (r >= 0.58 && r <= 0.65) c = dark ? DART_PIC_RED : DART_PIC_GREEN;
+                else if (r >= 0.91) c = dark ? DART_PIC_RED : DART_PIC_GREEN;
+                else c = dark ? DART_PIC_BLACK : DART_PIC_CREAM;
+                // (the wires: thin silver lines between the sectors and round the rings)
+                if (r >= 0.11 && edge < 0.6) c = DART_PIC_WIRE;
+                static const double rings[6] = {0.045, 0.11, 0.58, 0.65, 0.91, 1.0};
+                for (int k = 0; k < 6; k++) if (fabs(r - rings[k]) * R < 0.55) c = DART_PIC_WIRE;
+            }
+            s_dtPic[py * n + px] = c;
+        }
 }
-// The darts' display: the board and the darts on it, the aim, the scores, the foe beside it, what was said
+// A dart on the board as the screen shows it: stuck at (x, y), its barrel up and right of it, its flight at the end; in the air (big, u < 1)
+// on its way in from below
+static void DartPicDart(S32 x, S32 y, double u, int colour) {
+    double k = 1;
+    if (u < 1) { k = 1 + 2.2 * (1 - u); y += (S32)((1 - u) * 140); }
+    const S32 bx = x + (S32)(7 * k), by = y - (S32)(11 * k), fx = x + (S32)(12 * k), fy = y - (S32)(19 * k);
+    Line(x, y, bx, by, 56); Line(x + 1, y, bx + 1, by, 60);
+    Line(bx, by, fx, fy, 56);
+    for (int s = -3; s <= 3; s++) Line(bx + (S32)(s * k * 0.6), by - (S32)(1.5 * k), fx + (S32)(s * k * 1.3), fy - (S32)(2 * k), colour);
+    if (u >= 1) { Line(x - 1, y, x + 1, y, 15); Line(x, y - 1, x, y + 1, 15); }
+}
+// The darts' display: the board in the screen's middle and the darts on it, the aim, the scores chalked on a blackboard beside it (the user,
+// 2026-11-12: "dart scores being written on a blackboard at the side of the dart board"), what was said
 static void DartDraw(void) {
     if (s_dtScene < 0 || (S32)NumCube != s_dtScene || CubeMode != CUBE_INTERIEUR || RaceGame_StoryZoe()) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -19145,38 +19342,87 @@ static void DartDraw(void) {
         if (ListVarGame[FLAG_CHAPTER] >= 2 && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) HudLine(w / 2 - SizeFont("Action: play darts") / 2, h - 60, "Action: play darts", -1);
         return;
     }
-    const S32 cx = w - 150, cy = h / 2 + 10, R = 115;
-    BoxMovingAdd(cx - R - 4, cy - R - 4, cx + R + 4, cy + R + 4);
-    static const double rings[6] = {0.045, 0.11, 0.58, 0.65, 0.91, 1.0};
-    for (int i = 0; i < 6; i++) DartCircle(cx, cy, rings[i] * R, i == 2 || i == 3 ? 133 : i >= 4 ? 72 : 55);
-    for (int k = 0; k < 20; k++) {
-        const double a = (k + 0.5) * 3.14159265358979 / 10;
-        Line(cx + (S32)(0.11 * R * sin(a)), cy - (S32)(0.11 * R * cos(a)), cx + (S32)(R * sin(a)), cy - (S32)(R * cos(a)), 53);
+    const S32 slateW = 176;
+    // (the board and the blackboard side by side, the two together in the screen's middle)
+    S32 R = (S32)(h * 0.27);
+    if ((w - slateW - 60) / 2.6 < R) R = (S32)((w - slateW - 60) / 2.6);
+    if (R < 60) R = 60;
+    const S32 cx = w / 2 - (slateW + 18) / 2, cy = h / 2 - 10;
+    if (R != s_dtPicR || !s_dtPic) DartPicMake(R);
+    // (the two changing places: the board off the screen, so they're seen doing it -- the darts pulled out of the board in the scene too)
+    // (and at a turn's end, once its last dart is in: the three darts seen stuck in the board on the wall)
+    const int boardShown = s_dtState != 5 && !(s_dtState == 2 && s_dtLeft == 0 && (S32)TimerRefHR - s_dtAt > 600);
+    // the board
+    if (s_dtPic && boardShown) {
+        const S32 Rr = (S32)(R * 1.22), n = 2 * Rr + 1;
+        for (S32 py = 0; py < n; py++) {
+            const S32 y = cy - Rr + py;
+            if (y < 0 || y >= h) continue;
+            U8 *row = (U8 *)Log + TabOffLine[y];
+            const U8 *src = s_dtPic + (size_t)py * n;
+            for (S32 px = 0; px < n; px++) {
+                const S32 x = cx - Rr + px;
+                if (src[px] != 0xFF && x >= 0 && x < w) row[x] = src[px];
+            }
+        }
+        BoxMovingAdd(cx - Rr, cy - Rr, cx + Rr, cy + Rr);
     }
+    // its numbers on the rim
     static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
-    for (int k = 0; k < 20; k++) {
-        char n[8];
-        snprintf(n, sizeof(n), "%d", order[k]);
+    for (int k = 0; k < 20 && boardShown; k++) {
+        char nb[8];
+        snprintf(nb, sizeof(nb), "%d", order[k]);
         const double a = k * 3.14159265358979 / 10;
-        HudLine(cx + (S32)(1.12 * R * sin(a)) - SizeFont(n) / 2, cy - (S32)(1.12 * R * cos(a)) - 10, n, -1);
+        HudSmallIn(cx + (S32)(1.11 * R * sin(a)) - SizeFont(nb) * 3 / 8, cy - (S32)(1.11 * R * cos(a)) - 14, nb, -1, LBAWHITE);
     }
-    for (int i = 0; i < s_dtN; i++) {
-        const S32 x = cx + (S32)(s_dtMark[i][0] * R), y = cy + (S32)(s_dtMark[i][1] * R);
-        Line(x - 5, y - 5, x + 5, y + 5, 106); Line(x - 5, y + 5, x + 5, y - 5, 106);
+    // the turn's darts: flying in, then stuck where they scored -- Twinsen's red, the other's blue
+    const S32 now = TimerRefHR;
+    for (int i = 0; i < s_dtN && boardShown; i++) {
+        const double u = fmin(1.0, fmax(0.0, (double)(now - s_dtMarkAt[i]) / DART_FLY_MS));
+        DartPicDart(cx + (S32)(s_dtMark[i][0] * R), cy + (S32)(s_dtMark[i][1] * R), u, s_dtTurn == 0 ? 70 : 197);
     }
-    if (s_dtState == 0 || (s_dtState == 1 && s_dtFoe < 0)) {
+    if (boardShown && (s_dtState == 0 || (s_dtState == 1 && s_dtFoe < 0))) {
         const S32 x = cx + (S32)(s_dtFx * R), y = cy + (S32)(s_dtFy * R);
-        Line(x - 9, y, x + 9, y, LBAWHITE); Line(x, y - 9, x, y + 9, LBAWHITE);
+        Line(x - 10, y, x - 3, y, LBAWHITE); Line(x + 3, y, x + 10, y, LBAWHITE);
+        Line(x, y - 10, x, y - 3, LBAWHITE); Line(x, y + 3, x, y + 10, LBAWHITE);
     }
+    // the blackboard: a dark slate in a wooden frame to the board's right, the two names over their columns, each turn's score left chalked
+    // under, the old ones struck through, the latest at the bottom
     const T_DART_FOE *f = DartOpponent();
+    {
+        S32 x0 = cx + (S32)(R * 1.22) + 18, x1 = x0 + slateW;
+        const S32 y0 = cy - (S32)(R * 1.15), y1 = cy + (S32)(R * 1.15);
+        Box(x0, y0, x1, y1, 20);
+        Box(x0 + 6, y0 + 6, x1 - 6, y1 - 6, 129);
+        const S32 mid = (x0 + x1) / 2, top = y0 + 12;
+        HudSmallIn(x0 + 12, top, "You", -1, LBAWHITE);
+        char name[16];
+        snprintf(name, sizeof(name), "%.6s", f->Name);
+        HudSmallIn(mid + 6, top, name, -1, LBAWHITE);
+        Line(x0 + 10, top + 26, x1 - 10, top + 26, 15);
+        Line(mid, top + 4, mid, y1 - 12, 15);
+        const S32 step = 20, room = (y1 - 12 - (top + 32)) / step - 1;
+        for (int who = 0; who < 2; who++) {
+            // (the start, then each turn's: the last that fit)
+            int all[41], na = 0;
+            all[na++] = DART_START;
+            for (int k = 0; k < s_dtNHist[who] && na < 41; k++) all[na++] = s_dtHist[who][k];
+            const int from = na > room ? na - room : 0;
+            for (int k = from; k < na; k++) {
+                char nb[8];
+                snprintf(nb, sizeof(nb), "%d", all[k]);
+                const S32 x = who == 0 ? x0 + 14 : mid + 8, y = top + 32 + (k - from) * step;
+                HudSmallIn(x, y, nb, -1, k == na - 1 ? LBAWHITE : 57);
+                if (k < na - 1) Line(x - 2, y + 11, x + SizeFont(nb) * 3 / 4 + 2, y + 9, 60);
+            }
+        }
+        BoxMovingAdd(x0, y0, x1, y1);
+    }
     char line[96];
-    snprintf(line, sizeof(line), "You %d", s_dtScore[0]); HudLine(16, 12, line, -1);
-    snprintf(line, sizeof(line), "%s %d", f->Name, s_dtScore[1]); HudLine(16, 40, line, -1);
-    snprintf(line, sizeof(line), "%s: %d dart%s left", s_dtTurn == 0 ? "You" : f->Name, s_dtLeft, s_dtLeft == 1 ? "" : "s"); HudLine(16, 68, line, -1);
-    if (s_dtState == 1 && s_dtFoe < 0) HudLine(16, 96, "Zoe: press Action!", -1);
+    snprintf(line, sizeof(line), "%s: %d dart%s left", s_dtTurn == 0 ? "You" : f->Name, s_dtLeft, s_dtLeft == 1 ? "" : "s");
+    HudLine(16, 12, line, -1);
+    if (s_dtState == 1 && s_dtFoe < 0) HudLine(16, 40, "Zoe: press Action!", -1);
     if (TimerRefHR < s_dtMsgUntil && s_dtMsg[0]) HudLine(w / 2 - SizeFont(s_dtMsg) / 2, h - 60, s_dtMsg, -1);
-    // (the one played against, drawn beside the scores)
-    if (f->Body >= 0) RaceMod_DrawBody(16, 140, 196, 330, f->Body, 3400, 0, f->Anim);
 }
 // Whether Twinsen is in the pool's water -- the basin's box, or the dive on its way -- where he swims and does not drown (OBJECT.CPP's water)
 S32 RaceMod_PoolSwims(void) {
