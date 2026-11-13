@@ -121,7 +121,7 @@ internal static class StellaEntities
             }
         }
         int Mod(int a, int m) => ((a % m) + m) % m;
-        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0, counterCells = 0, barEnds = 0;
+        int floors = 0, northWalls = 0, westWalls = 0, rims = 0, rings = 0, stageCells = 0, counterCells = 0, barEnds = 0, benchCells = 0;
         for (var z = 0; z < Size; z++)
         for (var x = 0; x < Size; x++)
         {
@@ -148,6 +148,13 @@ internal static class StellaEntities
                 {
                     for (var y = FloorLayer + 1; y <= FloorLayer + 2; y++) Put(x, y, z, 0, 1);
                     counterCells++;
+                }
+                // (the lounge's benches: solid under their seats, up to them -- Twinsen sits on one: CitadelProps.ClubBooth)
+                if (Hall(x, z) && r >= Citadel.CitadelProps.SeatCells - 0.3 && r < RingFrom &&
+                    Citadel.CitadelProps.BoothAngles.Any(a => Math.Abs(((angle - a) % 360 + 540) % 360 - 180) <= 5))
+                {
+                    for (var y = FloorLayer + 1; y <= FloorLayer + Citadel.CitadelProps.BoothSeat / 256; y++) Put(x, y, z, 0, 1);
+                    benchCells++;
                 }
                 // (behind the bar, the barman's side: shut at both ends of the counter, up to the wall's top as the ring -- Twinsen walked in
                 // between the counter and the bottles, and the pieces drawn by their boxes put him under them: the user, 2026-11-13, "Twinsen
@@ -372,7 +379,7 @@ void comportement_3()
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"Stella Entities: scene {Scene} (grid {gridNumber}, Rick's bar's block library {raw[0]}): a round hall {Radius * 2:0} cells across, the corridor and the " +
-                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar, {barEnds} shutting its ends; Baldino's cell (scene {Cell}, its floor whole): " +
+                $"lift's foot -- {floors} floor cells, {northWalls} of north wall, {westWalls} of west wall, {rims} of low wall, {rings} invisible cells round the hall's edge, {stageCells} under the stage and catwalk, {counterCells} along the bar, {barEnds} shutting its ends, {benchCells} under the booths' benches; Baldino's cell (scene {Cell}, its floor whole): " +
                 $"the hidden lift in its corner by the door (cells x 32-33, z 31-32): Action on the spot and down onto the club's platform, and back up onto the spot");
         return log;
     }

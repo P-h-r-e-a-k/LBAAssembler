@@ -46,6 +46,8 @@ internal static partial class RaceTrackStory
         ZoeHintHal, ZoeHintRace,
         // (Stella Entities' people -- RaceTrackStory.StellaEntities.cs, 2026-11-11)
         ClubWelcome, ClubStaffOnly, ClubNoBoss, ClubBarman,
+        // (the lounge -- RaceTrackStory.StellaLounge.cs, 2026-11-13)
+        ClubOffer, ClubShowYes, ClubShowNo, ClubFollow, ClubBroke, ClubLater, ClubThanks, ClubMachineAsk, ClubMachineYes, ClubMachineNo, ClubMachineDone,
     }
     private static readonly string[][] MoonLines =
     {
@@ -311,6 +313,105 @@ internal static partial class RaceTrackStory
             "Cosa ti servo? Il Moon Fizz stasera lo offre la casa.",
             "O que vai ser? O Moon Fizz é oferta da casa esta noite.",
         },
+        new[]
+        {
+            "Hey there, handsome. Fancy a private show in the back? Just you and one of our girls -- 250 zlitos.",
+            "Salut, beau gosse. Un spectacle privé au fond, ça te dit ? Rien que toi et une de nos filles -- 250 zlitos.",
+            "Hallo, Hübscher. Lust auf eine Privatshow hinten? Nur du und eins unserer Mädchen -- 250 Zlitos.",
+            "Hola, guapo. ¿Te apetece un espectáculo privado al fondo? Solo tú y una de nuestras chicas -- 250 zlitos.",
+            "Ciao, bello. Ti va uno spettacolo privato sul retro? Solo tu e una delle nostre ragazze -- 250 zlitos.",
+            "Olá, bonitão. Apetece-te um espetáculo privado lá atrás? Só tu e uma das nossas raparigas -- 250 zlitos.",
+        },
+        new[]
+        {
+            "Yes, let's go.",
+            "Oui, allons-y.",
+            "Ja, gehen wir.",
+            "Sí, vamos.",
+            "Sì, andiamo.",
+            "Sim, vamos.",
+        },
+        new[]
+        {
+            "Not tonight, thanks.",
+            "Pas ce soir, merci.",
+            "Heute nicht, danke.",
+            "Esta noche no, gracias.",
+            "Non stasera, grazie.",
+            "Hoje não, obrigado.",
+        },
+        new[]
+        {
+            "This way, sugar. Follow me.",
+            "Par ici, mon chou. Suis-moi.",
+            "Hier entlang, Süßer. Folge mir.",
+            "Por aquí, cariño. Sígueme.",
+            "Da questa parte, tesoro. Seguimi.",
+            "Por aqui, querido. Segue-me.",
+        },
+        new[]
+        {
+            "You haven't got 250 zlitos, sugar. The change machine by the bar takes kashes.",
+            "Tu n'as pas 250 zlitos, mon chou. Le changeur près du bar prend les kashes.",
+            "Du hast keine 250 Zlitos, Süßer. Der Wechselautomat an der Bar nimmt Kashes.",
+            "No tienes 250 zlitos, cariño. La máquina de cambio junto a la barra acepta kashes.",
+            "Non hai 250 zlitos, tesoro. La macchina del cambio vicino al bar prende i kashes.",
+            "Não tens 250 zlitos, querido. A máquina de câmbio ao pé do bar aceita kashes.",
+        },
+        new[]
+        {
+            "Suit yourself. I'll be around.",
+            "Comme tu veux. Je ne suis pas loin.",
+            "Wie du willst. Ich bin in der Nähe.",
+            "Como quieras. Estaré por aquí.",
+            "Come vuoi. Sono qui intorno.",
+            "Como quiseres. Ando por aqui.",
+        },
+        new[]
+        {
+            "That's your show, handsome. Come back and see us.",
+            "C'est la fin du spectacle, beau gosse. Reviens nous voir.",
+            "Das war deine Show, Hübscher. Komm wieder vorbei.",
+            "Ese fue tu espectáculo, guapo. Vuelve a vernos.",
+            "Lo spettacolo è finito, bello. Torna a trovarci.",
+            "Foi o teu espetáculo, bonitão. Volta a visitar-nos.",
+        },
+        new[]
+        {
+            "A change machine: one zlito for every 2 kashes. Change your kashes?",
+            "Un changeur : un zlito pour 2 kashes. Changer tes kashes ?",
+            "Ein Wechselautomat: ein Zlito für je 2 Kashes. Kashes wechseln?",
+            "Una máquina de cambio: un zlito por cada 2 kashes. ¿Cambiar tus kashes?",
+            "Una macchina del cambio: uno zlito ogni 2 kashes. Cambiare i tuoi kashes?",
+            "Uma máquina de câmbio: um zlito por cada 2 kashes. Trocar os teus kashes?",
+        },
+        new[]
+        {
+            "Change them.",
+            "Changer.",
+            "Wechseln.",
+            "Cambiarlos.",
+            "Cambiali.",
+            "Trocar.",
+        },
+        new[]
+        {
+            "Leave it.",
+            "Laisser.",
+            "Lieber nicht.",
+            "Dejarlo.",
+            "Lascia stare.",
+            "Deixar.",
+        },
+        new[]
+        {
+            "The machine rattles and counts out your zlitos.",
+            "La machine cliquette et compte tes zlitos.",
+            "Der Automat rattert und zählt deine Zlitos ab.",
+            "La máquina traquetea y cuenta tus zlitos.",
+            "La macchina sferraglia e conta i tuoi zlitos.",
+            "A máquina chocalha e conta os teus zlitos.",
+        },
     };
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -504,6 +605,7 @@ void comportement_1()
         MoonPetanque(b, report, Say(MoonLine.BowlerUp), Say(MoonLine.BowlerTuesday));
         // Stella Entities' people: Rick's bouncers, his guard and his barman (RaceTrackStory.StellaEntities.cs)
         StellaPeople(b, Say);
+        StellaLounge(b, Say);
 
         b.Save();
         log.Add($"the Emerald Moon's race file: gate={QHal} {HalMended} (HAL mended), win={QHal} {HalWon}");

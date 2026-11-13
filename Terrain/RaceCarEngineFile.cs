@@ -662,6 +662,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}{string.Concat((s.TiredKeep ?? Array.Empty<int>()).Select(k => $" {k}"))}\n");
             // (... but not in the Tralu's secret bar: its regulars say their own lines at the evening's celebration)
             if (t.Story is { TiredText: >= 0 }) text.Append($"tired_skip={Citadel.TraluBarRoom.Scene}\n");
+            // (Stella Entities' money is zlitos, the hall's and the private room's, and its change machine -- RaceTrackStory.StellaLounge.cs)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"zlitos_scene={StellaEntities.Scene} {StellaRooms.Private}\nexchange={RaceTrackStory.ExchangeVar}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

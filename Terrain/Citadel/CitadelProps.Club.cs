@@ -208,6 +208,38 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
+    // The lounge round the hall's wall (the user, 2026-11-13: "Let's add some booths around the edge of the room", "chairs that Twinsen can
+    // actually sit on perhaps the booths we're adding"): a booth's bench (body 98) -- a leather seat BoothSeat over the floor, its back
+    // behind it -- at BoothAngles, BoothCells out, turned to face the hall's middle (its front +z, as an actor's beta 0 looks); the grid's
+    // invisible cells under it hold Twinsen on its seat (StellaEntities). The change machine (body 95), against the wall by the bar's end:
+    // kashes in, zlitos out, two for one (the user: "a currency change machine ... 2 kashes into 1 zilito").
+    public const int ClubBooth = 98, ChangeMachine = 95;
+    public static readonly float[] BoothAngles = { 35, 70, 185, 220, 325 };
+    public const float BoothCells = 17.4f, SeatCells = 17.2f, MachineAngle = 94, MachineCells = 17.6f;
+    public const int BoothSeat = 512;
+    public static Body BuildClubBooth(byte[] header)
+    {
+        var m = new CarMesh("a booth's bench", new[] { -1 });
+        m.Light = 0.85f;
+        const float W = 1300, D = 560;
+        m.Box(0, new Vector3(0, BoothSeat / 2f - 30, 0), new Vector3(W, BoothSeat - 60, D), ClubWood, ClubWood);
+        m.Box(0, new Vector3(0, BoothSeat - 30, 20), new Vector3(W - 40, 60, D - 40), ClubLeather, ClubLeather);
+        m.Box(0, new Vector3(0, BoothSeat + 420, -D / 2 - 40), new Vector3(W, 840, 120), ClubLeather, ClubLeather);
+        foreach (var s in new[] { -1, 1 }) m.Box(0, new Vector3(s * (W / 2 + 40), BoothSeat / 2f + 150, -40), new Vector3(80, BoothSeat + 300, D + 80), ClubWood, ClubWoodLight);
+        return m.ToBody(header);
+    }
+    public static Body BuildChangeMachine(byte[] header)
+    {
+        var m = new CarMesh("the change machine", new[] { -1 });
+        m.Light = 0.9f;
+        m.Box(0, new Vector3(0, 700, 0), new Vector3(560, 1400, 420), ClubSteel, ClubSteel);
+        m.Box(0, new Vector3(0, 1050, 215), new Vector3(420, 300, 20), ClubNeon, ClubNeon);
+        m.Box(0, new Vector3(0, 700, 215), new Vector3(200, 40, 20), ClubBrass, ClubBrass);
+        m.Box(0, new Vector3(0, 350, 215), new Vector3(300, 160, 30), ClubBoardColour, ClubBoardColour);
+        m.Ball(0, new Vector3(0, 1440, 0), 70, ClubGlow);
+        return m.ToBody(header);
+    }
+
     // a ring of n points round the body's own foot, radius r at height y
     private static int[] ClubRing(CarMesh m, float r, float y, int n) =>
         Enumerable.Range(0, n).Select(k => m.P(0, new Vector3(r * MathF.Cos(k * 2 * MathF.PI / n), y, r * MathF.Sin(k * 2 * MathF.PI / n)))).ToArray();

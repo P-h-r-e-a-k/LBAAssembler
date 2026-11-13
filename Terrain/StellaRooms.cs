@@ -17,6 +17,11 @@ namespace LBAAssembler.Terrain;
 internal static class StellaRooms
 {
     public const int Office = 391, Backstage = 392, RickOffice = 137;
+    // the private room (scene 395: 393 and 394 are the bowling alley's and the Francos' tunnels'): the same room again, curtained, a low
+    // sofa where Twinsen sits for a private show (RaceTrackStory.StellaEntities: the hostess's offer in the hall, the show there) -- the
+    // user, 2026-11-13, "Let's have the curtained booths in a back area that a dancer can lead him off into"
+    public const int Private = 395;
+    public const int SofaX = 6256, SofaZ = 3300, ShowZ = 4400;
     // (where Twinsen comes in from the club, either room: just inside the door of Rick's office's that leads out, x 5120-6144 at z 9216)
     public const int InsideX = 5632, InsideY = 256, InsideZ = 8500;
     private const int Prop = Citadel.CitadelProps.Chair;
@@ -30,13 +35,14 @@ internal static class StellaRooms
         if (!store.SceneExists(RickOffice) || !store.SceneExists(StellaEntities.Scene)) { log.Add("Stella Entities' office and backstage left out: no Rick's office (scene 137) or no club scene"); return log; }
         var scenes = HqrFile.Parse(File.ReadAllBytes(scenePath));
         if (Backstage + 1 < scenes.Count && !scenes.IsEmpty(Backstage + 1)) { log.Add($"Stella Entities' rooms left out: scene {Backstage} is already another part of the build's"); return log; }
+        if (Private + 1 < scenes.Count && !scenes.IsEmpty(Private + 1)) { log.Add($"Stella Entities' rooms left out: scene {Private} is already another part of the build's"); return log; }
         var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
         var header = new MapBricks.BkgHeader(bkg.Read(0));
         var table = bkg.Read(header.Brk + header.MaxBrk);
         // (Rick's office's grid, shared: the rooms don't change it)
         var type = table[RickOffice * 2]; var grid = table[RickOffice * 2 + 1];
         if (table.Length < (Backstage + 1) * 2) Array.Resize(ref table, (Backstage + 1) * 2);
-        foreach (var s in new[] { Office, Backstage }) { table[s * 2] = type; table[s * 2 + 1] = grid; }
+        foreach (var s in new[] { Office, Backstage, Private }) { table[s * 2] = type; table[s * 2 + 1] = grid; }
         bkg.SetStored(header.Brk + header.MaxBrk, table);
 
         var original = store.Load(RickOffice);
@@ -46,7 +52,8 @@ internal static class StellaRooms
         var (backX, backZ) = (StellaEntities.CatwalkX0World, StellaEntities.CatwalkEndZ + 600);
         static string Still() => "void comportement_0()\n{\n}\n";
         var records = new List<(int Scene, byte[] Record)>();
-        foreach (var (number, name, outAt) in new[] { (Office, "office", (outX, outZ)), (Backstage, "backstage", (backX, backZ)) })
+        var (privX, privZ) = StellaEntities.At(215, 15.5f);
+        foreach (var (number, name, outAt) in new[] { (Office, "office", (outX, outZ)), (Backstage, "backstage", (backX, backZ)), (Private, "private room", (privX, privZ)) })
         {
             var model = original.Clone();
             model.Island = StellaEntities.MoonIsland;
@@ -61,6 +68,17 @@ internal static class StellaRooms
             {
                 z.Num = StellaEntities.Scene;
                 z.Info = new[] { outAt.Item1, number == Backstage ? StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh : StellaEntities.FloorY, outAt.Item2, 0, 0, 0, 0, 1 };   // (the last: the door on)
+            }
+            if (number == Private)
+            {
+                // the low sofa (a booth's bench, sunk till its seat is a little over the floor: no cells to sit on in a shared grid) and the
+                // curtains round it; Twinsen on it as he comes in
+                var sofa = Citadel.CitadelProps.Actor(Citadel.CitadelProps.ClubBooth, SofaX, 256 - (Citadel.CitadelProps.BoothSeat - 110), SofaZ - 200, 0);
+                sofa.Armor = RaceTrackStory.WalkOverArmour;
+                SceneOps.AddActor(model, sofa);
+                foreach (var (generic, x, z, beta) in new[] { (Citadel.CitadelProps.CurtainLeft, SofaX - 1500, SofaZ + 300, 1024), (Citadel.CitadelProps.CurtainRight, SofaX + 1500, SofaZ + 300, 3072), (Citadel.CitadelProps.CurtainLeft, SofaX - 1500, ShowZ + 900, 1024), (Citadel.CitadelProps.CurtainRight, SofaX + 1500, ShowZ + 900, 3072) })
+                    SceneOps.AddActor(model, Citadel.CitadelProps.Actor(generic, x, 256, z, beta));
+                (model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z, model.Actors[0].Beta) = (SofaX, 256, SofaZ, 0);
             }
             if (number == Backstage)
             {
@@ -87,7 +105,7 @@ internal static class StellaRooms
             { var size = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(size, record.Length); scenes.SetStored(0, size); }
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
-        log.Add($"Stella Entities' rooms: the office (scene {Office}) and backstage (scene {Backstage}) on Rick's office's grid {grid}, each with its door back to the hall; no way in from the hall yet");
+        log.Add($"Stella Entities' rooms: the office (scene {Office}), backstage (scene {Backstage}) and the private room (scene {Private}) on Rick's office's grid {grid}, each with its door back to the hall");
         return log;
     }
 }
