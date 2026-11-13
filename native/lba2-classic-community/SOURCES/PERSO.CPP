@@ -298,6 +298,13 @@ void InitGameLists() {
 
 void InitGame(int argc) {
     /*-------------------------------------------------------------------------*/
+    // (a game started or loaded from the menu: any SaveTimer the last game left open -- it went to the menu mid-dialogue, mid-cut-scene,
+    // or the race's end_to_menu -- closed WITHOUT putting the clock back. Left open, the new game's first RestoreTimer wound its clock
+    // back to the old game's moment: the Polar dream's chase opening stalled after a New Game from the in-game menu, 2026-11-09)
+    if (CmptMemoTimerRef) {
+        Log_Info("[game] a new game: the last game's SaveTimer left open (%d), closed without putting the clock back", (int)CmptMemoTimerRef);
+        CmptMemoTimerRef = 0;
+    }
     UnsetClip();
 
     AlphaLight = 896 * MUL_ANGLE;
