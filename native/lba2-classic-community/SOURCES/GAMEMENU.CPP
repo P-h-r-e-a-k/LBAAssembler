@@ -4420,6 +4420,10 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
         case RACEGAME_STORY_CONTINUE: // ... the story kept, continued: the current save resumed
             goto resume_current;
 
+        case RACEGAME_TO_MENU: // ... a replay over or left: the game left, the menu again as at the start (RACEGAME.CPP)
+            firstloop = TRUE;
+            break;
+
         case RACEGAME_START: // the race game's race, set up (RACEGAME.CPP): a new game at its start line, no introduction
             firstloop = FALSE;
             strcpy(PlayerName, "");

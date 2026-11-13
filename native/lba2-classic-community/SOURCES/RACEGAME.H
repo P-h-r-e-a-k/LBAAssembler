@@ -8,6 +8,7 @@
 
 #define RACEGAME_START 2399                 // RaceGame_Menu: a race is set up (RaceMod_LoadFile) -- a new game, no introduction
 #define RACEGAME_STORY_NEW 2398             // ... Story Mode's set loaded (story_file=): a new game of LBA2's, its introduction first
+#define RACEGAME_TO_MENU 2396                // ... a replay over: the game left, the menu as at the start (its Achievements page)
 #define RACEGAME_STORY_CONTINUE 2397        // ... the same, the story's own save (story.lba) put in current.lba: the game resumed from it
 
 S32 RaceGame_On(void);

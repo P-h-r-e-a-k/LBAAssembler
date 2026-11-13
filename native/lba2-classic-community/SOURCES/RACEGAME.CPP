@@ -208,6 +208,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
 #define RG_ID_SHARED 2470                   // ... its Shared tracks (TracksPage(1))
 #define RG_ID_STORY_TWO 2471                // Story Mode's Two players row: player 2 is Zoe (StoryMode, 2026-11-11)
+#define RG_ID_REPLAY_END 2493               // the in-game menu's row in a replay: back to the Achievements page
 #define RG_ID_PLAYER 2472                   // the main menu's Player: <name> (PlayersPage), Achievements (AchievementsPage)
 #define RG_ID_ACHIEVEMENTS 2473
 #define RG_ID_PLAYER_NEW 2474               // PlayersPage's New player; its players 2475 .. 2480
@@ -300,6 +301,9 @@ static int s_localGuest = -1;               // this game is the second player's 
 static int s_storyTwo = 0, s_storyZoe = 0;
 static int s_gameMenus = 0;                 // in the race game's menus (RaceGame_Menu)
 static int s_storyOn = 0;                   // the story is what is being played (Story Mode's New story or Continue, not a race since)
+// (an achievement's replay is being played: the story's scenes, but none of it kept -- the player's own story save is left alone)
+static int s_replaying = 0, s_backToAch = 0;
+extern S32 RaceMod_ReplayOver(void);
 #define RG_STORY_SAVE "story.lba"           // the story's own save, in the saves' folder
 #define RG_ZOE_SAVE "zoe.lba"               // ... and with two players, the story as player 2's game is told to load it (RaceGame_StoryShare)
 static int s_lastSp = 0, s_lastTrial = 0;
@@ -1337,6 +1341,7 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the main menu's Quit: this player's game left for the player menu, whose own Quit ends the game -- the user, 2026-11-12)
     if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
+    if (s_on && num == RG_ID_REPLAY_END) { Label(string, "End the replay"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
     if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST))) return 0;
     // (a player's row: its name, marked when it is this game's)
@@ -2901,10 +2906,14 @@ S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
 // with the cow, or for special areas such as bowling or the strip club to re-explore them once these things have been unlocked in-game") ----
 // An earned achievement with a replay is a row to choose: the story's set started afresh at the egg's scene, its variables as they stood (the race
 // file's replay_set=, replay_gold=, applied as the scene loads) -- or, for the bowling alley, a game of bowling as one of its four bowlers.
-typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; } T_RG_REPLAY;
+// (Ms: a clip, back to the menu that long after its scene loads -- the Wizard and the cow seen through the telescope)
+typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; int Ms; } T_RG_REPLAY;
 static const T_RG_REPLAY s_replays[] = {
     {"spanked", 193, 0, 3, {{253, 1}, {200, 1}, {96, 1}}},          // the night house, drunk, Zoe waiting
-    {"telescope", 46, 50, 3, {{253, 2}, {56, 5}, {51, 4}}},        // the lighthouse's door, the spell cast, kashes for the telescope
+    // (the Wizard and the cow: the telescope's view itself, a clip -- the cow's field with the telescope's look on (ScopeVar 227 1), the Wizard
+    // hopping behind her, and back to the menu: the user, 2026-11-12, "it just needs to be 5 seconds of Twinsen watching the wizard with the
+    // cow performing the forward hop motion")
+    {"telescope", 47, 0, 4, {{253, 2}, {56, 5}, {51, 4}, {227, 1}}, 5000},
     {"stella", 390, 0, 1, {{253, 4}}},                             // Stella Entities
     {"bowling", 393, 0, 1, {{253, 5}}},                            // the bowling alley
 };
@@ -2943,11 +2952,13 @@ static S32 StartReplay(const T_RG_REPLAY *r, int bowler) {
         fprintf(f, "# a replay (RACEGAME.CPP): %s\nstart_scene=%d\n", r->Id, r->Scene);
         for (int i = 0; i < r->NVars; i++) fprintf(f, "replay_set=%d %d\n", r->Vars[i][0], r->Vars[i][1]);
         if (r->Gold > 0) fprintf(f, "replay_gold=%d\n", r->Gold);
+        if (r->Ms > 0) fprintf(f, "replay_ms=%d\n", r->Ms);
         if (bowler >= 0) fprintf(f, "bowling_game=%d\n", bowler);
         fclose(f);
     }
     RaceMod_LoadFile(path);
     s_storyOn = 1;
+    s_replaying = 1;
     s_raceSp = -1; s_raceOver = 0; s_raceCar = NULL; s_raceWatch[0] = 0; s_raceLevel = -1;
     Log_Info("[racegame] a replay: %s at scene %d%s", r->Id, r->Scene, bowler >= 0 ? " (a game of bowling)" : "");
     Page(NULL, 0);
@@ -3458,7 +3469,7 @@ void RaceGame_SceneEntered(void) {
     if (s_storyZoe) return;
     // (with two players, player 2's game told to load the scene too, whatever the run's autosaves -- not a race's laps: RaceGame_StoryShare)
     if (RaceGame_StoryTwo() && !RaceMod_CarRacing()) RaceGame_StoryShare();
-    if (!s_storyOn || Save_AutoDisabled() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
+    if (!s_storyOn || s_replaying || Save_AutoDisabled() || RaceMod_CarRacing() || ListObjet[NUM_PERSO].LifePoint <= 0) return;
     char story[ADELINE_MAX_PATH];
     StorySave(story);
     CurrentSaveGameTo(RG_STORY_SAVE);
@@ -5719,7 +5730,10 @@ static S32 GameMenu(S32 inGame) {
     // (the story played: its place kept, the game having saved it in current.lba as the menu opened -- when it did: with SavingEnable off,
     // Twinsen dead or out of sight or the phantom scene, GAMEMENU.CPP leaves current.lba as it was, perhaps a race's, and the story keeps
     // the scene it last entered, RaceGame_SceneEntered)
-    if (inGame && s_storyOn && SavingEnable) KeepStory();
+    if (inGame && s_storyOn && !s_replaying && SavingEnable) KeepStory();
+    // (a replay's clip over, or a replay ended from its menu: the game left, back to the Achievements page -- RACEGAME_TO_MENU)
+    if (inGame && s_replaying && RaceMod_ReplayOver()) { s_replaying = 0; s_storyOn = 0; s_backToAch = 1; Page(NULL, 0); return RACEGAME_TO_MENU; }
+    if (!inGame && s_backToAch) { s_backToAch = 0; s_replayCode = AchievementsPage(); if (s_replayCode) return s_replayCode; }
     // (the sum of best played back: a track's best lap over -- the next track's straight on, no menu)
     if (s_watchNext && s_watchListN > 0) {
         s_watchNext = 0;
@@ -5774,6 +5788,9 @@ static S32 GameMenu(S32 inGame) {
     }
     S32 nb = 0;
     if (resume && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESUME);
+    // (a replay: a way out of it, back to the Achievements page -- the user, 2026-11-12, "I had no way of qutting back to the menu from attempting
+    // to re-watch an achievement")
+    if (inGame && s_replaying) SetRow(s_mainMenu, nb++, RG_ID_REPLAY_END);
     if (restart && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESTART);
     if (!restart || s_story) SetRow(s_mainMenu, nb++, RG_ID_STORY);
     const S32 racing = nb;
@@ -5811,6 +5828,10 @@ static S32 GameMenu(S32 inGame) {
         case RG_ID_FEEDBACK:
             FeedbackPage();
             break;
+        case RG_ID_REPLAY_END:
+            s_replaying = 0; s_storyOn = 0; s_backToAch = 1;
+            Page(NULL, 0);
+            return RACEGAME_TO_MENU;
         case RG_ID_ACHIEVEMENTS:
             { s_replayCode = AchievementsPage(); if (s_replayCode) return s_replayCode; }
             break;

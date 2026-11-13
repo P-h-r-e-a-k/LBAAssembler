@@ -67,7 +67,9 @@ internal static partial class RaceTrackStory
         $"achieve=postcards var {EggLastCard} {PostcardsRewarded}",
         $"achieve=dinofly var {Terrain.Polar.PolarDinofly.TalkedVar} 1",
         $"achieve=stella scene {StellaEntities.Scene}",
-        "achieve=telescope scene 47",
+        // (the Wizard and the cow as the telescope shows them -- its view on, ScopeVar -- not the cow's field walked into: the user, 2026-11-12,
+        // "should fire when we watch the wizard with the cow through the telescope, not when we're close to the cow")
+        $"achieve=telescope var {ScopeVar} 1",
         $"achieve=bowling scene {BowlingAlley.Scene}",
     };
     private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40, LyraReady = 660, LyraRaise = 661;

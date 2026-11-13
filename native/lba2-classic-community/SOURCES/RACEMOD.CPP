@@ -868,6 +868,14 @@ static char s_dtMsg[64] = "";
 static U32 s_dtInput = 0;
 static U32 s_dtSeed = 12345;
 static int s_replaySet[8][2], s_nbReplay = 0, s_replayGold = -1, s_replayPending = 0;
+// replay_ms=<ms>: a replay that is a clip, over that long after its first scene loads -- back to the menu (s_menuAt), RaceMod_ReplayOver
+static S32 s_replayMs = 0, s_replayOver = 0, s_replayEndAt = 0;
+// (the race game's menu opened at the clip's end: the replay over -- once)
+S32 RaceMod_ReplayOver(void) {
+    if (!s_replayOver || TimerRefHR < s_replayEndAt) return 0;
+    s_replayOver = 0;
+    return 1;
+}
 static double s_poolX = 0, s_poolZ = 0, s_poolY = 0;   // (where he is in the water: held by PoolFrame, the engine's pushes between frames undone)
 static int s_poolSplash = -1;   // (pool_splash=: the scene variable set as he goes into the water)
 static S32 s_liftAt = 0;
@@ -4266,6 +4274,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "bowling_game")) s_bowlGame = atoi(v);
         else if (!strcmp(key, "replay_set") && s_nbReplay < 8) { if (sscanf(v, "%d %d", &s_replaySet[s_nbReplay][0], &s_replaySet[s_nbReplay][1]) == 2) s_nbReplay++; }
         else if (!strcmp(key, "replay_gold")) s_replayGold = atoi(v);
+        else if (!strcmp(key, "replay_ms")) s_replayMs = atoi(v);
         else if (!strcmp(key, "pool") && s_nbPools < RACE_MAX_POOLS) {
             T_RACE_POOL *pl = &s_pools[s_nbPools];
             if (sscanf(v, "%d %d %d %d %d %d %d", &pl->Scene, &pl->X0, &pl->Z0, &pl->X1, &pl->Z1, &pl->Floor, &pl->Surface) == 7) s_nbPools++;
@@ -12912,6 +12921,7 @@ void RaceMod_FootArrive(void) {
         for (int i = 0; i < s_nbReplay; i++)
             if (s_replaySet[i][0] >= 0 && s_replaySet[i][0] < 256) ListVarGame[s_replaySet[i][0]] = (S16)s_replaySet[i][1];
         if (s_replayGold >= 0) NbGoldPieces = s_replayGold;
+        if (s_replayMs > 0) { s_menuAt = s_replayEndAt = TimerRefHR + s_replayMs; s_replayOver = 1; Log_Info("[racemod] a replay's clip: the menu in %d ms", (int)s_replayMs); }
         if (s_nbReplay) Log_Info("[racemod] a replayed egg: %d variables set as scene %d loads", s_nbReplay, (int)NewCube);
     }
     if (!RaceMod_OnFoot() || CubeMode != CUBE_EXTERIEUR) return;
@@ -13844,7 +13854,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
