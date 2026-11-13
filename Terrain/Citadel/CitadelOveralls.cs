@@ -152,7 +152,24 @@ internal static class CitadelOveralls
         var others = new List<(int Entry, int Faces)>();
         byte[]? Entry(int i) { try { return bodies.Read(i); } catch (ArgumentOutOfRangeException) { return null; } catch (InvalidDataException) { return null; } }
         var copies = Enumerable.Range(0, bodies.Count).Where(i => !TunicBodies.Contains(i) && Entry(i) is { } e && Counts(e) is (2, WheelTunicFaces)).ToList();
-        foreach (var t in TunicBodies.Concat(copies).ToList())
+        // (Twinsen arm in arm with Zoe, entity 5's body: his part the suit's shape, not only its colour -- CoupleInSuit)
+        var coupled = new HashSet<int>();
+        foreach (var c in CoupleBodies)
+        {
+            if (c >= bodies.Count || Entry(c) is not { } coupleBytes) continue;
+            try
+            {
+                // (no LBRA patch on his back here: its 150 points and polygons took the pair over the engine's 550)
+                var couple = CoupleInSuit(Body.Read(coupleBytes, 2), Overalls(Body.Read(bodies.Read(Everyday), 2)));
+                log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}): {couple.Vertices.Count} points, {couple.Faces.Count} polygons, {couple.Lines.Count} lines, {couple.Spheres.Count} spheres, {couple.Bones.Count} bones");
+                HqrWriter.ReplaceInFile(bodyPath, c, couple.Write());
+                coupled.Add(c);
+                log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}): his part the racing suit's ({couple.Vertices.Count} points, {couple.Faces.Count} polygons)");
+            }
+            catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IndexOutOfRangeException or KeyNotFoundException)
+            { log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}) left in the tunic's shape, in the suit's colour: {e.Message}"); }
+        }
+        foreach (var t in TunicBodies.Concat(copies).Where(t => !coupled.Contains(t)).ToList())
         {
             if (t >= bodies.Count) continue;
             if (Entry(t) is not { } bytes) continue;
@@ -407,6 +424,84 @@ internal static class CitadelOveralls
         }
 
         return AddToBone(body, world, Head, points, faces);
+    }
+
+    // Twinsen arm in arm with Zoe (entity 5's body, BODY.HQR 17: the user, 2026-11-12, "Twinsen with Zoe is still Twinsen in his tunic rather
+    // than his racing outfit"): his bones there are the tunic body's 0-16, the whole of him 100 to his right (x -100), the pelvis's bone (2)
+    // shared with Zoe's middle. His polygons out -- every one on his bones 3-16, and the tunic's (192) and his trousers' (80) on bone 2 --
+    // and the suit's of the same bones in, moved as far; Zoe's (bone 2's others, her bones 17 on) as they were.
+    private static readonly int[] CoupleBodies = { 17 };
+    private static readonly Vector3 CoupleShift = new(-100, 0, 0);
+    internal static Body CoupleInSuit(Body couple, Body suit)
+    {
+        const int Shared = 2, FirstHis = 3, LastHis = 16;
+        if (couple.Bones.Count <= LastHis + 1 || suit.Bones.Count <= LastHis) throw new InvalidDataException("not the couple's bones");
+        var tWorld = couple.World(); var dWorld = suit.World();
+        int TBone(int p) => couple.Bones.FindIndex(b => p >= b.Start && p < b.Start + b.Count);
+        int DBone(int p) => suit.Bones.FindIndex(b => p >= b.Start && p < b.Start + b.Count);
+        bool His(int bone) => bone >= FirstHis && bone <= LastHis;
+        bool HisOnShared(Face f) => f.Points.All(p => TBone(p) == Shared) && (f.Colour == TunicColour || f.Colour == 80);
+        // (what of the couple stays: no point on his bones, nor his on the pelvis)
+        var keptFaces = couple.Faces.Where(f => !f.Points.Any(p => His(TBone(p))) && !HisOnShared(f)).ToList();
+        var keptLines = couple.Lines.Where(l => !His(TBone(l.A)) && !His(TBone(l.B))).ToList();
+        var keptSpheres = couple.Spheres.Where(sp => !His(TBone(sp.Point))).ToList();
+        // (and of the suit's: on his bones 0-16 only -- the medallion's, 17 on, left out)
+        // (nor those facing straight down -- his soles, under his chin and hands -- never seen from the game's camera above: the pair within
+        // the engine's 550 primitives)
+        bool Down(Face f) => Vector3.Normalize(LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(f.Points.Select(p => dWorld[p]).ToArray())).Y < -0.8f;
+        var donorFaces = suit.Faces.Where(f => f.Points.All(p => DBone(p) <= LastHis) && !Down(f)).ToList();
+        var donorLines = suit.Lines.Where(l => DBone(l.A) <= LastHis && DBone(l.B) <= LastHis).ToList();
+        var donorSpheres = suit.Spheres.Where(sp => DBone(sp.Point) <= LastHis).ToList();
+        var usedShared = new HashSet<int>(keptFaces.SelectMany(f => f.Points).Concat(keptLines.SelectMany(l => new[] { l.A, l.B })).Concat(keptSpheres.Select(sp => sp.Point))
+            .Concat(couple.Bones.Where((b, i) => !His(i) && i != Shared).Select(b => b.Pivot)).Where(p => TBone(p) == Shared));
+        var world = new List<Vector3>(); var light = new List<float>();
+        var tMap = new Dictionary<int, int>(); var dMap = new Dictionary<int, int>();
+        var bones = new List<Bone>();
+        for (var b = 0; b < couple.Bones.Count; b++)
+        {
+            var start = world.Count;
+            void Take(int p) { tMap[p] = world.Count; world.Add(tWorld[p]); light.Add(couple.LightScale is { } ls && p < ls.Length ? ls[p] : 1f); }
+            void Give(int p) { dMap[p] = world.Count; world.Add(dWorld[p] + CoupleShift); light.Add(suit.LightScale is { } ls && p < ls.Length ? ls[p] : 1f); }
+            var tb = couple.Bones[b];
+            if (His(b)) { var db = suit.Bones[b]; for (var p = db.Start; p < db.Start + db.Count; p++) Give(p); }
+            else if (b == Shared)
+            {
+                for (var p = tb.Start; p < tb.Start + tb.Count; p++) if (usedShared.Contains(p)) Take(p);
+                var db = suit.Bones[b]; for (var p = db.Start; p < db.Start + db.Count; p++) Give(p);
+            }
+            else
+            {
+                for (var p = tb.Start; p < tb.Start + tb.Count; p++) Take(p);
+                // (his root bones, 0 and 1: the same points in both -- the suit's taken as the couple's)
+                if (b < FirstHis && b < suit.Bones.Count) { var db = suit.Bones[b]; for (var k = 0; k < db.Count && k < tb.Count; k++) dMap[db.Start + k] = tMap[tb.Start + k]; }
+            }
+            bones.Add(tb with { Start = start, Count = world.Count - start });
+        }
+        // (pivots: his bones the suit's, moved; the rest the couple's -- one hanging from his (the umbrella from his hand): the suit's point of
+        // that bone nearest where it was)
+        int Pivot(int b)
+        {
+            if (His(b)) return dMap[suit.Bones[b].Pivot];
+            var p = couple.Bones[b].Pivot;
+            if (tMap.TryGetValue(p, out var kept)) return kept;
+            var db = suit.Bones[TBone(p)];
+            var best = db.Start;
+            for (var q = db.Start; q < db.Start + db.Count; q++)
+                if (Vector3.DistanceSquared(dWorld[q] + CoupleShift, tWorld[p]) < Vector3.DistanceSquared(dWorld[best] + CoupleShift, tWorld[p])) best = q;
+            return dMap[best];
+        }
+        for (var b = 0; b < bones.Count; b++)
+            if (couple.Bones[b].Parent >= 0) bones[b] = bones[b] with { Pivot = Pivot(b) };
+        var result = couple;
+        result.Bones = bones;
+        result.Faces = keptFaces.Select(f => f with { Points = f.Points.Select(p => tMap[p]).ToArray(), PointNormals = null })
+            .Concat(donorFaces.Select(f => f with { Points = f.Points.Select(p => dMap[p]).ToArray(), PointNormals = null })).ToList();
+        result.Lines = keptLines.Select(l => l with { A = tMap[l.A], B = tMap[l.B] }).Concat(donorLines.Select(l => l with { A = dMap[l.A], B = dMap[l.B] })).ToList();
+        result.Spheres = keptSpheres.Select(sp => sp with { Point = tMap[sp.Point] }).Concat(donorSpheres.Select(sp => sp with { Point = dMap[sp.Point] })).ToList();
+        result.LightScale = light.Any(l => l != 1f) ? light.ToArray() : null;
+        result.Vertices = Enumerable.Repeat(Vector3.Zero, world.Count).ToList();
+        result.SetWorld(world.ToArray());
+        return result;
     }
 
     // Twinsen in his tunic holding or wearing something (the blowpipes, the laser pistol, the buggy's strap and horn: a tunic body's
