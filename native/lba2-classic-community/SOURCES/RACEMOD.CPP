@@ -5560,6 +5560,10 @@ void RaceMod_Lap(S32 x, S32 z) {
     // (over it the wrong way before the qualifying lap: QualifyingArrival)
     if (crossedLine < 0 && s_laps == 0) QualifyingArrival(1, TimerRefHR);
     if (crossedLine <= 0) return;
+    // (the lap of honour's last leg -- off the line to Raph's car, by the start line: crossing it is no lap, and no checkpoint missed -- it
+    // sent the car back to checkpoint 1, into the sea and rescued at the line: the user, 2026-11-12, "Twinsen's car doesn't successfully
+    // drive a victory lap after beating Raph's time, it first drowned, before getting rescued, and ultimately returning to the start line")
+    if (s_victory >= 2) { s_missBackAt = 0; return; }
     // (a sprint's start line counts once: its race begins there)
     if (s_sprint && s_laps > 0) return;
     const S32 now = TimerRefHR;
