@@ -12,7 +12,9 @@ internal static class RaceTrackGloves
 {
     // The red is lit (a ramp of the game's palette, RESS.HQR entry 0: its light is added along the ramp); the white stripes and the dark
     // palms and tips are flat colours (a lit grey ramp came out mid-grey, neither white nor dark).
-    private const int Red = 64, White = 62, Dark = 49;
+    // (the gloves in the racing suit's colour -- green by default, Citadel/CitadelOveralls.SuitLit; red was the first suit's)
+    private static int Red => Citadel.CitadelOveralls.SuitLit;
+    private const int White = 62, Dark = 49;
 
     // The inventory's scale (the game's own glove stands about 4200 units tall, so these about as tall) and the room's (the darts on display
     // were about 490 across).

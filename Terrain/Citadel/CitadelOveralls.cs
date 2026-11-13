@@ -47,7 +47,10 @@ internal static class CitadelOveralls
     private static readonly int[] BuggyDrivers = { 18, 19 };
     private const int MuseumCase = 105, CaseTunicColour = 162, CaseMedallion = 66;
     // (the racing gloves' colours, RaceTrackGloves: the red lit along its ramp, the white and the dark flat)
-    private const int Red = 64, White = 62, Dark = 49;
+    // (the inventory's overalls and helmet, and the gloves' model (RaceTrackGloves), in the suit's colour -- "Red" was the first suit's: the
+    // user, 2026-11-12: "The Racing suit in the inventory, and the found icon ... need to match the green")
+    private static int Red => SuitLit;
+    private const int White = 62, Dark = 49;
     // (on Twinsen: a ramp's start is its darkest -- 64 came out maroon -- so his overalls' red six shades up it, as his jeans' blue is
     // 194; the shirt's polygons are textured, its pattern taken off)
     // The suit's colour, a choice -- green by default (the user, 2026-11-10: "Let's go with green, but let's keep the models, they may be
@@ -67,6 +70,8 @@ internal static class CitadelOveralls
     public static SuitColour Colour { get; set; } = SuitColour.Green;
     private static (SuitColour Colour, string Name, int Ramp, int Shade) Suit => Suits.First(s => s.Colour == Colour);
     private static int Bright => Suit.Ramp + Suit.Shade;
+    // the suit's colour, lit, as the build has chosen it (the inventory's models are made before or after Install sets Colour)
+    internal static int SuitLit => Suits.First(x => x.Colour == Chosen()) is var c ? c.Ramp + c.Shade : 132;
     // (the build's choice: RT_SUIT, else the race car window's)
     public static SuitColour Chosen()
     {

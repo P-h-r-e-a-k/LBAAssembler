@@ -29,3 +29,18 @@ internal static class TavernGridProbe
         return 0;
     }
 }
+
+// a probe: the polygons' colours of OBJFIX.HQR entries (the inventory's models) -- args: gamedir entry...
+internal static class ObjFixColours
+{
+    public static int Run(string[] args)
+    {
+        var hqr = LBAAssembler.HqrArchive.Open(Path.Combine(args[1], "OBJFIX.HQR"));
+        foreach (var e in args.Skip(2).Select(int.Parse))
+        {
+            var body = LbaBodyStudio.Body.Read(hqr.Read(e), 2, allowStatic: true);
+            Console.WriteLine($"OBJFIX {e}: " + string.Join(", ", body.Faces.GroupBy(f => f.Colour).OrderByDescending(g => g.Count()).Select(g => $"{g.Key}x{g.Count()}")));
+        }
+        return 0;
+    }
+}

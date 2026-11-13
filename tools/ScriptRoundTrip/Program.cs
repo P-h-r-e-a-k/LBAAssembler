@@ -61,6 +61,7 @@ internal static class Program
             "audio" => AudioTests.Run(args),
             "decorprobe" => DecorProbe.Run(args),
             "tavgrid" => TavernGridProbe.Run(args),
+            "objfixcolours" => ObjFixColours.Run(args),
             "racetrack" => RaceTrackProbe.Run(args),
             "buildtrack" => RaceTrackCommand.Run(args),
             "herostart" => RaceTrackCommand.HeroStart(args),
