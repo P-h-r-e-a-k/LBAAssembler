@@ -20716,6 +20716,11 @@ static void DrawFarItem(int body, double wx, S32 y, double wz, S32 alpha, S32 be
     const S32 x = (S32)(wx - CurrentCubeX * 32768.0), z = (S32)(wz - CurrentCubeY * 32768.0);
     const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z;
     if (dx * dx + dz * dz > (double)RACE_FAR_ITEMS * RACE_FAR_ITEMS) return;
+    // (no further than the island is drawn: past it, with no ground under it, it hung in the air -- the user, 2026-11-12, from the
+    // lighthouse's top: "two mushrooms floating in the air")
+    LongWorldRotatePoint(x, y, z);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar) return;
     U8 *shape = (U8 *)GivePtrBody(body);
     if (!shape) return;
     if (!(*drawn)++) { Switch_Fillers(FILL_POLY_FOG_NZW); SetCLUT(PalLevel); }
@@ -20723,6 +20728,8 @@ static void DrawFarItem(int body, double wx, S32 y, double wz, S32 alpha, S32 be
 }
 static void DrawFarItems(void) {
     if (CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    // (for the race's sake: on foot out of a race -- up the lighthouse, about the town -- only this scene's own are seen)
+    if (Comportement != C_BUGGY && !RaceOn()) return;
     const T_RACE_DRAW kept = DrawKept();
     int drawn = 0;
     if (s_powerups && !NoItems() && !Qualifying() && MushroomsOut()) {
