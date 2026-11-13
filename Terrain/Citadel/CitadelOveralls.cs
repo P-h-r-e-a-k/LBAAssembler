@@ -232,6 +232,18 @@ internal static class CitadelOveralls
                 table = RaceTrackBaldinoCar.WithBody(table, e, HelmetBody, helmetEntry);
                 HqrWriter.ReplaceInFile(ressPath, 44, table);
             }
+        // (Twinsen arm in arm with Zoe -- the behaviour's entity, CoupleEntity -- has the pair's body under every number the hero's own
+        // can be at: the behaviour keeps the number of the body he had on, and with one it hasn't -- the helmet's, 18, or a weapon's -- he
+        // walked alone with his arm out, Zoe nowhere, her words from no one: the user, 2026-11-13, "After leaving the lighthouse Twinsen has
+        // an invisible character tell him to go home to take a nap")
+        if (RaceTrackGuards.BodyOf(table, CoupleEntity, 0) is { } pair)
+        {
+            var given = new List<int>();
+            for (var g = 0; g <= HelmetBody; g++)
+                if (RaceTrackGuards.BodyOf(table, CoupleEntity, g) is null && RaceTrackGuards.BodyOf(table, HeroEntity, g) is not null)
+                { table = RaceTrackBaldinoCar.WithBody(table, CoupleEntity, g, pair); given.Add(g); }
+            if (given.Count > 0) { HqrWriter.ReplaceInFile(ressPath, 44, table); log.Add($"Twinsen arm in arm with Zoe: the pair's body (BODY.HQR {pair}) as entity {CoupleEntity}'s bodies {string.Join(", ", given)} too"); }
+        }
         log.Add($"Twinsen's other bodies in his tunic in the suit's colour: BODY.HQR {string.Join(", ", others.Select(o => $"{o.Entry} ({o.Faces})"))}");
         log.Add($"Twinsen's racing overalls with the helmet on: the hero's body {HelmetBody} ({helmeted.Vertices.Count} points, {helmeted.Faces.Count} polygons)");
         log.Add($"Twinsen's racing overalls ({Suit.Name}, the palette's {Bright}): BODY.HQR {Tunic} (the tunic's) his everyday body in the suit's colour with a white belt and stripes " +
@@ -431,6 +443,7 @@ internal static class CitadelOveralls
     // shared with Zoe's middle. His polygons out -- every one on his bones 3-16, and the tunic's (192) and his trousers' (80) on bone 2 --
     // and the suit's of the same bones in, moved as far; Zoe's (bone 2's others, her bones 17 on) as they were.
     private static readonly int[] CoupleBodies = { 17 };
+    private const int CoupleEntity = 5;
     private static readonly Vector3 CoupleShift = new(-100, 0, 0);
     internal static Body CoupleInSuit(Body couple, Body suit)
     {
