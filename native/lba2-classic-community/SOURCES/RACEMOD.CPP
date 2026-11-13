@@ -11744,9 +11744,24 @@ void RaceMod_TestAttack(int n, int pu) {
 
 // Every frame: the balls in flight -- moved, shown where they are in this scene (a sprite each, a trail behind it), and any car they reach
 // stopped.
+// A magic ball's sprite that no shot has (left behind by a reset of the track, a game loaded, a change of scene): gone. Each a shot's own --
+// the race mod's (owner 255), a ball's sprite (8 on, by its kind), its life the shots' -- the user, 2026-11-10 and 2026-11-12, the Polar
+// dream: "this single round blue ball always in the same place towards the end of the track": a green ball's sprite lying on the road.
+static void ShotSpritesOrphaned(void) {
+    for (int e = 0; e < MAX_EXTRAS; e++) {
+        T_EXTRA *x = &ListExtra[e];
+        if (x->Sprite < 8 || x->Sprite > 8 + SHOT_FIRE || x->Owner != 255 || !(x->Flags & EXTRA_ANIM_SPRITE) || x->TimeOut != RACE_HOME_MS + 1000) continue;
+        int owned = 0;
+        for (int i = 0; i < RACE_MAX_SHOTS && !owned; i++) owned = s_shots[i].On && s_shots[i].Extra == e;
+        if (owned) continue;
+        Log_Info("[racemod] a magic ball's sprite no shot has, at (%d,%d,%d) in scene %d: taken away", (int)x->PosX, (int)x->PosY, (int)x->PosZ, (int)NumCube);
+        x->Sprite = -1;
+    }
+}
 static void Shots(S32 now, int driving) {
     const T_RACE_OPPONENT *o = Guide();
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    ShotSpritesOrphaned();
     static S32 last = 0;
     double dt = last ? (now - last) / 1000.0 : 0;
     last = now;
@@ -22572,7 +22587,9 @@ static void ResetTrack(void) {
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0; s_winStopVar = -1; s_onceWon = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
-    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots)); HeardReset();
+    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes));
+    for (int i = 0; i < RACE_MAX_SHOTS; i++) if (s_shots[i].On && s_shots[i].Extra >= 0 && s_shots[i].Extra < MAX_EXTRAS) ListExtra[s_shots[i].Extra].Sprite = -1;
+    memset(s_shots, 0, sizeof(s_shots)); HeardReset();
     s_heroBranch = -1; s_heroBranchAt = -1;
     s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;

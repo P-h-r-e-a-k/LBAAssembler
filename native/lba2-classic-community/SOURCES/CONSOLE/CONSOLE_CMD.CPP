@@ -2825,6 +2825,20 @@ static void cmd_turnto(int argc, const char *argv[]) {
     if (argc < 2) { Console_Print("Usage: turnto <beta 0..4095> | turnto off"); return; }
     RaceMod_TurnTo(strcasecmp(argv[1], "off") ? atoi(argv[1]) : -1);
 }
+// Every extra in use (sprite or body not -1): where it is, what it is, whose -- the things lying about the scene that are no actor
+static void cmd_extralist(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    int n = 0;
+    for (int i = 0; i < MAX_EXTRAS; i++) {
+        const T_EXTRA *e = &ListExtra[i];
+        if (e->Sprite == -1) continue;
+        Log_Info("[extra] %d: at (%d,%d,%d) sprite %d body %d flags 0x%X info %d owner %d divers %d timeout %d", i, (int)e->PosX, (int)e->PosY, (int)e->PosZ,
+                 (int)e->Sprite, (int)e->Body, (unsigned)e->Flags, (int)e->Info, (int)e->Owner, (int)e->Divers, (int)e->TimeOut);
+        n++;
+    }
+    Log_Info("[extra] %d in use in cube %d", n, (int)NumCube);
+}
+
 static void cmd_racewalk(int argc, const char *argv[]) {
     extern void RaceMod_Walk(int n, const double *xz, int car, int more);
     extern void RaceMod_WalkThen(int actor, double reach, int action);
@@ -3373,6 +3387,7 @@ void Console_RegisterAll(void) {
                               "drivecap <km/h> | drivecap 0", "racewalk ... car brakes instead of accelerating while the car is over it.");
     Console_RegisterCommandEx("turnto", cmd_turnto, "Turn Twinsen on the spot by the keys till he faces a heading",
                               "turnto <beta> | turnto off", "Holds left or right, the shorter way, till he faces within 30 of beta (0 = +z, 1024 = +x, 2048 = -z, 3072 = -x). walkdone waits for it.");
+    Console_RegisterCommandEx("extralist", cmd_extralist, "List the extras in use (bonuses, projectiles lying about)", "extralist", "Logs each extra with a sprite or body: place, sprite, body, flags, owner.");
     Console_RegisterCommandEx("racewalk", cmd_racewalk, "Race-track test: walk Twinsen on foot through points, then to his car",
                               "racewalk [+] <x z>... [car] [actor <n> [reach]] [action] | racewalk off",
                               "With a race file's on_foot=1 and Twinsen out of his car, walks him through the points (island "
