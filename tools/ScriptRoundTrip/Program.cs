@@ -248,6 +248,7 @@ internal static class Program
             "discretail" => DiscRetailCommand.Run(args),
             "lba2sprite" => Lba2SpriteCommand.Run(args),
             "bodypolys" => BodyPolysCommand.Run(args),
+            "stella" => StellaCommand.Run(args),
             "gridgirl" => GridGirlCommand.Run(args),
             "maptrack" => MapTrackCommand.Run(args),
             "demo96" => Demo96Command.Run(args),

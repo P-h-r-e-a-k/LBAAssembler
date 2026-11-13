@@ -40,7 +40,7 @@ internal static class StellaEntities
     // the poles round the column (degrees, the room's middle to them: x = cos, z = sin -- all on the audience's side of it, the camera's:
     // one behind it was drawn over it), the tables', the stools'
     private static readonly float[] PoleAngles = { 10, 60, 110 }, TableAngles = { 20, 60, 200, 235, 305, 335 };
-    private const float PoleCells = 5, TableCells = 11.5f, StoolCells = 14.2f;
+    internal const float PoleCells = 5; private const float TableCells = 11.5f, StoolCells = 14.2f;
     private const int CorridorX0 = 43, CorridorX1 = 56, CorridorZ0 = 30, CorridorZ1 = 34;
     private const int FootX0 = 55, FootX1 = 60, FootZ0 = 26, FootZ1 = 34;
     // the floor's layer (Rick's), its tile (3 x 1 x 3) and where its 3 x 3 repeats from

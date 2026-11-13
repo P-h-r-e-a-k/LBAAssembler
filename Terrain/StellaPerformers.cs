@@ -1,328 +1,318 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Numerics;
-using LbaBodyStudio;
 using LBAAssembler.Characters;
+using LBAAssembler.Terrain.Palace;
 
 namespace LBAAssembler.Terrain;
 
-// Stella Entities' seven performers (docs/LBRA_STRIP_JOINT_DESIGN.md; the user, 2026-11-11: "a few female characters of different species
-// from both worlds, topless just wearing thongs" -- adult women only -- and "build ORIGINAL performer characters (new models)"). Each is a body
-// of her own, hand-built the way PeachCustom is (rings on Twinsen's 19-bone rig, so Twinsen's own animations fit her), from one Spec: her
-// skin, hair and thong colours, her build, and what makes her a Grobo, a rabbibunny, a Quetch, a Sup, a Franco or a wizard (ears, trunk, tail,
-// crest, hat). A stage costume: the thong a band at the hip with a patch at the front, nothing more drawn.
+// Stella Entities' seven performers (docs/LBRA_STRIP_JOINT_DESIGN.md). The user, 2026-11-13: "None of the models look anything like any
+// species from the game. We should be able to take some random characters and reskin and colour them to get the right shape", "We need the
+// pole dancers to be doing tricks with the poles, and strutting their stuff on the stage", "Have the performers topless, but wearing thongs
+// so they're not fully naked" -- adult women of the game's species, a strip bar's stage show and no more.
 //
-// Installed as bodies of the hero's entity (0, Twinsen's own rig: his walk fits them) -- the generics Body0.. -- with animations of their own
-// (Sway: dancing on the spot, arms rolling; Pole: one hand on the pole, leaning out and round it) beside his.
+// Each is one of the game's own bodies (its species' shape, its bones), recoloured: what she wore over her top her skin, a thong at her hips
+// (the low band of what she wore there, in a stage colour), her shoes or boots kept; whatever she carried gone (the umbrella). Seven:
+//   0 a Grobo (the Hacienda's bather, BODY 122)        stage       4 a Sup (the saucer's stewardess, 144)      stage
+//   1 a rabbibunny (the Hacienda's bather, 121)        pole        5 a Franco (the shop lady, 443)               stage
+//   2 a Quetch (the umbrella lady, 172)                stage       6 a wizard (the statue's, 189)                pole
+//   3 a Sup (the Imperial Hotel's, 440, as the flag marshal's bikini, GridGirl) pole
+// Installed as bodies of the hero's entity (0) -- generics Body0.. -- each with an animation of her own (Anim0 + her number) made for her
+// bones from one routine (StageRoutine or PoleRoutine, below) by what each bone is (her Rig).
+//
+// The pole: a pole dancer's body stands Reach beside the actor's own spot (the pole: the actor stands on it), the pole at her left (her
+// arm B's side); her bone 1 (the one everything hangs from, its pivot moved onto the pole's line) turns her round the pole, and bone 2 -- a
+// shift, in her pole routine -- lifts her up it (a climb), or, with bone 1 tipped, holds her upside down on it (an invert). On the stage,
+// bone 1 is the shift instead (her strut along the stage's edge, a dip), and her hips (bone 2 or 3) turn her as she goes.
 internal static class StellaPerformers
 {
-    public const int Entity = 0, Body0 = 70, Sway = 480, Pole = 481;
+    public const int Entity = 0, Body0 = 70, Anim0 = 480;
+    public static int AnimOf(int who) => Anim0 + who;
 
-    // What a performer is: colours (ramp starts of the racing palette: see PeachCustom's notes -- each stays inside its ramp when lit), her
-    // height and build (hips and shoulders, 1 = Peach's), and her kind's extras
-    public enum Kind { Grobo, Rabbibunny, Quetch, Sup, Franco, Wizard }
-    public sealed record Spec(string Name, Kind Kind, int Skin, int Hair, int Thong, int Accent, float Height = 1230, float Hips = 1, float Shoulders = 1, float Bust = 1);
+    // What each of her bones is: her hips (they turn her, sway), her torso (and chest, if she has one: -1), head, arms (+x side A, -x side
+    // B: upper, fore) and legs (thigh, shin, foot or -1); bone 1 (Orbit) and 2 (Lift) as above
+    public sealed record Rig(int Hips, int Torso, int Chest, int Head, int[] ArmA, int[] ArmB, int[] LegA, int[] LegB, int Orbit = 1, int Lift = 2);
+    // A polygon's new colour (To; -1 drops it) when its bone (of its first point) is one of Bones (any: null), its colour (low byte) From
+    // (any: -1), its middle within the heights and depths given
+    public sealed record Rule(int To, int From = -1, int[]? Bones = null, float YMin = float.MinValue, float YMax = float.MaxValue, float ZMin = float.MinValue, float ZMax = float.MaxValue);
+    public sealed record Spec(string Name, int Source, Rig Rig, bool Pole, Rule[] Rules, int DropFrom = -1, bool GridGirl = false);
+
+    private static int[] B(params int[] b) => b;
+    private const int Red = 69, Gold = 100, Black = 49, Purple = 210, Teal = 147;
+    // (a pole dancer's grip: how high her hand holds the pole, bone 1's pivot -- what she turns and tips about)
+    private const float GripHigh = 1500;
 
     public static readonly Spec[] All =
     {
-        new("a Grobo bather", Kind.Grobo, Skin: 54, Hair: 48, Thong: 76, Accent: 100, Height: 1180, Hips: 1.25f, Shoulders: 1.1f, Bust: 1.2f),
-        new("a rabbibunny", Kind.Rabbibunny, Skin: 58, Hair: 56, Thong: 70, Accent: 76, Height: 1200, Hips: 1.05f, Shoulders: 0.9f),
-        new("a Quetch", Kind.Quetch, Skin: 196, Hair: 197, Thong: 102, Accent: 76, Height: 1300, Hips: 0.9f, Shoulders: 0.9f, Bust: 0.8f),
-        new("a bikini Sup", Kind.Sup, Skin: 36, Hair: 69, Thong: 70, Accent: 100),
-        new("a stewardess Sup", Kind.Sup, Skin: 35, Hair: 48, Thong: 197, Accent: 102, Height: 1260, Hips: 0.95f),
-        new("a Franco lady", Kind.Franco, Skin: 133, Hair: 100, Thong: 102, Accent: 70, Height: 1150, Hips: 1.15f, Shoulders: 1.05f, Bust: 1.1f),
-        new("a wizard", Kind.Wizard, Skin: 35, Hair: 58, Thong: 197, Accent: 102, Height: 1250, Hips: 1.0f),
+        new("a Grobo", 122, new Rig(2, 3, -1, 4, B(9, 10), B(11, 12), B(5, 6, -1), B(7, 8, -1)), false, new Rule[]
+        {
+            new(192, 51, B(3, 9, 11)),                     // the bather's suit over her top: her skin
+            new(192, 51, B(2), YMin: 300),                 // its upper part at her middle too
+            new(Red, 51),                                  // the rest of it -- low at her hips, the legs' edges: a red thong
+        }),
+        new("a rabbibunny", 121, new Rig(2, 3, -1, 16, B(4, 5), B(7, 8), B(10, 11, 12), B(13, 14, 15)), true, new Rule[]
+        {
+            new(81, 101, B(3)),                            // the bikini's top: her fur
+            new(Black, 101, B(2)),                         // its bottom: a black thong
+        }),
+        new("a Quetch", 172, new Rig(2, 3, -1, 16, B(4, 5), B(7, 8), B(10, 11, 12), B(13, 14, 15)), false, new Rule[]
+        {
+            new(22, -1, B(3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14)),   // her suit: skin, top to toe but for her shoes and hips
+            new(Gold, -1, B(2), YMax: 660),                // the hips' low band: a gold thong
+            new(22, -1, B(2)),
+            new(Gold, 64, B(12, 15)),                      // gold shoes
+        }, DropFrom: 21),
+        new("a Sup", 440, new Rig(2, 3, -1, 4, B(8, 9), B(5, 6), B(14, 15, 16), B(11, 12, 13)), true, new Rule[]
+        {
+            new(36, 69, B(3, 17, 18, 19)),                 // the marshal's bikini top: her skin
+            new(Black, 69),                                // its bottom and her shoes: black
+        }, GridGirl: true),
+        new("a Sup stewardess", 144, new Rig(2, 3, 4, 6, B(7, 8), B(10, 11), B(13, 14, 15), B(16, 17, 18)), false, new Rule[]
+        {
+            new(38, 194, B(13, 16)),                       // her shorts' legs: skin
+            new(Teal, 194, B(2)),                          // their seat: a teal thong
+        }),
+        new("a Franco", 443, new Rig(3, 4, -1, 6, B(10, 11), B(13, 14), B(16, 17, 18), B(20, 21, 22)), false, new Rule[]
+        {
+            new(Purple, 70, B(3), YMax: 400),              // her shorts' low band: a purple thong
+            new(82, 70),                                   // the rest of them: skin
+            new(82, 150, B(10, 13)),                       // her sleeves: skin
+            new(82, 222),                                  // her socks: skin
+        }),
+        new("a wizard", 189, new Rig(2, 3, 4, 6, B(14, 15), B(11, 12), B(20, 21, 22), B(17, 18, 19)), true, new Rule[]
+        {
+            new(32, 160, B(4)),                            // her suit's top: skin
+            new(Gold, 64),                                 // its belt: a gold band
+            new(Purple, 160),                              // the rest -- at her hips and the boots: purple, a wizard's
+        }),
     };
 
-    private static readonly int[] Parents = { -1, 0, 1, 2, 3, 4, 3, 6, 2, 8, 9, 2, 11, 12, 3, 14, 15, 3, 17 };
+    // ---- the bodies --------------------------------------------------------------------------------------------------------------
 
-    public static Body Build(Body donor, Spec s)
+    // Her body from the game's (`source`, BODY.HQR's entry): recoloured by her rules, what she carried dropped, set beside the pole if she
+    // dances on one; its box round all the room her routine takes
+    public static byte[] Make(Spec s, byte[] source)
     {
-        float H = s.Height;
-        var vertices = Enumerable.Range(0, 19).Select(_ => new List<Vector3>()).ToArray();
-        var faces = new List<(int Bone, int[] Points, int Colour)>();
-        int Skin = s.Skin, Hair = s.Hair, Thong = s.Thong, Accent = s.Accent;
-
-        List<Vector3> R(int bone, float cx, float cy, float cz, float rx, float rz, int segments = 8)
+        if (s.GridGirl) source = GridGirl.Remodel(source);
+        var p = PalaceTorturers.Parts.Read(source);
+        if (s.DropFrom > 0)
         {
-            var ring = new List<Vector3>();
-            for (var j = 0; j < segments; j++)
+            var e = new GridGirl.Edit(p);
+            e.DropBonesFrom(s.DropFrom);
+            p = PalaceTorturers.Parts.Read(e.Finish());
+        }
+        // (each polygon by the first rule it meets; one with a picture on it -- the wizard's suit -- made a plain one, gouraud-lit, if a rule
+        // gives it a colour: its first 12 bytes are a plain polygon's, its points, colour and light)
+        var world = p.World();
+        var plain = new Dictionary<int, List<byte[]>>();
+        for (var b = 0; b < p.Blocks.Count; b++)
+        {
+            var (type, records) = p.Blocks[b];
+            var n = (type & 0x8000) != 0 ? 4 : 3;
+            var textured = (type & 0xFF) > 7;
+            var kept = new List<byte[]>();
+            foreach (var record in records)
             {
-                var a = j * 2 * MathF.PI / segments;
-                ring.Add(new Vector3(cx + rx * MathF.Cos(a), cy, cz + rz * MathF.Sin(a)));
+                var points = Enumerable.Range(0, n).Select(k => (int)BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(k * 2))).ToArray();
+                var colour = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(8));
+                var bone = p.Points[points[0]].Bone;
+                var c = points.Select(i => world[i]).Aggregate(Vector3.Zero, (a, v) => a + v) / n;
+                var rule = s.Rules.FirstOrDefault(r => (r.From < 0 || (colour & 0xFF) == r.From) && (r.Bones is null || r.Bones.Contains(bone))
+                                                       && c.Y >= r.YMin && c.Y <= r.YMax && c.Z >= r.ZMin && c.Z <= r.ZMax);
+                if (rule is null) { kept.Add(record); continue; }
+                if (rule.To < 0) continue;
+                if (!textured)
+                {
+                    BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(8), (ushort)((colour & 0xFF00) | rule.To));
+                    kept.Add(record);
+                    continue;
+                }
+                var r12 = record[..12];
+                BinaryPrimitives.WriteUInt16LittleEndian(r12.AsSpan(8), (ushort)(0x1000 | rule.To));
+                var to = (type & 0x8000) | 4;
+                if (!plain.TryGetValue(to, out var list)) plain[to] = list = new();
+                list.Add(r12);
             }
-            vertices[bone].AddRange(ring);
-            return ring;
+            p.Blocks[b] = (type, kept);
         }
-        void Chain(int bone, List<List<Vector3>> rings, int colour, bool capStart, bool capEnd)
+        foreach (var (type, list) in plain) p.Blocks.Add((type, list));
+        byte[] bytes;
+        var reach = Reach(s, p);
+        if (s.Pole)
         {
-            var begin = vertices[bone].Count - rings.Sum(r => r.Count);
-            if (begin < 0 || vertices[bone][begin] != rings[0][0]) throw new InvalidOperationException($"Chain(bone {bone}): rings aren't the trailing span.");
-            var offsets = new int[rings.Count]; var pos = begin;
-            for (var i = 0; i < rings.Count; i++) { offsets[i] = pos; pos += rings[i].Count; }
-            for (var r = 0; r < rings.Count - 1; r++)
-            {
-                var n = rings[r].Count;
-                for (var j = 0; j < n; j++)
-                    faces.Add((bone, new[] { offsets[r] + j, offsets[r] + (j + 1) % n, offsets[r + 1] + (j + 1) % n, offsets[r + 1] + j }, colour));
-            }
-            if (capStart) { var n = rings[0].Count; for (var j = 1; j < n - 2; j += 2) faces.Add((bone, new[] { offsets[0], offsets[0] + j + 2, offsets[0] + j + 1, offsets[0] + j }, colour)); }
-            if (capEnd) { var n = rings[^1].Count; var b = offsets[^1]; for (var j = 1; j < n - 2; j += 2) faces.Add((bone, new[] { b, b + j, b + j + 1, b + j + 2 }, colour)); }
+            // (bone 1's pivot onto the pole's line -- the actor's spot -- at her grip's height, and her, from it, Reach out to her right: the
+            // pole at her left; her points kept where they are from the pivot front to back, so she stands on the line; tipped about that
+            // pivot she goes over her hand on the pole, upside down above it)
+            var pivot = p.Bones[s.Rig.Orbit].Pivot;
+            var below = GripHigh - p.Points[pivot].Y;
+            p.Points[pivot] = p.Points[pivot] with { X = 0, Y = (short)GripHigh, Z = 0 };
+            var start = p.StartOf(s.Rig.Orbit);
+            for (var i = start; i < start + p.Bones[s.Rig.Orbit].Count; i++)
+                p.Points[i] = p.Points[i] with { X = (short)(p.Points[i].X + reach), Y = (short)(p.Points[i].Y - below) };
         }
-        // a pointed thing: a ring narrowing to a tip (a cone, an ear, a crest), its tip at `tip`
-        void Cone(int bone, float cx, float cy, float cz, float rx, float rz, Vector3 tip, int colour, int segments = 6)
-        {
-            var ring = R(bone, cx, cy, cz, rx, rz, segments);
-            var t = vertices[bone].Count; vertices[bone].Add(tip);
-            var b = t - segments;
-            for (var j = 0; j < segments; j++) faces.Add((bone, new[] { b + (j + 1) % segments, b + j, t }, colour));
-            // (its base, facing down)
-            for (var j = 1; j < segments - 2; j += 2) faces.Add((bone, new[] { b, b + j, b + j + 1, b + j + 2 }, colour));
-        }
-
-        float hipX = 70 * s.Hips, shX = 145 * s.Shoulders;
-        // ---- legs: bare, the foot a bare foot (a dancer's); the Franco's and the Grobo's a little thicker
-        float thick = s.Kind is Kind.Grobo or Kind.Franco ? 1.15f : 1f;
-        void Leg(int thigh, int shin, int foot, int side)
-        {
-            float x = side * hipX;
-            Chain(thigh, new() { R(thigh, x, H * .455f, 0, 48 * thick, 44 * thick), R(thigh, x, H * .29f, 0, 40 * thick, 38 * thick) }, Skin, true, false);
-            var shinTop = R(shin, x, H * .29f, 0, 40 * thick, 38 * thick);
-            var ankle = R(shin, x, H * .095f, 0, 32, 30);
-            Chain(shin, new() { shinTop, ankle }, Skin, false, false);
-            var footTop = R(foot, x, H * .095f, 0, 34, 32);
-            var toe = R(foot, x, H * .01f, H * .10f, 38, 34);
-            var sole = R(foot, x, H * .0f, H * .06f, 30, 32);
-            Chain(foot, new() { footTop, toe, sole }, s.Kind == Kind.Rabbibunny ? Accent : Skin, false, true);
-        }
-        Leg(8, 9, 10, 1); Leg(11, 12, 13, -1);
-
-        // ---- hips (2): skin, with the thong -- a band round the hips (coloured), and a patch at the front and a string at the back
-        {
-            var thigh = R(2, 0, H * .38f, 0, 118 * s.Hips, 90 * s.Hips, 10);
-            var low = R(2, 0, H * .43f, 0, 150 * s.Hips, 110 * s.Hips, 10);
-            Chain(2, new() { thigh, low }, Skin, false, false);
-            var bandLow = R(2, 0, H * .47f, 0, 156 * s.Hips, 114 * s.Hips, 10);
-            Chain(2, new() { low, bandLow }, Skin, false, false);
-            var bandHigh = R(2, 0, H * .485f, 0, 154 * s.Hips, 113 * s.Hips, 10);
-            Chain(2, new() { bandLow, bandHigh }, Thong, false, false);
-            var waist = R(2, 0, H * .53f, 0, 128, 94, 10);
-            Chain(2, new() { bandHigh, waist }, Skin, false, false);
-            var top = R(2, 0, H * .58f, 0, 118, 88, 10);
-            Chain(2, new() { waist, top }, Skin, false, false);
-            // the patch: a triangle at the front, a hand's breadth, from the band down between the legs (standing off the skin a little)
-            var p = vertices[2].Count;
-            vertices[2].Add(new Vector3(-60 * s.Hips, H * .485f, 118 * s.Hips + 2)); vertices[2].Add(new Vector3(60 * s.Hips, H * .485f, 118 * s.Hips + 2));
-            vertices[2].Add(new Vector3(0, H * .385f, 96 * s.Hips + 6));
-            faces.Add((2, new[] { p + 1, p, p + 2 }, Thong));
-            // (and the string behind: a short strip from the band into the cleft)
-            var q = vertices[2].Count;
-            vertices[2].Add(new Vector3(-14, H * .485f, -112 * s.Hips - 2)); vertices[2].Add(new Vector3(14, H * .485f, -112 * s.Hips - 2));
-            vertices[2].Add(new Vector3(0, H * .40f, -88 * s.Hips - 4));
-            faces.Add((2, new[] { q, q + 1, q + 2 }, Thong));
-        }
-
-        // ---- the torso (3): skin from the waist to the shoulders, her bust a swelling of the front, the neck
-        {
-            float bust = s.Bust;
-            var bib = R(3, 0, H * .58f, 0, 118, 88, 10);
-            var under = R(3, 0, H * .65f, 0, 124, 94 + 10 * bust, 10);
-            Chain(3, new() { bib, under }, Skin, false, false);
-            var chest = R(3, 0, H * .70f, 0, 128 * s.Shoulders, 100 + 26 * bust, 10);
-            Chain(3, new() { under, chest }, Skin, false, false);
-            var shoulders = R(3, 0, H * .775f, 0, 100 * s.Shoulders, 80, 10);
-            Chain(3, new() { chest, shoulders }, Skin, false, false);
-            var neck = R(3, 0, H * .815f, 0, 38, 34, 10);
-            Chain(3, new() { shoulders, neck }, Skin, false, false);
-        }
-        // ---- arms: slender, bare
-        void Arm(int upper, int fore, int side)
-        {
-            float x = side * shX;
-            Chain(upper, new() { R(upper, x, H * .775f, 0, 40, 38), R(upper, x, H * .62f, 0, 34, 32) }, Skin, true, false);
-            var foreTop = R(fore, x, H * .62f, 0, 34, 32);
-            var wrist = R(fore, x, H * .48f, 0, 28, 26);
-            Chain(fore, new() { foreTop, wrist }, Skin, false, false);
-            var palm = R(fore, x, H * .40f, 0, 32, 30);
-            var fist = R(fore, x, H * .345f, 0, 26, 24);
-            Chain(fore, new() { wrist, palm, fist }, Skin, false, true);
-        }
-        Arm(4, 5, 1); Arm(6, 7, -1);
-
-        // ---- the head (14) and what rides it (15, 16 above; 17 and 18 hang from the torso: the tail and the hair behind)
-        bool bigHead = s.Kind is Kind.Grobo or Kind.Franco;
-        {
-            float w = bigHead ? 1.12f : 1f;
-            var neck = R(14, 0, H * .815f, 0, 40, 36, 10);
-            var jaw = R(14, 0, H * .85f, 0, 56 * w, 52 * w, 10);
-            var cheeks = R(14, 0, H * .885f, 0, 62 * w, 58 * w, 10);
-            var brow = R(14, 0, H * .925f, 0, 58 * w, 54 * w, 10);
-            Chain(14, new() { neck, jaw, cheeks, brow }, Skin, false, false);
-            var crown = R(14, 0, H * .965f, 0, 52 * w, 48 * w, 10);
-            Chain(14, new() { brow, crown }, s.Kind == Kind.Wizard || s.Kind == Kind.Sup ? Skin : Skin, false, false);
-            var top = R(14, 0, H * .985f, 0, 30 * w, 28 * w, 10);
-            // (hair over the top of the head: the cap of it, in her hair's colour)
-            Chain(14, new() { crown, top }, s.Kind is Kind.Grobo or Kind.Quetch ? Skin : Hair, false, true);
-            // the nose, small; the lips, a patch in the thong's colour
-            var nb = vertices[14].Count;
-            vertices[14].Add(new Vector3(-14, H * .895f, 62 * w)); vertices[14].Add(new Vector3(14, H * .895f, 62 * w));
-            vertices[14].Add(new Vector3(12, H * .876f, 58 * w)); vertices[14].Add(new Vector3(-12, H * .876f, 58 * w));
-            var nt = vertices[14].Count;
-            vertices[14].Add(new Vector3(0, H * .885f, 78 * w));
-            faces.Add((14, new[] { nb + 1, nb, nt }, Skin)); faces.Add((14, new[] { nb + 2, nb + 1, nt }, Skin));
-            faces.Add((14, new[] { nb + 3, nb + 2, nt }, Skin)); faces.Add((14, new[] { nb, nb + 3, nt }, Skin));
-            var lb = vertices[14].Count;
-            vertices[14].Add(new Vector3(-15, H * .869f, 54 * w)); vertices[14].Add(new Vector3(15, H * .869f, 54 * w));
-            vertices[14].Add(new Vector3(17, H * .853f, 50 * w)); vertices[14].Add(new Vector3(-17, H * .853f, 50 * w));
-            faces.Add((14, new[] { lb + 3, lb + 2, lb + 1, lb }, Accent));
-            // eyes: two dark patches
-            foreach (var side in new[] { -1, 1 })
-            {
-                var e = vertices[14].Count;
-                float ex = side * 26;
-                vertices[14].Add(new Vector3(ex - 8, H * .913f, 56 * w)); vertices[14].Add(new Vector3(ex + 8, H * .913f, 56 * w));
-                vertices[14].Add(new Vector3(ex + 8, H * .901f, 56 * w)); vertices[14].Add(new Vector3(ex - 8, H * .901f, 56 * w));
-                faces.Add((14, new[] { e + 3, e + 2, e + 1, e }, 48));
-            }
-            float hy = H * .93f;
-            switch (s.Kind)
-            {
-                case Kind.Grobo:
-                    // big flat ears out at the sides, and a short trunk at the front hanging to the chin
-                    foreach (var side in new[] { -1, 1 })
-                    {
-                        var e = vertices[14].Count;
-                        vertices[14].Add(new Vector3(side * 62, hy + 30, 0)); vertices[14].Add(new Vector3(side * 62, hy - 30, 0));
-                        vertices[14].Add(new Vector3(side * 150, hy - 50, -20)); vertices[14].Add(new Vector3(side * 160, hy + 60, -20));
-                        faces.Add((14, side > 0 ? new[] { e, e + 1, e + 2, e + 3 } : new[] { e + 3, e + 2, e + 1, e }, Accent));
-                        faces.Add((14, side > 0 ? new[] { e + 3, e + 2, e + 1, e } : new[] { e, e + 1, e + 2, e + 3 }, Accent));
-                    }
-                    Chain(14, new() { R(14, 0, H * .905f, 62, 18, 16, 6), R(14, 0, H * .85f, 90, 15, 14, 6), R(14, 0, H * .81f, 96, 12, 12, 6) }, Skin, true, true);
-                    break;
-                case Kind.Rabbibunny:
-                    // long ears up from the crown, bent back a little; a round white tail behind (on the hips' bone, below)
-                    foreach (var side in new[] { -1, 1 })
-                    {
-                        Cone(14, side * 34, H * .97f, -6, 22, 14, new Vector3(side * 56, H * 1.20f, -52), Hair, 6);
-                        Cone(14, side * 34, H * .975f, 2, 12, 8, new Vector3(side * 56, H * 1.17f, -40), Accent, 4);
-                    }
-                    break;
-                case Kind.Quetch:
-                    // a tall crest of cartilage from brow to nape
-                    Cone(14, 0, H * .98f, 0, 18, 60, new Vector3(0, H * 1.12f, -90), Hair, 6);
-                    foreach (var side in new[] { -1, 1 })
-                        Cone(14, side * 56, hy, 0, 12, 14, new Vector3(side * 108, hy + 70, -10), Skin, 4);
-                    break;
-                case Kind.Sup:
-                    // long hair falling behind, down her back (a ponytail, or the stewardess's let loose)
-                    Chain(14, new() { R(14, 0, H * .97f, -50, 40, 24, 6), R(14, 0, H * .88f, -76, 38, 24, 6), R(14, 0, H * .76f, -86, 36, 22, 6), R(14, 0, H * .66f, -80, 22, 14, 6) }, Hair, true, true);
-                    break;
-                case Kind.Franco:
-                    // pointed ears, a bun of hair
-                    foreach (var side in new[] { -1, 1 })
-                        Cone(14, side * 58, hy, 0, 14, 14, new Vector3(side * 130, hy + 56, -10), Skin, 4);
-                    Chain(14, new() { R(14, 0, H * .99f, -30, 36, 36, 6), R(14, 0, H * 1.04f, -34, 42, 40, 6), R(14, 0, H * 1.08f, -30, 24, 22, 6) }, Hair, true, true);
-                    break;
-                case Kind.Wizard:
-                    // long silver hair behind her; the hat -- a brim and a tall bent cone -- on bone 15 below
-                    Chain(14, new() { R(14, 0, H * .97f, -46, 44, 28, 6), R(14, 0, H * .86f, -78, 42, 26, 6), R(14, 0, H * .72f, -90, 40, 24, 6), R(14, 0, H * .58f, -80, 24, 14, 6) }, Hair, true, true);
-                    break;
-            }
-        }
-        if (s.Kind == Kind.Wizard)
-        {
-            Chain(15, new() { R(15, 0, H * .975f, 0, 110, 104, 10), R(15, 0, H * .99f, 0, 96, 90, 10) }, 197, true, false);
-            var band = R(15, 0, H * .99f, 0, 54, 50, 10);
-            var mid = R(15, 0, H * 1.07f, -10, 40, 38, 10);
-            Chain(15, new() { band, mid }, 197, false, false);
-            Cone(15, 0, H * 1.07f, -10, 40, 38, new Vector3(0, H * 1.22f, -70), 197, 10);
-            // a gold band and a star on the front
-            Chain(15, new() { R(15, 0, H * .995f, 0, 57, 53, 10), R(15, 0, H * 1.02f, -2, 52, 48, 10) }, Accent, false, false);
-        }
-        if (s.Kind == Kind.Rabbibunny)
-        {
-            // the tail: a round puff behind, on the torso's lower bone (17 hangs from the torso, so it follows her spine; the hips' own 2 keeps it on the thong)
-            Chain(2, new() { R(2, 0, H * .46f, -138, 38, 34, 6), R(2, 0, H * .50f, -170, 52, 46, 6), R(2, 0, H * .54f, -138, 34, 30, 6) }, Hair, true, true);
-        }
-        if (s.Kind == Kind.Wizard)
-        {
-            // stars in her thong's band: gold patches at the front of the hips
-            foreach (var x in new[] { -90f, 0f, 90f })
-            {
-                var st = vertices[2].Count;
-                float zf = 112 * s.Hips + 4 - Math.Abs(x) * 0.25f;
-                vertices[2].Add(new Vector3(x - 10, H * .515f, zf)); vertices[2].Add(new Vector3(x + 10, H * .515f, zf));
-                vertices[2].Add(new Vector3(x + 10, H * .50f, zf)); vertices[2].Add(new Vector3(x - 10, H * .50f, zf));
-                faces.Add((2, new[] { st + 3, st + 2, st + 1, st }, Accent));
-            }
-        }
-
-        var origins = new Vector3[19];
-        origins[0] = Vector3.Zero; origins[1] = new Vector3(0, H * .455f, 0); origins[2] = new Vector3(0, H * .455f, 0);
-        origins[3] = new Vector3(0, H * .58f, 0); origins[4] = new Vector3(shX, H * .775f, 0); origins[5] = new Vector3(shX, H * .62f, 0);
-        origins[6] = new Vector3(-shX, H * .775f, 0); origins[7] = new Vector3(-shX, H * .62f, 0);
-        origins[8] = new Vector3(hipX, H * .455f, 0); origins[9] = new Vector3(hipX, H * .29f, 0); origins[10] = new Vector3(hipX, H * .095f, 0);
-        origins[11] = new Vector3(-hipX, H * .455f, 0); origins[12] = new Vector3(-hipX, H * .29f, 0); origins[13] = new Vector3(-hipX, H * .095f, 0);
-        origins[14] = new Vector3(0, H * .815f, 0); origins[15] = new Vector3(0, H * .975f, 0);
-        origins[16] = new Vector3(0, H * 1.04f, 0); origins[17] = new Vector3(0, H * .58f, 0); origins[18] = new Vector3(0, H * .58f, 0);
-        for (var i = 0; i < 19; i++) if (vertices[i].Count == 0) vertices[i].Add(origins[i]);
-        var pivots = new int[19];
-        for (var i = 1; i < 19; i++) { pivots[i] = vertices[Parents[i]].Count; vertices[Parents[i]].Add(origins[i]); }
-
-        var body = new Body { Game = 2, Header = (byte[])donor.Header.Clone(), Lit = true };
-        var starts = new int[19];
-        for (var i = 0; i < 19; i++)
-        {
-            starts[i] = body.Vertices.Count;
-            body.Vertices.AddRange(vertices[i]);
-            var pivot = i == 0 ? 0 : starts[Parents[i]] + pivots[i];
-            body.Bones.Add(new(starts[i], vertices[i].Count, pivot, Parents[i], new byte[38]));
-        }
-        foreach (var f in faces) body.Faces.Add(new(f.Points.Select(p => p + starts[f.Bone]).ToArray(), f.Colour));
-        body.SetWorld(body.Vertices.ToArray());
-        body.Validate();
-        return body;
+        bytes = p.Write();
+        var w = p.World();
+        var height = w.Max(v => v.Y);
+        var box = s.Pole ? new float[] { -reach - 900, reach + 900, 0, height + 2200, -reach - 900, reach + 900 }
+                         : new float[] { -1000, 1000, 0, height + 300, -450, 450 };
+        for (var k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(8 + k * 4), (int)box[k]);
+        return bytes;
     }
 
-    // ---- animations ------------------------------------------------------------------------------------------------------------
-
-    // Bone slots of the rig: 2 hips, 3 torso, 4/5 her right arm (upper, fore), 6/7 left, 8-10 right leg, 11-13 left leg, 14 head
-    // Dancing on the spot: the hips rolling side to side, the torso answering, the arms swaying over her head
-    public static CharacterAnim SwayAnim()
+    // How far beside the pole she stands: her B shoulder's way out, and a little more (her hand, up, on the pole)
+    private static float Reach(Spec s, PalaceTorturers.Parts p)
     {
-        var a = CharacterAnim.Still(19, Sway, "stella sway");
-        a.Keys.Clear();
-        (float Hip, float Lean, float Arms, float Knee)[] beats = { (14, -8, 40, 6), (0, 0, 80, 0), (-14, 8, 40, 6), (0, 0, 80, 0) };
-        foreach (var (hip, lean, arms, knee) in beats)
-        {
-            var k = new CharacterAnim.Key { Milliseconds = 450, Bones = Enumerable.Range(0, 19).Select(_ => (0, Vector3.Zero)).ToList() };
-            void Set(int bone, float x, float y, float z) => k.Bones[bone] = (0, new Vector3(x, y, z));
-            Set(2, 0, hip, hip * 0.35f); Set(3, 0, -hip * 0.6f, lean);
-            Set(4, 0, 0, 150 - arms * 0.2f); Set(6, 0, 0, -150 + arms * 0.2f);
-            Set(5, 0, 0, 20); Set(7, 0, 0, -20);
-            Set(14, 0, hip * 0.5f, -lean * 0.5f);
-            Set(9, knee, 0, 0); Set(12, knee, 0, 0);
-            a.Keys.Add(k);
-        }
-        a.LoopFrame = 0;
-        return a;
+        var w = p.World();
+        return Math.Abs(w[p.Bones[s.Rig.ArmB[0]].Pivot].X) + 20;
     }
 
-    // At the pole: one hand up on it, the body leaning out and round, the hips swinging, the other hand trailing
-    public static CharacterAnim PoleAnim()
+    // ---- the routines ------------------------------------------------------------------------------------------------------------
+
+    // A moment of a routine, in degrees: her whole self round the pole (Orbit) and tipped over it (Invert); her pelvis's place (Pelvis: on
+    // the pole, its height over her standing one and its way out from the pole's line -- or, on the stage, the shift: along the stage's
+    // edge x, up y); her hips' turn (Turn: 90 faces her left), sway, tip; torso, chest, head; arms (Up: raised sideways, Fwd: forwards,
+    // Elbow: the forearm in, Twist); legs (Kick: forwards, Out: sideways, Knee: bent)
+    public sealed record Pose
     {
-        var a = CharacterAnim.Still(19, Pole, "stella pole");
-        a.Keys.Clear();
-        (float Turn, float Lean, float Hip)[] beats = { (0, 14, 10), (35, 22, 0), (0, 12, -10), (-35, 22, 0) };
-        foreach (var (turn, lean, hip) in beats)
+        public int Ms = 500;
+        public float Orbit, Invert;
+        public Vector3 Pelvis;
+        public float Turn, Sway, Tip;
+        public float Bend, Lean, Twist, ChestBend, ChestTwist;
+        public float Nod, Look, Tilt;
+        public float UpA, FwdA, ElbowA, InA, UpB, FwdB, ElbowB, InB;
+        public float KickA, OutA, KneeA, KickB, OutB, KneeB;
+    }
+
+    // The stage: facing the room, hands on hips, popping them; a strut to her left along the edge, a pose to the crowd, a dip and a body roll
+    // up from it; a strut right, past where she began, arms up, a shimmy; back to the middle
+    public static List<Pose> StageRoutine()
+    {
+        var r = new List<Pose>();
+        Pose HandsOnHips(float sway) => new() { Ms = 650, Sway = sway, UpA = 45, ElbowA = 15, InA = 105, UpB = 45, ElbowB = 15, InB = 105, KneeA = sway > 0 ? 18 : 0, KneeB = sway < 0 ? 18 : 0, Tilt = -sway * 0.5f, Lean = -sway * 0.4f };
+        r.Add(HandsOnHips(12)); r.Add(HandsOnHips(-12)); r.Add(HandsOnHips(12));
+        void Strut(float from, float to, float facing, int steps)
         {
-            var k = new CharacterAnim.Key { Milliseconds = 520, Bones = Enumerable.Range(0, 19).Select(_ => (0, Vector3.Zero)).ToList() };
-            void Set(int bone, float x, float y, float z) => k.Bones[bone] = (0, new Vector3(x, y, z));
-            Set(2, 0, hip, hip * 0.4f); Set(3, -lean, turn * 0.5f, 0);
-            Set(4, 0, 0, 165); Set(5, 0, 0, 10);        // the right hand up on the pole
-            Set(6, 20, 0, -40 - turn * 0.4f); Set(7, 0, 0, -25);  // the left hand trailing
-            Set(14, 6, turn * 0.4f, 0);
-            Set(8, 0, 0, hip * 0.5f); Set(9, 18, 0, 0); Set(11, -10, 0, -hip * 0.5f); Set(12, 6, 0, 0);
-            a.Keys.Add(k);
+            for (var k = 1; k <= steps; k++)
+            {
+                var a = k % 2 == 0 ? 1 : -1;
+                r.Add(new()
+                {
+                    Ms = 420, Pelvis = new Vector3(from + (to - from) * k / steps, 0, 0), Turn = facing, Sway = 10 * a, Lean = -4 * a,
+                    KickA = a > 0 ? -28 : 14, KneeA = a > 0 ? 8 : 30, KickB = a > 0 ? 14 : -28, KneeB = a > 0 ? 30 : 8, OutA = -6, OutB = -6,
+                    FwdA = a > 0 ? 18 : -14, FwdB = a > 0 ? -14 : 18, UpA = 12, UpB = 12, ElbowA = 20, ElbowB = 20, Look = -facing * 0.6f,
+                });
+            }
+        }
+        r.Add(new() { Ms = 300, Turn = 90, UpA = 12, UpB = 12, Look = -40 });
+        Strut(0, -700, 90, 4);
+        r.Add(new() { Ms = 450, Pelvis = new(-700, 0, 0), Sway = 14, UpA = 160, ElbowA = 30, UpB = 45, ElbowB = 15, InB = 105, Bend = -10, Nod = -10, KneeB = 20 });
+        r.Add(new() { Ms = 800, Pelvis = new(-700, 0, 0), Sway = -14, UpA = 165, ElbowA = 40, UpB = 45, ElbowB = 15, InB = 105, Bend = -12, Nod = -14, KneeA = 20, Tilt = 8 });
+        // the dip: down, knees out, hands on her knees; and up through a body roll
+        r.Add(new() { Ms = 600, Pelvis = new(-700, -330, 0), KickA = -75, OutA = 30, KneeA = 110, KickB = -75, OutB = 30, KneeB = 110, Bend = 20, FwdA = -40, FwdB = -40, UpA = 20, UpB = 20, ElbowA = 10, ElbowB = 10 });
+        r.Add(new() { Ms = 500, Pelvis = new(-700, -150, 0), KickA = -35, OutA = 15, KneeA = 55, KickB = -35, OutB = 15, KneeB = 55, Tip = 12, Bend = 28, ChestBend = 10, Nod = 15, UpA = 30, UpB = 30, ElbowA = 60, ElbowB = 60 });
+        r.Add(new() { Ms = 450, Pelvis = new(-700, -40, 0), KneeA = 15, KneeB = 15, Tip = -10, Bend = -8, ChestBend = -14, Nod = -20, UpA = 30, UpB = 30, ElbowA = 40, ElbowB = 40 });
+        r.Add(new() { Ms = 300, Pelvis = new(-700, 0, 0), Turn = -90, UpA = 12, UpB = 12, Look = 40 });
+        Strut(-700, 700, -90, 8);
+        // arms up, her hair thrown back; a shimmy
+        r.Add(new() { Ms = 500, Pelvis = new(700, 0, 0), UpA = 170, UpB = 170, ElbowA = 30, ElbowB = 30, Nod = -25, Bend = -10, Sway = 10 });
+        foreach (var t in new[] { 14f, -14, 14, -14, 14, -14 })
+            r.Add(new() { Ms = 170, Pelvis = new(700, 0, 0), Twist = t, ChestTwist = t * 0.6f, UpA = 50, UpB = 50, ElbowA = 80, ElbowB = 80, KneeA = 10, KneeB = 10, Sway = t * 0.3f });
+        r.Add(new() { Ms = 300, Pelvis = new(700, 0, 0), Turn = 90, UpA = 12, UpB = 12, Look = -40 });
+        Strut(700, 0, 90, 4);
+        r.Add(new() { Ms = 300, Turn = 0, UpA = 45, ElbowA = 15, InA = 105, UpB = 45, ElbowB = 15, InB = 105 });
+        return r;
+    }
+
+    // The pole: a hand up on it, leaning out; walking round it; a spin, her legs tucked then one out; down; climbing it, legs wrapped round;
+    // upside down on it, legs opening and closing; back down; sliding down it to a squat, and up through a body roll
+    public static List<Pose> PoleRoutine()
+    {
+        var r = new List<Pose>();
+        const float Hold = 168, Grip = 25;    // her B hand up on the pole
+        r.Add(new() { Ms = 800, UpB = Hold, ElbowB = Grip, Lean = -14, UpA = 70, ElbowA = 20, Sway = 8, OutA = 10, Tilt = -6 });
+        r.Add(new() { Ms = 700, UpB = Hold, ElbowB = Grip, Lean = -20, UpA = 95, ElbowA = 10, Sway = -6, KneeA = 25, Nod = -10 });
+        // walking round it
+        for (var k = 1; k <= 4; k++)
+        {
+            var a = k % 2 == 0 ? 1 : -1;
+            r.Add(new()
+            {
+                Ms = 480, Orbit = 60 * k, UpB = Hold, ElbowB = Grip, Lean = -10, UpA = 55, ElbowA = 15, Sway = 8 * a,
+                KickA = a > 0 ? -30 : 12, KneeA = a > 0 ? 6 : 34, KickB = a > 0 ? 12 : -30, KneeB = a > 0 ? 34 : 6, Look = -15,
+            });
+        }
+        // the spin: off her feet, round
+        r.Add(new() { Ms = 380, Orbit = 330, Pelvis = new(0, 160, 0), UpB = Hold, ElbowB = 10, Lean = -18, UpA = 80, KickA = -70, KneeA = 95, KickB = -60, KneeB = 105 });
+        r.Add(new() { Ms = 380, Orbit = 90, Pelvis = new(0, 240, 0), UpB = Hold, ElbowB = 10, Lean = -24, UpA = 100, FwdA = -20, KickA = -80, KneeA = 0, KickB = -50, KneeB = 110, Nod = -15 });
+        r.Add(new() { Ms = 380, Orbit = 210, Pelvis = new(0, 180, 0), UpB = Hold, ElbowB = 10, Lean = -20, UpA = 100, KickA = -75, KneeA = 10, KickB = -40, KneeB = 100, Nod = -20 });
+        r.Add(new() { Ms = 420, Orbit = 330, Pelvis = new(0, 40, 0), UpB = Hold, ElbowB = 15, Lean = -12, UpA = 70, KickA = -20, KneeA = 20, KickB = -10, KneeB = 30 });
+        r.Add(new() { Ms = 400, Orbit = 360, UpB = Hold, ElbowB = Grip, Lean = -14, UpA = 60, Sway = 8 });
+        // climbing: both hands on it, legs round it
+        Pose Climb(float y, int ms, float legs) => new()
+        {
+            Ms = ms, Orbit = 360, Pelvis = new(0, y, 0), UpB = Hold, ElbowB = 10, UpA = 165, ElbowA = 35, Lean = -6,
+            KickA = -45 * legs, OutA = -20 * legs, KneeA = 70 * legs, KickB = -20 * legs, OutB = 15 * legs, KneeB = 50 * legs,
+        };
+        r.Add(Climb(250, 500, 1)); r.Add(Climb(450, 450, 0.4f)); r.Add(Climb(600, 500, 1)); r.Add(Climb(650, 450, 0.6f));
+        // tipping over: upside down on it, held there, legs in a V and closing
+        Pose Invert(float angle, float height, int ms, float v) => new()
+        {
+            Ms = ms, Orbit = 360, Invert = angle, Pelvis = new(0, height, 0), UpB = Hold, ElbowB = 10, UpA = 150, ElbowA = 30, Lean = -6,
+            KickA = -10, OutA = 40 * v, KneeA = 5, KickB = -10, OutB = 40 * v, KneeB = 5, Nod = -10,
+        };
+        r.Add(Invert(60, 1000, 600, 0.2f)); r.Add(Invert(120, 1050, 600, 0.6f)); r.Add(Invert(170, 1050, 600, 1));
+        r.Add(Invert(170, 1050, 700, 0.15f)); r.Add(Invert(170, 1050, 700, 1)); r.Add(Invert(170, 1050, 700, 0.2f));
+        r.Add(Invert(110, 1000, 600, 0.4f)); r.Add(Invert(50, 900, 600, 0.2f));
+        // sliding down to a squat, then up through a body roll
+        r.Add(Climb(600, 500, 0.8f) with { Invert = 0 });
+        r.Add(new() { Ms = 700, Orbit = 360, Pelvis = new(0, -300, 0), UpB = 150, ElbowB = 30, UpA = 30, ElbowA = 60, KickA = -80, OutA = 30, KneeA = 115, KickB = -80, OutB = 30, KneeB = 115, Bend = 15 });
+        r.Add(new() { Ms = 500, Orbit = 360, Pelvis = new(0, -130, 0), UpB = 160, ElbowB = 25, UpA = 50, ElbowA = 40, KickA = -35, KneeA = 50, KickB = -35, KneeB = 50, Tip = 12, Bend = 26, ChestBend = 10, Nod = 15 });
+        r.Add(new() { Ms = 450, Orbit = 360, Pelvis = new(0, -30, 0), UpB = Hold, ElbowB = Grip, UpA = 60, KneeA = 12, KneeB = 12, Tip = -10, Bend = -8, ChestBend = -14, Nod = -20 });
+        r.Add(new() { Ms = 400, Orbit = 360, UpB = Hold, ElbowB = Grip, Lean = -14, UpA = 70, ElbowA = 20, Sway = 8, OutA = 10, Tilt = -6 });
+        return r;
+    }
+
+    // A routine as her animation: her bones' turns (and the one shift) key by key
+    public static CharacterAnim Animation(Spec s, byte[] body, int generic, List<Pose>? routineGiven = null)
+    {
+        var p = PalaceTorturers.Parts.Read(body);
+        var world = p.World();
+        int bones = p.Bones.Count;
+        var rig = s.Rig;
+        var routine = routineGiven ?? (s.Pole ? PoleRoutine() : StageRoutine());
+        var a = new CharacterAnim { Generic = generic, Name = $"stella {s.Name}" };
+        foreach (var q in routine)
+        {
+            var key = new CharacterAnim.Key { Milliseconds = q.Ms, Bones = Enumerable.Range(0, bones).Select(_ => (0, Vector3.Zero)).ToList() };
+            void Turn(int bone, float x, float y, float z) { if (bone > 0 && bone < bones && key.Bones[bone].Item1 == 0) key.Bones[bone] = (0, key.Bones[bone].Value + new Vector3(x, y, z)); }
+            void Shift(int bone, Vector3 by) { if (bone > 0 && bone < bones) key.Bones[bone] = (1, by); }
+            if (s.Pole)
+            {
+                // round the pole and tipped over her grip on it (bone 1, its pivot there); the lift (bone 2, a shift): up the pole by
+                // Pelvis.Y -- upright only (once tipped, the tip alone holds her up over her hand)
+                Turn(rig.Orbit, 0, q.Orbit, q.Invert);
+                Shift(rig.Lift, q.Invert == 0 ? new Vector3(0, q.Pelvis.Y, 0) : Vector3.Zero);
+            }
+            else
+                Shift(rig.Orbit, q.Pelvis);
+            // (hips that are the lift, on the pole, don't turn: nor then do her legs make up for them)
+            var hipsTurn = key.Bones[rig.Hips].Item1 == 0;
+            var sway = hipsTurn ? q.Sway : 0;
+            var tip = hipsTurn ? q.Tip : 0;
+            Turn(rig.Hips, q.Tip, q.Turn, q.Sway);
+            Turn(rig.Torso, q.Bend, q.Twist, q.Lean);
+            if (rig.Chest >= 0) Turn(rig.Chest, q.ChestBend, q.ChestTwist, 0); else Turn(rig.Torso, q.ChestBend, q.ChestTwist, 0);
+            Turn(rig.Head, q.Nod, q.Look, q.Tilt);
+            // arms: A at +x (up: +z), B mirrored (up: -z); forward: -x; the forearm bent towards her front (Elbow) or in to her side (In)
+            Turn(rig.ArmA[0], -q.FwdA, 0, q.UpA); Turn(rig.ArmA[1], -q.ElbowA, 0, -q.InA);
+            Turn(rig.ArmB[0], -q.FwdB, 0, -q.UpB); Turn(rig.ArmB[1], -q.ElbowB, 0, q.InB);
+            // legs: kick forward -x, out sideways (A +z, B -z), knee back +x; each thigh against her hips' sway, so her feet stay under her
+            Turn(rig.LegA[0], q.KickA - tip, 0, q.OutA - sway); Turn(rig.LegA[1], q.KneeA, 0, 0);
+            Turn(rig.LegB[0], q.KickB - tip, 0, -q.OutB - sway); Turn(rig.LegB[1], q.KneeB, 0, 0);
+            if (rig.LegA.Length > 2 && rig.LegA[2] >= 0) Turn(rig.LegA[2], -q.KneeA * 0.4f - q.KickA * 0.3f, 0, 0);
+            if (rig.LegB.Length > 2 && rig.LegB[2] >= 0) Turn(rig.LegB[2], -q.KneeB * 0.4f - q.KickB * 0.3f, 0, 0);
+            a.Keys.Add(key);
         }
         a.LoopFrame = 0;
         return a;
@@ -330,8 +320,8 @@ internal static class StellaPerformers
 
     // ---- installing --------------------------------------------------------------------------------------------------------------
 
-    // Into the game folder: the seven bodies and two animations at the ends of BODY.HQR and ANIM.HQR, given to entity 0 as bodies Body0..Body0+6
-    // and animations Sway and Pole. Lines for the build's log.
+    // Into the game folder: the seven bodies and their animations at the ends of BODY.HQR and ANIM.HQR, given to entity 0 as bodies
+    // Body0..Body0+6 and animations Anim0..Anim0+6. Lines for the build's log.
     public static List<string> Install(string gameDirectory)
     {
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
@@ -339,25 +329,27 @@ internal static class StellaPerformers
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
         var hero = Lba2EntityTable.Parse(table).Entities.FirstOrDefault(e => e.Id == Entity);
-        if (hero is null || RaceTrackGuards.BodyOf(table, Entity, 0) is not { } twinsen)
+        if (hero is null)
             return new() { "WARNING: Stella Entities' performers: no hero entity -- none made" };
-        if (hero.Bodies.Any(b => b.Generic >= Body0 && b.Generic < Body0 + All.Length) || hero.Anims.Any(a => a.Generic is Sway or Pole))
-            return new() { $"WARNING: Stella Entities' performers: entity {Entity} already has bodies {Body0}-{Body0 + All.Length - 1} or animations {Sway}/{Pole} -- none made" };
-        var donor = Body.Read(HqrArchive.Open(bodyPath).Read(twinsen), 2);
+        if (hero.Bodies.Any(b => b.Generic >= Body0 && b.Generic < Body0 + All.Length) || hero.Anims.Any(a => a.Generic >= Anim0 && a.Generic < Anim0 + All.Length))
+            return new() { $"WARNING: Stella Entities' performers: entity {Entity} already has bodies {Body0}-{Body0 + All.Length - 1} or animations {Anim0}-{Anim0 + All.Length - 1} -- none made" };
+        var bodies = HqrArchive.Open(bodyPath);
+        var made = All.Select(s => Make(s, bodies.Read(s.Source))).ToList();
         var file = File.ReadAllBytes(bodyPath);
         var firstBody = HqrArchive.CountEntries(bodyPath);
+        var anims = File.ReadAllBytes(animPath);
+        var firstAnim = HqrArchive.CountEntries(animPath);
         for (var k = 0; k < All.Length; k++)
         {
-            file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Build(donor, All[k]).Write()));
+            file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(made[k]));
             table = RaceTrackBaldinoCar.WithBody(table, Entity, Body0 + k, firstBody + k);
+            var bones = PalaceTorturers.Parts.Read(made[k]).Bones.Count;
+            anims = HqrWriter.AppendEntry(anims, HqrWriter.StoredEntry(Animation(All[k], made[k], AnimOf(k)).Write(bones)));
+            table = RaceTrackJumpAnim.WithAnim(table, Entity, AnimOf(k), firstAnim + k);
         }
         File.WriteAllBytes(bodyPath, file);
-        var animIndex = HqrArchive.CountEntries(animPath);
-        var anims = HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(SwayAnim().Write(19)));
-        File.WriteAllBytes(animPath, HqrWriter.AppendEntry(anims, HqrWriter.StoredEntry(PoleAnim().Write(19))));
-        table = RaceTrackJumpAnim.WithAnim(table, Entity, Sway, animIndex);
-        table = RaceTrackJumpAnim.WithAnim(table, Entity, Pole, animIndex + 1);
+        File.WriteAllBytes(animPath, anims);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        return new() { $"Stella Entities' performers: {string.Join(", ", All.Select(s => s.Name))} -- BODY.HQR {firstBody}-{firstBody + All.Length - 1}, entity {Entity}'s bodies {Body0}-{Body0 + All.Length - 1}; sway and pole ANIM.HQR {animIndex}, {animIndex + 1}, its animations {Sway}, {Pole}" };
+        return new() { $"Stella Entities' performers: {string.Join(", ", All.Select(s => s.Name))} (the game's own bodies, recoloured) -- BODY.HQR {firstBody}-{firstBody + All.Length - 1}, entity {Entity}'s bodies {Body0}-{Body0 + All.Length - 1}; their dances ANIM.HQR {firstAnim}-{firstAnim + All.Length - 1}, its animations {Anim0}-{Anim0 + All.Length - 1}" };
     }
 }

@@ -151,7 +151,7 @@ internal static class GridGirl
 
     // A body's points added to the bones they belong to (each after the bone's own, every index after them moved on), its polygons kept,
     // recoloured or dropped, and new ones made; the new points' normals from the lit polygons round them, as long as its own skin's are.
-    private sealed class Edit
+    internal sealed class Edit
     {
         private readonly PalaceTorturers.Parts p;
         private readonly List<int[]> handed = new();           // the indices given out, moved on with the rest
@@ -186,6 +186,12 @@ internal static class GridGirl
                 }
                 p.Blocks[b] = (type, kept);
             }
+            // (lines and spheres -- 8 bytes each, a line's points at 4 and 6, a sphere's point at 4 and its size at 6 -- on the bones taken
+            // away: gone too)
+            byte[] Keep(byte[] records, bool line) => records.Chunk(8).Where(r =>
+                BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(4)) < cut && (!line || BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(6)) < cut)).SelectMany(r => r).ToArray();
+            p.Lines = Keep(p.Lines, true); p.LineCount = p.Lines.Length / 8;
+            p.Spheres = Keep(p.Spheres, false); p.SphereCount = p.Spheres.Length / 8;
             world = p.World();
         }
 

@@ -71,8 +71,9 @@ internal static partial class RaceTrackStory
             Place(bouncer, StellaEntities.At(258, 9.6f), say(MoonLine.ClubStaffOnly), 1300);
             Place(guard, StellaEntities.At(Citadel.CitadelProps.OfficeAt, 17.3f), say(MoonLine.ClubNoBoss), 1300);
             Place(barman, StellaEntities.At(142, 16.6f), say(MoonLine.ClubBarman), 1700, onAction: true);
-            // the seven performers (StellaPerformers: bodies of the hero's entity): three at the poles (10, 60 and 110 degrees, r 5 -- she stands
-            // just outside her pole, her hand up on it, facing out to the room), four dancing on the stage's other sides
+            // the seven performers (StellaPerformers: the game's own bodies recoloured, bodies of the hero's entity, each her own dance): three
+            // on the poles (10, 60 and 110 degrees -- the actor on the pole's spot: her body stands beside it, her dance takes her round,
+            // up and over it), four on the stage's other sides, strutting along its edge; no one's blows stopped by them (CHECK_OBJ_COL off)
             void Perform(int who, float degrees, float cells, bool atPole)
             {
                 var a = bouncer.Clone();
@@ -80,12 +81,13 @@ internal static partial class RaceTrackStory
                 (a.X, a.Y, a.Z) = (x, StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh, z);
                 a.Entity = StellaPerformers.Entity;
                 a.Body = StellaPerformers.Body0 + who;
-                a.Anim = atPole ? StellaPerformers.Pole : StellaPerformers.Sway;
+                a.Anim = StellaPerformers.AnimOf(who);
+                a.Flags &= ~1u;
                 a.Beta = (StellaEntities.FacingMiddle(x, z) + 2048) & 4095;
                 a.Move = 0;
                 adds.Add(IslandBeatsA.Add(model, a, "void comportement_0()\n{\n}\n"));
             }
-            Perform(3, 10, 5.5f, true); Perform(1, 60, 5.5f, true); Perform(6, 110, 5.5f, true);
+            Perform(3, 10, StellaEntities.PoleCells, true); Perform(1, 60, StellaEntities.PoleCells, true); Perform(6, 110, StellaEntities.PoleCells, true);
             Perform(0, 160, 6.2f, false); Perform(2, 205, 6.2f, false); Perform(4, 300, 6.2f, false); Perform(5, 345, 6.2f, false);
             return scripts => { foreach (var add in adds) add(scripts); };
         });

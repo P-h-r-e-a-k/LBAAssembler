@@ -116,6 +116,7 @@ internal static class Program
             // (a fifth argument: an island's palette instead of the game's main one -- its RESS.HQR entry, 27 Citadel Island in the storm, 34 the
             // Island of the Mosquibees...)
             "carviews" => CarViews(args[1], int.Parse(args[2]), args[3], args[4], args.Length > 5 ? int.Parse(args[5]) : 0),
+            "poseviews" => PoseViews(args[1], int.Parse(args[2]), args[3], int.Parse(args[4]), args[5], args[6]),
             // lightscales <file.hqr>: the LBA2 bodies whose points do not all take the whole of the light (Body.LightScale: normals shorter or
             // longer than the usual 10240)
             "lightscales" => LightScales(args[1]),
@@ -184,6 +185,58 @@ internal static class Program
         }
         sheet.Save(output, ImageFormat.Png);
         Console.WriteLine($"{output}: {hqr}[{index}] {model.Vertices.Count} points, {model.Faces.Count} polygons, {model.Lines.Count} lines, {model.Spheres.Count} spheres");
+        return 0;
+    }
+
+    // poseviews <BODY.HQR> <body> <ANIM.HQR> <anim> <game folder> <out.png>: a body posed by each keyframe of an animation (up to ten), each
+    // seen from three-quarters in front and from its side -- a column a keyframe -- for checking a dance without the game
+    private static int PoseViews(string hqr, int index, string animHqr, int animIndex, string folder, string output)
+    {
+        var model = Body.Read(new Hqr(hqr).Read(index), 2, allowStatic: true);
+        model.TexturePage = new Hqr(Path.Combine(folder, "RESS.HQR")).Read(6);
+        var palette = Generator.Palette(folder);
+        var data = new Hqr(animHqr).Read(animIndex);
+        int frames = BitConverter.ToUInt16(data, 0), slots = BitConverter.ToUInt16(data, 2);
+        var keys = new List<List<(int, double, double, double)>>();
+        for (int f = 0, p = 8; f < frames && f < 10 && p + 8 + slots * 8 <= data.Length; f++)
+        {
+            p += 8;
+            var bones = new List<(int, double, double, double)>();
+            for (var b = 0; b < slots; b++, p += 8)
+            {
+                int type = BitConverter.ToInt16(data, p);
+                short x = BitConverter.ToInt16(data, p + 2), y = BitConverter.ToInt16(data, p + 4), z = BitConverter.ToInt16(data, p + 6);
+                static double T(short a) => ((a & 0xFFF) - ((a & 0x800) != 0 ? 4096 : 0)) / 4.0;
+                bones.Add(b == 0 ? (0, 0, 0, 0) : (type & 1) != 0 ? (1, x, y, z) : (0, T(x), T(y), T(z)));
+            }
+            keys.Add(bones);
+        }
+        var views = new (float Yaw, float Pitch)[] { (0.65f, 0.3f), (MathF.PI / 2, 0.1f) };
+        const int W = 300, H = 380;
+        using var sheet = new Bitmap(W * keys.Count, H * views.Length);
+        using var g = Graphics.FromImage(sheet);
+        for (var k = 0; k < keys.Count; k++)
+        {
+            var world = LBAAssembler.Lba1.Lba1Pose.World(model, keys[k]);
+            for (var v = 0; v < views.Length; v++)
+            {
+                var (yaw, pitch) = views[v];
+                var turned = world.Select(q0 =>
+                {
+                    var q = new System.Numerics.Vector3(q0.X * MathF.Cos(yaw) + q0.Z * MathF.Sin(yaw), q0.Y, -q0.X * MathF.Sin(yaw) + q0.Z * MathF.Cos(yaw));
+                    return new System.Numerics.Vector3(q.X, q.Y * MathF.Cos(pitch) + q.Z * MathF.Sin(pitch), -q.Y * MathF.Sin(pitch) + q.Z * MathF.Cos(pitch));
+                }).ToArray();
+                var copy = new Body { Game = 2, Lit = model.Lit, Static = model.Static, Header = model.Header, Textures = model.Textures, TexturePage = model.TexturePage, LightScale = model.LightScale };
+                copy.Bones.AddRange(model.Bones); copy.Faces.AddRange(model.Faces); copy.Lines.AddRange(model.Lines); copy.Spheres.AddRange(model.Spheres);
+                copy.Vertices.AddRange(turned);
+                copy.SetWorld(turned);
+                using var bmp = Renderer.Render(copy, palette, W, H, MathF.PI, false, background: Color.FromArgb(40, 60, 90), gridLine: Color.FromArgb(40, 60, 90));
+                g.DrawImageUnscaled(bmp, k * W, v * H);
+            }
+            g.DrawString($"key {k}", SystemFonts.DefaultFont, Brushes.Yellow, k * W + 4, 4);
+        }
+        sheet.Save(output, ImageFormat.Png);
+        Console.WriteLine($"{output}: {keys.Count} keyframes of ANIM {animIndex} on BODY {index}");
         return 0;
     }
     private static int RenderHqr(string hqr, int index, string folder, string output, float yaw)
