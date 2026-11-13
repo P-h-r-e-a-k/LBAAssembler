@@ -38,6 +38,10 @@ internal static class StellaEntities
     // CatwalkX0-X1 north of the middle)
     private const double StageCells = 7.0;
     private const int CatwalkX0 = 23, CatwalkX1 = 24;
+    // (the catwalk's first x, and where its cells end by the backstage door -- the ring of invisible cells from RingFrom: the backstage
+    // door's zone, RaceTrackStory.StellaEntities)
+    public const int CatwalkX0World = CatwalkX0 * 512;
+    public static readonly int CatwalkEndZ = (int)Math.Round(CentreZ * 512 - RingFrom * 512);
     // the poles round the column (degrees, the room's middle to them: x = cos, z = sin -- all on the audience's side of it, the camera's:
     // one behind it was drawn over it), the tables', the stools'
     private static readonly float[] PoleAngles = { 10, 60, 110 }, TableAngles = { 20, 60, 200, 235, 305, 335 };

@@ -17,6 +17,8 @@ namespace LBAAssembler.Terrain;
 internal static class StellaRooms
 {
     public const int Office = 391, Backstage = 392, RickOffice = 137;
+    // (where Twinsen comes in from the club, either room: just inside the door of Rick's office's that leads out, x 5120-6144 at z 9216)
+    public const int InsideX = 5632, InsideY = 256, InsideZ = 8500;
     private const int Prop = Citadel.CitadelProps.Chair;
 
     public static List<string> Install(string gameDirectory)
@@ -39,7 +41,9 @@ internal static class StellaRooms
 
         var original = store.Load(RickOffice);
         var (outX, outZ) = StellaEntities.At(Citadel.CitadelProps.OfficeAt, 14.5f);
-        var (backX, backZ) = StellaEntities.At(Citadel.CitadelProps.BackstageAt, 14.5f);
+        // (back out of backstage: onto the catwalk by its door, at the stage's height -- not on the floor at 14.5 cells, inside the
+        // catwalk's cells; the engine adds where in the room's door zone he was, 0-1024 along x and 0-512 along z)
+        var (backX, backZ) = (StellaEntities.CatwalkX0World, StellaEntities.CatwalkEndZ + 600);
         static string Still() => "void comportement_0()\n{\n}\n";
         var records = new List<(int Scene, byte[] Record)>();
         foreach (var (number, name, outAt) in new[] { (Office, "office", (outX, outZ)), (Backstage, "backstage", (backX, backZ)) })
@@ -56,7 +60,7 @@ internal static class StellaRooms
             foreach (var z in model.Zones.Where(z => z.Type == 0))
             {
                 z.Num = StellaEntities.Scene;
-                z.Info = new[] { outAt.Item1, StellaEntities.FloorY, outAt.Item2, 0, 0, 0, 0, 0 };
+                z.Info = new[] { outAt.Item1, number == Backstage ? StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh : StellaEntities.FloorY, outAt.Item2, 0, 0, 0, 0, 1 };   // (the last: the door on)
             }
             if (number == Backstage)
             {
