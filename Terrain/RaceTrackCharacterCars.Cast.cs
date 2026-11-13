@@ -686,7 +686,10 @@ internal static partial class RaceTrackCharacterCars
         {
             var names = new Dictionary<int, (string Name, string Driver, string Island)> { [0] = ("The racer's car", "the racer of the Desert Island track", Desert), [1] = ("Baldino's rocket car", "Jerome Baldino", Desert) };
             foreach (var car in All) names.TryAdd(car.Generic, (car.Name, car.Driver, car.Island));
-            foreach (var (generic, body) in racerEntity.Bodies.Where(b => b.Generic < RaceTrackSmallCars.First).OrderBy(b => b.Generic))
+            // (not the empty copies -- bodies EmptyFirst on, the garage's parked cars, no car of their own: listed they took the cast's numbers
+            // (CastFirst, 64 on) twice, and LBRA's setup failed on the doubled numbers, 2026-11-13)
+            var empties = EmptyOnes.Length;
+            foreach (var (generic, body) in racerEntity.Bodies.Where(b => b.Generic < RaceTrackSmallCars.First && (b.Generic < EmptyFirst || b.Generic >= EmptyFirst + empties)).OrderBy(b => b.Generic))
             {
                 var small = racerEntity.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(generic)).Select(b => b.Body).DefaultIfEmpty(-1).First();
                 var (name, who, island) = names.TryGetValue(generic, out var n) ? n : ($"Car {generic}", "", "");
