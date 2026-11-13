@@ -5836,8 +5836,9 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_RACING);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
-    // (what this player has found: not in a race going on -- who is playing is the player menu's, behind Quit)
-    if (!inGame) SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);
+    // (what this player has found: not in a race going on -- who is playing is the player menu's, behind Quit. In the story's menu too:
+    // the user, 2026-11-13, "Our achievements menu doesn't seem to be on all menus. This menu is escaping to the menu from story mode")
+    if (!inGame || s_storyOn || !restart) SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
     s_mainMenu[1] = (U16)nb;
