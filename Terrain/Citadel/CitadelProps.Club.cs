@@ -217,6 +217,25 @@ internal static partial class CitadelProps
     // The Wannie miner's work glove (body 99), lost in the giant frog's mouth on Wannies Island (RaceTrackStory.Wannies): it was an
     // invisible helper there -- the user, 2026-11-13, "The glove stays invisible in the frog's mouth" -- a big leather glove now, seen
     public const int WannieGloveProp = 99;
+    // A two-post car lift (body 94) for the Desert's garage (the user, 2026-11-13: "some of the cars are raised up on car lifts being worked
+    // on"): its posts either side of the car (local x), its arms under the car at CarLiftHigh, turned with the car (its front local +z)
+    public const int CarLift = 94, CarLiftHigh = 760;
+    public static Body BuildCarLift(byte[] header)
+    {
+        var m = new CarMesh("a car lift", new[] { -1 });
+        m.Light = 0.9f;
+        const int Steel = 56, Yellow = 100, Base = 50;
+        foreach (var s in new[] { -1, 1 })
+        {
+            m.Box(0, new Vector3(s * 820, 900, 0), new Vector3(150, 1800, 180), Yellow, Yellow);
+            m.Box(0, new Vector3(s * 820, 20, 0), new Vector3(340, 40, 400), Base, Base);
+            foreach (var f in new[] { -1, 1 })
+                m.Box(0, new Vector3(s * 560, CarLiftHigh - 30, f * 380), new Vector3(520, 50, 80), Steel, Steel);
+            m.Box(0, new Vector3(s * 820, CarLiftHigh - 30, 0), new Vector3(170, 90, 860), Steel, Steel);
+        }
+        m.Box(0, new Vector3(0, 1790, 0), new Vector3(1800, 80, 120), Yellow, Yellow);
+        return m.ToBody(header);
+    }
     public static Body BuildWannieGlove(byte[] header)
     {
         var m = new CarMesh("the Wannie's glove", new[] { -1 });

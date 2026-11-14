@@ -127,6 +127,12 @@ internal static partial class RaceTrackStory
         var stand = "void comportement_0()\n{\n}\n";
         // who stands where: `u` along the tent, `v` from its middle towards its open front (world units)
         var people = new List<(SceneActorModel Actor, double U, double V, int Beta, string Life, string Who)>();
+        // (raised: a car on a lift -- its people's index, how far over the floor)
+        var rise = new Dictionary<int, int>();
+        // (the cars up on lifts, being worked on -- the user, 2026-11-13 -- in these bays; the mechanic at work there: the moon base's Esmer
+        // mechanic, no gun -- scene 23's actor 14, as Stella Entities' barman)
+        var liftBays = new HashSet<int> { 2, 5 };
+        var liftMechanic = Copy(b.Originals, 23, 14);
         var start = b.Store.Load(startScene);
         var grid = start.Actors.Where(a => a.Entity == RaceTrackScenes.RacerEntity && a.Body >= 0).Take(5).ToList();
         var mechanic = start.Actors.FirstOrDefault(a => a.Entity == 30 && a.Body >= 0);
@@ -151,7 +157,20 @@ internal static partial class RaceTrackStory
                 var empty = RaceTrackCharacterCars.EmptyGeneric(car.Body);
                 var racer = who is not null && kinds?.KindForBody(who.Character) is { } kind ? kind : ((int Entity, int Body, int Anim)?)null;
                 if (empty is { } e && racer is not null) car.Body = e;
+                if (liftBays.Contains(k)) rise[people.Count] = Citadel.CitadelProps.CarLiftHigh;
                 people.Add((car, u, bayV, facingOut, stand, empty is not null && racer is not null ? $"{who!.Name}, empty" : "a car in its bay"));
+                if (liftBays.Contains(k))
+                {
+                    people.Add((Citadel.CitadelProps.Actor(Citadel.CitadelProps.CarLift, 0, 0, 0), u, bayV, facingOut, stand, "a car lift"));
+                    if (liftMechanic is not null)
+                    {
+                        // (beside the raised car, on the other side from its racer, turned to it)
+                        var mside = k % 2 == 0 ? -1 : 1;
+                        var mech = liftMechanic.Clone();
+                        mech.Move = 0;
+                        people.Add((mech, u + mside * w * 0.36, bayV - 250, RaceTrackMath.Turn(Math.Atan2(-mside * g.AlongX, -mside * g.AlongZ)), stand, "a mechanic at the lift"));
+                    }
+                }
                 if (racer is { } r && empty is not null && mechanic is not null)
                 {
                     // (its racer by its side, a little towards the front, turned to the tent's way out -- the side alternating bay by bay)
@@ -229,11 +248,12 @@ internal static partial class RaceTrackStory
             b.Edit(scene, $"the racers' garage: {string.Join(", ", people.Select(p => p.Who))}", model =>
             {
                 var edits = new List<Action<SceneScripts>>();
-                foreach (var (actor0, u, v, beta, life, who) in people)
+                for (var pi = 0; pi < people.Count; pi++)
                 {
+                    var (actor0, u, v, beta, life, who) = people[pi];
                     var actor = actor0.Clone();
                     double wx = g.X * 512 + g.AlongX * u + g.OutX * v, wz = g.Z * 512 + g.AlongZ * u + g.OutZ * v;
-                    int x = (int)Math.Round(wx - cube.Item1 * IslandFile.CubeSize), z = (int)Math.Round(wz - cube.Item2 * IslandFile.CubeSize), y = (int)Math.Round(g.Y);
+                    int x = (int)Math.Round(wx - cube.Item1 * IslandFile.CubeSize), z = (int)Math.Round(wz - cube.Item2 * IslandFile.CubeSize), y = (int)Math.Round(g.Y) + (rise.TryGetValue(pi, out var up) ? up : 0);
                     // (one cube past an edge: its band's height over CubeShift, the place a cube back -- or, inside, as it is)
                     int band = x >= IslandFile.CubeSize ? 0 : z >= IslandFile.CubeSize ? 1 : x < 0 ? 2 : z < 0 ? 3 : -1;
                     if (band >= 0)

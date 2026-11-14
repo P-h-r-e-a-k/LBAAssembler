@@ -366,6 +366,9 @@ internal static class RaceCarEngineFile
         // a won story race's end, a cut-scene: the car braked to a stop past the line, Twinsen out of it, the controls his again once the
         // story's congratulations have played -- RACEMOD.CPP win_stop= (WinStopVar)
         if (story && info is not null && WinStopVar(RaceTrackIsland.ByName(info.Island), town) is int winStop) text.Append($"win_stop={winStop}\n");
+        // (the Desert's racers wait in their garage, not in the pit lane: out of sight till the grid forms -- the user, 2026-11-13, "We never need
+        // the racers in the pit lane, they have a garage to wait in")
+        if (story && info is not null && RaceTrackIsland.ByName(info.Island) == RaceTrackIsland.Desert) text.Append("pit_hidden=1\n");
         // and a story race won stays won: driving back to its start line starts no qualifying lap and no grid (a lost one runs again) --
         // RACEMOD.CPP once_won= (the user, 2026-11-07); Track select's races as they were
         if (story) text.Append("once_won=1\n");

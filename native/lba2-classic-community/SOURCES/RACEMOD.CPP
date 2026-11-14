@@ -584,6 +584,9 @@ static int s_mapRoadN[RACE_MAP_ROADS];            // trial_start=: a time trial'
 static int s_nbSpots = 0;
 static T_RACE_SPOT s_pits[RACE_MAX_SPOTS];
 static int s_nbPits = 0;
+// pit_hidden=1: the opponents out of sight while they wait -- qualifying, or before the grid forms -- in the pit lane's place: the Desert's
+// racers wait in their garage tent (the story's), and come out onto the grid (the user, 2026-11-13)
+static int s_pitHidden = 0;
 enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
@@ -4295,6 +4298,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "grid")) {
             T_RACE_SPOT *g = &s_spots[s_nbSpots];
             if (s_nbSpots < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbSpots++;
+        } else if (!strcmp(key, "pit_hidden")) { s_pitHidden = atoi(v) != 0;
         } else if (!strcmp(key, "pit")) {
             T_RACE_SPOT *g = &s_pits[s_nbPits];
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
@@ -7705,6 +7709,7 @@ static void QualifyingArrival(int wrongWay, S32 now) {
 #define RACE_GRID_BACK 0x7FFFFFFF          // (the player's time at the back of the grid: slower than any qualifying time)
 // opponentN_when=: an opponent not there while its game variable is out of its range
 static int OpponentAway(const T_RACE_OPPONENT *o) {
+    if (s_pitHidden && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
     if (o->WhenVar < 0) return 0;
     const S32 v = ListVarGame[o->WhenVar];
     return v < o->WhenLeast || (o->WhenBelow > 0 && v >= o->WhenBelow);
@@ -22661,7 +22666,7 @@ static void ResetTrack(void) {
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopCut = -1;
-    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
+    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_pitHidden = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
     s_raceSkyOff = 0;

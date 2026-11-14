@@ -4370,6 +4370,13 @@ internal static class RaceTrackBuilder
     // where it stands, for the story's people and cars in it.
     private const double TentLong = 10, TentDeep = 6, TentOut = 2.5;   // cells: along the road, back from it; past the verge
     private const float TentEave = 2100, TentRidge = 3400, TentValance = 380, TentPole = 45, TentWall = 40;
+    // (the tent's cells, for painting its floor)
+    private sealed class TentCells(IEnumerable<(int Gx, int Gz)> cells) : IslandRegion
+    {
+        private readonly List<(int Gx, int Gz)> list = cells.ToList();
+        public override IEnumerable<(int Gx, int Gz, double Weight)> Vertices(IslandFile island) => list.Select(c => (c.Gx, c.Gz, 1.0));
+        public override (double Gx, double Gz) Center => list.Count == 0 ? (0, 0) : (list.Average(c => c.Gx), list.Average(c => c.Gz));
+    }
     private static void GarageTent(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
     {
         if (report.StartLine.Count == 0 || report.LapX.Length < 8 || o.NewBodyBase < 0) { report.Notes.Add("garage tent: no start line or lap, or no new bodies here"); return; }
@@ -4494,6 +4501,22 @@ internal static class RaceTrackBuilder
                 island.SetHeight(gx, gz, want);
                 levelled++;
             }
+        }
+        // the ground under it painted the road's grey (the start line's own cell's texture): only its bays' mats were grey, a little over the
+        // sand, and the sand showed through between and under them -- the user, 2026-11-13, "make sure the floor under the garage is a solid
+        // grey without patches of sand coming through"
+        if (report.StartLine.Count > 0 && IslandGround.Pick(island, (int)Math.Floor(report.StartLine[0].X + report.StartLine[0].DirX * 3), (int)Math.Floor(report.StartLine[0].Z + report.StartLine[0].DirZ * 3), 0) is { } asphalt)
+        {
+            double hu = tentLong / 2 + 0.5, hv = tentDeep / 2 + 0.5;
+            var under = new List<(int, int)>();
+            for (var gz = (int)Math.Floor(at.Z - hu - hv); gz <= (int)Math.Ceiling(at.Z + hu + hv); gz++)
+            for (var gx = (int)Math.Floor(at.X - hu - hv); gx <= (int)Math.Ceiling(at.X + hu + hv); gx++)
+            {
+                double cx = gx + 0.5 - at.X, cz = gz + 0.5 - at.Z;
+                if (Math.Abs(cx * ax + cz * az) <= hu && Math.Abs(cx * lx + cz * lz) <= hv) under.Add((gx, gz));
+            }
+            var painted = IslandGround.Paint(island, new TentCells(under), asphalt, PolygonFields.All);
+            report.Notes.Add($"garage tent: its floor the road's grey ({painted} ground triangles, {under.Count} cells)");
         }
 
         // the tent, round its middle on the ground: `along` the road's way, `back` away from the road (the front open towards it)
