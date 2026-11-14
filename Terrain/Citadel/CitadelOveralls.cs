@@ -160,7 +160,7 @@ internal static class CitadelOveralls
             try
             {
                 // (no LBRA patch on his back here: its 150 points and polygons took the pair over the engine's 550)
-                var couple = CoupleInSuit(Body.Read(coupleBytes, 2), Overalls(Body.Read(bodies.Read(Everyday), 2)));
+                var couple = CoupleInSuit(Body.Read(coupleBytes, 2), Overalls(Body.Read(bodies.Read(Everyday), 2)), MirroredCouples.Contains(c));
                 log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}): {couple.Vertices.Count} points, {couple.Faces.Count} polygons, {couple.Lines.Count} lines, {couple.Spheres.Count} spheres, {couple.Bones.Count} bones");
                 HqrWriter.ReplaceInFile(bodyPath, c, couple.Write());
                 coupled.Add(c);
@@ -442,14 +442,21 @@ internal static class CitadelOveralls
     // than his racing outfit"): his bones there are the tunic body's 0-16, the whole of him 100 to his right (x -100), the pelvis's bone (2)
     // shared with Zoe's middle. His polygons out -- every one on his bones 3-16, and the tunic's (192) and his trousers' (80) on bone 2 --
     // and the suit's of the same bones in, moved as far; Zoe's (bone 2's others, her bones 17 on) as they were.
-    private static readonly int[] CoupleBodies = { 17 };
+    // (and the spell's pair at the lighthouse's top -- entity 116's, BODY.HQR 175: the same bones mirrored, Twinsen on Zoe's other side; the
+    // suit mirrored to it -- the user, 2026-11-14, "Twinsen in the cut scene next to Zoe at the top of the lighthouse is still Twinsen in his
+    // tunic")
+    private static readonly int[] CoupleBodies = { 17, 175 };
+    private static readonly HashSet<int> MirroredCouples = new() { 175 };
     private const int CoupleEntity = 5;
-    private static readonly Vector3 CoupleShift = new(-100, 0, 0);
-    internal static Body CoupleInSuit(Body couple, Body suit)
+    private static readonly Vector3 CoupleShiftLeft = new(-100, 0, 0);
+    internal static Body CoupleInSuit(Body couple, Body suit, bool mirrored = false)
     {
         const int Shared = 2, FirstHis = 3, LastHis = 16;
         if (couple.Bones.Count <= LastHis + 1 || suit.Bones.Count <= LastHis) throw new InvalidDataException("not the couple's bones");
         var tWorld = couple.World(); var dWorld = suit.World();
+        // (mirrored: the suit's x turned round, its polygons' turn with it, and moved to the pair's other side)
+        if (mirrored) dWorld = dWorld.Select(v => new Vector3(-v.X, v.Y, v.Z)).ToArray();
+        var CoupleShift = mirrored ? -CoupleShiftLeft : CoupleShiftLeft;
         int TBone(int p) => couple.Bones.FindIndex(b => p >= b.Start && p < b.Start + b.Count);
         int DBone(int p) => suit.Bones.FindIndex(b => p >= b.Start && p < b.Start + b.Count);
         bool His(int bone) => bone >= FirstHis && bone <= LastHis;
@@ -508,7 +515,7 @@ internal static class CitadelOveralls
         var result = couple;
         result.Bones = bones;
         result.Faces = keptFaces.Select(f => f with { Points = f.Points.Select(p => tMap[p]).ToArray(), PointNormals = null })
-            .Concat(donorFaces.Select(f => f with { Points = f.Points.Select(p => dMap[p]).ToArray(), PointNormals = null })).ToList();
+            .Concat(donorFaces.Select(f => f with { Points = (mirrored ? f.Points.Reverse() : f.Points).Select(p => dMap[p]).ToArray(), PointNormals = null })).ToList();
         result.Lines = keptLines.Select(l => l with { A = tMap[l.A], B = tMap[l.B] }).Concat(donorLines.Select(l => l with { A = dMap[l.A], B = dMap[l.B] })).ToList();
         result.Spheres = keptSpheres.Select(sp => sp with { Point = tMap[sp.Point] }).Concat(donorSpheres.Select(sp => sp with { Point = dMap[sp.Point] })).ToList();
         result.LightScale = light.Any(l => l != 1f) ? light.ToArray() : null;
