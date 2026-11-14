@@ -69,6 +69,8 @@ internal static class StellaEntities
     // Twinsen can go -- the cell's own invisible walls (its grid's block 0 with a collision, behind the pillar) fill x 31 and z 33-34
     // there, which held him at the first try's edge (x 31-32, z 32-33); the plate's middle
     private const int CellFloor = 2048, CellFloorLayer = 7, LiftCellX = 32, LiftCellZ = 31;
+    // (the corner inside the cell behind the door's left pillar, where a walk in from the cell's middle stops: cell (35.5, 30.2))
+    private const int InsideX = 18176, InsideZ = 15460;
     private static readonly (int X, int Y, int Z) CellFoot = ((LiftCellX + 1) * 512, CellFloor - Citadel.CitadelProps.LiftTop, (LiftCellZ + 1) * 512);
     // the club's lift: on the lift's foot's floor, cells x 57-58, z 27-28 (its middle), its open side south, the way into the corridor
     private const int ClubLiftCellX = 57, ClubLiftCellZ = 27;
@@ -258,6 +260,17 @@ internal static class StellaEntities
             Info = new[] { clubArrival.X - 512, clubArrival.Y + 100 - Tall, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
         cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
+        // (and the same way down from inside the cell: the corner just behind the door's left pillar -- the lift's own corner is the alcove
+        // outside the bars, only reached by turning left at the door; the user, 2026-11-13, "Twinsen was blocked from getting into the
+        // corner from inside the cell ... we should make it easier to walk onto the elevator in the corner". Action there takes him down
+        // onto the club's lift as on the spot: its door zone's corner set so where he stands in it is where the spot puts him)
+        const int InsideHalf = 384;
+        cell.Zones.Add(new SceneZoneModel
+        {
+            Type = 0, Num = Scene, X0 = InsideX - InsideHalf, X1 = InsideX + InsideHalf - 1, Z0 = InsideZ - InsideHalf, Z1 = InsideZ + InsideHalf - 1, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall,
+            Info = new[] { clubArrival.X - InsideHalf, clubArrival.Y + 100 - Tall, clubArrival.Z - InsideHalf, 0, LiftSwitch, 0, DontReadjust, 0 },
+        });
+        cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = InsideX - InsideHalf, X1 = InsideX + InsideHalf - 1, Z0 = InsideZ - InsideHalf, Z1 = InsideZ + InsideHalf - 1, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
         // (the club's way up: over its lift, higher than he comes in on it, on from the start; out on the cell's plate down its shaft)
         var clubTop = floorY + ClubUp - 100;
         model.Zones.Add(new SceneZoneModel

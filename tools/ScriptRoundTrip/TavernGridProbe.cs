@@ -22,7 +22,7 @@ internal static class TavernGridProbe
                 for (var y = 0; y < 25; y++)
                 {
                     var i = ((z * 64 + x) * 25 + y) * 2;
-                    if (cells[i] != 0) s += $" y{y}:b{cells[i]}/{cells[i + 1]}";
+                    if (cells[i] != 0 || cells[i + 1] != 0) s += $" y{y}:b{cells[i]}/{cells[i + 1]}";
                 }
                 Console.WriteLine($"x{x} z{z}:{s}");
             }
