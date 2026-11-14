@@ -233,7 +233,7 @@ internal static class CitadelMuseum
     }
 
     // The palette's colour nearest an RGB (redmean; CitadelLba1Rooms'), never 0 (a brick's 0 is drawn as it is, but kept clear of it)
-    private static byte Nearest(byte[] palette, int r, int g, int b)
+    internal static byte Nearest(byte[] palette, int r, int g, int b)
     {
         var best = 1; var bestD = double.MaxValue;
         for (var j = 1; j < 256; j++)
@@ -290,7 +290,7 @@ internal static class CitadelMuseum
 
     // A copy of `block` with the repainted positions' bricks the new ones (the bricks added after LBA_BKG.HQR's last, or the ones a
     // build added before), the copy added after the library's last block (or the one a build added before): its number.
-    private static int AddBlock(HqrFile bkg, MapBricks.BkgHeader header, ref byte[] library, int block, Dictionary<int, GphImage> painted)
+    internal static int AddBlock(HqrFile bkg, MapBricks.BkgHeader header, ref byte[] library, int block, Dictionary<int, GphImage> painted)
     {
         var info = GridPaint.Info(library, block)!.Value;
         var entries = GridPaint.Entries(library, block).ToList();

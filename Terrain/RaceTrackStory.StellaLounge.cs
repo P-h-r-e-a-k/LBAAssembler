@@ -75,7 +75,7 @@ internal static partial class RaceTrackStory
                 var (sx, sz) = StellaEntities.At(angles[k], Citadel.CitadelProps.SeatCells);
                 var seatY = StellaEntities.FloorY + Citadel.CitadelProps.BoothSeat;
                 model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Private, X0 = sx - 300, X1 = sx + 300, Z0 = sz - 300, Z1 = sz + 300, Y0 = seatY - 100, Y1 = seatY + 1500,
-                    Info = new[] { StellaRooms.SofaX - 300, 256 - 100, StellaRooms.SofaZ - 300, 0, PrivateSwitch, 0, 0, 0 } });
+                    Info = new[] { StellaRooms.SofaX - 300, 256 + Citadel.CitadelProps.BoothSeat - 100, StellaRooms.SofaZ - 300, 0, PrivateSwitch, 0, 0, 0 } });
                 model.Zones.Add(new SceneZoneModel { Type = 2, Num = BoothZone0 + k, X0 = zx - 400, X1 = zx + 400, Z0 = zz - 400, Z1 = zz + 400, Y0 = StellaEntities.FloorY - 100, Y1 = StellaEntities.FloorY + 1500, Info = new int[8] });
             }
             // the hostesses (StellaStaff: the rabbibunny, the Grobo): home beside the catwalk's foot; each one's way to each booth and back

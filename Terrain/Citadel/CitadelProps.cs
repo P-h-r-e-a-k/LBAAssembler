@@ -247,6 +247,27 @@ internal static partial class CitadelProps
         return new() { $"chapter 2's props, entity {Prop}'s bodies: {string.Join(", ", made)}" };
     }
 
+    // More props made elsewhere (from the game folder's own bodies -- StellaPosters): appended to BODY.HQR and given to entity 17 as above
+    public static List<string> InstallMore(string gameDirectory, string what, IEnumerable<(int Generic, string Name, Func<byte[], Body> Build)> more)
+    {
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var header = Body.Read(HqrArchive.Open(bodyPath).Read(HeaderBody), 2, allowStatic: true).Header;
+        if (Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == Prop) is null)
+            return new() { $"WARNING: {what}: no prop entity {Prop} -- not made" };
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var made = new List<string>();
+        foreach (var (generic, name, build) in more)
+        {
+            var count = HqrArchive.CountEntries(bodyPath);
+            File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(build(header).Write())));
+            table = RaceTrackBaldinoCar.WithBody(table, Prop, generic, count);
+            made.Add($"{name} BODY.HQR {count} (body {generic})");
+        }
+        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        return new() { $"{what}, entity {Prop}'s bodies: {string.Join(", ", made)}" };
+    }
+
     // The props whose box isn't the one their body's extent makes: the lift's platform (not its rails), the rugs' tiles (CitadelProps.Rugs)
     private static short[]? BoxOf(int generic) =>
         LiftBox(generic) ?? RugTileBox(generic) ?? ClubBox(generic) ?? PoolBox(generic);
