@@ -19,7 +19,7 @@ namespace LBAAssembler.Terrain;
 //     walking up to the hatch (HatchZone) he goes in, the freighter lifts off, and he's on the moon (change_cube 229, the Moon's start).
 internal static partial class RaceTrackStory
 {
-    private const int HangarScene = 12, HangarSaucer = 6, HatchZone = 30;
+    private const int HangarScene = 12, HangarSaucer = 6, HatchZone = 30, SpaceshipInside = 114;
     // the base's people (its guards, prisoners, workers: entities 31, 46, 48-54) and the small saucer (entity 47) taken away
     private static readonly HashSet<int> HangarGone = new() { 31, 46, 47, 48, 49, 50, 51, 52, 53, 54 };
     // cube variables: the officer's offer made (1), boarding (1 told to, 2 aboard), the black car gone
@@ -217,6 +217,9 @@ void comportement_1()
 "));
 
             // the hatch: walked into, boarding, Twinsen aboard and the freighter up; at its height, the moon
+            // (the game's own door into its spaceship's inside, scene 114, lies across the ramp's top (x 9216-9728): walked up to the hatch,
+            // Twinsen went through it into scene 114 and the freighter never lifted off -- the user, 2026-11-14. Gone: the freighter is the way)
+            model.Zones.RemoveAll(z => z.Type == 0 && z.Num == SpaceshipInside);
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = HatchZone, X0 = HoldHatch.X - 500, X1 = RampTop.X - 60, Z0 = ShipZ - 500, Z1 = ShipZ + 500, Y0 = PadY - 100, Y1 = PadY + 1600, Info = new int[8] });
             var keeper = RaceTrackScenes.InvisibleHelper(OfficerAt.X, HallY, OfficerAt.Z);
             adds.Add(IslandBeatsA.Add(model, keeper, $@"void comportement_0()
