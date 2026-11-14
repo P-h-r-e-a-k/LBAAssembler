@@ -86,12 +86,31 @@ internal static class LicenceCard
     // Twinsen's head and shoulders (his body's polygons above his chest), seen from the front, laid onto the photo: his height down the card
     // (-z up), his front (+z in his body) up off it, his x across -- a turn, not a mirror, so his polygons face up (his -z up showed the
     // back of his head, the user, 2026-11-14)
+    // (how much of his depth the photo keeps: enough that the hair at the back of his head sorts behind his face -- at 0.04 it was drawn over
+    // it, the user, 2026-11-14)
+    private const float PhotoDepth = 0.35f;
     private static void Photo(CarMesh m, Body body)
     {
         var world = body.World();
         var top = world.Max(v => v.Y);
         var cut = top * 0.56f;
-        var faces = body.Faces.Where(f => f.Points.All(p => world[p].Y >= cut)).ToList();
+        // (his front only, the polygons facing +z: pressed flat, the back of his head -- its hair -- lay over his face, the user, 2026-11-14:
+        // "his hair appears to be over his face on the front of the licence")
+        bool Front(Face f)
+        {
+            if (f.Points.Length < 3) return true;
+            var n = Vector3.Cross(world[f.Points[1]] - world[f.Points[0]], world[f.Points[2]] - world[f.Points[0]]);
+            return n.Z > 0.1f * n.Length();
+        }
+        // (and nothing of his head's back half: his ponytail has polygons facing the front as well, and lay down the middle of his face)
+        var head = world.Where(v => v.Y >= top * 0.8f).ToList();
+        var headMiddle = (head.Min(v => v.Z) + head.Max(v => v.Z)) / 2;
+        bool Back(Face f)
+        {
+            var c = f.Points.Aggregate(Vector3.Zero, (s, p) => s + world[p]) / f.Points.Length;
+            return c.Y >= top * 0.8f && c.Z < headMiddle;
+        }
+        var faces = body.Faces.Where(f => f.Points.All(p => world[p].Y >= cut) && Front(f) && !Back(f)).ToList();
         float minX = faces.SelectMany(f => f.Points).Min(p => world[p].X), maxX = faces.SelectMany(f => f.Points).Max(p => world[p].X);
         var scale = Math.Min((PhotoZ1 - PhotoZ0 - 60) / (top - cut), (PhotoX1 - PhotoX0 - 60) / (maxX - minX));
         var middle = (PhotoX0 + PhotoX1) / 2;
@@ -101,10 +120,11 @@ internal static class LicenceCard
         {
             if (handles.TryGetValue(p, out var h)) return h;
             var v = world[p];
-            return handles[p] = m.P(0, Stand(new Vector3(middle + (v.X - (minX + maxX) / 2) * scale, Top + 12 + (v.Z + 300) * 0.04f, PhotoZ1 - 20 - (v.Y - cut) * scale)));
+            return handles[p] = m.P(0, Stand(new Vector3(middle + (v.X - (minX + maxX) / 2) * scale, Top + 12 + (v.Z + 300) * PhotoDepth, PhotoZ1 - 20 - (v.Y - cut) * scale)));
         }
         foreach (var f in faces) m.Raw(f.Points.Select(H).ToArray(), f.Colour, f.Material == 0 ? 0 : -1, f.Texture);
-        foreach (var s in body.Spheres.Where(s => world[s.Point].Y >= cut)) m.Sphere(H(s.Point), Math.Max(6, (int)(s.Radius * scale)), s.Colour);
+        // (the hair on top of his head kept, its back half too: only the ponytail hanging behind it, under its top, left out)
+        foreach (var s in body.Spheres.Where(s => world[s.Point].Y >= cut && !(world[s.Point].Y >= top * 0.8f && world[s.Point].Y < top * 0.92f && world[s.Point].Z < headMiddle))) m.Sphere(H(s.Point), Math.Max(6, (int)(s.Radius * scale)), s.Colour);
     }
 
     // Block letters: strokes on a 4 x 6 grid (y down), each a thin bar lying on the card
