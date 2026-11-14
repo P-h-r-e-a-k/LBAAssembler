@@ -24,6 +24,10 @@ internal static partial class RaceTrackStory
 {
     // Q_PAGES (docs/LBRA_STORY_PLAN.md 3.1): 1 Flick has told, 2 the Dean has, 3-5 the pages found, 6 the diploma, 7 the race won, 8 told
     public const int QPages = 215, PagesDiploma = 6, PagesWon = 7, PagesDone = 8;
+    // Twinsen's magic level up with the School's diploma, and again with the Desert's race won -- 3 by Otringal (the user, 2026-11-14:
+    // "increment Twinsen's magic level after he gets the diploma from the school of magic, and again when he wins the Desert race, his magic
+    // level should be 3 when he gets to Otringal"); never down, whatever came first
+    private const int MagicDiploma = 2, MagicWon = 3;
     // the group's two spare game variables: the chapter whose radio call was answered, and the chapter whose ringing was shown
     // (not 235-237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF -- 2026-11-04)
     public const int RadioAnsweredA = 234, RadioRangA = 240;
@@ -944,6 +948,10 @@ void comportement_1()
                 found_object({Diploma});
                 set_var_game({Diploma}, 1);
                 set_var_game({QPages}, 6);
+                if ({MagicDiploma} > magic_level())
+                {{
+                    set_magic_level({MagicDiploma});
+                }}
             }}
             else if (2 > var_game({QPages}))
             {{
@@ -1176,6 +1184,10 @@ void comportement_1()
         message_obj({moya}, {Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});
         message_obj({bal}, {Say(DesertLine.BaldinoRocket)});
+        if ({MagicWon} > magic_level())
+        {{
+            set_magic_level({MagicWon});
+        }}
 {BuAfterRace(Say)}        if (4 > chapter())
         {{
             inc_chapter();

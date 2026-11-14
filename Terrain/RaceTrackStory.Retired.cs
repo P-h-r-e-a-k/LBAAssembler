@@ -67,6 +67,11 @@ internal static partial class RaceTrackStory
     // the story's chapters on each island: the game's own pickups gated on `N > chapter()` are never there in the story
     // (the lava lake's, 6: RaceTrackStory.LavaLake.cs)
     private const int DesertChapter = 3, MoonChapter = 4, OtringalChapter = 5, FrancosChapter = 7;
+    // the Esmer soldiers (the game's entities 31 and 32: masked, yellow, armed) gone from every scene of an island, every chapter: the
+    // Desert's -- the plaza, the harbour, the start line's scene, the Temple of Bu's hall -- shot Twinsen dead after the race was won (the
+    // user, 2026-11-14: "a lot of alien NPCs started attempting to kill Twinsen, can we remove them all please")
+    private static readonly int[] SoldierEntities = { 31, 32 };
+    private static bool SoldiersGone(RaceTrackIsland island) => island.IslandByte == 2;
 
     // An island's retirements (RaceTrackService.Story: once the island's story is built, before its people are retold). Adds to nothing
     // else; what it did, the log.
@@ -87,7 +92,7 @@ internal static partial class RaceTrackStory
             11 => (new List<Retirement> { new(132, 2, @"change_cube\(105\)", "the game's ferryman at the lava's edge (the Ferryman's Song, four gems) gone from chapter 11: the story's ferryman is the one", Gone("10 < chapter()")) }, new List<ClosedDoor>()),
             _ => (new List<Retirement>(), new List<ClosedDoor>()),
         };
-        if (people.Count == 0 && doors.Count == 0) return log;
+        if (people.Count == 0 && doors.Count == 0 && !SoldiersGone(island)) return log;
 
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         var islandScenes = new List<int>();
@@ -102,9 +107,10 @@ internal static partial class RaceTrackStory
         {
             var mine = people.Where(p => p.Scene == scene || p.Scene < 0).ToList();
             var shut = doors.Where(d => d.Scene == scene || d.Scene < 0).ToList();
-            if (mine.Count == 0 && shut.Count == 0) continue;
             SceneModel model;
             try { model = store.Load(scene); } catch (Exception e) when (e is InvalidDataException or IOException) { continue; }
+            var soldiers = SoldiersGone(island) ? Enumerable.Range(1, model.Actors.Count - 1).Where(i => SoldierEntities.Contains(model.Actors[i].Entity)).ToList() : new List<int>();
+            if (mine.Count == 0 && shut.Count == 0 && soldiers.Count == 0) continue;
             var said = new List<string>();
             var zones = false;
             foreach (var d in shut)
@@ -133,6 +139,19 @@ internal static partial class RaceTrackStory
                     said.Add($"actor {actor}: {p.Why}{(p.Scene >= 0 && actor != p.Actor ? $" (actor {actor}, not {p.Actor})" : "")}");
                 }
                 catch (NotTheGames e) { log.Add($"scene {scene} actor {actor}: {p.Why} left out: the script isn't the game's own: {e.Message}"); }
+            }
+            foreach (var a in soldiers)
+            {
+                try
+                {
+                    var life = scripts.GetText(a, ScriptKind.Life);
+                    var now = Gone("127 > chapter()")(life);
+                    if (now == life) continue;
+                    scripts.SetText(a, ScriptKind.Life, now);
+                    edited = true;
+                    said.Add($"actor {a}: an Esmer soldier (entity {model.Actors[a].Entity}) gone");
+                }
+                catch (NotTheGames e) { log.Add($"scene {scene} actor {a}: the Esmer soldier left: {e.Message}"); }
             }
             if (!edited && !zones) continue;
             byte[] record;
