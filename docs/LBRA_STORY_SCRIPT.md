@@ -249,7 +249,9 @@ later, FunFrock's first line in the final (chapter 14). The wake sets
 
 **Built:** the wake on a loss as on a win (the dream's race file: `dream_any_end=1`, the dream never run again); DREAM_CAUGHT set only
 by a real win (`won_set=229 1`, RACEMOD.CPP: win= applies either way in such a dream); Zoe's two waking lines by it, and FunFrock's at
-the final. **To build:** FunFrock's head start (his car let go before Twinsen's start); FunFrock's fading lines over the white.
+the final. **Also built:** FunFrock's head start (he drives off from the dock while Twinsen is on foot, `chase_head=` puts him well down
+the road as Twinsen takes the wheel); FunFrock's and Sendell's fading lines over the white, by DREAM_CAUGHT, before Zoe's wake line
+(Polar/PolarDream.cs FadeLines).
 
 ---
 

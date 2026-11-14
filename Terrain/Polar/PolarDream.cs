@@ -116,6 +116,50 @@ internal static class PolarDream
         "Uma voz, a desvanecer-se com o branco: \"Encontraste-me outra vez, Twinsen. Encontras sempre.\"",
     };
 
+    // FunFrock's voice and Sendell's over the white as the dream ends (docs/LBRA_STORY_SCRIPT.md, chapter 0's finish: "What is said over it
+    // depends on the race") -- said before Zoe's wake line, as Sendell's light's: the user, 2026-11-13, "FunFrock's head start in the dream"
+    // (the head start itself is built: he drives off from the dock while Twinsen is on foot, chase_head=); caught him (DREAM_CAUGHT, 229) or not
+    private const int DreamCaught = 229;
+    private static readonly string[][] FadeLines =
+    {
+        new[]
+        {
+            "FunFrock's voice, fading with the white: \"Impossible! Nobody catches me... nobody...\"",
+            "La voix de FunFrock, qui s'efface avec le blanc : « Impossible ! Personne ne me rattrape... personne... »",
+            "FunFrocks Stimme, die mit dem Weiß verblasst: \"Unmöglich! Niemand holt mich ein... niemand...\"",
+            "La voz de FunFrock, que se apaga con el blanco: \"¡Imposible! Nadie me alcanza... nadie...\"",
+            "La voce di FunFrock, che svanisce col bianco: \"Impossibile! Nessuno mi raggiunge... nessuno...\"",
+            "A voz de FunFrock, a desvanecer-se com o branco: \"Impossível! Ninguém me apanha... ninguém...\"",
+        },
+        new[]
+        {
+            "Another voice, unseen: \"Two worlds will race, Twinsen. And at the end of it, he will be waiting.\"",
+            "Une autre voix, invisible : « Deux mondes vont s'affronter, Twinsen. Et au bout de la course, il t'attendra. »",
+            "Eine andere Stimme, unsichtbar: \"Zwei Welten werden um die Wette fahren, Twinsen. Und am Ende wird er warten.\"",
+            "Otra voz, invisible: \"Dos mundos competirán, Twinsen. Y al final, él estará esperando.\"",
+            "Un'altra voce, invisibile: \"Due mondi correranno, Twinsen. E alla fine, lui ti aspetterà.\"",
+            "Outra voz, invisível: \"Dois mundos vão correr, Twinsen. E no fim, ele estará à espera.\"",
+        },
+        new[]
+        {
+            "FunFrock's voice, laughing, fading with the white: \"Too slow, Twinsen! Always one step behind!\"",
+            "La voix de FunFrock, qui rit et s'efface avec le blanc : « Trop lent, Twinsen ! Toujours un pas derrière ! »",
+            "FunFrocks Stimme, lachend, mit dem Weiß verblassend: \"Zu langsam, Twinsen! Immer einen Schritt hinterher!\"",
+            "La voz de FunFrock, riendo, apagándose con el blanco: \"¡Demasiado lento, Twinsen! ¡Siempre un paso por detrás!\"",
+            "La voce di FunFrock, ridendo, svanisce col bianco: \"Troppo lento, Twinsen! Sempre un passo indietro!\"",
+            "A voz de FunFrock, a rir, a desvanecer-se com o branco: \"Demasiado lento, Twinsen! Sempre um passo atrás!\"",
+        },
+        new[]
+        {
+            "Another voice, unseen: \"Two worlds will race, Twinsen. You will have your chance again. And at the end of it, he will be waiting.\"",
+            "Une autre voix, invisible : « Deux mondes vont s'affronter, Twinsen. Tu auras encore ta chance. Et au bout de la course, il t'attendra. »",
+            "Eine andere Stimme, unsichtbar: \"Zwei Welten werden um die Wette fahren, Twinsen. Du bekommst wieder deine Chance. Und am Ende wird er warten.\"",
+            "Otra voz, invisible: \"Dos mundos competirán, Twinsen. Tendrás otra oportunidad. Y al final, él estará esperando.\"",
+            "Un'altra voce, invisibile: \"Due mondi correranno, Twinsen. Avrai di nuovo la tua occasione. E alla fine, lui ti aspetterà.\"",
+            "Outra voz, invisível: \"Dois mundos vão correr, Twinsen. Terás outra oportunidade. E no fim, ele estará à espera.\"",
+        },
+    };
+
     // The island's own texts after its name, in a language (a language this doesn't know: the English).
     public static IEnumerable<(int Id, string Text)> IslandTexts(int language)
     {
@@ -144,6 +188,8 @@ internal static class PolarDream
             var attribute = lines.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute;
             lines.Texts.Add(new Lba2TextBank.Text { Id = id, Attribute = attribute, Bytes = Dos.GetBytes(Wake[lang < Wake.Length ? lang : 0]) });
             lines.Texts.Add(new Lba2TextBank.Text { Id = id + 1, Attribute = attribute, Bytes = Dos.GetBytes(SendellWake[lang < SendellWake.Length ? lang : 0]) });
+            for (var k = 0; k < FadeLines.Length; k++)
+                lines.Texts.Add(new Lba2TextBank.Text { Id = id + 2 + k, Attribute = attribute, Bytes = Dos.GetBytes(FadeLines[k][lang < FadeLines[k].Length ? lang : 0]) });
             hqr = lines.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
@@ -251,6 +297,16 @@ stop();
 {{
     if (1 == var_game({DreamVar}) && 161 == l_track())
     {{
+        if (1 == var_game({DreamCaught}))
+        {{
+            message({wake + 2});
+            message({wake + 3});
+        }}
+        else
+        {{
+            message({wake + 4});
+            message({wake + 5});
+        }}
         if (1 == var_game({RaceTrackStory.EggSendell}))
         {{
             message({wake + 1});
