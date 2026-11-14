@@ -2920,7 +2920,7 @@ static int RemoveFolder(const char *dir) {
 // (the name Share my ghosts has, if any, offered); its configuration and settings copied (the install keeps its own), its logs and the shared
 // tracks left. Once only (PLAYERS_MOVED.TXT in it after the first look, whether there was anything to move or not): the game, started there
 // before a player is chosen, makes files of its own in it (an empty save folder, the best times' file) that are nobody's.
-static const char *const s_sharedStays[] = {"lba2.cfg", "RACEGAME_SETTINGS.TXT", "adeline.log", "adeline.prev.log", "Tracks", "crash.txt", "PLAYERS_MOVED.TXT"};
+static const char *const s_sharedStays[] = {"lba2.cfg", "RACEGAME_SETTINGS.TXT", "adeline.log", "adeline.prev.log", "Tracks", "crash.txt", "PLAYERS_MOVED.TXT", "REMOTE_CONTROL.TXT"};
 static const char *const s_playerMarks[] = {"PLAYER.TXT", "BESTTIMES.TXT", "STORY_NOW.TXT", "ACHIEVEMENTS.TXT", "GHOSTS", "save", "RACE_NOW.TXT"};
 static int s_moveFailed = 0;
 static char s_moveTo[ADELINE_MAX_PATH];
