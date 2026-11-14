@@ -1262,6 +1262,9 @@ void comportement_1()
     // day she's out in the yard with Luc for the rest of chapter 2, not in the house as well. The hero's labels 170-172 and Zoe's 180-183
     // are new (PolarDream's are 150, 151 and 160-164); its scene-start branch goes before the game's own, which PolarDream's own then
     // finds as it always did.
+    // (the night's opening black till its scripts have laid Twinsen in his bed: he showed standing at the scene's start a moment first --
+    // the user, 2026-11-14; RACEMOD.CPP late_fade=)
+    internal static string LateFadeLines => $"late_fade={OpeningScene} {DayVar} {Night}\n";
     private static void Morning(StoryParts p) => p.Edit(OpeningScene, "the night: Twinsen asleep in his bed, Zoe wakes him to the morning the aliens land (chapter 2); later Zoe's word at the door", model =>
     {
         var first = model.TrackPoints.Count;

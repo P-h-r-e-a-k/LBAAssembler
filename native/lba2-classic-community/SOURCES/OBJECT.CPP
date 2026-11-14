@@ -6361,7 +6361,10 @@ startaffscene:
         FlagPal = FALSE;
     }
 
-    if (FlagFade) {
+    // (a race-track mod's scene whose opening has to run first: its fade in held a few frames, the picture black -- RACEMOD.CPP late_fade=)
+    extern S32 RaceMod_HoldFade(void);
+    if (FlagFade && RaceMod_HoldFade()) {
+    } else if (FlagFade) {
         // (from white: a dream's end, RACEMOD.CPP wake_flight= -- held white till its opening has run, RaceMod_Story fading it in)
         if (RaceMod_FadeFromWhite()) FadePal(255, 255, 255, PtrPal, 0);
         else FadeToPalAndSamples(PtrPal);

@@ -1487,6 +1487,22 @@ static int s_lensVar = -1, s_lensValue = 0, s_lensCubeScene = -1, s_lensCubeVar 
 // (lens='s third value: its round that many hundredths of the screen's height up from the middle -- the Wizard and the cow in the middle of
 // it, the user, 2026-11-14: "raise the view circle of the telescope up fractionally, so the cow and wizard are in the centre of the circle")
 static int s_lensRaise = 0;
+// late_fade=<scene> <game var> <value>: that scene loaded with the variable at that value, its picture kept black for its first frames, its
+// fade in after them -- its opening's scripts have put things in place by then (the night: Twinsen laid in his bed -- the user, 2026-11-14,
+// "When Twinsen wakes up in the morning he starts standing before laying down ... he enters the scene laying down"). OBJECT.CPP AffScene.
+#define RACE_LATE_FADE_FRAMES 14   // (his lying down blends from his standing pose over some 8 frames, the camera on the bedroom by 10)
+static int s_lateFade[8][3], s_nbLateFade = 0, s_lateFadeScene = -1, s_lateFadeFrames = 0;
+S32 RaceMod_HoldFade(void) {
+    if (!RaceMod_Active() || !s_nbLateFade) return 0;
+    if ((int)NumCube != s_lateFadeScene) { s_lateFadeScene = (int)NumCube; s_lateFadeFrames = 0; }
+    for (int k = 0; k < s_nbLateFade; k++)
+        if (s_lateFade[k][0] == (int)NumCube && s_lateFade[k][1] >= 0 && s_lateFade[k][1] < 256 && ListVarGame[s_lateFade[k][1]] == s_lateFade[k][2]) {
+            if (++s_lateFadeFrames <= RACE_LATE_FADE_FRAMES) return 1;
+            Log_Info("[racemod] late_fade: scene %d faded in after %d frames", (int)NumCube, RACE_LATE_FADE_FRAMES);
+            return 0;
+        }
+    return 0;
+}
 #define RACE_LENS_RIM 6
 #define RACE_LENS_RIM_COLOUR 50
 static void LensDraw(void) {
@@ -5101,6 +5117,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "adult_var")) { if (!setRead) s_adultVar = atoi(v); }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
+        else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
         else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
             int isl, dial;
@@ -14148,7 +14165,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
