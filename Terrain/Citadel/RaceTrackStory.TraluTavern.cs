@@ -79,6 +79,13 @@ internal static partial class RaceTrackStory
     private static readonly (int X, int Z)[] LucWay = { (Cell(35.2), Cell(35.7)), (Cell(35.2), Cell(38.9)), (Cell(34.2), Cell(39.5)), (Cell(34.2), Cell(46.2)) };
     private static readonly (int X, int Y, int Z) DrinkAt = (Cell(36.3), TraluBarRoom.FloorY + 768, Cell(47.0));
     private const int BarSitDown = 200, BarSeated = 201, BarStandUp = 202, BarStoodUp = 203, LucBrings = 10, LucThere = 11, LucBack = 12, LucHome = 13;
+    // (in from the caves' arch, walked to the table's east side before the cheers -- the user, 2026-11-14: "a scripted walk to the table area
+    // before the NPCs talk to him, as they currently talk to him off screen"; the scene variables counting the walk's time, for a walk that
+    // never gets there: put there after about 40 seconds)
+    private const int BarWalkIn = 204, BarWalkedIn = 205, WalkTick = 32, WalkWait = 33;
+    // (north along the arch's walkway (cells x 56-57), down its steps west at z 41 to the hall's floor, round the wall at x 46 and to the
+    // table's east side)
+    private static readonly (int X, int Z)[] WalkInWay = { (Cell(57.0), Cell(41.8)), (Cell(50.0), Cell(41.6)), (Cell(42.5), Cell(43.0)), (Cell(40.5), Cell(47.5)) };
     // how near Twinsen comes to talk: the regulars' (Luc's across his counter), the Tralu's (a big fellow, behind his barrel in his corner)
     private const int RegularReach = 750, LucReach = 1600, TraluReach = 2200;
 
@@ -218,6 +225,8 @@ void comportement_1()
             model.TrackPoints.Add(new SceneTrackPoint(LucAt.X, TraluBarRoom.FloorY, LucAt.Z));
             model.TrackPoints.Add(new SceneTrackPoint(StandAt.X, TraluBarRoom.FloorY, StandAt.Z));
             int seat = first, way = first + 1, home = first + 1 + LucWay.Length, stand = home + 1;
+            var walkIn = model.TrackPoints.Count;
+            foreach (var (x, z) in WalkInWay) model.TrackPoints.Add(new SceneTrackPoint(x, TraluBarRoom.FloorY, z));
             var drink = Prop(DrinkAt.X, DrinkAt.Y, DrinkAt.Z, TraluBarRoom.TankardGeneric, 1024);
             var drinkIndex = model.Actors.Count;
             edits.Add(p.Add(model, drink, $@"void comportement_0()
@@ -266,6 +275,26 @@ void comportement_1()
     add_var_cube({PartyWait}, 1);
     if (25 < var_cube({PartyWait}))
     {{
+        set_track_obj(0, label_{BarWalkIn});
+        set_comportement(comportement_5);
+    }}
+}}
+
+void comportement_5()
+{{
+    add_var_cube({WalkTick}, 1);
+    if (10 < var_cube({WalkTick}))
+    {{
+        set_var_cube({WalkTick}, 0);
+        add_var_cube({WalkWait}, 1);
+    }}
+    if ({BarWalkedIn} == l_track_obj(0))
+    {{
+        set_comportement(comportement_4);
+    }}
+    else if (200 < var_cube({WalkWait}))
+    {{
+        set_track_obj(0, label_{BarWalkedIn});
         set_comportement(comportement_4);
     }}
 }}
@@ -316,8 +345,16 @@ void comportement_3()
                 // (the celebration's tracks after the regulars' own: Luc's Add gave him the game's)
                 // (his track empty till now: a label 0 first -- the sitting down at its very start, offset 0, never ran)
                 var heroTrack = scripts.GetText(0, ScriptKind.Track).TrimEnd();
+                var walkSteps = string.Concat(Enumerable.Range(walkIn, WalkInWay.Length).Select(k => $"goto_point({k});\n"));
                 if (!heroTrack.Contains("label(")) heroTrack += "\nlabel(0);\nstop();";
                 scripts.SetText(0, ScriptKind.Track, heroTrack + $@"
+
+label({BarWalkIn});
+anim(1);
+{walkSteps}anim(0);
+
+label({BarWalkedIn});
+stop();
 
 label({BarSitDown});
 pos_point({seat});
