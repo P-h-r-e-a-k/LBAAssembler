@@ -677,6 +677,8 @@ void comportement_1()
         log.AddRange(StellaStaff.Install(gameDirectory));
         log.AddRange(StellaPosters.Install(gameDirectory));
         log.AddRange(HangarProps.Install(gameDirectory));
+        // (the racing licence's card in the inventory -- LicenceCard)
+        log.AddRange(LicenceCard.Install(gameDirectory));
         // (Twinsen's swimming: the Imperial Hotel's pool -- PoolSwim)
         log.AddRange(PoolSwim.Install(gameDirectory));
         // (the people copied are the game's own, from the scenes as they were before any track's build)

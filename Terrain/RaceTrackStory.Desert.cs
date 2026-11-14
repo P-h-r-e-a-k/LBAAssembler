@@ -808,7 +808,9 @@ void comportement_1()
             log.Add($"the exam pages: item {PagesSlot}'s texts (file {HolomapTexts}: {PagesSlot}, {100 + PagesSlot}, {200 + PagesSlot}) and the arrows' label ({label}), in all {languages} languages");
         }
         var objfix = Path.Combine(gameDirectory, "OBJFIX.HQR");
-        HqrWriter.ReplaceInFile(objfix, PagesSlot, HqrArchive.Open(objfix).Read(PagesModelLike));
+        // (unless 38 is the racing licence's card already: its install kept the note's scroll here first -- LicenceCard)
+        var note = HqrArchive.Open(objfix).Read(PagesModelLike);
+        if (!note.AsSpan().SequenceEqual(LicenceCard.Bytes(gameDirectory))) HqrWriter.ReplaceInFile(objfix, PagesSlot, note);
         log.Add($"the exam pages: OBJFIX.HQR entry {PagesSlot} (the pyramid key's) is entry {PagesModelLike}'s scroll of paper");
 
         var arrows = Enumerable.Repeat(-1, places.Length).ToArray();
