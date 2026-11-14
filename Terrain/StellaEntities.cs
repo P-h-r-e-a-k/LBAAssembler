@@ -153,7 +153,7 @@ internal static class StellaEntities
                 }
                 // (the lounge's benches: solid under their seats, up to them -- Twinsen sits on one: CitadelProps.ClubBooth)
                 if (Hall(x, z) && r >= Citadel.CitadelProps.SeatCells - 0.3 && r < RingFrom &&
-                    Citadel.CitadelProps.BoothAngles.Any(a => Math.Abs(((angle - a) % 360 + 540) % 360 - 180) <= 5))
+                    Citadel.CitadelProps.BoothAngles.Any(a => Math.Abs(((angle - a) % 360 + 540) % 360 - 180) <= Citadel.CitadelProps.BoothArc))
                 {
                     for (var y = FloorLayer + 1; y <= FloorLayer + Citadel.CitadelProps.BoothSeat / 256; y++) Put(x, y, z, 0, 1);
                     benchCells++;

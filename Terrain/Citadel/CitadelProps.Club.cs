@@ -250,15 +250,44 @@ internal static partial class CitadelProps
     public static readonly float[] BoothAngles = { 35, 70, 185, 220, 325 };
     public const float BoothCells = 17.4f, SeatCells = 17.2f, MachineAngle = 94, MachineCells = 17.6f;
     public const int BoothSeat = 512;
+    // (a booth, not a bench -- the user, 2026-11-13, "change these chairs for more of a booth ... shaped to allow for the curved room": its seat an
+    // arc along the hall's wall BoothArc degrees either side, a high padded back curving with it, high wooden ends; its frame: the actor at
+    // the arc's middle, turned to the hall's middle -- +z towards it, the hall's middle BoothCells ahead)
+    public const float BoothArc = 6f;
     public static Body BuildClubBooth(byte[] header)
     {
-        var m = new CarMesh("a booth's bench", new[] { -1 });
+        var m = new CarMesh("a booth", new[] { -1 });
         m.Light = 0.85f;
-        const float W = 1300, D = 560;
-        m.Box(0, new Vector3(0, BoothSeat / 2f - 30, 0), new Vector3(W, BoothSeat - 60, D), ClubWood, ClubWood);
-        m.Box(0, new Vector3(0, BoothSeat - 30, 20), new Vector3(W - 40, 60, D - 40), ClubLeather, ClubLeather);
-        m.Box(0, new Vector3(0, BoothSeat + 420, -D / 2 - 40), new Vector3(W, 840, 120), ClubLeather, ClubLeather);
-        foreach (var s in new[] { -1, 1 }) m.Box(0, new Vector3(s * (W / 2 + 40), BoothSeat / 2f + 150, -40), new Vector3(80, BoothSeat + 300, D + 80), ClubWood, ClubWoodLight);
+        const int Steps = 8;
+        const float Depth = 560, Back = 140, BackHigh = 1350;
+        float r = BoothCells * 512;
+        // a place at the hall's radius rr and angle th (degrees off the booth's middle), in the booth's frame
+        Vector3 At(float th, float rr, float y)
+        {
+            var a = th * MathF.PI / 180;
+            return new Vector3(rr * MathF.Sin(a), y, r - rr * MathF.Cos(a));
+        }
+        int P(Vector3 v) => m.P(0, v);
+        var inner = r - Depth / 2; var outer = r + Depth / 2; var backOut = outer + Back;
+        var middle = new Vector3(0, BoothSeat / 2f, r);   // (towards the hall's middle: the faces' inside is behind them)
+        for (var k = 0; k < Steps; k++)
+        {
+            float a0 = -BoothArc + 2 * BoothArc * k / Steps, a1 = a0 + 2 * BoothArc / Steps;
+            // the seat's top (leather), its front (wood) down to the floor
+            m.Up(new[] { P(At(a0, inner, BoothSeat)), P(At(a1, inner, BoothSeat)), P(At(a1, outer, BoothSeat)), P(At(a0, outer, BoothSeat)) }, ClubLeather);
+            m.Out(new[] { P(At(a0, inner, 0)), P(At(a1, inner, 0)), P(At(a1, inner, BoothSeat)), P(At(a0, inner, BoothSeat)) }, ClubWood, At(0, outer + 200, BoothSeat / 2f));
+            // the back: its padded front (leather) up from the seat, its top
+            m.Out(new[] { P(At(a0, outer, BoothSeat)), P(At(a1, outer, BoothSeat)), P(At(a1, outer, BackHigh)), P(At(a0, outer, BackHigh)) }, ClubLeather + 1, At(0, backOut + 300, BackHigh / 2));
+            m.Up(new[] { P(At(a0, outer, BackHigh)), P(At(a1, outer, BackHigh)), P(At(a1, backOut, BackHigh)), P(At(a0, backOut, BackHigh)) }, ClubWood);
+            // (and its outside, wood: the booths on the camera's side of the hall are seen from behind)
+            m.Out(new[] { P(At(a0, backOut, 0)), P(At(a1, backOut, 0)), P(At(a1, backOut, BackHigh)), P(At(a0, backOut, BackHigh)) }, ClubWood, At(0, inner, BackHigh / 2));
+        }
+        // the ends: high wooden panels at the arc's ends, from the back to the seat's front
+        foreach (var a in new[] { -BoothArc, BoothArc })
+        {
+            var face = new[] { P(At(a, inner - 60, 0)), P(At(a, backOut, 0)), P(At(a, backOut, BackHigh)), P(At(a, inner - 60, BoothSeat + 260)) };
+            m.Plate(0, ClubWoodLight, m.At(face[0]), m.At(face[1]), m.At(face[2]), m.At(face[3]));
+        }
         return m.ToBody(header);
     }
     public static Body BuildChangeMachine(byte[] header)

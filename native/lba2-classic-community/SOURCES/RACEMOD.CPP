@@ -1492,6 +1492,19 @@ static void LensDraw(void) {
         else { Box(left, y, cx - rimHalf, y, RACE_LENS_RIM_COLOUR); Box(cx + rimHalf, y, right, y, RACE_LENS_RIM_COLOUR); }
     }
 }
+// seat_var=<game var>: Twinsen seated by a script (it sets the variable to 1 and holds him still, NO_MOVE -- which leaves his keys unread,
+// so no script sees Action) -- a key pressed once all are let go, a way or Action, sets it to 2: the script stands him up. The user,
+// 2026-11-13, Stella Entities' booths: "Twinsen also seems unable to get down from the chair", "The second action isn't working"
+static int s_seatVar = -1, s_seatFree = 0;
+static void SeatFrame(void) {
+    if (s_seatVar < 0 || s_seatVar > 255) return;
+    if (ListVarGame[s_seatVar] != 1) { s_seatFree = 0; return; }
+    const U32 keys = I_UP | I_DOWN | I_LEFT | I_RIGHT | I_ACTION_M | I_ACTION_ALWAYS;
+    if (!(Input & keys)) { s_seatFree = 1; return; }
+    if (!s_seatFree) return;
+    ListVarGame[s_seatVar] = 2; s_seatFree = 0;
+    Log_Info("[racemod] seat: a key pressed -- Twinsen gets up");
+}
 static void ExchangeFrame(void) {
     if (s_exchangeVar < 0 || s_exchangeVar > 255 || ListVarGame[s_exchangeVar] == 0) return;
     ListVarGame[s_exchangeVar] = 0;
@@ -5022,6 +5035,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
         else if (!strcmp(key, "frog_var")) { if (!setRead) s_frogVar = atoi(v); }
+        else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
         else if (!strcmp(key, "lens")) { if (!setRead && sscanf(v, "%d %d", &s_lensVar, &s_lensValue) != 2) s_lensVar = -1; }
         else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
@@ -14046,7 +14060,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_frogVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_frogVar = -1; s_seatVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -20134,6 +20148,7 @@ static void DarkFrame(void) {
 void RaceMod_Frame(void) {
     DarkFrame();
     ExchangeFrame();
+    SeatFrame();
     FrogVarFrame();
     RaceMod_InvKinds();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }

@@ -20,6 +20,8 @@ namespace LBAAssembler.Terrain;
 internal static partial class RaceTrackStory
 {
     internal const int ExchangeVar = 196;
+    // (seated in a booth: 1; the engine makes it 2 at a key -- RACEMOD.CPP seat_var= -- and he gets up)
+    internal const int SeatVar = 210;
     private const int StewardessScene = 41, StewardessActor = 6;
     private const int BoothZone0 = 80, SitLabel = 100, StandLabel = 120, HostGo = 200, HostAt = 210, HostBack = 220, HostHome = 230;
     private const int SeatBooth = 60, SeatWait = 61, Offered = 62, LaterRounds = 63, ShowFrames = 0, ShowRounds = 1;
@@ -128,6 +130,8 @@ internal static partial class RaceTrackStory
             string ForBooth(Func<int, string> body) => string.Concat(Enumerable.Range(0, angles.Length).Select(k => $"        if ({k} == var_cube({SeatBooth}))\n        {{\n{body(k)}        }}\n"));
             string sit = string.Concat(Enumerable.Range(0, angles.Length).Select(k => $@"            if ({BoothZone0 + k} == zone_obj(0))
             {{
+                comportement_hero(0);
+                set_var_game({SeatVar}, 1);
                 set_dir_obj(0, NO_MOVE);
                 set_track_obj(0, label_{SitLabel + k});
                 set_var_cube({SeatBooth}, {k});
@@ -140,6 +144,7 @@ internal static partial class RaceTrackStory
             var keeper = RaceTrackScenes.InvisibleHelper(hx, StellaEntities.FloorY, hz);
             adds.Add(IslandBeatsA.Add(model, keeper, $@"void comportement_0()
 {{
+    set_var_game({SeatVar}, 0);
     set_change_cube({PrivateSwitch}, 0);
     set_comportement(comportement_1);
 }}
@@ -160,13 +165,11 @@ void comportement_2()
     {{
         add_var_cube({SeatWait}, 1);
     }}
-    swif (1 == action())
+    if (2 == var_game({SeatVar}))
     {{
-        if (30 < var_cube({SeatWait}))
-        {{
-{ForBooth(k => $"            set_track_obj(0, label_{StandLabel + k});\n")}            set_dir_obj(0, MOVE_MANUAL);
-            set_comportement(comportement_1);
-        }}
+{ForBooth(k => $"            set_track_obj(0, label_{StandLabel + k});\n")}        set_dir_obj(0, MOVE_MANUAL);
+        set_var_game({SeatVar}, 0);
+        set_comportement(comportement_1);
     }}
     if (2 == var_cube({Offered}) && 249 < var_cube({SeatWait}))
     {{
@@ -194,6 +197,7 @@ void comportement_3()
         if ({say(MoonLine.ClubShowYes)} == choice() && {ShowPrice - 1} < nb_gold_pieces())
         {{
             give_gold_pieces({ShowPrice});
+            set_var_game({SeatVar}, 0);
             message_obj({hostIndex}, {say(MoonLine.ClubFollow)});
             set_dir_obj(0, MOVE_MANUAL);
             set_change_cube({PrivateSwitch}, 1);
