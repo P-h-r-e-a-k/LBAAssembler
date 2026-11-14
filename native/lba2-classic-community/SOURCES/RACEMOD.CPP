@@ -18915,6 +18915,10 @@ static void PoolAnim(T_OBJET *hero, int gen) {
 }
 // The achievements (achieve=), looked at a few times a second: a game variable at its value, or the scene he is in
 static void AchievementsFrame(S32 now) {
+    // (the game's clock goes back at a change of scene or a save -- by up to a minute: the user's log -- and with the last look ahead of it
+    // the looks stopped till it caught up: the spanking's achievement, its variable set in the chamber, came only at the next load. A clock
+    // gone back starts the looks again from now)
+    if (now < s_achsAt) s_achsAt = now - 400;
     if (!s_nbAchs || now - s_achsAt < 400 || NewCube != -1) return;
     s_achsAt = now;
     for (int i = 0; i < s_nbAchs; i++) {
