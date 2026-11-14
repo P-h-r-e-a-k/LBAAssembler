@@ -214,6 +214,20 @@ internal static partial class CitadelProps
     // invisible cells under it hold Twinsen on its seat (StellaEntities). The change machine (body 95), against the wall by the bar's end:
     // kashes in, zlitos out, two for one (the user: "a currency change machine ... 2 kashes into 1 zilito").
     public const int ClubBooth = 98, ChangeMachine = 95;
+    // The Wannie miner's work glove (body 99), lost in the giant frog's mouth on Wannies Island (RaceTrackStory.Wannies): it was an
+    // invisible helper there -- the user, 2026-11-13, "The glove stays invisible in the frog's mouth" -- a big leather glove now, seen
+    public const int WannieGloveProp = 99;
+    public static Body BuildWannieGlove(byte[] header)
+    {
+        var m = new CarMesh("the Wannie's glove", new[] { -1 });
+        m.Light = 0.9f;
+        const int Leather = 96, Cuff = 22;
+        m.Box(0, new Vector3(0, 60, 0), new Vector3(300, 110, 320), Leather, Leather);
+        for (var k = 0; k < 4; k++) m.Box(0, new Vector3(-110 + k * 73, 50, 260), new Vector3(58, 80, 200), Leather, Leather);
+        m.Box(0, new Vector3(190, 50, 60), new Vector3(150, 80, 70), Leather, Leather);
+        m.Box(0, new Vector3(0, 70, -220), new Vector3(330, 140, 140), Cuff, Cuff);
+        return m.ToBody(header);
+    }
     public static readonly float[] BoothAngles = { 35, 70, 185, 220, 325 };
     public const float BoothCells = 17.4f, SeatCells = 17.2f, MachineAngle = 94, MachineCells = 17.6f;
     public const int BoothSeat = 512;

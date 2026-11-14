@@ -1464,6 +1464,9 @@ S32 RaceMod_EscLast(S32 dial) {
 // outside a great round in the screen's middle, a dark rim round it (the user, 2026-11-14: "For the scenes Twinsen views through the
 // telescope can we have these through a giant circular lens please, where we only focus on the centre of the screen, we can turn
 // everything else black") -- the lighthouse's telescope: the Wizard and the cow (ScopeVar), the storm night's ship (StormLook)
+// frog_var=<game var>: kept at 1 while the giant frog's mouth is open (FrogOpen), 0 shut -- for a script to time a grab at its mouth
+// (the Wannies' glove, the user, 2026-11-13: "the frog's timing")
+static int s_frogVar = -1;
 static int s_lensVar = -1, s_lensValue = 0, s_lensCubeScene = -1, s_lensCubeVar = 0, s_lensCubeValue = 0;
 #define RACE_LENS_RIM 6
 #define RACE_LENS_RIM_COLOUR 50
@@ -5014,6 +5017,7 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
+        else if (!strcmp(key, "frog_var")) { if (!setRead) s_frogVar = atoi(v); }
         else if (!strcmp(key, "lens")) { if (!setRead && sscanf(v, "%d %d", &s_lensVar, &s_lensValue) != 2) s_lensVar = -1; }
         else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
@@ -8212,6 +8216,11 @@ static S32 FrogPhase(S32 t) { const S32 p = t % s_frog.Period; return p < 0 ? p 
 static int FrogOpen(S32 t) {
     const S32 p = FrogPhase(t);
     return p >= s_frog.Move / 2 && p <= s_frog.Move + s_frog.Open - RACE_FROG_CLEAR;
+}
+
+static void FrogVarFrame(void) {
+    if (s_frogVar < 0 || s_frogVar > 255) return;
+    ListVarGame[s_frogVar] = (S16)(s_frog.On && FrogOpen(TimerRefHR) ? 1 : 0);
 }
 
 // The first time from t on that it does (a little after it opens).
@@ -14032,7 +14041,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_frogVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -20120,6 +20129,7 @@ static void DarkFrame(void) {
 void RaceMod_Frame(void) {
     DarkFrame();
     ExchangeFrame();
+    FrogVarFrame();
     RaceMod_InvKinds();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }

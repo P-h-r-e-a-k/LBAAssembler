@@ -19,6 +19,8 @@ internal static partial class RaceTrackStory
 {
     // Q_GLOVE: 1 Lyra's word heard, 2 the miner has told, 3 the glove found, 4 the glove given back (the start line's gate)
     public const int QGlove = 220, MinerTold = 2, GloveFound = 3, GloveBack = 4;
+    // (the game variable the engine keeps at 1 while the giant frog's mouth is open, 0 shut: frog_var=, the story file's)
+    public const int FrogOpenVar = 199;
     private const int WanniesChapter = 9, WanniesTexts = 3 + 6, WannieGlove = 11, WanniesFragment = 34, MosquibeesArrival = 102;
     private const int WannieScene = 96, MinerActor = 2, OldWannieActor = 3;
     // the elevator's foot, where the Elevator Platform's elevator comes down (the game's scene), and its four laser barriers
@@ -226,7 +228,11 @@ internal static partial class RaceTrackStory
         if (frogScene >= 0)
             GroupB.EditScene(store, frogScene, log, $"Wannie's glove (item {WannieGlove}) at the frog's mouth, cell ({frog.X:0.#}, {frog.Z:0.#}), {frog.Y:0} (Q_GLOVE 3)", model =>
             {
-                var glove = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(frog.X, model.CubeX), (int)Math.Round(frog.Y), RaceTrackScenes.CubeLocal(frog.Z, model.CubeY), 9);
+                // (the glove itself, seen -- and only to be grabbed while the mouth is open: the engine's frog_var=, FrogOpenVar -- the user,
+                // 2026-11-13, "The glove stays invisible in the frog's mouth, and the frog's timing")
+                // (just inside the mouth -- its lip is where the jaw shuts, the frog's own place -- on its floor)
+                var glove = Citadel.CitadelProps.Actor(Citadel.CitadelProps.WannieGloveProp, RaceTrackScenes.CubeLocal(frog.X + frog.Tx * 1.5, model.CubeX), (int)Math.Round(frog.Y) + 200,   /* (the mouth's floor rises from the lip: 180 up 1.5 cells in) */
+                    RaceTrackScenes.CubeLocal(frog.Z + frog.Tz * 1.5, model.CubeY), RaceTrackMath.Turn(Math.Atan2(-frog.Tx, -frog.Tz)));
                 return GroupB.Add(model, glove, $@"void comportement_0()
 {{
     if ({when} && {GloveFound} > var_game({QGlove}))
@@ -241,7 +247,7 @@ internal static partial class RaceTrackStory
 
 void comportement_1()
 {{
-    if ({MinerTold} == var_game({QGlove}) && 1500 > distance(0))
+    if ({MinerTold} == var_game({QGlove}) && 1500 > distance(0) && 1 == var_game({FrogOpenVar}))
     {{
         found_object({WannieGlove});
         set_var_game({WannieGlove}, 1);

@@ -668,6 +668,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"{Polar.PolarDinofly.EscLastLine(RaceTrackIsland.Polar.IslandByte)}\n");
             // (the lighthouse's telescope seen through its lens: the Wizard and the cow, the storm night's ship -- RACEMOD.CPP LensDraw)
             if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.LensLines);
+            // (the giant frog's mouth, open or shut, for the Wannies' glove: RACEMOD.CPP frog_var=)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"frog_var={RaceTrackStory.FrogOpenVar}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)
