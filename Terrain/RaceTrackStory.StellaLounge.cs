@@ -10,11 +10,13 @@ namespace LBAAssembler.Terrain;
 // off into".
 //   - the booths (CitadelProps.ClubBooth at BoothAngles): Action in front of one (its zone) sits Twinsen on its seat (his sitting animation,
 //     CitadelSpanking.TwinsenSit, as at the Tralu's bar); Action again stands him up in front of it;
-//   - sat a while, the hostess (the stewardess, scene 41's actor 6) walks over from beside the catwalk round the hall (never across the
-//     catwalk) and asks: a private show, 250 zlitos? Yes and he has them: paid, "Follow me", into the private room (StellaRooms.Private);
-//     not enough: the change machine by the bar; no: she goes back, and comes again later if he stays;
-//   - the private room: Twinsen on the sofa, a dancer before him, some seconds of her dance, her thanks, back out into the hall;
-//   - two waitresses walk round the hall between the booths and the bar (the stewardess again);
+//   - sat a while, a hostess walks over from beside the catwalk round the hall (never across the catwalk) and asks -- the two take turns,
+//     the rabbibunny first: a private show, 250 zlitos?; the Grobo: a lap dance, 50 zlitos? (StellaStaff, the user, 2026-11-13). Yes and he
+//     has them: paid, "Follow me", into the private room (StellaRooms.Private); not enough: the change machine by the bar; no: she goes
+//     back, and the other comes later if he stays;
+//   - the private room: Twinsen on the sofa, the one he paid dancing before him (the rabbibunny in a thong, or the stage's Grobo), some
+//     seconds of her dance, her thanks, back out into the hall (who: SeatVar 3 or 4, set as he pays);
+//   - two waitresses walk round the hall between the booths and the bar, trays of cocktails in hand (the rabbibunny again);
 //   - the change machine against the wall by the bar's end: Action -- change the kashes for zlitos? -- ExchangeVar (RACEMOD.CPP exchange=:
 //     two kashes a zlito). The hall's and the private room's money is zlitos (zlitos_scene=), what the scripts count and pay and the counter shows.
 internal static partial class RaceTrackStory
@@ -27,10 +29,13 @@ internal static partial class RaceTrackStory
     private const int SeatBooth = 60, SeatWait = 61, Offered = 62, LaterRounds = 63, ShowFrames = 0, ShowRounds = 1;
     // (turned down -- or too dear -- she comes again only after LaterAfter rounds of 250 frames more, if he's still sat there)
     private const int LaterAfter = 4;
-    private const int ShowPrice = 250, ShowWait = 200, ReturnSwitch = 7, ShowDancer = 3;
+    private const int ShowPrice = 250, LapPrice = 50, ShowWait = 200, ReturnSwitch = 7;
+    // (who comes next to his booth: 0 the rabbibunny, 1 the Grobo; who he paid, SeatVar: 3 the rabbibunny, 4 the Grobo; in the private room,
+    // who dances: 1 the Grobo)
+    private const int NextHost = 64, PaidBunny = 3, PaidGrobo = 4, ShowWho = 2;
     // (into the private room: a door zone over each booth's seat, off till the hostess's "Follow me" -- change_cube takes scenes up to 255)
     private const int PrivateSwitch = 8;
-    private const float LoungePath = 13.3f, HostHomeAngle = 250, HostHomeCells = 15.5f, FrontCells = 15.9f;
+    private const float LoungePath = 13.3f, HostHomeAngle = 250, GroboHomeAngle = 236, HostHomeCells = 15.5f, FrontCells = 15.9f;
 
     private static void StellaLounge(IslandBeatsA b, Func<MoonLine, int> say)
     {
@@ -73,23 +78,31 @@ internal static partial class RaceTrackStory
                     Info = new[] { StellaRooms.SofaX - 300, 256 - 100, StellaRooms.SofaZ - 300, 0, PrivateSwitch, 0, 0, 0 } });
                 model.Zones.Add(new SceneZoneModel { Type = 2, Num = BoothZone0 + k, X0 = zx - 400, X1 = zx + 400, Z0 = zz - 400, Z1 = zz + 400, Y0 = StellaEntities.FloorY - 100, Y1 = StellaEntities.FloorY + 1500, Info = new int[8] });
             }
-            // the hostess: home beside the catwalk's foot; her way to each booth and back
-            var host = stewardess.Clone();
+            // the hostesses (StellaStaff: the rabbibunny, the Grobo): home beside the catwalk's foot; each one's way to each booth and back
             var (hx, hz) = StellaEntities.At(HostHomeAngle, HostHomeCells);
-            (host.X, host.Y, host.Z) = (hx, StellaEntities.FloorY, hz);
-            host.Beta = StellaEntities.FacingMiddle(hx, hz);
-            host.Move = 3; host.Flags &= ~1u;
-            var hostIndex = model.Actors.Count;
-            adds.Add(IslandBeatsA.Add(model, host, "void comportement_0()\n{\n}\n"));
-            var homePoint = Point(HostHomeAngle, HostHomeCells, StellaEntities.FloorY);
-            var hostTrack = new System.Text.StringBuilder($"label(0);\nanim(0);\nstop();\n\nlabel({HostHome});\nanim(0);\nstop();\n");
-            for (var k = 0; k < angles.Length; k++)
+            (int Index, string Track) Hostess(float homeAngle, int body, int stand, int walk)
             {
-                var to = angles[k] < HostHomeAngle ? angles[k] : angles[k] - 360;
-                var way = Round(HostHomeAngle, to);
-                hostTrack.Append($"\nlabel({HostGo + k});\nanim(1);\n{string.Concat(way.Select(p => $"goto_point({p});\n"))}goto_point({fronts[k]});\nanim(0);\nbeta({(faces[k] + 2048) & 4095});\n\nlabel({HostAt + k});\nstop();\n");
-                hostTrack.Append($"\nlabel({HostBack + k});\nanim(1);\n{string.Concat(Enumerable.Reverse(way).Select(p => $"goto_point({p});\n"))}goto_point({homePoint});\nanim(0);\nbeta({host.Beta});\nstop();\n");
+                var host = stewardess.Clone();
+                var (x, z) = StellaEntities.At(homeAngle, HostHomeCells);
+                (host.X, host.Y, host.Z) = (x, StellaEntities.FloorY, z);
+                host.Beta = StellaEntities.FacingMiddle(x, z);
+                host.Entity = StellaStaff.Entity; host.Body = body; host.Anim = stand;
+                host.Move = 3; host.Flags &= ~1u;
+                var index = model.Actors.Count;
+                adds.Add(IslandBeatsA.Add(model, host, "void comportement_0()\n{\n}\n"));
+                var homePoint = Point(homeAngle, HostHomeCells, StellaEntities.FloorY);
+                var track = new System.Text.StringBuilder($"label(0);\nanim({stand});\nstop();\n\nlabel({HostHome});\nanim({stand});\nstop();\n");
+                for (var k = 0; k < angles.Length; k++)
+                {
+                    var to = angles[k] < homeAngle ? angles[k] : angles[k] - 360;
+                    var way = Round(homeAngle, to);
+                    track.Append($"\nlabel({HostGo + k});\nanim({walk});\n{string.Concat(way.Select(p => $"goto_point({p});\n"))}goto_point({fronts[k]});\nanim({stand});\nbeta({(faces[k] + 2048) & 4095});\n\nlabel({HostAt + k});\nstop();\n");
+                    track.Append($"\nlabel({HostBack + k});\nanim({walk});\n{string.Concat(Enumerable.Reverse(way).Select(p => $"goto_point({p});\n"))}goto_point({homePoint});\nanim({stand});\nbeta({host.Beta});\nstop();\n");
+                }
+                return (index, track.ToString());
             }
+            var (hostIndex, hostTrack) = Hostess(HostHomeAngle, StellaStaff.Bunny, StellaStaff.BunnyStand, StellaStaff.BunnyWalk);
+            var (groboIndex, groboTrack) = Hostess(GroboHomeAngle, StellaStaff.GroboHost, StellaStaff.GroboStand, StellaStaff.GroboWalk);
             // two waitresses, back and forth round the hall between the booths and the bar
             var waits = new List<(int Index, string Track)>();
             foreach (var (from, to) in new[] { (245f, 175f), (95f, -35f) })
@@ -97,12 +110,14 @@ internal static partial class RaceTrackStory
                 var w = stewardess.Clone();
                 var (wx, wz) = StellaEntities.At(from, LoungePath);
                 (w.X, w.Y, w.Z) = (wx, StellaEntities.FloorY, wz);
+                w.Entity = StellaStaff.Entity; w.Body = StellaStaff.BunnyTray; w.Anim = StellaStaff.TrayStand;
                 w.Move = 3; w.Flags &= ~1u;
                 var wi = model.Actors.Count;
                 adds.Add(IslandBeatsA.Add(model, w, "void comportement_0()\n{\n}\n"));
                 var way = Round(from, to);
-                waits.Add((wi, $"label(0);\nanim(1);\n{string.Concat(way.Select(p => $"goto_point({p});\n"))}anim(0);\nwait_nb_dizieme(40);\nanim(1);\n" +
-                               $"{string.Concat(Enumerable.Reverse(way).Select(p => $"goto_point({p});\n"))}anim(0);\nwait_nb_dizieme(40);\ngoto(label_0);\n"));
+                int walk = StellaStaff.TrayWalk, stand = StellaStaff.TrayStand;
+                waits.Add((wi, $"label(0);\nanim({walk});\n{string.Concat(way.Select(p => $"goto_point({p});\n"))}anim({stand});\nwait_nb_dizieme(40);\nanim({walk});\n" +
+                               $"{string.Concat(Enumerable.Reverse(way).Select(p => $"goto_point({p});\n"))}anim({stand});\nwait_nb_dizieme(40);\ngoto(label_0);\n"));
             }
             // the twinkling stars on the night sky, each its own beat, bright and dim (the user, 2026-11-13: "let's have some of the stars
             // twinkling emitting light around the room")
@@ -200,7 +215,14 @@ void comportement_2()
     if (0 == var_cube({Offered}) && {ShowWait} < var_cube({SeatWait}))
     {{
         set_var_cube({Offered}, 1);
+        if (0 == var_cube({NextHost}))
+        {{
 {ForBooth(k => $"            set_track_obj({hostIndex}, label_{HostGo + k});\n")}        set_comportement(comportement_3);
+        }}
+        else
+        {{
+{ForBooth(k => $"            set_track_obj({groboIndex}, label_{HostGo + k});\n")}        set_comportement(comportement_4);
+        }}
     }}
 }}
 
@@ -214,7 +236,7 @@ void comportement_3()
         if ({say(MoonLine.ClubShowYes)} == choice() && {ShowPrice - 1} < nb_gold_pieces())
         {{
             give_gold_pieces({ShowPrice});
-            set_var_game({SeatVar}, 0);
+            set_var_game({SeatVar}, {PaidBunny});
             message_obj({hostIndex}, {say(MoonLine.ClubFollow)});
             set_dir_obj(0, MOVE_MANUAL);
             set_change_cube({PrivateSwitch}, 1);
@@ -232,6 +254,41 @@ void comportement_3()
 {ForBooth(k => $"            set_track_obj({hostIndex}, label_{HostBack + k});\n")}            set_var_cube({SeatWait}, 0);
             set_var_cube({LaterRounds}, 0);
             set_var_cube({Offered}, 2);
+            set_var_cube({NextHost}, 1);
+            set_comportement(comportement_2);
+        }}
+    }}
+}}
+
+void comportement_4()
+{{
+    if ({HostAt} <= l_track_obj({groboIndex}) && {HostAt + angles.Length} > l_track_obj({groboIndex}))
+    {{
+        add_choice({say(MoonLine.ClubShowYes)});
+        add_choice({say(MoonLine.ClubShowNo)});
+        ask_choice_obj({groboIndex}, {say(MoonLine.ClubLapOffer)});
+        if ({say(MoonLine.ClubShowYes)} == choice() && {LapPrice - 1} < nb_gold_pieces())
+        {{
+            give_gold_pieces({LapPrice});
+            set_var_game({SeatVar}, {PaidGrobo});
+            message_obj({groboIndex}, {say(MoonLine.ClubFollow)});
+            set_dir_obj(0, MOVE_MANUAL);
+            set_change_cube({PrivateSwitch}, 1);
+        }}
+        else
+        {{
+            if ({say(MoonLine.ClubShowYes)} == choice())
+            {{
+                message_obj({groboIndex}, {say(MoonLine.ClubLapBroke)});
+            }}
+            else
+            {{
+                message_obj({groboIndex}, {say(MoonLine.ClubLater)});
+            }}
+{ForBooth(k => $"            set_track_obj({groboIndex}, label_{HostBack + k});\n")}            set_var_cube({SeatWait}, 0);
+            set_var_cube({LaterRounds}, 0);
+            set_var_cube({Offered}, 2);
+            set_var_cube({NextHost}, 0);
             set_comportement(comportement_2);
         }}
     }}
@@ -242,7 +299,8 @@ void comportement_3()
             return scripts =>
             {
                 foreach (var add in adds) add(scripts);
-                scripts.SetText(hostIndex, ScriptKind.Track, hostTrack.ToString());
+                scripts.SetText(hostIndex, ScriptKind.Track, hostTrack);
+                scripts.SetText(groboIndex, ScriptKind.Track, groboTrack);
                 foreach (var (wi, track) in waits) scripts.SetText(wi, ScriptKind.Track, track);
                 foreach (var (si, track) in stars) scripts.SetText(si, ScriptKind.Track, track);
                 var heroTrack = scripts.GetText(0, ScriptKind.Track).TrimEnd();
@@ -255,13 +313,19 @@ void comportement_3()
         b.Edit(StellaRooms.Private, "Stella Entities' private room: a dancer's show for Twinsen on the sofa, then back to the hall", model =>
         {
             var adds = new List<Action<SceneScripts>>();
-            var dancer = bouncer.Clone();
-            (dancer.X, dancer.Y, dancer.Z) = (StellaRooms.SofaX, 256, StellaRooms.ShowZ);
-            dancer.Entity = StellaPerformers.Entity; dancer.Body = StellaPerformers.Body0 + ShowDancer; dancer.Anim = StellaPerformers.AnimOf(ShowDancer);
-            dancer.Flags &= ~1u; dancer.Flags |= NoShadowFlag; dancer.Armor = WalkOverArmour;
-            dancer.Beta = 2048; dancer.Move = 0;
-            var dancerIndex = model.Actors.Count;
-            adds.Add(IslandBeatsA.Add(model, dancer, "void comportement_0()\n{\n}\n"));
+            int Dancer(int body, int anim)
+            {
+                var dancer = bouncer.Clone();
+                (dancer.X, dancer.Y, dancer.Z) = (StellaRooms.SofaX, 256, StellaRooms.ShowZ);
+                dancer.Entity = StellaStaff.Entity; dancer.Body = body; dancer.Anim = anim;
+                dancer.Flags &= ~1u; dancer.Flags |= NoShadowFlag; dancer.Armor = WalkOverArmour;
+                dancer.Beta = 2048; dancer.Move = 0;
+                var index = model.Actors.Count;
+                adds.Add(IslandBeatsA.Add(model, dancer, "void comportement_0()\n{\n}\n"));
+                return index;
+            }
+            var bunnyIndex = Dancer(StellaStaff.BunnyThong, StellaStaff.BunnyLap);
+            var groboIndex = Dancer(StellaPerformers.Body0, StellaStaff.GroboLap);
             // (the way back: a door zone round the sofa, off till the show's end -- into the hall in front of the booths)
             var (rx, rz) = StellaEntities.At(215, 15.5f);
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaEntities.Scene, X0 = StellaRooms.SofaX - 300, X1 = StellaRooms.SofaX + 300, Z0 = StellaRooms.SofaZ - 300, Z1 = StellaRooms.SofaZ + 300, Y0 = 0, Y1 = 2000,
@@ -269,6 +333,17 @@ void comportement_3()
             var heroLife = $@"void comportement_0()
 {{
     set_change_cube({ReturnSwitch}, 0);
+    set_var_cube({ShowWho}, 0);
+    if ({PaidGrobo} == var_game({SeatVar}))
+    {{
+        set_var_cube({ShowWho}, 1);
+        kill_obj({bunnyIndex});
+    }}
+    else
+    {{
+        kill_obj({groboIndex});
+    }}
+    set_var_game({SeatVar}, 0);
     set_dir(NO_MOVE);
     beta(0);
     anim({Citadel.CitadelSpanking.TwinsenSit});
@@ -287,7 +362,14 @@ void comportement_1()
     }}
     if (3 < var_cube({ShowRounds}))
     {{
-        message_obj({dancerIndex}, {say(MoonLine.ClubThanks)});
+        if (1 == var_cube({ShowWho}))
+        {{
+            message_obj({groboIndex}, {say(MoonLine.ClubThanks)});
+        }}
+        else
+        {{
+            message_obj({bunnyIndex}, {say(MoonLine.ClubThanks)});
+        }}
         anim(0);
         set_dir(MOVE_MANUAL);
         set_change_cube({ReturnSwitch}, 1);

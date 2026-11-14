@@ -48,6 +48,8 @@ internal static partial class RaceTrackStory
         ClubWelcome, ClubStaffOnly, ClubNoBoss, ClubBarman,
         // (the lounge -- RaceTrackStory.StellaLounge.cs, 2026-11-13)
         ClubOffer, ClubShowYes, ClubShowNo, ClubFollow, ClubBroke, ClubLater, ClubThanks, ClubMachineAsk, ClubMachineYes, ClubMachineNo, ClubMachineDone,
+        // (the Grobo hostess's lap dance -- StellaStaff, 2026-11-14)
+        ClubLapOffer, ClubLapBroke,
     }
     private static readonly string[][] MoonLines =
     {
@@ -315,12 +317,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Hey there, handsome. Fancy a private show in the back? Just you and one of our girls -- 250 zlitos.",
-            "Salut, beau gosse. Un spectacle privé au fond, ça te dit ? Rien que toi et une de nos filles -- 250 zlitos.",
-            "Hallo, Hübscher. Lust auf eine Privatshow hinten? Nur du und eins unserer Mädchen -- 250 Zlitos.",
-            "Hola, guapo. ¿Te apetece un espectáculo privado al fondo? Solo tú y una de nuestras chicas -- 250 zlitos.",
-            "Ciao, bello. Ti va uno spettacolo privato sul retro? Solo tu e una delle nostre ragazze -- 250 zlitos.",
-            "Olá, bonitão. Apetece-te um espetáculo privado lá atrás? Só tu e uma das nossas raparigas -- 250 zlitos.",
+            "Hey there, handsome. Fancy a private show in the back? Just you and me -- 250 zlitos.",
+            "Salut, beau gosse. Un spectacle privé au fond, ça te dit ? Rien que toi et moi -- 250 zlitos.",
+            "Hallo, Hübscher. Lust auf eine Privatshow hinten? Nur du und ich -- 250 Zlitos.",
+            "Hola, guapo. ¿Te apetece un espectáculo privado al fondo? Solo tú y yo -- 250 zlitos.",
+            "Ciao, bello. Ti va uno spettacolo privato sul retro? Solo io e te -- 250 zlitos.",
+            "Olá, bonitão. Apetece-te um espetáculo privado lá atrás? Só tu e eu -- 250 zlitos.",
         },
         new[]
         {
@@ -411,6 +413,24 @@ internal static partial class RaceTrackStory
             "La máquina traquetea y cuenta tus zlitos.",
             "La macchina sferraglia e conta i tuoi zlitos.",
             "A máquina chocalha e conta os teus zlitos.",
+        },
+        new[]
+        {
+            "Hi there, sweetie. How about a lap dance? Only 50 zlitos -- I'm the bargain of the house.",
+            "Coucou, mon sucre. Une petite danse rien que pour toi ? Seulement 50 zlitos -- la bonne affaire de la maison.",
+            "Hallo, Zuckerstück. Wie wär's mit einem Lapdance? Nur 50 Zlitos -- das Schnäppchen des Hauses.",
+            "Hola, cielo. ¿Qué tal un baile privado? Solo 50 zlitos -- la ganga de la casa.",
+            "Ciao, dolcezza. Che ne dici di una lap dance? Solo 50 zlitos -- l'affare della casa.",
+            "Olá, docinho. Que tal uma lap dance? Só 50 zlitos -- a pechincha da casa.",
+        },
+        new[]
+        {
+            "You haven't got 50 zlitos, sweetie. The change machine by the bar takes kashes.",
+            "Tu n'as pas 50 zlitos, mon sucre. Le changeur près du bar prend les kashes.",
+            "Du hast keine 50 Zlitos, Zuckerstück. Der Wechselautomat an der Bar nimmt Kashes.",
+            "No tienes 50 zlitos, cielo. La máquina de cambio junto a la barra acepta kashes.",
+            "Non hai 50 zlitos, dolcezza. La macchina del cambio vicino al bar prende i kashes.",
+            "Não tens 50 zlitos, docinho. A máquina de câmbio ao pé do bar aceita kashes.",
         },
     };
 

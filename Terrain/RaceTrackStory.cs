@@ -672,6 +672,7 @@ void comportement_1()
         log.AddRange(Citadel.CitadelProps.Install(gameDirectory));
         // (Stella Entities' seven performers: bodies and dances of the hero's entity)
         log.AddRange(StellaPerformers.Install(gameDirectory));
+        log.AddRange(StellaStaff.Install(gameDirectory));
         // (Twinsen's swimming: the Imperial Hotel's pool -- PoolSwim)
         log.AddRange(PoolSwim.Install(gameDirectory));
         // (the people copied are the game's own, from the scenes as they were before any track's build)

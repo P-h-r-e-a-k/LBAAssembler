@@ -157,6 +157,8 @@ internal static class GridGirl
         private readonly List<int[]> handed = new();           // the indices given out, moved on with the rest
         private readonly HashSet<int> made = new();
         private readonly List<(int[] Points, int Colour, bool Outward)> polys = new();
+        // (the polygons made by Face: each facing the way given, not out from the body's middle)
+        private readonly Dictionary<int[], Vector3> facing = new(ReferenceEqualityComparer.Instance);
         private Vector3[] world;
 
         public Edit(PalaceTorturers.Parts parts) { p = parts; world = p.World(); }
@@ -231,6 +233,11 @@ internal static class GridGirl
                 }
             }
             for (var b = 0; b < p.Bones.Count; b++) p.Bones[b] = p.Bones[b] with { Pivot = Move(p.Bones[b].Pivot) };
+            // (lines' two points, at 4 and 6, and spheres' one, at 4: the School of Magic's rabbibunny's whiskers and tail)
+            for (var r = 0; r + 8 <= p.Lines.Length; r += 8)
+                foreach (var at2 in new[] { 4, 6 }) BinaryPrimitives.WriteUInt16LittleEndian(p.Lines.AsSpan(r + at2), (ushort)Move(BinaryPrimitives.ReadUInt16LittleEndian(p.Lines.AsSpan(r + at2))));
+            for (var r = 0; r + 8 <= p.Spheres.Length; r += 8)
+                BinaryPrimitives.WriteUInt16LittleEndian(p.Spheres.AsSpan(r + 4), (ushort)Move(BinaryPrimitives.ReadUInt16LittleEndian(p.Spheres.AsSpan(r + 4))));
             foreach (var list in handed) for (var k = 0; k < list.Length; k++) list[k] = Move(list[k]);
             foreach (var poly in polys) for (var k = 0; k < poly.Points.Length; k++) poly.Points[k] = Move(poly.Points[k]);
             var movedMade = made.Select(Move).ToList(); made.Clear(); foreach (var m in movedMade) made.Add(m);
@@ -251,6 +258,24 @@ internal static class GridGirl
         // A polygon, wound to face away from the body's middle line (`outward`) or as given
         public void Quad(int a, int b, int c, int d, int colour, bool outward) => polys.Add((new[] { a, b, c, d }, colour, outward));
         public void Tri(int a, int b, int c, int colour, bool outward) => polys.Add((new[] { a, b, c }, colour, outward));
+        // A polygon (three or four points) wound to face `want`
+        public void Face(int[] points, int colour, Vector3 want)
+        {
+            var copy = points.ToArray();
+            polys.Add((copy, colour, false));
+            facing[copy] = want;
+        }
+        // A sphere on `bone` at a place (as the body stands): its colour, its radius
+        public void AddSphere(int bone, Vector3 at, int radius, int colour)
+        {
+            var point = Add(bone, new[] { at })[0];
+            var record = new byte[8];
+            BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(2), (ushort)colour);
+            BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(4), (ushort)point);
+            BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(6), (ushort)radius);
+            p.Spheres = p.Spheres.Concat(record).ToArray();
+            p.SphereCount = p.Spheres.Length / 8;
+        }
 
         // The sides between two rings of as many points, going round the same way
         public void Strip(int[] upper, int[] lower, int colour)
@@ -279,7 +304,7 @@ internal static class GridGirl
             foreach (var (points, colour, _) in polys)
             {
                 var n = PalaceTorturers.Newell(points.Select(i => world[i]).ToArray());
-                var want = Outward(points, colour);
+                var want = facing.TryGetValue(points, out var given) ? given : Outward(points, colour);
                 written.Add((Vector3.Dot(n, want) >= 0 ? points : points.Reverse().ToArray(), colour & 0xFFFF));
             }
             // (the new points' normals: from the polygons round them, as long as her skin's own are)
