@@ -908,6 +908,7 @@ goto(label_0);
         set_dir(MOVE_MANUAL);
         pos_point({onLift});
         set_dir(NO_MOVE);
+        anim(0);
         set_change_cube({LiftSwitch}, 1);
         {Ride(lift)}
     }}

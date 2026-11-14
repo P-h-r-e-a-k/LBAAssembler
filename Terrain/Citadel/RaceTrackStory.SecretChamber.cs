@@ -140,6 +140,7 @@ void comportement_1()
         if ({LiftZone} == zone_obj(0) && {Driving} != comportement_hero() && {DrankTonight} == var_game({Drunk}))
         {{
             set_dir_obj(0, NO_MOVE);
+            anim_obj(0, 0);
             set_change_cube({LiftSwitch}, 1);
             {Ride(lift)}        }}
     }}
