@@ -7828,8 +7828,11 @@ static void QualifyingArrival(int wrongWay, S32 now) {
 // back), each on its spot, the laps counted afresh from the start line; then the grid is shown and the count-down runs.
 #define RACE_GRID_BACK 0x7FFFFFFF          // (the player's time at the back of the grid: slower than any qualifying time)
 // opponentN_when=: an opponent not there while its game variable is out of its range
+// (the grid forming counts the pit lane's hidden racers in: it is formed while the qualifying phase still holds, and they are what it lines
+// up -- the user, 2026-11-14, the Desert's "other racers started from the pitlane instead of forming up on the grid")
+static int s_gridForming = 0;
 static int OpponentAway(const T_RACE_OPPONENT *o) {
-    if (s_pitHidden && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
+    if (s_pitHidden && !s_gridForming && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
     if (o->WhenVar < 0) return 0;
     const S32 v = ListVarGame[o->WhenVar];
     return v < o->WhenLeast || (o->WhenBelow > 0 && v >= o->WhenBelow);
@@ -7839,8 +7842,10 @@ static void FormGrid(S32 now) {
     s_nbOrder = 0;
     s_order[s_nbOrder] = -1;
     s_orderTime[s_nbOrder++] = s_qualifying ? s_qualifyTime : s_gridBack ? RACE_GRID_BACK : 0;
+    s_gridForming = 1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
         if (s_opp[n].Count && s_opp[n].Scenes && !OpponentAway(&s_opp[n])) { s_order[s_nbOrder] = n; s_orderTime[s_nbOrder++] = s_opp[n].QualTime; }
+    s_gridForming = 0;
     for (int i = 1; i < s_nbOrder; i++)
         for (int j = i; j > 0 && s_orderTime[j] < s_orderTime[j - 1]; j--) {
             const int t = s_order[j]; s_order[j] = s_order[j - 1]; s_order[j - 1] = t;
