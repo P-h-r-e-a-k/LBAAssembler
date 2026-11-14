@@ -1460,6 +1460,32 @@ S32 RaceMod_EscLast(S32 dial) {
     for (int k = 0; k < s_nbEscLast; k++) if (s_escLast[k][0] == (int)Island && s_escLast[k][1] == (int)dial) return 1;
     return 0;
 }
+// lens=<game var> <value> / lens_cube=<scene> <scene var> <value>: while it holds, the picture seen as through a telescope's lens -- black
+// outside a great round in the screen's middle, a dark rim round it (the user, 2026-11-14: "For the scenes Twinsen views through the
+// telescope can we have these through a giant circular lens please, where we only focus on the centre of the screen, we can turn
+// everything else black") -- the lighthouse's telescope: the Wizard and the cow (ScopeVar), the storm night's ship (StormLook)
+static int s_lensVar = -1, s_lensValue = 0, s_lensCubeScene = -1, s_lensCubeVar = 0, s_lensCubeValue = 0;
+#define RACE_LENS_RIM 6
+#define RACE_LENS_RIM_COLOUR 50
+static void LensDraw(void) {
+    const int game = s_lensVar >= 0 && s_lensVar < 256 && ListVarGame[s_lensVar] == s_lensValue;
+    const int cube = s_lensCubeScene >= 0 && (int)NumCube == s_lensCubeScene && s_lensCubeVar >= 0 && s_lensCubeVar < 80 && ListVarCube[s_lensCubeVar] == s_lensCubeValue;
+    if (!game && !cube) return;
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, cx = w / 2, cy = h / 2;
+    const double r = h * 0.47;
+    for (S32 y = 0; y < h; y++) {
+        const double dy = y + 0.5 - cy;
+        if (fabs(dy) >= r) { Box(0, y, w - 1, y, 0); continue; }
+        const S32 half = (S32)sqrt(r * r - dy * dy);
+        const S32 left = cx - half, right = cx + half;
+        if (left > 0) Box(0, y, left - 1, y, 0);
+        if (right < w - 1) Box(right + 1, y, w - 1, y, 0);
+        // (the rim: the round's edge, thicker where it runs up and down)
+        const S32 rimHalf = (S32)sqrt(fmax(0.0, (r - RACE_LENS_RIM) * (r - RACE_LENS_RIM) - dy * dy));
+        if (fabs(dy) >= r - RACE_LENS_RIM) Box(left, y, right, y, RACE_LENS_RIM_COLOUR);
+        else { Box(left, y, cx - rimHalf, y, RACE_LENS_RIM_COLOUR); Box(cx + rimHalf, y, right, y, RACE_LENS_RIM_COLOUR); }
+    }
+}
 static void ExchangeFrame(void) {
     if (s_exchangeVar < 0 || s_exchangeVar > 255 || ListVarGame[s_exchangeVar] == 0) return;
     ListVarGame[s_exchangeVar] = 0;
@@ -4988,6 +5014,8 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
+        else if (!strcmp(key, "lens")) { if (!setRead && sscanf(v, "%d %d", &s_lensVar, &s_lensValue) != 2) s_lensVar = -1; }
+        else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
             int isl, dial;
             if (!setRead && s_nbEscLast < RACE_MAX_ESC_LAST && sscanf(v, "%d %d", &isl, &dial) == 2) { s_escLast[s_nbEscLast][0] = isl; s_escLast[s_nbEscLast][1] = dial; s_nbEscLast++; }
@@ -14004,7 +14032,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -22372,6 +22400,7 @@ void RaceMod_Draw(void) {
     // (his car parked, him on foot: the car he drives as drawn in its place -- HeroLook)
     if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
     DrawFarItems();
+    LensDraw();
     DrawWindow();
     // (an achievement's toast, on foot or in the car, out of doors or in: the screen's bottom right corner)
     AchToast(TimerRefHR);

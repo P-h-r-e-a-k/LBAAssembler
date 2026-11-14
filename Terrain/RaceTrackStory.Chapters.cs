@@ -1766,6 +1766,8 @@ void comportement_2()
     // user, 2026-11-08, "The lighthouse's ground-floor door doesn't work in CITABAU.ILE ... teleport Twinsen to the top and back down again
     // when he uses the doors". Only once he's been out of its zone since he last came through it: DoorAway.)
     public const int ScopeVar = 227;
+    // (both seen through the telescope's lens: the race file's lens= and lens_cube= -- RaceCarEngineFile)
+    internal static string LensLines => $"lens={ScopeVar} 1\nlens_cube={LighthouseScene} {StormLook} 2\n";
     // (ScopeSide: the balcony by the telescope, west of the spell's place, LighthouseTop)
     private const int CowScene = 47, LighthouseTop = 60, ScopeSide = 61, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
