@@ -342,7 +342,7 @@ void comportement_3()
         }
         var clubPlate = clubParts[0];
         // the hall's round wall and curb (CitadelProps.Club), round its middle, drawn into the backdrop
-        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubBoard, Citadel.CitadelProps.ClubFront, Citadel.CitadelProps.ClubCurb, Citadel.CitadelProps.ClubStage, Citadel.CitadelProps.ClubSteps, Citadel.CitadelProps.ClubShelf }
+        var round = new[] { Citadel.CitadelProps.ClubWall, Citadel.CitadelProps.ClubBoard, Citadel.CitadelProps.ClubFront, Citadel.CitadelProps.ClubCurb, Citadel.CitadelProps.ClubStage, Citadel.CitadelProps.ClubRail, Citadel.CitadelProps.ClubSteps, Citadel.CitadelProps.ClubShelf }
             .Select(g => SceneOps.AddActor(model, Backdrop(g, (int)(CentreX * 512) - Citadel.CitadelProps.ClubShiftX, floorY, (int)(CentreZ * 512) - Citadel.CitadelProps.ClubShiftZ))).ToList();
         // ... and the room's furniture in its place among the people: the reactor's column on the stage, the poles round it, the bar's
         // counter, its stools, the tables

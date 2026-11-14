@@ -128,6 +128,40 @@ internal static partial class CitadelProps
     public const int PoleHigh = 3900, ColumnHigh = 5200;
     private const int ClubWood = 22, ClubWoodLight = 25, ClubVelvet = 68, ClubReactor = 158, ClubSteel = 56, ClubFelt = 133, ClubLeather = 69;
 
+    // The stage's brass rail (body 89, into the backdrop with it): round the stage's edge just outside its skirt, StageRailHigh up, on posts --
+    // open where the catwalk leaves it (north, 270) -- for the patrons to lean on (the user, 2026-11-13: "perhaps a gold pole running around
+    // the edge of the stage for people to lean against")
+    public const int ClubRail = 89;
+    public const float RailRadius = StageRadius + 90, StageRailHigh = 900, RailGap = 11;
+    public static Body BuildClubRail(byte[] header)
+    {
+        var m = new CarMesh("Stella Entities' stage rail", new[] { -1 });
+        m.Light = 0.9f;
+        const int Steps = 44;
+        const float Tube = 32;
+        float from = 270 + RailGap, to = 270 + 360 - RailGap;
+        var rings = new int[Steps + 1][];
+        var middles = new Vector3[Steps + 1];
+        for (var k = 0; k <= Steps; k++)
+        {
+            var a = from + (to - from) * k / Steps;
+            var c = ClubAt(a, RailRadius, StageRailHigh);
+            var o = ClubAt(a, RailRadius + Tube, StageRailHigh) - c;
+            middles[k] = c;
+            rings[k] = new[] { m.P(0, c + new Vector3(0, Tube, 0)), m.P(0, c + o * 0.87f - new Vector3(0, Tube / 2, 0)), m.P(0, c - o * 0.87f - new Vector3(0, Tube / 2, 0)) };
+        }
+        for (var k = 0; k < Steps; k++)
+        {
+            var inside = (middles[k] + middles[k + 1]) / 2;
+            for (var s = 0; s < 3; s++)
+                m.Out(new[] { rings[k][s], rings[k][(s + 1) % 3], rings[k + 1][(s + 1) % 3], rings[k + 1][s] }, ClubBrass, inside);
+        }
+        // its posts, down to the floor, and a knob at either end
+        for (var k = 0; k <= Steps; k += 4) m.Box(0, middles[k] - new Vector3(0, StageRailHigh / 2, 0), new Vector3(36, StageRailHigh, 36), ClubBrass);
+        m.Ball(0, middles[0], 48, ClubBrass); m.Ball(0, middles[Steps], 48, ClubBrass);
+        return m.ToBody(header);
+    }
+
     public static Body BuildClubStage(byte[] header)
     {
         var m = new CarMesh("Stella Entities' stage", new[] { -1 });
@@ -565,6 +599,6 @@ internal static partial class CitadelProps
     // over the room was "in front" of Twinsen, and he went into the backdrop with them)
     // (and the bar's counter pieces, a speck at their middles: a curved piece's own box was a square round it, the stools and the floor
     // in front of the bar inside it -- Twinsen pushed away from the bar; the grid's invisible cells along the curve are the counter's)
-    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubShelf or ClubFront or ClubBoard or ClubCounter or ClubCounter2 or ClubCounter3 or ClubSteps
+    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubRail or ClubShelf or ClubFront or ClubBoard or ClubCounter or ClubCounter2 or ClubCounter3 or ClubSteps
         ? new short[] { -1, 0, -1, 1, 1, 1 } : null;
 }

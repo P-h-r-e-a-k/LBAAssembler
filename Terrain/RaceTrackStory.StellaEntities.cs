@@ -16,6 +16,11 @@ internal static partial class RaceTrackStory
     // (the club's scene variables: whether each has had his word this time he came near)
     private const int ClubSaidFirst = 10;
     private const uint NoShadowFlag = 1u << 12;
+    // the patrons round the stage (the user, 2026-11-13: "Let's also add some other patrons to the strip joint"): Rick's own regulars from
+    // his bar (scene 136) -- the lizard leaning on his table (actor 2) and the dark one on the counter (26), leaning on the stage's rail; the
+    // Sup in his coat, a glass in his hand (25), twice, and the Franco in stripes (17) standing at it -- where (degrees round the room, cells
+    // out: just outside the rail), facing the stage
+    private static readonly (int Actor, float Degrees, float Cells)[] Patrons = { (2, 35, 8.15f), (26, 185, 8.15f), (25, 80, 8.3f), (25, 225, 8.3f), (17, 135, 8.3f), (2, 320, 8.15f) };
 
     private static void StellaPeople(IslandBeatsA b, Func<MoonLine, int> say)
     {
@@ -107,6 +112,17 @@ internal static partial class RaceTrackStory
             }
             Perform(3, 10, StellaEntities.PoleCells, true); Perform(1, 60, StellaEntities.PoleCells, true); Perform(6, 110, StellaEntities.PoleCells, true);
             Perform(0, 160, 6.2f, false); Perform(2, 205, 6.2f, false); Perform(4, 300, 6.2f, false); Perform(5, 345, 6.2f, false);
+            // the patrons: still, where they are put -- not pushed off the stage's solid cells, nor fallen (CHECK_BRICK_COL, OBJ_FALLABLE off)
+            foreach (var (actor, degrees, cells) in Patrons)
+            {
+                if (Copy(b.Originals, RickBar, actor) is not { } patron) continue;
+                var (x, z) = StellaEntities.At(degrees, cells);
+                (patron.X, patron.Y, patron.Z) = (x, StellaEntities.FloorY, z);
+                patron.Beta = StellaEntities.FacingMiddle(x, z);
+                patron.Move = 0;
+                patron.Flags &= ~(2u | 0x800u);
+                adds.Add(IslandBeatsA.Add(model, patron, "void comportement_0()\n{\n}\n"));
+            }
             return scripts => { foreach (var add in adds) add(scripts); };
         });
     }
