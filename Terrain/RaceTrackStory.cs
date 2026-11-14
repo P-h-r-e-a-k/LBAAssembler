@@ -643,6 +643,8 @@ void comportement_1()
             hqr = lines.WriteInto(hqr);
             var labels = Lba2TextBank.Load(text, lang, HolomapTexts);
             AddTexts(labels, labelFirst, LabelAttribute, Labels, words);
+            // (and the racing licence's, item 38 -- RaceTrackStory.Licence.cs)
+            LicenceTexts(labels, words);
             // (file 2 is also the inventory's: the gloves' found message, name and description, each moved out of its voiced place)
             var item = new[] { GlovesSlot, 100 + GlovesSlot, 200 + GlovesSlot };
             for (var k = 0; k < item.Length; k++)
@@ -1218,6 +1220,9 @@ void comportement_1()
         message({Id(Line.PaulTicket)});
         found_object({FerryTicket});
         set_var_game({FerryTicket}, 1);
+        message({Say(ChapterLine.PaulLicence)});
+        found_object({LicenceSlot});
+        set_var_game({LicenceSlot}, 1);
         add_gold_pieces({Purse});
         message({Say(ChapterLine.HeraldLeads)});
         set_var_game({WonVar}, 2);

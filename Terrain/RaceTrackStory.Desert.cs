@@ -90,7 +90,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\n" + GarageRaceLines()
+        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\n"
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -304,6 +304,8 @@ void comportement_1()
         ZoeHintDean, ZoeHintPages, ZoeHintFilters, ZoeHintHelmet, ZoeHintRace,
         // (the Esmers' hangar, the way to the moon -- RaceTrackStory.Hangar.cs, 2026-11-14)
         HangarOffer, HangarYes, HangarNo, HangarBoard, HangarLater, HangarLift, HangarClosed,
+        // (the Temple of Bu's gate: the racing licence -- RaceTrackStory.Licence.cs, 2026-11-14)
+        GateLicence, GateNoLicence, GateInCar, TempleThrough,
     }
     private static readonly string[][] DesertLines =
     {
@@ -471,12 +473,12 @@ void comportement_1()
         },
         new[]
         {
-            "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. The Esmers' freighter takes cars to the moon from their hangar -- I'll take you there now.",
-            "Tu te crois rapide ? Sur la lune, j'ai un atterrisseur qui laisserait ta voiture sur place. Viens me défier là-haut. Le cargo des Esmers emmène les voitures sur la lune depuis leur hangar -- je t'y conduis.",
-            "Du hältst dich für schnell? Auf dem Mond habe ich eine Landefähre, die dein Auto stehen ließe. Komm und fahr dort oben gegen mich. Der Frachter der Esmer bringt Autos aus ihrem Hangar zum Mond -- ich bringe dich hin.",
-            "¿Te crees rápido? En la luna tengo un módulo de aterrizaje que dejaría tu coche parado. Ven a correr contra mí allí arriba. El carguero de los Esmers lleva coches a la luna desde su hangar: te llevo ahora.",
-            "Ti credi veloce? Sulla luna ho un modulo d'atterraggio che lascerebbe la tua macchina ferma. Vieni a sfidarmi lassù. Il cargo degli Esmer porta le auto sulla luna dal loro hangar: ti ci porto subito.",
-            "Achas que és rápido? Na lua tenho um módulo de alunagem que deixava o teu carro parado. Vem correr contra mim lá em cima. O cargueiro dos Esmers leva carros para a lua a partir do hangar deles -- levo-te lá agora.",
+            "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. The Esmers' freighter takes cars to the moon -- show your racing licence at the Temple of Bú, by the track.",
+            "Tu te crois rapide ? Sur la lune, j'ai un atterrisseur qui laisserait ta voiture sur place. Viens me défier là-haut. Le cargo des Esmers emmène les voitures sur la lune -- montre ta licence de course au Temple de Bù, près de la piste.",
+            "Du hältst dich für schnell? Auf dem Mond habe ich eine Landefähre, die dein Auto stehen ließe. Komm und fahr dort oben gegen mich. Der Frachter der Esmer bringt Autos zum Mond -- zeig deine Rennlizenz am Tempel von Bù an der Strecke.",
+            "¿Te crees rápido? En la luna tengo un módulo de aterrizaje que dejaría tu coche parado. Ven a correr contra mí allí arriba. El carguero de los Esmers lleva coches a la luna: enseña tu licencia de carreras en el Templo de Bú, junto a la pista.",
+            "Ti credi veloce? Sulla luna ho un modulo d'atterraggio che lascerebbe la tua macchina ferma. Vieni a sfidarmi lassù. Il cargo degli Esmer porta le auto sulla luna: mostra la tua licenza di corsa al Tempio di Bù, vicino alla pista.",
+            "Achas que és rápido? Na lua tenho um módulo de alunagem que deixava o teu carro parado. Vem correr contra mim lá em cima. O cargueiro dos Esmers leva carros para a lua -- mostra a tua licença de corrida no Templo de Bú, junto à pista.",
         },
         // (the easter eggs, from PageEgg on: RaceTrackStory.Eggs.Desert.cs)
         new[]
@@ -733,6 +735,42 @@ void comportement_1()
             "Niente più voli per la luna oggi, amico.",
             "Hoje não há mais voos para a lua, amigo.",
         },
+        new[]
+        {
+            "Racing licence? ... All in order. Your car goes down through the Temple of Bú to the freighter -- we'll take it from here.",
+            "Licence de course ? ... Tout est en ordre. Ta voiture descend par le Temple de Bù jusqu'au cargo -- on s'en occupe.",
+            "Rennlizenz? ... Alles in Ordnung. Dein Auto fährt durch den Tempel von Bù hinunter zum Frachter -- wir übernehmen.",
+            "¿Licencia de carreras? ... Todo en orden. Tu coche baja por el Templo de Bú hasta el carguero: nosotros nos encargamos.",
+            "Licenza di corsa? ... Tutto in ordine. La tua auto scende per il Tempio di Bù fino al cargo: ci pensiamo noi.",
+            "Licença de corrida? ... Está tudo em ordem. O teu carro desce pelo Templo de Bú até ao cargueiro -- nós tratamos disso.",
+        },
+        new[]
+        {
+            "No racing licence, no way through. The Cup gives one to the winner of Citadel Island's town circuit.",
+            "Pas de licence de course, pas de passage. La Coupe en donne une au vainqueur du circuit de la ville de l'île de la Citadelle.",
+            "Ohne Rennlizenz kein Durchgang. Der Pokal gibt eine dem Sieger des Stadtkurses der Zitadelleninsel.",
+            "Sin licencia de carreras no se pasa. La Copa da una al ganador del circuito urbano de la isla de la Ciudadela.",
+            "Niente licenza di corsa, niente passaggio. La Coppa ne dà una al vincitore del circuito cittadino dell'isola della Cittadella.",
+            "Sem licença de corrida não se passa. A Taça dá uma ao vencedor do circuito da cidade da ilha da Cidadela.",
+        },
+        new[]
+        {
+            "Racers come through here in their cars, with their racing licence. Bring yours round.",
+            "Les pilotes passent ici en voiture, avec leur licence de course. Amène la tienne.",
+            "Rennfahrer kommen hier mit ihrem Auto und ihrer Rennlizenz durch. Bring deins her.",
+            "Los pilotos pasan por aquí en su coche, con su licencia de carreras. Trae el tuyo.",
+            "I piloti passano di qui in macchina, con la loro licenza di corsa. Porta la tua.",
+            "Os pilotos passam por aqui de carro, com a licença de corrida. Traz o teu.",
+        },
+        new[]
+        {
+            "The Esmers wave the car through the Temple of Bú's gates, down its old halls, to their hangar far below.",
+            "Les Esmers font passer la voiture par les portes du Temple de Bù, le long de ses vieilles salles, jusqu'à leur hangar tout en bas.",
+            "Die Esmer winken das Auto durch die Tore des Tempels von Bù, seine alten Hallen hinab, zu ihrem Hangar tief unten.",
+            "Los Esmers hacen pasar el coche por las puertas del Templo de Bú, por sus viejas salas, hasta su hangar allá abajo.",
+            "Gli Esmer fanno passare l'auto dai cancelli del Tempio di Bù, giù per le sue antiche sale, fino al loro hangar laggiù.",
+            "Os Esmers fazem passar o carro pelos portões do Templo de Bú, pelas suas velhas salas, até ao hangar lá em baixo.",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -808,6 +846,8 @@ void comportement_1()
         int Say(DesertLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Desert, log);
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
+        // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
+        TempleGate(b, report, scenes.StartScene, Say);
         Hangar(b, HangarScene, 4, MoonStart, new HangarLines(Say(DesertLine.HangarOffer), Say(DesertLine.HangarYes), Say(DesertLine.HangarNo),
             Say(DesertLine.HangarBoard), Say(DesertLine.HangarLater), Say(DesertLine.HangarLift), Say(DesertLine.HangarClosed)));
         // (Zoe as companion's hints on the Desert: the Dean, his pages, the sand filters, the helmet, the race -- RaceTrackStory.Companion.cs)
@@ -858,7 +898,6 @@ void comportement_1()
         {{
             inc_chapter();
         }}
-        change_cube({HangarScene});
     }}
 ")));
 
@@ -1139,7 +1178,6 @@ void comportement_1()
         {{
             inc_chapter();
         }}
-        change_cube({HangarScene});
     }}
 }}
 "),

@@ -7,6 +7,8 @@ namespace LBAAssembler.Terrain;
 //
 // The variables: game variables no script of the built game uses and the engine doesn't (checked 2026-11-04 with scriptgrep2 on a full
 // build of the fifteen story islands, and the engine source for ListVarGame[...]): 196-199, 210, 225, 226, 247, 250, and 153-155.
+// (2026-11-14: 110, 119 and 248 were free too, and are now the masked car's MaskedGone, the frog's FrogOpenVar and the licence's
+// DriveMarksVar; 210 is the booths' SeatVar)
 // (235-237 are the videos seen, PLAYACF.CPP FLAG_ACF; 251-254 the engine's; 106, 114, 172 were free too (96 is the night out's Drunk, 106 the Desert's QFilters, 114 the two players' TwoPlayersVar) -- 75 is the Desert's
 // exam pages found, a bit each, RaceTrackStory.Desert.cs PagesFoundVar; 172 is
 // read by scene 62's dead branch; 52 is the final's: another race asked for once, RaceTrackStory.Final.cs FinalAskedAgain; 58 chapter 1's

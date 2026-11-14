@@ -135,6 +135,8 @@ internal static partial class RaceTrackStory
         TyreBait, TyreDeal, BobAfter, BaitPrice, BaitBought, BaitPlenty, LucTyre, TimLucAway, UmbrellaTaken,
         // (Raph's fiancée at the foot of the lighthouse, his time beaten and the storm still on -- 2026-11-08)
         FianceeStorm,
+        // (the town circuit's prize: the Cup's racing licence -- RaceTrackStory.Licence.cs, 2026-11-14)
+        PaulLicence,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -824,6 +826,15 @@ internal static partial class RaceTrackStory
             "¡Mi Raph por fin ha vuelto a su faro! Si el Mago Meteo pudiera ahuyentar esta tormenta...",
             "Il mio Raph è finalmente tornato al suo faro! Se solo il Mago Metereologo potesse scacciare questa tempesta...",
             "O meu Raph voltou finalmente para o farol dele! Se ao menos o Mago do Tempo pudesse afastar esta tempestade...",
+        },
+        new[]
+        {
+            "And this is yours too, Twinsen: the Cup's racing licence. Keep it with you -- some gates won't open without it.",
+            "Et ceci est à toi aussi, Twinsen : la licence de course de la Coupe. Garde-la sur toi -- certaines barrières ne s'ouvrent pas sans elle.",
+            "Und das gehört auch dir, Twinsen: die Rennlizenz des Pokals. Behalte sie bei dir -- manche Tore öffnen sich nicht ohne sie.",
+            "Y esto también es tuyo, Twinsen: la licencia de carreras de la Copa. Llévala contigo: algunas barreras no se abren sin ella.",
+            "E anche questa è tua, Twinsen: la licenza di corsa della Coppa. Tienila con te: certi cancelli non si aprono senza.",
+            "E isto também é teu, Twinsen: a licença de corrida da Taça. Guarda-a contigo -- há barreiras que não abrem sem ela.",
         },
     };
 

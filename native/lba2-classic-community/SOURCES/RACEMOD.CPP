@@ -1505,6 +1505,43 @@ static void SeatFrame(void) {
     ListVarGame[s_seatVar] = 2; s_seatFree = 0;
     Log_Info("[racemod] seat: a key pressed -- Twinsen gets up");
 }
+// drive_marks=<game var> <count>: a story's scripted drive (the user, 2026-11-14: the racing licence shown at the Temple of Bu's gate,
+// "then script the car progression the rest of the way"). A script sets the variable to an actor's index (2-239): the first of <count>
+// markers, consecutive actors of the scene -- and Twinsen's car, he in it, is driven through their places (RaceMod_Walk, DriveInput),
+// the variable 250 while it goes; past the last, braked to a stop and Twinsen out of it (MarksBrakeInput), the variable 251: the script's
+// cue to go on.
+static int s_markVar = -1, s_markCount = 0, s_markBrake = 0;
+void RaceMod_Walk(int n, const double *xz, int car, int more);
+static void DriveMarksFrame(void) {
+    if (s_markVar < 0 || s_markVar > 255) return;
+    const S32 v = ListVarGame[s_markVar];
+    if (v >= 2 && v < 240) {
+        if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
+        double pts[16];
+        int n = 0;
+        for (int k = 0; k < s_markCount && n < 8 && v + k < NbObjets; k++, n++) {
+            pts[2 * n] = ListObjet[v + k].Obj.X + CurrentCubeX * 32768.0;
+            pts[2 * n + 1] = ListObjet[v + k].Obj.Z + CurrentCubeY * 32768.0;
+        }
+        if (!n) return;
+        RaceMod_Walk(n, pts, 0, 0);
+        ListVarGame[s_markVar] = 250;
+        Log_Info("[racemod] drive_marks: the car driven through actors %d-%d (to %.0f, %.0f)", (int)v, (int)v + n - 1, pts[2 * n - 2], pts[2 * n - 1]);
+    } else if (v == 250 && s_walkN == 0 && !s_markBrake) {
+        s_markBrake = 1;
+        Log_Info("[racemod] drive_marks: at the last marker -- braking");
+    }
+}
+static U32 MarksBrakeInput(void) {
+    if (Comportement != C_BUGGY) { s_markBrake = 0; if (s_markVar >= 0 && s_markVar < 256) ListVarGame[s_markVar] = 251; return 0; }
+    if ((ListBuggy[0].Speed * 36 + 2560) / 5120 > 1) return I_DOWN;
+    ListObjet[NUM_PERSO].Move = MOVE_MANUAL;
+    LeaveBuggy(C_NORMAL);
+    s_markBrake = 0;
+    if (s_markVar >= 0 && s_markVar < 256) ListVarGame[s_markVar] = 251;
+    Log_Info("[racemod] drive_marks: stopped -- Twinsen out of the car");
+    return 0;
+}
 static void ExchangeFrame(void) {
     if (s_exchangeVar < 0 || s_exchangeVar > 255 || ListVarGame[s_exchangeVar] == 0) return;
     ListVarGame[s_exchangeVar] = 0;
@@ -5036,6 +5073,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
         else if (!strcmp(key, "frog_var")) { if (!setRead) s_frogVar = atoi(v); }
         else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
+        else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "lens")) { if (!setRead && sscanf(v, "%d %d", &s_lensVar, &s_lensValue) != 2) s_lensVar = -1; }
         else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
@@ -7084,6 +7122,7 @@ static void VictoryNear(void) {
 U32 RaceMod_AutoInput(void) {
     VictoryFrame();
     VictoryNear();
+    if (s_markBrake) return MarksBrakeInput();
     if (s_ghostWatch) return 0;
     // (the console's turnto: on foot, turned on the spot)
     if (s_turnTo >= 0 && Comportement != C_BUGGY) return TurnInput();
@@ -14060,7 +14099,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_frogVar = -1; s_seatVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -20149,6 +20188,7 @@ void RaceMod_Frame(void) {
     DarkFrame();
     ExchangeFrame();
     SeatFrame();
+    DriveMarksFrame();
     FrogVarFrame();
     RaceMod_InvKinds();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
