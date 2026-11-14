@@ -19,6 +19,7 @@ lba2.cfg stores user preferences and last-save info. Read at startup, written at
 
 - **Read**: `ReadConfigFile()` in [SOURCES/CONFIG_FILE.CPP](../SOURCES/CONFIG_FILE.CPP), invoked from `InitProgram()`
 - **Write**: `WriteConfigFile()` in the same file, called from `TheEndInfo()`
+- **Read again**: `ReloadConfigFile()` in the same file, after the config directory has moved (`Directories_SwitchUserDir`: the race game's player switch). A folder without its own `lba2.cfg` gets a copy of the seed folder's first; the owned file is stacked over the game data's and applied as at boot.
 - Not to be confused with [SOURCES/CONFIG.CPP](../SOURCES/CONFIG.CPP), which is the in-game key-binding menu
 - Options menu changes globals only; config is written once at exit. No intermediate saves when changing options.
 - **A setting forced for one run is not written back.** The write serialises globals, so without this a

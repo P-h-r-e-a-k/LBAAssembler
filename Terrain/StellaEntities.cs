@@ -26,6 +26,9 @@ namespace LBAAssembler.Terrain;
 internal static class StellaEntities
 {
     public const int Scene = 390, Cell = 54, RickBar = 136, MoonIsland = 3;
+    // (1 while the player playing is 18 or more -- RACEMOD.CPP adult_var=, the race game's player's date of birth: the lift down from the
+    // cell stays shut to a younger one, nothing else changes; the user, 2026-11-13)
+    public const int AdultVar = 128;
     // the hall: round, its middle and radius (cells); the corridor (x, z); the lift's foot
     // (the hall's floor: the cells whose middles are within the props' floor radius -- CitadelProps.Club: the round wall and the curb
     // over the floor's stepped edge; inside the curb a ring of invisible solid cells, RingFrom out, ring layers high, holds Twinsen
@@ -319,7 +322,7 @@ void comportement_1()
 {{
     swif (1 == action())
     {{
-        if ({LiftZone} == zone_obj(0))
+        if ({LiftZone} == zone_obj(0) && 1 == var_game({AdultVar}))
         {{
             set_change_cube({LiftSwitch}, 1);
             set_comportement(comportement_3);

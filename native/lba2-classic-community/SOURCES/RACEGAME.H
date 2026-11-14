@@ -44,4 +44,6 @@ int RaceGame_StoryZoeWait(char *path, int size);   // ... before the menus (test
 int RaceGame_StoryTwoTest(int x, int y, int w, int h);   // (tests: the console's storytwo)           // ... player 1's: the story kept now and player 2's told to load it
 void RaceGame_StoryTest(int on);            // (tests: the run played as Story Mode's story, the console's `storymode`)
 
+/* The player playing is 18 or more (or the game has no players): Stella Entities' way in open (RACEMOD.CPP adult_var=) */
+S32 RaceGame_PlayerAdult(void);
 #endif

@@ -76,6 +76,14 @@ bool directoriesInitialized = false;
 char directoriesUserDir[ADELINE_MAX_PATH] = "";
 char directoriesResDir[ADELINE_MAX_PATH] = "";
 char directoriesCfgDir[ADELINE_MAX_PATH] = "";
+/* The user directory the run started in, and whether the config directory is
+   that same directory. A player switch (Directories_SwitchUserDir) moves the
+   user directory, and the config directory with it when they are one. */
+static char directoriesSharedUserDir[ADELINE_MAX_PATH] = "";
+static bool directoriesCfgIsUser = false;
+/* The save folder inside the user directory, resolved on first use and again
+   after a switch. */
+static char directoriesSavePath[ADELINE_MAX_PATH] = "";
 char directoriesCDPrefix[ADELINE_MAX_PATH] = "";
 S32 directoriesDistVersion;
 /* Set from the command line before anything asks for a path; empty means the
@@ -298,6 +306,9 @@ void InitDirectories(const char *userDir, const char *resDir,
     }
 
     directoriesDistVersion = distVersion;
+    strncpy(directoriesSharedUserDir, directoriesUserDir, ADELINE_MAX_PATH);
+    directoriesSharedUserDir[ADELINE_MAX_PATH - 1] = '\0';
+    directoriesCfgIsUser = strcmp(directoriesCfgDir, directoriesUserDir) == 0;
 
     directoriesInitialized = true;
 }
@@ -1130,15 +1141,39 @@ void GetSavePath(char *outPath, U16 pathMaxSize, const char *saveFilename) {
     assert(directoriesInitialized);
     assert((outPath != NULL) && (pathMaxSize > 0));
 
-    static bool initialized = false;
-    static char savePath[ADELINE_MAX_PATH] = "";
-    if (!initialized) {
-        DiscoverEndingAndAppend(savePath, ADELINE_MAX_PATH, directoriesUserDir,
+    if (directoriesSavePath[0] == '\0') {
+        DiscoverEndingAndAppend(directoriesSavePath, ADELINE_MAX_PATH, directoriesUserDir,
                                 DIR_NAME_SAVE);
-        initialized = true;
     }
 
-    DiscoverEndingAndAppend(outPath, pathMaxSize, savePath, saveFilename);
+    DiscoverEndingAndAppend(outPath, pathMaxSize, directoriesSavePath, saveFilename);
+}
+
+const char *Directories_GetSharedUserDir(void) { return directoriesSharedUserDir; }
+
+/* Another player's folder as the user directory from now on, without a
+   restart: the config directory moves with it when it was the user directory,
+   and the save folder is resolved again on its next use. */
+void Directories_SwitchUserDir(const char *dir) {
+    assert(directoriesInitialized);
+    if (dir == NULL || dir[0] == '\0') return;
+    strncpy(directoriesUserDir, dir, ADELINE_MAX_PATH);
+    directoriesUserDir[ADELINE_MAX_PATH - 1] = '\0';
+    /* ending in a separator, as the boot's resolved directories do: the path
+       helpers append a file name to it as it is */
+    {
+        const size_t n = strlen(directoriesUserDir);
+        if (n > 0 && n + 1 < ADELINE_MAX_PATH && directoriesUserDir[n - 1] != '/' && directoriesUserDir[n - 1] != '\\') {
+            directoriesUserDir[n] = '/';
+            directoriesUserDir[n + 1] = '\0';
+        }
+    }
+    if (directoriesCfgIsUser) {
+        strncpy(directoriesCfgDir, directoriesUserDir, ADELINE_MAX_PATH);
+        directoriesCfgDir[ADELINE_MAX_PATH - 1] = '\0';
+    }
+    directoriesSavePath[0] = '\0';
+    Log_Info("[dirs] the user directory is now %s", directoriesUserDir);
 }
 
 /* Saves the install ships, handed to a profile the first time it is used.

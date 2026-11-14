@@ -480,6 +480,17 @@ void Log_RemoveSink(LogSink *sink) {
     }
 }
 
+void Log_DestroySink(LogSink *sink) {
+    if (!sink)
+        return;
+    Log_RemoveSink(sink);
+    if (sink->owns_fp && sink->fp)
+        fclose(sink->fp);
+    sink->fp = 0;
+    sink->owns_fp = 0;
+    sink->in_use = 0;
+}
+
 int Log_HasSinks(void) { return g_active_count > 0; }
 
 } // extern "C"

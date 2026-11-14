@@ -396,6 +396,31 @@ static void RestackDataConfig(void) {
     DefFileBufferAppendFile(dataCfg);
 }
 
+/* The config read again from the config directory as it now is (a player
+   switch: Directories_SwitchUserDir): a folder with no config of its own gets a
+   copy of `seed`'s first, then the owned file is stacked over the game data's
+   and its settings applied, as at boot. */
+void ReloadConfigFile(const char *seed) {
+    GetCfgPath(PathConfigFile, ADELINE_MAX_PATH, CFG_NAME);
+    if (!ExistsFileOrDir(PathConfigFile) && seed != NULL && seed[0] != '\0') {
+        char from[ADELINE_MAX_PATH];
+        snprintf(from, sizeof(from), "%s/%s", seed, CFG_NAME);
+        if (FILE *in = fopen(from, "rb")) {
+            if (FILE *out = fopen(PathConfigFile, "wb")) {
+                char buf[4096];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
+                fclose(out);
+            }
+            fclose(in);
+        }
+    }
+    OpenOwnedConfig();
+    RestackDataConfig();
+    ReadConfigFile();
+    Log_Info("[config] read again from %s", PathConfigFile);
+}
+
 S32 WriteConfigValue(const char *ident, S32 value) {
     OpenOwnedConfig();
     const S32 ok = DefFileBufferWriteValue(ident, value);

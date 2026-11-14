@@ -21,6 +21,9 @@ extern void ReadConfigFile(void);
  * a resolution switch, so it rewrites rather than appends. Values a per-run
  * override is currently forcing are written back at their stored preference. */
 extern void WriteConfigFile(void);
+/* The config read again after the config directory has moved (a player
+   switch); a folder without one gets a copy of `seed`'s lba2.cfg first. */
+extern void ReloadConfigFile(const char *seed);
 
 /* Full screen <-> a window: the setting (DisplayFullScreen) flipped, applied and saved -- F11 / Alt+Enter, and the race game's Options. */
 extern void ToggleDisplayFullscreen(void);

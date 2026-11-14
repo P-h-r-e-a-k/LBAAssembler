@@ -131,6 +131,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <cstring>
 #include <ctime>
 
@@ -594,6 +595,8 @@ static int s_nbUnlocked = 0;
 
 static void SettingsPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "RACEGAME_SETTINGS.TXT"); }
 
+static void ReadSharedSettings(void);
+static void WriteSharedSettings(void);
 static void ReadSettings(void) {
     if (s_setRead) return;
     Read();   // (the tracks first: the ghosts beaten are kept by their names)
@@ -668,6 +671,8 @@ static void ReadSettings(void) {
     fclose(f);
     // (updates=off, before there was a choice of when: the player's no is kept, as Manually, and a check they ask for asks them first, as it did)
     if (s_updates == 2) { s_updates = 1; if (!checkGiven) s_updateCheck = 2; }
+    // (the install's own settings, kept in its folder for every player: updates, bug reports)
+    ReadSharedSettings();
     if (s_level < 0 || s_level > 2) s_level = 1;
     if (s_storyLevel < 0 || s_storyLevel > 2) s_storyLevel = 1;
     s_minimap = s_minimap != 0;
@@ -759,6 +764,7 @@ static void WriteSettings(void) {
     for (int i = 0; i < s_nbUnlocked; i++) fprintf(f, "%s_unlocked=1\n", s_unlocked[i]);
     fputs(s_setOther, f);
     fclose(f);
+    WriteSharedSettings();
 }
 
 // Whether a car is there to take: one with unlock= only once it is won; one unlocked "for trial" only for a time trial.
@@ -2645,74 +2651,94 @@ static void ReportBugPage(int feature) {
 }
 
 // Feedback, the main menu's (the user, 2026-11-02: "put this under a 'Feedback' menu, then have the options on a second menu")
-// ---- players and achievements (the user, 2026-11-11/12) ----------------------------------------------------------------------------
-// A player is a user folder of the game's: its saves, best times, ghosts, settings, unlocks and achievements all in it, and the game's
-// configuration copied there as it was made. The folder the game had before players (User\LBA2) is the first player's, "Player 1" --
-// nothing moved, nothing lost; the others' are User\Players\<name>. Choosing another player starts the game again on that folder
-// (RaceUpdate_Relaunch: --user-dir) and this one goes. With more than one player the game asks who is playing as it starts.
+// ---- players and achievements (the user, 2026-11-11/12/13) -------------------------------------------------------------------------
+// A player is a folder of User\Players: its saves, best times, ghosts, settings, unlocks, achievements, story and log all in it, and the
+// game's configuration copied there as it was made. The folder the game starts in (User\LBA2) is the install's own, no player's: its
+// configuration seeds a new player's, the shared tracks are in it, the updater and the bug reports read their settings there (updates=,
+// reports=: kept there too as they change), and its log runs alongside the player's. A player chosen, the game carries on in their folder
+// without starting again (Directories_SwitchUserDir, ReloadConfigFile); any player can be deleted, the one playing too (the game back in
+// the install's folder first); a player's date of birth is asked as they are made (and once of a player from before), and Stella Entities'
+// way in stays shut to one under 18 (RaceGame_PlayerAdult: the race file's adult_var=).
 #define RG_PLAYERS_MAX 4
-static char s_plName[RG_PLAYERS_MAX][48], s_plDir[RG_PLAYERS_MAX][ADELINE_MAX_PATH];
+#define RG_ADULT_AGE 18
+static char s_plName[RG_PLAYERS_MAX][48], s_plDir[RG_PLAYERS_MAX][ADELINE_MAX_PATH], s_plBorn[RG_PLAYERS_MAX][12];
 static int s_nbPlayers = 0, s_plNow = -1, s_plAsked = 0;
-static char s_plRoot[ADELINE_MAX_PATH], s_plMine[ADELINE_MAX_PATH], s_plNowName[48] = "Player 1";
+static char s_plRoot[ADELINE_MAX_PATH], s_plMine[ADELINE_MAX_PATH], s_plNowName[48] = "", s_plShared[ADELINE_MAX_PATH];
+static char s_plNowBorn[12] = "";
+static LogSink *s_plLog = NULL;
+static int s_achRead = 0;                   // (the achievements read from the player's folder: ReadAch)
 
 static void Slashes(char *s) { for (; *s; s++) if (*s == '\\') *s = '/'; }
 static void TrimSep(char *s) { size_t n = strlen(s); while (n > 1 && (s[n - 1] == '/' || s[n - 1] == '\\')) s[--n] = 0; }
+static int IsDir(const char *path) { SDL_PathInfo info; return SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY; }
+static int IsFile(const char *path) { SDL_PathInfo info; return SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_FILE; }
 
-// The player's name kept in its folder (PLAYER.TXT), or the first player's own
-static void NameIn(const char *dir, char *name, size_t size, const char *otherwise) {
+// The install's folder (the one the game started in -- or, started on a player's folder, the LBA2 beside User\Players) and User\Players
+static void PlayerRoots(void) {
+    if (s_plShared[0]) return;
+    char shared[ADELINE_MAX_PATH], parent[ADELINE_MAX_PATH];
+    snprintf(shared, sizeof(shared), "%s", Directories_GetSharedUserDir());
+    Slashes(shared);
+    TrimSep(shared);
+    snprintf(parent, sizeof(parent), "%s", shared);
+    if (char *slash = strrchr(parent, '/')) *slash = 0;
+    const char *last = strrchr(parent, '/');
+    if (last && !strcasecmp(last + 1, "Players")) {
+        snprintf(s_plRoot, sizeof(s_plRoot), "%s", parent);
+        if (char *slash = strrchr(parent, '/')) *slash = 0;
+        snprintf(s_plShared, sizeof(s_plShared), "%s/LBA2", parent);
+        SDL_CreateDirectory(s_plShared);
+    } else {
+        snprintf(s_plShared, sizeof(s_plShared), "%s", shared);
+        snprintf(s_plRoot, sizeof(s_plRoot), "%s/Players", parent);
+    }
+}
+
+// The player's name and date of birth kept in their folder (PLAYER.TXT: the name, then born=YYYY-MM-DD)
+static void NameIn(const char *dir, char *name, size_t size, char *born, size_t bornSize, const char *otherwise) {
     char path[ADELINE_MAX_PATH];
     snprintf(path, sizeof(path), "%s/PLAYER.TXT", dir);
     snprintf(name, size, "%s", otherwise);
+    if (born && bornSize) born[0] = 0;
     if (FILE *f = fopen(path, "r")) {
         char line[64];
         if (fgets(line, sizeof(line), f)) { Trim(line); if (line[0]) snprintf(name, size, "%s", line); }
+        while (fgets(line, sizeof(line), f)) { Trim(line); if (!strncmp(line, "born=", 5) && born && bornSize) snprintf(born, bornSize, "%s", line + 5); }
         fclose(f);
     }
+}
+static void WriteCard(const char *dir, const char *name, const char *born) {
+    char path[ADELINE_MAX_PATH];
+    snprintf(path, sizeof(path), "%s/PLAYER.TXT", dir);
+    if (FILE *f = fopen(path, "w")) { fprintf(f, "%s\n", name); if (born && born[0]) fprintf(f, "born=%s\n", born); fclose(f); }
 }
 
 static SDL_EnumerationResult SDLCALL PlayerFolder(void *, const char *dirname, const char *fname) {
     if (s_nbPlayers >= RG_PLAYERS_MAX || fname[0] == '.') return SDL_ENUM_CONTINUE;
     char dir[ADELINE_MAX_PATH];
     snprintf(dir, sizeof(dir), "%s/%s", s_plRoot, fname);
-    SDL_PathInfo info;
-    if (!SDL_GetPathInfo(dir, &info) || info.type != SDL_PATHTYPE_DIRECTORY) return SDL_ENUM_CONTINUE;
-    snprintf(s_plName[s_nbPlayers], sizeof(s_plName[0]), "%s", fname);
+    TrimSep(dir);
+    if (!IsDir(dir)) return SDL_ENUM_CONTINUE;
+    NameIn(dir, s_plName[s_nbPlayers], sizeof(s_plName[0]), s_plBorn[s_nbPlayers], sizeof(s_plBorn[0]), fname);
     snprintf(s_plDir[s_nbPlayers], sizeof(s_plDir[0]), "%s", dir);
     s_nbPlayers++;
     return SDL_ENUM_CONTINUE;
 }
 
-// The players there are: the first (the game's own folder from before them), then each of User\Players
+// The players there are (User\Players), and which is playing (-1: none -- the game in the install's folder)
 static void ListPlayers(void) {
-    char me[ADELINE_MAX_PATH], parent[ADELINE_MAX_PATH], legacy[ADELINE_MAX_PATH];
+    PlayerRoots();
+    char me[ADELINE_MAX_PATH];
     GetCfgPath(me, ADELINE_MAX_PATH, "");
     Slashes(me);
     TrimSep(me);
     snprintf(s_plMine, sizeof(s_plMine), "%s", me);
-    snprintf(parent, sizeof(parent), "%s", me);
-    if (char *slash = strrchr(parent, '/')) *slash = 0;
-    const char *last = strrchr(parent, '/');
-    if (last && !strcasecmp(last + 1, "Players")) {
-        snprintf(s_plRoot, sizeof(s_plRoot), "%s", parent);
-        char up[ADELINE_MAX_PATH];
-        snprintf(up, sizeof(up), "%s", parent);
-        if (char *slash = strrchr(up, '/')) *slash = 0;
-        snprintf(legacy, sizeof(legacy), "%s/LBA2", up);
-    } else {
-        snprintf(s_plRoot, sizeof(s_plRoot), "%s/Players", parent);
-        snprintf(legacy, sizeof(legacy), "%s", me);
-    }
     s_nbPlayers = 0;
-    SDL_PathInfo info;
-    if (SDL_GetPathInfo(legacy, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
-        NameIn(legacy, s_plName[0], sizeof(s_plName[0]), "Player 1");
-        snprintf(s_plDir[0], sizeof(s_plDir[0]), "%s", legacy);
-        s_nbPlayers = 1;
-    }
     SDL_EnumerateDirectory(s_plRoot, PlayerFolder, NULL);
     s_plNow = -1;
     for (int i = 0; i < s_nbPlayers; i++) if (!strcasecmp(s_plDir[i], s_plMine)) s_plNow = i;
-    if (s_plNow >= 0) snprintf(s_plNowName, sizeof(s_plNowName), "%s", s_plName[s_plNow]);
+    snprintf(s_plNowName, sizeof(s_plNowName), "%s", s_plNow >= 0 ? s_plName[s_plNow] : "");
+    snprintf(s_plNowBorn, sizeof(s_plNowBorn), "%s", s_plNow >= 0 ? s_plBorn[s_plNow] : "");
 }
 static const char *PlayerNameAt(int k) { return k >= 0 && k < s_nbPlayers ? s_plName[k] : ""; }
 static int PlayerIndexNow(void) { return s_plNow; }
@@ -2721,29 +2747,155 @@ static const char *PlayerNow(void) {
     return s_plNowName;
 }
 
-// A new player: a folder of its own with the game's configuration as this one has it
-static int MakePlayer(const char *name) {
-    char dir[ADELINE_MAX_PATH], cfgFrom[ADELINE_MAX_PATH], cfgTo[ADELINE_MAX_PATH], card[ADELINE_MAX_PATH];
+// A date of birth as typed (day, month, year: any of / . - or spaces between) into YYYY-MM-DD; 0 if it isn't one
+static int ParseBorn(const char *typed, char *out, size_t size) {
+    int d = 0, m = 0, y = 0;
+    char buf[40];
+    snprintf(buf, sizeof(buf), "%s", typed);
+    for (char *c = buf; *c; c++) if (!isdigit((unsigned char)*c)) *c = ' ';
+    if (sscanf(buf, "%d %d %d", &d, &m, &y) != 3) return 0;
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    const int thisYear = t ? t->tm_year + 1900 : 2026;
+    if (y < 1900 || y > thisYear || m < 1 || m > 12 || d < 1 || d > 31) return 0;
+    snprintf(out, size, "%04d-%02d-%02d", y, m, d);
+    return 1;
+}
+// How old someone born then is today (-1: not known)
+static int AgeOf(const char *born) {
+    int y, m, d;
+    if (!born || sscanf(born, "%d-%d-%d", &y, &m, &d) != 3) return -1;
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    if (!t) return -1;
+    int age = t->tm_year + 1900 - y;
+    if (t->tm_mon + 1 < m || (t->tm_mon + 1 == m && t->tm_mday < d)) age--;
+    return age;
+}
+// The player playing is 18 or more -- or the game has no players (a test run, the editor's Play): no one to keep out
+S32 RaceGame_PlayerAdult(void) {
+    if (!s_plAsked) return 1;
+    return AgeOf(s_plNowBorn) >= RG_ADULT_AGE;
+}
+// A date of birth asked for: non-zero and `out` filled when one was given
+static int AskBorn(const char *who, char *out, size_t size) {
+    for (;;) {
+        char typed[24] = "";
+        char title[80];
+        snprintf(title, sizeof(title), "%s's date of birth", who);
+        if (!TypePage(title, "Day / month / year, e.g. 21/06/1997, then Enter", typed, sizeof(typed), 0, 0)) return 0;
+        if (ParseBorn(typed, out, size)) return 1;
+        SayPage("Date of birth", "That isn't a date: type the day, the month and the year, e.g. 21/06/1997.");
+    }
+}
+
+// The per-player settings back as they are before any player's are read, and the files read again for the player now
+static void ForgetPlayer(void) {
+    s_setRead = 0; s_timesRead = 0; s_achRead = 0;
+    s_controlsSeen = 0; s_powerupsSeen = 0; s_qualified = 0; s_skipQualifying = 0;
+    s_level = 1; s_storyLevel = 1; s_minimap = 1; s_camera = 2; s_raceSky = 0; s_ghost = 0; s_trialLaps = 3;
+    s_ghostOther[0] = 0; s_gridCarName[0] = 0; s_setOther[0] = 0; s_nbUnlocked = 0;
+    memset(s_beaten, 0, sizeof(s_beaten));
+    memset(s_nbTimes, 0, sizeof(s_nbTimes));
+    s_other[0] = 0;
+}
+
+// The game on in another folder -- a player's, or the install's (NULL) -- from now on: this one's configuration kept, theirs read, their
+// log beside the install's
+static void SwitchTo(const char *dir) {
+    PlayerRoots();
+    WriteConfigFile();
+    const char *to = dir ? dir : s_plShared;
+    Directories_SwitchUserDir(to);
+    ReloadConfigFile(s_plShared);
+    ForgetPlayer();
+    if (s_plLog) { Log_DestroySink(s_plLog); s_plLog = NULL; }
+    if (dir) {
+        char log[ADELINE_MAX_PATH], prev[ADELINE_MAX_PATH];
+        snprintf(log, sizeof(log), "%s/adeline.log", dir);
+        snprintf(prev, sizeof(prev), "%s/adeline.prev.log", dir);
+        SDL_RemovePath(prev);
+        SDL_RenamePath(log, prev);
+        s_plLog = Log_MakeFileSink(log, LOG_DEBUG);
+        if (s_plLog) Log_AddSink(s_plLog);
+    }
+    ListPlayers();
+    Log_Info("[racegame] playing: %s (%s)", s_plNow >= 0 ? s_plNowName : "no one", to);
+}
+
+// The install's own settings (updates=, update_check=, update_checked=, reports=) kept in its folder, where the updater and the bug
+// reports read them, whichever player changed them
+static int SharedKey(const char *line) {
+    return !strncmp(line, "updates=", 8) || !strncmp(line, "update_check=", 13) || !strncmp(line, "update_checked=", 15) || !strncmp(line, "reports=", 8);
+}
+static void WriteSharedSettings(void) {
+    PlayerRoots();
+    char path[ADELINE_MAX_PATH], keep[RG_OTHER_SIZE] = "";
+    snprintf(path, sizeof(path), "%s/RACEGAME_SETTINGS.TXT", s_plShared);
+    char mine[ADELINE_MAX_PATH];
+    SettingsPath(mine);
+    Slashes(mine);
+    if (!strcasecmp(mine, path)) return;
+    if (FILE *in = fopen(path, "r")) {
+        char line[512];
+        while (fgets(line, sizeof(line), in)) if (!SharedKey(line) && strlen(keep) + strlen(line) + 1 < sizeof(keep)) strcat(keep, line);
+        fclose(in);
+    }
+    if (FILE *f = fopen(path, "w")) {
+        fputs(keep, f);
+        fprintf(f, "updates=%s\nupdate_check=%s\nupdate_checked=%lld\nreports=%s\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0],
+                s_checkKey[s_updateCheck], s_updateChecked, s_reportKey[s_reports]);
+        fclose(f);
+    }
+}
+// ... and read from there over the player's
+static void ReadSharedSettings(void) {
+    PlayerRoots();
+    char path[ADELINE_MAX_PATH];
+    snprintf(path, sizeof(path), "%s/RACEGAME_SETTINGS.TXT", s_plShared);
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    char line[512];
+    while (fgets(line, sizeof(line), f)) {
+        Trim(line);
+        char *eq = strchr(line, '=');
+        if (!eq) continue;
+        *eq = 0;
+        if (!strcmp(line, "updates")) { for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_updateKey[k])) s_updates = k; }
+        else if (!strcmp(line, "update_check")) { for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_checkKey[k])) s_updateCheck = k; }
+        else if (!strcmp(line, "update_checked")) s_updateChecked = strtoll(eq + 1, NULL, 10);
+        else if (!strcmp(line, "reports")) { for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_reportKey[k])) s_reports = k; }
+    }
+    fclose(f);
+}
+
+// A file or folder copied (a folder with everything in it)
+static int CopyFile(const char *from, const char *to) {
+    FILE *in = fopen(from, "rb");
+    if (!in) return 0;
+    FILE *out = fopen(to, "wb");
+    if (!out) { fclose(in); return 0; }
+    char buf[8192];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
+    fclose(out);
+    fclose(in);
+    return 1;
+}
+
+// A new player: a folder of their own, the install's configuration copied in, their name and date of birth
+static int MakePlayer(const char *name, const char *born) {
+    PlayerRoots();
+    char dir[ADELINE_MAX_PATH], cfgFrom[ADELINE_MAX_PATH], cfgTo[ADELINE_MAX_PATH];
     snprintf(dir, sizeof(dir), "%s/%s", s_plRoot, name);
     SDL_CreateDirectory(s_plRoot);
     SDL_CreateDirectory(dir);
-    snprintf(cfgFrom, sizeof(cfgFrom), "%s/lba2.cfg", s_plMine);
+    snprintf(cfgFrom, sizeof(cfgFrom), "%s/lba2.cfg", s_plShared);
     snprintf(cfgTo, sizeof(cfgTo), "%s/lba2.cfg", dir);
-    SDL_PathInfo info;
-    if (!SDL_GetPathInfo(cfgTo, &info))
-        if (FILE *in = fopen(cfgFrom, "rb")) {
-            if (FILE *out = fopen(cfgTo, "wb")) {
-                char buf[4096];
-                size_t n;
-                while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
-                fclose(out);
-            }
-            fclose(in);
-        }
-    snprintf(card, sizeof(card), "%s/PLAYER.TXT", dir);
-    if (FILE *f = fopen(card, "w")) { fprintf(f, "%s\n", name); fclose(f); }
+    if (!IsFile(cfgTo)) CopyFile(cfgFrom, cfgTo);
+    WriteCard(dir, name, born);
     Log_Info("[racegame] a new player: %s (%s)", name, dir);
-    return SDL_GetPathInfo(dir, &info);
+    return IsDir(dir);
 }
 
 // A player's folder and everything in it, gone (Delete on the player menu, once asked)
@@ -2751,8 +2903,7 @@ static SDL_EnumerationResult SDLCALL RemoveIn(void *, const char *dirname, const
     char path[ADELINE_MAX_PATH];
     snprintf(path, sizeof(path), "%s/%s", dirname, fname);
     TrimSep(path);
-    SDL_PathInfo info;
-    if (SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY) SDL_EnumerateDirectory(path, RemoveIn, NULL);
+    if (IsDir(path)) SDL_EnumerateDirectory(path, RemoveIn, NULL);
     SDL_RemovePath(path);
     return SDL_ENUM_CONTINUE;
 }
@@ -2760,54 +2911,91 @@ static int RemoveFolder(const char *dir) {
     SDL_EnumerateDirectory(dir, RemoveIn, NULL);
     return SDL_RemovePath(dir);
 }
-// (a player of User\Players -- not the first, the game's own folder from before players, which holds the game's settings)
-static int PlayerOfFolder(int k) {
-    const size_t n = strlen(s_plRoot);
-    return k >= 0 && k < s_nbPlayers && !strncasecmp(s_plDir[k], s_plRoot, n) && (s_plDir[k][n] == '/' || s_plDir[k][n] == '\\');
-}
 
-// The player menu, the first the game shows (the user, 2026-11-12: "Our first menu needs to be a Player menu ... We should be able to quit
-// the currently loaded players game, and go back to the player menu, with a further quit option from this menu to actually exit the game";
-// and before: "They may either select an existing user, or create a new user. They should also be able to delete a user account by pressing
-// delete, which we should confirm deletion"): the players, New player, Quit the game. Enter (or a click) on a player: this one's, on to
-// the main menu -- another's, the game started again on its folder; Delete on a player: asked, then their folder gone; Quit the game (or
-// Esc): asked, then the game ends.
-// Returns 0: on, this player; 1: started again for another (this game to go); 3: quit the game.
-#define RG_PL_LINE 44
-// An install from before players (the user, 2026-11-12: "If a user doesn't already have a player created because they're on an old version
-// let's have our updater to ask them their name, and we can put everything that already exists under this player, this will mainly be ghost
-// times"): its first player is the game's own folder, with everything played so far -- ghosts, best laps, the story, achievements -- and no
-// name. The first time the player menu comes up after the update, asked once: the name becomes that player's (PLAYER.TXT in it), all of it
-// kept under it. (Share my ghosts' name, if there is one, offered.)
-static void LegacyName(void) {
-    static int asked = 0;
-    if (asked) return;
-    asked = 1;
-    ListPlayers();
-    if (s_nbPlayers < 1 || PlayerOfFolder(0)) return;
+// The install's folder, from before players were folders of their own (the user, 2026-11-13: "We should allow all users to be deleted
+// without the install being affected ... Everything else is a save file configuration"): what was played there -- saves, best laps, ghosts,
+// the story, achievements, settings -- moved into a player of User\Players, named as it was (PLAYER.TXT), or as the player says when asked
+// (the name Share my ghosts has, if any, offered); its configuration and settings copied (the install keeps its own), its logs and the shared
+// tracks left. Once only (PLAYERS_MOVED.TXT in it after the first look, whether there was anything to move or not): the game, started there
+// before a player is chosen, makes files of its own in it (an empty save folder, the best times' file) that are nobody's.
+static const char *const s_sharedStays[] = {"lba2.cfg", "RACEGAME_SETTINGS.TXT", "adeline.log", "adeline.prev.log", "Tracks", "crash.txt", "PLAYERS_MOVED.TXT"};
+static const char *const s_playerMarks[] = {"PLAYER.TXT", "BESTTIMES.TXT", "STORY_NOW.TXT", "ACHIEVEMENTS.TXT", "GHOSTS", "save", "RACE_NOW.TXT"};
+static int s_moveFailed = 0;
+static char s_moveTo[ADELINE_MAX_PATH];
+static SDL_EnumerationResult SDLCALL MoveOut(void *, const char *dirname, const char *fname) {
+    for (size_t k = 0; k < sizeof(s_sharedStays) / sizeof(s_sharedStays[0]); k++) if (!strcasecmp(fname, s_sharedStays[k])) return SDL_ENUM_CONTINUE;
+    char from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH];
+    snprintf(from, sizeof(from), "%s/%s", dirname, fname);
+    TrimSep(from);
+    snprintf(to, sizeof(to), "%s/%s", s_moveTo, fname);
+    if (!SDL_RenamePath(from, to)) { s_moveFailed++; Log_Warn("[racegame] %s not moved to %s: %s", from, to, SDL_GetError()); }
+    return SDL_ENUM_CONTINUE;
+}
+static void MoveFirstPlayer(void) {
+    static int done = 0;
+    if (done) return;
+    done = 1;
+    PlayerRoots();
+    char mark[ADELINE_MAX_PATH];
+    snprintf(mark, sizeof(mark), "%s/PLAYERS_MOVED.TXT", s_plShared);
+    if (IsFile(mark)) return;
+    if (FILE *f = fopen(mark, "w")) { fprintf(f, "# the players' own files are in User\\Players (RACEGAME.CPP MoveFirstPlayer)\n"); fclose(f); }
+    int played = 0;
+    for (size_t k = 0; k < sizeof(s_playerMarks) / sizeof(s_playerMarks[0]); k++) {
+        char path[ADELINE_MAX_PATH];
+        snprintf(path, sizeof(path), "%s/%s", s_plShared, s_playerMarks[k]);
+        if (IsFile(path) || IsDir(path)) played = 1;
+    }
+    if (!played) return;
+    char name[48], born[12];
+    NameIn(s_plShared, name, sizeof(name), born, sizeof(born), "");
     char card[ADELINE_MAX_PATH];
-    snprintf(card, sizeof(card), "%s/PLAYER.TXT", s_plDir[0]);
-    SDL_PathInfo info;
-    if (SDL_GetPathInfo(card, &info)) return;
-    char name[40] = "";
-    if (!strcasecmp(s_plDir[0], s_plMine)) GhostOwnerName(name, sizeof(name));
-    SayPage("Who is playing?", "LBRA now keeps a player for each person who plays. Everything played here so far -- your ghost times, best laps, story and achievements -- will be kept under your name.");
-    if (!TypePage("Your name", "Type your name, then Enter", name, sizeof(name), 0, 0)) name[0] = 0;
+    snprintf(card, sizeof(card), "%s/PLAYER.TXT", s_plShared);
+    if (!IsFile(card)) {
+        char typed[40] = "";
+        GhostOwnerName(typed, sizeof(typed));
+        SayPage("Who is playing?", "LBRA now keeps a player for each person who plays. Everything played here so far -- your ghost times, best laps, story and achievements -- will be kept under your name.");
+        if (!TypePage("Your name", "Type your name, then Enter", typed, sizeof(typed), 0, 0)) typed[0] = 0;
+        snprintf(name, sizeof(name), "%s", typed);
+    }
     char clean[40];
     int k = 0;
     for (const char *c = name; *c && k < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[k++] = *c;
     clean[k] = 0;
     Trim(clean);
     if (!clean[0]) snprintf(clean, sizeof(clean), "Player 1");
-    if (FILE *f = fopen(card, "w")) { fprintf(f, "%s\n", clean); fclose(f); }
-    Log_Info("[racegame] the first player (from before players) named: %s (%s)", clean, s_plDir[0]);
+    // (a player of that name already there: the next free "<name> 2", "<name> 3")
+    snprintf(s_moveTo, sizeof(s_moveTo), "%s/%s", s_plRoot, clean);
+    for (int n = 2; IsDir(s_moveTo) && n < 10; n++) snprintf(s_moveTo, sizeof(s_moveTo), "%s/%s %d", s_plRoot, clean, n);
+    SDL_CreateDirectory(s_plRoot);
+    SDL_CreateDirectory(s_moveTo);
+    s_moveFailed = 0;
+    SDL_EnumerateDirectory(s_plShared, MoveOut, NULL);
+    for (int c = 0; c < 2; c++) {
+        const char *file = c ? "RACEGAME_SETTINGS.TXT" : "lba2.cfg";
+        char from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH];
+        snprintf(from, sizeof(from), "%s/%s", s_plShared, file);
+        snprintf(to, sizeof(to), "%s/%s", s_moveTo, file);
+        if (IsFile(from) && !IsFile(to)) CopyFile(from, to);
+    }
+    const char *slash = strrchr(s_moveTo, '/');
+    WriteCard(s_moveTo, slash ? slash + 1 : clean, born);
+    Log_Info("[racegame] the install's folder's player moved to %s (%d not moved)", s_moveTo, s_moveFailed);
     AsciiMode = FALSE;
     Page(NULL, 0);
 }
 
+// The player menu, the first the game shows (the user, 2026-11-12: "Our first menu needs to be a Player menu ... We should be able to quit
+// the currently loaded players game, and go back to the player menu, with a further quit option from this menu to actually exit the game";
+// and before: "They may either select an existing user, or create a new user. They should also be able to delete a user account by pressing
+// delete, which we should confirm deletion"): the players, New player, Quit the game. Enter (or a click) on a player: on to the main menu
+// as them (the game carries on in their folder); Delete on a player: asked, then their folder gone -- the one playing too; Quit the game (or
+// Esc): asked, then the game ends.
+// Returns 0: on, as the player chosen; 3: quit the game.
+#define RG_PL_LINE 44
 static int PlayersPage(void) {
     int at = -1;
-    LegacyName();
+    MoveFirstPlayer();
     for (;;) {
         ListPlayers();
         const int shown = s_nbPlayers > RG_PLAYERS_MAX ? RG_PLAYERS_MAX : s_nbPlayers;
@@ -2850,41 +3038,55 @@ static int PlayersPage(void) {
         AsciiMode = FALSE;
         Page(NULL, 0);
         if (del) {
-            if (chosen == s_plNow) { SayPage("Delete a player", "That is the player playing now. Choose another player first, then delete this one from there."); continue; }
-            if (!PlayerOfFolder(chosen)) { SayPage("Delete a player", "The first player holds the game's own settings and can't be deleted."); continue; }
             char line[200];
             snprintf(line, sizeof(line), "Delete %s? Their saves, ghosts, best laps and achievements go with them, for good.", s_plName[chosen]);
             if (AskPage("Delete a player", line, "Enter: delete    Esc: keep")) {
-                char name[48];
+                char name[48], dir[ADELINE_MAX_PATH];
                 snprintf(name, sizeof(name), "%s", s_plName[chosen]);
-                if (RemoveFolder(s_plDir[chosen])) Log_Info("[racegame] player deleted: %s (%s)", name, s_plDir[chosen]);
-                else { Log_Info("[racegame] player not deleted: %s (%s): %s", name, s_plDir[chosen], SDL_GetError()); SayPage("Delete a player", "That player's folder could not be deleted."); }
+                snprintf(dir, sizeof(dir), "%s", s_plDir[chosen]);
+                // (the one playing: the game back in the install's folder first, their log and configuration let go)
+                if (chosen == s_plNow) SwitchTo(NULL);
+                if (RemoveFolder(dir)) Log_Info("[racegame] player deleted: %s (%s)", name, dir);
+                else { Log_Info("[racegame] player not deleted: %s (%s): %s", name, dir, SDL_GetError()); SayPage("Delete a player", "That player's folder could not be deleted."); }
                 at = -1;
             }
             continue;
         }
         if (chosen == n - 1) { if (QuitPage()) return 3; continue; }
-        const char *dir = NULL;
-        if (chosen < shown) dir = s_plDir[chosen];
-        else {
-            char name[40] = "";
-            if (!TypePage("New player", "Your name", name, sizeof(name), 0, 0)) continue;
+        char dir[ADELINE_MAX_PATH] = "", name[48] = "", born[12] = "";
+        if (chosen < shown) {
+            snprintf(dir, sizeof(dir), "%s", s_plDir[chosen]);
+            snprintf(name, sizeof(name), "%s", s_plName[chosen]);
+            snprintf(born, sizeof(born), "%s", s_plBorn[chosen]);
+            // (a player from before dates of birth: asked once)
+            if (!born[0]) {
+                if (!AskBorn(name, born, sizeof(born))) continue;
+                WriteCard(dir, name, born);
+            }
+        } else {
+            char typed[40] = "";
+            if (!TypePage("New player", "Your name", typed, sizeof(typed), 0, 0)) continue;
             char clean[40];
             int k = 0;
-            for (const char *c = name; *c && k < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[k++] = *c;
+            for (const char *c = typed; *c && k < 30; c++) if (isalnum((unsigned char)*c) || *c == ' ' || *c == '-' || *c == '_') clean[k++] = *c;
             clean[k] = 0;
             Trim(clean);
             if (!clean[0]) continue;
             // (a name taken: that player)
             int found = -1;
             for (int i = 0; i < s_nbPlayers; i++) if (!strcasecmp(s_plName[i], clean)) found = i;
-            if (found >= 0) dir = s_plDir[found];
-            else if (MakePlayer(clean)) { static char made[ADELINE_MAX_PATH]; snprintf(made, sizeof(made), "%s/%s", s_plRoot, clean); dir = made; }
+            if (found >= 0) { snprintf(dir, sizeof(dir), "%s", s_plDir[found]); snprintf(born, sizeof(born), "%s", s_plBorn[found]); }
+            else {
+                if (!AskBorn(clean, born, sizeof(born))) continue;
+                if (MakePlayer(clean, born)) snprintf(dir, sizeof(dir), "%s/%s", s_plRoot, clean);
+            }
+            if (found >= 0 && !born[0]) { if (!AskBorn(clean, born, sizeof(born))) continue; WriteCard(dir, clean, born); }
         }
-        if (!dir) continue;
-        if (!strcasecmp(dir, s_plMine)) { Page(NULL, 0); return 0; }
-        if (RaceUpdate_Relaunch(dir)) return 1;
-        SayPage("Who is playing?", "The game could not be started again for that player");
+        if (!dir[0]) continue;
+        if (strcasecmp(dir, s_plMine)) SwitchTo(dir);
+        else ListPlayers();
+        Page(NULL, 0);
+        return 0;
     }
 }
 
@@ -2903,7 +3105,7 @@ static const T_RG_ACH s_ach[] = {
 };
 #define RG_ACH_N ((int)(sizeof(s_ach) / sizeof(s_ach[0])))
 static U8 s_achGot[RG_ACH_N];
-static int s_achRead = 0;
+// (s_achRead: with the players, which forget it)
 static void AchPath(char *out) { GetCfgPath(out, ADELINE_MAX_PATH, "ACHIEVEMENTS.TXT"); }
 static void ReadAch(void) {
     if (s_achRead) return;
@@ -5579,7 +5781,7 @@ static int RaceAgain(const T_RG_CAR *car) {
 static uint32_t FnvByte(uint32_t h, unsigned char b) { return (h ^ b) * 16777619u; }
 static int SharedFolderChanged(void) {
     char dir[ADELINE_MAX_PATH];
-    GetCfgPath(dir, ADELINE_MAX_PATH, "Tracks");
+    PlayerRoots(); snprintf(dir, ADELINE_MAX_PATH, "%s/Tracks", s_plShared);   // (the shared tracks: the install's, every player's)
     int count = 0;
     char **names = SDL_GlobDirectory(dir, "*.lbrtrack", SDL_GLOB_CASEINSENSITIVE, &count);
     static char lower[RG_MAX_ENTRIES][128];
@@ -5617,7 +5819,7 @@ static int SharedFolderChanged(void) {
 // The folder opened in Explorer (made first: the game's first look at it)
 static void SharedOpenFolder(void) {
     char dir[ADELINE_MAX_PATH], url[ADELINE_MAX_PATH + 16];
-    GetCfgPath(dir, ADELINE_MAX_PATH, "Tracks");
+    PlayerRoots(); snprintf(dir, ADELINE_MAX_PATH, "%s/Tracks", s_plShared);   // (the shared tracks: the install's, every player's)
     SDL_CreateDirectory(dir);
     snprintf(url, sizeof(url), "file:///%s", dir);
     for (char *c = url; *c; c++) if (*c == '\\') *c = '/';
@@ -5809,7 +6011,7 @@ static S32 GameMenu(S32 inGame) {
     }
     // (the first menu met: who is playing -- not in a test run or a second player's game, nor once a player is chosen and the game started
     // again for them, LBRA_PLAYER_CHOSEN)
-    if (!inGame && !s_plAsked && !s_localGuest && !getenv("LBRA_PLAYER_CHOSEN") && !RaceUpdate_Tested()) {
+    if (!inGame && !s_plAsked && !s_localGuest && !getenv("LBRA_PLAYER_CHOSEN") && (!RaceUpdate_Tested() || getenv("LBRA_TEST_PLAYERS"))) {
         s_plAsked = 1;
         const int pl = PlayersPage();
         if (pl == 1 || pl == 3) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }

@@ -675,6 +675,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"frog_var={RaceTrackStory.FrogOpenVar}\n");
             // (Stella Entities' booths: Twinsen got up by any key -- RACEMOD.CPP seat_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"seat_var={RaceTrackStory.SeatVar}\n");
+            // (the player 18 or more: Stella Entities' lift down open -- RACEMOD.CPP adult_var=)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

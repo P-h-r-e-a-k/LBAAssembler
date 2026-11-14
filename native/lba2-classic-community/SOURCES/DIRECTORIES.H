@@ -73,6 +73,11 @@ const char *Directories_GetProfile(void);
 /// "LBA2_USER_DIR" or "default". For the boot banner, so a pasted log says how
 /// the run chose where to write, not just where it wrote.
 const char *Directories_GetUserDirSource(void);
+/* The user directory the run started in (a player switch leaves it as it was) */
+const char *Directories_GetSharedUserDir(void);
+/* Another folder as the user directory from now on (and as the config
+   directory, when that was the user directory): the race game's players. */
+void Directories_SwitchUserDir(const char *dir);
 
 /// True when \p name can be a profile directory: not empty, no path separator
 /// in either spelling, no parent-directory hop, not a bare dot, no colon, and

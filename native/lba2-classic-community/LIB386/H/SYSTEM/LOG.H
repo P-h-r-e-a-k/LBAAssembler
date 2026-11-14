@@ -115,6 +115,8 @@ LogSink *Log_MakeCallbackSink(LogLineFn printer, LogSeverity min_severity);
 
 void Log_AddSink(LogSink *sink);
 void Log_RemoveSink(LogSink *sink);
+/* A sink taken out and let go: its file closed, if it owns one (a log that moves to another folder) */
+void Log_DestroySink(LogSink *sink);
 
 /* True once at least one sink is registered (the fan-out is live). Legacy
  * LogPrintf/LogPuts use this to choose between routing through the fan-out and
