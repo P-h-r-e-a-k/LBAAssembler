@@ -5645,8 +5645,15 @@ void RaceMod_Lap(S32 x, S32 z) {
     if (!s_active || !s_car.HasLine || CubeMode != CUBE_EXTERIEUR) { pcx = -1; return; }
     // (the chase: Twinsen at the wheel at last, FunFrock long gone)
     ChaseStart();
-    // the story's arrow to the start line (holo_arrow): Twinsen is at the wheel, so he has found it
-    if (s_holoArrow >= 0) { ClrHoloPos(s_holoArrow); Log_Info("[racemod] holomap arrow %d cleared", s_holoArrow); s_holoArrow = -1; }
+    // the story's arrow to the start line (holo_arrow): cleared once he has found it -- in his car, by the start line. (It went every frame
+    // he was out of doors on the island, driving or not: the morning after the storm, Zoe's arrow to the town circuit gone as he stepped out
+    // of the house -- the user, 2026-11-14, "the holomap displays in the corner of the screen ... yet nothing is added")
+    if (s_holoArrow >= 0 && Comportement == C_BUGGY && CurrentCubeX == s_car.LineCubeX && CurrentCubeY == s_car.LineCubeZ) {
+        const double mx = (s_car.LineX0 + s_car.LineX1) / 2.0, mz = (s_car.LineZ0 + s_car.LineZ1) / 2.0;
+        if ((x - mx) * (x - mx) + (z - mz) * (z - mz) < 4096.0 * 4096.0) {
+            ClrHoloPos(s_holoArrow); Log_Info("[racemod] holomap arrow %d cleared: at the start line", s_holoArrow); s_holoArrow = -1;
+        }
+    }
     const S32 x0 = px - (CurrentCubeX - pcx) * 32768, z0 = pz - (CurrentCubeY - pcz) * 32768;
     const int same = pcx == CurrentCubeX && pcz == CurrentCubeY;
     const int beside = pcx >= 0 && !same && abs(CurrentCubeX - pcx) <= 1 && abs(CurrentCubeY - pcz) <= 1 && abs(x - x0) + abs(z - z0) <= RACE_CUBE_STEP;
