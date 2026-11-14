@@ -46,4 +46,6 @@ void RaceGame_StoryTest(int on);            // (tests: the run played as Story M
 
 /* The player playing is 18 or more (or the game has no players): Stella Entities' way in open (RACEMOD.CPP adult_var=) */
 S32 RaceGame_PlayerAdult(void);
+// A replay of an achievement started (its new game: no introduction film -- GAMEMENU.CPP new_game)
+S32 RaceGame_Replaying(void);
 #endif

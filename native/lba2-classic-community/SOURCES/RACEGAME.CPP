@@ -2773,6 +2773,7 @@ static int AgeOf(const char *born) {
     return age;
 }
 // The player playing is 18 or more -- or the game has no players (a test run, the editor's Play): no one to keep out
+S32 RaceGame_Replaying(void) { return s_replaying; }
 S32 RaceGame_PlayerAdult(void) {
     if (!s_plAsked) return 1;
     return AgeOf(s_plNowBorn) >= RG_ADULT_AGE;
@@ -3145,7 +3146,8 @@ S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
 // file's replay_set=, replay_gold=, applied as the scene loads) -- or, for the bowling alley, a game of bowling as one of its four bowlers.
 // (Ms: a clip, back to the menu that long after its scene loads -- the Wizard and the cow seen through the telescope. End: over as game
 // variable End[0] comes to End[1] (End[0] 0: none), faded out to the menu -- the race file's replay_end=)
-typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; int Ms; int End[2]; } T_RG_REPLAY;
+// End[2]: that many ms after it (0: at once). At: where Twinsen stands as it loads (x, y, z, beta; 0 0 0: the scene's start) -- replay_at=
+typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; int Ms; int End[3]; int At[4]; } T_RG_REPLAY;
 static const T_RG_REPLAY s_replays[] = {
     // (the spanking, short and to the point -- the user, 2026-11-14: "start with Twinsen on the elevator going down, and fade out again back
     // to the menu after Zoe tells Twinsen to go straight to bed without them coming back up the elevator again": the secret chamber (400,
@@ -3158,7 +3160,11 @@ static const T_RG_REPLAY s_replays[] = {
     {"telescope", 47, 0, 4, {{253, 2}, {56, 5}, {51, 4}, {227, 1}}, 5000},
     {"stella", 390, 0, 1, {{253, 4}}},                             // Stella Entities
     {"bowling", 393, 0, 1, {{253, 5}}},                            // the bowling alley
-    {"dinofly", 254, 0, 1, {{253, 0}}},                            // the dream's Polar Island, the Dino-Fly on its jetty
+    // (the Dino-Fly on the dream's Polar Island, on its jetty -- the user, 2026-11-14: "spawn Twinsen next to dinofly, with dinofly already
+    // posing the question "Where do you want to go?" Then after Twinsen answers fade back to the menu a couple of seconds later": Twinsen
+    // in front of him, facing him (the Dino-Fly at (3456, 1024, 8832), facing 1204); the replay's own variable, 250, has him ask at once
+    // (Polar/PolarDinofly.cs); over two seconds after his TalkedVar, 194, comes to 1 as the answer is given)
+    {"dinofly", 254, 0, 2, {{253, 0}, {250, 1}}, 0, {194, 1, 2000}, {4322, 1024, 8587, 3252}},
     {"dungeon", 159, 0, 1, {{253, 13}}},                           // the Emperor's palace, the room whose fireplace is the way down
     {"postcards", 95, 0, 3, {{253, 14}, {196, 13}, {197, 14}}},    // Celebration Island, every postcard found: the reward told
 };
@@ -3198,7 +3204,8 @@ static S32 StartReplay(const T_RG_REPLAY *r, int bowler) {
         for (int i = 0; i < r->NVars; i++) fprintf(f, "replay_set=%d %d\n", r->Vars[i][0], r->Vars[i][1]);
         if (r->Gold > 0) fprintf(f, "replay_gold=%d\n", r->Gold);
         if (r->Ms > 0) fprintf(f, "replay_ms=%d\n", r->Ms);
-        if (r->End[0] > 0) fprintf(f, "replay_end=%d %d\n", r->End[0], r->End[1]);
+        if (r->End[0] > 0) fprintf(f, "replay_end=%d %d %d\n", r->End[0], r->End[1], r->End[2]);
+        if (r->At[0] || r->At[2]) fprintf(f, "replay_at=%d %d %d %d\n", r->At[0], r->At[1], r->At[2], r->At[3]);
         if (bowler >= 0) fprintf(f, "bowling_game=%d\n", bowler);
         fclose(f);
     }

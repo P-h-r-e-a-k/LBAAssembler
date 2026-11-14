@@ -8,7 +8,7 @@ namespace LBAAssembler.Terrain;
 // The variables: game variables no script of the built game uses and the engine doesn't (checked 2026-11-04 with scriptgrep2 on a full
 // build of the fifteen story islands, and the engine source for ListVarGame[...]): 196-199, 210, 225, 226, 247, 250, and 153-155.
 // (2026-11-14: 110, 119 and 248 were free too, and are now the masked car's MaskedGone, the frog's FrogOpenVar and the licence's
-// DriveMarksVar; 210 is the booths' SeatVar)
+// DriveMarksVar; the booths' SeatVar was 210, EggStatuette's too -- moved to 247, 2026-11-14; 250 is ReplayVar)
 // (235-237 are the videos seen, PLAYACF.CPP FLAG_ACF; 251-254 the engine's; 106, 114, 172 were free too (96 is the night out's Drunk, 106 the Desert's QFilters, 114 the two players' TwoPlayersVar) -- 75 is the Desert's
 // exam pages found, a bit each, RaceTrackStory.Desert.cs PagesFoundVar; 172 is
 // read by scene 62's dead branch; 52 is the final's: another race asked for once, RaceTrackStory.Final.cs FinalAskedAgain; 58 chapter 1's
@@ -24,6 +24,8 @@ internal static partial class RaceTrackStory
     public const int EggBu = 199, BuBeaten = 1, BuPaid = 2;
     // the fifth Dark Monk statuette: 1 found on the lava lake, 2 shown to the seller (and sitting on the statue's ring in the final)
     public const int EggStatuette = 210, StatuetteFound = 1, StatuetteShown = 2;
+    // an achievement's replay under way: 1 (RACEGAME.CPP's replay set it, replay_set=; never in a story played) -- the Dino-Fly asks at once
+    public const int ReplayVar = 250;
     // the Brune sisters: 1 all four spoken to in the palace dungeon (they're in the final's crowd with Mrs. Brune)
     public const int EggSisters = 155;
     // the Elevator Platform's monster beaten by ten seconds (the race-track mode's margin_win=): 1 (his "BLUE ONE" sign in the final's crowd)

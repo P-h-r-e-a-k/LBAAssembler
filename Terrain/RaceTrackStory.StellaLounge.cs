@@ -23,7 +23,8 @@ internal static partial class RaceTrackStory
 {
     internal const int ExchangeVar = 196;
     // (seated in a booth: 1; the engine makes it 2 at a key -- RACEMOD.CPP seat_var= -- and he gets up)
-    internal const int SeatVar = 210;
+    // (247 since 2026-11-14: 210 was the Dark Monk statuette's EggStatuette as well)
+    internal const int SeatVar = 247;
     private const int StewardessScene = 41, StewardessActor = 6;
     private const int BoothZone0 = 80, SitLabel = 100, StandLabel = 120, HostGo = 200, HostAt = 210, HostBack = 220, HostHome = 230;
     private const int SeatBooth = 60, SeatWait = 61, Offered = 62, LaterRounds = 63, ShowFrames = 0, ShowRounds = 1;

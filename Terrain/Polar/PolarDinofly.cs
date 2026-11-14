@@ -80,8 +80,24 @@ internal static class PolarDinofly
         actor.Beta = beta;
         SceneOps.AddActor(model, actor);
         var index = model.Actors.Count - 1;
+        // (in his achievement's replay, RaceTrackStory.ReplayVar 1: his question at once, Twinsen put beside him -- RACEGAME.CPP replay_at=;
+        // the user, 2026-11-14)
+        var ask = $@"            add_choice({HamalayiText});
+            add_choice({TippetText});
+            add_choice({BrundleText});
+            add_choice({StayText});
+            ask_choice_obj({index}, {AskText});
+            if ({StayText} != choice())
+            {{
+                message_obj({index}, {NotThisGameText});
+            }}
+            set_var_game({TalkedVar}, 1);
+";
         var life = $@"void comportement_0()
 {{
+    if (1 == var_game({RaceTrackStory.ReplayVar}) && 0 == var_game({TalkedVar}))
+    {{
+{ask}    }}
     swif (1 == action())
     {{
         if (1500 > distance(0))

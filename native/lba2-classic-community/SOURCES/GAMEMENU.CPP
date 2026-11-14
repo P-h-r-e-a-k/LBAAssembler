@@ -4316,7 +4316,10 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
             PtrPal = PtrPalNormal;
             StopMusic();
             InitGame(1);
-            Introduction();
+            // (not before an achievement's replay: the intro film, the Adeline logo first, every time one was chosen -- the user,
+            // 2026-11-14, "Every time I load an achievement replay the Adeline logo scene replays first")
+            if (!RaceGame_Replaying())
+                Introduction();
             HQ_StopSample();
             HQ_ResumeSamples();
             FlagFade = TRUE;
