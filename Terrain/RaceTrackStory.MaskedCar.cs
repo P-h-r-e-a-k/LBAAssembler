@@ -10,7 +10,8 @@ namespace LBAAssembler.Terrain;
 // in). The user, 2026-11-13: "build it everywhere the story calls for it, and spot test if possible, but no full runs".
 internal static partial class RaceTrackStory
 {
-    private const int MaskedGone = 198, MaskedReach = 2600, MaskedDrive = 1, MaskedAway = 2, MaskedSpeed = 3200;
+    // (110: free in the game and the build -- 198 was the fourth exam page's egg, EggPage, 2026-11-14)
+    private const int MaskedGone = 110, MaskedReach = 2600, MaskedDrive = 1, MaskedAway = 2, MaskedSpeed = 3200;
     private const double MaskedPast = 7, MaskedRun = 14;
     // the chapters with the black car past the finish, by the island raced in them
     private static readonly Dictionary<string, int> MaskedChapters = new(StringComparer.OrdinalIgnoreCase)

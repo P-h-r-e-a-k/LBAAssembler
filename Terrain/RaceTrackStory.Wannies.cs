@@ -20,7 +20,8 @@ internal static partial class RaceTrackStory
     // Q_GLOVE: 1 Lyra's word heard, 2 the miner has told, 3 the glove found, 4 the glove given back (the start line's gate)
     public const int QGlove = 220, MinerTold = 2, GloveFound = 3, GloveBack = 4;
     // (the game variable the engine keeps at 1 while the giant frog's mouth is open, 0 shut: frog_var=, the story file's)
-    public const int FrogOpenVar = 199;
+    // (119: free in the game and the build -- 199 was Bu's lap record's egg, EggBu, 2026-11-14)
+    public const int FrogOpenVar = 119;
     private const int WanniesChapter = 9, WanniesTexts = 3 + 6, WannieGlove = 11, WanniesFragment = 34, MosquibeesArrival = 102;
     private const int WannieScene = 96, MinerActor = 2, OldWannieActor = 3;
     // the elevator's foot, where the Elevator Platform's elevator comes down (the game's scene), and its four laser barriers
