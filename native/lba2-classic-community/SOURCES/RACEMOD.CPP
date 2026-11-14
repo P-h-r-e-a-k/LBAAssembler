@@ -1484,13 +1484,16 @@ S32 RaceMod_EscLast(S32 dial) {
 // (the Wannies' glove, the user, 2026-11-13: "the frog's timing")
 static int s_frogVar = -1;
 static int s_lensVar = -1, s_lensValue = 0, s_lensCubeScene = -1, s_lensCubeVar = 0, s_lensCubeValue = 0;
+// (lens='s third value: its round that many hundredths of the screen's height up from the middle -- the Wizard and the cow in the middle of
+// it, the user, 2026-11-14: "raise the view circle of the telescope up fractionally, so the cow and wizard are in the centre of the circle")
+static int s_lensRaise = 0;
 #define RACE_LENS_RIM 6
 #define RACE_LENS_RIM_COLOUR 50
 static void LensDraw(void) {
     const int game = s_lensVar >= 0 && s_lensVar < 256 && ListVarGame[s_lensVar] == s_lensValue;
     const int cube = s_lensCubeScene >= 0 && (int)NumCube == s_lensCubeScene && s_lensCubeVar >= 0 && s_lensCubeVar < 80 && ListVarCube[s_lensCubeVar] == s_lensCubeValue;
     if (!game && !cube) return;
-    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, cx = w / 2, cy = h / 2;
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, cx = w / 2, cy = h / 2 - (game ? h * s_lensRaise / 100 : 0);
     const double r = h * 0.47;
     for (S32 y = 0; y < h; y++) {
         const double dy = y + 0.5 - cy;
@@ -5097,7 +5100,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
         else if (!strcmp(key, "adult_var")) { if (!setRead) s_adultVar = atoi(v); }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
-        else if (!strcmp(key, "lens")) { if (!setRead && sscanf(v, "%d %d", &s_lensVar, &s_lensValue) != 2) s_lensVar = -1; }
+        else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
             int isl, dial;

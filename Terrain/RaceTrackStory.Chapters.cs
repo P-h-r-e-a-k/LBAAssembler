@@ -1778,7 +1778,9 @@ void comportement_2()
     // when he uses the doors". Only once he's been out of its zone since he last came through it: DoorAway.)
     public const int ScopeVar = 227;
     // (both seen through the telescope's lens: the race file's lens= and lens_cube= -- RaceCarEngineFile)
-    internal static string LensLines => $"lens={ScopeVar} 1\nlens_cube={LighthouseScene} {StormLook} 2\n";
+    // (the cow's view: its round 14 hundredths of the screen up, the Wizard and Rosa in its middle -- the user, 2026-11-14)
+    private const int CowLensRaise = 14;
+    internal static string LensLines => $"lens={ScopeVar} 1 {CowLensRaise}\nlens_cube={LighthouseScene} {StormLook} 2\n";
     // (ScopeSide: the balcony by the telescope, west of the spell's place, LighthouseTop)
     private const int CowScene = 47, LighthouseTop = 60, ScopeSide = 61, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
@@ -1798,7 +1800,9 @@ void comportement_2()
     private const int LampDoor = 62, DoorFront = 63, TopAway = 49;
     // (the storm night's telescope: the Esmers' ship the first time this visit, the Wizard and the cow after it -- the user, 2026-11-13: "if
     // Twinsen uses it once let's have the spaceship come down, if Twinsen uses it a second time let's show the wizard/cow scene")
-    private const int ShipSeen = 51;
+    // (a game variable since 2026-11-14 -- the user: "we should only see the alien ship once, any subsequent usage should show us the
+    // wizard/cow scene"; a scene variable, the ship came back each visit. 255: no script of the build nor the engine uses it)
+    private const int ShipSeen = 255;
     // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
@@ -1887,9 +1891,9 @@ void comportement_1()
                     if (2 < nb_gold_pieces())
                     {{
                         give_gold_pieces(3);
-                        if (1 == chapter() && 0 == var_cube({ShipSeen}))
+                        if (1 == chapter() && 0 == var_game({ShipSeen}))
                         {{
-                            set_var_cube({ShipSeen}, 1);
+                            set_var_game({ShipSeen}, 1);
                             set_var_cube({StormLook}, 1);
                         }}
                         else
@@ -1916,9 +1920,9 @@ void comportement_1()
                         if (2 < nb_gold_pieces())
                         {{
                             give_gold_pieces(3);
-                            if (1 == chapter() && 0 == var_cube({ShipSeen}))
+                            if (1 == chapter() && 0 == var_game({ShipSeen}))
                             {{
-                                set_var_cube({ShipSeen}, 1);
+                                set_var_game({ShipSeen}, 1);
                                 set_var_cube({StormLook}, 1);
                             }}
                             else
@@ -2018,6 +2022,9 @@ stop();
             }
             wizard.X = here.X; wizard.Y = here.Y; wizard.Z = here.Z; wizard.Beta = rosa.Beta + 72;
             wizard.Anim = 0;
+            // (no shadow: the engine laid his on Rosa's back as he hopped behind her, a brown blot on the cow -- the user, 2026-11-14,
+            // "the wizard casting a brown shadow onto the cow, let's remove this"; NO_SHADOW)
+            wizard.Flags |= 1u << 12;
             var moveThere = therePoint < 0 ? "" : $@"        if ({asideWeather} == var_game({WeatherVar}))
         {{
             pos_point({therePoint});
