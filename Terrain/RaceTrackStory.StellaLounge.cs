@@ -104,6 +104,23 @@ internal static partial class RaceTrackStory
                 waits.Add((wi, $"label(0);\nanim(1);\n{string.Concat(way.Select(p => $"goto_point({p});\n"))}anim(0);\nwait_nb_dizieme(40);\nanim(1);\n" +
                                $"{string.Concat(Enumerable.Reverse(way).Select(p => $"goto_point({p});\n"))}anim(0);\nwait_nb_dizieme(40);\ngoto(label_0);\n"));
             }
+            // the twinkling stars on the night sky, each its own beat, bright and dim (the user, 2026-11-13: "let's have some of the stars
+            // twinkling emitting light around the room")
+            var stars = new List<(int Index, string Track)>();
+            var twinkle = new Random(11);
+            for (var a = Citadel.CitadelProps.ClubWallFrom + 9; a < Citadel.CitadelProps.ClubWallTo - 5; a += 13)
+            {
+                if (a > Citadel.CitadelProps.BackstageAt - 20 && a < Citadel.CitadelProps.BackstageAt + 20) continue;   // (not over the club's name)
+                var (sx, sz) = StellaEntities.At(a, Citadel.CitadelProps.ClubWallRadius / 512f - 0.12f);
+                var y = StellaEntities.FloorY + 1700 + twinkle.Next(1600);
+                var star = Citadel.CitadelProps.Actor(Citadel.CitadelProps.ClubStar, sx, y, sz, StellaEntities.FacingMiddle(sx, sz));
+                star.Armor = WalkOverArmour;
+                star.Move = 3;   // (its track: the twinkle)
+                var si = model.Actors.Count;
+                adds.Add(IslandBeatsA.Add(model, star, "void comportement_0()\n{\n}\n"));
+                int on = 3 + twinkle.Next(8), off = 2 + twinkle.Next(5);
+                stars.Add((si, $"label(0);\nbody({Citadel.CitadelProps.ClubStar});\nwait_nb_dizieme({on});\nbody({Citadel.CitadelProps.ClubStarDim});\nwait_nb_dizieme({off});\ngoto(label_0);\n"));
+            }
             // the change machine
             var (mx, mz) = StellaEntities.At(Citadel.CitadelProps.MachineAngle, Citadel.CitadelProps.MachineCells);
             var machine = Citadel.CitadelProps.Actor(Citadel.CitadelProps.ChangeMachine, mx, StellaEntities.FloorY, mz, StellaEntities.FacingMiddle(mx, mz));
@@ -227,6 +244,7 @@ void comportement_3()
                 foreach (var add in adds) add(scripts);
                 scripts.SetText(hostIndex, ScriptKind.Track, hostTrack.ToString());
                 foreach (var (wi, track) in waits) scripts.SetText(wi, ScriptKind.Track, track);
+                foreach (var (si, track) in stars) scripts.SetText(si, ScriptKind.Track, track);
                 var heroTrack = scripts.GetText(0, ScriptKind.Track).TrimEnd();
                 if (!heroTrack.Contains("label(")) heroTrack += "\nlabel(0);\nstop();";
                 scripts.SetText(0, ScriptKind.Track, heroTrack + "\n" + sitDown);

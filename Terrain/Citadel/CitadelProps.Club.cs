@@ -19,10 +19,12 @@ internal static partial class CitadelProps
     public const float ClubWallRadius = 19.5f * 512, ClubCurbIn = 18.2f * 512, ClubCurbOut = 19.8f * 512, ClubFloorRadius = 19.0f * 512;
     public const float ClubDoorFrom = -8, ClubDoorTo = 11;
     public const int ClubStoneTop = 1100, ClubWallTop = 3800, ClubCurbHigh = 200;
+    // (the night's colours: the sky's darkest blue, the stars white and pale yellow)
+    private const int ClubNight = 192, ClubStarWhite = 15, ClubStarYellow = 111;
     // (the palette: Rick's sky, his clouds' white, the stone's greys, brass and a lamp's glow)
-    private const int ClubSky = 205, ClubCloud = 63, ClubStone = 50, ClubCurbStone = 52, ClubBrass = 106, ClubGlow = 245;
+    private const int ClubStone = 50, ClubCurbStone = 52, ClubBrass = 106, ClubGlow = 245;
     // the arc the camera sees the wall's inside along (the room's middle to the wall: x = cos, z = sin of the angle)
-    private const float ClubWallFrom = 128, ClubWallTo = 322;
+    internal const float ClubWallFrom = 128, ClubWallTo = 322;
 
     // (the actor stands far back in the room's north-west corner, ClubShift from its middle: the engine draws the scene's objects back
     // to front, each piece for the backdrop copied into it as it is drawn -- one drawn after Twinsen took him into the backdrop with it,
@@ -36,44 +38,35 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("Stella Entities' wall", new[] { -1 });
         m.Light = 0.85f;
-        const int Steps = 30, Arc = 5;
-        const float CloudFoot = 1450;
+        const int Steps = 30;
         var step = (ClubWallTo - ClubWallFrom) / Steps;
         Vector3 Inside(float y) => ClubMiddle + new Vector3(0, y, 0);
-        // (each column: the stone's foot and top, the clouds' foot and the wall's top)
-        var foot = new int[Steps + 1]; var stone = new int[Steps + 1]; var cloud = new int[Steps + 1]; var top = new int[Steps + 1];
+        // (each column: the stone's foot and top, the wall's top)
+        var foot = new int[Steps + 1]; var stone = new int[Steps + 1]; var top = new int[Steps + 1];
         for (var k = 0; k <= Steps; k++)
         {
             var a = ClubWallFrom + k * step;
             foot[k] = m.P(0, ClubAt(a, ClubWallRadius, 0));
             stone[k] = m.P(0, ClubAt(a, ClubWallRadius, ClubStoneTop));
-            cloud[k] = m.P(0, ClubAt(a, ClubWallRadius, CloudFoot));
             top[k] = m.P(0, ClubAt(a, ClubWallRadius, ClubWallTop));
         }
-        // the half of the wall's chord a puff spans (its width's half), each puff its own height
-        var half = ClubWallRadius * MathF.Sin(step * MathF.PI / 360);
+        // over the stone, the night: dark sky from the stone's top to the wall's top, unlit, stars scattered over it -- the user, 2026-11-13,
+        // "redo the walls from the blue and white clouds, let's make it like a night sky, black with stars" (the twinkling ones: ClubStar)
+        var rand = new Random(1996);
         for (var k = 0; k < Steps; k++)
         {
             var a0 = ClubWallFrom + k * step;
             m.In(new[] { foot[k], foot[k + 1], stone[k + 1], stone[k] }, ClubStone, Inside(ClubStoneTop / 2f));
-            m.In(new[] { stone[k], stone[k + 1], m.P(0, ClubAt(a0 + step, ClubWallRadius, CloudFoot + 30)), m.P(0, ClubAt(a0, ClubWallRadius, CloudFoot + 30)) }, ClubCloud, Inside(1300), unlit: true);
-            // a puff: a half-round of cloud from column to column, a fan from its foot's middle; the sky in strips over it
-            var tall = half * (0.9f + 0.7f * (0.5f + 0.5f * MathF.Sin(k * 2.3f)));
-            var arc = new int[Arc + 1]; var over = new int[Arc + 1];
-            arc[0] = cloud[k]; arc[Arc] = cloud[k + 1]; over[0] = top[k]; over[Arc] = top[k + 1];
-            for (var i = 1; i < Arc; i++)
+            m.In(new[] { stone[k], stone[k + 1], top[k + 1], top[k] }, ClubNight, Inside((ClubStoneTop + ClubWallTop) / 2f), unlit: true);
+            for (var s = 0; s < 2; s++)
             {
-                var t = MathF.PI * i / Arc;
-                var along = (1 - MathF.Cos(t)) / 2;
-                var a = a0 + along * step;
-                arc[i] = m.P(0, ClubAt(a, ClubWallRadius, CloudFoot + tall * MathF.Sin(t)));
-                over[i] = m.P(0, ClubAt(a, ClubWallRadius, ClubWallTop));
-            }
-            var hub = m.P(0, ClubAt(a0 + step / 2, ClubWallRadius, CloudFoot));
-            for (var i = 0; i < Arc; i++)
-            {
-                m.In(new[] { hub, arc[i], arc[i + 1] }, ClubCloud, Inside(1700), unlit: true);
-                m.In(new[] { arc[i], arc[i + 1], over[i + 1], over[i] }, ClubSky, Inside(2700), unlit: true);
+                var a = a0 + step * (float)rand.NextDouble();
+                var y = ClubStoneTop + 150 + (ClubWallTop - ClubStoneTop - 300) * (float)rand.NextDouble();
+                var size = 14 + 22 * (float)rand.NextDouble();
+                var da = size * 180 / (MathF.PI * ClubWallRadius);
+                var colour = rand.Next(3) == 0 ? ClubStarYellow : ClubStarWhite;
+                m.In(new[] { m.P(0, ClubAt(a - da, ClubWallRadius - 12, y)), m.P(0, ClubAt(a, ClubWallRadius - 12, y - size)), m.P(0, ClubAt(a + da, ClubWallRadius - 12, y)), m.P(0, ClubAt(a, ClubWallRadius - 12, y + size)) },
+                     colour, Inside(y), unlit: true);
             }
         }
         // brass lamps on the wall over the stone, every so far along: a bracket and a glowing globe
@@ -220,6 +213,39 @@ internal static partial class CitadelProps
     // A two-post car lift (body 94) for the Desert's garage (the user, 2026-11-13: "some of the cars are raised up on car lifts being worked
     // on"): its posts either side of the car (local x), its arms under the car at CarLiftHigh, turned with the car (its front local +z)
     public const int CarLift = 94, CarLiftHigh = 760;
+    // A twinkling star on Stella Entities' night sky (bodies 93 and 92: bright -- a four-pointed star in a pale halo -- and dim), the two swapped
+    // by its track as the candle's flame is: its front +z, towards the hall's middle (RaceTrackStory.StellaLounge)
+    public const int ClubStar = 93, ClubStarDim = 92;
+    public static Body BuildClubStar(byte[] header) => BuildStar(header, true);
+    public static Body BuildClubStarDim(byte[] header) => BuildStar(header, false);
+    private static Body BuildStar(byte[] header, bool bright)
+    {
+        var m = new CarMesh(bright ? "a twinkling star" : "a twinkling star, dim", new[] { -1 });
+        m.Light = 1f;
+        int P(float x, float y) => m.P(0, new Vector3(x, y, 0));
+        var c = P(0, 0);
+        void Ray(float dx, float dy, float w, int colour)
+        {
+            var tip = P(dx, dy); var l = P(-dy * w, dx * w); var r = P(dy * w, -dx * w);
+            m.In(new[] { c, l, tip }, colour, new Vector3(0, 0, 100), unlit: true); m.In(new[] { c, tip, r }, colour, new Vector3(0, 0, 100), unlit: true);
+        }
+        if (bright)
+        {
+            // (its glow: pale halos round it, a little behind -- the wider one the darker)
+            const int Sides = 12;
+            foreach (var (radius, depth, colour) in new[] { (300f, -12f, ClubNight + 3), (170f, -6f, ClubNight + 6) })
+            {
+                var halo = Enumerable.Range(0, Sides).Select(k => m.P(0, new Vector3(radius * MathF.Cos(k * 2 * MathF.PI / Sides), radius * MathF.Sin(k * 2 * MathF.PI / Sides), depth))).ToArray();
+                var hc = m.P(0, new Vector3(0, 0, depth));
+                for (var k = 0; k < Sides; k++) m.In(new[] { hc, halo[k], halo[(k + 1) % Sides] }, colour, new Vector3(0, 0, 100), unlit: true);
+            }
+            foreach (var (dx, dy) in new[] { (0f, 190f), (0f, -190f), (190f, 0f), (-190f, 0f) }) Ray(dx, dy, 0.16f, ClubStarWhite);
+            foreach (var (dx, dy) in new[] { (75f, 75f), (-75f, 75f), (75f, -75f), (-75f, -75f) }) Ray(dx, dy, 0.25f, ClubStarYellow);
+        }
+        else
+            foreach (var (dx, dy) in new[] { (0f, 45f), (0f, -45f), (45f, 0f), (-45f, 0f) }) Ray(dx, dy, 0.3f, ClubStarYellow);
+        return m.ToBody(header);
+    }
     public static Body BuildCarLift(byte[] header)
     {
         var m = new CarMesh("a car lift", new[] { -1 });
