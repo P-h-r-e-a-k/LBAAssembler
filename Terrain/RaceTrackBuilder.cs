@@ -4507,7 +4507,8 @@ internal static class RaceTrackBuilder
         // grey without patches of sand coming through"
         if (report.StartLine.Count > 0 && IslandGround.Pick(island, (int)Math.Floor(report.StartLine[0].X + report.StartLine[0].DirX * 3), (int)Math.Floor(report.StartLine[0].Z + report.StartLine[0].DirZ * 3), 0) is { } asphalt)
         {
-            double hu = tentLong / 2 + 0.5, hv = tentDeep / 2 + 0.5;
+            // (a cell past the tent all round: the sand between its walls' foot and the painted cells showed -- the user, 2026-11-14)
+            double hu = tentLong / 2 + 1.5, hv = tentDeep / 2 + 1.5;
             var under = new List<(int, int)>();
             for (var gz = (int)Math.Floor(at.Z - hu - hv); gz <= (int)Math.Ceiling(at.Z + hu + hv); gz++)
             for (var gx = (int)Math.Floor(at.X - hu - hv); gx <= (int)Math.Ceiling(at.X + hu + hv); gx++)
@@ -4576,7 +4577,9 @@ internal static class RaceTrackBuilder
         }
         if (bays > 0)
         {
-            float w = 2 * hl / bays, depth = (float)(bayDeep * 512), line = 70, lift = 8;
+            // (the lines 24 over the ground: the ground under the tent is the road's grey, and the bays' grey pads 8 over it flickered with it
+            // as Twinsen moved, the sand showing through -- the user, 2026-11-14; the pads gone, the lines lifted clear of it)
+            float w = 2 * hl / bays, depth = (float)(bayDeep * 512), line = 70, lift = 22;
             // (in tiles a cell across at most: the engine leaves out a whole polygon with a corner behind the camera, and the game's camera
             // stands over the tent's back wall, where the pads and lines begin -- as one polygon each they were never seen)
             void Up(System.Numerics.Vector3 a, System.Numerics.Vector3 b, System.Numerics.Vector3 c2, System.Numerics.Vector3 d, int colour)
@@ -4590,8 +4593,6 @@ internal static class RaceTrackBuilder
             for (var k = 0; k < bays; k++)
             {
                 float u0 = -hl + w * k, u1 = u0 + w, uc = (u0 + u1) / 2;
-                // the pad, a little in from the lines
-                Up(At(u0 + 160, hd - 120, lift), At(u1 - 160, hd - 120, lift), At(u1 - 160, hd - depth + 120, lift), At(u0 + 160, hd - depth + 120, lift), 51);   // (mid grey, a concrete mat: lower down the poles' ramp -- lit from above, theirs (57) came out white and the lines on it lost, their darker one (54) the sand's colour)
                 // the front line, either side of the way out
                 Up(At(u0, hd - depth, lift + 2), At(uc - w * 0.3f, hd - depth, lift + 2), At(uc - w * 0.3f, hd - depth - line, lift + 2), At(u0, hd - depth - line, lift + 2), White);
                 Up(At(uc + w * 0.3f, hd - depth, lift + 2), At(u1, hd - depth, lift + 2), At(u1, hd - depth - line, lift + 2), At(uc + w * 0.3f, hd - depth - line, lift + 2), White);
