@@ -104,8 +104,18 @@ internal static partial class RaceTrackStory
             // (the drive done in an earlier visit -- Twinsen out of the car past the last marker, or a game saved after it: on to the hangar
             // as the scene starts again; a drive cut short, a game saved in the middle of it: back to the start, to be driven again -- the
             // user, 2026-11-14, his game left at 251 far from the guard, and no way on)
+            // (and a game past the diploma or the win from before those raised the magic level: the levels caught up here, the start line's
+            // scene -- the user's own, 2026-11-14, at level 1 with both behind him)
             adds.Add(IslandBeatsA.Add(model, guard, $@"void comportement_0()
 {{
+    if ({PagesDone} <= var_game({QPages}) && {MagicWon} > magic_level())
+    {{
+        set_magic_level({MagicWon});
+    }}
+    else if ({PagesDiploma} <= var_game({QPages}) && {MagicDiploma} > magic_level())
+    {{
+        set_magic_level({MagicDiploma});
+    }}
     if ({MarksArrived} == var_game({DriveMarksVar}) && {Driving} != comportement_hero())
     {{
         set_var_game({DriveMarksVar}, {MarksDone});

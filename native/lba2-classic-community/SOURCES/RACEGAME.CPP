@@ -2747,13 +2747,14 @@ static const char *PlayerNow(void) {
     return s_plNowName;
 }
 
-// A date of birth as typed (day, month, year: any of / . - or spaces between) into YYYY-MM-DD; 0 if it isn't one
+// A date of birth as typed (year, month, day -- the user, 2026-11-14, "change the date of birth to yyyy/mm/dd ordering": any of / . - or
+// spaces between) into YYYY-MM-DD; 0 if it isn't one
 static int ParseBorn(const char *typed, char *out, size_t size) {
     int d = 0, m = 0, y = 0;
     char buf[40];
     snprintf(buf, sizeof(buf), "%s", typed);
     for (char *c = buf; *c; c++) if (!isdigit((unsigned char)*c)) *c = ' ';
-    if (sscanf(buf, "%d %d %d", &d, &m, &y) != 3) return 0;
+    if (sscanf(buf, "%d %d %d", &y, &m, &d) != 3) return 0;
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
     const int thisYear = t ? t->tm_year + 1900 : 2026;
@@ -2784,9 +2785,9 @@ static int AskBorn(const char *who, char *out, size_t size) {
         char typed[24] = "";
         char title[80];
         snprintf(title, sizeof(title), "%s's date of birth", who);
-        if (!TypePage(title, "Day / month / year, e.g. 21/06/1997, then Enter", typed, sizeof(typed), 0, 0)) return 0;
+        if (!TypePage(title, "Year / month / day, e.g. 1997/06/21, then Enter", typed, sizeof(typed), 0, 0)) return 0;
         if (ParseBorn(typed, out, size)) return 1;
-        SayPage("Date of birth", "That isn't a date: type the day, the month and the year, e.g. 21/06/1997.");
+        SayPage("Date of birth", "That isn't a date: type the year, the month and the day, e.g. 1997/06/21.");
     }
 }
 
