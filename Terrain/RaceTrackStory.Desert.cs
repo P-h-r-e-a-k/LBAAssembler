@@ -437,12 +437,12 @@ void comportement_1()
         },
         new[]
         {
-            "The Desert champion, beaten by a ferry-ticket driver! The Cup goes on, to the Emerald Moon.",
-            "Le champion du Désert, battu par un pilote venu en ferry ! La Coupe continue, vers la Lune d'Émeraude.",
-            "Der Wüstenchampion, geschlagen von einem Fahrer mit Fährticket! Der Pokal geht weiter, zum Smaragdmond.",
-            "¡El campeón del Desierto, vencido por un piloto con billete de ferry! La Copa sigue, hacia la Luna Esmeralda.",
-            "Il campione del Deserto, battuto da un pilota col biglietto del traghetto! La Coppa continua, verso la Luna di Smeraldo.",
-            "O campeão do Deserto, vencido por um piloto de bilhete de barca! A Taça continua, rumo à Lua Esmeralda.",
+            "The Desert champion is beaten -- Twinsen wins! The Cup's next race is on the Emerald Moon.",
+            "Le champion du Désert est battu -- Twinsen gagne ! La prochaine course de la Coupe est sur la Lune d'Émeraude.",
+            "Der Wüstenchampion ist geschlagen -- Twinsen gewinnt! Das nächste Rennen des Pokals ist auf dem Smaragdmond.",
+            "¡El campeón del Desierto ha perdido: gana Twinsen! La próxima carrera de la Copa es en la Luna Esmeralda.",
+            "Il campione del Deserto è battuto: vince Twinsen! La prossima gara della Coppa è sulla Luna di Smeraldo.",
+            "O campeão do Deserto foi vencido: ganha o Twinsen! A próxima corrida da Taça é na Lua Esmeralda.",
         },
         new[]
         {
