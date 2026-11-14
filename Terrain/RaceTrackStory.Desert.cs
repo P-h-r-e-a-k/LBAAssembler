@@ -26,6 +26,9 @@ internal static partial class RaceTrackStory
     // the group's two spare game variables: the chapter whose radio call was answered, and the chapter whose ringing was shown
     // (not 235-237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF -- 2026-11-04)
     public const int RadioAnsweredA = 234, RadioRangA = 240;
+    // (rung and not answered: it answers itself after some 20 seconds -- frames counted in this scene, RadioAutoRounds rounds of 250 -- so it
+    // never holds him up: docs/LBRA_STORY_SCRIPT.md, "If he hasn't answered after 20 seconds it answers itself")
+    private const int RadioWait = 72, RadioRounds = 73, RadioAutoRounds = 3;
     private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2, MoonStart = 229;
     // the game's own: the variable of its Dino-Fly's cure (1 sent to Ker'aooc, 2 his assistant has answered, 3 the School's hall seen)
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
@@ -225,7 +228,16 @@ void comportement_1()
             set_var_game({RadioRangA}, {chapter});
             message({ringing});
         }}
-        if (1 == use_inventory({Radio}))
+        if ({chapter} == var_game({RadioRangA}) && {Driving} != comportement_hero())
+        {{
+            add_var_cube({RadioWait}, 1);
+            if (250 < var_cube({RadioWait}))
+            {{
+                set_var_cube({RadioWait}, 0);
+                add_var_cube({RadioRounds}, 1);
+            }}
+        }}
+        if (1 == use_inventory({Radio}) || {RadioAutoRounds} < var_cube({RadioRounds}))
         {{
             set_var_game({RadioAnsweredA}, {chapter});
 {string.Concat(call.Select(c => $"            message({c});\n"))}        }}
