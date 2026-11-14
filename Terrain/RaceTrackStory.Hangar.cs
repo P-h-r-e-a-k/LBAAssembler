@@ -36,12 +36,16 @@ internal static partial class RaceTrackStory
     // the alien cars (the racers' entity's bodies), each its own start in the loop and speed
     private static readonly (int Body, int Wait, int Speed)[] HangarCars = { (8, 0, 1800), (14, 90, 1600), (15, 180, 2000) };
 
-    private static void Hangar(IslandBeatsA b, Func<DesertLine, int> say, int moonStart)
+    // the hangar's lines (text ids of its island's file): the officer's offer, the answers, go aboard, later, the lift-off, no flights
+    internal sealed record HangarLines(int Offer, int Yes, int No, int Board, int Later, int Lift, int Closed);
+
+    // The hangar in `scene` (12 on the Desert; its copy, 208, on the Moon: MoonHangar) for the chapter it flies in, off to `destination`
+    private static void Hangar(IslandBeatsA b, int scene, int chapter, int destination, HangarLines say)
     {
-        if (!b.Store.SceneExists(HangarScene)) { b.Log.Add($"the Esmers' hangar left out: no scene {HangarScene}"); return; }
+        if (!b.Store.SceneExists(scene)) { b.Log.Add($"the Esmers' hangar left out: no scene {scene}"); return; }
         var officer = Copy(b.Originals, MoonBase, BaseMechanic);
         if (officer is null) { b.Log.Add("the Esmers' hangar left out: no Esmer mechanic in the moon base (scene 23) to copy"); return; }
-        b.Edit(HangarScene, "the Esmers' hangar: the freighter to the moon, the cars loaded, the black car, the dock officer, the lift-off (chapter 4)", model =>
+        b.Edit(scene, $"the Esmers' hangar: the freighter (on to scene {destination}), the cars loaded, the black car, the dock officer, the lift-off (chapter {chapter})", model =>
         {
             var adds = new List<Action<SceneScripts>>();
             var tracks = new List<(int Index, string Track)>();
@@ -93,7 +97,7 @@ internal static partial class RaceTrackStory
             var blackIndex = model.Actors.Count;
             adds.Add(IslandBeatsA.Add(model, Car(RaceTrackCharacterCars.MaskedGeneric, BlackAt, 2048), $@"void comportement_0()
 {{
-    if (4 != chapter() || 1 == var_cube({BlackGone}))
+    if ({chapter} != chapter() || 1 == var_cube({BlackGone}))
     {{
         invisible(1);
         suicide();
@@ -128,7 +132,7 @@ void comportement_2()
             buggy.Move = 3; buggy.Armor = WalkOverArmour;
             adds.Add(IslandBeatsA.Add(model, buggy, $@"void comportement_0()
 {{
-    if (4 != chapter())
+    if ({chapter} != chapter())
     {{
         invisible(1);
         suicide();
@@ -181,31 +185,31 @@ void comportement_1()
 
 void comportement_1()
 {{
-    if (4 != chapter())
+    if ({chapter} != chapter())
     {{
-        message_obj({officerIndex}, {say(DesertLine.HangarClosed)});
+        message_obj({officerIndex}, {say.Closed});
     }}
     else
     {{
         if (0 == var_cube({Boarding}))
         {{
-            add_choice({say(DesertLine.HangarYes)});
-            add_choice({say(DesertLine.HangarNo)});
-            ask_choice_obj({officerIndex}, {say(DesertLine.HangarOffer)});
-            if ({say(DesertLine.HangarYes)} == choice())
+            add_choice({say.Yes});
+            add_choice({say.No});
+            ask_choice_obj({officerIndex}, {say.Offer});
+            if ({say.Yes} == choice())
             {{
                 set_var_cube({Boarding}, 1);
                 set_track_obj({buggyIndex}, label_1);
-                message_obj({officerIndex}, {say(DesertLine.HangarBoard)});
+                message_obj({officerIndex}, {say.Board});
             }}
             else
             {{
-                message_obj({officerIndex}, {say(DesertLine.HangarLater)});
+                message_obj({officerIndex}, {say.Later});
             }}
         }}
         else
         {{
-            message_obj({officerIndex}, {say(DesertLine.HangarBoard)});
+            message_obj({officerIndex}, {say.Board});
         }}
     }}
     set_comportement(comportement_0);
@@ -229,8 +233,8 @@ void comportement_1()
 {{
     if ({LiftHigh} == l_track_obj({shipIndex}))
     {{
-        message({say(DesertLine.HangarLift)});
-        change_cube({moonStart});
+        message({say.Lift});
+        change_cube({destination});
         set_comportement(comportement_2);
     }}
 }}

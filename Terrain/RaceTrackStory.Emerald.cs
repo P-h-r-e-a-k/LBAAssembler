@@ -50,6 +50,8 @@ internal static partial class RaceTrackStory
         ClubOffer, ClubShowYes, ClubShowNo, ClubFollow, ClubBroke, ClubLater, ClubThanks, ClubMachineAsk, ClubMachineYes, ClubMachineNo, ClubMachineDone,
         // (the Grobo hostess's lap dance -- StellaStaff, 2026-11-14)
         ClubLapOffer, ClubLapBroke,
+        // (the moon's hangar, the freighter on to Otringal -- RaceTrackStory.Hangar.cs, MoonHangar, 2026-11-14)
+        HangarOffer, HangarYes, HangarNo, HangarBoard, HangarLater, HangarLift, HangarClosed, HangarGo,
     }
     private static readonly string[][] MoonLines =
     {
@@ -432,6 +434,78 @@ internal static partial class RaceTrackStory
             "Non hai 50 zlitos, dolcezza. La macchina del cambio vicino al bar prende i kashes.",
             "Não tens 50 zlitos, docinho. A máquina de câmbio ao pé do bar aceita kashes.",
         },
+        new[]
+        {
+            "The freighter for Otringal is ready. Shall we load your car?",
+            "Le cargo pour Otringal est prêt. On charge ta voiture ?",
+            "Der Frachter nach Otringal ist bereit. Sollen wir dein Auto einladen?",
+            "El carguero a Otringal está listo. ¿Cargamos tu coche?",
+            "Il cargo per Otringal è pronto. Carichiamo la tua auto?",
+            "O cargueiro para Otringal está pronto. Carregamos o teu carro?",
+        },
+        new[]
+        {
+            "Load it. To Otringal!",
+            "Chargez-la. En route pour Otringal !",
+            "Ladet es ein. Auf nach Otringal!",
+            "Cargadlo. ¡A Otringal!",
+            "Caricatela. Si va a Otringal!",
+            "Carreguem-no. Para Otringal!",
+        },
+        new[]
+        {
+            "Not yet.",
+            "Pas encore.",
+            "Noch nicht.",
+            "Todavía no.",
+            "Non ancora.",
+            "Ainda não.",
+        },
+        new[]
+        {
+            "Your car's going aboard. Up the pad's ramp and through the hatch -- we lift off as soon as you're in.",
+            "Ta voiture monte à bord. Grimpe la rampe de la plate-forme et passe l'écoutille -- on décolle dès que tu es dedans.",
+            "Dein Auto kommt an Bord. Die Rampe zur Plattform hinauf und durch die Luke -- wir starten, sobald du drin bist.",
+            "Tu coche sube a bordo. Sube la rampa de la plataforma y entra por la escotilla: despegamos en cuanto estés dentro.",
+            "La tua auto sale a bordo. Su per la rampa della piattaforma e dentro il portello: decolliamo appena sei dentro.",
+            "O teu carro vai a bordo. Sobe a rampa da plataforma e entra pela escotilha -- descolamos assim que estiveres lá dentro.",
+        },
+        new[]
+        {
+            "Take your time. The freighter doesn't fly without its passenger.",
+            "Prends ton temps. Le cargo ne part pas sans son passager.",
+            "Lass dir Zeit. Der Frachter fliegt nicht ohne seinen Passagier.",
+            "Tómate tu tiempo. El carguero no despega sin su pasajero.",
+            "Fai con calma. Il cargo non parte senza il suo passeggero.",
+            "Não tenhas pressa. O cargueiro não parte sem o seu passageiro.",
+        },
+        new[]
+        {
+            "The hatch closes. The freighter shudders, rises from its pad and climbs away towards Otringal.",
+            "L'écoutille se ferme. Le cargo tremble, quitte sa plate-forme et s'élève en direction d'Otringal.",
+            "Die Luke schließt sich. Der Frachter bebt, hebt von seiner Plattform ab und steigt in Richtung Otringal.",
+            "La escotilla se cierra. El carguero tiembla, se eleva de su plataforma y asciende rumbo a Otringal.",
+            "Il portello si chiude. Il cargo trema, si stacca dalla piattaforma e sale verso Otringal.",
+            "A escotilha fecha-se. O cargueiro estremece, ergue-se da plataforma e sobe rumo a Otringal.",
+        },
+        new[]
+        {
+            "No more flights to Otringal today, friend.",
+            "Plus de vols pour Otringal aujourd'hui, l'ami.",
+            "Heute keine Flüge mehr nach Otringal, Freund.",
+            "Hoy no hay más vuelos a Otringal, amigo.",
+            "Niente più voli per Otringal oggi, amico.",
+            "Hoje não há mais voos para Otringal, amigo.",
+        },
+        new[]
+        {
+            "The Esmers' freighter goes on to Otringal from the base's hangar. Off you go, racer.",
+            "Le cargo des Esmers repart pour Otringal depuis le hangar de la base. En route, pilote.",
+            "Der Frachter der Esmer fliegt vom Hangar der Basis weiter nach Otringal. Los geht's, Rennfahrer.",
+            "El carguero de los Esmers sigue hacia Otringal desde el hangar de la base. En marcha, piloto.",
+            "Il cargo degli Esmer prosegue per Otringal dall'hangar della base. Vai, pilota.",
+            "O cargueiro dos Esmers segue para Otringal a partir do hangar da base. Vai, piloto.",
+        },
     };
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
@@ -442,6 +516,9 @@ internal static partial class RaceTrackStory
         if (first < 0) return log;
         int Say(MoonLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Emerald, log);
+        // (won, the freighter on to Otringal from the moon base's hangar -- RaceTrackStory.Hangar.cs, MoonHangar)
+        Hangar(b, MoonHangar.Scene, 5, OtringalStart, new HangarLines(Say(MoonLine.HangarOffer), Say(MoonLine.HangarYes), Say(MoonLine.HangarNo),
+            Say(MoonLine.HangarBoard), Say(MoonLine.HangarLater), Say(MoonLine.HangarLift), Say(MoonLine.HangarClosed)));
         // (Zoe as companion's hints on the Emerald Moon: HAL, then the race -- RaceTrackStory.Companion.cs)
         CompanionTalks[RaceTrackIsland.Emerald.IleFile] = $@"            if ({HalMended} > var_game({QHal}))
             {{
@@ -609,11 +686,12 @@ void comportement_1()
         message({Say(MoonLine.LyraZeelich)});
         message_obj({hal}, {Say(MoonLine.HalLog)});
         message_zoe({Say(MoonLine.ZoeLaugh)});
+        message({Say(MoonLine.HangarGo)});
         if (5 > chapter())
         {{
             inc_chapter();
         }}
-        change_cube({OtringalStart});
+        change_cube({MoonHangar.Scene});
     }}
 }}
 "),

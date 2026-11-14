@@ -808,7 +808,8 @@ void comportement_1()
         int Say(DesertLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Desert, log);
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
-        Hangar(b, Say, MoonStart);
+        Hangar(b, HangarScene, 4, MoonStart, new HangarLines(Say(DesertLine.HangarOffer), Say(DesertLine.HangarYes), Say(DesertLine.HangarNo),
+            Say(DesertLine.HangarBoard), Say(DesertLine.HangarLater), Say(DesertLine.HangarLift), Say(DesertLine.HangarClosed)));
         // (Zoe as companion's hints on the Desert: the Dean, his pages, the sand filters, the helmet, the race -- RaceTrackStory.Companion.cs)
         CompanionTalks[RaceTrackIsland.Desert.IleFile] = $@"            if (2 > var_game({QPages}) && 7 != var_game({PagesFoundVar}))
             {{

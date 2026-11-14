@@ -534,7 +534,7 @@ internal static class RaceTrackService
                 made.Add(LBAAssembler.Terrain.Citadel.TavernPlant.Remove(gameDirectory));
             }
             // (and Stella Entities, the club under the Emerald Moon's reactor, its hidden lift in Baldino's old cell: StellaEntities)
-            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Emerald.IleFile)) { made.AddRange(StellaEntities.Install(gameDirectory)); made.AddRange(StellaRooms.Install(gameDirectory)); }
+            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Emerald.IleFile)) { made.AddRange(StellaEntities.Install(gameDirectory)); made.AddRange(StellaRooms.Install(gameDirectory)); made.AddRange(MoonHangar.Install(gameDirectory)); }
             // (the hidden bowling alley under Otringal's prison exit: BowlingAlley)
             if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Otringal.IleFile)) made.AddRange(BowlingAlley.Install(gameDirectory));
             if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
