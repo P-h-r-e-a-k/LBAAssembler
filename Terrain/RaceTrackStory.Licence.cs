@@ -101,8 +101,22 @@ internal static partial class RaceTrackStory
             guard.Beta = RaceTrackMath.Turn(Math.Atan2(-nx, -nz));
             guard.Move = 0;
             var gi = model.Actors.Count;
+            // (the drive done in an earlier visit -- Twinsen out of the car past the last marker, or a game saved after it: on to the hangar
+            // as the scene starts again; a drive cut short, a game saved in the middle of it: back to the start, to be driven again -- the
+            // user, 2026-11-14, his game left at 251 far from the guard, and no way on)
             adds.Add(IslandBeatsA.Add(model, guard, $@"void comportement_0()
 {{
+    if ({MarksArrived} == var_game({DriveMarksVar}) && {Driving} != comportement_hero())
+    {{
+        set_var_game({DriveMarksVar}, {MarksDone});
+        message({say(DesertLine.TempleThrough)});
+        change_cube({HangarScene});
+        set_comportement(comportement_2);
+    }}
+    else if ({MarksDriving} == var_game({DriveMarksVar}) && {Driving} != comportement_hero())
+    {{
+        set_var_game({DriveMarksVar}, 0);
+    }}
     if (4 == chapter() && {PagesDone} == var_game({QPages}) && 0 == var_game({DriveMarksVar}) && 2600 > distance(0))
     {{
         if ({Driving} == comportement_hero())

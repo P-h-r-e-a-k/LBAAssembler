@@ -14244,6 +14244,9 @@ double RaceMod_JetSteer(void) {
 S32 RaceMod_Takeover(void) {
     if (s_winStop == 1 && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (win_stop=: the car braked to a stop for him)
     if (s_victory && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (victory_lap=: the pilot drives the lap of honour)
+    // (drive_marks=: the story's drive through its markers and the stop after them -- the player's keys had the car too, and drove it off at
+    // full speed past the last marker, far from the script waiting for the stop: the user, 2026-11-14)
+    if (RaceMod_Active() && Comportement == C_BUGGY && (s_markBrake || (s_markVar >= 0 && s_markVar < 256 && ListVarGame[s_markVar] == 250))) return 1;
     if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return 1;   // (the console's racewalk)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) return 1;   // (a ghost played back drives the car: GhostWatch)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
