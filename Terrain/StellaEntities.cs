@@ -211,6 +211,21 @@ internal static class StellaEntities
                 for (var y = FloorLayer + 1; y < top; y++) Put(x, y, z, 0, 1);
                 Put(x, top, z, 0, SlopeDownEast);
             }
+        // (no slot one cell wide between solid cells -- the catwalk, the steps, the stage, the benches, the ring along the wall, the hall's
+        // edge: Twinsen, wider than a cell, fell into one and never reached its floor, held in his fall -- the user, 2026-11-13, by the
+        // backstage door: "Trying to walk off the stage traps Twinsen in a falling animation here"; such a cell is made solid to the wall's top)
+        bool SolidAt(int x, int z) => !Floor(x, z) || (set.TryGetValue((x, FloorLayer + 1, z), out var c) && (c.Block != 0 || c.Pos != 0));
+        var slots = 0;
+        for (var pass = 0; pass < 3; pass++)
+            for (var z = 1; z < Size - 1; z++)
+            for (var x = 1; x < Size - 1; x++)
+            {
+                if (!Hall(x, z) || SolidAt(x, z)) continue;
+                if (!((SolidAt(x - 1, z) && SolidAt(x + 1, z)) || (SolidAt(x, z - 1) && SolidAt(x, z + 1)))) continue;
+                for (var y = FloorLayer + 1; y <= RingTop; y++) Put(x, y, z, 0, 1);
+                slots++;
+            }
+        log.Add($"Stella Entities: {slots} one-cell slots filled (none to fall into)");
         for (var z = 0; z < Size; z++)
         for (var y = 0; y < Height; y++)
         for (var x = 0; x < Size; x++)
