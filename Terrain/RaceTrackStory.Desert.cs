@@ -1092,12 +1092,7 @@ void comportement_2()
             var y = Math.Max(at.Y, ground) + 8;
             if (ground > at.Y + 16) log.Add($"page {k + 1}: the lap's line ({at.Y:0}) under the ground there ({ground:0}) -- on the ground");
             var bit = 1 << k;
-            b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}, height {y:0}) ({fraction:0%} of the lap): found in any order (bit {bit} of variable {PagesFoundVar})", model =>
-            {
-                var page = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Page, Math.Clamp(RaceTrackScenes.CubeLocal(at.X, model.CubeX), 0, IslandFile.CubeSize - 1), (int)Math.Round(y),
-                    Math.Clamp(RaceTrackScenes.CubeLocal(at.Z, model.CubeY), 0, IslandFile.CubeSize - 1), 700 * k);
-                page.CoulObj = 9;
-                return IslandBeatsA.Add(model, page, $@"void comportement_0()
+            var pageLife = $@"void comportement_0()
 {{
     if ({desert} && ({PageNotFound(k)}))
     {{
@@ -1132,8 +1127,33 @@ void comportement_1()
         }}
     }}
 }}
-");
+";
+            int PageX(SceneModel model) => Math.Clamp(RaceTrackScenes.CubeLocal(at.X, model.CubeX), 0, IslandFile.CubeSize - 1);
+            int PageZ(SceneModel model) => Math.Clamp(RaceTrackScenes.CubeLocal(at.Z, model.CubeY), 0, IslandFile.CubeSize - 1);
+            b.Edit(scene, $"exam page {k + 1} on the road at cell ({at.X:0.#}, {at.Z:0.#}, height {y:0}) ({fraction:0%} of the lap): found in any order (bit {bit} of variable {PagesFoundVar})", model =>
+            {
+                var page = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Page, PageX(model), (int)Math.Round(y), PageZ(model), 700 * k);
+                page.CoulObj = 9;
+                return IslandBeatsA.Add(model, page, pageLife);
             });
+            // (and seen from the cubes beside its own: a copy in each of their scenes, one cube past the edge toward it -- the race file's
+            // cube_shift_marks=, the height's band over CubeShift, as the racers' garage is -- found there as well; the user, 2026-11-14: "make
+            // sure that the deans missing pages are visible from all connected areas")
+            var pageCube = ((int)Math.Floor(at.X / 64), (int)Math.Floor(at.Z / 64));
+            var byCube = b.OutsideScenes.ToDictionary(s => (b.Store.Load(s).CubeX, b.Store.Load(s).CubeY));
+            foreach (var (dx, dz, band) in new[] { (-1, 0, 0), (0, -1, 1), (1, 0, 2), (0, 1, 3) })
+            {
+                if (!byCube.TryGetValue((pageCube.Item1 + dx, pageCube.Item2 + dz), out var beside)) continue;
+                if (y < 0 || y >= CubeShiftBand) { log.Add($"page {k + 1}: too high ({y:0}) to be seen from scene {beside}"); continue; }
+                var shown = (int)Math.Round(y) + CubeShift + band * CubeShiftBand;
+                b.Edit(beside, $"exam page {k + 1} seen from the cube beside it (scene {scene}'s, past this one's edge)", model =>
+                {
+                    var there = b.Store.Load(scene);
+                    var page = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Page, PageX(there), shown, PageZ(there), 700 * k);
+                    page.CoulObj = 9;
+                    return IslandBeatsA.Add(model, page, pageLife);
+                });
+            }
         }
 
         // Baldino at his house: a copy of the game's own, the car's tune and his tip -- his greeting as his radio call was answered or not
