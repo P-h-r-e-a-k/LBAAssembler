@@ -872,6 +872,11 @@ static int s_dtOn = 0, s_dtState = 0, s_dtTurn = 0, s_dtLeft = 3, s_dtScore[2], 
 static double s_dtAimX = 0, s_dtAimY = 0, s_dtMark[3][2], s_dtFx = 0, s_dtFy = 0;
 static S32 s_dtAt = 0, s_dtMsgUntil = 0, s_dtLast = 0, s_dtThrowAt = 0;
 static char s_dtMsg[64] = "";
+// a wager on the match (the user, 2026-11-14: "the option to wager money on the darts in the Citadel Tavern, if Twinsen wins he doubles any
+// money he wagers. Let's have fixed wager options, 25, 50, and 100"): before the first dart against one of the regulars (not Zoe), state 6 --
+// Left and Right pick none or a stake Twinsen has, Action takes it from his purse; a win gives it back twice over
+static const int s_dtStakes[4] = {0, 25, 50, 100};
+static int s_dtStakePick = 0, s_dtStake = 0, s_dtSideWas = 0;
 static U32 s_dtInput = 0;
 static U32 s_dtSeed = 12345;
 // dart_board=<face x> <face z> <radius> <beta> <wait x> <wait z>: the board's face on the wall (where the darts stick: the game's own darts,
@@ -19437,6 +19442,15 @@ static void DartLand(S32 now, double x, double y) {
         if (s_dtNHist[who] < 40) s_dtHist[who][s_dtNHist[who]++] = 0;
         snprintf(said, sizeof(said), who == 0 ? "You win!" : "%s wins", DartOpponent()->Name);
         if (who) snprintf(said, sizeof(said), "%s wins", DartOpponent()->Name);
+        // (the wager: won, twice the stake back; lost, it stays the opponent's)
+        if (s_dtStake > 0) {
+            if (who == 0) {
+                if (MONEY_ZLITOS) NbZlitosPieces += s_dtStake * 2; else NbGoldPieces += s_dtStake * 2;
+                snprintf(said, sizeof(said), "You win %d %s!", s_dtStake * 2, MONEY_ZLITOS ? "zlitos" : "kashes");
+            } else snprintf(said, sizeof(said), "%s wins your %d %s", DartOpponent()->Name, s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes");
+            Log_Info("[racemod] darts: the wager of %d %s", s_dtStake, who == 0 ? "won, twice over" : "lost");
+            s_dtStake = 0;
+        }
         DartSay(now, said, 6000);
         Log_Info("[racemod] darts: %s", said);
         return;
@@ -19503,7 +19517,9 @@ static void DartFrame(S32 now) {
             hero->Obj.Beta = DartFacing(hero->Obj.X, hero->Obj.Z);
             ClearRealAngle(hero);
             DartStandShow(1);
-            DartSay(now, "Arrows aim, Action throws", 3000);
+            s_dtStake = 0; s_dtStakePick = 0; s_dtSideWas = 1;
+            if (s_dtFoe >= 0) s_dtState = 6;   // (the wager first, against a regular)
+            else DartSay(now, "Arrows aim, Action throws", 3000);
             Log_Info("[racemod] darts: a match of %d against %s (opponent's actor %d)", DART_START, DartOpponent()->Name, s_dtStand);
         }
         return;
@@ -19512,7 +19528,25 @@ static void DartFrame(S32 now) {
     if (s_dtThrown && now - s_dtThrowAt > 800) { s_dtThrown = 0; s_dtHeroWalk = -1; DartHeroAnim(0); }
     hero->WorkFlags &= ~FALLING;
     const double t = now / 1000.0;
-    if (s_dtState == 0) {
+    if (s_dtState == 6) {
+        // the wager: Left and Right through the stakes he has the money for, Action takes it
+        const S32 purse = MONEY_ZLITOS ? NbZlitosPieces : NbGoldPieces;
+        const int side = (s_dtInput & I_LEFT) ? -1 : (s_dtInput & I_RIGHT) ? 1 : 0;
+        if (side && !s_dtSideWas)
+            for (int k = 1; k <= 4; k++) {
+                const int pick = (s_dtStakePick + side * k + 4) % 4;
+                if (s_dtStakes[pick] <= purse) { s_dtStakePick = pick; break; }
+            }
+        s_dtSideWas = side != 0;
+        if (s_dtStakes[s_dtStakePick] > purse) s_dtStakePick = 0;
+        if (pressed) {
+            s_dtStake = s_dtStakes[s_dtStakePick];
+            if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake;
+            s_dtState = 0; s_dtAt = now;
+            DartSay(now, "Arrows aim, Action throws", 3000);
+            Log_Info("[racemod] darts: a wager of %d against %s", s_dtStake, DartOpponent()->Name);
+        }
+    } else if (s_dtState == 0) {
         // the player's aim: the arrows, and the sway over it
         if (s_dtInput & I_LEFT) s_dtAimX -= 0.7 * dt;
         if (s_dtInput & I_RIGHT) s_dtAimX += 0.7 * dt;
@@ -19698,6 +19732,15 @@ static void DartDraw(void) {
     snprintf(line, sizeof(line), "%s: %d dart%s left", s_dtTurn == 0 ? "You" : f->Name, s_dtLeft, s_dtLeft == 1 ? "" : "s");
     HudLine(16, 12, line, -1);
     if (s_dtState == 1 && s_dtFoe < 0) HudLine(16, 40, "Zoe: press Action!", -1);
+    if (s_dtState == 6) {
+        char wager[64];
+        const char *money = MONEY_ZLITOS ? "zlitos" : "kashes";
+        if (s_dtStakes[s_dtStakePick]) snprintf(wager, sizeof(wager), "Wager: < %d %s >", s_dtStakes[s_dtStakePick], money);
+        else snprintf(wager, sizeof(wager), "Wager: < none >");
+        HudLine(w / 2 - SizeFont(wager) / 2, h - 90, wager, -1);
+        char keys[] = "Left, Right: the stake -- Action: play";
+        HudLine(w / 2 - SizeFont(keys) / 2, h - 60, keys, -1);
+    }
     if (TimerRefHR < s_dtMsgUntil && s_dtMsg[0]) HudLine(w / 2 - SizeFont(s_dtMsg) / 2, h - 60, s_dtMsg, -1);
 }
 // Whether Twinsen is in the pool's water -- the basin's box, or the dive on its way -- where he swims and does not drown (OBJECT.CPP's water)
