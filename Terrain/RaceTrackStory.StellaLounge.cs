@@ -133,7 +133,8 @@ internal static partial class RaceTrackStory
                 star.Move = 3;   // (its track: the twinkle)
                 var si = model.Actors.Count;
                 adds.Add(IslandBeatsA.Add(model, star, "void comportement_0()\n{\n}\n"));
-                int on = 3 + twinkle.Next(8), off = 2 + twinkle.Next(5);
+                // (slow: bright 1.2-2.7 s, dim 0.8-1.7 s -- the user, 2026-11-14: "we need to slow the flashing down"; it was 0.3-1.0 and 0.2-0.6)
+                int on = 12 + twinkle.Next(16), off = 8 + twinkle.Next(10);
                 stars.Add((si, $"label(0);\nbody({Citadel.CitadelProps.ClubStar});\nwait_nb_dizieme({on});\nbody({Citadel.CitadelProps.ClubStarDim});\nwait_nb_dizieme({off});\ngoto(label_0);\n"));
             }
             // the change machine

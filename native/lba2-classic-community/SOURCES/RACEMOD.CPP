@@ -891,6 +891,9 @@ static S32 s_dtPicR = 0;
 static int s_replaySet[8][2], s_nbReplay = 0, s_replayGold = -1, s_replayPending = 0;
 // replay_ms=<ms>: a replay that is a clip, over that long after its first scene loads -- back to the menu (s_menuAt), RaceMod_ReplayOver
 static S32 s_replayMs = 0, s_replayOver = 0, s_replayEndAt = 0;
+// replay_end=<var> <value>: a replay over as that game variable comes to that value -- the picture faded out, back to the menu (ReplayEndFrame;
+// the spanking's: Zoe's "straight to bed" said, the user, 2026-11-14: "fade out again back to the menu after Zoe tells Twinsen to go straight to bed")
+static S32 s_replayEndVar = -1, s_replayEndValue = 0;
 // (the race game's menu opened at the clip's end: the replay over -- once)
 S32 RaceMod_ReplayOver(void) {
     if (!s_replayOver || TimerRefHR < s_replayEndAt) return 0;
@@ -4424,6 +4427,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "replay_set") && s_nbReplay < 8) { if (sscanf(v, "%d %d", &s_replaySet[s_nbReplay][0], &s_replaySet[s_nbReplay][1]) == 2) s_nbReplay++; }
         else if (!strcmp(key, "replay_gold")) s_replayGold = atoi(v);
         else if (!strcmp(key, "replay_ms")) s_replayMs = atoi(v);
+        else if (!strcmp(key, "replay_end")) { if (sscanf(v, "%d %d", &s_replayEndVar, &s_replayEndValue) != 2) s_replayEndVar = -1; }
         else if (!strcmp(key, "pool") && s_nbPools < RACE_MAX_POOLS) {
             T_RACE_POOL *pl = &s_pools[s_nbPools];
             if (sscanf(v, "%d %d %d %d %d %d %d", &pl->Scene, &pl->X0, &pl->Z0, &pl->X1, &pl->Z1, &pl->Floor, &pl->Surface) == 7) s_nbPools++;
@@ -6227,6 +6231,18 @@ static void CarHome(void) {
     if (away) Log_Info("[racemod] car_home: the car left in scene %d", (int)ListBuggy[0].Cube);
 }
 
+// replay_end=: its variable come to its value -- this frame, after the scripts and before the picture is drawn: the picture as it last was
+// faded to black (and the sound with it), and the menu at once (RaceMod_WantsMenu, RaceMod_ReplayOver). Once.
+static void ReplayEndFrame(void) {
+    if (s_replayEndVar < 0 || s_replayEndVar >= 256 || s_replayPending || NewCube != -1) return;
+    if (ListVarGame[s_replayEndVar] != s_replayEndValue) return;
+    Log_Info("[racemod] a replay's end: var %d is %d -- faded out, back to the menu", (int)s_replayEndVar, (int)s_replayEndValue);
+    s_replayEndVar = -1;
+    FadeToBlackAndSamples(PtrPal);
+    s_menuAt = s_replayEndAt = TimerRefHR;
+    s_replayOver = 1;
+}
+
 void RaceMod_Story(void) {
     // (a car lapping on its own, parade=: the whole picture drawn again -- this runs just before the frame is drawn, AffScene(FirstTime))
     if (s_paradeFlip) { FirstTime = AFF_ALL_FLIP; s_paradeFlip = 0; }
@@ -6240,6 +6256,7 @@ void RaceMod_Story(void) {
         FadeWhiteToPalAndSamples(PtrPal);
     }
     if (!RaceMod_Active()) return;
+    ReplayEndFrame();
     CarHome();
     Companion();
     StoryTwo();
@@ -14111,7 +14128,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;

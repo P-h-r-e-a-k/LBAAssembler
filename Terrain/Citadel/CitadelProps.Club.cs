@@ -21,6 +21,9 @@ internal static partial class CitadelProps
     public const int ClubStoneTop = 1100, ClubWallTop = 3800, ClubCurbHigh = 200;
     // (the night's colours: the sky's darkest blue, the stars white and pale yellow)
     private const int ClubNight = 192, ClubStarWhite = 15, ClubStarYellow = 111;
+    // the twinkling stars' yellows (the user, 2026-11-14: "let's turn the stars yellow"): the palette's own yellow and gold, and its golds
+    // a step and two down for the glow round them (111 is a pale cream)
+    private const int TwinkleYellow = 245, TwinkleGold = 244, TwinkleGlow = 106, TwinkleGlowFar = 104;
     // (the palette: Rick's sky, his clouds' white, the stone's greys, brass and a lamp's glow)
     private const int ClubStone = 50, ClubCurbStone = 52, ClubBrass = 106, ClubGlow = 245;
     // the arc the camera sees the wall's inside along (the room's middle to the wall: x = cos, z = sin of the angle)
@@ -267,17 +270,17 @@ internal static partial class CitadelProps
         {
             // (its glow: pale halos round it, a little behind -- the wider one the darker)
             const int Sides = 12;
-            foreach (var (radius, depth, colour) in new[] { (300f, -12f, ClubNight + 3), (170f, -6f, ClubNight + 6) })
+            foreach (var (radius, depth, colour) in new[] { (300f, -12f, TwinkleGlowFar), (170f, -6f, TwinkleGlow) })
             {
                 var halo = Enumerable.Range(0, Sides).Select(k => m.P(0, new Vector3(radius * MathF.Cos(k * 2 * MathF.PI / Sides), radius * MathF.Sin(k * 2 * MathF.PI / Sides), depth))).ToArray();
                 var hc = m.P(0, new Vector3(0, 0, depth));
                 for (var k = 0; k < Sides; k++) m.In(new[] { hc, halo[k], halo[(k + 1) % Sides] }, colour, new Vector3(0, 0, 100), unlit: true);
             }
-            foreach (var (dx, dy) in new[] { (0f, 190f), (0f, -190f), (190f, 0f), (-190f, 0f) }) Ray(dx, dy, 0.16f, ClubStarWhite);
-            foreach (var (dx, dy) in new[] { (75f, 75f), (-75f, 75f), (75f, -75f), (-75f, -75f) }) Ray(dx, dy, 0.25f, ClubStarYellow);
+            foreach (var (dx, dy) in new[] { (0f, 190f), (0f, -190f), (190f, 0f), (-190f, 0f) }) Ray(dx, dy, 0.16f, TwinkleYellow);
+            foreach (var (dx, dy) in new[] { (75f, 75f), (-75f, 75f), (75f, -75f), (-75f, -75f) }) Ray(dx, dy, 0.25f, TwinkleGold);
         }
         else
-            foreach (var (dx, dy) in new[] { (0f, 45f), (0f, -45f), (45f, 0f), (-45f, 0f) }) Ray(dx, dy, 0.3f, ClubStarYellow);
+            foreach (var (dx, dy) in new[] { (0f, 45f), (0f, -45f), (45f, 0f), (-45f, 0f) }) Ray(dx, dy, 0.3f, TwinkleGold);
         return m.ToBody(header);
     }
     public static Body BuildCarLift(byte[] header)
@@ -599,6 +602,34 @@ internal static partial class CitadelProps
     // over the room was "in front" of Twinsen, and he went into the backdrop with them)
     // (and the bar's counter pieces, a speck at their middles: a curved piece's own box was a square round it, the stools and the floor
     // in front of the bar inside it -- Twinsen pushed away from the bar; the grid's invisible cells along the curve are the counter's)
-    public static short[]? ClubBox(int generic) => generic is ClubWall or ClubCurb or ClubStage or ClubRail or ClubShelf or ClubFront or ClubBoard or ClubCounter or ClubCounter2 or ClubCounter3 or ClubSteps
-        ? new short[] { -1, 0, -1, 1, 1, 1 } : null;
+    public static short[]? ClubBox(int generic) => generic switch
+    {
+        ClubCounter or ClubCounter3 => CounterBox(CounterAt.First(c => c.Generic == generic).Angle),
+        ClubCounter2 => new short[] { -1, 0, -1, 1, 1, 1 },   // (the middle piece's at its middle, as it was: the barman behind it, kept behind it)
+        ClubWall or ClubCurb or ClubStage or ClubRail or ClubShelf or ClubFront or ClubBoard or ClubSteps => new short[] { -1, 0, -1, 1, 1, 1 },
+        _ => null,
+    };
+    // A counter piece's speck: not at its middle -- the engine sorts by the boxes' gaps on each axis, and Twinsen at the bar's end in front of
+    // the piece was far enough along it from its middle to be "behind" it, the bar drawn over him and his feet showing under it (the user,
+    // 2026-11-14: "Twinsen still gets hidden by the end of the bar, which appears to be floating in the air"). At a corner of the piece's
+    // footprint instead: the far one (-x -z, away from the camera) for a piece whose room side faces the camera -- Twinsen, always on the
+    // room side (the barman's side shut), in front of it wherever he stands by it -- and the near one (+x +z) for a piece whose room side
+    // faces away, in front of him when he is at its room side, yet behind him past its end. On the barman's side either way: nothing meets it.
+    // (the two end pieces only: the bar's ends are where he stands beside a piece far from its middle)
+    private static short[] CounterBox(float middle)
+    {
+        float mx = CounterMiddle * MathF.Cos(middle * MathF.PI / 180), mz = CounterMiddle * MathF.Sin(middle * MathF.PI / 180);
+        var xs = new List<float>(); var zs = new List<float>();
+        for (var a = middle - CounterArc / 2; a <= middle + CounterArc / 2 + 0.01f; a += CounterArc / 8)
+            foreach (var r in new[] { CounterIn, CounterOut })
+            {
+                xs.Add(r * MathF.Cos(a * MathF.PI / 180) - mx);
+                zs.Add(r * MathF.Sin(a * MathF.PI / 180) - mz);
+            }
+        // (the room side, towards the room's middle, -(cos, sin): facing the camera (+x +z) when cos + sin is under 0)
+        var roomAway = MathF.Cos(middle * MathF.PI / 180) + MathF.Sin(middle * MathF.PI / 180) > 0.1f;
+        var x = (short)Math.Round(roomAway ? xs.Max() : xs.Min());
+        var z = (short)Math.Round(roomAway ? zs.Max() : zs.Min());
+        return new short[] { (short)(x - 1), 0, (short)(z - 1), (short)(x + 1), 1, (short)(z + 1) };
+    }
 }

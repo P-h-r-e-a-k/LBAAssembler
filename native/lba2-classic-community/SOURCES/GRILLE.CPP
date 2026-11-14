@@ -427,8 +427,13 @@ void GetShadow(S32 xw, S32 yw, S32 zw) {
 
     ptc = BufCube + ym * 2 + (xm * SIZE_CUBE_Y * 2) + (zm * SIZE_CUBE_X * SIZE_CUBE_Y * 2);
 
+    /* (a race-track mod's scenes: an invisible solid cell -- no brick, its collision in the cell's second byte, as WorldColBrick reads it
+       -- is ground too: Stella Entities' stage and catwalk are such cells under drawn props, and the shadow fell through them onto the
+       floor, Twinsen standing in the air over it -- the user, 2026-11-14. The game's own scenes as they were) */
+    extern S32 RaceMod_Active(void);
+    const S32 invisibleGround = RaceMod_Active();
     for (y = ym; y > 0; y--) {
-        if (*ptc != 0)
+        if (*ptc != 0 || (invisibleGround && ptc[1] != 0))
             break;
         ptc -= 2;
     }
@@ -441,7 +446,10 @@ void GetShadow(S32 xw, S32 yw, S32 zw) {
 
     ShadowCol = 0;
 
-    if (*ptc != 0) {
+    if (*ptc == 0 && invisibleGround && ptc[1] != 0) {
+        ShadowCol = ptc[1];
+        ReajustPos(ShadowCol);
+    } else if (*ptc != 0) {
         block = (*ptc++) - 1;
         adr = GetAdrBlock(block);
         adr += HEADER_BLOCK;

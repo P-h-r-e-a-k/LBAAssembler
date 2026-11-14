@@ -30,6 +30,7 @@ internal static class StellaRooms
     public const int SofaX = 6256, SofaZ = 3300, ShowZ = 4400;
     // (where Twinsen comes in from the club, either room: just inside the door of Rick's office's that leads out, x 5120-6144 at z 9216)
     public const int InsideX = 5632, InsideY = 256, InsideZ = 8500;
+    private const int DoorwayZ = 9216;   // (Rick's doorway: his door's sprite stands past it, in the door zone)
     private const int Prop = Citadel.CitadelProps.Chair;
     // Rick's walls: the west wall's block (its pattern: z mod 5 -- z 12 its positions 35-39 up from layer 6, z 13 its 5-9) and the vent in it
     // (x 4, z 12-13, layers 6-9); the north wall's (x 5-14, z 4: its column x mod 4 -- 20-23, 4 more a layer up) and the painting in it
@@ -55,11 +56,11 @@ internal static class StellaRooms
         var header = new MapBricks.BkgHeader(bkg.Read(0));
         var table = bkg.Read(header.Brk + header.MaxBrk);
         var type = table[RickOffice * 2];
-        var (grid, backGrid, privateGrid) = NightGrid(gameDirectory, bkg, header, table[RickOffice * 2 + 1], log);
-        if (grid < 0 || backGrid < 0 || privateGrid < 0) return log;
+        var (grid, _, privateGrid) = NightGrid(gameDirectory, bkg, header, table[RickOffice * 2 + 1], log);
+        if (grid < 0 || privateGrid < 0) return log;
         table = bkg.Read(header.Brk + header.MaxBrk);
         if (table.Length < (Private + 1) * 2) Array.Resize(ref table, (Private + 1) * 2);
-        foreach (var s in new[] { Office, Backstage, Private }) { table[s * 2] = type; table[s * 2 + 1] = (byte)(s == Private ? privateGrid : s == Backstage ? backGrid : grid); }
+        foreach (var s in new[] { Office, Backstage, Private }) { table[s * 2] = type; table[s * 2 + 1] = (byte)(s == Private ? privateGrid : grid); }
         bkg.SetStored(header.Brk + header.MaxBrk, table);
 
         var original = store.Load(RickOffice);
@@ -80,7 +81,10 @@ internal static class StellaRooms
             // (actor 1 kept as it is in every room: the engine's mechanical penguin's place -- whatever stands there is killed as each scene
             // loads, OBJECT.CPP RestartMecaPingouin; the private room's sofa and backstage's rack were, there)
             var keep = new List<SceneActorModel> { model.Actors[0], model.Actors[1] };
-            if (number == Office) keep.AddRange(model.Actors.Skip(2).Where(a => (a.Entity == 16 && a.Body >= 0) || a.IsSprite));
+            // (backstage too, since 2026-11-14: the user, there, "we need the desk and chair back, along with the posters on the wall")
+            // (not his door, a sprite in the doorway at z 9472: its own scripts open it, these rooms' are still -- shut for ever, Twinsen
+            // kept in: the doorway open instead, 2026-11-14)
+            if (number is Office or Backstage) keep.AddRange(model.Actors.Skip(2).Where(a => ((a.Entity == 16 && a.Body >= 0) || a.IsSprite) && !(a.IsSprite && a.Z >= DoorwayZ)));
             model.Actors.Clear(); model.Actors.AddRange(keep);
             // (his door, not the vent's way out: a door zone up the west wall, from layer 3)
             model.Zones.RemoveAll(z => z.Type != 0 || z.Y0 >= 512);
@@ -89,7 +93,7 @@ internal static class StellaRooms
                 z.Num = StellaEntities.Scene;
                 z.Info = new[] { outAt.Item1, number == Backstage ? StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh : StellaEntities.FloorY, outAt.Item2, 0, 0, 0, 0, 1 };   // (the last: the door on)
             }
-            if (number == Office)
+            if (number is Office or Backstage)
             {
                 SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterSide, SidePosterX, PosterY, SidePosterZ, 1024));
                 SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterBack, BackPosterX, PosterY, BackPosterZ, 0));
@@ -108,7 +112,7 @@ internal static class StellaRooms
             if (number == Backstage)
             {
                 // the dressing room: a rack of the performers' things at the back, chairs at the mirrors, mirrors (pictures) on the wall
-                foreach (var (generic, x, z, beta) in new[] { (Citadel.CitadelProps.Rack, 7600, 2900, 0), (Citadel.CitadelProps.Chair, 3800, 4400, 1024), (Citadel.CitadelProps.Chair, 5200, 4400, 1024), (Citadel.CitadelProps.Chair, 6600, 4400, 1024) })
+                foreach (var (generic, x, z, beta) in new[] { (Citadel.CitadelProps.Rack, 7600, 2900, 0) })   // (its chairs gone with Rick's desk and armchairs back: they stood in them, 2026-11-14)
                     SceneOps.AddActor(model, Citadel.CitadelProps.Actor(generic, x, 256, z, beta));
             }
             var scripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), number);
@@ -190,18 +194,30 @@ internal static class StellaRooms
         // its shades the night's: dark blues; a star here and there, white or pale yellow
         var night = Enumerable.Range(0, 16).Select(s => Citadel.CitadelMuseum.Nearest(palette, 10 + s, 12 + s, 32 + s * 2)).ToArray();
         byte white = Citadel.CitadelMuseum.Nearest(palette, 235, 235, 250), yellow = Citadel.CitadelMuseum.Nearest(palette, 250, 236, 150);
+        // (one shade of the night for the whole wall, the stucco's commonest shade's: its other shades -- the wallpaper's waves -- showed through
+        // as darker waves, the user, 2026-11-14: "let's have them uniform")
+        var shades = new int[16];
+        Citadel.CitadelMuseum.Repaint(library, WestWall, Brick, (x, y, c) => { if (c >> 4 == stucco) shades[c & 15]++; return c; });
+        var flat = night[Array.IndexOf(shades, shades.Max())];
         var swap = new Dictionary<int, int>();
         foreach (var block in used.OrderBy(b => b))
         {
             if (block == Painting) continue;   // (walled over)
             int all = 0, teal = 0;
-            Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) => { all++; if (c >> 4 == stucco) teal++; return c; });
+            var blockCounts = new int[16];
+            Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) => { all++; blockCounts[c >> 4]++; if (c >> 4 == stucco) teal++; return c; });
             if (all == 0 || teal * 100 < all * 35) continue;
+            // (in a stucco block, every ramp a fiftieth of it or more as well: the wallpaper's darker waves' outlines were left showing through
+            // the night -- the user, 2026-11-14, "on the wall ... is still the outline of the waves from the original walls, let's have them
+            // uniform")
+            var blockRamps = new HashSet<int>(ramps);
+            for (var r = 0; r < 16; r++) if (blockCounts[r] * 50 >= all) blockRamps.Add(r);
+            log.Add($"Stella Entities' rooms: block {block}'s ramps painted the night: {string.Join(", ", blockRamps.OrderBy(r => r))} (its ramps: {string.Join(", ", Enumerable.Range(0, 16).Where(r => blockCounts[r] > 0).Select(r => $"{r} x{blockCounts[r]}"))})");
             var painted = Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) =>
             {
-                if (!ramps.Contains(c >> 4)) return c;
+                if (!blockRamps.Contains(c >> 4)) return c;
                 var h = unchecked(((uint)x * 73856093u) ^ ((uint)y * 19349663u) ^ ((uint)block * 83492791u)) * 2654435761u;
-                return (h >> 7) % 97 == 0 ? white : (h >> 7) % 173 == 1 ? yellow : night[c & 15];
+                return (h >> 7) % 97 == 0 ? white : (h >> 7) % 173 == 1 ? yellow : flat;
             });
             if (painted.Count == 0) continue;
             try { swap[block] = Citadel.CitadelMuseum.AddBlock(bkg, header, ref library, block, painted); }
@@ -245,7 +261,8 @@ internal static class StellaRooms
         var bare = new Dictionary<(int, int, int), (int Block, int Pos)>(set);
         for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
             if (Furniture.Contains(Lba1GridEdit.Get(shape, x, y, z).Block)) bare[(x, y, z)] = (0, 0);
-        var backstage = Insert(bare, "the same, backstage's: Rick's desk and armchairs gone");
+        // (backstage on the office's grid, Rick's desk and armchairs kept: the user, 2026-11-14)
+        var backstage = rooms;
         // (and the private room's: under the sofa's seat, solid invisible cells up to it -- as under the hall's booths: Twinsen sits on them)
         var seated = new Dictionary<(int, int, int), (int Block, int Pos)>(bare);
         for (var x = (SofaX - 900) / 512; x <= (SofaX + 900) / 512; x++)

@@ -204,6 +204,24 @@ internal static class StellaEntities
                 rims++;
             }
         }
+        // (outside the hall's floor, every cell beside it solid to the wall's top: no floor there at all, and the ring inside the curb, a band
+        // of cells whose middles are 18.6-19 cells out, has gaps where the round edge crosses the cells aslant -- Twinsen walked through one off
+        // the floor's edge and fell for ever: the user, 2026-11-14, "Twinsen still gets stuck in a falling animation if he goes to the edge of
+        // the strip joint". Not where something stands already: the corridor's walls)
+        var outerCells = 0;
+        for (var z = 0; z < Size; z++)
+        for (var x = 0; x < Size; x++)
+        {
+            if (Floor(x, z) || set.ContainsKey((x, FloorLayer + 1, z))) continue;
+            var besideHall = false;
+            for (var ddz = -1; ddz <= 1 && !besideHall; ddz++)
+                for (var ddx = -1; ddx <= 1 && !besideHall; ddx++)
+                    besideHall = Hall(x + ddx, z + ddz);
+            if (!besideHall) continue;
+            for (var y = FloorLayer; y <= RingTop; y++) if (!set.ContainsKey((x, y, z))) Put(x, y, z, 0, 1);
+            outerCells++;
+        }
+        log.Add($"Stella Entities: {outerCells} cells round the hall's floor made solid (nothing to walk off)");
         // the steps up onto the catwalk by the backstage door (CitadelProps.ClubSteps): a ramp down east from the catwalk's edge, a layer a
         // cell -- each column solid up to its slope (collision 5: full height at its west side, nothing at its east: OBJECT.CPP ReajustPos)
         const int SlopeDownEast = 5;

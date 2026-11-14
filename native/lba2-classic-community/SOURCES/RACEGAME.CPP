@@ -3143,10 +3143,15 @@ S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
 // with the cow, or for special areas such as bowling or the strip club to re-explore them once these things have been unlocked in-game") ----
 // An earned achievement with a replay is a row to choose: the story's set started afresh at the egg's scene, its variables as they stood (the race
 // file's replay_set=, replay_gold=, applied as the scene loads) -- or, for the bowling alley, a game of bowling as one of its four bowlers.
-// (Ms: a clip, back to the menu that long after its scene loads -- the Wizard and the cow seen through the telescope)
-typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; int Ms; } T_RG_REPLAY;
+// (Ms: a clip, back to the menu that long after its scene loads -- the Wizard and the cow seen through the telescope. End: over as game
+// variable End[0] comes to End[1] (End[0] 0: none), faded out to the menu -- the race file's replay_end=)
+typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; int Ms; int End[2]; } T_RG_REPLAY;
 static const T_RG_REPLAY s_replays[] = {
-    {"spanked", 193, 0, 3, {{253, 1}, {200, 1}, {96, 1}}},          // the night house, drunk, Zoe waiting
+    // (the spanking, short and to the point -- the user, 2026-11-14: "start with Twinsen on the elevator going down, and fade out again back
+    // to the menu after Zoe tells Twinsen to go straight to bed without them coming back up the elevator again": the secret chamber (400,
+    // RaceTrackStory.SecretChamber), Twinsen brought in on its lift as it comes down -- the scene's own start, the lift's top -- Chapter 1,
+    // Tired, Drunk 1; over as Drunk comes to 2, Scolded, set as her "straight to bed" is said)
+    {"spanked", 400, 0, 3, {{253, 1}, {200, 1}, {96, 1}}, 0, {96, 2}},
     // (the Wizard and the cow: the telescope's view itself, a clip -- the cow's field with the telescope's look on (ScopeVar 227 1), the Wizard
     // hopping behind her, and back to the menu: the user, 2026-11-12, "it just needs to be 5 seconds of Twinsen watching the wizard with the
     // cow performing the forward hop motion")
@@ -3193,6 +3198,7 @@ static S32 StartReplay(const T_RG_REPLAY *r, int bowler) {
         for (int i = 0; i < r->NVars; i++) fprintf(f, "replay_set=%d %d\n", r->Vars[i][0], r->Vars[i][1]);
         if (r->Gold > 0) fprintf(f, "replay_gold=%d\n", r->Gold);
         if (r->Ms > 0) fprintf(f, "replay_ms=%d\n", r->Ms);
+        if (r->End[0] > 0) fprintf(f, "replay_end=%d %d\n", r->End[0], r->End[1]);
         if (bowler >= 0) fprintf(f, "bowling_game=%d\n", bowler);
         fclose(f);
     }
