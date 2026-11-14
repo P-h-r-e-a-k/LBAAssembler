@@ -514,6 +514,18 @@ internal static partial class RaceTrackCharacterCars
         return k < 0 ? null : EmptyFirst + k;
     }
     public static Car? OfGeneric(int generic) => All.FirstOrDefault(c => c.Generic == generic);
+    // The masked driver's black car (docs/LBRA_STORY_SCRIPT.md: "past the finish, a black car stands with its engine running. When Twinsen
+    // comes near, it drives off and is gone" -- RaceTrackStory.MaskedCar): Raph's car with no one in it, every polygon the greys' darkest
+    // steps, no number -- the racer's entity's body MaskedGeneric
+    public const int MaskedGeneric = 95;
+    private const int MaskedGrey = 48;
+    public static Body Masked(Body emptyCar)
+    {
+        emptyCar.Faces = emptyCar.Faces.Select(f => f with { Colour = MaskedGrey + (f.Colour & 15) / 4, Texture = null }).ToList();
+        emptyCar.Lines = emptyCar.Lines.Select(l => l with { Colour = MaskedGrey + (l.Colour & 15) / 4 }).ToList();
+        emptyCar.Spheres = emptyCar.Spheres.Select(sp => sp with { Colour = MaskedGrey + (sp.Colour & 15) / 4 }).ToList();
+        return emptyCar;
+    }
     public static Body WithoutDriver(Body car)
     {
         if (car.Bones.Count <= DriverSeatBone) return car;
@@ -557,6 +569,16 @@ internal static partial class RaceTrackCharacterCars
             table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, EmptyGeneric(car.Generic)!.Value, next);
             index[car.Name + ", empty"] = next;
             log.Add($"{car.Name}, empty: BODY.HQR entry {next}, the racer's entity's body {EmptyGeneric(car.Generic)}");
+            next++;
+        }
+        // (the masked driver's black car: Raph's, empty, black)
+        if (cars.FirstOrDefault(c => c.Car == Raph) is { Body: { } raphBody })
+        {
+            var masked = Masked(WithoutDriver(Body.Read(raphBody.Write(), 2)));
+            bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(masked.Write()));
+            table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, MaskedGeneric, next);
+            index["the masked driver's black car"] = next;
+            log.Add($"the masked driver's black car: BODY.HQR entry {next}, the racer's entity's body {MaskedGeneric}");
             next++;
         }
         // (and FunFrock's car empty, for Polar Island's story's start: no entity's, the race-track mode draws it by its entry -- chase_car=)
