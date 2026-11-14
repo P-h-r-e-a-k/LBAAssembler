@@ -7,7 +7,7 @@ namespace LBAAssembler.Terrain;
 // The racing licence's model in the inventory (OBJFIX.HQR 38, the burgomaster's note's -- RaceTrackStory.Licence.cs): a card, as Twinsen's
 // identity card was in the first game (the user, 2026-11-14: "can we create a new object, perhaps with a picture of Twinsen on it,
 // similar to his I.D. card in LBA1"). Lying flat as the ferry ticket does (its face up, +y; its top edge -z): cream, a red band along
-// its top with a strip of chequers, his photo on the left -- his own body (BODY.HQR 0, the tunic), head and shoulders, pressed flat onto
+// its top with a strip of chequers, his photo on the left -- his own body in his racing suit (CitadelOveralls), head and shoulders, pressed flat onto
 // a pale blue ground, its textures kept -- his name in block letters on the right, lines of print under it, and a gold seal.
 internal static class LicenceCard
 {
@@ -72,7 +72,8 @@ internal static class LicenceCard
         // the photo: its ground, and Twinsen
         Patch(PhotoX0 - 20, PhotoZ0 - 20, PhotoX1 + 20, PhotoZ1 + 20, ink, 2);
         Patch(PhotoX0, PhotoZ0, PhotoX1, PhotoZ1, sky, 4);
-        Photo(m, HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(HeroBody));
+        // (in his racing suit, as the story dresses him -- CitadelOveralls, from his everyday body as it does; no helmet: his face)
+        Photo(m, Citadel.CitadelOveralls.WithBackPatch(Citadel.CitadelOveralls.Overalls(Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(HeroBody), 2))));
         // his name
         Word(m, "TWINSEN", -170, -500, 170, 310, 44, ink);
         // lines of print, and the seal
@@ -83,10 +84,10 @@ internal static class LicenceCard
     }
 
     // Twinsen's head and shoulders (his body's polygons above his chest), seen from the front, laid onto the photo: his height down the card
-    // (-z up), his front (-z in his body) up off it, and so his x the other way across -- a turn, not a mirror, so his polygons face up
-    private static void Photo(CarMesh m, byte[] source)
+    // (-z up), his front (+z in his body) up off it, his x across -- a turn, not a mirror, so his polygons face up (his -z up showed the
+    // back of his head, the user, 2026-11-14)
+    private static void Photo(CarMesh m, Body body)
     {
-        var body = Body.Read(source, 2, allowStatic: true);
         var world = body.World();
         var top = world.Max(v => v.Y);
         var cut = top * 0.56f;
@@ -100,7 +101,7 @@ internal static class LicenceCard
         {
             if (handles.TryGetValue(p, out var h)) return h;
             var v = world[p];
-            return handles[p] = m.P(0, Stand(new Vector3(middle - (v.X - (minX + maxX) / 2) * scale, Top + 12 + (300 - v.Z) * 0.04f, PhotoZ1 - 20 - (v.Y - cut) * scale)));
+            return handles[p] = m.P(0, Stand(new Vector3(middle + (v.X - (minX + maxX) / 2) * scale, Top + 12 + (v.Z + 300) * 0.04f, PhotoZ1 - 20 - (v.Y - cut) * scale)));
         }
         foreach (var f in faces) m.Raw(f.Points.Select(H).ToArray(), f.Colour, f.Material == 0 ? 0 : -1, f.Texture);
         foreach (var s in body.Spheres.Where(s => world[s.Point].Y >= cut)) m.Sphere(H(s.Point), Math.Max(6, (int)(s.Radius * scale)), s.Colour);
