@@ -112,6 +112,8 @@ internal static class StellaEntities
         var edits = new List<Lba1GridCell>();
         var set = new Dictionary<(int, int, int), (int Block, int Pos)>();
         void Put(int x, int y, int z, int block, int pos) => set[(x, y, z)] = (block, pos);
+        // (the blocks of Rick's walls copied: painted the night below)
+        var walls = new HashSet<int>();
         // (a column of Rick's, copied whole into (x, z))
         void Column(int x, int z, Func<int, (int X, int Z)> from)
         {
@@ -119,7 +121,7 @@ internal static class StellaEntities
             {
                 var (sx, sz) = from(y);
                 var at = At(sx, y, sz);
-                if (cells[at] != 0) Put(x, y, z, cells[at], cells[at + 1]);
+                if (cells[at] != 0) { Put(x, y, z, cells[at], cells[at + 1]); walls.Add(cells[at]); }
             }
         }
         int Mod(int a, int m) => ((a % m) + m) % m;
@@ -226,6 +228,15 @@ internal static class StellaEntities
                 slots++;
             }
         log.Add($"Stella Entities: {slots} one-cell slots filled (none to fall into)");
+        // Rick's walls round the lift's foot and the corridor: his blue sky and white clouds the night, as the hall's (the user, 2026-11-13:
+        // "redo the walls from the blue and white clouds, let's make it like a night sky")
+        var libraryAt = header.Bll + raw[0];
+        var wallLibrary = bkg.Read(libraryAt);
+        var night = StellaRooms.NightBlocks(gameDirectory, bkg, header, ref wallLibrary, walls);
+        bkg.SetStored(libraryAt, wallLibrary);
+        if (header.MaxBll < (uint)wallLibrary.Length) header.MaxBll = (uint)wallLibrary.Length;
+        foreach (var key in set.Keys.ToList()) if (night.TryGetValue(set[key].Block, out var nightBlock)) set[key] = (nightBlock, set[key].Pos);
+        log.Add($"Stella Entities: Rick's sky-and-cloud walls the night in {night.Count} blocks ({string.Join(", ", night.Select(kv => $"{kv.Key} as {kv.Value}"))})");
         for (var z = 0; z < Size; z++)
         for (var y = 0; y < Height; y++)
         for (var x = 0; x < Size; x++)

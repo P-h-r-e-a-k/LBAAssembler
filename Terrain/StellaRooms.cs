@@ -134,6 +134,37 @@ internal static class StellaRooms
         return log;
     }
 
+    // Blocks of a library painted the night (copies of them, added to it): those mostly blue -- a third of their picture or more in blue ramps
+    // (a ramp's middle shade bluer than red) -- every ramp of a fiftieth or more of them dark blue, a star here and there. The new block of each.
+    internal static Dictionary<int, int> NightBlocks(string gameDirectory, HqrFile bkg, MapBricks.BkgHeader header, ref byte[] library, IEnumerable<int> blocks)
+    {
+        byte[]? Brick(int b) => b >= 0 && b < header.MaxBrk && !bkg.IsEmpty(header.Brk + b) ? bkg.Read(header.Brk + b) : null;
+        var palette = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(0);
+        bool Blue(int r) { int k = (r * 16 + 8) * 3; return palette[k + 2] > palette[k] + 30; }
+        var night = Enumerable.Range(0, 16).Select(s => Citadel.CitadelMuseum.Nearest(palette, 10 + s, 12 + s, 32 + s * 2)).ToArray();
+        byte white = Citadel.CitadelMuseum.Nearest(palette, 235, 235, 250), yellow = Citadel.CitadelMuseum.Nearest(palette, 250, 236, 150);
+        var made = new Dictionary<int, int>();
+        foreach (var block in blocks.Distinct().OrderBy(b => b))
+        {
+            var counts = new int[16];
+            Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) => { counts[c >> 4]++; return c; });
+            var all = counts.Sum();
+            if (all == 0 || Enumerable.Range(0, 16).Where(Blue).Sum(r => counts[r]) * 3 < all) continue;
+            var ramps = Enumerable.Range(0, 16).Where(r => counts[r] * 50 >= all).ToHashSet();   // (a fiftieth: the clouds' outlines too)
+            var b0 = block;
+            var painted = Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) =>
+            {
+                if (!ramps.Contains(c >> 4)) return c;
+                var h = unchecked(((uint)x * 73856093u) ^ ((uint)y * 19349663u) ^ ((uint)b0 * 83492791u)) * 2654435761u;
+                return (h >> 7) % 97 == 0 ? white : (h >> 7) % 173 == 1 ? yellow : night[c & 15];
+            });
+            if (painted.Count == 0) continue;
+            try { made[block] = Citadel.CitadelMuseum.AddBlock(bkg, header, ref library, block, painted); }
+            catch (InvalidDataException) { }
+        }
+        return made;
+    }
+
     // Rick's office's grid copied (`rick`), his stucco's blocks painted the night (copies of them, in his block library), the vent and the
     // painting walled over: the new grid's number (or -1, the log says why). The file's header kept up to date; the bricks' table read
     // again after (bricks added before it).
