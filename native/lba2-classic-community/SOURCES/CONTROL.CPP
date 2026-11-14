@@ -970,7 +970,34 @@ void Control_DumpStateTo(const char *path) {
     control_dump_state(path);
 }
 
+/* REMOTE_CONTROL.TXT in the shared user folder (a port number, 1-65535): the listener without --listen on the command line, for a
+   player's own install that is to be reachable on 127.0.0.1 every time it runs. The command line is what marks a run as a test to the
+   rest of the game (the updater skips its check under --listen), so a file keeps an ordinary run ordinary but for the socket. Read once. */
+static void control_listen_from_file(void) {
+    static int checked = 0;
+    if (checked || s_have_listen)
+        return;
+    checked = 1;
+    const char *dir = Directories_GetSharedUserDir();
+    if (!dir || !dir[0])
+        return;
+    char path[1024];
+    const size_t n = strlen(dir);
+    snprintf(path, sizeof(path), "%s%sREMOTE_CONTROL.TXT", dir, (dir[n - 1] == '/' || dir[n - 1] == '\\') ? "" : "/");
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return;
+    long port = 0;
+    if (fscanf(f, "%ld", &port) == 1 && port > 0 && port < 65536) {
+        s_have_listen = 1;
+        s_listen_port = port;
+        Log_Info("[control] REMOTE_CONTROL.TXT: listening on 127.0.0.1:%ld", port);
+    }
+    fclose(f);
+}
+
 void Control_ServiceListen(void) {
+    control_listen_from_file();
     if (!s_have_listen)
         return;
     /* Opened on the first present rather than the first tick: the menu and every
