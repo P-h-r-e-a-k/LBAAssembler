@@ -317,6 +317,11 @@ internal sealed class RaceTrackPlan
     // The ground raised to a height: x0, z0, x1, z1 (cells), the height, how fast it falls to the land round it a cell. Citadel 2's far side of the drawbridge,
     // built low for the fine weather's island, its mill wheel in the air over it (RaiseGround)
     public double[][]? RaiseGround { get; set; }
+    // Steep banks eased: x0, z0, x1, z1 (cells from the origin), the most a corner may stand over the one beside it (world units a cell) --
+    // only lowered, so the ground at a bank's foot (the road) stays and its cliff is cut back into a slope that steep (EaseBanks). Citadel's
+    // ridge left of the school, a sheer grass bank over the storm track's hairpin but for a walkable slope at its west end (the user,
+    // 2026-11-14: "flatten the steep section to match the slope that's on the left of the green area")
+    public double[][]? BankEases { get; set; }
     // Cells of level ground kept past the verge where the land rises straight up beside the road (SetBackBanks): Mosquibees Island's mounds
     public double SetBack { get; set; }
     // A car kept off the walls beside the road, sliding along them (RoadWalls)
@@ -1237,6 +1242,7 @@ internal static class RaceTrackBuilder
         if (main.Raised is not null) FlushOverDeck(island, field, main, options, report, sunk);
         GroundFills(island, field, plan, report);
         RaiseGround(island, plan, report);
+        EaseBanks(island, plan, report);
         SetBackBanks(island, field, index, main, plan, report);
         FillPockets(island, field, index, report);
         report.Balloons = (options.Island.SharedFrom ?? options.Island) == RaceTrackIsland.Desert || options.Island == RaceTrackIsland.Harvest;
@@ -5639,6 +5645,37 @@ internal static class RaceTrackBuilder
     // "There's a hole inside the track at the first corner where we can see the gas". Shaping the ground for the road leaves them.
     private const int PocketMostCells = 500;
     private const double PocketNearRoad = 14;
+
+    private static void EaseBanks(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
+    {
+        foreach (var f in (plan.BankEases ?? Array.Empty<double[]>()).Where(f => f.Length >= 5 && f[4] > 0))
+        {
+            int x0 = (int)f[0] + plan.OriginCellX, z0 = (int)f[1] + plan.OriginCellZ, x1 = (int)f[2] + plan.OriginCellX, z1 = (int)f[3] + plan.OriginCellZ;
+            var step = f[4];
+            var lowered = new HashSet<(int, int)>();
+            // (each corner no higher than any beside it -- in the rectangle or round it -- plus the step a cell's distance; over and over
+            // till nothing moves: the cliff's top worked back from its foot)
+            for (var pass = 0; pass < 64; pass++)
+            {
+                var moved = false;
+                for (var z = z0; z <= z1; z++)
+                for (var x = x0; x <= x1; x++)
+                {
+                    if (!island.HasVertex(x, z) || island.HeightAt(x, z) is not { } h) continue;
+                    var most = (double)h;
+                    for (var dz = -1; dz <= 1; dz++)
+                    for (var dx = -1; dx <= 1; dx++)
+                    {
+                        if ((dx == 0 && dz == 0) || !island.HasVertex(x + dx, z + dz) || island.HeightAt(x + dx, z + dz) is not { } n) continue;
+                        most = Math.Min(most, n + step * (dx != 0 && dz != 0 ? 1.4142 : 1));
+                    }
+                    if (most < h - 0.5) { island.SetHeight(x, z, (int)Math.Round(most)); lowered.Add((x, z)); moved = true; }
+                }
+                if (!moved) break;
+            }
+            report.Notes.Add($"a steep bank eased to {step} a cell, ({x0},{z0})-({x1},{z1}): {lowered.Count} corners lowered");
+        }
+    }
 
     private static void RaiseGround(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
     {
