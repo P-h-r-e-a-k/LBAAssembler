@@ -18,7 +18,8 @@ namespace LBAAssembler.Terrain;
 //   - Baldino at his house (scene 38: the game's own out of sight, a copy talks): the sand filters and his tip, and he races too.
 //   - Won (the race file's win=215 7): out of the car (by the start line, each speaker's own voice; in another outside scene, the radio's
 //     controller says the same lines) -- Flick, the racer, Moya's clue of the oil on the last bend and
-//     the black car, Zoe, and Baldino's rocket to the moon (inc_chapter: 4; change_cube(229), the Emerald Moon's start).
+//     the black car, Zoe, and Baldino taking him to the Esmers' hangar (inc_chapter: 4; change_cube(12)) -- the freighter to the moon there
+//     (RaceTrackStory.Hangar.cs; scene 229, the Emerald Moon's start).
 internal static partial class RaceTrackStory
 {
     // Q_PAGES (docs/LBRA_STORY_PLAN.md 3.1): 1 Flick has told, 2 the Dean has, 3-5 the pages found, 6 the diploma, 7 the race won, 8 told
@@ -301,6 +302,8 @@ void comportement_1()
         BaldinoFilters, ZoeFitted, ZoeNoFilters, ZoeReady,
         // (Zoe as companion's hints -- RaceTrackStory.Companion.cs, 2026-11-11)
         ZoeHintDean, ZoeHintPages, ZoeHintFilters, ZoeHintHelmet, ZoeHintRace,
+        // (the Esmers' hangar, the way to the moon -- RaceTrackStory.Hangar.cs, 2026-11-14)
+        HangarOffer, HangarYes, HangarNo, HangarBoard, HangarLater, HangarLift, HangarClosed,
     }
     private static readonly string[][] DesertLines =
     {
@@ -468,12 +471,12 @@ void comportement_1()
         },
         new[]
         {
-            "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. My rocket leaves now, room for three.",
-            "Tu te crois rapide ? Sur la lune, j'ai un atterrisseur qui laisserait ta voiture sur place. Viens me défier là-haut. Ma fusée part maintenant, il y a de la place pour trois.",
-            "Du hältst dich für schnell? Auf dem Mond habe ich eine Landefähre, die dein Auto stehen ließe. Komm und fahr dort oben gegen mich. Meine Rakete startet jetzt, Platz für drei.",
-            "¿Te crees rápido? En la luna tengo un módulo de aterrizaje que dejaría tu coche parado. Ven a correr contra mí allí arriba. Mi cohete sale ahora, hay sitio para tres.",
-            "Ti credi veloce? Sulla luna ho un modulo d'atterraggio che lascerebbe la tua macchina ferma. Vieni a sfidarmi lassù. Il mio razzo parte adesso, c'è posto per tre.",
-            "Achas que és rápido? Na lua tenho um módulo de alunagem que deixava o teu carro parado. Vem correr contra mim lá em cima. O meu foguetão parte agora, há lugar para três.",
+            "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. The Esmers' freighter takes cars to the moon from their hangar -- I'll take you there now.",
+            "Tu te crois rapide ? Sur la lune, j'ai un atterrisseur qui laisserait ta voiture sur place. Viens me défier là-haut. Le cargo des Esmers emmène les voitures sur la lune depuis leur hangar -- je t'y conduis.",
+            "Du hältst dich für schnell? Auf dem Mond habe ich eine Landefähre, die dein Auto stehen ließe. Komm und fahr dort oben gegen mich. Der Frachter der Esmer bringt Autos aus ihrem Hangar zum Mond -- ich bringe dich hin.",
+            "¿Te crees rápido? En la luna tengo un módulo de aterrizaje que dejaría tu coche parado. Ven a correr contra mí allí arriba. El carguero de los Esmers lleva coches a la luna desde su hangar: te llevo ahora.",
+            "Ti credi veloce? Sulla luna ho un modulo d'atterraggio che lascerebbe la tua macchina ferma. Vieni a sfidarmi lassù. Il cargo degli Esmer porta le auto sulla luna dal loro hangar: ti ci porto subito.",
+            "Achas que és rápido? Na lua tenho um módulo de alunagem que deixava o teu carro parado. Vem correr contra mim lá em cima. O cargueiro dos Esmers leva carros para a lua a partir do hangar deles -- levo-te lá agora.",
         },
         // (the easter eggs, from PageEgg on: RaceTrackStory.Eggs.Desert.cs)
         new[]
@@ -667,6 +670,69 @@ void comportement_1()
             "È tutto pronto, Twinsen. Andiamo a vincere la corsa del deserto!",
             "Está tudo pronto, Twinsen. Vamos ganhar a corrida do deserto!",
         },
+        new[]
+        {
+            "The freighter for the Emerald Moon is ready. Shall we load your car?",
+            "Le cargo pour la Lune d'Émeraude est prêt. On charge ta voiture ?",
+            "Der Frachter zum Smaragdmond ist bereit. Sollen wir dein Auto einladen?",
+            "El carguero a la Luna Esmeralda está listo. ¿Cargamos tu coche?",
+            "Il cargo per la Luna di Smeraldo è pronto. Carichiamo la tua auto?",
+            "O cargueiro para a Lua Esmeralda está pronto. Carregamos o teu carro?",
+        },
+        new[]
+        {
+            "Load it. To the moon!",
+            "Chargez-la. En route pour la lune !",
+            "Ladet es ein. Auf zum Mond!",
+            "Cargadlo. ¡A la luna!",
+            "Caricatela. Si va sulla luna!",
+            "Carreguem-no. Para a lua!",
+        },
+        new[]
+        {
+            "Not yet.",
+            "Pas encore.",
+            "Noch nicht.",
+            "Todavía no.",
+            "Non ancora.",
+            "Ainda não.",
+        },
+        new[]
+        {
+            "Your car's going aboard. Up the pad's ramp and through the hatch -- we lift off as soon as you're in.",
+            "Ta voiture monte à bord. Grimpe la rampe de la plate-forme et passe l'écoutille -- on décolle dès que tu es dedans.",
+            "Dein Auto kommt an Bord. Die Rampe zur Plattform hinauf und durch die Luke -- wir starten, sobald du drin bist.",
+            "Tu coche sube a bordo. Sube la rampa de la plataforma y entra por la escotilla: despegamos en cuanto estés dentro.",
+            "La tua auto sale a bordo. Su per la rampa della piattaforma e dentro il portello: decolliamo appena sei dentro.",
+            "O teu carro vai a bordo. Sobe a rampa da plataforma e entra pela escotilha -- descolamos assim que estiveres lá dentro.",
+        },
+        new[]
+        {
+            "Take your time. The freighter doesn't fly without its passenger.",
+            "Prends ton temps. Le cargo ne part pas sans son passager.",
+            "Lass dir Zeit. Der Frachter fliegt nicht ohne seinen Passagier.",
+            "Tómate tu tiempo. El carguero no despega sin su pasajero.",
+            "Fai con calma. Il cargo non parte senza il suo passeggero.",
+            "Não tenhas pressa. O cargueiro não parte sem o seu passageiro.",
+        },
+        new[]
+        {
+            "The hatch closes. The freighter shudders, rises from its pad and climbs away towards the Emerald Moon.",
+            "L'écoutille se ferme. Le cargo tremble, quitte sa plate-forme et s'élève vers la Lune d'Émeraude.",
+            "Die Luke schließt sich. Der Frachter bebt, hebt von seiner Plattform ab und steigt dem Smaragdmond entgegen.",
+            "La escotilla se cierra. El carguero tiembla, se eleva de su plataforma y asciende hacia la Luna Esmeralda.",
+            "Il portello si chiude. Il cargo trema, si stacca dalla piattaforma e sale verso la Luna di Smeraldo.",
+            "A escotilha fecha-se. O cargueiro estremece, ergue-se da plataforma e sobe rumo à Lua Esmeralda.",
+        },
+        new[]
+        {
+            "No more flights to the moon today, friend.",
+            "Plus de vols pour la lune aujourd'hui, l'ami.",
+            "Heute keine Flüge mehr zum Mond, Freund.",
+            "Hoy no hay más vuelos a la luna, amigo.",
+            "Niente più voli per la luna oggi, amico.",
+            "Hoje não há mais voos para a lua, amigo.",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -741,6 +807,8 @@ void comportement_1()
         if (first < 0) return log;
         int Say(DesertLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Desert, log);
+        // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
+        Hangar(b, Say, MoonStart);
         // (Zoe as companion's hints on the Desert: the Dean, his pages, the sand filters, the helmet, the race -- RaceTrackStory.Companion.cs)
         CompanionTalks[RaceTrackIsland.Desert.IleFile] = $@"            if (2 > var_game({QPages}) && 7 != var_game({PagesFoundVar}))
             {{
@@ -789,7 +857,7 @@ void comportement_1()
         {{
             inc_chapter();
         }}
-        change_cube({MoonStart});
+        change_cube({HangarScene});
     }}
 ")));
 
@@ -1070,7 +1138,7 @@ void comportement_1()
         {{
             inc_chapter();
         }}
-        change_cube({MoonStart});
+        change_cube({HangarScene});
     }}
 }}
 "),

@@ -261,7 +261,7 @@ internal static partial class CitadelProps
         {
             var count = HqrArchive.CountEntries(bodyPath);
             File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(build(header).Write())));
-            table = RaceTrackBaldinoCar.WithBody(table, Prop, generic, count);
+            table = BoxOf(generic) is { } box ? WithBodyBox(table, Prop, generic, count, box) : RaceTrackBaldinoCar.WithBody(table, Prop, generic, count);
             made.Add($"{name} BODY.HQR {count} (body {generic})");
         }
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
@@ -270,7 +270,7 @@ internal static partial class CitadelProps
 
     // The props whose box isn't the one their body's extent makes: the lift's platform (not its rails), the rugs' tiles (CitadelProps.Rugs)
     private static short[]? BoxOf(int generic) =>
-        LiftBox(generic) ?? RugTileBox(generic) ?? ClubBox(generic) ?? PoolBox(generic);
+        LiftBox(generic) ?? RugTileBox(generic) ?? ClubBox(generic) ?? PoolBox(generic) ?? HangarProps.Box(generic);
 
     // An entity's body record with its own box (the engine's ZV: F_BODY, the generic, the record's size, the body's number, "has
     // actions", F_ZV and the box's six values) in place of the one the body's own extent makes -- the chamber's lift: its rail and chains
