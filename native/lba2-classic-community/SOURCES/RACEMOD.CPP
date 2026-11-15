@@ -7241,7 +7241,8 @@ U32 RaceMod_AutoInput(void) {
     // scripted playthrough's walks by the keys, not teleports, 2026-11-07)
     if ((s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
     // (... and in his car, driven through them: DriveInput)
-    if (s_walkN > 0 && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) return DriveInput();
+    // (indoors too, in a room the car was driven into -- drive_in=: the points the scene's own units)
+    if (s_walkN > 0 && Comportement == C_BUGGY) return DriveInput();
     // (the console's racestop, done: Twinsen is out of the car it stopped -- over, not to get him out of the car again when he is back in it)
     if (s_stopReach > 0 && s_stopping == 2 && Comportement != C_BUGGY) { s_stopping = 0; s_stopReach = 0; }
     // (armed by nothing now -- no lap of honour on (s_victory), no pilot or walk driving the car: a stop left over by a victory lap that ended some other
@@ -13808,7 +13809,14 @@ extern "C" void RaceMod_DriveCap(int kmh) { s_driveCap = kmh > 0 ? kmh : 0; Log_
 static U32 DriveInput(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const U32 go = s_driveCap && (ListBuggy[0].Speed * 36 + 2560) / 5120 > s_driveCap ? I_DOWN : I_UP;
-    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    // (outside, island units; indoors -- a room drive_in= lets the car into -- the scene's own)
+    const int out = CubeMode == CUBE_EXTERIEUR;
+    const double wx = hero->Obj.X + (out ? CurrentCubeX * 32768.0 : 0), wz = hero->Obj.Z + (out ? CurrentCubeY * 32768.0 : 0);
+    if ((S32)NumCube != s_walkCube) {
+        // (through a door into a room or out of one: the points were the other scene's -- the drive ends at the door)
+        if (!out || !s_walkOut) { Log_Info("[racemod] racewalk: the car into scene %d -- the drive ends at the door", (int)NumCube); s_walkN = 0; s_walkAt = 0; return 0; }
+        s_walkCube = NumCube;
+    }
     if (s_walkAt >= s_walkN) { s_walkN = 0; Log_Info("[racemod] racewalk: the car at its last point (%.0f,%d,%.0f)", wx, (int)hero->Obj.Y, wz); return 0; }
     const double dx = s_walkX[s_walkAt] - wx, dz = s_walkZ[s_walkAt] - wz;
     const double away = sqrt(dx * dx + dz * dz);
