@@ -93,6 +93,9 @@ internal static partial class RaceTrackStory
     private static readonly (int X, int Y, int Z) DemoSewerArrival = (20357, 1536, 15140), DemoDeadEnd = (12800, 3072, 2300);
     private const int DemoPainterActor = 7;
     private const int HatchSwitch = 213, LadderSwitch = 214;
+    // (the quay's lift into the sewers: its plate's half width, how far it sinks, its scenario zone, the helper's settling count (a cell
+    // variable of scene 43's), its sounds and speed -- the Stella Entities lift's)
+    private const int LiftHalf = 512, LiftDip = 400, QuayLiftZone = 70, QuaySettle = 40, QuayLiftStart = 506, QuayLiftStop = 510, QuayLiftSpeed = 300;
     // the museum's blueprints: under the glass of a display case of the hall's own (the user, 2026-11-04, "in a display case instead of
     // just on the floor"; 2026-11-06, the standard cases, not the tunic's: Citadel/CitadelMuseum, the case and the blueprints in it are
     // the museum's bricks) -- read with Action by it: an unseen helper on the case's top, as the game's own book's case has one (actor 13)
@@ -1432,24 +1435,78 @@ stop();
             var run = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(ht.X, model.CubeX), (int)Math.Round(ht.Y), RaceTrackScenes.CubeLocal(ht.Z, model.CubeY)));
             int hx = RaceTrackScenes.CubeLocal(ht.X, model.CubeX), hz = RaceTrackScenes.CubeLocal(ht.Z, model.CubeY), hy = (int)Math.Round(ht.Y);
+            // (a lift, not a hatch Twinsen was taken through as he stepped on it -- the user, 2026-11-15: "replace the teleport block that
+            // accesses the sewers with one of the games elevators": the game's kind of lift plate, dark planks in an iron frame, on the quay;
+            // walked onto, or Action on it, it sinks under him and the door into the sewers, under the plate, opens -- switched on by the
+            // lift alone, HatchSwitch -- where he stands on it being where he comes out on the sewers' lift)
             model.Zones.Add(new SceneZoneModel
             {
-                Type = 0, Num = Sewers, X0 = hx - 256, X1 = hx + 255, Z0 = hz - 256, Z1 = hz + 255, Y0 = hy - 200, Y1 = hy + 1500,
-                // (into the sewers at the lift's top -- the engine adds Twinsen's height over the zone's foot, 200 here -- switched off
-                // until the thief is down)
-                Info = new[] { liftTop.X, liftTop.Y - 200, liftTop.Z, 0, HatchSwitch, 0, 1, 0 },
+                Type = 0, Num = Sewers, X0 = hx - LiftHalf, X1 = hx + LiftHalf - 1, Z0 = hz - LiftHalf, Z1 = hz + LiftHalf - 1, Y0 = hy - LiftDip - 300, Y1 = hy + 1500,
+                Info = new[] { liftTop.X - LiftHalf, liftTop.Y - 300, liftTop.Z - LiftHalf, 0, HatchSwitch, 0, 1, 0 },
             });
-            // (the hatch itself, on the quay over the zone -- before the thief, who must stay the scene's last actor)
-            // (one Twinsen stands on, as the game's hatches are -- OBJ_CARRIER: a sprite is solid, and the hatch pushed him off its own door)
-            var hatchProp = RaceTrackScenes.SpriteProp(hx, hy, hz, RaceTrackScenes.HatchSprite);
-            hatchProp.Flags |= RaceTrackScenes.CarrierFlag;
-            SceneOps.AddActor(model, hatchProp);
-            var life = p.Add(model, thief, $@"void comportement_0()
+            model.Zones.Add(new SceneZoneModel { Type = 2, Num = QuayLiftZone, X0 = hx - LiftHalf + 64, X1 = hx + LiftHalf - 65, Z0 = hz - LiftHalf + 64, Z1 = hz + LiftHalf - 65, Y0 = hy - 300, Y1 = hy + 900, Info = new int[8] });
+            var low = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy - LiftDip, hz));
+            // (the plate and the lift's helper -- before the thief, who must stay the scene's last actor)
+            var plate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.LiftPlatform, hx, hy - Citadel.CitadelProps.LiftTop, hz);
+            plate.Flags |= RaceTrackScenes.CarrierFlag;
+            plate.Move = 3;
+            var plateIndex = SceneOps.AddActor(model, plate);
+            var helper = RaceTrackScenes.InvisibleHelper(hx, hy, hz);
+            var helperLife = p.Add(model, helper, $@"void comportement_0()
 {{
-    if (2 > chapter() && {ThiefDown} <= var_game({QThief}))
+    set_var_cube({QuaySettle}, 0);
+    set_comportement(comportement_4);
+}}
+
+void comportement_4()
+{{
+    add_var_cube({QuaySettle}, 1);
+    if (5 < var_cube({QuaySettle}))
+    {{
+        if ({QuayLiftZone} == zone_obj(0))
+        {{
+            set_comportement(comportement_2);
+        }}
+        else
+        {{
+            set_comportement(comportement_1);
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({QuayLiftZone} != zone_obj(0))
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    if ({QuayLiftZone} == zone_obj(0) && {Driving} != comportement_hero() && (1 < chapter() || {ThiefDown} <= var_game({QThief})))
+    {{
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj({plateIndex}, label_1);
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if (2 == l_track_obj({plateIndex}))
     {{
         set_change_cube({HatchSwitch}, 1);
+        set_comportement(comportement_5);
     }}
+}}
+
+void comportement_5()
+{{
+}}
+");
+            var life = p.Add(model, thief, $@"void comportement_0()
+{{
     if (2 > chapter() && 0 < var_game({QThief}) && {ThiefDown} > var_game({QThief}))
     {{
         body(100);
@@ -1468,7 +1525,6 @@ void comportement_1()
     {{
         message({p.Say(ChapterLine.ThiefRuns)});
         set_var_game({QThief}, {ThiefDown});
-        set_change_cube({HatchSwitch}, 1);
         set_track(label_10);
         set_comportement(comportement_2);
     }}
@@ -1485,6 +1541,23 @@ void comportement_2()
 ");
             return scripts =>
             {
+                helperLife(scripts);
+                scripts.SetText(plateIndex, ScriptKind.Life, @"void comportement_0()
+{
+}
+");
+                scripts.SetText(plateIndex, ScriptKind.Track, $@"label(0);
+stop();
+
+label(1);
+sample({QuayLiftStart});
+speed({QuayLiftSpeed});
+goto_point_3d({low});
+sample({QuayLiftStop});
+
+label(2);
+stop();
+");
                 life(scripts);
                 var index = model.Actors.Count - 1;
                 scripts.SetText(index, ScriptKind.Track, $@"label(0);
@@ -2391,6 +2464,9 @@ void comportement_1()
             p.Edit(Harbour, $"Felix the fisherman by the harbour's scrap at cell ({bobAt.X:0.#}, {bobAt.Z:0.#}), the old tyre he'll trade for a tin of bait beside him", model =>
             {
                 Place(bob, model, Facing(bobAt, tyreAt.X, tyreAt.Z));
+                // (walked through: his box is the landing crowd's whole body's, and stood an invisible wall across the quay south of him -- the
+                // user, 2026-11-15, "Near where we find the tyre on Citadel 2 there seems to be an invisible wall blocking Twinsen")
+                bob.Armor = WalkOverArmour;
                 var bobLife = p.Add(model, bob, Talker("2 == chapter()", $@"            if ({BaitTraded} == var_game({QBait}))
             {{
                 message({p.Say(ChapterLine.BobAfter)});
