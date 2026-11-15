@@ -30,8 +30,10 @@ internal static class BowlingAlley
     public const int FloorY = (FloorLayer + 1) * 256;
     // the lift: its pad outside (scene 90: the square platform by the prison's way out, its middle -- ground 3,900 -- where the user looked
     // for it, 2026-11-14: "This was the spot on Otringal that the elevator down to the bowling area was supposed to be. I can't seem to
-    // trigger it"; it was 13 cells east, at 22000, 19800) and its foot inside (cells)
-    public const int PadX = 15360, PadY = 3900, PadZ = 19968;
+    // trigger it"; it was 13 cells east, at 22000, 19800) and its foot inside (cells). The middle of the square painted on its ground (cube
+    // (7,9)'s cells x 24-30, z 37-43), not of its zone, 2.5 cells off -- the user stood on the square's middle, 2026-11-15: "Twinsen still
+    // can't activate it from where he's currently standing" (14314, 21187)
+    public const int PadX = 14080, PadY = 3900, PadZ = 20736;
     // (taken by walking onto it, within PadReach of its middle: no scenario zone, the platform's own -- zone 33 -- keeps the creature on it
     // calm while Twinsen stands on it (its script chases him once he is out of it). PadSettle: scene 90's cell variable counting the
     // helper's first frames.)

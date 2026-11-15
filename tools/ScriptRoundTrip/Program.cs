@@ -219,6 +219,7 @@ internal static class Program
             // bodynames <game folder> [first] [count]: every BODY.HQR entry's name as the actor attributes window shows it (Lba2BodyNames)
             "bodynames" => BodyNamesCommand.Run(args),
             "islandtexture" => IslandTextureCommand.Run(args),
+            "groundcells" => GroundCellsCommand.Run(args),
             "islandfreetex" => IslandFreeTextureCommand.Run(args),
             "islandheights" => IslandHeightsCommand.Run(args),
             "decorpoints" => DecorPointsCommand.Run(args),
