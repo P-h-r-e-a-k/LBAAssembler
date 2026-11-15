@@ -160,7 +160,10 @@ internal static class StellaEntities
                 if (Hall(x, z) && r >= Citadel.CitadelProps.CounterIn / 512 - 0.15 && r <= Citadel.CitadelProps.CounterOut / 512 + 0.1 &&
                     angle >= Citadel.CitadelProps.BarFrom - 3 && angle <= Citadel.CitadelProps.BarTo + 3)
                 {
-                    for (var y = FloorLayer + 1; y <= FloorLayer + 2; y++) Put(x, y, z, 0, 1);
+                    // (up to the wall's top, not only the counter's own two layers: a jump onto it (it's 768 up, a jump nearly 1000) and a
+                    // step off its far side put Twinsen on the barman's side, under the bar's pieces -- the user, 2026-11-15, "jump all
+                    // around the edge and make sure Twinsen doesn't get stuck anywhere")
+                    for (var y = FloorLayer + 1; y <= RingTop; y++) Put(x, y, z, 0, 1);
                     counterCells++;
                 }
                 // (the lounge's benches: solid under their seats, up to them -- Twinsen sits on one: CitadelProps.ClubBooth)
@@ -229,6 +232,17 @@ internal static class StellaEntities
             outerCells++;
         }
         log.Add($"Stella Entities: {outerCells} cells round the hall's floor made solid (nothing to walk off)");
+        // (the corridor's and the lift foot's low walls -- Rick's stone foot, a layer high -- solid above them to the wall's top too: a
+        // standing jump cleared them and Twinsen fell for ever past the grid's edge, nothing under him -- the user, 2026-11-15, "jump all
+        // around the edge and make sure Twinsen doesn't get stuck anywhere")
+        var rimTops = 0;
+        foreach (var ((x, y, z), (block, _)) in set.ToList())
+        {
+            if (y != FloorLayer + 1 || block != LowWall) continue;
+            for (var yy = FloorLayer + 2; yy <= RingTop; yy++) if (!set.ContainsKey((x, yy, z))) Put(x, yy, z, 0, 1);
+            rimTops++;
+        }
+        log.Add($"Stella Entities: {rimTops} low wall cells solid above them to the wall's top (nothing to jump over)");
         // the steps up onto the catwalk by the backstage door (CitadelProps.ClubSteps): a ramp down east from the catwalk's edge, a layer a
         // cell -- each column solid up to its slope (collision 5: full height at its west side, nothing at its east: OBJECT.CPP ReajustPos)
         const int SlopeDownEast = 5;
