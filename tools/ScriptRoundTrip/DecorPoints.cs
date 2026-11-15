@@ -73,7 +73,7 @@ internal static class SceneActorsCommand
         for (var i = 0; i < scene.Actors.Count; i++)
         {
             var a = scene.Actors[i];
-            Console.WriteLine($"  actor {i + 1}: entity {a.Entity} body {a.Body} anim {a.Anim} at ({a.X},{a.Y},{a.Z}) beta {a.Beta} flags 0x{a.Flags:X} move {a.Move} life {a.Life.Length} track {a.Track.Length}");
+            Console.WriteLine($"  actor {i + 1}: entity {a.Entity} body {a.Body} anim {a.Anim} at ({a.X},{a.Y},{a.Z}) beta {a.Beta} flags 0x{a.Flags:X} move {a.Move} life {a.Life.Length} track {a.Track.Length} options 0x{a.OptionFlags:X} bonus {a.NbBonus}");
         }
         // (points: the scene's track points too -- where a script's pos_point puts an actor)
         if (args.Contains("points"))

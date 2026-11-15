@@ -96,6 +96,7 @@ internal static class Program
             "scripttext" => RaceTrackCommand.ScriptText(args),
             "colscan" => ColScanCommand.Run(args),
             "storytexts" => StoryTextsCommand.Run(args),
+            "newlines" => NewLinesCommand.Run(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
