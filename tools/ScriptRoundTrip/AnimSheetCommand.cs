@@ -13,7 +13,27 @@ internal static class AnimSheetCommand
     {
         var dir = args[1];
         var body = LbaBodyStudio.Body.Read(HqrArchive.Open(Path.Combine(dir, "BODY.HQR")).Read(int.Parse(args[2])), 2);
-        var anims = args.Skip(4).Select(int.Parse).ToList();
+        var datas = args.Skip(4).Select(a => HqrArchive.Open(Path.Combine(dir, "ANIM.HQR")).Read(int.Parse(a))).ToList();
+        Render(body, datas, args[3]);
+        return 0;
+    }
+
+    // bowlanims <game folder> <out folder>: the bowlers' own reactions (Terrain/BowlingAnims) drawn, a sheet each -- before they go into a game
+    public static int Bowlers(string[] args)
+    {
+        Directory.CreateDirectory(args[2]);
+        foreach (var r in LBAAssembler.Terrain.BowlingAnims.Rigs)
+        {
+            var body = LbaBodyStudio.Body.Read(HqrArchive.Open(Path.Combine(args[1], "BODY.HQR")).Read(r.Body), 2);
+            var (c, s, m) = LBAAssembler.Terrain.BowlingAnims.Make(r, HqrArchive.Open(Path.Combine(args[1], "ANIM.HQR")).Read(r.Stand));
+            Render(body, new List<byte[]> { c.Write(r.Bones), s.Write(r.Bones), m.Write(r.Bones) }, Path.Combine(args[2], $"{r.Entity}.png"));
+        }
+        return 0;
+    }
+
+    public static void Render(LbaBodyStudio.Body body, List<byte[]> datas, string output)
+    {
+        var anims = datas;
         const int W = 140, H = 180, Most = 12;
         var sheet = new byte[W * Most * H * anims.Count * 4];
         int sw = W * Most, sh = H * anims.Count;
@@ -22,7 +42,7 @@ internal static class AnimSheetCommand
         var light = Vector3.Normalize(new Vector3(-0.4f, -0.7f, -0.6f));
         for (var r = 0; r < anims.Count; r++)
         {
-            var frames = PalaceTorturers.ReadFrames(HqrArchive.Open(Path.Combine(dir, "ANIM.HQR")).Read(anims[r]), body.Bones.Count);
+            var frames = PalaceTorturers.ReadFrames(anims[r], body.Bones.Count);
             var pick = Enumerable.Range(0, Math.Min(Most, frames.Count)).Select(k => frames.Count <= Most ? k : k * (frames.Count - 1) / (Most - 1)).ToList();
             // (one scale for the row: the body's height at rest)
             var rest = PalaceTorturers.Posed(body, frames[0].Bones).Points;
@@ -44,10 +64,9 @@ internal static class AnimSheetCommand
                     Fill(sheet, sw, sh, poly, (byte)(col * ((f.Colour * 37) % 100 + 155) / 255), col, (byte)(col * ((f.Colour * 59) % 100 + 155) / 255), c * W, (c + 1) * W, r * H, (r + 1) * H);
                 }
             }
-            Console.WriteLine($"row {r}: anim {anims[r]}, {frames.Count} keyframes, shown {string.Join(",", pick)}");
+            Console.WriteLine($"row {r}: {frames.Count} keyframes, shown {string.Join(",", pick)}");
         }
-        PngWriter.Write(args[3], sheet, sw, sh);
-        return 0;
+        PngWriter.Write(output, sheet, sw, sh);
     }
 
     private static void Fill(byte[] img, int w, int h, (float X, float Y)[] poly, byte rr, byte gg, byte bb, int x0, int x1, int y0, int y1)

@@ -114,6 +114,17 @@ internal static class Lba2AreaStudy
     }
 
     // The map drawn as a picture (the same picture the editor shows).
+    // lba2scenerender <folder> <scene> <png>: one interior scene's grid drawn alone, as the game draws it (no actors) -- a scene the build made
+    // that is in no map (the bowling alley, 393)
+    public static int RenderScene(string[] args)
+    {
+        var interiors = new Lba2Interiors(args[1]);
+        var image = interiors.RenderArea(new List<Lba1AreaTile> { new(int.Parse(args[2]), 0, 0, 0) });
+        PngWriter.Write(args[3], image.Bgra, image.Width, image.Height);
+        Console.WriteLine($"{image.Width} x {image.Height}");
+        return 0;
+    }
+
     public static int Render(string[] args)
     {
         var interiors = new Lba2Interiors(args[1]);

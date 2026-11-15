@@ -309,6 +309,8 @@ internal static class CitadelMuseum
         return count + 1;
     }
 
+    // (the same, for the build's other rooms: the bowling alley's, BowlingRoom)
+    internal static int AddBrickPublic(HqrFile bkg, MapBricks.BkgHeader header, byte[] bytes) => AddBrick(bkg, header, bytes);
     // A brick: the file's own with these bytes, else added after its last (header.MaxBrk one more)
     private static int AddBrick(HqrFile bkg, MapBricks.BkgHeader header, byte[] bytes)
     {

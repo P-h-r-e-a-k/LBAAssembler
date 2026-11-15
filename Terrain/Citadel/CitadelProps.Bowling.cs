@@ -1,3 +1,4 @@
+using System.IO;
 using System.Numerics;
 using LbaBodyStudio;
 
@@ -11,9 +12,14 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static partial class CitadelProps
 {
     public const int BowlingLanes = 122, PinChain = 123, LeverUp = 124, LeverDown = 125;
+    // (since 2026-11-15: the lanes are floor and the chains drawn by the engine -- RACEMOD.CPP BowlChainsDraw, link by link from a body of
+    // one link -- so their numbers carry a chain's link and a pin's helmet alone; and the ball a curled-up Sphero of its own)
+    public const int ChainLink = BowlingLanes, PinHelmet = PinChain, SpheroBall = 34;
     // the alley's scene units: three lanes along z, the outer two played (their middles), the foul line and the pins' rows
-    public const int LaneX0 = 9216, LaneX1 = 18432, LaneMiddleX = 13824, LaneMiddleZ = 9600, LaneHalf = 1000, LaneGutter = 260;
-    public const int FoulZ = 14000, PinsZ = 4800, LaneTop = 40;
+    // (the lanes are the room's floor since 2026-11-15 -- BowlingRoom: lanes 0 and 2 of its three played, the foul line at its row 36's
+    // near edge, the pins' back row over its deck's row 10; the lanes' prop below no longer used)
+    public const int LaneX0 = 7680, LaneX1 = 14848, LaneMiddleX = 11264, LaneMiddleZ = 12288, LaneHalf = 1024, LaneGutter = 260;
+    public const int FoulZ = 18944, PinsZ = 5376, LaneTop = 0;
     private const int Board = 21, BoardLine = 63, Gutter = 48, PinSteel = 52, ChainColour = 50, LeverSteel = 56, Knob = 70;
 
     public static Body BuildBowlingLanes(byte[] header)
@@ -43,11 +49,54 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
+    // A pin's helmet alone, round the pin's feet (the Franco's head about 1,050 up): the steel dome, its brim, and the eye on top its chain
+    // hooks on (RACEMOD.CPP BOWL_HELMET_TOP, 1,360) -- turned with the pin as it falls
+    public static Body BuildPinHelmet(byte[] header)
+    {
+        var m = new CarMesh("a pin's helmet", new[] { -1 });
+        m.Light = 0.7f;
+        m.Ball(0, new Vector3(0, 1150, 0), 190, PinSteel);
+        m.Box(0, new Vector3(0, 1010, 0), new Vector3(340, 50, 340), PinSteel);
+        m.Box(0, new Vector3(0, 1325, 0), new Vector3(60, 70, 24), ChainColour);
+        return m.ToBody(header);
+    }
+
+    // A chain's link, a body of its own the engine draws again and again down a chain (RACEMOD.CPP BowlChainsDraw): an upright oval of thick
+    // steel bars, 110 long -- the chain's way its y; thicker than the first chains' rods, the user, 2026-11-15: "let's make the chains holding
+    // them up slightly thicker so they're more visible"
+    public static Body BuildChainLink(byte[] header)
+    {
+        var m = new CarMesh("a chain's link", new[] { -1 });
+        m.Light = 0.75f;
+        const float W = 46, H = 62, T = 28;
+        foreach (var x in new[] { -W, W }) m.Box(0, new Vector3(x, 0, 0), new Vector3(T, 2 * H, T), ChainColour, top: ChainColour + 3);
+        foreach (var y in new[] { -H, H }) m.Box(0, new Vector3(0, y, 0), new Vector3(2 * W + T, T, T), ChainColour, top: ChainColour + 3);
+        return m.ToBody(header);
+    }
+
+    // The ball: a Sphero curled up (the game's own -- entity 28's body, BODY.HQR 41 -- posed as its hurt animation, ANIM.HQR 301, leaves it at
+    // its last frame: legs tucked, a ball), its middle at the body's origin and BOWL_BALL_R (340) round, so the engine rolls it by turning it
+    public static Body BuildSpheroBall(byte[] header, string gameDirectory)
+    {
+        var body = Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(41), 2);
+        var frames = Terrain.Palace.PalaceTorturers.ReadFrames(HqrArchive.Open(Path.Combine(gameDirectory, "ANIM.HQR")).Read(301), body.Bones.Count);
+        var (points, _) = Terrain.Palace.PalaceTorturers.Posed(body, frames[^1].Bones);
+        var middle = points.Aggregate(Vector3.Zero, (a, b) => a + b) / points.Length;
+        var reach = points.Max(q => (q - middle).Length());
+        var scale = 340f / Math.Max(1f, reach);
+        var m = new CarMesh("a Sphero, curled up", new[] { -1 });
+        m.Light = 0.85f;
+        var at = points.Select(q => m.P(0, (q - middle) * scale)).ToArray();
+        foreach (var f in body.Faces.Where(f => f.Points.Length >= 3)) m.Raw(f.Points.Select(i => at[i]).ToArray(), f.Colour, false);
+        foreach (var sp in body.Spheres) m.Sphere(at[sp.Point], Math.Max(8, (int)(sp.Radius * scale)), sp.Colour);
+        return m.ToBody(header);
+    }
+
     // The giant lever: a stand and its arm, up or thrown down toward the bowler (+z), a red knob on the end
     private static Body BuildLever(byte[] header, bool down)
     {
         var m = new CarMesh(down ? "the giant lever, pulled" : "the giant lever", new[] { -1 });
-        m.Light = 0.8f;
+        m.Light = 0.3f;
         m.Box(0, new Vector3(0, 250, 0), new Vector3(700, 500, 500), LeverSteel, top: LeverSteel + 2);
         var tip = down ? new Vector3(0, 650, 1250) : new Vector3(0, 1900, -250);
         m.Rod(0, new Vector3(0, 500, 0), tip, LeverSteel);

@@ -857,10 +857,27 @@ typedef struct { S32 Cx, FoulZ, PinsZ, Ball, Pin[6]; } T_BOWL_LANE;
 typedef struct { S32 Lane, Actor, Throw, Cheer, Shrug, Dismay; char Name[40]; } T_BOWLER;
 static T_BOWL_LANE s_bl[2];
 static T_BOWLER s_bw[4];
+// The lanes as they are played (BowlLanes, the user, 2026-11-15: "the sphero needs to be rolling down the alley instead of walking, as the
+// sphero needs to be visibily thrown by the players. Currently the sphero walks through all the pins, then afterwards the pins fall down";
+// "The chains need to stay connected to their heads the entire time, and let's make the chains holding them up slightly thicker"): a lane's
+// ball (a curled-up Sphero, a body of its own) held by the bowler through his throw, let go at the foul line, rolled and spun down the lane;
+// each pin toppled about its feet as the ball -- or a falling pin -- reaches it, its helmet (an actor of its own) turned with it; the chains
+// drawn each frame from the dark over the pin to its helmet's top; the pins hauled up off the deck and set down again by them.
+typedef struct {
+    int On, Helper, WhoVar, OutcomeVar, Speed[2], Bowler[2], Link, AnchorY, RackX, RackZ, Helmet[6];
+    int Phase; S32 PhaseAt;
+    int BallState;                  // 0 at the ball return, 1 in the bowler's hands, 2 rolling, 3 gone into the pit
+    double Bx, By, Bz, Btx, Bv, Spin;
+    int Down[6], Spread[6];
+    double Tilt[6], TiltV[6], Dx[6], Dz[6], Lift;
+    S32 LiftAt;                     // (the chains' haul started, or -1)
+    int Knocked;                    // (pins down since the last reset)
+} T_BOWL_ANIM;
+static T_BOWL_ANIM s_ba[2];
 static int s_blN = 0, s_bwN = 0, s_blScene = -1, s_blVar = 99, s_blFloor = 1064, s_blHalf = 1000, s_bowlLoaded = 0;
 static int s_bowlGame = -1, s_bowlInit = 0, s_bowlState = 0, s_bowlActWas = 0, s_bowlOverSaid = 0;
 static double s_bowlX = 0, s_bowlPower = 0, s_bowlFinalX = 0, s_bowlStartX = 0;
-static S32 s_bowlAt = 0, s_bowlLast = 0, s_bowlMsgUntil = 0, s_bowlBest = 0;
+static S32 s_bowlAt = 0, s_bowlAt2 = 0, s_bowlLast = 0, s_bowlMsgUntil = 0, s_bowlBest = 0;
 static int s_bowlDown[6], s_bowlHome[6][2], s_bowlRolls[21], s_bowlNRolls = 0, s_bowlThisBall = 0, s_bowlReact = 0;
 static char s_bowlMsg[64] = "";
 static U32 s_bowlInput = 0;
@@ -19174,6 +19191,17 @@ static void BowlLoad(void) {
             for (char *q = s_bw[a].Name; *q; q++) if (*q == '_') *q = ' ';
             if (a + 1 > s_bwN) s_bwN = a + 1;
         }
+        else if (!strncmp(line, "anim ", 5)) {
+            int v[19], got = sscanf(line + 5, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14], &v[15], &v[16], &v[17], &v[18]);
+            if (got == 18 && v[0] >= 0 && v[0] < 2) {
+                T_BOWL_ANIM *ba = &s_ba[v[0]];
+                memset(ba, 0, sizeof(*ba));
+                ba->On = 1; ba->Helper = v[1]; ba->WhoVar = v[2]; ba->OutcomeVar = v[3]; ba->Speed[0] = v[4]; ba->Speed[1] = v[5];
+                ba->Bowler[0] = v[6]; ba->Bowler[1] = v[7]; ba->Link = v[8]; ba->AnchorY = v[9]; ba->RackX = v[10]; ba->RackZ = v[11];
+                for (int i = 0; i < 6; i++) ba->Helmet[i] = v[12 + i];
+                ba->Phase = -1; ba->LiftAt = -1;
+            }
+        }
         else if (sscanf(line, "lane %d %d %d %d %d %d %d %d %d %d %d", &a, &b, &c, &d, &e, &g, &h2, &k, &m, &n2, &o) == 11 && a >= 0 && a < 2) {
             s_bl[a].Cx = b; s_bl[a].FoulZ = c; s_bl[a].PinsZ = d; s_bl[a].Ball = e;
             s_bl[a].Pin[0] = g; s_bl[a].Pin[1] = h2; s_bl[a].Pin[2] = k; s_bl[a].Pin[3] = m; s_bl[a].Pin[4] = n2; s_bl[a].Pin[5] = o;
@@ -19236,6 +19264,208 @@ static int BowlFrameEnded(void) {
     }
     return 1;
 }
+#define BOWL_BALL_R 340                   // the ball's radius (the curled Sphero's: its body's middle at its origin)
+#define BOWL_PIN_R 170                    // a pin's (a Franco's) width, half
+#define BOWL_HELMET_TOP 1360              // a helmet's top over the pin's feet: where its chain hooks on
+#define BOWL_LINK 95                      // a chain link's length along the chain
+#define BOWL_HAUL 900                     // how far the chains lift the pins off the deck
+#define BOWL_RELEASE_MS 1000              // the throw: the ball let go this long after it starts
+#define BOWL_PI 3.14159265358979
+static S32 BowlAng(double rad) { return (S32)floor(rad * 4096.0 / (2 * BOWL_PI) + 0.5) & 4095; }
+// (a pin's angles for a tilt `t` (radians) toward (dx, dz): about x and about z, its beta 0 -- its head then at its feet plus the helmet's
+// height along (sin t dx, cos t, sin t dz), as the renderer turns a body: its y axis the matrix's second column)
+static void BowlTiltAngles(double t, double dx, double dz, S32 *alpha, S32 *gamma) {
+    const double sn = sin(t), cs = cos(t);
+    *gamma = BowlAng(asin(fmax(-1.0, fmin(1.0, -sn * dx))));
+    *alpha = BowlAng(atan2(sn * dz, cs));
+}
+static void BowlKnock(T_BOWL_ANIM *ba, int i, double dx, double dz) {
+    if (ba->Down[i]) return;
+    const double l = sqrt(dx * dx + dz * dz);
+    ba->Down[i] = 1; ba->Spread[i] = 0; ba->Tilt[i] = 0.02; ba->TiltV[i] = 2.2;
+    ba->Dx[i] = l > 1e-6 ? dx / l : 0; ba->Dz[i] = l > 1e-6 ? dz / l : -1;
+    ba->Knocked++;
+}
+// The chains haul the pins up and set them down standing: from now
+static void BowlReset(T_BOWL_ANIM *ba, S32 now) { ba->LiftAt = now; }
+// A lane's frame: the pins falling, the chains' haul, and -- the lane's own round (not the player's) -- the ball by the round's phase
+static void BowlLaneFrame(int lane, S32 now, double dt, int npc) {
+    T_BOWL_ANIM *ba = &s_ba[lane];
+    const T_BOWL_LANE *ln = &s_bl[lane];
+    if (!ba->On || ln->Ball <= 0 || ln->Ball >= (int)NbObjets) return;
+    T_OBJET *ball = &ListObjet[ln->Ball];
+    const double floorY = s_blFloor;
+    // (the round's phase: the lever's track's label -- 0 a wait, 1 the throw, 2 the pins, 3 the lever, 4 the chains' haul)
+    if (npc && ba->Helper > 0 && ba->Helper < (int)NbObjets) {
+        const int phase = ListObjet[ba->Helper].LabelTrack;
+        if (phase != ba->Phase) {
+            ba->Phase = phase; ba->PhaseAt = now;
+            if (phase == 1) { ba->BallState = 1; }
+            else if (phase == 4) { BowlReset(ba, now); ba->BallState = 0; }
+        }
+    }
+    {
+        const int who = (ListVarCube[ba->WhoVar] != 0) ? 1 : 0, outcome = ListVarCube[ba->OutcomeVar];
+        if (ba->BallState == 1) {
+            // (in the bowler's hands: picked up off the return, swung back and forward low, let go at the line -- the round's bowler, or
+            // the player's, whose throw set its speed and its line)
+            const int b = npc ? ba->Bowler[who] : (s_bowlGame >= 0 && s_bowlGame < s_bwN ? s_bw[s_bowlGame].Actor : -1);
+            const T_OBJET *bo = (b > 0 && b < (int)NbObjets) ? &ListObjet[b] : NULL;
+            const double bx = bo ? bo->Obj.X : ln->Cx, bz = bo ? bo->Obj.Z : ln->FoulZ + 1000;
+            const double t = (now - ba->PhaseAt) / 1000.0, rel = BOWL_RELEASE_MS / 1000.0;
+            const double hx = bx + 260, hy = floorY + 520, hz = bz - 200;
+            if (t < 0.3) {
+                const double u = t / 0.3;
+                ba->Bx = ba->RackX + (hx - ba->RackX) * u; ba->Bz = ba->RackZ + (hz - ba->RackZ) * u; ba->By = floorY + BOWL_BALL_R + (hy - floorY - BOWL_BALL_R) * u;
+            } else if (t < rel) {
+                const double u = (t - 0.3) / (rel - 0.3), sw = sin(u * BOWL_PI);
+                // (back up behind him, then forward and down to the boards)
+                ba->Bx = hx; ba->Bz = hz + (u < 0.5 ? 520 * sw : -620 * (u - 0.5) * 2); ba->By = u < 0.5 ? hy + 260 * sw : hy + (floorY + BOWL_BALL_R - hy) * (u - 0.5) * 2;
+                ba->Spin -= dt * 2.0;
+            } else {
+                // (let go: down the lane at the bowler's speed, drawn toward where the throw's luck sends it)
+                ba->BallState = 2;
+                ba->Bx = fmax(ln->Cx - s_blHalf + BOWL_BALL_R, fmin(ln->Cx + s_blHalf - BOWL_BALL_R, hx - 120));
+                ba->By = floorY + BOWL_BALL_R; ba->Bz = ln->FoulZ - 300;
+                if (npc) {
+                    ba->Bv = ba->Speed[who] > 0 ? ba->Speed[who] : 4500;
+                    ba->Btx = outcome == 0 ? ln->Cx + 90 : outcome == 1 ? ln->Cx + 470 : ln->Cx + s_blHalf + 256;
+                }
+                Log_Info("[racemod] bowling: lane %d's ball thrown (bowler %d, outcome %d)", lane, who, outcome);
+            }
+        }
+    }
+    if (ba->BallState == 2) {
+        // rolling: on down the lane, drawn toward its line; into the gutter once past the boards' edge, and along it
+        ba->Bz -= ba->Bv * dt;
+        const int guttered = fabs(ba->Bx - ln->Cx) > s_blHalf - BOWL_BALL_R * 0.5;
+        if (guttered) { ba->Bx += ((ba->Bx > ln->Cx ? ln->Cx + s_blHalf + 256 : ln->Cx - s_blHalf - 256) - ba->Bx) * fmin(1.0, dt * 6); ba->By = floorY + BOWL_BALL_R - 120; }
+        else ba->Bx += (ba->Btx - ba->Bx) * fmin(1.0, dt * 0.9);
+        ba->Spin -= ba->Bv * dt / BOWL_BALL_R;
+        if (!guttered)
+            for (int i = 0; i < BOWL_PINS; i++) {
+                if (ba->Down[i]) continue;
+                const double px = s_bowlHome[i][0], pz = s_bowlHome[i][1], dx = px - ba->Bx, dz = pz - ba->Bz;
+                if (dx * dx + dz * dz < (double)(BOWL_BALL_R + BOWL_PIN_R + 60) * (BOWL_BALL_R + BOWL_PIN_R + 60)) {
+                    const double l = sqrt(dx * dx + dz * dz) + 1e-6;
+                    BowlKnock(ba, i, dx / l * 0.8, dz / l * 0.8 - 0.6);
+                    ba->Bx -= dx / l * 40; ba->Bv *= 0.93;
+                }
+            }
+        if (ba->Bz < ln->PinsZ - 900) {
+            ba->BallState = 3;
+            // (the throw's luck a strike: what the pins scattered didn't take down goes down now)
+            if (npc && ListVarCube[ba->OutcomeVar] == 0)
+                for (int i = 0; i < BOWL_PINS; i++) if (!ba->Down[i]) BowlKnock(ba, i, (i % 2 ? 0.5 : -0.5), -1);
+        }
+    }
+    // the pins: falling, and a falling pin knocking those it lands on
+    for (int i = 0; i < BOWL_PINS; i++) {
+        if (!ba->Down[i]) continue;
+        if (ba->Tilt[i] < 1.42) {
+            ba->TiltV[i] += 9.0 * sin(ba->Tilt[i] + 0.15) * dt;
+            ba->Tilt[i] = fmin(1.42, ba->Tilt[i] + ba->TiltV[i] * dt);
+        }
+        if (!ba->Spread[i] && ba->Tilt[i] > 0.6) {
+            ba->Spread[i] = 1;
+            const double hx = s_bowlHome[i][0] + ba->Dx[i] * 900, hz = s_bowlHome[i][1] + ba->Dz[i] * 900;
+            for (int j = 0; j < BOWL_PINS; j++) {
+                if (ba->Down[j] || j == i) continue;
+                const double dx = s_bowlHome[j][0] - (s_bowlHome[i][0] + hx) / 2, dz = s_bowlHome[j][1] - (s_bowlHome[i][1] + hz) / 2;
+                if (dx * dx + dz * dz < 560.0 * 560.0) BowlKnock(ba, j, ba->Dx[i] + dx / 1400, ba->Dz[i] + dz / 1400);
+            }
+        }
+    }
+    // the chains' haul: up off the deck (the fallen swinging upright as they rise), then down again standing
+    ba->Lift = 0;
+    if (ba->LiftAt >= 0) {
+        const double t = (now - ba->LiftAt) / 1000.0;
+        if (t < 1.0) ba->Lift = t;
+        else if (t < 1.6) {
+            ba->Lift = 1;
+            for (int i = 0; i < BOWL_PINS; i++) { ba->Tilt[i] *= fmax(0.0, 1 - dt * 6); if (ba->Tilt[i] < 0.01) { ba->Tilt[i] = 0; ba->Down[i] = 0; ba->TiltV[i] = 0; } }
+        } else if (t < 2.6) {
+            ba->Lift = 2.6 - t;
+            for (int i = 0; i < BOWL_PINS; i++) { ba->Tilt[i] = 0; ba->Down[i] = 0; ba->TiltV[i] = 0; }
+        } else { ba->LiftAt = -1; ba->Knocked = 0; }
+    }
+    // their places: the ball, the pins and their helmets
+    if (ba->BallState == 0) { ba->Bx = ba->RackX; ba->Bz = ba->RackZ; ba->By = floorY + BOWL_BALL_R; }
+    ball->Obj.X = (S32)ba->Bx; ball->Obj.Z = (S32)ba->Bz; ball->Obj.Y = ba->BallState == 3 ? RACE_OUT_OF_SIGHT_Y : (S32)ba->By;
+    ball->Obj.Alpha = BowlAng(ba->Spin); ball->Obj.Beta = 0; ball->Obj.Gamma = 0;
+    ball->WorkFlags &= ~FALLING;
+    for (int i = 0; i < BOWL_PINS; i++) {
+        const int a = ln->Pin[i];
+        if (a <= 0 || a >= (int)NbObjets) continue;
+        T_OBJET *pin = &ListObjet[a];
+        S32 al, ga;
+        BowlTiltAngles(ba->Tilt[i], ba->Dx[i], ba->Dz[i], &al, &ga);
+        pin->Obj.X = s_bowlHome[i][0]; pin->Obj.Z = s_bowlHome[i][1]; pin->Obj.Y = (S32)(floorY + ba->Lift * BOWL_HAUL);
+        pin->Obj.Alpha = al; pin->Obj.Gamma = ga; pin->Obj.Beta = 0;
+        pin->WorkFlags &= ~FALLING;
+        const int hm = ba->Helmet[i];
+        if (hm > 0 && hm < (int)NbObjets) {
+            T_OBJET *h = &ListObjet[hm];
+            h->Obj.X = pin->Obj.X; h->Obj.Y = pin->Obj.Y; h->Obj.Z = pin->Obj.Z; h->Obj.Alpha = al; h->Obj.Beta = 0; h->Obj.Gamma = ga;
+            h->WorkFlags &= ~FALLING;
+        }
+    }
+}
+static void BowlLanesFrame(S32 now) {
+    static S32 last = 0;
+    if (CubeMode != CUBE_INTERIEUR || NewCube != -1) { last = now; return; }
+    BowlLoad();
+    if ((S32)NumCube != s_blScene || s_blN < 1) { last = now; return; }
+    const double dt = fmin(0.1, fmax(0.0, (now - last) / 1000.0));
+    last = now;
+    for (int lane = 0; lane < s_blN; lane++) {
+        T_BOWL_ANIM *ba = &s_ba[lane];
+        if (!ba->On) continue;
+        // (the pins' homes: where the scene stands them -- the game's own table, s_bowlHome, is the player's lane's)
+        static int homed[2] = {0, 0};
+        static S32 homeOf[2][6][2];
+        if (!homed[lane]) {
+            homed[lane] = 1;
+            for (int i = 0; i < BOWL_PINS; i++) { const int a = s_bl[lane].Pin[i]; homeOf[lane][i][0] = a > 0 ? ListObjet[a].Obj.X : 0; homeOf[lane][i][1] = a > 0 ? ListObjet[a].Obj.Z : 0; }
+        }
+        for (int i = 0; i < BOWL_PINS; i++) { s_bowlHome[i][0] = homeOf[lane][i][0]; s_bowlHome[i][1] = homeOf[lane][i][1]; }
+        const int players = s_bowlGame >= 0 && s_bowlGame < s_bwN && s_bw[s_bowlGame].Lane == lane;
+        BowlLaneFrame(lane, now, dt, !players);
+    }
+}
+// The chains: each pin's, link by link from the dark over its home down to its helmet's top -- the helmet where the pin's turned head is
+static void BowlChainsDraw(void) {
+    if (CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene) return;
+    for (int lane = 0; lane < s_blN; lane++) {
+        const T_BOWL_ANIM *ba = &s_ba[lane];
+        if (!ba->On || ba->Link <= 0 || ba->Link >= (int)NbObjets) continue;
+        const S32 bodyNum = ListObjet[ba->Link].Obj.Body.Num;
+        if (bodyNum < 0) continue;
+        U8 *link = (U8 *)GivePtrBody(bodyNum);
+        if (!link) continue;
+        for (int i = 0; i < BOWL_PINS; i++) {
+            const int a = s_bl[lane].Pin[i];
+            if (a <= 0 || a >= (int)NbObjets) continue;
+            const T_OBJET *pin = &ListObjet[a];
+            const double sn = sin(ba->Tilt[i]), cs = cos(ba->Tilt[i]);
+            const double ex = pin->Obj.X + BOWL_HELMET_TOP * sn * ba->Dx[i], ey = pin->Obj.Y + BOWL_HELMET_TOP * cs, ez = pin->Obj.Z + BOWL_HELMET_TOP * sn * ba->Dz[i];
+            // (its anchor over where the pin stands)
+            const double ax = pin->Obj.X, ay = ba->AnchorY, az = pin->Obj.Z;
+            double ux = ax - ex, uy = ay - ey, uz = az - ez;
+            const double len = sqrt(ux * ux + uy * uy + uz * uz);
+            if (len < 1) continue;
+            ux /= len; uy /= len; uz /= len;
+            // (each link along the chain, its long axis the chain's way; every other one turned a quarter about it, as links hang)
+            const S32 gamma = BowlAng(asin(fmax(-1.0, fmin(1.0, -ux)))), alpha = BowlAng(atan2(uz, uy));
+            const int n = (int)(len / BOWL_LINK);
+            for (int k = 0; k <= n; k++) {
+                const double d = k * BOWL_LINK + BOWL_LINK / 2.0;
+                if (d > len) break;
+                BodyDisplay((S32)(ex + ux * d), (S32)(ey + uy * d), (S32)(ez + uz * d), alpha, (k & 1) ? 1024 : 0, gamma, link);
+            }
+        }
+    }
+}
 static void BowlSay(S32 now, const char *text) { snprintf(s_bowlMsg, sizeof(s_bowlMsg), "%s", text); s_bowlMsgUntil = now + 2600; }
 static void BowlFrame(S32 now) {
     if (s_bowlGame < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1) return;
@@ -19276,7 +19506,7 @@ static void BowlFrame(S32 now) {
         if (s_bowlX > ln->Cx + s_blHalf - 160) s_bowlX = ln->Cx + s_blHalf - 160;
         bo->Obj.X = (S32)s_bowlX;
         if (bo->GenAnim != 0) InitAnim(0, ANIM_REPEAT, me->Actor);
-        ball->Obj.X = (S32)s_bowlX; ball->Obj.Z = ln->FoulZ + 400; ball->Obj.Y = s_blFloor;
+        (void)ball;
         if (s_bowlState == 0 && pressed) { s_bowlState = 1; s_bowlAt = now; }
         else if (s_bowlState == 1) {
             const double t = fmod((double)(now - s_bowlAt), 2000.0) / 1000.0;
@@ -19287,43 +19517,25 @@ static void BowlFrame(S32 now) {
                 s_bowlFinalX = s_bowlX + (s_bowlPower - 0.65) * 1400 + (double)((now / 7) % 240) - 120;
                 s_bowlState = 2; s_bowlAt = now;
                 InitAnim((U16)me->Throw, ANIM_REPEAT, me->Actor);
-                InitAnim(1, ANIM_REPEAT, ln->Ball);
+                // (the lane's ball held through the throw, then rolled: BowlLaneFrame)
+                {
+                    T_BOWL_ANIM *ba = &s_ba[me->Lane];
+                    ba->BallState = 1; ba->PhaseAt = now; ba->Knocked = 0;
+                    ba->Bv = 3000 + 3500 * s_bowlPower; ba->Btx = s_bowlFinalX;
+                }
                 Log_Info("[racemod] bowling: thrown at power %.2f from %d, to %d", s_bowlPower, (int)s_bowlX, (int)s_bowlFinalX);
             }
         }
     } else if (s_bowlState == 2) {
-        // rolling
-        const double travel = 3200 - 2000 * s_bowlPower;
-        double u = (now - s_bowlAt) / travel;
-        if (u > 1) u = 1;
-        const double z0 = ln->FoulZ + 400, z1 = s_bowlPower < 0.15 ? ln->PinsZ + 2600 : ln->PinsZ - 200;
-        ball->Obj.X = (S32)(s_bowlStartX + (s_bowlFinalX - s_bowlStartX) * u);
-        ball->Obj.Z = (S32)(z0 + (z1 - z0) * u);
-        ball->Obj.Y = s_blFloor;
+        // rolling (BowlLaneFrame rolls the ball and topples what it reaches): over once it has gone into the pit and the pins have settled
+        T_BOWL_ANIM *ba = &s_ba[me->Lane];
         bo->Obj.X = (S32)s_bowlX;
-        if (u >= 1) {
-            // the pins it reaches, and the ones they reach
-            int knocked[BOWL_PINS] = {0}, hit = 0;
-            const int gutter = fabs(s_bowlFinalX - ln->Cx) > s_blHalf - 60, weak = s_bowlPower < 0.15;
-            if (!gutter && !weak) {
-                for (int i = 0; i < BOWL_PINS; i++) if (!s_bowlDown[i] && fabs(s_bowlHome[i][0] - s_bowlFinalX) < 380) { knocked[i] = 1; hit++; }
-                if (hit) {
-                    const int chance = s_bowlPower > 0.55 ? 75 : s_bowlPower > 0.3 ? 50 : 20;
-                    for (int i = 0; i < BOWL_PINS; i++) {
-                        if (s_bowlDown[i] || knocked[i]) continue;
-                        for (int j = 0; j < BOWL_PINS; j++) {
-                            if (!knocked[j] || j == i) continue;
-                            const double dx = s_bowlHome[i][0] - s_bowlHome[j][0], dz = s_bowlHome[i][1] - s_bowlHome[j][1];
-                            if (dx * dx + dz * dz < 800.0 * 800.0 && (int)((now / 20 + i * 131 + j * 17) % 100) < chance) { knocked[i] = 1; break; }
-                        }
-                    }
-                }
-            }
+        if (ba->BallState == 3 && s_bowlAt2 == 0) s_bowlAt2 = now;
+        if (ba->BallState == 3 && now - s_bowlAt2 > 1200) {
+            s_bowlAt2 = 0;
+            const int gutter = fabs(s_bowlFinalX - ln->Cx) > s_blHalf - 60, weak = 0;
             int down = 0;
-            for (int i = 0; i < BOWL_PINS; i++) if (knocked[i]) {
-                s_bowlDown[i] = 1; down++;
-                InitAnim(10, ANIM_FINAL, ln->Pin[i]);
-            }
+            for (int i = 0; i < BOWL_PINS; i++) if (ba->Down[i] && !s_bowlDown[i]) { s_bowlDown[i] = 1; down++; }
             s_bowlRolls[s_bowlNRolls < 21 ? s_bowlNRolls++ : 20] = down;
             int standing = 0;
             for (int i = 0; i < BOWL_PINS; i++) if (!s_bowlDown[i]) standing++;
@@ -19336,7 +19548,6 @@ static void BowlFrame(S32 now) {
             BowlSay(now, said);
             s_bowlReact = !standing ? me->Cheer : down >= 3 ? me->Shrug : me->Dismay;
             InitAnim((U16)s_bowlReact, ANIM_REPEAT, me->Actor);
-            ball->Obj.Z = ln->PinsZ - 900;
             s_bowlState = 3; s_bowlAt = now;
             Log_Info("[racemod] bowling: %d down (%s)", down, said);
         }
@@ -19355,16 +19566,12 @@ static void BowlFrame(S32 now) {
                 s_menuAt = now + 7000;
             } else {
                 if (BowlFrameEnded() || s_bowlNRolls == 0) {
-                    for (int i = 0; i < BOWL_PINS; i++) {
-                        T_OBJET *pin = &ListObjet[ln->Pin[i]];
-                        pin->Obj.X = s_bowlHome[i][0]; pin->Obj.Z = s_bowlHome[i][1]; pin->Obj.Y = s_blFloor;
-                        InitAnim(0, ANIM_REPEAT, ln->Pin[i]);
-                        s_bowlDown[i] = 0;
-                    }
+                    // (the chains haul them all up and set them down standing)
+                    BowlReset(&s_ba[me->Lane], now);
+                    for (int i = 0; i < BOWL_PINS; i++) s_bowlDown[i] = 0;
                 }
                 s_bowlState = 0;
-                ball->Obj.Z = ln->FoulZ + 400;
-                InitAnim(0, ANIM_REPEAT, ln->Ball);
+                s_ba[me->Lane].BallState = 0;
                 BowlSay(now, "Left and Right to aim, Space to throw");
             }
         }
@@ -20449,6 +20656,7 @@ void RaceMod_Frame(void) {
     PoolFrame(TimerRefHR);
     AchievementsFrame(TimerRefHR);
     BowlFrame(TimerRefHR);
+    BowlLanesFrame(TimerRefHR);
     DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -22724,6 +22932,7 @@ void RaceMod_Draw(void) {
     // round itself, and the car he drives as, or parked, was cut away while it was up: Polar Island's digger gone, 2026-10-27)
     UnsetClip();
     if (!RaceMod_Active()) { IslandCarDraw(); return; }
+    BowlChainsDraw();
     if (!LbaFont) return;
     // (LBA2_CARVIS=1: the first opponent's car's state logged as it changes -- in this scene or not, out of sight at Y -20000, hidden,
     // bodiless, behind the camera (16), off the screen (32) -- and how many mushrooms of the next cubes are drawn: the user saw FunFrock's
