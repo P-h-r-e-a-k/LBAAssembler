@@ -195,6 +195,43 @@ void TakeBuggy(void) {
 }
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+// Driving into an inside scene (drive_in=, RACEMOD.CPP RaceMod_DriveIn): where the car stood outside as it went in -- a little back from the
+// door the way it came, so it isn't parked in the doorway -- for LeaveBuggy in a room that has no car of its own: the car is back there.
+// The user, 2026-11-15: "Can we do engine changes to allow driving in inside scenes please".
+#define BUGGY_OUT_BACK 1500
+static S32 OutsideCube = -1, OutsideX, OutsideY, OutsideZ, OutsideBeta;
+
+// From GereZoneChangeCube (OBJECT.CPP) as Twinsen in his car takes a door, before it turns him to the way he faces beyond it, and from
+// ChangeCube for a script's change of scene: the outside spot, leaving an outside scene
+void BuggyLeavingScene(void) {
+    if (CubeMode != CUBE_EXTERIEUR) return;
+    const T_OBJET *ptrobj = &ListObjet[NUM_PERSO];
+    if (ptrobj->Move != MOVE_BUGGY_MANUAL AND ptrobj->Move != MOVE_BUGGY) return;
+    LongRotate(0, (ListBuggy[0].Speed < 0 ? BUGGY_OUT_BACK : -BUGGY_OUT_BACK) * 1024, ptrobj->Obj.Beta);
+    S32 x = ptrobj->Obj.X + X0 / 1024, z = ptrobj->Obj.Z + Z0 / 1024;
+    if (x < DEMI_BRICK_XZ) x = DEMI_BRICK_XZ;
+    if (x > 32768 - DEMI_BRICK_XZ) x = 32768 - DEMI_BRICK_XZ;
+    if (z < DEMI_BRICK_XZ) z = DEMI_BRICK_XZ;
+    if (z > 32768 - DEMI_BRICK_XZ) z = 32768 - DEMI_BRICK_XZ;
+    OutsideCube = NumCube; OutsideX = x; OutsideY = ptrobj->Obj.Y; OutsideZ = z; OutsideBeta = ptrobj->Obj.Beta;
+}
+
+// The room's floor under (x, z) for the car's wheels, pitch and roll: the bricks' top (the room's GetShadow, its slopes and the actors
+// stood on), measured from a step over the car -- the globals GetShadow sets put back, the car's own move among them (Nxw, Nzw).
+// A wall's top is no floor: higher than a step over the car, the car's own height; and no lower than two bricks under it.
+static S32 RoomFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
+    const S32 nx = Nxw, ny = Nyw, nz = Nzw, mx = XMap, my = YMap, mz = ZMap, sx = ShadowX, sy = ShadowY, sz = ShadowZ, so = ShadowTestObject;
+    const U8 sc = ShadowCol;
+    const S32 own = ptrobj->Obj.Y;
+    GetShadow(x, own + SIZE_BRICK_Y, z);
+    S32 y = ShadowY;
+    Nxw = nx; Nyw = ny; Nzw = nz; XMap = mx; YMap = my; ZMap = mz; ShadowX = sx; ShadowY = sy; ShadowZ = sz; ShadowTestObject = so; ShadowCol = sc;
+    if (y > own + SIZE_BRICK_Y) y = own;
+    if (y < own - 2 * SIZE_BRICK_Y) y = own - 2 * SIZE_BRICK_Y;
+    return y;
+}
+
+//■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 void LeaveBuggy(U8 newcomportement) {
     S32 sample;
@@ -227,6 +264,22 @@ void LeaveBuggy(U8 newcomportement) {
     InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
 
     SetComportement(newcomportement);
+
+    // (out of the car in a room with no car of its own -- driven in, drive_in=: NUM_BUGGY is the outside scene's actor's number, another
+    // actor here; the car is back where it stood outside, BuggyLeavingScene -- or, never driven in from outside, where it was parked before)
+    if (CubeMode == CUBE_INTERIEUR AND !IsBuggyPresent()) {
+        // (Twinsen where the car stood -- ObjectClear above put him at the room's corner; outside, PosObjetAroundAnother puts him by it)
+        ptrobj->Obj.X = ptb->X; ptrobj->Obj.Y = ptb->Y; ptrobj->Obj.Z = ptb->Z; ptrobj->Obj.Beta = ptb->Beta;
+        ClearRealAngle(ptrobj);
+        if (OutsideCube >= 0) {
+            ptb->Cube = OutsideCube; ptb->X = OutsideX; ptb->Y = OutsideY; ptb->Z = OutsideZ; ptb->Beta = OutsideBeta;
+            Log_Info("[buggy] out of the car in scene %d, which has no car of its own: the car back outside in scene %d at (%d,%d,%d)",
+                     (int)NumCube, (int)OutsideCube, (int)OutsideX, (int)OutsideY, (int)OutsideZ);
+        } else {
+            Log_Info("[buggy] out of the car in scene %d, which has no car of its own: the car where it was parked before, scene %d", (int)NumCube, (int)ptb->Cube);
+        }
+        return;
+    }
 
     //----- Restaure buggy scénarique
 
@@ -633,6 +686,9 @@ void MoveBuggy(T_OBJET *ptrobj) {
 // Only for a race-track mod (RACEMOD.CPP); otherwise the terrain, as ever.
 
 static S32 BuggyFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
+    // (indoors, drive_in=: the room's bricks -- CalculAltitudeObjet is the island's terrain, nothing to do with a room)
+    if (CubeMode == CUBE_INTERIEUR)
+        return RoomFloorY(ptrobj, x, z);
     S32 y = CalculAltitudeObjet(x, z, -1);
     if (!RaceMod_Active())
         return y;

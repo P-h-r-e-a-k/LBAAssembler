@@ -1179,6 +1179,11 @@ void ChangeCube() {
 
     APtObj = ptrobj;
 
+    // (in his car, out of an outside scene: where the car stood, for getting out of it in a room with no car of its own -- BUGGY.CPP; by a
+    // door, GereZoneChangeCube has said it already, before turning him)
+    if (FlagChgCube != 1)
+        BuggyLeavingScene();
+
     MemoMove = ptrobj->Move;
     LastCubeMode = CubeMode;
 
@@ -3588,7 +3593,14 @@ void DoAnim(U8 numobj) {
     /* gestion anim/DEP OBJET 3D */
 
     else /* pas SPRITE_3D donc obj articulés (Avez Vous Donc Une Ame? ;)*/
+    {
         GereObjAnim(numobj);
+
+        // Twinsen's car driven indoors (drive_in=, RACEMOD.CPP): its move, as outside (EXTFUNC.CPP DoAnimExt) -- the game's own never
+        // let it into a room, and here it stood still, its engine running
+        if (APtObj->Move == MOVE_BUGGY_MANUAL)
+            DoAnimBuggy(APtObj);
+    }
 
     /*──────────────────────────────────────────────────────────────────────────*/
     // Gestion des WAGONS
@@ -4608,6 +4620,14 @@ void DoDir(U8 numobj) {
                 AND !(ptrobj->WorkFlags & ANIM_MASTER_GRAVITY)) {
             ActionNormal = 2; // Action Buggy pour en descendre
             InitWaitNoInput(I_ACTION);
+            // (outside, the car's own actor's script lets him out on the action key; a room he drove into, drive_in=, has no car of its
+            // own, so the engine does: out, and the car back outside where it stood -- BUGGY.CPP LeaveBuggy)
+            if (CubeMode == CUBE_INTERIEUR AND !IsBuggyPresent() AND !(ptrobj->WorkFlags & FALLING) AND NewCube == -1) {
+                ActionNormal = FALSE;
+                ptrobj->Move = MOVE_MANUAL;
+                LeaveBuggy(C_NORMAL);
+                break;
+            }
         } else {
             if ((Input & I_ACTION_ALWAYS)
                     AND !(ptrobj->WorkFlags & ANIM_MASTER_GRAVITY)
@@ -6646,8 +6666,12 @@ S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
     { extern S32 RaceMod_CarKeptOut(S32 scene, const char *how); if (RaceMod_CarKeptOut(ptrz->Num, "a door")) return FALSE; }
     // (nor through a door whose lift or wall is gone from this weather's island file -- RACEMOD.CPP RaceMod_DoorShut)
     { extern S32 RaceMod_DoorShut(const T_ZONE *zn); if (RaceMod_DoorShut(ptrz)) return FALSE; }
+    // (the car through a door into an outside scene only, as the game had it -- or into an inside one listed by drive_in=, RACEMOD.CPP
+    // RaceMod_DriveIn: the user, 2026-11-15, "allow driving in inside scenes")
+    extern S32 RaceMod_DriveIn(S32 scene);
     if (((ptrobj->Move != MOVE_BUGGY_MANUAL AND ptrobj->Move != MOVE_BUGGY)
-             OR(CubeArrowFlags(ptrz->Num) & 4)) // Exterieur
+             OR(CubeArrowFlags(ptrz->Num) & 4) // Exterieur
+             OR RaceMod_DriveIn(MapPack_ZoneScene(NumCube, ptrz->Num)))
         AND(ptrz->Info7 & ZONE_ON)) {
         // protection meurt dans un autre cube
         if (ptrobj->LifePoint > 0) {
@@ -6722,6 +6746,12 @@ S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
             newbeta = (-ptrz->Info3 * 1024) & 4095;
 
             LongRotate(x - ptrz->X0, z - ptrz->Z0, newbeta);
+            const S32 rx = X0, rz = Z0;
+
+            if (ptrobj == &ListObjet[NUM_PERSO])
+                BuggyLeavingScene();
+            X0 = rx;
+            Z0 = rz;
 
             if (flagx)
                 NewPosX = ptrz->Info0 + X0;
@@ -7022,6 +7052,67 @@ void CheckZoneSce(T_OBJET *ptrobj, U8 numobj) {
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+// Twinsen's car at a door into an inside scene it may go into (drive_in=, RACEMOD.CPP RaceMod_DriveIn): the door taken when the car's nose
+// (its tail, reversing) is in the door's zone -- the game takes a door when the hero's middle is in it, and the car's long body stops at the
+// door's wall before its middle gets there. Taken as from the nearest place in the zone to the car's middle (GereZoneChangeCube: the way in
+// put where that place puts it; the zone's wait for the door's wall, ZONE_TEST_BRICK, not waited for -- the nose is already at it).
+void CheckBuggyDriveIn(T_OBJET *ptrobj) {
+    extern S32 RaceMod_DriveIn(S32 scene);
+    if (NewCube != -1 OR (ptrobj->WorkFlags & FALLING))
+        return;
+    // (indoors only in a room the car may be in: the game's own scenes as they were)
+    if (CubeMode == CUBE_INTERIEUR AND !RaceMod_DriveIn(NumCube))
+        return;
+    // (half a brick past the nose: the game's doorways are made for Twinsen on foot, and the car -- wider than most -- stops at the door's
+    // wall before its nose is over the threshold; driven at it, not stood still)
+    if (ListBuggy[0].Speed > 0)
+        Rotate(0, ptrobj->ZMax + DEMI_BRICK_XZ, ptrobj->Obj.Beta);
+    else if (ListBuggy[0].Speed < 0)
+        Rotate(0, ptrobj->ZMin - DEMI_BRICK_XZ, ptrobj->Obj.Beta);
+    else
+        Rotate(0, ptrobj->ZMax, ptrobj->Obj.Beta);
+    const S32 x = ptrobj->Obj.X + X0, y = ptrobj->Obj.Y, z = ptrobj->Obj.Z + Z0;
+    // (not straight back out of the door the car came in by, its tail in it as it arrives: a scene's doors taken by the nose only once it
+    // has been in none of them)
+    static S32 armedCube = -1;
+    T_ZONE *ptrz = ListZone;
+    S32 inAny = FALSE;
+    for (S32 n = 0; n < NbZones; n++, ptrz++)
+        inAny |= ptrz->Type == 0 AND ZonePointInBox(x, y, z, ptrz->X0, ptrz->Y0, ptrz->Z0, ptrz->X1, ptrz->Y1, ptrz->Z1);
+    if (armedCube != (S32)NumCube) {
+        if (!inAny) armedCube = NumCube;
+        return;
+    }
+    if (!ListBuggy[0].Speed)
+        return;
+    ptrz = ListZone;
+    for (S32 n = 0; n < NbZones; n++, ptrz++) {
+        if (ptrz->Type != 0 OR !(ptrz->Info7 & ZONE_ON))
+            continue;
+        if (!ZonePointInBox(x, y, z, ptrz->X0, ptrz->Y0, ptrz->Z0, ptrz->X1, ptrz->Y1, ptrz->Z1))
+            continue;
+        const S32 scene = MapPack_ZoneScene(NumCube, ptrz->Num);
+        // (out of a room the car is in by its nose too, into an outside scene -- outside, the game's own way: the car's middle)
+        const S32 outside = (CubeArrowFlags(ptrz->Num) & 4) != 0;
+        if (outside ? CubeMode == CUBE_EXTERIEUR : !RaceMod_DriveIn(scene))
+            continue;
+        const S32 ox = ptrobj->Obj.X, oz = ptrobj->Obj.Z;
+        const S32 info5 = ptrz->Info5;
+        ptrobj->Obj.X = ox < ptrz->X0 ? ptrz->X0 : ox >= ptrz->X1 ? ptrz->X1 - 1 : ox;
+        ptrobj->Obj.Z = oz < ptrz->Z0 ? ptrz->Z0 : oz >= ptrz->Z1 ? ptrz->Z1 - 1 : oz;
+        ptrz->Info5 &= ~ZONE_TEST_BRICK;
+        const S32 taken = GereZoneChangeCube(ptrobj, ptrz);
+        ptrz->Info5 = info5;
+        ptrobj->Obj.X = ox;
+        ptrobj->Obj.Z = oz;
+        if (taken) {
+            armedCube = -1;
+            Log_Info("[buggy] the car's %s at the door into scene %d: driven through", ListBuggy[0].Speed >= 0 ? "nose" : "tail", (int)scene);
+            return;
+        }
+    }
+}
+
 void CheckBuggyZoneGiver(T_OBJET *ptrobj) {
     S32 n;
     T_ZONE *ptrz;

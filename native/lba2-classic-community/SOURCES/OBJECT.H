@@ -113,6 +113,7 @@ extern void SetZoneCamera(T_ZONE *ptrz);
 extern void CheckZoneSce(T_OBJET *ptrobj, U8 numobj);
 /*--------------------------------------------------------------------------*/
 extern void CheckBuggyZoneGiver(T_OBJET *ptrobj);
+extern void CheckBuggyDriveIn(T_OBJET *ptrobj);
 /*--------------------------------------------------------------------------*/
 
 #endif // OBJECT_H

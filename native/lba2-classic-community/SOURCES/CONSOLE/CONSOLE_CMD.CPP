@@ -2860,6 +2860,14 @@ static void cmd_racewalk(int argc, const char *argv[]) {
 
 /* racestop <x> <z> <reach>: with a race file's on_foot=, the test pilot's car stopped once it comes within <reach> of the place (island
    units) and Twinsen got out (RACEMOD.CPP RaceMod_StopAt) -- then any racewalk given walks him. */
+/* intocar: Twinsen into his car where he stands -- the scene's car actor brought to him (RACEMOD.CPP RaceMod_IntoCarHere). For headless tests
+   (drive_in=, 2026-11-15: driven up to a door into an inside scene). */
+static void cmd_intocar(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    extern S32 RaceMod_IntoCarHere(void);
+    Console_Print(RaceMod_IntoCarHere() ? "intocar: in his car" : "intocar: no car in this scene");
+}
+
 static void cmd_racestop(int argc, const char *argv[]) {
     extern void RaceMod_StopAt(double x, double z, double reach);
     if (argc < 4) { Console_Print("Usage: racestop <x> <z> <reach>"); return; }
@@ -3367,6 +3375,8 @@ void Console_RegisterAll(void) {
                               "raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>",
                               "Each percentage scales the race file's car (its gears' top speeds, pull, brakes, steering); the lap at a "
                               "neutral character, and its time flat out, round the bends and between (RACEMOD.CPP RaceMod_PlanLap).");
+    Console_RegisterCommandEx("intocar", cmd_intocar, "Test: Twinsen into his car where he stands", "intocar",
+                              "The scene's car actor brought to him and taken, as its script does. For headless tests.");
     Console_RegisterCommandEx("racestop", cmd_racestop, "Race-track test: stop the pilot's car near a place and get out",
                               "racestop <x> <z> <reach>",
                               "With a race file's on_foot=1, the test pilot stops the car once it comes within <reach> of the "

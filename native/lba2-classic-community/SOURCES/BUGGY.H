@@ -51,6 +51,7 @@ extern U8 NumBuggy;
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 extern void InitBuggy(U8 numobj, U32 flaginit);
+extern void BuggyLeavingScene(void);
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 extern void ResetBuggy(void);

@@ -1496,6 +1496,13 @@ static int s_lensVar = -1, s_lensValue = 0, s_lensCubeScene = -1, s_lensCubeVar 
 // high over his feet, looking the way he faces (PovDraw). The user, 2026-11-14, of Stella Entities' private show: "Let's watch the show
 // from Twinsen's view point" -- the rooms' bricks are drawn for the game's slanted view only, so the room itself is not.
 static int s_povScene = -1, s_povVar = 0, s_povValue = 0, s_povEye = 0, s_povMark = -1;
+// drive_in=<scene> [<scene> ...] | all: the inside scenes Twinsen's car may be driven into through a door (the game's own lets it through
+// doors into the island's outside cubes only: OBJECT.CPP GereZoneChangeCube) -- and, racing, not kept out of them (RaceMod_CarKeptOut).
+// Every file's lines add to the list. In the room the car drives on its bricks (OBJECT.CPP DoAnim, BUGGY.CPP BuggyFloorY); got out of
+// where the room has no car of its own, it is back where it stood outside (BUGGY.CPP LeaveBuggy). The user, 2026-11-15: "Can we do engine
+// changes to allow driving in inside scenes please". (LBA2_DRIVE_IN, the same list, for a game without a race-track mod.)
+#define RACE_MAX_DRIVE_IN 32
+static int s_driveIn[RACE_MAX_DRIVE_IN], s_nbDriveIn = 0, s_driveInAll = 0;
 // (lens='s third value: its round that many hundredths of the screen's height up from the middle -- the Wizard and the cow in the middle of
 // it, the user, 2026-11-14: "raise the view circle of the telescope up fractionally, so the cow and wizard are in the centre of the circle")
 static int s_lensRaise = 0;
@@ -5139,6 +5146,17 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
+        else if (!strcmp(key, "drive_in")) {
+            if (!strcmp(v, "all")) s_driveInAll = 1;
+            else for (const char *q = v; *q;) {
+                char *end; const long n = strtol(q, &end, 10);
+                if (end == q) break;
+                int seen = 0;
+                for (int i = 0; i < s_nbDriveIn; i++) seen |= s_driveIn[i] == (int)n;
+                if (!seen && s_nbDriveIn < RACE_MAX_DRIVE_IN) s_driveIn[s_nbDriveIn++] = (int)n;
+                q = end;
+            }
+        }
         else if (!strcmp(key, "pov")) {
             if (!setRead && sscanf(v, "%d %d %d %d %d", &s_povScene, &s_povVar, &s_povValue, &s_povEye, &s_povMark) != 5) s_povScene = -1;
         }
@@ -13165,6 +13183,18 @@ static void IntoCar(const char *why) {
     Message(why);
 }
 
+// The console's intocar: Twinsen into his car where he stands, in a scene with its car actor
+S32 RaceMod_IntoCarHere(void) {
+    if (!IsBuggyPresent() || NUM_BUGGY >= NbObjets) return 0;
+    if (Comportement == C_BUGGY) return 1;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    hero->WorkFlags &= ~FALLING;
+    ClearRealAngle(hero);
+    BackInCar();
+    ListBuggy[0].Speed = 0;
+    return 1;
+}
+
 // Every frame (RaceMod_Frame): on foot, what takes him back to his car.
 static void OnFoot(S32 now) {
     if (!s_onFoot || CubeMode != CUBE_EXTERIEUR) return;
@@ -14201,7 +14231,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -17301,14 +17331,21 @@ static void IncomingHeard(S32 now, int driving) {
 static int s_carTrace = 0;
 void RaceMod_CarTrace(int on) { s_carTrace = on; }
 static void CarTraceLine(void) {
-    if (!s_carTrace || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
+    if (!s_carTrace || Comportement != C_BUGGY) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    extern S32 BuggyPitchProbe[3];
+    // (indoors, drive_in=: the scene's own place, the floor probes the room's bricks -- BUGGY.CPP RoomFloorY)
+    if (CubeMode != CUBE_EXTERIEUR) {
+        Log_Info("[cartrace] t %u scene %d x %d y %d z %d pitch %d roll %d speed %d fall %d probes %d %d %d beta %d", (unsigned)TimerRefHR, (int)NumCube,
+                 (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z, (int)ListBuggy[0].Alpha, (int)ListBuggy[0].Gamma, (int)ListBuggy[0].Speed,
+                 (hero->WorkFlags & FALLING) ? 1 : 0, (int)BuggyPitchProbe[0], (int)BuggyPitchProbe[1], (int)BuggyPitchProbe[2], (int)(hero->Obj.Beta & 4095));
+        return;
+    }
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
     S32 f = -99999;
     int seg = -1;
     double lat = 0, t = 0;
     if (s_nbRaised && !RaisedAt(wx, wz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t)) f = -99999;
-    extern S32 BuggyPitchProbe[3];
     Log_Info("[cartrace] t %u x %.0f y %d z %.0f pitch %d roll %d speed %d fall %d floor %d seg %d lat %.0f ground %d probes %d %d %d beta %d", (unsigned)TimerRefHR, wx,
              (int)hero->Obj.Y, wz, (int)ListBuggy[0].Alpha, (int)ListBuggy[0].Gamma, (int)ListBuggy[0].Speed, (hero->WorkFlags & FALLING) ? 1 : 0,
              (int)f, seg, lat, (int)CalculAltitudeTerrain(hero->Obj.X, hero->Obj.Z, 0), (int)BuggyPitchProbe[0], (int)BuggyPitchProbe[1],
@@ -20017,8 +20054,31 @@ void RaceMod_DoorTo(const T_ZONE *zn) {
 // A car racing is never taken indoors, by a door or by a script: a scene that isn't one of the island's cubes is for Twinsen on foot. Wannies Island's start scene, 98, has a script for
 // Twinsen arriving by its lift: it reads variable 107 before the race's hold has set it, so every race began with it waiting to send him on to the hall, scene 123, on reaching the
 // top of the lift -- a zone behind the start line. Driving away from it no one came to it; the user, 2026-11-01, reversing from the start: "warp inside".
+// drive_in= (or LBA2_DRIVE_IN): non-zero when Twinsen's car may go into that inside scene through a door
+S32 RaceMod_DriveIn(S32 scene) {
+    static int envRead = 0, envAll = 0, envN = 0, env[RACE_MAX_DRIVE_IN];
+    if (!envRead) {
+        envRead = 1;
+        const char *e = getenv("LBA2_DRIVE_IN");
+        if (e && !strcmp(e, "all")) envAll = 1;
+        else if (e) for (const char *q = e; *q && envN < RACE_MAX_DRIVE_IN;) {
+            char *end; const long n = strtol(q, &end, 10);
+            if (end == q) { if (*q) q++; continue; }
+            env[envN++] = (int)n; q = end;
+        }
+        if (envAll || envN) Log_Info("[buggy] LBA2_DRIVE_IN: the car may be driven into %s", envAll ? "every inside scene" : "the inside scenes listed");
+    }
+    if (envAll) return 1;
+    for (int i = 0; i < envN; i++) if (env[i] == scene) return 1;
+    if (!RaceMod_Active()) return 0;
+    if (s_driveInAll) return 1;
+    for (int i = 0; i < s_nbDriveIn; i++) if (s_driveIn[i] == scene) return 1;
+    return 0;
+}
+
 S32 RaceMod_CarKeptOut(S32 scene, const char *how) {
     if (!RaceMod_Active() || !CarRacing()) return 0;
+    if (RaceMod_DriveIn(scene)) return 0;
     int own = 0;
     // (an inside scene says it is cube (0,0))
     for (int qx = 0; qx < 16 && !own; qx++) for (int qz = 0; qz < 16 && !own; qz++) own = (qx || qz) && CubeScene(qx, qz) == scene;

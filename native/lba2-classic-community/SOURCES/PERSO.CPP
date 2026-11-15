@@ -1859,6 +1859,8 @@ restartloop:
                     // teste les zones giver pour le
                     // buggy au point devant le buggy
                     CheckBuggyZoneGiver(ptrobj);
+                    // (and the doors into inside scenes it may be driven into, by its nose: drive_in=)
+                    CheckBuggyDriveIn(ptrobj);
                 }
 
                 // pour la demo
