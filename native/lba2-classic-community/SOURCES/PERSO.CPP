@@ -1994,7 +1994,9 @@ restartloop:
 
                 /* (Auto camera in a car: on while Twinsen drives, Classic on foot -- picked up as he gets in or out; and on foot in a room
                    under the ground, the race-track mode's foot_room= -- the palace's dungeon: the classic camera saw the floor over him) */
-                const S32 autoNow = Comportement == C_BUGGY || RaceMod_FootRoom();
+                /* (not in a car driven indoors, drive_in=: the room's own camera there for now -- the user, 2026-11-15, "Let's omit the
+                   chase camera for indoor scenes at the moment"; back to Auto as the car comes out) */
+                const S32 autoNow = (Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) || RaceMod_FootRoom();
                 if (FollowCameraInCar AND autoNow != (FollowCamera != 0)) {
                     FollowCamera = autoNow;
                     if (FollowCamera)
