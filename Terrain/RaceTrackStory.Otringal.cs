@@ -489,11 +489,18 @@ void comportement_1()
             b.Edit(HotelScene, "the hotel pool's water and a diving board (Twinsen swims in it: RACEMOD.CPP pool=)", model =>
             {
                 var water = Citadel.CitadelProps.Actor(Citadel.CitadelProps.PoolWater, Citadel.CitadelProps.PoolMiddleX, Citadel.CitadelProps.PoolSurface, Citadel.CitadelProps.PoolMiddleZ);
+                // (the water walked through, not a solid sheet: falling through it off the diving board, Twinsen was pushed out of its box --
+                // both basins' -- to its far corner, or out of the room altogether, the user, 2026-11-14: "After respawning after using the
+                // diving board in the imperial hotel twinsen respawns out of bounds")
+                water.Armor = WalkOverArmour;
                 var board = Citadel.CitadelProps.Actor(Citadel.CitadelProps.DivingBoard, Citadel.CitadelProps.BoardX, Citadel.CitadelProps.PoolDeck, Citadel.CitadelProps.BoardZ, Citadel.CitadelProps.BoardBeta);
                 const string Still = "void comportement_0()\n{\n}\n";
                 var addWater = IslandBeatsA.Add(model, water, Still);
                 var addBoard = IslandBeatsA.Add(model, board, Still);
-                return scripts => { addWater(scripts); addBoard(scripts); };
+                var ladder = Citadel.CitadelProps.Actor(Citadel.CitadelProps.PoolLadder, Citadel.CitadelProps.LadderX, Citadel.CitadelProps.PoolDeck, Citadel.CitadelProps.LadderZ, Citadel.CitadelProps.LadderBeta);
+                ladder.Armor = WalkOverArmour;
+                var addLadder = IslandBeatsA.Add(model, ladder, Still);
+                return scripts => { addWater(scripts); addBoard(scripts); addLadder(scripts); };
             });
 
         // the bowling alley's lift in the prison exit's platform (BowlingAlley: scene 393 below it)

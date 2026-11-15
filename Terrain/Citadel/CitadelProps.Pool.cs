@@ -13,6 +13,10 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static partial class CitadelProps
 {
     public const int PoolWater = 120, DivingBoard = 121;
+    // (and a ladder at the basin's edge -- the user, 2026-11-14: "Let's also make sure there's a ladder in the pool": steel rails up out of the
+    // water and over the edge onto the deck, three steps under the surface; swimming to any edge takes Twinsen out, the ladder's included)
+    public const int PoolLadder = 19, LadderX = 15500, LadderZ = 16600, LadderBeta = 1024;
+    private const int LadderSteel = 56, LadderStep = 52;
     // the basin (scene units): two rectangles -- x0 z0 x1 z1 -- its floor, the water's surface
     public static readonly (int X0, int Z0, int X1, int Z1)[] PoolBasin = { (18500, 7500, 23500, 19500), (15500, 13500, 18500, 19500) };
     public const int PoolFloor = 1536, PoolSurface = 1990, PoolDeck = 2048;
@@ -32,6 +36,24 @@ internal static partial class CitadelProps
         foreach (var (x0, z0, x1, z1) in PoolBasin)
             m.Pane(0, PoolWaterColour, new Vector3(x0 - PoolMiddleX, 0, z0 - PoolMiddleZ), new Vector3(x1 - PoolMiddleX, 0, z0 - PoolMiddleZ),
                 new Vector3(x1 - PoolMiddleX, 0, z1 - PoolMiddleZ), new Vector3(x0 - PoolMiddleX, 0, z1 - PoolMiddleZ));
+        return m.ToBody(header);
+    }
+
+    // The ladder, its foot the deck's edge: its own +z over the water (the actor turned to face the basin), rails a step apart along the
+    // edge, up out of the water and over onto the deck, steps between them under the surface
+    public static Body BuildPoolLadder(byte[] header)
+    {
+        var m = new CarMesh("the hotel pool's ladder", new[] { -1 });
+        m.Light = 1.0f;
+        const float Rail = 34, Half = 230, Out = 150, Back = 160, Top = 640, Low = -480;
+        foreach (var x in new[] { -Half, Half })
+        {
+            m.Box(0, new Vector3(x, (Top + Low) / 2, Out), new Vector3(Rail, Top - Low, Rail), LadderSteel);
+            m.Box(0, new Vector3(x, Top, (Out - Back) / 2), new Vector3(Rail, Rail, Out + Back + Rail), LadderSteel);
+            m.Box(0, new Vector3(x, Top / 2, -Back), new Vector3(Rail, Top, Rail), LadderSteel);
+        }
+        foreach (var y in new[] { -120f, -260f, -400f })
+            m.Box(0, new Vector3(0, y, Out), new Vector3(2 * Half, 22, 110), LadderStep);
         return m.ToBody(header);
     }
 
