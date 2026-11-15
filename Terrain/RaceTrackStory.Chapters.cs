@@ -1781,9 +1781,11 @@ void comportement_2()
     // when he uses the doors". Only once he's been out of its zone since he last came through it: DoorAway.)
     public const int ScopeVar = 227;
     // (both seen through the telescope's lens: the race file's lens= and lens_cube= -- RaceCarEngineFile)
-    // (the cow's view: its round 14 hundredths of the screen up, the Wizard and Rosa in its middle -- the user, 2026-11-14)
-    private const int CowLensRaise = 14;
-    internal static string LensLines => $"lens={ScopeVar} 1 {CowLensRaise}\nlens_cube={LighthouseScene} {StormLook} 2\n";
+    // (the cow's view: the lens's round in the screen's middle, whole, and the camera aimed CowLookUp layers above Rosa's feet so the
+    // Wizard and Rosa come down into its middle -- the user, 2026-11-14: "can we get the full circle on the screen please with the scene in
+    // the centre"; the round raised 14 hundredths instead ran off the top)
+    private const int CowLookUp = 3;
+    internal static string LensLines => $"lens={ScopeVar} 1\nlens_cube={LighthouseScene} {StormLook} 2\n";
     // (ScopeSide: the balcony by the telescope, west of the spell's place, LighthouseTop)
     private const int CowScene = 47, LighthouseTop = 60, ScopeSide = 61, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
@@ -1809,7 +1811,7 @@ void comportement_2()
     // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
-    private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 5000, 8 };
+    private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 3800, 8 };
     private static void LighthouseClimb(StoryParts p)
     {
         p.Edit(LighthouseScene, "the lighthouse's door once the spell is cast: up to its top and down, and the telescope there", model =>
@@ -2012,7 +2014,7 @@ stop();
             void Shot(int num, (int X, int Y, int Z) at, (int X, int Y, int Z) her)
             {
                 var info = (int[])CowShot.Clone();
-                (info[0], info[1], info[2]) = ((at.X + her.X) / 2 / 512, her.Y / 256, (at.Z + her.Z) / 2 / 512);
+                (info[0], info[1], info[2]) = ((at.X + her.X) / 2 / 512, her.Y / 256 + CowLookUp, (at.Z + her.Z) / 2 / 512);
                 model.Zones.Add(new SceneZoneModel { Type = 1, Num = num, X0 = at.X - 400, X1 = at.X + 400, Y0 = at.Y - 1500, Y1 = at.Y + 1500, Z0 = at.Z - 500, Z1 = at.Z + 500, Info = info });
             }
             Shot(CowCamera, here, (rosa.X, rosa.Y, rosa.Z));

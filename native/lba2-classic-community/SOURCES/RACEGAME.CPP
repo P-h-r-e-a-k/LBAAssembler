@@ -3158,7 +3158,10 @@ static const T_RG_REPLAY s_replays[] = {
     // (the Wizard and the cow: the telescope's view itself, a clip -- the cow's field with the telescope's look on (ScopeVar 227 1), the Wizard
     // hopping behind her, and back to the menu: the user, 2026-11-12, "it just needs to be 5 seconds of Twinsen watching the wizard with the
     // cow performing the forward hop motion")
-    {"telescope", 47, 0, 4, {{253, 2}, {56, 5}, {51, 4}, {227, 1}}, 5000},
+    // (in chapter 1, the storm night the story shows it in: chapter 2 was set after the island had loaded in the storm, and the scene loaded
+    // again -- resumed from the menu -- came up in fine weather, CITABAU, a blue sky for the black: the user, 2026-11-14, "Pressing escape,
+    // then resuming ... changed the sky colour from black to blue ... go with the night version with black sky")
+    {"telescope", 47, 0, 4, {{253, 1}, {56, 5}, {51, 4}, {227, 1}}, 5000},
     {"stella", 390, 0, 1, {{253, 4}}},                             // Stella Entities
     {"bowling", 393, 0, 1, {{253, 5}}},                            // the bowling alley
     // (the Dino-Fly on the dream's Polar Island, on its jetty -- the user, 2026-11-14: "spawn Twinsen next to dinofly, with dinofly already
