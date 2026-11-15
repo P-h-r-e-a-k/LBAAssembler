@@ -866,8 +866,15 @@ static char s_bowlMsg[64] = "";
 static U32 s_bowlInput = 0;
 // darts=<scene> <spot x> <spot z> <reach> <board x> <board z> <board y>, dart_foe=<body> <anim> <scatter> <name>, dart_zoe=<same>: the Tavern's darts (DartFrame)
 typedef struct { S32 Body, Anim, Scatter; char Name[24]; } T_DART_FOE;
-static T_DART_FOE s_dtFoes[8], s_dtZoe;
+static T_DART_FOE s_dtFoes[16], s_dtZoe;
 static int s_nbDtFoe = 0, s_dtHasZoe = 0, s_dtScene = -1, s_dtSpot[3], s_dtBoard[3];
+// (more than one board -- the Tavern's, the Tralu's bar's: the user, 2026-11-15, "Let's add a dart board to the tralu bar area too ... Let's
+// make the opponent one of the people sat at the table": each darts= line a board of its own, its dart_board= and dart_foe= lines after it
+// its own; the one in the scene Twinsen is in the board played, DartBoardPick, its foes from s_dtFoeFirst, from its chapter on)
+#define RACE_MAX_DART_BOARDS 4
+typedef struct { int Scene, Spot[3], Board[3], Face[6], HasFace, FoeFirst, NbFoe, MinChapter; } T_DART_BOARD;
+static T_DART_BOARD s_dtBoards[RACE_MAX_DART_BOARDS];
+static int s_nbDtBoards = 0, s_dtFoeFirst = 0, s_dtFoeCount = 0, s_dtMinChapter = 2;
 static int s_dtOn = 0, s_dtState = 0, s_dtTurn = 0, s_dtLeft = 3, s_dtScore[2], s_dtStartScore[2], s_dtFoe = -1, s_dtN = 0, s_dtActWas = 0, s_dtZoePress = 0, s_dtThrown = 0;
 static double s_dtAimX = 0, s_dtAimY = 0, s_dtMark[3][2], s_dtFx = 0, s_dtFy = 0;
 static S32 s_dtAt = 0, s_dtMsgUntil = 0, s_dtLast = 0, s_dtThrowAt = 0;
@@ -4441,15 +4448,24 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbLifts++;
             }
         }
-        else if (!strcmp(key, "dart_board")) s_dtHasFace = sscanf(v, "%d %d %d %d %d %d", &s_dtFace[0], &s_dtFace[1], &s_dtFace[2], &s_dtFace[3], &s_dtFace[4], &s_dtFace[5]) == 6;
-        else if (!strcmp(key, "darts")) { if (sscanf(v, "%d %d %d %d %d %d %d", &s_dtScene, &s_dtSpot[0], &s_dtSpot[1], &s_dtSpot[2], &s_dtBoard[0], &s_dtBoard[1], &s_dtBoard[2]) != 7) s_dtScene = -1; }
+        else if (!strcmp(key, "dart_board") && s_nbDtBoards) {
+            T_DART_BOARD *b = &s_dtBoards[s_nbDtBoards - 1];
+            b->HasFace = sscanf(v, "%d %d %d %d %d %d", &b->Face[0], &b->Face[1], &b->Face[2], &b->Face[3], &b->Face[4], &b->Face[5]) == 6;
+        }
+        else if (!strcmp(key, "darts") && s_nbDtBoards < RACE_MAX_DART_BOARDS) {
+            T_DART_BOARD *b = &s_dtBoards[s_nbDtBoards];
+            memset(b, 0, sizeof(*b));
+            b->MinChapter = 2;
+            const int n = sscanf(v, "%d %d %d %d %d %d %d %d", &b->Scene, &b->Spot[0], &b->Spot[1], &b->Spot[2], &b->Board[0], &b->Board[1], &b->Board[2], &b->MinChapter);
+            if (n >= 7) { b->FoeFirst = s_nbDtFoe; s_nbDtBoards++; }
+        }
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
             memset(&f, 0, sizeof(f));
             if (sscanf(v, "%d %d %d %23s", &f.Body, &f.Anim, &f.Scatter, f.Name) == 4) {
                 for (char *q = f.Name; *q; q++) if (*q == '_') *q = ' ';
                 if (!strcmp(key, "dart_zoe")) { s_dtZoe = f; s_dtHasZoe = 1; }
-                else if (s_nbDtFoe < 8) s_dtFoes[s_nbDtFoe++] = f;
+                else if (s_nbDtFoe < 16) { s_dtFoes[s_nbDtFoe++] = f; if (s_nbDtBoards) s_dtBoards[s_nbDtBoards - 1].NbFoe++; }
             }
         }
         else if (!strcmp(key, "bowling_game")) s_bowlGame = atoi(v);
@@ -14181,7 +14197,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -19522,7 +19538,21 @@ static void DartEnd(void) {
     DartsGiveBack();
     s_dtHeroWalk = -1;
 }
+// The board of the scene Twinsen is in, made the one played (not in a match: a match keeps its board)
+static void DartBoardPick(void) {
+    if (s_dtOn) return;
+    s_dtScene = -1;
+    for (int i = 0; i < s_nbDtBoards; i++) {
+        const T_DART_BOARD *b = &s_dtBoards[i];
+        if (b->Scene != (S32)NumCube) continue;
+        s_dtScene = b->Scene;
+        memcpy(s_dtSpot, b->Spot, sizeof(s_dtSpot)); memcpy(s_dtBoard, b->Board, sizeof(s_dtBoard)); memcpy(s_dtFace, b->Face, sizeof(s_dtFace));
+        s_dtHasFace = b->HasFace; s_dtFoeFirst = b->FoeFirst; s_dtFoeCount = b->NbFoe; s_dtMinChapter = b->MinChapter;
+        return;
+    }
+}
 static void DartFrame(S32 now) {
+    DartBoardPick();
     if (s_dtScene < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene || RaceGame_StoryZoe()) {
         if (s_dtOn && (S32)NumCube != s_dtScene) { s_dtOn = 0; DartsGiveBack(); s_dtHeroWalk = -1; }
         return;
@@ -19536,11 +19566,11 @@ static void DartFrame(S32 now) {
         // (the opponent's place empty but in a match)
         { T_OBJET *st = DartStand(); if (st && !(st->Flags & INVISIBLE)) DartStandShow(0); }
         const double dx = hero->Obj.X - s_dtSpot[0], dz = hero->Obj.Z - s_dtSpot[1];
-        if (pressed && ListVarGame[FLAG_CHAPTER] >= 2 && Comportement != C_BUGGY && !(hero->WorkFlags & FALLING) && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) {
+        if (pressed && ListVarGame[FLAG_CHAPTER] >= s_dtMinChapter && Comportement != C_BUGGY && !(hero->WorkFlags & FALLING) && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) {
             // a match: against Zoe (player 2) when the game has two players, else one of the foes at random
             s_dtSeed ^= (U32)now * 2654435761u;
             const int two = RaceGame_StoryTwo() && s_dtHasZoe;
-            s_dtFoe = two ? -1 : s_nbDtFoe ? (int)(DartRnd() * s_nbDtFoe) % s_nbDtFoe : -1;
+            s_dtFoe = two ? -1 : s_dtFoeCount ? s_dtFoeFirst + (int)(DartRnd() * s_dtFoeCount) % s_dtFoeCount : -1;
             if (!two && s_dtFoe < 0) return;
             s_dtOn = 1; s_dtState = 0; s_dtTurn = 0; s_dtLeft = 3; s_dtN = 0;
             s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = DART_START;
@@ -19770,8 +19800,9 @@ static void DartDraw(void) {
     if (s_dtState == 6) {
         char wager[64];
         const char *money = MONEY_ZLITOS ? "zlitos" : "kashes";
-        if (s_dtStakes[s_dtStakePick]) snprintf(wager, sizeof(wager), "Wager: < %d %s >", s_dtStakes[s_dtStakePick], money);
-        else snprintf(wager, sizeof(wager), "Wager: < none >");
+        // (no < > round it: the font has neither, they came out as stars -- the user's picture of the Tralu bar's board, 2026-11-15)
+        if (s_dtStakes[s_dtStakePick]) snprintf(wager, sizeof(wager), "Wager: %d %s", s_dtStakes[s_dtStakePick], money);
+        else snprintf(wager, sizeof(wager), "Wager: none");
         HudLine(w / 2 - SizeFont(wager) / 2, h - 90, wager, -1);
         char keys[] = "Left, Right: the stake -- Action: play";
         HudLine(w / 2 - SizeFont(keys) / 2, h - 60, keys, -1);
