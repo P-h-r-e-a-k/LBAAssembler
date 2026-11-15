@@ -6052,14 +6052,16 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_RACING);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
-    // (what this player has found: not in a race going on -- who is playing is the player menu's, behind Quit. In the story's menu too:
-    // the user, 2026-11-13, "Our achievements menu doesn't seem to be on all menus. This menu is escaping to the menu from story mode")
-    if (!inGame || s_storyOn || !restart) SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);
+    // (what this player has found: on every main menu -- the title's, the story's, after a race or a time trial (the user, 2026-11-14:
+    // "Can we make sure all menu's are uniform please? This menu still misses the achievements option - after finishing a race"))
+    SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
     s_mainMenu[1] = (U16)nb;
-    // (eight or nine rows from 290 ran off the bottom of a 480-tall screen, Quit cut in half: the user's picture, 2026-10-31)
-    s_mainMenu[2] = (U16)(nb > 7 ? 265 : nb > 6 ? 290 : 300);
+    // (eight or nine rows from 290 ran off the bottom of a 480-tall screen, Quit cut in half: the user's picture, 2026-10-31. Now a list
+    // longer than the screen's room scrolls, GAMEMENU_MOUSE.CPP GameMenuLayout -- the user, 2026-11-14: "We can add a scrollbar if menus
+    // require it, we don't have to force them all to fit")
+    s_mainMenu[2] = (U16)(nb > 6 ? 290 : 300);
     s_mainMenu[3] = 0;
     for (;;) {
         const S32 select = Menu(s_mainMenu);

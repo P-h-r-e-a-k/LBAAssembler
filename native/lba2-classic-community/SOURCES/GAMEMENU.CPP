@@ -2411,22 +2411,13 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
 
     ptrmenu++; // dial num
 
-    if (y == 0) // depuis le haut
-    {
-        // Top-anchored list (the ask-choice menu, GameChoiceMenu, the only
-        // y==0 user). Float with the canvas so the choices track the rest of
-        // the UI on a taller framebuffer instead of staying stranded at the top
-        // edge while the question bubble (MyDial) bottom-anchors. No-op at 480.
-        y = HAUTEUR_STANDARD / 2 + 10 + UI_VCENTER_OFS;
-    } else // centre sur y
-    {
-        // The table y-centre is authored on the 480-tall canvas; float it to
-        // the vertical middle of a taller framebuffer (no-op at 480).
-        y += UI_VCENTER_OFS;
-        y -= (HAUTEUR_STANDARD * nb + (nb - 1) * GameMenuRowSpace(nb)) / 2;
-    }
+    // (the rows' place: GameMenuLayout -- the top-anchored ask-choice list, or the list centred on its y floated to a taller framebuffer's
+    // middle; one longer than the screen's room shows the rows that fit and scrolls, its bar to their right)
+    S32 first, vis;
+    GameMenuLayout(ptrmenu - 4, &y, &first, &vis);
+    ptrmenu += 2 * first;
 
-    for (n = 0; n < nb; n++) {
+    for (n = first; n < first + vis; n++) {
         type = *ptrmenu++;
         num = *ptrmenu++;
 
@@ -2465,6 +2456,19 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
         CoulTextMenu = keepColour;
 
         y += HAUTEUR_STANDARD + GameMenuRowSpace(nb);
+    }
+
+    // (the scrollbar: down the rows' right, its thumb the rows shown of them all and where -- Track select's, RACEGAME.CPP)
+    if (vis < nb && !justone) {
+        S32 bx0, by0, bx1, by1;
+        GameMenuScrollbarRect(ptrmenu - 4 - 2 * (first + vis), &bx0, &by0, &bx1, &by1);
+        CopyBlock(bx0, by0, bx1, by1, Screen, bx0, by0, Log);
+        ShadeBoxBlk(bx0, by0, bx1, by1, 10);
+        DrawCadre(bx0, by0, bx1, by1, ALL_ANGLES);
+        const S32 h = by1 - by0 - 4, thumb = h * vis / nb > 18 ? h * vis / nb : 18;
+        const S32 ty = by0 + 2 + (h - thumb) * first / (nb - vis);
+        Box(bx0 + 3, ty, bx1 - 3, ty + thumb, 243);
+        BoxStaticAdd(bx0, by0, bx1, by1);
     }
 
 #ifdef DEMO
@@ -3008,7 +3012,14 @@ S32 DoGameMenu(U16 *ptrmenu) {
         if (FlagMenuMouse && MenuMouse_GetRefCount() > 0) {
             S32 wy = ConsumeMouseWheelY();
 
-            if (wy != 0)
+            // (a scrolling list, not on a slider: the wheel scrolls it; on a slider it moves the slider, as before)
+            S32 yt, first, vis;
+            GameMenuLayout(ptrmenu, &yt, &first, &vis);
+            const S32 rowType = ptrmenu[4 + 0 + selected * 2];
+            if (wy != 0 && vis < nb && (rowType < 2 || rowType > 7)) {
+                if (GameMenuScrollTo(ptrmenu, &selected, first - wy))
+                    flag = 1;
+            } else if (wy != 0)
                 GameMenuApplyMouseWheelDoGameMenu(ptrmenu, selected, wy, &timerkey, &flag);
         }
 
