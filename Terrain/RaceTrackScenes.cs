@@ -261,7 +261,11 @@ internal static class RaceTrackScenes
                     case 'E': edge = z.Info[0] == Near && Math.Max(z.X0, z.X1) >= Cube - Cell; a0 = Math.Min(z.Z0, z.Z1); a1 = Math.Max(z.Z0, z.Z1); break;
                     default: edge = z.Info[0] == Far && Math.Min(z.X0, z.X1) <= Cell; a0 = Math.Min(z.Z0, z.Z1); a1 = Math.Max(z.Z0, z.Z1); break;
                 }
-                return edge && a0 <= lo && a1 >= hi;
+                // (and arriving where he left, along the edge: the engine puts him at Info0 + (x - X0) -- a game zone from x 512 with Info0 0,
+                // Desert's scene 65 into 64, put him a cell west of the raised road, beside it and back over the edge again, scene after
+                // scene, the user's "invisible barrier" on the Desert's bridge, 2026-11-15)
+                var same = e.Side is 'N' or 'S' ? z.Info[0] == Math.Min(z.X0, z.X1) : z.Info[2] == Math.Min(z.Z0, z.Z1);
+                return edge && same && a0 <= lo && a1 >= hi;
             }
             if (model.Zones.Any(Covers)) continue;
             var zone = new SceneZoneModel { Type = 0, Num = e.ToScene, Info = new int[8], Y0 = y0, Y1 = y1 };
@@ -273,7 +277,9 @@ internal static class RaceTrackScenes
                 case 'E': zone.Z0 = lo; zone.Z1 = hi; zone.X0 = Cube - Cell; zone.X1 = Cube; zone.Info[2] = lo; zone.Info[0] = Near; break;
                 default: zone.Z0 = lo; zone.Z1 = hi; zone.X0 = 0; zone.X1 = Cell; zone.Info[2] = lo; zone.Info[0] = Far; break;
             }
-            SceneOps.AddZone(model, zone);
+            // (first in the scene's zones: where a game zone to the same scene covers the edge too, the engine takes the first it finds)
+            if (model.Zones.Count >= SceneValidator.MaxZones) { log.Add($"scene {scene}: WARNING: no room for the {e.Side} edge's crossing zone (the engine's {SceneValidator.MaxZones} zones)"); continue; }
+            model.Zones.Insert(0, zone);
             added++;
             log.Add($"scene {scene}: the road leaves the cube over its {e.Side} edge where no crossing zone reached it -- one added to scene {e.ToScene} ({EdgeHalfCells * 2:0} cells of edge, height {y0}..{y1})");
         }
