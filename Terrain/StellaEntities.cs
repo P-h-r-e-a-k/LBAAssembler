@@ -290,6 +290,8 @@ internal static class StellaEntities
         // (the cell keeps its floor whole: no shaft, nothing in it to show -- the lift is hidden, the user, 2026-11-13: "the elevator down can be
         // seen inside Baldino's cell, it shouldn't be visible at all")
         bkg.SetStored(header.Brk + header.MaxBrk, table);
+        // the back rooms (the private show's: StellaRooms.Private), a grid of their own from Rick's bricks, the walls the night
+        WingGrid = BuildWing(cells, raw, night, bkg, ref header, log);
 
         // the scene: Rick's bar's header (its light, its music), the Moon's, Twinsen arriving on the lift
         var cell = store.Load(Cell);
@@ -503,6 +505,85 @@ void comportement_3()
         var a = Citadel.CitadelProps.Actor(generic, x, y, z);
         a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
         return a;
+    }
+
+    // ---- the back rooms (the user, 2026-11-14: "For the private show in the strip club we need to redesign the private rooms, they're just
+    // based on the office, let's add a back area we follow the woman into, past some curtains into other rooms, into our own room, which is
+    // just a chair"): a corridor north from the hall's door, three rooms either side behind low walls, curtains at their openings, and at
+    // its far end, past curtains, the room with the chair. Rick's floor and his walls painted the night; the walls the game's camera looks
+    // past -- every one between two of the rooms, and the outer south and east sides -- low.
+    public static int WingGrid = -1;
+    // (cells) the corridor; the side rooms' columns and their rows (each room's z from, to); the room at the end
+    public const int WingCorrX0 = 30, WingCorrX1 = 33, WingCorrZ0 = 21, WingCorrZ1 = 46;
+    public const int WingWestX0 = 24, WingWestX1 = 28, WingEastX0 = 35, WingEastX1 = 39;
+    public static readonly (int Z0, int Z1)[] WingRooms = { (40, 44), (34, 38), (28, 32) };
+    public const int WingEndX0 = 28, WingEndX1 = 35, WingEndZ0 = 14, WingEndZ1 = 20;
+    private static bool WingFloor(int x, int z) =>
+        (x >= WingCorrX0 && x <= WingCorrX1 && z >= WingCorrZ0 && z <= WingCorrZ1) ||
+        (x >= WingEndX0 && x <= WingEndX1 && z >= WingEndZ0 && z <= WingEndZ1) ||
+        WingRooms.Any(r => z >= r.Z0 && z <= r.Z1 && ((x >= WingWestX0 && x <= WingWestX1) || (x >= WingEastX0 && x <= WingEastX1))) ||
+        // (each side room's way in from the corridor: the wall's cell between, its middle three rows open)
+        WingRooms.Any(r => z >= r.Z0 + 1 && z <= r.Z1 - 1 && (x == WingWestX1 + 1 || x == WingEastX0 - 1));
+
+    private static int BuildWing(byte[] cells, byte[] raw, Dictionary<int, int> night, HqrFile bkg, ref MapBricks.BkgHeader header, List<string> log)
+    {
+        int At(int x, int y, int z) => ((z * Size + x) * Height + y) * 2;
+        var shape = Lba2GridBackend.ToLba1Shape(raw);
+        var set = new Dictionary<(int, int, int), (int Block, int Pos)>();
+        void Put(int x, int y, int z, int block, int pos) => set[(x, y, z)] = (night.TryGetValue(block, out var n) ? n : block, pos);
+        void Column(int x, int z, Func<int, (int X, int Z)> from)
+        {
+            for (var y = FloorLayer + 1; y < Height; y++)
+            {
+                var (sx, sz) = from(y);
+                var at = At(sx, y, sz);
+                if (cells[at] != 0) Put(x, y, z, cells[at], cells[at + 1]);
+            }
+        }
+        int Mod(int a, int m) => ((a % m) + m) % m;
+        bool F(int x, int z) => x is >= 0 and < Size && z is >= 0 and < Size && WingFloor(x, z);
+        int floors = 0, tall = 0, low = 0;
+        for (var z = 0; z < Size; z++)
+        for (var x = 0; x < Size; x++)
+        {
+            if (F(x, z)) { Put(x, FloorLayer, z, Tile, Mod(x - 1, 3) + 3 * Mod(z - 1, 3)); floors++; continue; }
+            bool south = F(x, z + 1), east = F(x + 1, z), north = F(x, z - 1), west = F(x - 1, z);
+            bool diagBack = F(x + 1, z + 1), diagOther = F(x - 1, z - 1) || F(x + 1, z - 1) || F(x - 1, z + 1);
+            // (tall only with nothing to walk on north or west of it, nor on those diagonals: a wall the camera looks past to a floor behind it
+            // is low -- one by a side room's corner stood tall in the corridor's middle)
+            if ((south || east || diagBack) && (north || west || diagOther))
+            {
+                // (between two of the rooms: low, two layers -- a tall one stood between the camera and the room behind it)
+                Put(x, FloorLayer + 1, z, LowWall, Mod(x + z, 2)); Put(x, FloorLayer + 2, z, LowWall, Mod(x + z + 1, 2));
+                low++;
+            }
+            else if (south || (diagBack && !east)) { Column(x, z, y => (North.X + Mod(x - North.X, 3), North.Z)); tall++; }
+            else if (east) { Column(x, z, y => (West.X, West.Z + Mod(z - West.Z, y >= WestUpper ? 3 : 4))); tall++; }
+            else if (north || west || diagOther || diagBack) { Put(x, FloorLayer + 1, z, LowWall, Mod(x + z, 2)); low++; }
+        }
+        var edits = new List<Lba1GridCell>();
+        for (var z = 0; z < Size; z++)
+        for (var y = 0; y < Height; y++)
+        for (var x = 0; x < Size; x++)
+        {
+            var (block, pos) = set.TryGetValue((x, y, z), out var c) ? c : (0, 0);
+            edits.Add(new Lba1GridCell(x, y, z, block, pos));
+        }
+        var grid = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
+        grid[0] = raw[0];
+        var gridNumber = header.Grm - header.Gri;
+        if (gridNumber > 255) { log.Add("Stella Entities' back rooms left out: LBA_BKG.HQR has 256 grids already"); return -1; }
+        bkg.InsertAt(header.Grm, grid);
+        header.Grm += 1; header.Bll += 1; header.Brk += 1;
+        if (header.MaxGri < (uint)grid.Length) header.MaxGri = (uint)grid.Length;
+        var library = bkg.Read(header.Bll + raw[0]);
+        var hdr = header;
+        var (bytes, usedBricks) = MapBricks.UsedBrickBytes(grid, library, b => b < hdr.MaxBrk && !bkg.IsEmpty(hdr.Brk + b) ? BinaryPrimitives.ReadUInt32LittleEndian(bkg.ExtentOf(hdr.Brk + b)) : 0);
+        if (header.MaxBrickCube < (uint)((usedBricks + 1) * 4 + bytes)) header.MaxBrickCube = (uint)((usedBricks + 1) * 4 + bytes);
+        if (header.MaxMaskCube < (uint)((usedBricks + 1) * 4 + bytes + usedBricks * 64)) header.MaxMaskCube = (uint)((usedBricks + 1) * 4 + bytes + usedBricks * 64);
+        bkg.SetStored(0, header.Bytes);
+        log.Add($"Stella Entities' back rooms: grid {gridNumber} -- a corridor (cells x {WingCorrX0}-{WingCorrX1}, z {WingCorrZ0}-{WingCorrZ1}), {WingRooms.Length * 2} rooms off it, the private room at its end; {floors} floor cells, {tall} of tall wall, {low} of low");
+        return gridNumber;
     }
 
     // A lift's part: a carrier on its own track, run from the scene's start (an actor's track starts by itself only when it moves by it)

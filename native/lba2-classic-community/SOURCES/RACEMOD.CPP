@@ -1491,6 +1491,11 @@ S32 RaceMod_EscLast(S32 dial) {
 // (the Wannies' glove, the user, 2026-11-13: "the frog's timing")
 static int s_frogVar = -1;
 static int s_lensVar = -1, s_lensValue = 0, s_lensCubeScene = -1, s_lensCubeVar = 0, s_lensCubeValue = 0;
+// pov=<scene> <scene var> <value> <eye height> <armour>: while the scene variable holds the value in that scene, the frame is
+// Twinsen's own view -- the room dark, the actors of that armour (a dancer: the scene's, whichever of them is there) drawn as he sees them from where he sits, his eyes that
+// high over his feet, looking the way he faces (PovDraw). The user, 2026-11-14, of Stella Entities' private show: "Let's watch the show
+// from Twinsen's view point" -- the rooms' bricks are drawn for the game's slanted view only, so the room itself is not.
+static int s_povScene = -1, s_povVar = 0, s_povValue = 0, s_povEye = 0, s_povMark = -1;
 // (lens='s third value: its round that many hundredths of the screen's height up from the middle -- the Wizard and the cow in the middle of
 // it, the user, 2026-11-14: "raise the view circle of the telescope up fractionally, so the cow and wizard are in the centre of the circle")
 static int s_lensRaise = 0;
@@ -5134,6 +5139,9 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
+        else if (!strcmp(key, "pov")) {
+            if (!setRead && sscanf(v, "%d %d %d %d %d", &s_povScene, &s_povVar, &s_povValue, &s_povEye, &s_povMark) != 5) s_povScene = -1;
+        }
         else if (!strcmp(key, "lens_cube")) { if (!setRead && sscanf(v, "%d %d %d", &s_lensCubeScene, &s_lensCubeVar, &s_lensCubeValue) != 3) s_lensCubeScene = -1; }
         else if (!strcmp(key, "esc_last")) {
             int isl, dial;
@@ -14193,7 +14201,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -21662,6 +21670,54 @@ static void RestoreView(const T_RACE_VIEW *v) {
     CameraXLight = v->CameraXLight; CameraYLight = v->CameraYLight; CameraZLight = v->CameraZLight;
 }
 
+// Twinsen's own view (pov=): the screen dark -- a black room, a little light on the floor before him -- and the actors listed drawn in
+// perspective from his eyes, the camera on the first of them where his eyes are, the way he faces
+#define RACE_POV_FLOOR 192                 // (pov=: the floor's glow before him, and darker -- the club's night blues)
+#define RACE_POV_FLOOR_DARK 193
+static void PovDraw(void) {
+    if (s_povScene < 0 || (S32)NumCube != s_povScene || CubeMode != CUBE_INTERIEUR || NewCube != -1) return;
+    if (s_povVar < 0 || s_povVar >= MAX_VARS_CUBE || ListVarCube[s_povVar] != s_povValue) return;
+    // (the actors seen: those of the armour, drawn and alive -- the first of them the one looked at)
+    S32 seen[4], nb = 0;
+    for (S32 a = 1; a < NbObjets && nb < 4; a++) {
+        const T_OBJET *o = &ListObjet[a];
+        if (o->Armure != s_povMark || o->Obj.Body.Num == -1 || (o->Flags & INVISIBLE) || (o->WorkFlags & OBJ_DEAD)) continue;
+        seen[nb++] = a;
+    }
+    if (!nb) return;
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+    // (the room: black above, the floor's glow under the dancer, darker towards the screen's foot)
+    for (S32 y = 0; y < h; y++) Box(0, y, w - 1, y, y < h * 55 / 100 ? 0 : (y < h * 70 / 100 ? RACE_POV_FLOOR : RACE_POV_FLOOR_DARK));
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const T_OBJET *her = &ListObjet[seen[0]];
+    const double dx = her->Obj.X - hero->Obj.X, dz = her->Obj.Z - hero->Obj.Z;
+    const double dist = fmax(400.0, sqrt(dx * dx + dz * dz));
+    const S32 eyeY = hero->Obj.Y + s_povEye, lookY = her->Obj.Y + s_povEye * 2 / 3;
+    // (facing her from his eyes: the way along the floor, and down at her middle a little)
+    // (the camera's beta a quarter turn from an actor's: 0 looks along x -- at 0 she showed her side)
+    const S32 beta = ((S32)(atan2(dx, dz) * 2048 / 3.14159265358979) + 1024 + 4096) & 4095;
+    const S32 alpha = ((S32)(atan2((double)(eyeY - lookY), dist) * 2048 / 3.14159265358979) + 4096) & 4095;
+    T_RACE_VIEW view;
+    SaveView(&view);
+    SaveCamera();
+    SetProjection(w / 2, h / 2, 64, w / 2, w / 2);
+    SetFollowCamera(her->Obj.X, lookY, her->Obj.Z, alpha, beta, 0, (S32)dist);
+    SetLightVector(AlphaLight, BetaLight, 0);
+    const T_RACE_DRAW kept = DrawKept();
+    Switch_Fillers(FILL_POLY_TEXTURES);
+    const PTR_U8 map = PtrMap;
+    U8 *const objMap = ObjPtrMap;
+    const S32 rep = RepMask;
+    PtrMap = ObjPtrMap = BufferTexture;
+    RepMask = 0xFFFF;
+    for (S32 i = 0; i < nb; i++) ObjectDisplay(&ListObjet[seen[i]].Obj);
+    PtrMap = map; ObjPtrMap = objMap; RepMask = rep;
+    FillersBack(&kept);
+    RestoreCamera();
+    RestoreView(&view);
+    BoxStaticAdd(0, 0, w - 1, h - 1);
+}
+
 // The item box (top left) or the second box (`k`): its item, or the roulette going by -- the items turning over, a little slower towards
 // the end and never standing: the step rate falls from its start's to RACE_ITEM_ROLL_SLOW of it, straight (each step 48 to 96 ms), and
 // the last step lands on the item drawn as the roulette stops. (Slowing to a standstill as it did, p = steps (1 - (1 - t)^2), its rate
@@ -22626,6 +22682,7 @@ void RaceMod_Draw(void) {
     if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
     DrawFarItems();
     LensDraw();
+    PovDraw();
     DrawWindow();
     // (an achievement's toast, on foot or in the car, out of doors or in: the screen's bottom right corner)
     AchToast(TimerRefHR);

@@ -34,6 +34,10 @@ internal static partial class RaceTrackStory
     // (who comes next to his booth: 0 the rabbibunny, 1 the Grobo; who he paid, SeatVar: 3 the rabbibunny, 4 the Grobo; in the private room,
     // who dances: 1 the Grobo)
     private const int NextHost = 64, PaidBunny = 3, PaidGrobo = 4, ShowWho = 2;
+    // (the private room's: the scene variable the engine's view from Twinsen's eyes watches (RACEMOD.CPP pov=: StellaPovLine), the dancers'
+    // armour it knows them by, his eyes' height sitting; the tracks' labels; the chair's seat)
+    private const int PovVar = 5, PovArmour = 117, PovEye = 1150, LeadOn = 10, LeadAside = 11, ShowOn = 12, ShowDancing = 13, FollowOn = 20, Seated = 21, ChairSeat = 0;
+    internal static string StellaPovLine => $"pov={StellaRooms.Private} {PovVar} 1 {PovEye} {PovArmour}\n";
     // (into the private room: a door zone over each booth's seat, off till the hostess's "Follow me" -- change_cube takes scenes up to 255)
     private const int PrivateSwitch = 8;
     private const float LoungePath = 13.3f, HostHomeAngle = 250, GroboHomeAngle = 236, HostHomeCells = 15.5f, FrontCells = 15.9f;
@@ -76,7 +80,7 @@ internal static partial class RaceTrackStory
                 var (sx, sz) = StellaEntities.At(angles[k], Citadel.CitadelProps.SeatCells);
                 var seatY = StellaEntities.FloorY + Citadel.CitadelProps.BoothSeat;
                 model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Private, X0 = sx - 300, X1 = sx + 300, Z0 = sz - 300, Z1 = sz + 300, Y0 = seatY - 100, Y1 = seatY + 1500,
-                    Info = new[] { StellaRooms.SofaX - 300, 256 + Citadel.CitadelProps.BoothSeat - 100, StellaRooms.SofaZ - 300, 0, PrivateSwitch, 0, 0, 0 } });
+                    Info = new[] { StellaRooms.SofaX - 300, 256 - 100, StellaRooms.EntryZ - 300, 0, PrivateSwitch, 0, 0, 0 } });
                 model.Zones.Add(new SceneZoneModel { Type = 2, Num = BoothZone0 + k, X0 = zx - 400, X1 = zx + 400, Z0 = zz - 400, Z1 = zz + 400, Y0 = StellaEntities.FloorY - 100, Y1 = StellaEntities.FloorY + 1500, Info = new int[8] });
             }
             // the hostesses (StellaStaff: the rabbibunny, the Grobo): home beside the catwalk's foot; each one's way to each booth and back
@@ -311,50 +315,87 @@ void comportement_4()
             };
         });
 
-        // the private room: Twinsen on the sofa, a dancer before him, her dance a while, her thanks, and back out into the hall
-        b.Edit(StellaRooms.Private, "Stella Entities' private room: a dancer's show for Twinsen on the sofa, then back to the hall", model =>
+        // the private room (the back rooms since 2026-11-15: StellaRooms, StellaEntities.BuildWing): in at the corridor's south end, the
+        // one he paid walks ahead up it to the room at its end and steps aside; he follows her in and sits on the chair; she comes before
+        // him and dances, the screen his own eyes (RACEMOD.CPP pov=, StellaPovLine: PovVar while she does); her thanks, and back to the hall
+        b.Edit(StellaRooms.Private, "Stella Entities' private room: down the back corridor after her, the chair, her show from Twinsen's eyes, then back to the hall", model =>
         {
             var adds = new List<Action<SceneScripts>>();
-            int Dancer(int body, int anim)
+            int up = SceneOps.AddTrackPoint(model, new SceneTrackPoint(StellaRooms.SofaX, 256, (StellaEntities.WingEndZ1 + 1) * 512 + 300));
+            int aside = SceneOps.AddTrackPoint(model, new SceneTrackPoint(StellaRooms.SofaX + 1200, 256, StellaRooms.ShowZ));
+            int show = SceneOps.AddTrackPoint(model, new SceneTrackPoint(StellaRooms.SofaX, 256, StellaRooms.ShowZ));
+            int behind = SceneOps.AddTrackPoint(model, new SceneTrackPoint(StellaRooms.SofaX, 256, (StellaEntities.WingEndZ1 + 1) * 512 + 900));
+            int inRoom = SceneOps.AddTrackPoint(model, new SceneTrackPoint(StellaRooms.SofaX, 256, StellaRooms.SofaZ + 700));
+            int chair = SceneOps.AddTrackPoint(model, new SceneTrackPoint(StellaRooms.SofaX, 256 + ChairSeat, StellaRooms.SofaZ));
+            int Dancer(int body, int stand)
             {
                 var dancer = bouncer.Clone();
-                (dancer.X, dancer.Y, dancer.Z) = (StellaRooms.SofaX, 256, StellaRooms.ShowZ);
-                dancer.Entity = StellaStaff.Entity; dancer.Body = body; dancer.Anim = anim;
-                dancer.Flags &= ~1u; dancer.Flags |= NoShadowFlag; dancer.Armor = WalkOverArmour;
-                dancer.Beta = 2048; dancer.Move = 0;
+                (dancer.X, dancer.Y, dancer.Z) = (StellaRooms.SofaX, 256, StellaRooms.EntryZ - 1400);
+                dancer.Entity = StellaStaff.Entity; dancer.Body = body; dancer.Anim = stand;
+                dancer.Flags &= ~1u; dancer.Flags |= NoShadowFlag; dancer.Armor = PovArmour;
+                dancer.Beta = 2048; dancer.Move = 3;
                 var index = model.Actors.Count;
                 adds.Add(IslandBeatsA.Add(model, dancer, "void comportement_0()\n{\n}\n"));
                 return index;
             }
-            var bunnyIndex = Dancer(StellaStaff.BunnyThong, StellaStaff.BunnyLap);
-            var groboIndex = Dancer(StellaPerformers.Body0, StellaStaff.GroboLap);
-            // (the way back: a door zone round the sofa, off till the show's end -- into the hall in front of the booths)
+            var bunnyIndex = Dancer(StellaStaff.BunnyThong, StellaStaff.BunnyStand);
+            var groboIndex = Dancer(StellaPerformers.Body0, StellaStaff.GroboStand);
+            string DancerTrack(int walk, int lap) => $"label(0);\nstop();\n\nlabel({LeadOn});\nanim({walk});\ngoto_point({up});\ngoto_point({aside});\nanim(0);\n\nlabel({LeadAside});\nstop();\n\n" +
+                $"label({ShowOn});\nanim({walk});\ngoto_point({show});\nbeta(2048);\nanim({lap});\n\nlabel({ShowDancing});\nstop();\n";
+            // (the way back: a door zone round the chair, off till the show's end -- into the hall in front of the booths)
             var (rx, rz) = StellaEntities.At(215, 15.5f);
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaEntities.Scene, X0 = StellaRooms.SofaX - 300, X1 = StellaRooms.SofaX + 300, Z0 = StellaRooms.SofaZ - 300, Z1 = StellaRooms.SofaZ + 300, Y0 = 0, Y1 = 2000,
                 Info = new[] { rx - 300, StellaEntities.FloorY, rz - 300, 0, ReturnSwitch, 0, 0, 0 } });
             var heroLife = $@"void comportement_0()
 {{
     set_change_cube({ReturnSwitch}, 0);
+    set_var_cube({PovVar}, 0);
     set_var_cube({ShowWho}, 0);
     if ({PaidGrobo} == var_game({SeatVar}))
     {{
         set_var_cube({ShowWho}, 1);
         kill_obj({bunnyIndex});
+        set_track_obj({groboIndex}, label_{LeadOn});
     }}
     else
     {{
         kill_obj({groboIndex});
+        set_track_obj({bunnyIndex}, label_{LeadOn});
     }}
     set_var_game({SeatVar}, 0);
     set_dir(NO_MOVE);
-    beta(0);
-    anim({Citadel.CitadelSpanking.TwinsenSit});
-    set_var_cube({ShowFrames}, 0);
-    set_var_cube({ShowRounds}, 0);
+    set_track(label_{FollowOn});
     set_comportement(comportement_1);
 }}
 
 void comportement_1()
+{{
+    if ({Seated} == l_track())
+    {{
+        if (1 == var_cube({ShowWho}))
+        {{
+            set_track_obj({groboIndex}, label_{ShowOn});
+        }}
+        else
+        {{
+            set_track_obj({bunnyIndex}, label_{ShowOn});
+        }}
+        set_var_cube({ShowFrames}, 0);
+        set_var_cube({ShowRounds}, 0);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({ShowDancing} == l_track_obj({bunnyIndex}) || {ShowDancing} == l_track_obj({groboIndex}))
+    {{
+        set_var_cube({PovVar}, 1);
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
 {{
     add_var_cube({ShowFrames}, 1);
     if (200 < var_cube({ShowFrames}))
@@ -364,6 +405,7 @@ void comportement_1()
     }}
     if (3 < var_cube({ShowRounds}))
     {{
+        set_var_cube({PovVar}, 0);
         if (1 == var_cube({ShowWho}))
         {{
             message_obj({groboIndex}, {say(MoonLine.ClubThanks)});
@@ -375,18 +417,23 @@ void comportement_1()
         anim(0);
         set_dir(MOVE_MANUAL);
         set_change_cube({ReturnSwitch}, 1);
-        set_comportement(comportement_2);
+        set_comportement(comportement_4);
     }}
 }}
 
-void comportement_2()
+void comportement_4()
 {{
 }}
 ";
+            // (Twinsen after her up the corridor, into the room past where she stood aside, onto the chair facing south, sitting)
+            var heroTrack = $"label(0);\nstop();\n\nlabel({FollowOn});\nanim(1);\ngoto_point({behind});\ngoto_point({inRoom});\npos_point({chair});\nbeta(0);\nanim({Citadel.CitadelSpanking.TwinsenSit});\n\nlabel({Seated});\nstop();\n";
             return scripts =>
             {
                 foreach (var add in adds) add(scripts);
                 scripts.SetText(0, ScriptKind.Life, heroLife);
+                scripts.SetText(0, ScriptKind.Track, heroTrack);
+                scripts.SetText(bunnyIndex, ScriptKind.Track, DancerTrack(StellaStaff.BunnyWalk, StellaStaff.BunnyLap));
+                scripts.SetText(groboIndex, ScriptKind.Track, DancerTrack(StellaStaff.GroboWalk, StellaStaff.GroboLap));
             };
         });
     }
