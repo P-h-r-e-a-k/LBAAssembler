@@ -274,7 +274,17 @@ internal sealed class CommunityRendererBackend
             // gone (even if the load fails part-way): the next exterior render must load its island again
             // even if it is the same name.
             directIsland = null;
-            if (!RendererLibrary.LoadInteriorScene(numscene)) { directFailure = $"load interior scene failed: {numscene}"; return null; }
+            var loaded = RendererLibrary.LoadInteriorSceneResult(numscene);
+            // (-1: LBA_BKG.HQR rewritten under the renderer since it started -- a grid or bricks saved, a map installed, a build -- so its
+            // tables are stale: started again and loaded once more; before 2026-11-15 the load went ahead with them and crashed)
+            if (loaded == -1)
+            {
+                DebugLog.Log($"CommunityRendererBackend: LBA_BKG.HQR changed under the renderer, starting it again for interior scene {numscene}");
+                RestartDirectRenderer();
+                if (!directSession) return null;
+                loaded = RendererLibrary.LoadInteriorSceneResult(numscene);
+            }
+            if (loaded != 1) { directFailure = $"load interior scene failed: {numscene}"; return null; }
             RendererLibrary.GetInteriorCameraPosition(out cameraX, out cameraY, out cameraZ);
             if (!RendererLibrary.RenderInteriorFrame()) { directFailure = "native interior render returned failure"; return null; }
             var pointer = RendererLibrary.GetFramebuffer(out var width, out var height, out var pitch);
@@ -798,6 +808,26 @@ internal sealed class CommunityRendererBackend
             directIsland = null;
         }
     }
+    // The game folder's files were rewritten under a running renderer (a race track build, or its files put back): the tables it read
+    // when it started -- LBA_BKG.HQR's header and its scenes' grid numbers, the entity table, the body/animation caches' indexes -- no
+    // longer match the files, and the next inside scene loaded its grid through the old ones: a native crash (2026-11-14, Otringal's
+    // scenes after a build). Started again at once, under the lock, so nothing renders from a renderer that is down meanwhile; the
+    // next render loads its island or scene again.
+    public void RestartDirectRenderer()
+    {
+        lock (directRenderLock)
+        {
+            interiorLoaded = false;
+            directIsland = null;
+            if (!directSession || RendererLibrary is null) return;
+            RendererLibrary.Shutdown();
+            directSession = false;
+            if (!RendererLibrary.SetDataRoot(liveRoot ?? gameDirectory)) { directFailure = "set data root failed"; return; }
+            if (!RendererLibrary.Initialize()) { directFailure = "native initialize failed"; return; }
+            directSession = true;
+        }
+    }
+
     public bool IsRendererLibraryLoaded => RendererLibrary?.IsLoaded == true;
 
     public string Diagnostics => $"Engine={enginePath}\nExists={File.Exists(enginePath)}\nGame={gameDirectory}\nExists={Directory.Exists(gameDirectory)}\nSaves={saveDirectory}\nDirect={directFailure}";

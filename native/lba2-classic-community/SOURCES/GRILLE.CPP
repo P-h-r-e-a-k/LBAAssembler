@@ -324,6 +324,35 @@ void InitGrille(U32 numcube) {
 }
 
 /*--------------------------------------------------------------------------*/
+// Whether LBA_BKG.HQR's header on disk still says what InitBufferCube read when the memory was set up (the editor's renderer only:
+// LBA Assembler's race track build adds bricks and grids to the file under a renderer started before it, 2026-11-14 -- with the old
+// header InitGrille loaded the wrong fiches as the block library and bricks and LoadUsedBrickFrom read outside them). The editor
+// starts its renderer again after a build; this keeps any other change from crashing it: no inside scene is loaded until then.
+S32 BkgHeaderIsCurrent() {
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, BKG_HQR_NAME);
+    S32 size = HQF_ResSize(path, 0);
+    if (size < (S32)sizeof(T_BKG_HEADER))
+        return 0;
+    U8 *buffer = (U8 *)malloc(size + RECOVER_AREA);
+    if (!buffer)
+        return 0;
+    S32 current = 0;
+    if (Load_HQR(path, buffer, 0)) {
+        const T_BKG_HEADER *disk = (const T_BKG_HEADER *)buffer;
+        current = disk->Gri_Start == BkgHeader.Gri_Start AND disk->Grm_Start == BkgHeader.Grm_Start
+                  AND disk->Bll_Start == BkgHeader.Bll_Start AND disk->Brk_Start == BkgHeader.Brk_Start
+                  AND disk->Max_Brk == BkgHeader.Max_Brk AND disk->ForbidenBrick == BkgHeader.ForbidenBrick
+                  AND disk->Max_Size_Gri <= BkgHeader.Max_Size_Gri AND disk->Max_Size_Bll <= BkgHeader.Max_Size_Bll
+                  // (these two InitBufferCube may have raised for LBA Assembler's maps)
+                  AND disk->Max_Size_Brick_Cube <= BkgHeader.Max_Size_Brick_Cube
+                  AND disk->Max_Size_Mask_Brick_Cube <= BkgHeader.Max_Size_Mask_Brick_Cube;
+    }
+    free(buffer);
+    return current;
+}
+
+/*--------------------------------------------------------------------------*/
 void FreeGrille() {}
 /*-------------------------------------------------------------------------*/
 /*══════════════════════════════════════════════════════════════════════════*

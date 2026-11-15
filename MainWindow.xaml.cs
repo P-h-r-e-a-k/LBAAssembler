@@ -1829,6 +1829,9 @@ public partial class MainWindow : Window
     // with unsaved script edits is kept: ForgetScene).
     private void RaceTrackChanged()
     {
+        // (the renderer read LBA_BKG.HQR's header, the entity table and the body/animation indexes when it started: started again, or the
+        // next inside scene loads its grid through the old tables -- the native crash of 2026-11-14 picking Otringal's scenes after a build)
+        nativeRenderer.RestartDirectRenderer();
         zoneCache.Clear();
         foreach (var entry in allSceneEntries) scriptSession.ForgetScene(entry.Option.Index);
         InvalidateNativeIsland();

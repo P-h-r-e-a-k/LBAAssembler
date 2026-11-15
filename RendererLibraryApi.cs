@@ -405,6 +405,9 @@ internal sealed class RendererLibraryApi : IDisposable
     // genuine load failure; see lba2_renderer_load_interior_scene's own
     // doc comment (RENDERER_API.H).
     public bool LoadInteriorScene(int numscene) => loadInteriorScene?.Invoke(numscene) == 1;
+    // The same with the native answer as it is: 1 loaded, 0 not an interior or a failure, -1 LBA_BKG.HQR changed since Initialize (a race
+    // track build under the running renderer) and nothing was loaded -- Shutdown + SetDataRoot + Initialize, then load again.
+    public int LoadInteriorSceneResult(int numscene) => loadInteriorScene?.Invoke(numscene) ?? 0;
     // Pans the interior camera to an arbitrary position without touching its
     // fixed isometric angle -- see lba2_renderer_set_interior_camera_position's
     // own doc comment (RENDERER_API.H). Only meaningful after LoadInteriorScene.

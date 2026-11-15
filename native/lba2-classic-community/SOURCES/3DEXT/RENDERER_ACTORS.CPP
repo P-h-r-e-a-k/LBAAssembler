@@ -1447,6 +1447,15 @@ int RendererLoadInteriorScene(int numscene)
 {
     if (numscene < 0) return 0;
 
+    // (LBA_BKG.HQR rewritten under the renderer since it started -- a race track build: its grids and bricks are past the tables read
+    // then, and loading the scene's grid with them read outside its buffers, a native crash, 2026-11-14. -1: nothing loaded, the renderer
+    // must be started again -- lba2_renderer_shutdown + lba2_renderer_initialize -- before any inside scene is.)
+    extern S32 BkgHeaderIsCurrent();
+    if (!BkgHeaderIsCurrent()) {
+        NativeDebugLog("RendererLoadInteriorScene(%d): LBA_BKG.HQR changed since the renderer started -- not loaded (start it again)", numscene);
+        return -1;
+    }
+
     S32 ok = LoadScene(numscene);
     if (!ok) return 0;
 

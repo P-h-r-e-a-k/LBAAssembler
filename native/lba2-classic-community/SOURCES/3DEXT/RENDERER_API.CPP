@@ -124,7 +124,11 @@ static void InstallCrashLog(void)
     static bool installed = false;
     if (installed) return;
     installed = true;
-    g_crashLogPath = getenv("LBA2_RENDERER_CRASHLOG");
+    // (GetEnvironmentVariableA, not getenv: the editor sets the variable from .NET after the process started, and the CRT's
+    // getenv reads its own copy of the environment taken at startup -- the log was never written by the editor, 2026-11-15)
+    static char path[MAX_PATH];
+    DWORD n = GetEnvironmentVariableA("LBA2_RENDERER_CRASHLOG", path, sizeof(path));
+    g_crashLogPath = n > 0 && n < sizeof(path) ? path : NULL;
     if (g_crashLogPath && *g_crashLogPath) AddVectoredExceptionHandler(1, RendererCrashLogHandler);
 }
 #else

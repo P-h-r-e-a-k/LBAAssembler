@@ -186,7 +186,10 @@ LBA2_RENDERER_API int lba2_renderer_forget_scene_edits(int scene);
    genuine load failure) -- callers should fall back to
    lba2_renderer_load_island/lba2_renderer_load_cube for an exterior scene
    instead. Also sets up this scene's own fixed camera (no separate
-   lba2_renderer_set_camera call is needed or meaningful here). */
+   lba2_renderer_set_camera call is needed or meaningful here).
+   -1: LBA_BKG.HQR was rewritten since lba2_renderer_initialize read its
+   header (a race track build adds grids and bricks), nothing was loaded:
+   lba2_renderer_shutdown + lba2_renderer_initialize, then load again. */
 LBA2_RENDERER_API int lba2_renderer_load_interior_scene(int numscene);
 
 /* Moves the interior camera lba2_renderer_load_interior_scene set up to an
