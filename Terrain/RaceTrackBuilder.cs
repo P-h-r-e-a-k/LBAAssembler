@@ -320,7 +320,9 @@ internal sealed class RaceTrackPlan
     // Steep banks eased: x0, z0, x1, z1 (cells from the origin), the most a corner may stand over the one beside it (world units a cell) --
     // only lowered, so the ground at a bank's foot (the road) stays and its cliff is cut back into a slope that steep (EaseBanks). Citadel's
     // ridge left of the school, a sheer grass bank over the storm track's hairpin but for a walkable slope at its west end (the user,
-    // 2026-11-14: "flatten the steep section to match the slope that's on the left of the green area")
+    // 2026-11-14: "flatten the steep section to match the slope that's on the left of the green area"). Then any number of x, z, r (cells
+    // from the origin): rounds of ground kept as they were -- the ridge's telescope, lowered with it, the user, 2026-11-15: "let's lift the
+    // telescope back up to it's original height along with the ground underneath it"
     public double[][]? BankEases { get; set; }
     // Cells of level ground kept past the verge where the land rises straight up beside the road (SetBackBanks): Mosquibees Island's mounds
     public double SetBack { get; set; }
@@ -5653,6 +5655,9 @@ internal static class RaceTrackBuilder
             int x0 = (int)f[0] + plan.OriginCellX, z0 = (int)f[1] + plan.OriginCellZ, x1 = (int)f[2] + plan.OriginCellX, z1 = (int)f[3] + plan.OriginCellZ;
             var step = f[4];
             var lowered = new HashSet<(int, int)>();
+            var keep = new List<(double X, double Z, double R)>();
+            for (var k = 5; k + 2 < f.Length; k += 3) keep.Add((f[k] + plan.OriginCellX, f[k + 1] + plan.OriginCellZ, f[k + 2]));
+            bool Kept(int x, int z) => keep.Any(c => (x - c.X) * (x - c.X) + (z - c.Z) * (z - c.Z) <= c.R * c.R);
             // (each corner no higher than any beside it -- in the rectangle or round it -- plus the step a cell's distance; over and over
             // till nothing moves: the cliff's top worked back from its foot)
             for (var pass = 0; pass < 64; pass++)
@@ -5661,7 +5666,7 @@ internal static class RaceTrackBuilder
                 for (var z = z0; z <= z1; z++)
                 for (var x = x0; x <= x1; x++)
                 {
-                    if (!island.HasVertex(x, z) || island.HeightAt(x, z) is not { } h) continue;
+                    if (Kept(x, z) || !island.HasVertex(x, z) || island.HeightAt(x, z) is not { } h) continue;
                     var most = (double)h;
                     for (var dz = -1; dz <= 1; dz++)
                     for (var dx = -1; dx <= 1; dx++)
@@ -5673,7 +5678,7 @@ internal static class RaceTrackBuilder
                 }
                 if (!moved) break;
             }
-            report.Notes.Add($"a steep bank eased to {step} a cell, ({x0},{z0})-({x1},{z1}): {lowered.Count} corners lowered");
+            report.Notes.Add($"a steep bank eased to {step} a cell, ({x0},{z0})-({x1},{z1}): {lowered.Count} corners lowered" + (keep.Count > 0 ? $", {keep.Count} round(s) of ground kept" : ""));
         }
     }
 
