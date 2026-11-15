@@ -481,12 +481,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "The hatch closes. The freighter shudders, rises from its pad and climbs away towards Otringal.",
-            "L'écoutille se ferme. Le cargo tremble, quitte sa plate-forme et s'élève en direction d'Otringal.",
-            "Die Luke schließt sich. Der Frachter bebt, hebt von seiner Plattform ab und steigt in Richtung Otringal.",
-            "La escotilla se cierra. El carguero tiembla, se eleva de su plataforma y asciende rumbo a Otringal.",
-            "Il portello si chiude. Il cargo trema, si stacca dalla piattaforma e sale verso Otringal.",
-            "A escotilha fecha-se. O cargueiro estremece, ergue-se da plataforma e sobe rumo a Otringal.",
+            "The hatch closes. The saucer hums, lifts off the landing pad and climbs away towards Otringal.",
+            "L'écoutille se ferme. La soucoupe vrombit, quitte l'aire d'atterrissage et s'élève en direction d'Otringal.",
+            "Die Luke schließt sich. Die Untertasse summt, hebt vom Landeplatz ab und steigt in Richtung Otringal.",
+            "La escotilla se cierra. El platillo zumba, despega de la plataforma de aterrizaje y asciende rumbo a Otringal.",
+            "Il portello si chiude. Il disco ronza, si stacca dalla piattaforma di atterraggio e sale verso Otringal.",
+            "A escotilha fecha-se. O disco zumbe, ergue-se da plataforma de aterragem e sobe rumo a Otringal.",
         },
         new[]
         {
@@ -499,14 +499,89 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "The Esmers' freighter goes on to Otringal from the base's hangar. Off you go, racer.",
-            "Le cargo des Esmers repart pour Otringal depuis le hangar de la base. En route, pilote.",
-            "Der Frachter der Esmer fliegt vom Hangar der Basis weiter nach Otringal. Los geht's, Rennfahrer.",
-            "El carguero de los Esmers sigue hacia Otringal desde el hangar de la base. En marcha, piloto.",
-            "Il cargo degli Esmer prosegue per Otringal dall'hangar della base. Vai, pilota.",
-            "O cargueiro dos Esmers segue para Otringal a partir do hangar da base. Vai, piloto.",
+            "An Esmer saucer is waiting on the landing pad to take you and your car on to Otringal. Off you go, racer.",
+            "Une soucoupe des Esmers t'attend sur l'aire d'atterrissage pour t'emmener à Otringal avec ta voiture. En route, pilote.",
+            "Eine Untertasse der Esmer wartet auf dem Landeplatz, um dich und dein Auto nach Otringal zu bringen. Los geht's, Rennfahrer.",
+            "Un platillo de los Esmers te espera en la plataforma de aterrizaje para llevarte a Otringal con tu coche. En marcha, piloto.",
+            "Un disco degli Esmer ti aspetta sulla piattaforma di atterraggio per portare te e la tua auto a Otringal. Vai, pilota.",
+            "Um disco dos Esmers espera-te na plataforma de aterragem para te levar a Otringal com o teu carro. Vai, piloto.",
         },
     };
+
+    // The moon's landing pad (the outside scene with the game's door into its Esmer shuttle, scene 115 -- the platform's west face): the
+    // hangar's saucer (the game's, scene 12's actor 6) parked on the platform; the moon won (chapter 5, HAL's log told), Twinsen walked in
+    // through the shuttle's door is aboard -- held, the lift-off said -- and on to Otringal's start
+    private const int ShuttleInside = 115;
+    private static readonly (int X, int Y, int Z) PadTop = (21248, 700, 17390);
+    private static void MoonSaucer(IslandBeatsA b, int liftLine)
+    {
+        var saucer = Copy(b.Originals, HangarScene, HangarSaucer);
+        foreach (var scene in b.OutsideScenes.ToList())
+            b.Edit(scene, "the landing pad: the Esmers' saucer parked on its platform (the shuttle's door the way aboard)", model =>
+            {
+                if (saucer is null || !model.Zones.Any(z => z.Type == 0 && z.Num == ShuttleInside)) return _ => { };
+                var ship = saucer.Clone();
+                (ship.X, ship.Y, ship.Z) = PadTop;
+                ship.Beta = 0;
+                // (walked through: its box, as wide as the saucer, kept Twinsen from the shuttle's door at the platform's foot)
+                ship.Armor = WalkOverArmour;
+                var addShip = IslandBeatsA.Add(model, ship, @"void comportement_0()
+{
+}
+");
+                // (and aboard as he comes up to the shuttle's door, the moon won: in the track's copy of the cube the platform's foot can't be
+                // walked onto, its door out of reach)
+                var door = model.Zones.First(z => z.Type == 0 && z.Num == ShuttleInside);
+                var helper = RaceTrackScenes.InvisibleHelper((door.X0 + door.X1) / 2, Math.Min(door.Y0, door.Y1), (door.Z0 + door.Z1) / 2);
+                var addHelper = IslandBeatsA.Add(model, helper, $@"void comportement_0()
+{{
+    if (5 <= chapter() && {HalDone} == var_game({QHal}) && {BoardReach} > distance(0) && {Driving} != comportement_hero())
+    {{
+        set_dir_obj(0, NO_MOVE);
+        change_cube({ShuttleInside});
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+}}
+");
+                return scripts => { addShip(scripts); addHelper(scripts); };
+            });
+        if (!b.Store.SceneExists(ShuttleInside)) { b.Log.Add($"the saucer to Otringal left out: no scene {ShuttleInside}"); return; }
+        b.Edit(ShuttleInside, $"aboard the Esmers' saucer once the moon is won: the lift-off, on to Otringal (scene {OtringalStart})", model =>
+        {
+            var helper = RaceTrackScenes.InvisibleHelper(model.Hero.X, model.Hero.Y, model.Hero.Z);
+            return IslandBeatsA.Add(model, helper, $@"void comportement_0()
+{{
+    if (5 <= chapter() && {HalDone} == var_game({QHal}))
+    {{
+        set_dir_obj(0, NO_MOVE);
+        set_var_cube({SaucerWait}, 0);
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    add_var_cube({SaucerWait}, 1);
+    if (20 < var_cube({SaucerWait}))
+    {{
+        message({liftLine});
+        change_cube({OtringalStart});
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+}}
+");
+        });
+    }
+    // (scene 115's cell variable counting the moments before the lift-off -- its own scripts use 0-3)
+    private const int SaucerWait = 20, BoardReach = 1800;
 
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
     {
@@ -516,9 +591,10 @@ internal static partial class RaceTrackStory
         if (first < 0) return log;
         int Say(MoonLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Emerald, log);
-        // (won, the freighter on to Otringal from the moon base's hangar -- RaceTrackStory.Hangar.cs, MoonHangar)
-        Hangar(b, MoonHangar.Scene, 5, OtringalStart, new HangarLines(Say(MoonLine.HangarOffer), Say(MoonLine.HangarYes), Say(MoonLine.HangarNo),
-            Say(MoonLine.HangarBoard), Say(MoonLine.HangarLater), Say(MoonLine.HangarLift), Say(MoonLine.HangarClosed)));
+        // (won, an Esmer saucer on to Otringal from the moon's own landing pad -- the user, 2026-11-14: "We need to have a different spaceship
+        // take us from Emerald Moon to Otringal. Emerald Moon already has a place spaceships take off and land, let's use this area for
+        // Twinsen to board a spaceship from the moon to otringal": MoonSaucer. The base's hangar, scene 208, no longer the way)
+        MoonSaucer(b, Say(MoonLine.HangarLift));
         // (Zoe as companion's hints on the Emerald Moon: HAL, then the race -- RaceTrackStory.Companion.cs)
         CompanionTalks[RaceTrackIsland.Emerald.IleFile] = $@"            if ({HalMended} > var_game({QHal}))
             {{
@@ -691,7 +767,6 @@ void comportement_1()
         {{
             inc_chapter();
         }}
-        change_cube({MoonHangar.Scene});
     }}
 }}
 "),
