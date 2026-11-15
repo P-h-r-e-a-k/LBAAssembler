@@ -38,7 +38,17 @@ internal static class BowlingRoom
     // low stone wall (block 19); his booths' platform with its stairs and slot machine (x 18-29, z 23-37) and his bar (x 35-45, z 35-45)
     private const int Tile = 67, LowWall = 19, WestUpper = 18;
     private static readonly (int X, int Z) North = (38, 12), West = (17, 36);
-    private static readonly (int X0, int Z0, int X1, int Z1, int Dx, int Dz) Booths = (18, 23, 29, 37, 20, -15), Bar = (35, 35, 45, 45, 8, -10);
+    // (2026-11-15, second round: his booths, their tables and his fruit machines only -- his raised platform under the western ones, its
+    // stairs, its rails and low walls left out, those booths lowered its three layers onto the floor: the stairs led nowhere, the user,
+    // "You've also added stairs to nowhere that just causes twinsen to drop down to the floor below"; his wall lamps, on his wall there,
+    // left out too -- "These wall lights appear to be floating in the air" -- in the room's middle east; his bar its own blocks only, its
+    // back to the north wall -- "push the back of a bar up against a wall", "a corner section of post by the bar that looks out of place")
+    private static readonly (int X0, int Z0, int X1, int Z1, int Dx, int Dz) Booths = (18, 23, 29, 37, 18, 3), Bar = (36, 37, 44, 44, 8, -29);
+    private static readonly HashSet<int> BoothBlocks = new() { 32, 33, 35, 36, 39, 80, 205, 206 };   // (his potted plant, 81 and 40, left out: it stood before the poker table)
+    private static readonly HashSet<int> BarBlocks = new() { 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 204, 205, 207, 140 };
+    // the fruit machines' fronts, for the engine (RACEMOD.CPP FruitFrame): his two (block 80: by his platform's foot, x 19-20 z 36, and up
+    // on it, x 23-24 z 23 -- his 81/40 is a potted plant), where they land (world units), the front of each its south side
+    public static readonly (int X, int Z)[] FruitMachines = { ((19 + 18 + 1) * 512, (36 + 3) * 512 + 768), ((23 + 18 + 1) * 512, (23 + 3) * 512 + 768) };
 
     public readonly record struct Built(int GridNumber, byte Type, byte[] Grid, int Library);
 
@@ -74,19 +84,19 @@ internal static class BowlingRoom
         for (var z = RoomZ0; z <= RoomZ1 + 1; z++) { Put(RoomX0 - 1, FloorLayer, z, Tile, 3 * Mod(z, 3)); Column(RoomX0 - 1, z, y => (West.X, West.Z + Mod(z - West.Z, y >= WestUpper ? 3 : 4))); }
         for (var x = RoomX0; x <= RoomX1 + 1; x++) { Put(x, FloorLayer, RoomZ1 + 1, Tile, Mod(x, 3)); Put(x, FloorLayer + 1, RoomZ1 + 1, LowWall, Mod(x, 2)); }
         for (var z = RoomZ0; z <= RoomZ1; z++) { Put(RoomX1 + 1, FloorLayer, z, Tile, 3 * Mod(z, 3)); Put(RoomX1 + 1, FloorLayer + 1, z, LowWall, Mod(z, 2)); }
-        // ---- Rick's booths and his bar, copied whole (their floor too: the booths stand on a raised platform)
-        foreach (var r in new[] { Booths, Bar })
+        // ---- Rick's booths (on the floor) and his bar (its back to the north wall)
+        foreach (var (r, keep) in new[] { (Booths, BoothBlocks), (Bar, BarBlocks) })
             for (var z = r.Z0; z <= r.Z1; z++)
                 for (var x = r.X0; x <= r.X1; x++)
-                    for (var y = 0; y < Height; y++)
+                    for (var y = 1; y < Height; y++)
                     {
                         var at = At(x, y, z);
-                        if (cells[at] == 0) continue;
+                        if (cells[at] == 0 || !keep.Contains(cells[at])) continue;
+                        // (the booths on his raised platform -- x 18-24 up to z 34 -- down its three layers; his steps, 41 and 42, left out)
+                        var ty = r == Booths && x <= 24 && z <= 34 ? y - 3 : y;
                         var (tx, tz) = (x + r.Dx, z + r.Dz);
-                        if (tx < RoomX0 || tx > RoomX1 || tz < RoomZ0 || tz > RoomZ1) continue;
-                        // (his walls and his rims' balustrade left out: the room has its own)
-                        if (cells[at] is 128 or 129 or 196) continue;
-                        Put(tx, y, tz, cells[at], cells[at + 1]);
+                        if (ty < 1 || tx < RoomX0 || tx > RoomX1 || tz < RoomZ0 || tz > RoomZ1) continue;
+                        Put(tx, ty, tz, cells[at], cells[at + 1]);
                     }
 
         // ---- the library: a copy of Rick's, its blocks the room names painted dark in place, the lanes' blocks added
@@ -238,12 +248,13 @@ internal static class BowlingRoom
         int Half(double k) => (int)Math.Round(shade * k);
         return ramp switch
         {
-            >= 9 and <= 12 => (byte)(4 * 16 + Half(wall ? 0.3 : 0.4)),
-            7 or 8 => (byte)(4 * 16 + Half(0.55)),
-            3 or 13 or 14 when wall => (byte)(14 * 16 + Half(0.18)),
-            3 when shade >= 14 => (byte)(3 * 16 + 11),
-            3 => (byte)(3 * 16 + Half(0.42)),
-            _ => (byte)(ramp * 16 + Half(wall ? 0.35 : 0.5)),
+            // (2026-11-15, second round: "make the place slightly darker and more menacing feeling" -- every shade lower again)
+            >= 9 and <= 12 => (byte)(4 * 16 + Half(wall ? 0.22 : 0.3)),
+            7 or 8 => (byte)(4 * 16 + Half(0.42)),
+            3 or 13 or 14 when wall => (byte)(14 * 16 + Half(0.12)),
+            3 when shade >= 14 => (byte)(3 * 16 + 9),
+            3 => (byte)(3 * 16 + Half(0.3)),
+            _ => (byte)(ramp * 16 + Half(wall ? 0.26 : 0.38)),
         };
     }
 }

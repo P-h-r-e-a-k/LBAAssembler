@@ -865,6 +865,7 @@ static T_BOWLER s_bw[4];
 // drawn each frame from the dark over the pin to its helmet's top; the pins hauled up off the deck and set down again by them.
 typedef struct {
     int On, Helper, WhoVar, OutcomeVar, Speed[2], Bowler[2], Link, AnchorY, RackX, RackZ, Helmet[6];
+    int Ball2, Active;              // (the lane's second bowler's ball -- each his own colour -- and the one in play: 0 or 1)
     int Phase; S32 PhaseAt;
     int BallState;                  // 0 at the ball return, 1 in the bowler's hands, 2 rolling, 3 gone into the pit
     double Bx, By, Bz, Btx, Bv, Spin;
@@ -874,6 +875,11 @@ typedef struct {
     int Knocked;                    // (pins down since the last reset)
 } T_BOWL_ANIM;
 static T_BOWL_ANIM s_ba[2];
+// The alley's fruit machines (BOWLMAP.TXT fruit x z; the user, 2026-11-15: "You've added fruit machines, but they're lacking wheels, and
+// don't respond when Twinsen attempts to interact with them"): Action by one, a coin of the planet's in, three reels spun on the screen
+static int s_fmN = 0, s_fmX[4], s_fmZ[4], s_fmOn = 0, s_fmReel[3], s_fmPay = 0, s_fmActWas = 0, s_fmPaid = 0;
+static S32 s_fmAt = 0;
+static unsigned s_fmSeed = 1115u;
 static int s_blN = 0, s_bwN = 0, s_blScene = -1, s_blVar = 99, s_blFloor = 1064, s_blHalf = 1000, s_bowlLoaded = 0;
 static int s_bowlGame = -1, s_bowlInit = 0, s_bowlState = 0, s_bowlActWas = 0, s_bowlOverSaid = 0;
 static double s_bowlX = 0, s_bowlPower = 0, s_bowlFinalX = 0, s_bowlStartX = 0;
@@ -6351,6 +6357,9 @@ void RaceMod_Story(void) {
     // the picture kept from the last whole one, and what the race-track mode moves outside that left its copies behind: the user,
     // 2026-10-10, a gas monster's dark double standing behind it as it struck; and the roulette wheel, decors, stood still)
     else if (RaceMod_Active() && CubeMode == CUBE_EXTERIEUR && NewCube == -1) FirstTime = AFF_ALL_FLIP;
+    // (and in the bowling alley: its chains are drawn over the picture, not as actors -- drawn only where things moved, the room left each
+    // chain's last places on it, the user, 2026-11-15: "as the chains move their previous position is still visible")
+    else if (s_blScene >= 0 && CubeMode == CUBE_INTERIEUR && (S32)NumCube == s_blScene && NewCube == -1) FirstTime = AFF_ALL_FLIP;
     // (the waking scene held white: now it fades in)
     if (s_whiteUntil && TimerRefHR >= s_whiteUntil && NewCube == -1) {
         s_whiteUntil = 0;
@@ -19193,13 +19202,13 @@ static void BowlLoad(void) {
         }
         else if (!strncmp(line, "anim ", 5)) {
             int v[19], got = sscanf(line + 5, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14], &v[15], &v[16], &v[17], &v[18]);
-            if (got == 18 && v[0] >= 0 && v[0] < 2) {
+            if (got >= 18 && v[0] >= 0 && v[0] < 2) {
                 T_BOWL_ANIM *ba = &s_ba[v[0]];
                 memset(ba, 0, sizeof(*ba));
                 ba->On = 1; ba->Helper = v[1]; ba->WhoVar = v[2]; ba->OutcomeVar = v[3]; ba->Speed[0] = v[4]; ba->Speed[1] = v[5];
                 ba->Bowler[0] = v[6]; ba->Bowler[1] = v[7]; ba->Link = v[8]; ba->AnchorY = v[9]; ba->RackX = v[10]; ba->RackZ = v[11];
                 for (int i = 0; i < 6; i++) ba->Helmet[i] = v[12 + i];
-                ba->Phase = -1; ba->LiftAt = -1;
+                ba->Phase = -1; ba->LiftAt = -1; ba->Ball2 = got >= 19 ? v[18] : -1; ba->Active = 0;
             }
         }
         else if (sscanf(line, "lane %d %d %d %d %d %d %d %d %d %d %d", &a, &b, &c, &d, &e, &g, &h2, &k, &m, &n2, &o) == 11 && a >= 0 && a < 2) {
@@ -19207,6 +19216,7 @@ static void BowlLoad(void) {
             s_bl[a].Pin[0] = g; s_bl[a].Pin[1] = h2; s_bl[a].Pin[2] = k; s_bl[a].Pin[3] = m; s_bl[a].Pin[4] = n2; s_bl[a].Pin[5] = o;
             if (a + 1 > s_blN) s_blN = a + 1;
         }
+        else if (sscanf(line, "fruit %d %d", &a, &b) == 2 && s_fmN < 4) { s_fmX[s_fmN] = a; s_fmZ[s_fmN] = b; s_fmN++; }
     }
     fclose(f);
     Log_Info("[racemod] bowling: %d lanes, %d bowlers (scene %d)", s_blN, s_bwN, s_blScene);
@@ -19293,14 +19303,16 @@ static void BowlLaneFrame(int lane, S32 now, double dt, int npc) {
     T_BOWL_ANIM *ba = &s_ba[lane];
     const T_BOWL_LANE *ln = &s_bl[lane];
     if (!ba->On || ln->Ball <= 0 || ln->Ball >= (int)NbObjets) return;
-    T_OBJET *ball = &ListObjet[ln->Ball];
+    const int inPlay = ba->Active && ba->Ball2 > 0 && ba->Ball2 < (int)NbObjets ? ba->Ball2 : ln->Ball;
+    T_OBJET *ball = &ListObjet[inPlay];
+    const int waiting = inPlay == ln->Ball ? ba->Ball2 : ln->Ball;
     const double floorY = s_blFloor;
     // (the round's phase: the lever's track's label -- 0 a wait, 1 the throw, 2 the pins, 3 the lever, 4 the chains' haul)
     if (npc && ba->Helper > 0 && ba->Helper < (int)NbObjets) {
         const int phase = ListObjet[ba->Helper].LabelTrack;
         if (phase != ba->Phase) {
             ba->Phase = phase; ba->PhaseAt = now;
-            if (phase == 1) { ba->BallState = 1; }
+            if (phase == 1) { ba->BallState = 1; ba->Active = ListVarCube[ba->WhoVar] != 0 ? 1 : 0; }
             else if (phase == 4) { BowlReset(ba, now); ba->BallState = 0; }
         }
     }
@@ -19346,7 +19358,7 @@ static void BowlLaneFrame(int lane, S32 now, double dt, int npc) {
             for (int i = 0; i < BOWL_PINS; i++) {
                 if (ba->Down[i]) continue;
                 const double px = s_bowlHome[i][0], pz = s_bowlHome[i][1], dx = px - ba->Bx, dz = pz - ba->Bz;
-                if (dx * dx + dz * dz < (double)(BOWL_BALL_R + BOWL_PIN_R + 60) * (BOWL_BALL_R + BOWL_PIN_R + 60)) {
+                if (dx * dx + dz * dz < (double)(BOWL_BALL_R * 3 / 4 + BOWL_PIN_R) * (BOWL_BALL_R * 3 / 4 + BOWL_PIN_R)) {
                     const double l = sqrt(dx * dx + dz * dz) + 1e-6;
                     BowlKnock(ba, i, dx / l * 0.8, dz / l * 0.8 - 0.6);
                     ba->Bx -= dx / l * 40; ba->Bv *= 0.93;
@@ -19372,7 +19384,10 @@ static void BowlLaneFrame(int lane, S32 now, double dt, int npc) {
             for (int j = 0; j < BOWL_PINS; j++) {
                 if (ba->Down[j] || j == i) continue;
                 const double dx = s_bowlHome[j][0] - (s_bowlHome[i][0] + hx) / 2, dz = s_bowlHome[j][1] - (s_bowlHome[i][1] + hz) / 2;
-                if (dx * dx + dz * dz < 560.0 * 560.0) BowlKnock(ba, j, ba->Dx[i] + dx / 1400, ba->Dz[i] + dz / 1400);
+                // (a pin it lands on goes down more often than not, not always -- the user, 2026-11-15: "we can't have our players
+                // bowling a strike every time")
+                s_fmSeed = s_fmSeed * 1664525u + 1013904223u;
+                if (dx * dx + dz * dz < 520.0 * 520.0 && (s_fmSeed >> 16) % 100 < 62) BowlKnock(ba, j, ba->Dx[i] + dx / 1400, ba->Dz[i] + dz / 1400);
             }
         }
     }
@@ -19394,6 +19409,11 @@ static void BowlLaneFrame(int lane, S32 now, double dt, int npc) {
     ball->Obj.X = (S32)ba->Bx; ball->Obj.Z = (S32)ba->Bz; ball->Obj.Y = ba->BallState == 3 ? RACE_OUT_OF_SIGHT_Y : (S32)ba->By;
     ball->Obj.Alpha = BowlAng(ba->Spin); ball->Obj.Beta = 0; ball->Obj.Gamma = 0;
     ball->WorkFlags &= ~FALLING;
+    if (waiting > 0 && waiting < (int)NbObjets) {
+        T_OBJET *w = &ListObjet[waiting];
+        w->Obj.X = ba->RackX; w->Obj.Y = (S32)(floorY + BOWL_BALL_R); w->Obj.Z = ba->RackZ + 2 * BOWL_BALL_R + 40; w->Obj.Alpha = 0; w->Obj.Gamma = 0;
+        w->WorkFlags &= ~FALLING;
+    }
     for (int i = 0; i < BOWL_PINS; i++) {
         const int a = ln->Pin[i];
         if (a <= 0 || a >= (int)NbObjets) continue;
@@ -19431,6 +19451,79 @@ static void BowlLanesFrame(S32 now) {
         for (int i = 0; i < BOWL_PINS; i++) { s_bowlHome[i][0] = homeOf[lane][i][0]; s_bowlHome[i][1] = homeOf[lane][i][1]; }
         const int players = s_bowlGame >= 0 && s_bowlGame < s_bwN && s_bw[s_bowlGame].Lane == lane;
         BowlLaneFrame(lane, now, dt, !players);
+    }
+}
+// A fruit machine: Action by one (on foot, within reach of its front), a coin of the planet's in -- kashes on Twinsun, zlitos on Zeelich --
+// and its three reels spun, stopping one after another; three alike pay (three sevens the most), two sevens give the coin back
+static void BowlSay(S32 now, const char *text);
+#define FM_REACH 1150
+#define FM_SPIN_MS 900
+#define FM_GAP_MS 450
+#define FM_SHOW_MS 2600
+static const char *const s_fmName[5] = {"7", "BELL", "PIN", "SKULL", "CHERRY"};
+static int FmRoll(void) { s_fmSeed = s_fmSeed * 1664525u + 1013904223u; const int r = (s_fmSeed >> 16) % 20; return r < 2 ? 0 : r < 6 ? 1 : r < 11 ? 2 : r < 15 ? 3 : 4; }
+static S32 *FmPurse(void) { return MONEY_ZLITOS ? &NbZlitosPieces : &NbGoldPieces; }
+static int FmNear(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    for (int i = 0; i < s_fmN; i++) {
+        const double dx = hero->Obj.X - s_fmX[i], dz = hero->Obj.Z - s_fmZ[i];
+        if (dx * dx + dz * dz <= (double)FM_REACH * FM_REACH) return i;
+    }
+    return -1;
+}
+static void FruitFrame(S32 now) {
+    if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene) { s_fmOn = 0; return; }
+    const int act = (s_bowlInput & I_ACTION_M) != 0, pressed = act && !s_fmActWas;
+    s_fmActWas = act;
+    if (s_fmOn && now - s_fmAt > FM_SPIN_MS + 2 * FM_GAP_MS && !s_fmPaid) {
+        s_fmPaid = 1;
+        const int a = s_fmReel[0], b = s_fmReel[1], c = s_fmReel[2];
+        s_fmPay = a == b && b == c ? (a == 0 ? 25 : a == 1 ? 10 : 5) : (a == 0) + (b == 0) + (c == 0) >= 2 ? 1 : 0;
+        *FmPurse() += s_fmPay;
+        Log_Info("[racemod] fruit machine: %s %s %s, pays %d", s_fmName[a], s_fmName[b], s_fmName[c], s_fmPay);
+    }
+    if (s_fmOn && now - s_fmAt > FM_SPIN_MS + 2 * FM_GAP_MS + FM_SHOW_MS) s_fmOn = 0;
+    if (!pressed || s_fmOn || s_bowlGame >= 0 || Comportement == C_BUGGY) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    for (int i = 0; i < s_fmN; i++) {
+        const double dx = hero->Obj.X - s_fmX[i], dz = hero->Obj.Z - s_fmZ[i];
+        if (dx * dx + dz * dz > (double)FM_REACH * FM_REACH) continue;
+        if (*FmPurse() < 1) { BowlSay(now, MONEY_ZLITOS ? "No zlitos for the machine" : "No kashes for the machine"); return; }
+        *FmPurse() -= 1;
+        for (int r = 0; r < 3; r++) s_fmReel[r] = FmRoll();
+        s_fmOn = 1; s_fmAt = now; s_fmPaid = 0; s_fmPay = 0;
+        HQ_3D_MixSample(575, 0x1000, 0, 1, hero->Obj.X, hero->Obj.Y, hero->Obj.Z);
+        Log_Info("[racemod] fruit machine %d: a coin in", i);
+        return;
+    }
+}
+// Its reels on the screen, over the scene: three windows, each turning through its symbols until its stop, then the result
+static void FruitDraw(void) {
+    if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene || s_bowlGame >= 0) return;
+    if (!s_fmOn) {
+        const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+        if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine(w / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
+        else if (Comportement != C_BUGGY && FmNear() >= 0) {
+            const char *t = MONEY_ZLITOS ? "Action: play the machine, 1 zlito" : "Action: play the machine, 1 kash";
+            HudLine(w / 2 - SizeFont((char *)t) / 2, h - 60, t, -1);
+        }
+        return;
+    }
+    const S32 now = TimerRefHR, w = (S32)ModeDesiredX, cw = 150, ch = 90, gap = 16, x0 = w / 2 - (3 * cw + 2 * gap) / 2, y0 = 130;
+    Box(x0 - 14, y0 - 40, x0 + 3 * cw + 2 * gap + 13, y0 + ch + 44, 4 * 16 + 2);
+    Box(x0 - 10, y0 - 36, x0 + 3 * cw + 2 * gap + 9, y0 + ch + 40, 0);
+    HudLine(w / 2 - SizeFont((char *)"THE ONE-ARMED BANDIT") / 2, y0 - 32, "THE ONE-ARMED BANDIT", -1);
+    for (int r = 0; r < 3; r++) {
+        const S32 x = x0 + r * (cw + gap);
+        Box(x, y0, x + cw - 1, y0 + ch - 1, 3 * 16 + 12);
+        const int stopped = now - s_fmAt >= FM_SPIN_MS + r * FM_GAP_MS;
+        const int shown = stopped ? s_fmReel[r] : (int)((now - s_fmAt) / 70 + r * 2) % 5;
+        HudLine(x + cw / 2 - SizeFont((char *)s_fmName[shown]) / 2, y0 + ch / 2 - 12, s_fmName[shown], -1);
+    }
+    if (s_fmPaid) {
+        char t[48];
+        if (s_fmPay > 0) snprintf(t, sizeof(t), "Pays %d", s_fmPay); else snprintf(t, sizeof(t), "Nothing");
+        HudLine(w / 2 - SizeFont(t) / 2, y0 + ch + 10, t, -1);
     }
 }
 // The chains: each pin's, link by link from the dark over its home down to its helmet's top -- the helmet where the pin's turned head is
@@ -19521,6 +19614,7 @@ static void BowlFrame(S32 now) {
                 {
                     T_BOWL_ANIM *ba = &s_ba[me->Lane];
                     ba->BallState = 1; ba->PhaseAt = now; ba->Knocked = 0;
+                    ba->Active = ba->Bowler[1] == me->Actor ? 1 : 0;
                     ba->Bv = 3000 + 3500 * s_bowlPower; ba->Btx = s_bowlFinalX;
                 }
                 Log_Info("[racemod] bowling: thrown at power %.2f from %d, to %d", s_bowlPower, (int)s_bowlX, (int)s_bowlFinalX);
@@ -20657,6 +20751,7 @@ void RaceMod_Frame(void) {
     AchievementsFrame(TimerRefHR);
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
+    FruitFrame(TimerRefHR);
     DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -22934,6 +23029,7 @@ void RaceMod_Draw(void) {
     if (!RaceMod_Active()) { IslandCarDraw(); return; }
     BowlChainsDraw();
     if (!LbaFont) return;
+    FruitDraw();
     // (LBA2_CARVIS=1: the first opponent's car's state logged as it changes -- in this scene or not, out of sight at Y -20000, hidden,
     // bodiless, behind the camera (16), off the screen (32) -- and how many mushrooms of the next cubes are drawn: the user saw FunFrock's
     // car vanish and come back, 2026-10-27, not yet seen here)

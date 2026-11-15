@@ -115,6 +115,7 @@ internal static partial class RaceTrackStory
             "Não há travessias para a Cidadela enquanto a Taça estiver na cidade, senhor. Os ferries estão todos reservados para o público da corrida.",
         },
     };
+    private const int PrisonState = 12, PrisonAfter = 6;   // (a scene variable scene 84 never sets -- its scripts use 0 to 3 -- and variable 83 as after the breakout)
     private const int PrisonEntrance = 83, Prison = 84, OtringalTown = 90, OtringalHarbour = 87, JohnnyRoom = 79, FrancosVillage = 109,
                       DesertFerryOffice = 40, DesertHarbour = 65, CxRetailWay = 179, CxRetailRide = 176;
 
@@ -151,13 +152,45 @@ internal static partial class RaceTrackStory
 
         if (story.Contains(RaceTrackIsland.Otringal))
         {
-            Edit(OtringalTown, $"the doors into Otringal's prison (scenes {PrisonEntrance} and {Prison}) taken out: the race-track mode holds variable 83 at 4, where the prison starts Twinsen in his cell for good", model =>
+            // (the town's doors into the prison kept since 2026-11-15 -- the user: "Our work on the elevator into the bowling area appears
+            // to have removed the door entry zone"; they were taken out on 2026-11-05 -- and the prison as long after the game's breakout
+            // instead: every test of its scripts on variable 83, held at 4 by the race-track mode (4 or under: Twinsen in his cell, the guards
+            // on watch), worked out here as if it were 6 and put back as a test always true or always false (on a scene variable the prison
+            // never sets, so 0) -- not a variable set at the start: the actors' scripts run before Twinsen's on the first frame)
+            Edit(Prison, $"the prison (scene {Prison}) as long after the breakout -- Twinsen walks in free, its guards gone, the gate's barrier off: its tests of variable 83 (held at 4) as if it were {PrisonAfter}", _ => scripts =>
             {
-                var shut = 0;
-                for (var z = model.Zones.Count - 1; z >= 0; z--)
-                    if (model.Zones[z].Type == 0 && model.Zones[z].Num is PrisonEntrance or Prison) { SceneOps.DeleteZone(model, z); shut++; }
-                if (shut == 0) throw new NotTheGames("no door into the prison");
-                return _ => { };
+                string Always(bool yes) => yes ? $"0 <= var_cube({PrisonState})" : $"0 > var_cube({PrisonState})";
+                var test = new System.Text.RegularExpressions.Regex(@"(-?\d+) (==|!=|<=|>=|<|>) var_game\(83\)");
+                var changed = 0;
+                for (var a = 0; a < scripts.ActorCount; a++)
+                {
+                    var life = scripts.GetText(a, ScriptKind.Life);
+                    var done = test.Replace(life, m =>
+                    {
+                        var n = int.Parse(m.Groups[1].Value);
+                        return Always(m.Groups[2].Value switch
+                        {
+                            "==" => n == PrisonAfter, "!=" => n != PrisonAfter, "<=" => n <= PrisonAfter, ">=" => n >= PrisonAfter, "<" => n < PrisonAfter, _ => n > PrisonAfter,
+                        });
+                    });
+                    if (done.Contains("var_game(83)", StringComparison.Ordinal)) throw new NotTheGames($"actor {a} reads variable 83 other than in a test");
+                    if (done == life) continue;
+                    scripts.SetText(a, ScriptKind.Life, done);
+                    changed++;
+                }
+                if (changed == 0) throw new NotTheGames("no test of variable 83 in the prison");
+                // (and the electric barrier across the gate he comes in by from the town -- off only when he starts by the entrance's door, its
+                // zone 12, else on until its switch is hit: off from the start, its switch showing it, so the way back out is open)
+                var barrier = 0;
+                for (var a = 1; a < scripts.ActorCount; a++)
+                {
+                    var life = scripts.GetText(a, ScriptKind.Life);
+                    if (!life.Contains("flow_point(25, 54)", StringComparison.Ordinal) && !life.Contains("set_comportement_obj(27, comportement_3)", StringComparison.Ordinal)) continue;
+                    if (!life.Contains("12 == zone_obj(0)", StringComparison.Ordinal)) continue;
+                    scripts.SetText(a, ScriptKind.Life, life.Replace("12 == zone_obj(0)", Always(true), StringComparison.Ordinal));
+                    barrier++;
+                }
+                if (barrier != 2) throw new NotTheGames($"the gate's barrier and its switch: {barrier} actors, not 2");
             });
             var taxi = AddIslandTexts(gameDirectory, RaceTrackIsland.Otringal.IslandByte, OtringalTaxiLines, log, "Otringal's harbour taxi");
             if (taxi >= 0)

@@ -174,7 +174,7 @@ internal static class CitadelSpanking
 
     // A keyframe: the standing's values, the hips' move down by `drop`, then each bone in `aims` turned to point its own way (from its
     // pivot to its first child's) along the given direction -- parents before children
-    private static AnimFrame Frame(Body body, int time, (int Type, double A, double B, double C)[] basis, Dictionary<int, Vector3> aims, int drop, int head, int back = 0)
+    internal static AnimFrame Frame(Body body, int time, (int Type, double A, double B, double C)[] basis, Dictionary<int, Vector3> aims, int drop, int head, int back = 0)
     {
         var v = basis.ToArray();
         v[1] = (1, 0, drop, -back);

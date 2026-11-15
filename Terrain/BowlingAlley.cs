@@ -51,6 +51,8 @@ internal static class BowlingAlley
 
     // (the chains' anchors in the dark over the pins: this far over the floor)
     private const int ChainAnchor = 4400;
+    // (the poker table's middle -- cells 42, 36: between the booths and the fruit machines -- and its players' distance from it)
+    private const int PokerX = 42 * 512, PokerZ = 36 * 512, PokerSeat = 800;
 
     // (the game of bowling the engine plays -- RACEMOD.CPP bowling_game=: it holds this scene variable, and the lane scripts wait)
     public const int GameVar = 99;
@@ -183,7 +185,7 @@ void comportement_3()
         }
         int Prop(int generic, int x, int y, int z, int beta = 0)
         {
-            var a = CitadelProps.Actor(generic, x, y, z, beta);
+            var a = CitadelProps.Actor(generic > 127 ? (sbyte)generic : generic, x, y, z, beta);
             a.Flags |= RaceTrackScenes.CarrierFlag; a.Move = 3; a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
             return SceneOps.AddActor(model, a);
         }
@@ -219,10 +221,12 @@ void comportement_3()
             // (the speeds the ball rolls at, units a second -- RACEMOD.CPP rolls it: some 2 to 3 seconds down the lane)
             // (their reactions the build's own -- BowlingAnims: a celebration for a strike, a shrug for some pins, a remonstration at the
             // gutter; the game's that stood in for them walked them off down the lane)
-            (0, CitadelProps.LaneX0, MonkeyMonster, 0, "the monkey monster", ThrowMonster, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 5, 8, 6000),   // strong: strikes, and wild
-            (0, CitadelProps.LaneX0, Sailor, SailorBody, "the sailor", 579, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 3, 8, 4800),                  // steady: more often some pins
-            (1, CitadelProps.LaneX1, SwordMonkey, 0, "the swordsman monkey", SwingSword, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 6, 9, 5400),   // precise
-            (1, CitadelProps.LaneX1, GreenGloom, 0, "the green gloom", 481, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 3, 5, 4200),               // heavy and erratic
+            // (2026-11-15, second round: each his own throw -- BowlingAnims.Bowl -- the swordsman without his sword, a ball each in his own
+            // colour, and strikes rarer -- "we can't have our players bowling a strike every time"; the engine's pins fall less surely too)
+            (0, CitadelProps.LaneX0, MonkeyMonster, 0, "the monkey monster", BowlingAnims.Bowl, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 3, 8, 6000),   // strong: strikes, and wild
+            (0, CitadelProps.LaneX0, Sailor, SailorBody, "the sailor", BowlingAnims.Bowl, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 2, 8, 4800),            // steady: more often some pins
+            (1, CitadelProps.LaneX1, SwordMonkey, BowlingAnims.Swordless, "the swordsman monkey", BowlingAnims.Bowl, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 4, 9, 5400),   // precise
+            (1, CitadelProps.LaneX1, GreenGloom, 0, "the green gloom", BowlingAnims.Bowl, BowlingAnims.Celebrate, BowlingAnims.Shrug, BowlingAnims.Remonstrate, 2, 5, 4200),           // heavy and erratic
         };
         // (a chain's link, for the engine to draw the chains with -- RACEMOD.CPP BowlChainsDraw: an actor out of sight carrying its body)
         var link = Prop(CitadelProps.ChainLink, CitadelProps.LaneMiddleX, FloorY, 2000);
@@ -236,7 +240,10 @@ void comportement_3()
             // the giant lever beside the lane keeps the round (an invisible helper's track did not run): a phase a label of its track, its arm
             // thrown down in the third as the bowler pulls it
             var helper = Prop(CitadelProps.LeverUp, cx + 1750, FloorY, CitadelProps.FoulZ + 500);
-            Text(helper, "", $"label(0);\nwait_nb_second(2);\nlabel(1);\nwait_nb_second(5);\nlabel(2);\nwait_nb_second(3);\nlabel(3);\nwait_nb_second(2);\nbody({CitadelProps.LeverDown});\nwait_nb_second(1);\nbody({CitadelProps.LeverUp});\nwait_nb_second(1);\nlabel(4);\nwait_nb_second(3);\ngoto(label_0);\n");
+            // (the second lane's round starts 8 s after the first's, about half a round: the two never in step -- the user, 2026-11-15, "we
+            // need our two lanes out of sync")
+            var late = lane == 2 ? "label(9);\nwait_nb_second(8);\n" : "";
+            Text(helper, "", late + $"label(0);\nwait_nb_second(2);\nlabel(1);\nwait_nb_second(5);\nlabel(2);\nwait_nb_second(3);\nlabel(3);\nwait_nb_second(2);\nbody({CitadelProps.LeverDown});\nwait_nb_second(1);\nbody({CitadelProps.LeverUp});\nwait_nb_second(1);\nlabel(4);\nwait_nb_second(3);\ngoto(label_0);\n");
             // (and each round the throw's luck is rolled while the bowlers change places, in tenths by whose turn it is)
             var rolls = string.Concat(bowlers.Where(b => b.Lane == lane - 1).Select((b, i) =>
                 $"        if ({i} == var_cube({who}))\n        {{\n            if ({b.Strike} > rnd(10)) {{ set_var_cube({outcome}, 0); }}\n            else if ({b.Some} > rnd(10)) {{ set_var_cube({outcome}, 1); }}\n            else {{ set_var_cube({outcome}, 2); }}\n        }}\n"));
@@ -244,8 +251,11 @@ void comportement_3()
             // the ball: a Sphero curled up, waiting at the lane's ball return on the divider beside its approach; the engine has it picked up,
             // thrown, rolled and spun down the lane and back by the round's phase (RACEMOD.CPP BowlLaneFrame)
             var (rackX, rackZ) = (cx + 1700, CitadelProps.FoulZ + 1500);
-            var ball = Prop(CitadelProps.SpheroBall, rackX, onFloor + 340, rackZ);
+            var colours = CitadelProps.SpheroColours;
+            var ball = Prop(colours[2 * (lane - 1)].Generic, rackX, onFloor + 340, rackZ);
             Text(ball, Still(), "label(0);\nstop();\n");
+            var ball2 = Prop(colours[2 * (lane - 1) + 1].Generic, rackX, onFloor + 340, rackZ + 2 * 340 + 40);
+            Text(ball2, Still(), "label(0);\nstop();\n");
             // the bowlers
             var home = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx, onFloor, CitadelProps.FoulZ + 1200));
             var wait = SceneOps.AddTrackPoint(model, new SceneTrackPoint(cx - 1900, onFloor, CitadelProps.FoulZ + 2200));
@@ -287,13 +297,17 @@ void comportement_3()
                 }
             map.Add($"lane {lane - 1} {cx} {CitadelProps.FoulZ} {CitadelProps.PinsZ} {ball} {string.Join(' ', pinActors)}");
             var speeds = bowlers.Where(b => b.Lane == lane - 1).Select(b => b.Speed).ToList();
-            map.Add($"anim {lane - 1} {helper} {who} {outcome} {speeds[0]} {speeds[1]} {bowlerActors[0]} {bowlerActors[1]} {link} {FloorY + ChainAnchor} {rackX} {rackZ} {string.Join(' ', helmets)}");
+            map.Add($"anim {lane - 1} {helper} {who} {outcome} {speeds[0]} {speeds[1]} {bowlerActors[0]} {bowlerActors[1]} {link} {FloorY + ChainAnchor} {rackX} {rackZ} {string.Join(' ', helmets)} {ball2}");
         }
         // ---- the dressing (CitadelProps.BowlingDecor): the neon pin on the back wall over the lanes, the neon BAR hung over the bar, dim lamps
         // over the lanes, a scoreboard over each played lane's pins, the ball returns the Spheros wait in, kegs and crates
         void Decor(int generic, int x, int y, int z, int beta = 0) { var d = Prop(generic, x, y, z, beta); Text(d, Still(), "label(0);\nstop();\n"); }
         Decor(CitadelProps.NeonPin, CitadelProps.LaneMiddleX, FloorY + 1700, (BowlingRoom.RoomZ0 * 512) + 40);
-        Decor(CitadelProps.NeonBar, 24320, FloorY + 2100, 13650);
+        // (the bar's back to the north wall since 2026-11-15's second round -- BowlingRoom: its counter's U at cells x 45-52, z 8-15, open
+        // to the south, the barman in it -- its neon on the wall over it)
+        Decor(CitadelProps.NeonBar, 25088, FloorY + 2100, BowlingRoom.RoomZ0 * 512 + 60);
+        Decor(CitadelProps.HangingLamp, 25088, FloorY + 2300, 6400);
+        Decor(CitadelProps.HangingLamp, PokerX, FloorY + 2300, PokerZ);
         foreach (var lx in new[] { CitadelProps.LaneX0, CitadelProps.LaneMiddleX, CitadelProps.LaneX1 })
             foreach (var lz in new[] { 9216, 14336 }) Decor(CitadelProps.HangingLamp, lx, FloorY + 2300, lz);
         foreach (var lx in new[] { CitadelProps.LaneX0, CitadelProps.LaneX1 })
@@ -301,18 +315,35 @@ void comportement_3()
             Decor(CitadelProps.Scoreboard, lx, FloorY + 2500, 4700);
             Decor(CitadelProps.BallReturn, lx + 1700, FloorY, CitadelProps.FoulZ + 1500);
         }
-        foreach (var (kx, kz) in new[] { (21760, 19200), (22350, 19650), (27200, 18900) }) Decor(CitadelProps.Keg, kx, FloorY, kz);
+        // (no kegs: they read as two posts -- the user, 2026-11-15: "I have no idea what these two posts are")
         foreach (var (cx2, cz2) in new[] { (5500, 23300), (5500, 23900), (6080, 23600) }) Decor(CitadelProps.Crate, cx2, FloorY, cz2);
         // ---- the regulars, the underbelly at the bar (Otringal's own, as Rick's bar has them): a casino gloom, a sailor and a Franco dissident
         // at its stools, a brown-faced sailor behind it, the big grey gloom minding the lift, another dissident at the slot machine
-        foreach (var (entity, body, x, z, beta) in new[] { (294, 0, 22784, 13005, 0), (295, 0, 23808, 13005, 0), (56, 93, 25856, 13005, 0),
-                                                         (297, 187, 24320, 15872, 2048), (206, 148, 25856, 22784, 3072), (56, 93, 19968, 11980, 2048) })
+        // (2026-11-15, second round: the bar against the north wall -- the gloom and the sailor at its west side, the dissident at its east,
+        // the barman in its U; another dissident by the booths; the big grey Franco by the lift)
+        void Regular(int entity, int body, int x, int z, int beta, int anim = 0)
         {
             var r = SceneOps.BlankActor(SceneGame.Lba2, x, FloorY, z, entity);
-            r.Body = (sbyte)body; r.Anim = 0; r.Beta = beta; r.Flags = 0x1000; r.CoulObj = 9; r.Armor = 51; r.LifePoints = -1; r.Move = 0;
+            r.Body = (sbyte)body; r.Anim = anim; r.Beta = beta; r.Flags = 0x1000; r.CoulObj = 9; r.Armor = 51; r.LifePoints = -1; r.Move = 0;
             r.Life = new byte[] { 0 }; r.Track = new byte[] { 0 };
             Text(SceneOps.AddActor(model, r), Still(), "label(0);\nstop();\n");
         }
+        foreach (var (entity, body, x, z, beta) in new[] { (294, 0, 22784, 5888, 1024), (295, 0, 22784, 6912, 1024), (56, 93, 27392, 6400, 3072),
+                                                         (297, 187, 24832, 6400, 0), (206, 148, 20736, 15104, 3072), (56, 93, 25856, 22272, 2048) })
+            Regular(entity, body, x, z, beta);
+        // ---- the poker table (the user, 2026-11-15: "add a round table with people sitting playing poker"): round, among the booths and the
+        // fruit machines, a sailor, a blue sailor and a Franco dissident sat at it (BowlingAnims.Poker, each at his own pace), the fourth chair
+        // empty, toward the room. Each sits PokerSeat from its middle facing it, his chair's seat under him (a chair's seat ChairAhead in front
+        // of its own place)
+        Decor(CitadelProps.PokerTable, PokerX, FloorY, PokerZ);
+        foreach (var (entity, body, dx, dz, beta) in new[] { (56, 93, 0, -1, 0), (297, 0, -1, 0, 1024), (295, 0, 1, 0, 3072), (-1, 0, 0, 1, 2048) })
+        {
+            var (sx, sz) = (PokerX + dx * PokerSeat, PokerZ + dz * PokerSeat);
+            Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
+            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker);
+        }
+        // the fruit machines (BowlingRoom: Rick's two, where they stand), for the engine
+        foreach (var (fx, fz) in BowlingRoom.FruitMachines) map.Add($"fruit {fx} {fz}");
         File.WriteAllLines(Path.Combine(gameDirectory, "BOWLMAP.TXT"), map);
 
         // ---- the scripts
