@@ -55,7 +55,10 @@ internal static partial class RaceTrackStory
                 up = Pt(LiftUp), high = Pt(LiftTop), black = Pt(BlackAt), buggyAt = Pt(BuggyAt);
             string Aboard(int speed) => $"speed({speed});\ngoto_point_3d({corridor});\ngoto_point_3d({foot});\ngoto_point_3d({top});\ngoto_point_3d({hatch});\n";
             // (hidden while its track is in the hold)
-            const string HiddenInHold = "void comportement_0()\n{\n    if (10 == l_track())\n    {\n        invisible(1);\n    }\n    if (11 == l_track())\n    {\n        invisible(0);\n    }\n}\n";
+            // (and once Twinsen's buggy is being loaded, Boarding, kept there: one came back out of the hatch as the buggy went up the ramp --
+            // the user's picture, 2026-11-14, "when loading Twinsen's car into the spaceship another car appeared in the doorway")
+            var HiddenInHold = $"void comportement_0()\n{{\n    if (10 == l_track())\n    {{\n        invisible(1);\n        if (0 < var_cube({Boarding}))\n        {{\n            suicide();\n        }}\n    }}\n" +
+                $"    if (11 == l_track())\n    {{\n        if (0 < var_cube({Boarding}))\n        {{\n            invisible(1);\n            suicide();\n        }}\n        invisible(0);\n    }}\n}}\n";
 
             // Twinsen arrives at the hall's south end, facing north up it
             var hero = model.Actors[0];
