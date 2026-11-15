@@ -159,8 +159,11 @@ internal static class CitadelOveralls
             if (c >= bodies.Count || Entry(c) is not { } coupleBytes) continue;
             try
             {
-                // (no LBRA patch on his back here: its 150 points and polygons took the pair over the engine's 550)
-                var couple = CoupleInSuit(Body.Read(coupleBytes, 2), Overalls(Body.Read(bodies.Read(Everyday), 2)), MirroredCouples.Contains(c));
+                // (the LBRA patch on his back too, as on his own body -- the user, 2026-11-15, "Twinsen's model when he's walking with Zoe lacks
+                // the detail we added to the back of his racing suit": its 150 points and polygons over the game's 550, the engine's limit is
+                // 1,100 since, LIB386 AFF_OBJ.CPP. Not on the mirrored pair at the lighthouse's top: its letters would read backwards)
+                var couple = CoupleInSuit(Body.Read(coupleBytes, 2), MirroredCouples.Contains(c) ? Overalls(Body.Read(bodies.Read(Everyday), 2)) : WithBackPatch(Overalls(Body.Read(bodies.Read(Everyday), 2))), MirroredCouples.Contains(c));
+                couple.LimitOverride = 1100;
                 log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}): {couple.Vertices.Count} points, {couple.Faces.Count} polygons, {couple.Lines.Count} lines, {couple.Spheres.Count} spheres, {couple.Bones.Count} bones");
                 HqrWriter.ReplaceInFile(bodyPath, c, couple.Write());
                 coupled.Add(c);

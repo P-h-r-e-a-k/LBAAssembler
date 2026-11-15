@@ -44,7 +44,10 @@ public sealed class Body
     public int[] NormalBone = [];
     public List<BodyLine> Lines = [];
     public List<BodySphere> Spheres = [];
-    public int Limit => Game == 1 ? 500 : 550;
+    // (LimitOverride: a body only LBA Racing Adventure's own engine draws, whose limit is 1,100 -- LIB386 AFF_OBJ.CPP since 2026-11-15 --
+    // e.g. Twinsen arm in arm with Zoe in his racing suit with its back patch; null: the classic engine's)
+    public int? LimitOverride;
+    public int Limit => LimitOverride ?? (Game == 1 ? 500 : 550);
     public int DrawBufferBytes => Faces.Sum(f=>4+6*f.Points.Length)+(Lines.Count+Spheres.Count)*12;
     static int U(byte[] b, int p) => BitConverter.ToUInt16(b, p);
     static int I(byte[] b, int p) => BitConverter.ToInt32(b, p);

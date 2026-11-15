@@ -19,8 +19,10 @@
 #include <math.h>
 #include <SYSTEM/DEBUG_TRACES.H>
 
-#define MAX_NB_POINTS 550
-#define MAX_NB_POLYS 550
+// (1,100, twice the game's 550: LBA Racing Adventure's bodies -- Twinsen arm in arm with Zoe in his racing suit with its back patch,
+// 2026-11-15 -- are over it; the arrays are static and small)
+#define MAX_NB_POINTS 1100
+#define MAX_NB_POLYS 1100
 #define MAX_NB_GROUPES 30
 #define SIZE_MATRICE (sizeof(S16) * 15)
 #define W_NORM (1 << 30)
