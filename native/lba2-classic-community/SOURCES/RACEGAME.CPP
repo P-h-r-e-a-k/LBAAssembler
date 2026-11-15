@@ -3892,7 +3892,8 @@ static S32 StoryMode(void) {
     for (;;) {
         // (five rows since the Two players row, 2026-11-11: the title and the line under them moved out of their way)
         Page("Story Mode", 298 - (56 * rows) / 2 - 50);
-        Text(UI_CENTER_X, 462 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
+        // (the line just under the rows' last: at 462 its letters ran off the bottom of a 480-tall screen -- the user's picture, 2026-11-15)
+        Text(UI_CENTER_X, 298 - (50 * rows + 6 * (rows - 1)) / 2 + (rows - 1) * 56 + 25 + 14 + UI_VCENTER_OFS, "Win the islands' races to unlock cars", RG_GREY);
         const S32 select = Menu(s_storyMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         // (the story's difficulty: its page, then back here -- the row says the level chosen)

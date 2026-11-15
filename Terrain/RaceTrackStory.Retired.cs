@@ -67,6 +67,8 @@ internal static partial class RaceTrackStory
     // the story's chapters on each island: the game's own pickups gated on `N > chapter()` are never there in the story
     // (the lava lake's, 6: RaceTrackStory.LavaLake.cs)
     private const int DesertChapter = 3, MoonChapter = 4, OtringalChapter = 5, FrancosChapter = 7;
+    // (scene 54's cell variable: its door's track started -- the hero's own script uses var_cube(0) only)
+    private const int CellOpening = 9;
     // the Esmer soldiers (the game's entities 31 and 32: masked, yellow, armed) gone from every scene of an island, every chapter: the
     // Desert's -- the plaza, the harbour, the start line's scene, the Temple of Bu's hall -- shot Twinsen dead after the race was won (the
     // user, 2026-11-14: "a lot of alien NPCs started attempting to kill Twinsen, can we remove them all please")
@@ -287,8 +289,18 @@ internal static partial class RaceTrackStory
         var moon = $"{MoonChapter - 1} < chapter()";
         return (new List<Retirement>
         {
-            new(54, 0, @"set_var_game\(85, 7\)", "the cell door's little key opens nothing (the game's escape with Baldino: var 85 7-10, its crash, chapter 6)",
-                Swap("if (4 == col())", $"if ({MoonChapter} > chapter() && 4 == col())")),
+            // (the cell's door opened by a little key all the same -- the fire extinguisher by the cells gives it, StellaEntities -- and kept:
+            // it opens each time he comes to it holding one, from either side, and the way to Stella Entities' lift is through the cell.
+            // The user, 2026-11-14: "Baldino's cell is locked and requires a key, there's a fire extinguisher leading up to his cell area
+            // that already gives a bonus, let's change the bonus so it gives Twinsen the key he needs". CellOpening: the door's track
+            // started once, not again every frame he touches it while it swings.)
+            new(54, 0, @"set_var_game\(85, 7\)", "the cell door's little key opens the door only, not the game's escape with Baldino (var 85 7-10, its crash, chapter 6)",
+                Swap("if (4 == col())", $@"if ({MoonChapter} <= chapter() && 4 == col() && 0 < nb_little_keys() && 0 == var_cube({CellOpening}))
+    {{
+        set_var_cube({CellOpening}, 1);
+        set_track_obj(4, label_0);
+    }}
+    if ({MoonChapter} > chapter() && 4 == col())")),
             new(54, 5, @"suicide\(\);\s*\}\s*set_track\(label_0\);\s*set_comportement\(comportement_1\);.*use_inventory\(29\)", "the cell's guard who chases on sight gone", Gone(moon)),
             new(54, 6, @"set_dir\(MOVE_FOLLOW, 8\)", "Baldino in his old cell (the game's escape) gone", Gone(moon)),
             new(54, 7, @"found_object\(29\)", "the cell's prisoner (the translator, item 29, and the escape) gone", Gone(moon)),

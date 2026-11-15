@@ -74,6 +74,13 @@ internal static class StellaEntities
     private const int CellFloor = 2048, CellFloorLayer = 7, LiftCellX = 32, LiftCellZ = 31;
     // (the corner inside the cell behind the door's left pillar, where a walk in from the cell's middle stops: cell (35.5, 30.2))
     private const int InsideX = 18176, InsideZ = 15460;
+    // (scene 54's fire extinguisher, on the wall by the cells: where the game has it -- a sprite)
+    private static readonly (int X, int Z) ExtinguisherAt = (22527, 25599);
+    // (scene 54's cell variable counting the lift helper's first frames -- the hero's script uses 0, the cell door's opening 9)
+    private const int SettleVar = 8;
+    // (the spot reaching a cell further east, towards the door: walked into the corner from the doorway he comes to rest against the
+    // pillar about 250 short of its edge, hidden behind it -- the user, 2026-11-14, "still having trouble walking into the corner")
+    private const int SpotEast = 1023;
     private static readonly (int X, int Y, int Z) CellFoot = ((LiftCellX + 1) * 512, CellFloor - Citadel.CitadelProps.LiftTop, (LiftCellZ + 1) * 512);
     // the club's lift: on the lift's foot's floor, cells x 57-58, z 27-28 (its middle), its open side south, the way into the corridor
     private const int ClubLiftCellX = 57, ClubLiftCellZ = 27;
@@ -286,6 +293,16 @@ internal static class StellaEntities
 
         // the scene: Rick's bar's header (its light, its music), the Moon's, Twinsen arriving on the lift
         var cell = store.Load(Cell);
+        // (the fire extinguisher on the way to the cells: hit, it gives the little key that opens Baldino's cell (RaceTrackStory.Retired's
+        // scene 54 swap), not its ten hearts -- the user, 2026-11-14, "let's change the bonus so it gives Twinsen the key he needs")
+        // (its bonus is the giver zone at its foot -- Action there, once a visit: EXTRA.CPP ZoneGiveExtraBonus, Info0 the kinds, Info1 how
+        // many -- the game's nine hearts and magic)
+        const int GiverZone = 4, GiveKey = 128;
+        var extinguisher = cell.Zones.Where(zn => zn.Type == GiverZone)
+            .OrderBy(zn => Math.Abs((zn.X0 + zn.X1) / 2 - ExtinguisherAt.X) + Math.Abs((zn.Z0 + zn.Z1) / 2 - ExtinguisherAt.Z)).FirstOrDefault();
+        if (extinguisher is null || Math.Abs((extinguisher.X0 + extinguisher.X1) / 2 - ExtinguisherAt.X) > 2048)
+            log.Add("Stella Entities: the fire extinguisher's bonus by the cells (scene 54) not found -- left as the game's");
+        else { extinguisher.Info[0] = GiveKey; extinguisher.Info[1] = 1; }
         var model = store.Load(RickBar).Clone();
         model.Island = MoonIsland;
         model.Actors.RemoveRange(2, model.Actors.Count - 2);
@@ -303,10 +320,10 @@ internal static class StellaEntities
         cell.Zones.RemoveAll(zn => zn.Type == 0 && zn.Num == Scene);
         cell.Zones.Add(new SceneZoneModel
         {
-            Type = 0, Num = Scene, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall,
+            Type = 0, Num = Scene, X0 = CellFoot.X - 512, X1 = CellFoot.X + SpotEast, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall,
             Info = new[] { clubArrival.X - 512, clubArrival.Y + 100 - Tall, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
-        cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + 511, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
+        cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + SpotEast, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
         // (and the same way down from inside the cell: the corner just behind the door's left pillar -- the lift's own corner is the alcove
         // outside the bars, only reached by turning left at the door; the user, 2026-11-13, "Twinsen was blocked from getting into the
         // corner from inside the cell ... we should make it easier to walk onto the elevator in the corner". Action there takes him down
@@ -330,21 +347,46 @@ internal static class StellaEntities
 
         // the lifts' actors: the cell's helper (Action on the spot); the club's platform, four plates two by two
         var cellHelper = SceneOps.AddActor(cell, RaceTrackScenes.InvisibleHelper(CellFoot.X, CellFloor, CellFoot.Z));
+        // (walked onto, as well as Action on it: the user, 2026-11-14, "I'm also still having trouble walking into the corner to the left of
+        // the door to trigger the elevator" -- armed once he has been off it since the scene started, as he comes back up onto the spot)
+        // (a few frames first: where he stands is only known once the zones have been looked at for him, after the scene's first life pass)
         var cellLife = $@"void comportement_0()
 {{
     set_change_cube({LiftSwitch}, 0);
-    set_comportement(comportement_1);
+    set_var_cube({SettleVar}, 0);
+    set_comportement(comportement_4);
+}}
+
+void comportement_4()
+{{
+    add_var_cube({SettleVar}, 1);
+    if (5 < var_cube({SettleVar}))
+    {{
+        if ({LiftZone} == zone_obj(0))
+        {{
+            set_comportement(comportement_2);
+        }}
+        else
+        {{
+            set_comportement(comportement_1);
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({LiftZone} != zone_obj(0))
+    {{
+        set_comportement(comportement_1);
+    }}
 }}
 
 void comportement_1()
 {{
-    swif (1 == action())
+    if ({LiftZone} == zone_obj(0) && 1 == var_game({AdultVar}))
     {{
-        if ({LiftZone} == zone_obj(0) && 1 == var_game({AdultVar}))
-        {{
-            set_change_cube({LiftSwitch}, 1);
-            set_comportement(comportement_3);
-        }}
+        set_change_cube({LiftSwitch}, 1);
+        set_comportement(comportement_3);
     }}
 }}
 
