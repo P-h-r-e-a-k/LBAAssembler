@@ -63,7 +63,10 @@ def C(x, z): return (x - OX, z - OZ)
 RW_X, RW_Z = 458.8, 534.0               # its middle: over the casino (its building x 452.6..465.1, z 528.8..535.4)
 RW_RIM, RW_OUT_R = 24.3, 24.8           # its wall's inner face and its outside (cells)
 RW_HOLE = 5.0                           # the hole in its bottom
-RW_YH, RW_S1, RW_S2 = 10600.0, 70.0, 3.6     # its floor at the hole's edge; its rise outwards, S1 a cell, steepening by S2 a cell a cell
+RW_YH, RW_S1, RW_S2 = 12000.0, 70.0, 3.6     # its floor at the hole's edge; its rise outwards, S1 a cell, steepening by S2 a cell a cell
+# (12000, not 10600: the casino put back right up to the road west from under the wheel, under the hole's edge -- its domes 11464 high, the
+# wheel's underside 300 under its floor and clear of what stands under it by 150. The user, 2026-11-15: "push it back so it's right up to
+# the stretch of track that's behind it please, if we need to lift the roulette wheel fractionally to allow this then please do so")
 RW_WALL = 400.0                         # its wall over its floor at the rim
 def bowl(r): d = max(0.0, r - RW_HOLE); return RW_YH + RW_S1 * d + RW_S2 * d * d
 def bowl_slope(r): d = max(0.0, r - RW_HOLE); return (RW_S1 + 2 * RW_S2 * d) / 512    # its rise outwards, a unit a unit
@@ -379,6 +382,9 @@ TUNNELS = [
 DRIVE_THROUGH = [{'body': b, 'scale': 1.0, 'clearance': CAR_ROOM, 'half': TUBE} for b in (144, 143, 111)]
 KEEP = [9, 10, 11, 12, 13, 14, 25, 26, 69, 77, 99, 100, 112]     # the palace, the stair towers, the town's big buildings, the gatehouse
 # (the casino, 70/71, is not: the roulette wheel floats where it stood -- the user, 2026-10-09: "We can remove that building if we need to")
+# the footbridge in the town under the road's tightest bend: its west wall (bodies 86-90) and the lamp's head (body 2) at its south-west
+# corner, [body, island cell x, z] -- the user, 2026-11-15: "it's not in the way of the track", "restore the lamp head too"
+KEEP_PLACED = [[86, 469.3, 528.0], [87, 469.3, 530.0], [88, 469.3, 533.0], [89, 469.3, 536.0], [90, 469.3, 538.0], [2, 467.2, 537.0]]
 
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)
 ride = ~np.zeros(N, bool)
@@ -471,6 +477,7 @@ plan = {
     'tunnels': TUNNELS,
     'driveThrough': DRIVE_THROUGH,
     'keepBodies': KEEP,
+    'keepPlaced': KEEP_PLACED,
     'stayPut': [112],
     # (the raised road in pieces of 10 cells, not 4: the town's and the palace's cubes are near their 200 decors already)
     'raisedPiece': 10.0,
@@ -495,6 +502,8 @@ plan = {
     'hoops': [{'at': [476.0 - OX, 589.5 - OZ], 'bodies': [134, 133, 135, 132], 'scale': 4.5, 'bottom': 812.0}],
     'gasMonsters': [{'from': int(nearest((420.3, 549.0), S_)), 'to': int(nearest((410.3, 585.0), S_)), 'every': 8.0, 'out': 3.0, 'most': 5},
                     {'from': int(nearest((414.0, 590.0), E)), 'to': int(nearest((443.0, 605.0), (0.57, 0.82))), 'every': 8.0, 'out': 3.0, 'most': 5}],
+    # (the fence links the plan json had by hand: the pit fence's join to the road's rail)
+    'fenceLinks': [[7, 9, 139, 10495, 22789, 12546, 24840, 3900]],
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))

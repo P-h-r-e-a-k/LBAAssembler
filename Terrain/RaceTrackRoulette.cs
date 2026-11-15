@@ -70,7 +70,7 @@ internal static class RaceTrackRoulette
     // Builds the wheel at (cx, cz) (island cells): the ground that would reach its underside lowered, what stands up into it taken away
     // (not what `kept` keeps), and its decors added. Null when its cube is full.
     public static RouletteSpot? Place(IslandFile island, TrackRoad r, RouletteRun run, double cx, double cz, int landing, RaceTrackOptions o,
-        RaceTrackReport report, Func<int, bool> kept)
+        RaceTrackReport report, Func<IslandDecor, bool> kept)
     {
         var rim = run.Rim; var outer = Math.Max(run.Outer, rim + 0.2);
         double Floor(double cells) { var d = Math.Max(0, cells - run.Hole); return run.Slope * d + run.Steepen * d * d; }   // over HoleY
@@ -93,7 +93,7 @@ internal static class RaceTrackRoulette
             foreach (var d in cube.Decors.ToList())
             {
                 var body = d.Body & 0xFFFF;
-                if (kept(body)) continue;
+                if (kept(d)) continue;
                 double x0 = (qx * (double)IslandFile.CubeSize + Math.Min(d.XMin, d.X)) / 512, x1 = (qx * (double)IslandFile.CubeSize + Math.Max(d.XMax, d.X)) / 512;
                 double z0 = (qz * (double)IslandFile.CubeSize + Math.Min(d.ZMin, d.Z)) / 512, z1 = (qz * (double)IslandFile.CubeSize + Math.Max(d.ZMax, d.Z)) / 512;
                 double nx = Math.Clamp(cx, x0, x1), nz = Math.Clamp(cz, z0, z1);

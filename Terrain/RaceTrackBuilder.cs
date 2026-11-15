@@ -203,6 +203,10 @@ internal sealed class RaceTrackPlan
     // road that passes over them): Polar Island's rocky peak and its plateau are decors, and its jump lands on the peak's top -- the
     // build took the peak's columns away under the road, down to the sea, and left the road on its piers in mid-air (2026-10-06).
     public int? KeepAbove { get; set; }
+    // Single decors that stay where they are, as KeepBodies' do, named by [body, island cell x, island cell z] (a point in the decor's box):
+    // a piece whose body is used all over the island -- a lamp's head -- kept here only. Otringal's footbridge under the raised road by its
+    // tightest bend: its west wall and a lamp's head, the user, 2026-11-15, "it's not in the way of the track", "restore the lamp head too".
+    public double[][]? KeepPlaced { get; set; }
     // A raised road's banking (with Raised), one number for each point: how much the road's surface rises across it, per unit of the way
     // to the left of the way the lap runs (so a bend to the left, its inside the lower, has it negative). The Elevator Platform's lap is
     // a rollercoaster: it leans into its bends.
@@ -1205,7 +1209,7 @@ internal static class RaceTrackBuilder
         // middle, where the ground is cut, is their origin -- and kept by the clearing)
         var through = new HashSet<int>();
         if (plan.DriveThrough is { Length: > 0 } huts) { through.UnionWith(RaceTrackDriveThrough.Make(island, main, huts, options, report)); keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(through).ToArray(); }
-        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through);
+        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through, plan.KeepPlaced);
         // (a kept building made shallower has bodies of its own, kept as the ones they copy; and so has a piece cut down to a wall)
         if (plan.ThinKept is { Length: > 0 } thin) { keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(ThinKept(island, thin, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
@@ -1297,7 +1301,7 @@ internal static class RaceTrackBuilder
         // (and what the ground carried up into the road's way: the decors stood clear of it when they were cleared, and ground filled
         // under a raised road's end lifts what stood there -- 2026-10-06: two of LBA1's barrels at the foot of Polar Island's 108, lifted
         // 7,000 onto the start of the raised road round the rocky peak)
-        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through);
+        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through, plan.KeepPlaced);
         ClearAdrift(island, adrift, report, through);
         // (the pipes after the clearing: they stand over the road, out of its way)
         // (the steam jets out of the gantries' uprights where there are some: with them)
@@ -1350,8 +1354,9 @@ internal static class RaceTrackBuilder
         if (planned && main.Raised is not null && plan.Roulette is { Centre.Length: >= 2 } roulette)
         {
             var keep = keepBodies?.ToHashSet() ?? new HashSet<int>();
+            var keepOne = KeptPlaced(island, plan.KeepPlaced);
             report.Roulette = RaceTrackRoulette.Place(island, main, roulette, roulette.Centre[0] + plan.OriginCellX, roulette.Centre[1] + plan.OriginCellZ,
-                PlanPoint(plan, main, roulette.Landing), options, report, keep.Contains);
+                PlanPoint(plan, main, roulette.Landing), options, report, d => keep.Contains(d.Body & 0xFFFF) || keepOne.Contains(d));
         }
         if (planned && plan.GasMonsters is { Length: > 0 } monsters)
             foreach (var g in monsters)
@@ -4094,6 +4099,14 @@ internal static class RaceTrackBuilder
                 why[3]++;
                 return Clear(dx, dz, dy) ? dy : null;
             }
+            // (put back where the island's record says, by hand: RaceTrackIsland.RestoreAt)
+            var byHand = false;
+            if (o.Island.RestoreAt?.FirstOrDefault(r => pieces.Any(p => (p.D.Body & 0xFFFF) == r.Body)) is { Body: > 0 } at && InCubes(at.Dx, at.Dz))
+            {
+                found = (at.Dx, at.Dz, Rise(at.Dx, at.Dz));
+                byHand = true;
+                report.Notes.Add($"a building put back by hand (the island's RestoreAt, body {at.Body}) at ({at.Dx}, {at.Dz}) cells, {found.Value.Dy} up");
+            }
             // (the ground round it as it was round it first; failing that, as level as it was -- a house on a cliff's ledge, the Mosquibees')
             for (var pass = 0; pass < 2 && found is null; pass++)
             {
@@ -4114,7 +4127,7 @@ internal static class RaceTrackBuilder
             // (and slid back towards where it stood, a cell at a time, while it still fits off the curbs and clear -- its back to the road:
             // the user, 2026-10-29, "push the casino back closer to its original position so it directly backs up to the race track". The
             // ground round it needn't be as level there: it takes its own ground with it)
-            if (found is { } first)
+            if (found is { } first && !byHand)
             {
                 var steps = Math.Max(Math.Abs(first.Dx), Math.Abs(first.Dz));
                 for (var k = steps - 1; k >= 1; k--)
@@ -4756,13 +4769,29 @@ internal static class RaceTrackBuilder
 
     // `asIs`: bodies kept with their boxes as they are -- a drive-through hut's parts (RaceTrackDriveThrough), its walls beside the road and
     // its roof over it, whose boxes the build made itself
+    // The decors RaceTrackPlan.KeepPlaced names: [body, island cell x, z] each, the decor of that body whose box holds that point.
+    internal static HashSet<IslandDecor> KeptPlaced(IslandFile island, double[][]? keepPlaced)
+    {
+        var keep = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
+        if (keepPlaced is not { Length: > 0 }) return keep;
+        foreach (var (kx, kz, kcube) in IslandOps.CubeCells(island))
+            foreach (var d in kcube.Decors)
+            {
+                var (x0, z0, x1, z1) = DecorCells(d, kx, kz);
+                if (keepPlaced.Any(k => k.Length >= 3 && (int)k[0] == (d.Body & 0xFFFF) && k[1] >= x0 && k[1] <= x1 && k[2] >= z0 && k[2] <= z1)) keep.Add(d);
+            }
+        return keep;
+    }
+
     private static void ClearDecors(IslandFile island, RoadIndex index, RaceTrackOptions o, RaceTrackReport report, List<TrackRoad>? roads = null, int[]? keepBodies = null,
-        int? keepAbove = null, HashSet<int>? asIs = null)
+        int? keepAbove = null, HashSet<int>? asIs = null, double[][]? keepPlaced = null)
     {
         var taken = new List<(int Cx, int Cz, IslandDecor D)>();
         bool Protected(int body) => o.Island.OldTrackCube is not null && o.ProtectedBodies.Contains(body);
         var keepSet = keepBodies?.ToHashSet() ?? new HashSet<int>();
-        bool Kept(IslandDecor d) => keepSet.Contains(d.Body & 0xFFFF) || keepAbove is { } high && d.YMax >= high;
+        // (and the single decors the plan names by body and place: KeepPlaced)
+        var keepOne = KeptPlaced(island, keepPlaced);
+        bool Kept(IslandDecor d) => keepSet.Contains(d.Body & 0xFFFF) || keepOne.Contains(d) || keepAbove is { } high && d.YMax >= high;
         // (the decor at the island's doors: RaceTrackOptions.DoorBoxes)
         var atDoor = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
         foreach (var b in o.DoorBoxes) atDoor.UnionWith(RaceTrackOptions.DecorsAtDoor(island, b));
