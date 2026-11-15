@@ -3183,7 +3183,7 @@ static void AchRowLabel(int k, char *out, size_t size) {
     snprintf(out, size, "%s: %s", s_ach[k].Group, s_achGot[k] ? s_ach[k].Title : "##########");
 }
 static const char *BowlerName(int k) {
-    static const char *const names[4] = {"The monkey monster", "The Emperor's soldier", "The swordsman monkey", "The Dark Monk"};
+    static const char *const names[4] = {"The monkey monster", "The sailor", "The swordsman monkey", "The green gloom"};   // (the user's four, 2026-11-15)
     return k >= 0 && k < 4 ? names[k] : "";
 }
 // The best bowling score of a bowler, kept (BOWLING.TXT in the player's folder, four numbers): `score` kept if better (-1: only asked)

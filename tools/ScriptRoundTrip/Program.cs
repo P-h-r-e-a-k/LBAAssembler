@@ -220,6 +220,7 @@ internal static class Program
             "bodynames" => BodyNamesCommand.Run(args),
             "islandtexture" => IslandTextureCommand.Run(args),
             "groundcells" => GroundCellsCommand.Run(args),
+            "animsheet" => AnimSheetCommand.Run(args),
             "islandfreetex" => IslandFreeTextureCommand.Run(args),
             "islandheights" => IslandHeightsCommand.Run(args),
             "decorpoints" => DecorPointsCommand.Run(args),

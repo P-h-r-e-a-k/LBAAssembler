@@ -43,7 +43,10 @@ internal static class BowlingAlley
     private const int LiftRide = 1, LiftDown = 2, LiftRise = 3, LiftRisen = 4, LiftSpeed = 600, LiftStart = 506, LiftStop = 510;
     private const int CellDown = 1600, CellUp = 1200, ClubDown = 1200, ClubUp = 1800;
     // the animations: the Franco's standing and its fall (entity 297), the Sphero's rolling, the bowlers' throw and swing
-    private const int Franco = 56, Sphero = 28, MonkeyMonster = 275, SwordMonkey = 252, EmperorSoldier = 184, DarkMonk = 217;
+    // (the bowlers the user listed, 2026-11-12, by BODY.HQR entry as LBA Assembler lists them: 388 monkey monster = entity 275, 363 monkey
+    // monster with sword = 252, 419 sailor = entity 297's body 186, 295 green gloom = entity 204's body 0. The first build had the Emperor's
+    // soldier and the Dark Monk for the last two -- the user, 2026-11-15: "two are correct, and two aren't")
+    private const int Franco = 56, Sphero = 28, MonkeyMonster = 275, SwordMonkey = 252, Sailor = 297, SailorBody = 186, GreenGloom = 204;
     private const int StandAnim = 0, FallAnim = 10, RollAnim = 1, WalkAnim = 1, ThrowMonster = 15, SwingSword = 52, PullAnim = 6;
 
     // (the game of bowling the engine plays -- RACEMOD.CPP bowling_game=: it holds this scene variable, and the lane scripts wait)
@@ -186,7 +189,8 @@ void comportement_3()
         int Mk(int entity, int bodyGeneric, int x, int z, int beta, int anim, string name)
         {
             var a = SceneOps.BlankActor(SceneGame.Lba2, x, FloorY + CitadelProps.LaneTop, z, entity);
-            a.Body = bodyGeneric; a.Anim = anim; a.Beta = beta; a.Flags = 0x1000 | RaceTrackScenes.CarrierFlag; a.CoulObj = 9; a.Armor = 51; a.LifePoints = -1; a.Move = 3;
+            // (the record's body a signed byte: 186 is -70, as the game's own scenes have it)
+            a.Body = (sbyte)bodyGeneric; a.Anim = anim; a.Beta = beta; a.Flags = 0x1000 | RaceTrackScenes.CarrierFlag; a.CoulObj = 9; a.Armor = 51; a.LifePoints = -1; a.Move = 3;
             a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
             return SceneOps.AddActor(model, a);
         }
@@ -220,12 +224,15 @@ void comportement_3()
         var bowlerNumber = 0;
         // the four bowlers, two to a lane taking turns: what they throw, how they cheer a strike, shrug at some pins, and curse a gutter ball; the
         // chances of each (tenths: a strike under `Strike`, some pins under `Some`, else the gutter) and how fast the ball goes
-        var bowlers = new (int Lane, int X, int Entity, string Name, int Throw, int Cheer, int Shrug, int Dismay, int Strike, int Some, int Speed)[]
+        // (the sailor's and the gloom's animations picked from a sheet of their keyframes, ScriptRoundTrip animsheet: the sailor's 579 an
+        // underarm swing, 578 arms up and a bow, 28 a pointing gesture, 6 a recoil; the gloom's 481 a lunge along the floor, 480 arms raised,
+        // 28 its talking gesture, 482 a slump)
+        var bowlers = new (int Lane, int X, int Entity, int Body, string Name, int Throw, int Cheer, int Shrug, int Dismay, int Strike, int Some, int Speed)[]
         {
-            (0, CitadelProps.LaneX0, MonkeyMonster, "the monkey monster", ThrowMonster, 133, 222, 6, 5, 8, 3200),      // strong: strikes, and wild
-            (0, CitadelProps.LaneX0, EmperorSoldier, "the Emperor's soldier", 436, 434, 433, 6, 3, 8, 2500),         // steady: more often some pins
-            (1, CitadelProps.LaneX1, SwordMonkey, "the swordsman monkey", SwingSword, 532, 129, 6, 6, 9, 2800),      // precise
-            (1, CitadelProps.LaneX1, DarkMonk, "the Dark Monk", 488, 485, 489, 492, 3, 5, 1900),                    // slow and erratic
+            (0, CitadelProps.LaneX0, MonkeyMonster, 0, "the monkey monster", ThrowMonster, 133, 222, 6, 5, 8, 3200),   // strong: strikes, and wild
+            (0, CitadelProps.LaneX0, Sailor, SailorBody, "the sailor", 579, 578, 28, 6, 3, 8, 2500),                  // steady: more often some pins
+            (1, CitadelProps.LaneX1, SwordMonkey, 0, "the swordsman monkey", SwingSword, 532, 129, 6, 6, 9, 2800),   // precise
+            (1, CitadelProps.LaneX1, GreenGloom, 0, "the green gloom", 481, 480, 28, 482, 3, 5, 1900),               // heavy and erratic
         };
         foreach (var cx in new[] { CitadelProps.LaneX0, CitadelProps.LaneX1 })
         {
@@ -265,7 +272,7 @@ void comportement_3()
             foreach (var b in bowlers.Where(b => b.Lane == lane - 1))
             {
                 var first = turn == 0;
-                var actor = Mk(b.Entity, 0, first ? cx : cx - 1900, first ? CitadelProps.FoulZ + 1200 : CitadelProps.FoulZ + 2200, 2048, StandAnim, b.Name);
+                var actor = Mk(b.Entity, b.Body, first ? cx : cx - 1900, first ? CitadelProps.FoulZ + 1200 : CitadelProps.FoulZ + 2200, 2048, StandAnim, b.Name);
                 string React(int label, int anim) => $"label({label});\nanim({anim});\nwait_anim();\nanim({StandAnim});\nstop();\n\n";
                 var track = "label(0);\nstop();\n\n" + $"label(1);\nanim({b.Throw});\nwait_anim();\nanim({StandAnim});\nspeed(900);\ngoto_point_3d({home});\nbeta(2048);\nstop();\n\n" +
                             React(20, b.Cheer) + React(21, b.Shrug) + React(22, b.Dismay) +
