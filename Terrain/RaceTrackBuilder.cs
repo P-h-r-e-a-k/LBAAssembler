@@ -728,8 +728,11 @@ internal sealed class RaceTrackReport
     // and its way out (RaceTrackScenes)
     public (double FromX, double FromZ, double Dx, double Dz)? Moved { get; set; }
     // The lost doors whose building was put back elsewhere (RaceTrackBuilder.RestoreLostBuildings): the door's box (island cells) and how far
-    // it moved (cells, and units up)
-    public List<(double X0, double Z0, double X1, double Z1, int Dx, int Dz, int Dy)> Relocated { get; } = new();
+    // it moved (units: x, z, and up)
+    public List<(double X0, double Z0, double X1, double Z1, int Mx, int Mz, int Dy)> Relocated { get; } = new();
+    // ... and the places before such a building's doors that went with it (RaceTrackIsland.RestoreSpot.Frontage, island cells, where it
+    // stood): the scenes' actors, their ways' points and their zones there moved as far (RaceTrackScenes)
+    public List<(double X0, double Z0, double X1, double Z1, int Mx, int Mz, int Dy)> Frontages { get; } = new();
     // ... of them, the ones whose decor is still there, under the ground the build raised (RaceTrackService.NoteLostDoors)
     public List<(double X0, double Z0, double X1, double Z1)> BuriedDoors { get; } = new();
     public List<double[]> Arrows { get; } = new();
@@ -4101,11 +4104,13 @@ internal static class RaceTrackBuilder
             }
             // (put back where the island's record says, by hand: RaceTrackIsland.RestoreAt)
             var byHand = false;
-            if (o.Island.RestoreAt?.FirstOrDefault(r => pieces.Any(p => (p.D.Body & 0xFFFF) == r.Body)) is { Body: > 0 } at && InCubes(at.Dx, at.Dz))
+            var spot = o.Island.RestoreAt?.FirstOrDefault(r => pieces.Any(p => (p.D.Body & 0xFFFF) == r.Body));
+            if (spot is not null && InCubes(spot.Dx, spot.Dz))
             {
-                found = (at.Dx, at.Dz, Rise(at.Dx, at.Dz));
+                found = (spot.Dx, spot.Dz, Rise(spot.Dx, spot.Dz));
                 byHand = true;
-                report.Notes.Add($"a building put back by hand (the island's RestoreAt, body {at.Body}) at ({at.Dx}, {at.Dz}) cells, {found.Value.Dy} up");
+                report.Notes.Add($"a building put back by hand (the island's RestoreAt, body {spot.Body}) at ({spot.Dx}, {spot.Dz}) cells and " +
+                                 $"({spot.NudgeX}, {spot.NudgeZ}) units, {found.Value.Dy} up");
             }
             // (the ground round it as it was round it first; failing that, as level as it was -- a house on a cliff's ledge, the Mosquibees')
             for (var pass = 0; pass < 2 && found is null; pass++)
@@ -4147,14 +4152,38 @@ internal static class RaceTrackBuilder
             if (found is not { } f) { report.Notes.Add($"WARNING: {what}: no place for it off the road within {RestoreSearch} cells -- its doors go (of {why[0]} tries over two passes, {why[1]} in its cube, {why[2]} of them off the curbs, {why[3]} of them level enough, none clear of the decor standing there)"); continue; }
             if (pieces.GroupBy(p => (p.Cx, p.Cz)).Any(g => island.CubeAt(g.Key.Cx, g.Key.Cz) is not { } c || c.Decors.Count + g.Count() > IslandDecors.MaxPerCubeRaceTrack))
             { report.Notes.Add($"WARNING: {what}: no room for its {pieces.Count} pieces in their cube -- its doors go"); continue; }
+            // (how far it goes, in units: whole cells, and by hand a nudge -- RestoreSpot.NudgeX/Z -- and in cells, exactly)
+            int shiftX = f.Dx * 512 + (byHand ? spot!.NudgeX : 0), shiftZ = f.Dz * 512 + (byHand ? spot!.NudgeZ : 0);
+            double ox = shiftX / 512.0, oz = shiftZ / 512.0;
+            // (by hand, the place before its doors goes with it: its decor -- a bin, a bench -- moved as far, before the props where it goes
+            // are cleared; the scenes' actors, points and zones there by RaceTrackScenes, RaceTrackReport.Frontages)
+            if (byHand && spot!.Frontage is { Length: 4 } fr)
+            {
+                var carried = new List<int>();
+                foreach (var (qx, qz, cube) in IslandOps.CubeCells(island))
+                    foreach (var d in cube.Decors.ToList())
+                    {
+                        double ux = (qx * (double)IslandFile.CubeSize + d.X) / 512, uz = (qz * (double)IslandFile.CubeSize + d.Z) / 512;
+                        if (ux < fr[0] || ux > fr[2] || uz < fr[1] || uz > fr[3] || pieces.Any(p => ReferenceEquals(p.D, d)) || !props.Any(q => ReferenceEquals(q.D, d))) continue;
+                        if (d.X + shiftX < 0 || d.X + shiftX >= IslandFile.CubeSize || d.Z + shiftZ < 0 || d.Z + shiftZ >= IslandFile.CubeSize) continue;
+                        var was = Box(d, qx, qz);
+                        d.MoveTo(d.X + shiftX, d.Y + f.Dy, d.Z + shiftZ);
+                        props.RemoveAll(q => ReferenceEquals(q.D, d));
+                        standing.Remove(was);
+                        standing.Add(Box(d, qx, qz));
+                        carried.Add(d.Body & 0xFFFF);
+                    }
+                report.Frontages.Add((fr[0], fr[1], fr[2], fr[3], shiftX, shiftZ, f.Dy));
+                report.Notes.Add($"the place before its doors went with it: {carried.Count} decors (bodies {string.Join(",", carried)}), and the scenes' actors, points and zones there");
+            }
             // (the props where it goes, and before its doors, cleared)
             var cleared = new List<int>();
             foreach (var q in props.ToList())
             {
                 var t = q.B;
-                var under = boxes.Any(b => t.X1 > b.X0 + f.Dx + 0.25 && t.X0 < b.X1 + f.Dx - 0.25 && t.Z1 > b.Z0 + f.Dz + 0.25 && t.Z0 < b.Z1 + f.Dz - 0.25
+                var under = boxes.Any(b => t.X1 > b.X0 + ox + 0.25 && t.X0 < b.X1 + ox - 0.25 && t.Z1 > b.Z0 + oz + 0.25 && t.Z0 < b.Z1 + oz - 0.25
                                            && t.Y1 > b.Y0 + f.Dy + 100 && t.Y0 < b.Y1 + f.Dy + RestoreAbove)
-                            || outside.Any(a => a.X + f.Dx > t.X0 && a.X + f.Dx < t.X1 && a.Z + f.Dz > t.Z0 && a.Z + f.Dz < t.Z1
+                            || outside.Any(a => a.X + ox > t.X0 && a.X + ox < t.X1 && a.Z + oz > t.Z0 && a.Z + oz < t.Z1
                                                 && t.Y1 > doorBoxes[0].Y0 + f.Dy + 100 && t.Y0 < doorBoxes[0].Y0 + f.Dy + 1000);
                 if (!under || island.CubeAt(q.Cx, q.Cz) is not { } c || !c.Decors.Remove(q.D)) continue;
                 props.Remove(q);
@@ -4168,14 +4197,14 @@ internal static class RaceTrackBuilder
             foreach (var p in pieces)
             {
                 var d = p.D.Clone();
-                d.MoveTo(d.X + f.Dx * 512, d.Y + f.Dy, d.Z + f.Dz * 512);
+                d.MoveTo(d.X + shiftX, d.Y + f.Dy, d.Z + shiftZ);
                 island.CubeAt(p.Cx, p.Cz)!.Decors.Add(d);
                 standing.Add(Box(d, p.Cx, p.Cz));
             }
             // (and the room before its doors kept for Twinsen: the next one put back stands clear of it -- the Mosquibees' village gate
             // came to stand before the cliff house's door)
             foreach (var b in doorBoxes)
-                standing.Add((b.X0 + f.Dx - RestoreApproach, b.Z0 + f.Dz - RestoreApproach, b.X1 + f.Dx + RestoreApproach, b.Z1 + f.Dz + RestoreApproach,
+                standing.Add((b.X0 + ox - RestoreApproach, b.Z0 + oz - RestoreApproach, b.X1 + ox + RestoreApproach, b.Z1 + oz + RestoreApproach,
                               (int)b.Y0 + f.Dy, (int)b.Y0 + f.Dy + (int)RaceTrackReport.RoadHeadroom));
             // (its ground with it: the ground under it and its doors, and round them, as it was there -- a stairway's pit, its foot at the doors;
             // the hollow a Mosquibee village gate stands over; the slope down from a cliff house's door -- blended into the new place's
@@ -4196,7 +4225,7 @@ internal static class RaceTrackBuilder
                 island.SetHeight(x + f.Dx, z + f.Dz, (int)Math.Round(want));
                 shaped++;
             }
-            foreach (var i in doorList) report.Relocated.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1, f.Dx, f.Dz, f.Dy));
+            foreach (var i in doorList) report.Relocated.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1, shiftX, shiftZ, f.Dy));
             report.Notes.Add($"{what} ({pieces.Count} pieces, bodies {string.Join(",", pieces.Select(p => p.D.Body & 0xFFFF).Distinct())}) put back off the road: " +
                              $"moved ({f.Dx}, {f.Dz}) cells and {f.Dy} up" + (shaped > 0 ? $", {shaped} ground points round it shaped as its were" : ""));
         }

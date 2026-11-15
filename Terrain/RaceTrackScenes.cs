@@ -545,6 +545,36 @@ internal static class RaceTrackScenes
                     log.Add($"scene {scene}: actor {actor} (entity {model.Actors[actor].Entity}) has no place in a race: stopped, out of sight");
                     count++;
                 }
+            // (the place before the doors of a building put back by hand went with it -- RaceTrackReport.Frontages: the actors standing there,
+            // the scene's points there and its zones there but its doors (moved with their building) and its cameras -- Otringal's casino's
+            // hostess, the passer-by and their ways, the user, 2026-11-15: "There's some NPCs we can move in front of the casino")
+            foreach (var fr in report.Frontages)
+            {
+                bool In(int x, int z) { double cx = model.CubeX * 64 + x / 512.0, cz = model.CubeY * 64 + z / 512.0; return cx >= fr.X0 && cx <= fr.X1 && cz >= fr.Z0 && cz <= fr.Z1; }
+                int movedActors = 0, movedPoints = 0, movedZones = 0;
+                for (var i = 1; i < model.Actors.Count; i++)
+                {
+                    var a = model.Actors[i];
+                    if (a.Entity == BuggyEntity || !In(a.X, a.Z)) continue;
+                    a.X += fr.Mx; a.Z += fr.Mz; a.Y += fr.Dy; movedActors++;
+                }
+                for (var k = 0; k < model.TrackPoints.Count; k++)
+                {
+                    var tp = model.TrackPoints[k];
+                    if (!In(tp.X, tp.Z)) continue;
+                    model.TrackPoints[k] = tp with { X = tp.X + fr.Mx, Y = tp.Y + fr.Dy, Z = tp.Z + fr.Mz }; movedPoints++;
+                }
+                foreach (var zn in model.Zones)
+                {
+                    if (zn.Type is 0 or 1 || !In((zn.X0 + zn.X1) / 2, (zn.Z0 + zn.Z1) / 2)) continue;
+                    zn.X0 += fr.Mx; zn.X1 += fr.Mx; zn.Z0 += fr.Mz; zn.Z1 += fr.Mz; zn.Y0 += fr.Dy; zn.Y1 += fr.Dy; movedZones++;
+                }
+                if (movedActors + movedPoints + movedZones > 0)
+                {
+                    log.Add($"scene {scene}: before a building put back by hand, {movedActors} actors, {movedPoints} points and {movedZones} zones moved with it ({fr.Mx},{fr.Dy},{fr.Mz})");
+                    count++;
+                }
+            }
             if (options.RemoveActors)
             {
                 // slot 1 of every scene is the engine's own placeholder for Zoe (entity 14, no body, parked at 0,0,0); the engine treats that slot
@@ -955,7 +985,7 @@ internal static class RaceTrackScenes
                         if (tracks.Count == 1 && report.Relocated.FindIndex(r => Same((r.X0, r.Z0, r.X1, r.Z1))) is var mvi && mvi >= 0)
                         {
                             var mv = report.Relocated[mvi];
-                            int mx = mv.Dx * 512, mz = mv.Dz * 512;
+                            int mx = mv.Mx, mz = mv.Mz;
                             log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) moved ({mx},{mv.Dy},{mz}) with its building, put back off the road");
                             var from = (X0: zone.X0, Z0: zone.Z0, X1: zone.X1, Z1: zone.Z1);
                             zone.X0 += mx; zone.X1 += mx; zone.Z0 += mz; zone.Z1 += mz; zone.Y0 += mv.Dy; zone.Y1 += mv.Dy;

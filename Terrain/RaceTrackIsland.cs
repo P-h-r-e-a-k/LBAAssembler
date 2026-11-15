@@ -4,6 +4,16 @@ namespace LBAAssembler.Terrain;
 // textures and colours the road is painted with (every island has its own texture page and palette, so the Desert track's own tile
 // coordinates draw something else on another island -- RaceTrackTextures copies the road's tiles into the island's spare texture space
 // and gives back where they landed).
+// Where a building the road took away is put back by hand (RaceTrackIsland.RestoreAt): the building one of whose pieces has Body, moved (Dx, Dz)
+// whole cells and (NudgeX, NudgeZ) units from where it stood; with a Frontage (island cells x0, z0, x1, z1, where it stood), the place before
+// its doors goes with it -- its decor, and the scenes' actors, their ways' points and their zones there (RaceTrackReport.Frontages).
+internal sealed record RestoreSpot(int Body, int Dx, int Dz)
+{
+    public int NudgeX { get; init; }
+    public int NudgeZ { get; init; }
+    public double[]? Frontage { get; init; }
+}
+
 internal sealed record RaceTrackIsland(
     string Name,                    // as the dialog and the log call it
     string IleFile,                 // the island's ground
@@ -382,7 +392,7 @@ internal sealed record RaceTrackIsland(
     // round it says). Otringal's casino right up to the road west from under the roulette wheel -- the search keeps it 5 cells off the
     // wheel's own way round, which passes over it (the user, 2026-11-15: "push it back so it's right up to the stretch of track that's
     // behind it please").
-    public (int Body, int Dx, int Dz)[]? RestoreAt { get; init; }
+    public RestoreSpot[]? RestoreAt { get; init; }
     // Places (island cells) whose decor stays unless it stands on the asphalt, as at the island's doors (RaceTrackOptions.DoorBoxes):
     // a fence along a cube's edge where the game has no way over that edge -- it was the wall there, and taken away for being near the
     // road it left the edge's invisible wall standing where it had been (Citadel Island's neighbour's fence, the user, 2026-11-08: "gone,
@@ -561,7 +571,9 @@ internal sealed record RaceTrackIsland(
         Title = "Otringal: through the game's tunnel, through the town and round the palace",
         // (the casino, bodies 70/71: its back 5.25 cells off the road's middle west from under the wheel, z 532 -- as the search keeps it off
         // a road -- under the wheel, lifted to 12,000 at its hole for it: otringal_design.py RW_YH)
-        RestoreAt = new[] { (70, 0, 9) },
+        // (2026-11-15 later: "fully flush to the track" -- its back at the deck's own edge, 536.26 (the deck piece's box), 22 units off it; the
+        // place before its doors with it: the hostess, the passer-by, the bin and its zones, behind it otherwise)
+        RestoreAt = new[] { new RestoreSpot(70, 0, 7) { NudgeZ = 282, Frontage = new[] { 449.0, 535.2, 466.8, 543.8 } } },
         // (55.5 frames a second at 848 x 480 to 60.4 at the island's own 41,200, 2026-11-02)
         View = (200000, 150000),
         NewCubes = new[] { (6, 9, 264, 87) },

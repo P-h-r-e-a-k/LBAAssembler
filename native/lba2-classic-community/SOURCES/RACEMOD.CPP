@@ -14978,7 +14978,9 @@ static void Projectiles(S32 now, int driving) {
 // box with it: the engine leaves out a decor whose box is out of sight).
 static void WheelDecors(T_DECORS *list, S32 count) {
     if (!s_wheel.On || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
-    const int down = Comportement == C_BUGGY;
+    // (down where it is raced always, on foot too -- the user, 2026-11-15: "let's restore the roulette wheel to where it is during the race";
+    // up out of sight while Twinsen walked since 2026-10-29. A wheel stored up is brought down)
+    const int down = 1;
     for (S32 i = 0; i < count; i++) {
         T_DECORS *d = &list[i];
         const int body = d->Body & 0xFFFF;
