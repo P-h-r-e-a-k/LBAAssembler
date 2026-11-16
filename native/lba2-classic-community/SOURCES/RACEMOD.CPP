@@ -20055,22 +20055,27 @@ static void DartFrame(S32 now) {
     hero->WorkFlags &= ~FALLING;
     const double t = now / 1000.0;
     if (s_dtState == 6) {
-        // the wager: Left and Right through the stakes he has the money for, Action takes it
+        // the wager: the opponent asks how much it is for; Left and Right through every stake, Action takes it -- one he hasn't the money for
+        // and the opponent says so and it's a friendly game (the user, 2026-11-16: "I can't seem to trigger the wager feature ... Let's have
+        // Twinsen be asked how much the wager is for the game, and if he doesn't have enough kashes be told something like "You seem a bit
+        // low on money, let's just have a friendly game"" -- the stakes he couldn't afford weren't offered at all: under 25, only none)
         const S32 purse = MONEY_ZLITOS ? NbZlitosPieces : NbGoldPieces;
         const int side = (s_dtInput & I_LEFT) ? -1 : (s_dtInput & I_RIGHT) ? 1 : 0;
-        if (side && !s_dtSideWas)
-            for (int k = 1; k <= 4; k++) {
-                const int pick = (s_dtStakePick + side * k + 4) % 4;
-                if (s_dtStakes[pick] <= purse) { s_dtStakePick = pick; break; }
-            }
+        if (side && !s_dtSideWas) s_dtStakePick = (s_dtStakePick + side + 4) % 4;
         s_dtSideWas = side != 0;
-        if (s_dtStakes[s_dtStakePick] > purse) s_dtStakePick = 0;
         if (pressed) {
             s_dtStake = s_dtStakes[s_dtStakePick];
-            if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake;
             s_dtState = 0; s_dtAt = now;
-            DartSay(now, "Arrows aim, Action throws", 3000);
-            Log_Info("[racemod] darts: a wager of %d against %s", s_dtStake, DartOpponent()->Name);
+            if (s_dtStake > purse) {
+                // (the opponent's words alone: with his name before them the line ran off the screen's sides)
+                Log_Info("[racemod] darts: %d %s asked, %d in the purse -- a friendly game", s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes", (int)purse);
+                s_dtStake = 0; s_dtStakePick = 0;
+                DartSay(now, "You seem a bit low on money, let's just have a friendly game", 4500);
+            } else {
+                if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake;
+                DartSay(now, s_dtStake ? "Arrows aim, Action throws" : "A friendly game: arrows aim, Action throws", 3000);
+                Log_Info("[racemod] darts: a wager of %d against %s", s_dtStake, DartOpponent()->Name);
+            }
         }
     } else if (s_dtState == 0) {
         // the player's aim: the arrows, and the sway over it
@@ -20271,7 +20276,10 @@ static void DartDraw(void) {
         const char *money = MONEY_ZLITOS ? "zlitos" : "kashes";
         // (no < > round it: the font has neither, they came out as stars -- the user's picture of the Tralu bar's board, 2026-11-15)
         if (s_dtStakes[s_dtStakePick]) snprintf(wager, sizeof(wager), "Wager: %d %s", s_dtStakes[s_dtStakePick], money);
-        else snprintf(wager, sizeof(wager), "Wager: none");
+        else snprintf(wager, sizeof(wager), "Wager: none, a friendly game");
+        char ask[96];
+        snprintf(ask, sizeof(ask), "%s: How much is the wager?", f->Name);
+        HudLine(w / 2 - SizeFont(ask) / 2, h - 120, ask, -1);
         HudLine(w / 2 - SizeFont(wager) / 2, h - 90, wager, -1);
         char keys[] = "Left, Right: the stake -- Action: play";
         HudLine(w / 2 - SizeFont(keys) / 2, h - 60, keys, -1);
