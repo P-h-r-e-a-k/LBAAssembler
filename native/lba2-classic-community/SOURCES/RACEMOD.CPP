@@ -19792,25 +19792,29 @@ static void BowlDraw(void) {
     if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine((S32)ModeDesiredX / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
 }
 // ---- the Tavern's darts (the user: "Twinsen to play against a random character from the car, or in two player mode with Zoe ... against Zoe") ----
-// 501 down to nothing (the user, 2026-11-12: "have the dart game playing from 501 not 301"), three darts a turn, a turn over-thrown (below nothing) not counted. Action by the board (DartsReach) starts a match against a
+// 501 down to nothing (the user, 2026-11-12: "have the dart game playing from 501 not 301"), three darts a turn, a turn over-thrown (below nothing) not counted;
+// the last dart a double -- or the bull, the double bull -- (the user, 2026-11-16: "Let's update darts so the user has to finish with a double"): reaching
+// nothing on any other, or leaving 1, is a bust too. The foes play by it as well (DartFoeThrow: their checkouts on doubles). Action by the board (DartsReach) starts a match against a
 // foe of the race file's, chosen at random -- or against Zoe, her darts thrown by player 2's Action, when the game has two players. The board is
 // drawn over the screen (Line), the aim a cross swaying on it: the arrows move it, Action throws where it is that moment (the sway is the skill);
 // the foes' darts fall where their aim and their scatter (steadiness) take them, on the same board.
 static void HudLine(S32 x, S32 y, const char *text, int align);
 static double DartRnd(void) { s_dtSeed = s_dtSeed * 1664525u + 1013904223u; return ((s_dtSeed >> 8) & 0xFFFF) / 65536.0; }
 // The score of a dart at (x, y) in the board's radii (the top 20, clockwise): its value and its words
+static int s_dtDouble = 0;   // (the last dart scored: a double, or the bull)
 static int DartScore(double x, double y, char *words, size_t size) {
     static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
     const double r = sqrt(x * x + y * y);
+    s_dtDouble = 0;
     if (r > 1.0) { snprintf(words, size, "Missed the board"); return 0; }
-    if (r < 0.045) { snprintf(words, size, "Bull!"); return 50; }
+    if (r < 0.045) { snprintf(words, size, "Bull!"); s_dtDouble = 1; return 50; }
     if (r < 0.11) { snprintf(words, size, "Outer bull"); return 25; }
     double a = atan2(x, -y);
     if (a < 0) a += 2 * 3.14159265358979;
     const int sector = (int)floor((a + 3.14159265358979 / 20) / (3.14159265358979 / 10)) % 20;
     const int v = order[sector];
     if (r >= 0.58 && r <= 0.65) { snprintf(words, size, "Treble %d", v); return 3 * v; }
-    if (r >= 0.91) { snprintf(words, size, "Double %d", v); return 2 * v; }
+    if (r >= 0.91) { snprintf(words, size, "Double %d", v); s_dtDouble = 1; return 2 * v; }
     snprintf(words, size, "%d", v);
     return v;
 }
@@ -19934,11 +19938,16 @@ static void DartLand(S32 now, double x, double y) {
     const int rest = s_dtScore[who] - value;
     s_dtLeft--;
     int endTurn = s_dtLeft == 0;
-    if (rest < 0) { s_dtScore[who] = s_dtStartScore[who]; snprintf(said, sizeof(said), "%s: bust, the turn does not count", words); endTurn = 1; }
+    // (a bust: below nothing, or 1 left -- no double makes 1 -- or nothing reached on a dart that isn't a double)
+    if (rest < 0 || rest == 1 || (rest == 0 && !s_dtDouble)) {
+        s_dtScore[who] = s_dtStartScore[who];
+        snprintf(said, sizeof(said), rest == 0 ? "%s: bust, finish on a double" : rest == 1 ? "%s: bust, 1 can't be finished" : "%s: bust, the turn does not count", words);
+        endTurn = 1;
+    }
     else { s_dtScore[who] = rest; snprintf(said, sizeof(said), "%s: %d", words, value); }
     DartSay(now, said, 2200);
     s_dtThrown = 1; s_dtThrowAt = now;
-    if (rest == 0) {
+    if (rest == 0 && s_dtDouble) {
         s_dtState = 4; s_dtAt = now;
         if (s_dtNHist[who] < 40) s_dtHist[who][s_dtNHist[who]++] = 0;
         snprintf(said, sizeof(said), who == 0 ? "You win!" : "%s wins", DartOpponent()->Name);
@@ -19969,13 +19978,15 @@ static void DartFoeThrow(S32 now) {
     double ax, ay;
     // the aim: a point on the board -- the number's sector at the middle of the treble ring, or the single's
     static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
-    int want = rem >= 60 ? 20 : rem <= 20 && rem >= 1 ? rem : 20;
+    // (finishing on a double: an odd score under 60 made even with a single -- 32, the double 16, left where a single does it, else 1 off)
+    int want = rem >= 60 ? 20 : rem - 32 >= 1 && rem - 32 <= 20 ? rem - 32 : (rem & 1) ? 1 : 20;
     const double r = rem >= 60 ? 0.615 : 0.78;
     int sec = 0;
     for (int i = 0; i < 20; i++) if (order[i] == want) sec = i;
     const double a = sec * 3.14159265358979 / 10;
     ax = r * sin(a); ay = -r * cos(a);
-    if (rem <= 50 && rem > 20 && (rem % 2) == 0 && rem <= 40) { want = rem / 2; for (int i = 0; i < 20; i++) if (order[i] == want) sec = i; ax = 0.95 * sin(sec * 3.14159265358979 / 10); ay = -0.95 * cos(sec * 3.14159265358979 / 10); }
+    if (rem == 50) { ax = 0; ay = 0; want = -1; }   // (the bull)
+    else if (rem <= 40 && rem >= 2 && (rem % 2) == 0) { want = rem / 2; for (int i = 0; i < 20; i++) if (order[i] == want) sec = i; ax = 0.95 * sin(sec * 3.14159265358979 / 10); ay = -0.95 * cos(sec * 3.14159265358979 / 10); }
     const double sigma = f->Scatter / 100.0;
     const double ex = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma, ey = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma;
     s_dtFx = ax + ex; s_dtFy = ay + ey;
@@ -20208,8 +20219,16 @@ static void DartDraw(void) {
     }
     if (boardShown && (s_dtState == 0 || (s_dtState == 1 && s_dtFoe < 0))) {
         const S32 x = cx + (S32)(s_dtFx * R), y = cy + (S32)(s_dtFy * R);
-        Line(x - 10, y, x - 3, y, LBAWHITE); Line(x + 3, y, x + 10, y, LBAWHITE);
-        Line(x, y - 10, x, y - 3, LBAWHITE); Line(x, y + 3, x, y + 10, LBAWHITE);
+        // (light brown, two pixels thick in a dark rim: the white one was lost on the board's white -- the user, 2026-11-16, "perhaps a light
+        // brown like the barrel colour could work")
+        const int Rim = 0, Tan = 2 * 16 + 5;
+        for (int pass = 0; pass < 2; pass++) {
+            const int c = pass == 0 ? Rim : Tan, o = pass == 0 ? 1 : 0;
+            for (int t = -o; t <= 1 + o; t++) {
+                Line(x - 11 - o, y + t, x - 3 + o, y + t, c); Line(x + 3 - o, y + t, x + 11 + o, y + t, c);
+                Line(x + t, y - 11 - o, x + t, y - 3 + o, c); Line(x + t, y + 3 - o, x + t, y + 11 + o, c);
+            }
+        }
     }
     // the blackboard: a dark slate in a wooden frame to the board's right, the two names over their columns, each turn's score left chalked
     // under, the old ones struck through, the latest at the bottom
