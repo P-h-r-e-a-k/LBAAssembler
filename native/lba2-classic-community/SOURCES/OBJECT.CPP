@@ -640,6 +640,15 @@ void UseOneClover(void) {
         }
 
         RestartValidePos();
+
+        // (put back where he last stood, no cutscene on, he is the player's again: the valid place is taken frame by frame, and one taken
+        // after a script stopped his moves -- a lift's NO_MOVE as it took him, him running on off it into the sea -- came back with them
+        // stopped, and nothing gave them back: the user, 2026-11-16, Citadel's harbour, "I now have no control over him since he respawned")
+        if (ptrobj->Move == NO_MOVE AND !CinemaMode AND ptrobj->LifePoint > 0) {
+            Log_Info("[clover] Twinsen put back at (%d,%d,%d) in scene %d with no move: the controls his again", (int)ptrobj->Obj.X, (int)ptrobj->Obj.Y, (int)ptrobj->Obj.Z, (int)NumCube);
+            ptrobj->Move = MOVE_MANUAL;
+            ClearRealAngle(ptrobj);
+        }
     } else {
         ClearFoudre();
 

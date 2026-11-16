@@ -189,12 +189,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers.",
-            "Belle course, Twinsen ! Tu as gagné le prix : un ticket de ferry. Et la bourse de la Coupe : cinquante kashes, de la part des Esmers.",
-            "Gut gefahren, Twinsen! Du hast den Preis gewonnen: eine Fahrkarte für die Fähre. Und das Preisgeld des Pokals: fünfzig Kashes, von den Esmern.",
-            "¡Buena carrera, Twinsen! Has ganado el premio: un ticket de ferry. Y la bolsa de la Copa: cincuenta kashes, de parte de los Esmers.",
-            "Bella corsa, Twinsen! Hai vinto il premio: un biglietto per il traghetto. E il montepremi della Coppa: cinquanta kashes, da parte degli Esmer.",
-            "Boa corrida, Twinsen! Ganhaste o prémio: um bilhete de barca. E a bolsa da Taça: cinquenta kashes, da parte dos Esmers.",
+            "Well raced, Twinsen! The Cup's purse is yours: fifty kashes, from the Esmers.",
+            "Belle course, Twinsen ! La bourse de la Coupe est à toi : cinquante kashes, de la part des Esmers.",
+            "Gut gefahren, Twinsen! Das Preisgeld des Pokals gehört dir: fünfzig Kashes, von den Esmern.",
+            "¡Buena carrera, Twinsen! La bolsa de la Copa es tuya: cincuenta kashes, de parte de los Esmers.",
+            "Bella corsa, Twinsen! Il montepremi della Coppa è tuo: cinquanta kashes, da parte degli Esmer.",
+            "Boa corrida, Twinsen! A bolsa da Taça é tua: cinquenta kashes, da parte dos Esmers.",
         },
         // (the time is the race-track mode's: its "##" becomes Raph's lap at the car setup's skill, RACEMOD.CPP beat_text=)
         new[]
@@ -1198,12 +1198,15 @@ void comportement_1()
             });
 
         // 6. the town circuit won: Mr. Paul's prize, once Twinsen is out of his car -- in whichever of the island's outside scenes that is: the
-        // ferry ticket and the Cup's purse, and the herald's word that Twinsen leads the Cup
+        // Cup's purse and the racing licence (the main event's, the intergalactic racing), and the herald's word that Twinsen leads the Cup.
+        // Not the ferry ticket since 2026-11-16 (the user: "Let's make Twinsen have to buy the ferry ticket instead of giving it to him for
+        // winning the race, His race prize is the racing licence and the right to participate in the intergalactical racing"): the ferry
+        // office sells it once the race is won (RaceTrackStory.Retired, scene 8's clerk, the game's 10 kashes)
         var paulColour = paul?.CoulObj ?? 4;
         for (var scene = RaceTrackIsland.Citadel.FirstScene; scene <= RaceTrackIsland.Citadel.LastScene; scene++)
         {
             if (!store.SceneExists(scene)) continue;
-            Edit(scene, "Mr. Paul hands over his prize, a ferry ticket, after a win on the town circuit; Twinsen driving here means he has his car", model =>
+            Edit(scene, "Mr. Paul hands over his prize, the purse and the racing licence, after a win on the town circuit; Twinsen driving here means he has his car", model =>
             {
                 var prize = RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, paulColour);
                 return Add(model, prize, $@"void comportement_0()
@@ -1220,12 +1223,10 @@ void comportement_1()
     if (1 == var_game({WonVar}) && {Driving} != comportement_hero())
     {{
         message({Id(Line.PaulTicket)});
-        found_object({FerryTicket});
-        set_var_game({FerryTicket}, 1);
+        add_gold_pieces({Purse});
         message({Say(ChapterLine.PaulLicence)});
         found_object({LicenceSlot});
         set_var_game({LicenceSlot}, 1);
-        add_gold_pieces({Purse});
         message({Say(ChapterLine.HeraldLeads)});
         set_var_game({WonVar}, 2);
     }}

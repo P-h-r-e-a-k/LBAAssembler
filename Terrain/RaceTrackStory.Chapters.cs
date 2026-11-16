@@ -41,7 +41,8 @@ namespace LBAAssembler.Terrain;
 //     - at the town circuit's start line the Esmer herald gives the magic slate (item 28), Flick and Mr. Paul want six cars on the grid.
 //     - the slate's hidden pages: the blueprints copied onto it (Q_BLUEPRINT 2), the pharmacy's gallic acid for 50 kashes (item 17), the
 //       neighbour's sheet brought out with it (Q_SHEET 2). The pages themselves -- their pictures, memo_ardoise -- are for later.
-//     - Mr. Paul's prize (Apply step 6) is the ferry ticket and the Cup's purse; Mrs. Brune at the ferry office lets Zoe aboard as crew.
+//     - Mr. Paul's prize (Apply step 6) is the Cup's purse and the racing licence; the ferry office sells the ticket once the race is won
+//       (2026-11-16: bought, not won), and Mrs. Brune there lets Zoe aboard as crew.
 // The game's own lines that the story's people still say are IslandRetell's (it runs after this and repoints every one of the game's text
 // ids); the lines here are the story's new ones, texts after RaceTrackStory's own at the end of Citadel's file.
 internal static partial class RaceTrackStory
@@ -95,6 +96,10 @@ internal static partial class RaceTrackStory
     private const int HatchSwitch = 213, LadderSwitch = 214;
     // (the quay's lift into the sewers: its plate's half width, how far it sinks, its scenario zone, the helper's settling count (a cell
     // variable of scene 43's), its sounds and speed -- the Stella Entities lift's)
+    // (OffQuayLift: from the plate's middle, Twinsen not on it -- its corner is 724 off -- the controls his again: the user, 2026-11-16, ran
+    // onto it, the lift's NO_MOVE left him running on in his run's animation off it into the sea, and the clover put him back frozen;
+    // now anim_obj(0, 0) stops him on it as it takes him)
+    private const int OffQuayLift = 900;
     private const int LiftHalf = 512, LiftDip = 400, QuayLiftZone = 70, QuaySettle = 40, QuayLiftStart = 506, QuayLiftStop = 510, QuayLiftSpeed = 300;
     // the museum's blueprints: under the glass of a display case of the hall's own (the user, 2026-11-04, "in a display case instead of
     // just on the floor"; 2026-11-06, the standard cases, not the tunic's: Citadel/CitadelMuseum, the case and the blueprints in it are
@@ -140,6 +145,8 @@ internal static partial class RaceTrackStory
         FianceeStorm,
         // (the town circuit's prize: the Cup's racing licence -- RaceTrackStory.Licence.cs, 2026-11-14)
         PaulLicence,
+        // (Mr. Paul at the town circuit's start line: the entry, the prize, the main event -- the user, 2026-11-16)
+        PaulEntry,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -832,12 +839,24 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And this is yours too, Twinsen: the Cup's racing licence. Keep it with you -- some gates won't open without it.",
-            "Et ceci est à toi aussi, Twinsen : la licence de course de la Coupe. Garde-la sur toi -- certaines barrières ne s'ouvrent pas sans elle.",
-            "Und das gehört auch dir, Twinsen: die Rennlizenz des Pokals. Behalte sie bei dir -- manche Tore öffnen sich nicht ohne sie.",
-            "Y esto también es tuyo, Twinsen: la licencia de carreras de la Copa. Llévala contigo: algunas barreras no se abren sin ella.",
-            "E anche questa è tua, Twinsen: la licenza di corsa della Coppa. Tienila con te: certi cancelli non si aprono senza.",
-            "E isto também é teu, Twinsen: a licença de corrida da Taça. Guarda-a contigo -- há barreiras que não abrem sem ela.",
+            "And your racing licence, Twinsen: you're in the main event, the intergalactic racing! Keep it with you -- some gates won't open without it.",
+            "Et ta licence de course, Twinsen : tu es de l'épreuve principale, les courses intergalactiques ! Garde-la sur toi -- certaines barrières ne s'ouvrent pas sans elle.",
+            "Und deine Rennlizenz, Twinsen: Du bist beim Hauptwettbewerb dabei, den intergalaktischen Rennen! Behalte sie bei dir -- manche Tore öffnen sich nicht ohne sie.",
+            "Y tu licencia de carreras, Twinsen: ¡estás en la prueba principal, las carreras intergalácticas! Llévala contigo: algunas barreras no se abren sin ella.",
+            "E la tua licenza di corsa, Twinsen: sei nella gara principale, le corse intergalattiche! Tienila con te: certi cancelli non si aprono senza.",
+            "E a tua licença de corrida, Twinsen: estás na prova principal, as corridas intergalácticas! Guarda-a contigo -- há barreiras que não abrem sem ela.",
+        },
+        // (the user, 2026-11-16: "Entry to the race costs 20 kashes, the winner of the race wins 50 kashes, and a racing licence to access the
+        // main event. The main event is first a race on Desert island, then a race across the alien's moon and planet. Only one space left
+        // for race entrants. It doesn't have to be those exact words, but words to that effect")
+        new[]
+        {
+            "Entry is twenty kashes, Twinsen. The winner takes fifty kashes and a racing licence for the main event: a race on Desert Island first, then one across the aliens' moon and their planet. One place left on the grid!",
+            "L'inscription coûte vingt kashes, Twinsen. Le vainqueur gagne cinquante kashes et une licence de course pour l'épreuve principale : d'abord une course sur l'île du Désert, puis une à travers la lune des extraterrestres et leur planète. Il reste une place sur la grille !",
+            "Die Startgebühr beträgt zwanzig Kashes, Twinsen. Der Sieger bekommt fünfzig Kashes und eine Rennlizenz für den Hauptwettbewerb: zuerst ein Rennen auf der Wüsteninsel, dann eins über den Mond der Außerirdischen und ihren Planeten. Ein Startplatz ist noch frei!",
+            "La inscripción cuesta veinte kashes, Twinsen. El ganador se lleva cincuenta kashes y una licencia de carreras para la prueba principal: primero una carrera en la isla del Desierto, luego otra por la luna de los extraterrestres y su planeta. ¡Queda una plaza en la parrilla!",
+            "L'iscrizione costa venti kashes, Twinsen. Il vincitore si prende cinquanta kashes e una licenza di corsa per la gara principale: prima una corsa sull'isola del Deserto, poi una attraverso la luna degli alieni e il loro pianeta. Resta un posto sulla griglia!",
+            "A inscrição custa vinte kashes, Twinsen. O vencedor leva cinquenta kashes e uma licença de corrida para a prova principal: primeiro uma corrida na ilha do Deserto, depois uma pela lua dos extraterrestres e o seu planeta. Resta um lugar na grelha!",
         },
     };
 
@@ -1490,6 +1509,7 @@ void comportement_1()
     if ({QuayLiftZone} == zone_obj(0) && {Driving} != comportement_hero() && (1 < chapter() || {ThiefDown} <= var_game({QThief})))
     {{
         set_dir_obj(0, NO_MOVE);
+        anim_obj(0, 0);
         set_track_obj({plateIndex}, label_1);
         set_comportement(comportement_3);
     }}
@@ -1497,6 +1517,11 @@ void comportement_1()
 
 void comportement_3()
 {{
+    if ({OffQuayLift} < distance(0))
+    {{
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_5);
+    }}
     if (2 == l_track_obj({plateIndex}))
     {{
         set_change_cube({HatchSwitch}, 1);
@@ -2895,7 +2920,11 @@ stop();
             {
                 Place(paul, model, pa);
                 p.Log.Add($"Mr. Paul at cell ({pa.X:0.#}, {pa.Z:0.#}), {pa.Y:0}");
-                edits.Add(p.Add(model, paul, Talker("2 == chapter()", $@"            if ({WheelFitted} > var_game({QLucCar}))
+                edits.Add(p.Add(model, paul, Talker("2 == chapter()", $@"            if (0 == var_game({WonVar}))
+            {{
+                message({p.Say(ChapterLine.PaulEntry)});
+            }}
+            if ({WheelFitted} > var_game({QLucCar}))
             {{
                 message({p.Say(ChapterLine.PaulSix)});
             }}")));

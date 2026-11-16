@@ -1065,12 +1065,12 @@ internal static partial class IslandRetell
         }),
         (413, new[]
         {
-            "You need a ticket to board the ferry, Mr. Twinsen. Win the race, and it's yours.",
-            "Il vous faut un ticket pour embarquer sur le ferry, monsieur Twinsen. Gagnez la course, et il est à vous.",
-            "Sie brauchen eine Fahrkarte für die Fähre, Herr Twinsen. Gewinnen Sie das Rennen, dann gehört sie Ihnen.",
-            "Necesita un ticket para embarcar en el ferry, señor Twinsen. Gane la carrera y será suyo.",
-            "Le serve un biglietto per il traghetto, signor Twinsen. Vinca la corsa, ed è suo.",
-            "Você precisa de um bilhete para entrar na barca, senhor Twinsen. Vença a corrida, e ele é seu.",
+            "You need a ticket to board the ferry, Mr. Twinsen. The ferry office sells them, but there's no crossing till the town race is won.",
+            "Il vous faut un ticket pour embarquer sur le ferry, monsieur Twinsen. Le bureau du ferry en vend, mais pas de traversée avant que la course de la ville soit gagnée.",
+            "Sie brauchen eine Fahrkarte für die Fähre, Herr Twinsen. Das Fährbüro verkauft sie, aber keine Überfahrt, bevor das Stadtrennen gewonnen ist.",
+            "Necesita un ticket para embarcar en el ferry, señor Twinsen. La oficina del ferry los vende, pero no hay travesía hasta que se gane la carrera de la ciudad.",
+            "Le serve un biglietto per il traghetto, signor Twinsen. L'ufficio del traghetto li vende, ma niente traversata finché la corsa della città non è vinta.",
+            "Você precisa de um bilhete para entrar na barca, senhor Twinsen. O escritório da barca vende-os, mas não há travessia até a corrida da cidade ser ganha.",
         }),
         // (Raph's fiancée at the lighthouse once its lamp is lit -- in the story that is chapter 2, the morning after the spell, and Raph is
         // out by the Tavern and racing the Esmers' cars, not back at the lighthouse: the sweep of 2026-11-05)

@@ -241,14 +241,15 @@ internal static partial class RaceTrackStory
         // (the umbrella man and his customer: the game's own gates are chapter 1 and var 57 1 or 2 -- the pharmacy's snatch sets it 1)
         new(48, 6, @"found_object\(20\)", "the game's umbrella man on the harbour (the umbrella, item 20, for his customer) gone: the story's umbrella goes back to Tim", Gone("0 < chapter()")),
         new(48, 7, @"set_anim_dial\(86\)", "the umbrella man's customer (the umbrella given her: the Desert's healing wizard, var 62, the holomap's arrow) gone", Gone("0 < chapter()")),
-        // (the clerk's sale: from the game's var 111 or 62 on, with no ticket -- the story's ticket is the town circuit's prize, after which
-        // Twinsen has one; in the storm, her own line that there are no ferries)
-        new(8, 2, @"set_var_game\(59, 1\)", "the ferry office sells no Desert ticket before the town circuit is won (the ticket is its prize); in the storm, \"No ferries in this storm\"", life =>
+        // (the clerk's sale: the game's from var 111 or 62 on -- the story's, from the town circuit won on, whatever they are: the ticket is
+        // bought, for the game's 10 kashes, the race's prize the purse and the licence -- the user, 2026-11-16, "Let's make Twinsen have to
+        // buy the ferry ticket instead of giving it to him for winning the race"; in the storm, her own line that there are no ferries)
+        new(8, 2, @"set_var_game\(59, 1\)", "the ferry office sells the Desert ticket (10 kashes) once the town circuit is won, not before; in the storm, \"No ferries in this storm\"", life =>
         {
             var storm = Regex.Match(life, @"if \(2 > chapter\(\)\)\s*\{\s*message\((\d+)\);\s*\}");
             if (!storm.Success) throw new NotTheGames("no storm line");
             return All(
-                Swap("if (0 < var_game(111) || 0 < var_game(62))", $"if (0 < var_game({WonVar}) && (0 < var_game(111) || 0 < var_game(62)))"),
+                Swap("if (0 < var_game(111) || 0 < var_game(62))", $"if (0 < var_game({WonVar}))"),
                 Swap("message(314);\nmessage_obj(0, 311);\nmessage(310);",
                     $"if (2 > chapter())\n{{\nmessage({storm.Groups[1].Value});\n}}\nelse\n{{\nmessage(314);\nmessage_obj(0, 311);\nmessage(310);\n}}"))(life);
         }),

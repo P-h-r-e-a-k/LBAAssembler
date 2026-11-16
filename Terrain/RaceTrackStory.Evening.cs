@@ -401,12 +401,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "We've won here! Mr. Paul's ticket takes us on the ferry from the harbour, to the desert.",
-            "On a gagné ici ! Le billet de M. Paul nous fait prendre le ferry au port, vers le désert.",
-            "Hier haben wir gewonnen! Mit Herrn Pauls Fahrkarte geht's vom Hafen mit der Fähre in die Wüste.",
-            "¡Aquí hemos ganado! El billete del señor Paul nos lleva en el ferry del puerto, al desierto.",
-            "Qui abbiamo vinto! Il biglietto del signor Paul ci porta col traghetto dal porto, al deserto.",
-            "Aqui ganhámos! O bilhete do Sr. Paul leva-nos no ferry do porto, até ao deserto.",
+            "We've won here! Now a ticket from the ferry office, and the ferry from the harbour takes us to the desert.",
+            "On a gagné ici ! Maintenant un billet au bureau du ferry, et le ferry du port nous emmène au désert.",
+            "Hier haben wir gewonnen! Jetzt eine Fahrkarte aus dem Fährbüro, und die Fähre bringt uns vom Hafen in die Wüste.",
+            "¡Aquí hemos ganado! Ahora un billete en la oficina del ferry, y el ferry del puerto nos lleva al desierto.",
+            "Qui abbiamo vinto! Ora un biglietto all'ufficio del traghetto, e il traghetto dal porto ci porta al deserto.",
+            "Aqui ganhámos! Agora um bilhete no escritório do ferry, e o ferry do porto leva-nos até ao deserto.",
         },
         new[]
         {
