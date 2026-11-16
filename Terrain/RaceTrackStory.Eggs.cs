@@ -8,7 +8,8 @@ namespace LBAAssembler.Terrain;
 // Since 2026-11-16 the game variables go on past 255 (the engine's COMMON.H MAX_VARS_GAME, 1024: the scripts name them in two bytes,
 // LM_*_VAR_GAME_W / LF_VAR_GAME_W; saves keep them in a block of their own): every one of 0-255 is some script's (a full story build's
 // scan that day), so a new variable of the story's is 256 on -- 256 ExchangeVar, 257 ReplayVar, 258 SeatVar, moved there from the
-// clashes found (196 EggCards, 250 EggWeather, 247 EggSendell keep theirs). Of 0-255, written but never read (free if their writes
+// clashes found (196 EggCards, 250 EggWeather, 247 EggSendell keep theirs); 259 EntryPaid (Mr. Paul's entry, RaceTrackStory.Chapters.cs);
+// the next free 260. Of 0-255, written but never read (free if their writes
 // went): 111, 166, 171, 173, 182, 184, 185, 186, 189, 190.
 // The variables: game variables no script of the built game uses and the engine doesn't (checked 2026-11-04 with scriptgrep2 on a full
 // build of the fifteen story islands, and the engine source for ListVarGame[...]): 196-199, 210, 225, 226, 247, 250, and 153-155.

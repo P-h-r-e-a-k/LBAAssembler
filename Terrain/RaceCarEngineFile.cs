@@ -351,6 +351,9 @@ internal static class RaceCarEngineFile
         if (town)
         {
             text.Append($"gate={RaceTrackStory.DayVar} {RaceTrackStory.Rested} The new track opens tomorrow\n");
+            // (and the entry paid to Mr. Paul at the start line -- the user, 2026-11-16: "Let's force Twinsen to have to have paid Mr. Paul the
+            // entry fee before he may enter the race")
+            text.Append($"gate={RaceTrackStory.EntryPaid} 1 Mr. Paul: {RaceTrackStory.EntryFee} kashes entry fee first!\n");
             // (and six cars on the grid: Luc's barrel back on four wheels -- RaceTrackStory.Chapters.cs, Yard)
             text.Append($"gate={RaceTrackStory.QLucCar} {RaceTrackStory.WheelFitted} Mr. Paul: six cars! Luc's a wheel short.\n");
             text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.WonVar} 1\n");

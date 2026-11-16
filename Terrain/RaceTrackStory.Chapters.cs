@@ -39,6 +39,7 @@ namespace LBAAssembler.Terrain;
 //     - Luc in the yard by the carport, his barrel car's back wheel lost (Q_LUCCAR 2); Bob at the harbour scrap, the wheel in it (3); Zoe
 //       fits it and gives the portable radio (item 26; Q_LUCCAR 4, which the town circuit's gate waits for: gate=214 4, RaceCarEngineFile).
 //     - at the town circuit's start line the Esmer herald gives the magic slate (item 28), Flick and Mr. Paul want six cars on the grid.
+//       Mr. Paul takes the entry, 20 kashes (ENTRY_PAID 259 1, the start line's other gate: gate=259 1).
 //     - the slate's hidden pages: the blueprints copied onto it (Q_BLUEPRINT 2), the pharmacy's gallic acid for 50 kashes (item 17), the
 //       neighbour's sheet brought out with it (Q_SHEET 2). The pages themselves -- their pictures, memo_ardoise -- are for later.
 //     - Mr. Paul's prize (Apply step 6) is the Cup's purse and the racing licence; the ferry office sells the ticket once the race is won
@@ -54,6 +55,10 @@ internal static partial class RaceTrackStory
     // Q_LUCCAR: 1 Zoe's word at the door read (no longer said, 2026-11-09), 2 Luc has told, 3 the tyre traded for after he told, 4 the wheel fitted (the town circuit's
     // gate)
     public const int QLucCar = 214, LucWord = 1, LucTold = 2, WheelFound = 3, WheelFitted = 4;
+    // ENTRY_PAID (chapter 2): 1 once Twinsen has paid Mr. Paul the town circuit's entry, EntryFee kashes -- the start line's gate
+    // (RaceCarEngineFile) till then. The user, 2026-11-16: "Let's force Twinsen to have to have paid Mr. Paul the entry fee before he may
+    // enter the race". A wide variable (the game's 0-255 are all taken: RaceTrackStory.Eggs.cs).
+    public const int EntryPaid = 259, EntryFee = 20;
     // QBait (chapter 2): 1 a tin of fishing bait bought at Mr. Bazoo's, 2 traded to Bob at the harbour for his old tyre (whenever: before
     // Luc has told too). A game variable no script of the game's uses and the engine doesn't (RaceTrackStory.Eggs.cs: kept spare), as the
     // inventory has no slot to spare for the bait (its forty are the game's own, the story's items the game's retexted).
@@ -150,6 +155,8 @@ internal static partial class RaceTrackStory
         PaulLicence,
         // (Mr. Paul at the town circuit's start line: the entry, the prize, the main event -- the user, 2026-11-16)
         PaulEntry,
+        // (and the entry paid to him before the race: his question, Twinsen's two answers, then on the grid or short -- 2026-11-16)
+        PaulAsk, PaulPay, PaulNotNow, PaulPaid, PaulShort, PaulOnGrid,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -860,6 +867,62 @@ internal static partial class RaceTrackStory
             "La inscripción cuesta veinte kashes, Twinsen. El ganador se lleva cincuenta kashes y una licencia de carreras para la prueba principal: primero una carrera en la isla del Desierto, luego otra por la luna de los extraterrestres y su planeta. ¡Queda una plaza en la parrilla!",
             "L'iscrizione costa venti kashes, Twinsen. Il vincitore si prende cinquanta kashes e una licenza di corsa per la gara principale: prima una corsa sull'isola del Deserto, poi una attraverso la luna degli alieni e il loro pianeta. Resta un posto sulla griglia!",
             "A inscrição custa vinte kashes, Twinsen. O vencedor leva cinquenta kashes e uma licença de corrida para a prova principal: primeiro uma corrida na ilha do Deserto, depois uma pela lua dos extraterrestres e o seu planeta. Resta um lugar na grelha!",
+        },
+        // (the entry paid before the race -- the user, 2026-11-16: "Let's force Twinsen to have to have paid Mr. Paul the entry fee before he
+        // may enter the race")
+        new[]
+        {
+            "So, twenty kashes for the last place on the grid?",
+            "Alors, vingt kashes pour la dernière place sur la grille ?",
+            "Also, zwanzig Kashes für den letzten Startplatz?",
+            "Entonces, ¿veinte kashes por la última plaza en la parrilla?",
+            "Allora, venti kashes per l'ultimo posto sulla griglia?",
+            "Então, vinte kashes pelo último lugar na grelha?",
+        },
+        new[]
+        {
+            "Here are my twenty kashes.",
+            "Voici mes vingt kashes.",
+            "Hier sind meine zwanzig Kashes.",
+            "Aquí tienes mis veinte kashes.",
+            "Ecco i miei venti kashes.",
+            "Aqui estão os meus vinte kashes.",
+        },
+        new[]
+        {
+            "Not just now.",
+            "Pas tout de suite.",
+            "Jetzt gerade nicht.",
+            "Ahora mismo no.",
+            "Non adesso.",
+            "Agora não.",
+        },
+        new[]
+        {
+            "Thank you kindly, Twinsen. The last place is yours: bring your car to the start line!",
+            "Merci bien, Twinsen. La dernière place est à toi : amène ta voiture sur la ligne de départ !",
+            "Vielen Dank, Twinsen. Der letzte Startplatz gehört dir: Bring dein Auto an die Startlinie!",
+            "Muchas gracias, Twinsen. La última plaza es tuya: ¡trae tu coche a la línea de salida!",
+            "Grazie mille, Twinsen. L'ultimo posto è tuo: porta la tua macchina sulla linea di partenza!",
+            "Muito obrigado, Twinsen. O último lugar é teu: traz o teu carro para a linha de partida!",
+        },
+        new[]
+        {
+            "No kashes, no race, Twinsen. Come back with twenty and the place is yours.",
+            "Pas de kashes, pas de course, Twinsen. Reviens avec vingt kashes et la place est à toi.",
+            "Keine Kashes, kein Rennen, Twinsen. Komm mit zwanzig wieder, dann gehört der Platz dir.",
+            "Sin kashes no hay carrera, Twinsen. Vuelve con veinte y la plaza es tuya.",
+            "Niente kashes, niente corsa, Twinsen. Torna con venti e il posto è tuo.",
+            "Sem kashes não há corrida, Twinsen. Volta com vinte e o lugar é teu.",
+        },
+        new[]
+        {
+            "You're on the grid, Twinsen. Bring your car to the start line!",
+            "Tu es sur la grille, Twinsen. Amène ta voiture sur la ligne de départ !",
+            "Du stehst in der Startaufstellung, Twinsen. Bring dein Auto an die Startlinie!",
+            "Estás en la parrilla, Twinsen. ¡Trae tu coche a la línea de salida!",
+            "Sei sulla griglia, Twinsen. Porta la tua macchina sulla linea di partenza!",
+            "Estás na grelha, Twinsen. Traz o teu carro para a linha de partida!",
         },
     };
 
@@ -3006,9 +3069,29 @@ stop();
             {
                 Place(paul, model, pa);
                 p.Log.Add($"Mr. Paul at cell ({pa.X:0.#}, {pa.Z:0.#}), {pa.Y:0}");
-                edits.Add(p.Add(model, paul, Talker("2 == chapter()", $@"            if (0 == var_game({WonVar}))
+                // (the entry, twenty kashes, paid to him: asked when Twinsen has them, else to come back with them; paid, he's on the grid --
+                // the start line's gate, ENTRY_PAID, open; a lost race runs again without paying twice -- the user, 2026-11-16)
+                edits.Add(p.Add(model, paul, Talker("2 == chapter()", $@"            if (0 == var_game({WonVar}) && 0 < var_game({EntryPaid}))
+            {{
+                message({p.Say(ChapterLine.PaulOnGrid)});
+            }}
+            else if (0 == var_game({WonVar}) && {EntryFee} > nb_gold_pieces())
             {{
                 message({p.Say(ChapterLine.PaulEntry)});
+                message({p.Say(ChapterLine.PaulShort)});
+            }}
+            else if (0 == var_game({WonVar}))
+            {{
+                message({p.Say(ChapterLine.PaulEntry)});
+                add_choice({p.Say(ChapterLine.PaulPay)});
+                add_choice({p.Say(ChapterLine.PaulNotNow)});
+                ask_choice({p.Say(ChapterLine.PaulAsk)});
+                if ({p.Say(ChapterLine.PaulPay)} == choice())
+                {{
+                    give_gold_pieces({EntryFee});
+                    set_var_game({EntryPaid}, 1);
+                    message({p.Say(ChapterLine.PaulPaid)});
+                }}
             }}
             if ({WheelFitted} > var_game({QLucCar}))
             {{
