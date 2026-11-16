@@ -299,6 +299,8 @@ internal static class NewLinesCommand
         foreach (var ((file, id), who) in retailSaid.OrderBy(p => p.Key.File).ThenBy(p => p.Key.Id))
         {
             var person = who.GroupBy(w => w).OrderByDescending(g => g.Count()).First().Key;
+            if (Trace is { } traced && who.Contains(traced) && person != traced)
+                Console.WriteLine($"trace {traced}: file {file} text {id} said by {traced} {who.Count(w => w == traced)} time(s), given to {person} ({who.Count(w => w == person)})");
             // (Twinsen's own voice for certain: his answers -- what his script says is now and then a sign read or someone else's)
             if (person == "Twinsen" && !answers.Contains((file, id))) continue;
             if (!ownLines.TryGetValue(person, out var own)) ownLines[person] = own = new List<(int, int)>();
@@ -387,6 +389,7 @@ internal static class NewLinesCommand
                 var hasVoice = voices.TryGetValue(character, out var voice);
                 if (source == lang && hasVoice)
                 {
+                    tracing = character;
                     (wav, from) = Sample(voice.Lines, lang, retailBanks, Vox, seconds);
                     if (lang == 0 && wav is not null) englishSamples[character] = wav;
                 }
@@ -638,9 +641,12 @@ internal static class NewLinesCommand
 
     // ---- a character's sample: their retail lines' recordings in this language, each line once and each recording whole (a recording in
     // parts, all of them: HqrArchive.ReadParts), one after the other -- up to `seconds` if that is over 0
+    private static readonly string? Trace = Environment.GetEnvironmentVariable("NEWLINES_TRACE");
+    private static string tracing = "";
     private static (byte[]? Wav, string From) Sample(List<(int File, int Id)> own, int lang, Dictionary<(int Lang, int File), List<Text>> retailBanks,
         Func<string, HqrArchive?> vox, double seconds)
     {
+        void Say(string what) { if (lang == 0 && Trace is not null && Trace == tracing) Console.WriteLine($"trace {tracing}: {what}"); }
         var pcm = new List<short>();
         var used = new Dictionary<string, int>();
         var gap = new short[(int)(Rate * Gap)];
@@ -650,7 +656,7 @@ internal static class NewLinesCommand
             var place = retailBanks[(lang, file)].FindIndex(t => t.Id == id);
             var name = VoxName(lang, file);
             var archive = vox(name);
-            if (place < 0 || archive is null || !archive.IsValid(place)) continue;
+            if (place < 0 || archive is null || !archive.IsValid(place)) { Say($"file {file} text {id}: no recording (place {place}, {name})"); continue; }
             short[]? clip;
             try
             {
@@ -658,7 +664,8 @@ internal static class NewLinesCommand
                 clip = parts.Any(c => c is null) && parts[0] is null ? null : parts.Where(c => c is not null).SelectMany(c => c!).ToArray();
             }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { clip = null; }
-            if (clip is null || clip.Length < Shortest * Rate) continue;
+            if (clip is null || clip.Length < Shortest * Rate) { Say($"file {file} text {id}: {(clip is null ? "not decoded" : $"{clip.Length / (double)Rate:0.00} s, too short")}"); continue; }
+            Say($"file {file} text {id}: {clip.Length / (double)Rate:0.0} s ({name} entry {place})");
             if (pcm.Count > 0) pcm.AddRange(gap);
             pcm.AddRange(clip);
             used[name] = used.GetValueOrDefault(name) + 1;
