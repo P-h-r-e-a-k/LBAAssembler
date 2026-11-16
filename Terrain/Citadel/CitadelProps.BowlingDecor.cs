@@ -80,13 +80,17 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("a hanging lamp", new[] { -1 });
         m.Light = 0.6f;
-        Tube(m, new Vector3(0, 220, 0), new Vector3(0, 2600, 0), 16, PanelBlack);
-        var top = m.Loop(0, new Vector3(0, 220, 0), new Vector3(70, 0, 0), new Vector3(0, 0, 70), 8);
-        var rim = m.Loop(0, new Vector3(0, 40, 0), new Vector3(260, 0, 0), new Vector3(0, 0, 260), 8);
-        m.Skin(top, rim, _ => ShadeGreen, new Vector3(0, -400, 0));
-        m.Skin(rim, top, _ => ShadeGreen, new Vector3(0, 600, 0));
-        m.Ball(0, new Vector3(0, 30, 0), 80, Bulb);
+        HangingLampAt(m, Vector3.Zero);
         return m.ToBody(header);
+    }
+    private static void HangingLampAt(CarMesh m, Vector3 at)
+    {
+        Tube(m, at + new Vector3(0, 220, 0), at + new Vector3(0, 2600, 0), 16, PanelBlack);
+        var top = m.Loop(0, at + new Vector3(0, 220, 0), new Vector3(70, 0, 0), new Vector3(0, 0, 70), 8);
+        var rim = m.Loop(0, at + new Vector3(0, 40, 0), new Vector3(260, 0, 0), new Vector3(0, 0, 260), 8);
+        m.Skin(top, rim, _ => ShadeGreen, at + new Vector3(0, -400, 0));
+        m.Skin(rim, top, _ => ShadeGreen, at + new Vector3(0, 600, 0));
+        m.Ball(0, at + new Vector3(0, 30, 0), 80, Bulb);
     }
 
     // A scoreboard over a played lane's pins: a black panel, its frame, the last frames in red (an X, a 9 and a spare's slash)

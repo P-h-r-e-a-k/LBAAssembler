@@ -503,6 +503,9 @@ void comportement_1()
                 return scripts => { addWater(scripts); addBoard(scripts); addLadder(scripts); };
             });
 
+        // the bowling alley's people's words and its change machine (RaceTrackStory.BowlingTalk)
+        BowlingTalk(b, gameDirectory, log);
+
         // the bowling alley's lift in the prison exit's platform (BowlingAlley: scene 393 below it)
         if (b.Store.SceneExists(BowlingAlley.Outside) && b.Store.SceneExists(BowlingAlley.Scene))
             b.Edit(BowlingAlley.Outside, "the hidden bowling alley's lift in the prison exit's platform", BowlingAlley.OutsideLift);

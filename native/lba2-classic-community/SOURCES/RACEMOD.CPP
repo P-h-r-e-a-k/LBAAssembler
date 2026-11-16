@@ -888,7 +888,9 @@ static char s_halIsland[HAL_MAX][16], s_halAch[HAL_MAX][16], s_halWords[HAL_MAX]
 static S32 s_halUsedAt = 0, s_halUntil = 0;
 // The alley's fruit machines (BOWLMAP.TXT fruit x z; the user, 2026-11-15: "You've added fruit machines, but they're lacking wheels, and
 // don't respond when Twinsen attempts to interact with them"): Action by one, a coin of the planet's in, three reels spun on the screen
-static int s_fmN = 0, s_fmX[4], s_fmZ[4], s_fmOn = 0, s_fmReel[3], s_fmPay = 0, s_fmActWas = 0, s_fmPaid = 0;
+// (BOWLMAP.TXT fruit x z [actor]: where Twinsen stands to play it, and its cabinet's actor -- its bones 1-3 its reels, turned here: FruitReels)
+#define FM_MAX 12
+static int s_fmN = 0, s_fmX[FM_MAX], s_fmZ[FM_MAX], s_fmActor[FM_MAX], s_fmStop[FM_MAX][3], s_fmWhich = -1, s_fmOn = 0, s_fmReel[3], s_fmPay = 0, s_fmActWas = 0, s_fmPaid = 0;
 static S32 s_fmAt = 0;
 static unsigned s_fmSeed = 1115u;
 static int s_blN = 0, s_bwN = 0, s_blScene = -1, s_blVar = 99, s_blFloor = 1064, s_blHalf = 1000, s_bowlLoaded = 0;
@@ -19381,7 +19383,13 @@ static void BowlLoad(void) {
             s_bl[a].Pin[0] = g; s_bl[a].Pin[1] = h2; s_bl[a].Pin[2] = k; s_bl[a].Pin[3] = m; s_bl[a].Pin[4] = n2; s_bl[a].Pin[5] = o;
             if (a + 1 > s_blN) s_blN = a + 1;
         }
-        else if (sscanf(line, "fruit %d %d", &a, &b) == 2 && s_fmN < 4) { s_fmX[s_fmN] = a; s_fmZ[s_fmN] = b; s_fmN++; }
+        else if (sscanf(line, "fruit %d %d", &a, &b) == 2 && s_fmN < FM_MAX) {
+            s_fmX[s_fmN] = a; s_fmZ[s_fmN] = b; s_fmActor[s_fmN] = -1;
+            if (sscanf(line, "fruit %d %d %d", &a, &b, &c) == 3) s_fmActor[s_fmN] = c;
+            // (each machine's reels at rest on symbols of their own)
+            for (int r = 0; r < 3; r++) s_fmStop[s_fmN][r] = (s_fmN * 2 + r * 3 + 1) % 5;
+            s_fmN++;
+        }
     }
     fclose(f);
     Log_Info("[racemod] bowling: %d lanes, %d bowlers (scene %d)", s_blN, s_bwN, s_blScene);
@@ -19628,13 +19636,17 @@ static void BowlSay(S32 now, const char *text);
 static const char *const s_fmName[5] = {"7", "BELL", "PIN", "SKULL", "CHERRY"};
 static int FmRoll(void) { s_fmSeed = s_fmSeed * 1664525u + 1013904223u; const int r = (s_fmSeed >> 16) % 20; return r < 2 ? 0 : r < 6 ? 1 : r < 11 ? 2 : r < 15 ? 3 : 4; }
 static S32 *FmPurse(void) { return MONEY_ZLITOS ? &NbZlitosPieces : &NbGoldPieces; }
+// (the machine Twinsen stands at: the nearest within reach -- the strip's machines stand 1024 apart, closer than the reach, so the first
+// within it was the one beside him)
 static int FmNear(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    int best = -1;
+    double bestD = (double)FM_REACH * FM_REACH;
     for (int i = 0; i < s_fmN; i++) {
-        const double dx = hero->Obj.X - s_fmX[i], dz = hero->Obj.Z - s_fmZ[i];
-        if (dx * dx + dz * dz <= (double)FM_REACH * FM_REACH) return i;
+        const double dx = hero->Obj.X - s_fmX[i], dz = hero->Obj.Z - s_fmZ[i], d = dx * dx + dz * dz;
+        if (d <= bestD) { bestD = d; best = i; }
     }
-    return -1;
+    return best;
 }
 static void FruitFrame(S32 now) {
     if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene) { s_fmOn = 0; return; }
@@ -19645,24 +19657,54 @@ static void FruitFrame(S32 now) {
         const int a = s_fmReel[0], b = s_fmReel[1], c = s_fmReel[2];
         s_fmPay = a == b && b == c ? (a == 0 ? 25 : a == 1 ? 10 : 5) : (a == 0) + (b == 0) + (c == 0) >= 2 ? 1 : 0;
         *FmPurse() += s_fmPay;
+        if (s_fmWhich >= 0 && s_fmWhich < s_fmN) for (int r = 0; r < 3; r++) s_fmStop[s_fmWhich][r] = s_fmReel[r];
         Log_Info("[racemod] fruit machine: %s %s %s, pays %d", s_fmName[a], s_fmName[b], s_fmName[c], s_fmPay);
     }
     if (s_fmOn && now - s_fmAt > FM_SPIN_MS + 2 * FM_GAP_MS + FM_SHOW_MS) s_fmOn = 0;
     if (!pressed || s_fmOn || s_bowlGame >= 0 || Comportement == C_BUGGY) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
-    for (int i = 0; i < s_fmN; i++) {
-        const double dx = hero->Obj.X - s_fmX[i], dz = hero->Obj.Z - s_fmZ[i];
-        if (dx * dx + dz * dz > (double)FM_REACH * FM_REACH) continue;
+    for (int i = FmNear(); i >= 0; i = -1) {
         if (*FmPurse() < 1) { BowlSay(now, MONEY_ZLITOS ? "No zlitos for the machine" : "No kashes for the machine"); return; }
         *FmPurse() -= 1;
         for (int r = 0; r < 3; r++) s_fmReel[r] = FmRoll();
-        s_fmOn = 1; s_fmAt = now; s_fmPaid = 0; s_fmPay = 0;
+        s_fmOn = 1; s_fmAt = now; s_fmPaid = 0; s_fmPay = 0; s_fmWhich = i;
         HQ_3D_MixSample(575, 0x1000, 0, 1, hero->Obj.X, hero->Obj.Y, hero->Obj.Z);
         Log_Info("[racemod] fruit machine %d: a coin in", i);
         return;
     }
 }
-// Its reels on the screen, over the scene: three windows, each turning through its symbols until its stop, then the result
+// The machines' reels (the user, 2026-11-16: "we need to replicate the behaviour so it's not just three random things spinning in the
+// middle of the screen, they need to rotate in the fruit machine"): each machine's cabinet's bones 1-3 (CitadelProps.BowlSlot), each a drum
+// of five faces round its axle, turned about it -- the one played spinning, each reel stopping in turn on its symbol; the others still on
+// their last. The actor's frames set here, not by an animation (MANUAL_INTER_FRAME), just before the scene is drawn (AffScene).
+#define FM_TURN 9000        // (spinning: this much of a turn a second, 4096 a turn)
+// (the turn that shows face k at the front: k fifths of a turn, the engine's x turn taking the faces' upward order -- the test's
+// LBA2_FRUIT_SHOW showed the other sign put the bells where the cherries go)
+static S32 FmFace(int k) { return (S32)((k * 4096 / 5) & 4095); }
+static void FruitReels(S32 now) {
+    if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene) return;
+    // (a test's: LBA2_FRUIT_SHOW=k, every reel at rest on face k -- the symbols' order round the drum checked at a glance)
+    static int s_fmShow = -2;
+    if (s_fmShow == -2) { const char *e = getenv("LBA2_FRUIT_SHOW"); s_fmShow = e && *e ? atoi(e) % 5 : -1; }
+    if (s_fmShow >= 0) for (int i = 0; i < s_fmN; i++) for (int r = 0; r < 3; r++) s_fmStop[i][r] = s_fmShow;
+    for (int i = 0; i < s_fmN; i++) {
+        const int a = s_fmActor[i];
+        if (a <= 0 || a >= (int)NbObjets || ListObjet[a].Obj.Body.Num == -1) continue;
+        T_OBJET *o = &ListObjet[a];
+        o->WorkFlags |= MANUAL_INTER_FRAME;
+        memset(o->Obj.CurrentFrame, 0, sizeof(o->Obj.CurrentFrame));
+        for (int r = 0; r < 3; r++) {
+            S32 angle = FmFace(s_fmStop[i][r]);
+            if (s_fmOn && i == s_fmWhich) {
+                const S32 t = now - s_fmAt;
+                angle = t < FM_SPIN_MS + r * FM_GAP_MS ? (S32)(((S64)t * FM_TURN / 1000 + r * 1365) & 4095) : FmFace(s_fmReel[r]);
+            }
+            o->Obj.CurrentFrame[1 + r].Alpha = (S16)angle;
+        }
+    }
+}
+
+// Its result over the scene once its reels have stopped (the reels themselves turn in the machine: FruitReels)
 static void FruitDraw(void) {
     if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene || s_bowlGame >= 0) return;
     if (!s_fmOn) {
@@ -19674,22 +19716,12 @@ static void FruitDraw(void) {
         }
         return;
     }
-    const S32 now = TimerRefHR, w = (S32)ModeDesiredX, cw = 150, ch = 90, gap = 16, x0 = w / 2 - (3 * cw + 2 * gap) / 2, y0 = 130;
-    Box(x0 - 14, y0 - 40, x0 + 3 * cw + 2 * gap + 13, y0 + ch + 44, 4 * 16 + 2);
-    Box(x0 - 10, y0 - 36, x0 + 3 * cw + 2 * gap + 9, y0 + ch + 40, 0);
-    BoxMovingAdd(x0 - 14, y0 - 40, x0 + 3 * cw + 2 * gap + 13, y0 + ch + 44);   // (as HAL's panel: all of it to redraw)
-    HudLine(w / 2 - SizeFont((char *)"THE ONE-ARMED BANDIT") / 2, y0 - 32, "THE ONE-ARMED BANDIT", -1);
-    for (int r = 0; r < 3; r++) {
-        const S32 x = x0 + r * (cw + gap);
-        Box(x, y0, x + cw - 1, y0 + ch - 1, 3 * 16 + 12);
-        const int stopped = now - s_fmAt >= FM_SPIN_MS + r * FM_GAP_MS;
-        const int shown = stopped ? s_fmReel[r] : (int)((now - s_fmAt) / 70 + r * 2) % 5;
-        HudLine(x + cw / 2 - SizeFont((char *)s_fmName[shown]) / 2, y0 + ch / 2 - 12, s_fmName[shown], -1);
-    }
+    const S32 w = (S32)ModeDesiredX;
     if (s_fmPaid) {
-        char t[48];
-        if (s_fmPay > 0) snprintf(t, sizeof(t), "Pays %d", s_fmPay); else snprintf(t, sizeof(t), "Nothing");
-        HudCentred(w, y0 + ch + 10, t, 0);
+        char t[64];
+        if (s_fmPay > 0) snprintf(t, sizeof(t), "%s %s %s -- pays %d", s_fmName[s_fmReel[0]], s_fmName[s_fmReel[1]], s_fmName[s_fmReel[2]], s_fmPay);
+        else snprintf(t, sizeof(t), "%s %s %s -- nothing", s_fmName[s_fmReel[0]], s_fmName[s_fmReel[1]], s_fmName[s_fmReel[2]]);
+        HudCentred(w, 150, t, 0);
     }
 }
 // HAL's hints, read once
@@ -21147,6 +21179,7 @@ void RaceMod_Frame(void) {
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
     FruitFrame(TimerRefHR);
+    FruitReels(TimerRefHR);
     HalFrame(TimerRefHR);
     DartFrame(TimerRefHR);
     RaceCameraKey();

@@ -121,6 +121,12 @@ internal static class BowlingAnims
         new("the sailor", 297, 0, 7, 8, 12, 13, 17, 21, 430),
         new("the blue sailor", 295, 0, 12, 13, 7, 8, 21, 17, 234),
         new("a Franco dissident", 56, 93, 6, 7, 9, 10, 12, 16, 0),
+        // (each table its own players -- the user, 2026-11-16: "We have two poker tables in the bowling area, both of them with two identical
+        // NPCs, this needs work, they need to add interest and have differences": the glooms in a tie and in grey (entity 204's bodies 150,
+        // 151, one rig), an old Wannie, the Franco from the gas station)
+        new("a gloom in a tie", 204, 150, 9, 10, 13, 14, 17, 21, 250),
+        new("an old Wannie", 274, 0, 7, 8, 12, 13, 17, 21, 185),
+        new("the gas station's Franco", 203, 0, 6, 7, 9, 10, 12, 16, 0),
     };
 
     // A sitter's poker: sitting, his thighs level and shins down, his hands on the table; looking at his cards, pushing chips in -- each at his

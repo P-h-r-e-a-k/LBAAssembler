@@ -60,8 +60,15 @@ internal static class BowlingAlley
 
     private static string Still() => "void comportement_0()\n{\n}\n";
 
+    // Who in the alley Twinsen can talk to: each one's actor and who they are (RaceTrackStory.BowlingTalk gives each a line: the user,
+    // 2026-11-16, "Every character Twinsen can speak to should have a response line") -- filled as the alley is built, the story after it
+    public static readonly List<(int Actor, string Who)> Talkers = new();
+    // (where Twinsen stands to play a fruit machine: this far out in front of its cabinet's middle -- RACEMOD.CPP FM_REACH round it)
+    private const int FruitFront = 700;
+
     public static List<string> Install(string gameDirectory)
     {
+        Talkers.Clear();
         var log = new List<string>();
         var scenePath = Path.Combine(gameDirectory, "SCENE.HQR");
         var bkgPath = Path.Combine(gameDirectory, "LBA_BKG.HQR");
@@ -325,8 +332,8 @@ void comportement_3()
         Decor(CitadelProps.PoolCue, poolX + CitadelProps.PoolLength / 2 + 90, FloorY, poolZ - 300);
         var (shotX, shotZ) = (poolX - CitadelProps.PoolLength / 2 - CitadelProps.PoolStand, poolZ);
         Decor(CitadelProps.HangingLamp, PokerX, FloorY + 2300, PokerZ);
-        foreach (var lx in new[] { CitadelProps.LaneX0, CitadelProps.LaneMiddleX, CitadelProps.LaneX1 })
-            foreach (var lz in new[] { 9216, 14336 }) Decor(CitadelProps.HangingLamp, lx, FloorY + 2300, lz);
+        // (the six over the lanes one body: the alley's actors near the engine's hundred -- CitadelProps.LaneLamps)
+        Decor(CitadelProps.LaneLamps, CitadelProps.LaneMiddleX, FloorY + 2300, 11776);
         foreach (var lx in new[] { CitadelProps.LaneX0, CitadelProps.LaneX1 })
         {
             Decor(CitadelProps.Scoreboard, lx, FloorY + 2500, 4700);
@@ -338,18 +345,23 @@ void comportement_3()
         // at its stools, a brown-faced sailor behind it, the big grey gloom minding the lift, another dissident at the slot machine
         // (2026-11-15, second round: the bar against the north wall -- the gloom and the sailor at its west side, the dissident at its east,
         // the barman in its U; another dissident by the booths; the big grey Franco by the lift)
-        void Regular(int entity, int body, int x, int z, int beta, int anim = 0)
+        void Regular(int entity, int body, int x, int z, int beta, int anim = 0, string? who = null)
         {
             var r = SceneOps.BlankActor(SceneGame.Lba2, x, FloorY, z, entity);
             r.Body = (sbyte)body; r.Anim = anim; r.Beta = beta; r.Flags = 0x1000; r.CoulObj = 9; r.Armor = 51; r.LifePoints = -1; r.Move = 0;
             r.Life = new byte[] { 0 }; r.Track = new byte[] { 0 };
-            Text(SceneOps.AddActor(model, r), Still(), "label(0);\nstop();\n");
+            var index = SceneOps.AddActor(model, r);
+            Text(index, Still(), "label(0);\nstop();\n");
+            if (who is not null) Talkers.Add((index, who));
         }
-        foreach (var (entity, body, x, z, beta) in new[] { (294, 0, barMiddle - 1000, barFront + 520, 2048), (295, 0, barMiddle + 1000, barFront + 520, 2048),
-                                                         (56, 93, barX1 + 420, barWall + 1900, 3072), (297, 187, barMiddle, barWall + 1500, 0),
-                                                         (56, 93, poolX + 500, poolZ + CitadelProps.PoolWidth / 2 + 380, 2048), (56, 93, 25856, 22272, 2048) })
-            Regular(entity, body, x, z, beta);
-        Regular(297, 0, shotX, shotZ, 1024, BowlingAnims.Pool);
+        // (each one different -- the user, 2026-11-16, of the poker tables' "two identical NPCs ... they need to add interest and have
+        // differences": at the bar a casino gloom and an off-duty Franco guard, the dissident at its east end, the brown sailor behind it;
+        // an old Wannie with his tart by the pool table; the casino's other gloom by the lift)
+        foreach (var (entity, body, x, z, beta, who) in new[] { (294, 0, barMiddle - 1000, barFront + 520, 2048, "BarGloom"), (56, 0, barMiddle + 1000, barFront + 520, 2048, "BarGuard"),
+                                                              (56, 93, barX1 + 420, barWall + 1900, 3072, "BarDissident"), (297, 187, barMiddle, barWall + 1500, 0, "Barman"),
+                                                              (274, 177, poolX + 500, poolZ + CitadelProps.PoolWidth / 2 + 380, 2048, "PoolWannie"), (294, 184, 25856, 22272, 2048, "LiftGloom") })
+            Regular(entity, body, x, z, beta, 0, who);
+        Regular(297, 0, shotX, shotZ, 1024, BowlingAnims.Pool, "PoolSailor");
         // ---- more tables (the user, 2026-11-16: "We should add more tables"): a second big round table east of the booths, a sailor and a
         // dissident at a hand of cards there, two chairs free; and one of Rick's card tables between the lanes' end and the booths, empty
         // (Rick's is too small for the sailors to sit at: the poker table's size, the user's same day)
@@ -357,25 +369,33 @@ void comportement_3()
         const int cardsX = 52 * 512, cardsZ = 35 * 512 + 256;
         Decor(CitadelProps.PokerTable, cardsX, FloorY, cardsZ);
         Decor(CitadelProps.HangingLamp, cardsX, FloorY + 2300, cardsZ);
-        foreach (var (entity, body, dx, dz, beta) in new[] { (297, 0, -1, 0, 1024), (56, 93, 0, -1, 0), (-1, 0, 1, 0, 3072), (-1, 0, 0, 1, 2048) })
+        // (its own players: the grey gloom, the gas station's Franco, the blue sailor)
+        foreach (var (entity, body, dx, dz, beta, who) in new[] { (204, 151, -1, 0, 1024, "CardsGloom"), (203, 0, 0, -1, 0, "CardsFranco"), (295, 0, 1, 0, 3072, "CardsSailor"), (-1, 0, 0, 1, 2048, "") })
         {
             var (sx, sz) = (cardsX + dx * PokerSeat, cardsZ + dz * PokerSeat);
             Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
-            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker);
+            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who);
         }
         // ---- the poker table (the user, 2026-11-15: "add a round table with people sitting playing poker"): round, among the booths and the
         // fruit machines, a sailor, a blue sailor and a Franco dissident sat at it (BowlingAnims.Poker, each at his own pace), the fourth chair
         // empty, toward the room. Each sits PokerSeat from its middle facing it, his chair's seat under him (a chair's seat ChairAhead in front
         // of its own place)
         Decor(CitadelProps.PokerTable, PokerX, FloorY, PokerZ);
-        foreach (var (entity, body, dx, dz, beta) in new[] { (56, 93, 0, -1, 0), (297, 0, -1, 0, 1024), (295, 0, 1, 0, 3072), (-1, 0, 0, 1, 2048) })
+        // (its players: the gloom in a tie, an old Wannie, the Franco dissident)
+        foreach (var (entity, body, dx, dz, beta, who) in new[] { (204, 150, 0, -1, 0, "PokerGloom"), (274, 0, -1, 0, 1024, "PokerWannie"), (56, 93, 1, 0, 3072, "PokerDissident"), (-1, 0, 0, 1, 2048, "") })
         {
             var (sx, sz) = (PokerX + dx * PokerSeat, PokerZ + dz * PokerSeat);
             Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
-            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker);
+            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who);
         }
-        // the fruit machines (BowlingRoom: Rick's two, where they stand), for the engine
-        foreach (var (fx, fz) in BowlingRoom.FruitMachines) map.Add($"fruit {fx} {fz}");
+        // the fruit machines (BowlingRoom.FruitMachines: CitadelProps.BowlSlot, its reels turned by the engine), for the engine: where
+        // Twinsen stands to play each, and its actor
+        foreach (var (fx, fz) in BowlingRoom.FruitMachines)
+        {
+            var slot = Prop(CitadelProps.BowlSlot, fx, FloorY, fz, 0);
+            Text(slot, Still(), "label(0);\nstop();\n");
+            map.Add($"fruit {fx} {fz + FruitFront} {slot}");
+        }
         File.WriteAllLines(Path.Combine(gameDirectory, "BOWLMAP.TXT"), map);
 
         // ---- the scripts

@@ -38,6 +38,8 @@ internal static class BowlingRoom
     // Rick's: his floor tile, his north wall's columns (x 38-40, z 12), his west wall's (x 17, z 36 on, 4 then 3 a repeat from layer 18), the
     // low stone wall (block 19); his booths' platform with its stairs and slot machine (x 18-29, z 23-37) and his bar (x 35-45, z 35-45)
     private const int Tile = 67, LowWall = 19, WestUpper = 18;
+    // (the invisible cells over the low rims: up to this layer, well over a jump from the floor)
+    private const int RimTop = FloorLayer + 12;
     private static readonly (int X, int Z) North = (38, 12), West = (17, 36);
     // (2026-11-15, second round: his booths, their tables and his fruit machines only -- his raised platform under the western ones, its
     // stairs, its rails and low walls left out, those booths lowered its three layers onto the floor: the stairs led nowhere, the user,
@@ -45,10 +47,22 @@ internal static class BowlingRoom
     // left out too -- "These wall lights appear to be floating in the air" -- in the room's middle east; his bar its own blocks only, its
     // back to the north wall -- "push the back of a bar up against a wall", "a corner section of post by the bar that looks out of place")
     private static readonly (int X0, int Z0, int X1, int Z1, int Dx, int Dz) Booths = (18, 23, 29, 37, 18, 3);
-    private static readonly HashSet<int> BoothBlocks = new() { 32, 33, 35, 36, 39, 80, 205, 206 };   // (his potted plant, 81 and 40, left out: it stood before the poker table)
-    // the fruit machines' fronts, for the engine (RACEMOD.CPP FruitFrame): his two (block 80: by his platform's foot, x 19-20 z 36, and up
-    // on it, x 23-24 z 23 -- his 81/40 is a potted plant), where they land (world units), the front of each its south side
-    public static readonly (int X, int Z)[] FruitMachines = { ((19 + 18 + 1) * 512, (36 + 3) * 512 + 768), ((23 + 18 + 1) * 512, (23 + 3) * 512 + 768) };
+    // (his potted plant, 81 and 40, left out: it stood before the poker table; his two fruit machines, 80, too since 2026-11-16 -- the alley's
+    // own in their places, their reels turning in them: CitadelProps.BowlSlot)
+    private static readonly HashSet<int> BoothBlocks = new() { 32, 33, 35, 36, 39, 205, 206 };
+    // the fruit machines (CitadelProps.BowlSlot actors, BowlingAlley): each cabinet's middle (world units), its front south (+z) -- where
+    // Rick's two stood, and five side by side along the south strip under the lanes' approach (the user, 2026-11-16: "Let's add in some
+    // more fruit machines around the edge in a cluster together")
+    public static readonly (int X, int Z)[] FruitMachines =
+    {
+        (42 * 512, 26 * 512 + 256), (38 * 512, 39 * 512 + 256),
+        (14 * 512 + 256, 43 * 512 + 256), (16 * 512 + 256, 43 * 512 + 256), (18 * 512 + 256, 43 * 512 + 256), (20 * 512 + 256, 43 * 512 + 256), (22 * 512 + 256, 43 * 512 + 256),
+    };
+    // (two more booths, Rick's east one -- cells x 44-47, z 27-32 in the room -- again: east of it, a cell further north (clear of the card
+    // table's chair), and south of the poker table by the south rim -- the user, 2026-11-16, "Perhaps add a couple of booth tables, and
+    // essentially just fill the space")
+    private static readonly (int X0, int Z0, int X1, int Z1) EastBooth = (44, 27, 47, 32);
+    private static readonly (int Dx, int Dz)[] MoreBooths = { (5, -1), (-1, 14) };
 
     public readonly record struct Built(int GridNumber, byte Type, byte[] Grid, int Library);
 
@@ -84,6 +98,10 @@ internal static class BowlingRoom
         for (var z = RoomZ0; z <= RoomZ1 + 1; z++) { Put(RoomX0 - 1, FloorLayer, z, Tile, 3 * Mod(z, 3)); Column(RoomX0 - 1, z, y => (West.X, West.Z + Mod(z - West.Z, y >= WestUpper ? 3 : 4))); }
         for (var x = RoomX0; x <= RoomX1 + 1; x++) { Put(x, FloorLayer, RoomZ1 + 1, Tile, Mod(x, 3)); Put(x, FloorLayer + 1, RoomZ1 + 1, LowWall, Mod(x, 2)); }
         for (var z = RoomZ0; z <= RoomZ1; z++) { Put(RoomX1 + 1, FloorLayer, z, Tile, 3 * Mod(z, 3)); Put(RoomX1 + 1, FloorLayer + 1, z, LowWall, Mod(z, 2)); }
+        // (over the low rims, invisible solid cells up to RimTop: over the low wall Twinsen climbed and fell out of the room into the dark,
+        // to his death -- the user, 2026-11-16, "We need to prevent Twinsen being able to die over the edge of the bowling scene")
+        for (var x = RoomX0; x <= RoomX1 + 1; x++) for (var y = FloorLayer + 2; y <= RimTop; y++) Put(x, y, RoomZ1 + 1, 0, 1);
+        for (var z = RoomZ0; z <= RoomZ1; z++) for (var y = FloorLayer + 2; y <= RimTop; y++) Put(RoomX1 + 1, y, z, 0, 1);
         // ---- Rick's booths (on the floor) and his bar (its back to the north wall)
         // (his bar's bricks no longer: since 2026-11-16 the bar is props -- BowlingAlley, CitadelProps.BarCounter -- its U open to the north
         // wall, the barman in it; the user: "the U shape of the bar in the bowling alley needs turning around so the gap is against the wall",
@@ -101,6 +119,10 @@ internal static class BowlingRoom
                         if (ty < 1 || tx < RoomX0 || tx > RoomX1 || tz < RoomZ0 || tz > RoomZ1) continue;
                         Put(tx, ty, tz, cells[at], cells[at + 1]);
                     }
+
+        foreach (var (dx, dz) in MoreBooths)
+            foreach (var key in set.Keys.Where(k => k.Item1 >= EastBooth.X0 && k.Item1 <= EastBooth.X1 && k.Item3 >= EastBooth.Z0 && k.Item3 <= EastBooth.Z1 && k.Item2 >= 1).ToList())
+                if (BoothBlocks.Contains(set[key].Block)) Put(key.Item1 + dx, key.Item2, key.Item3 + dz, set[key].Block, set[key].Pos);
 
         // ---- the library: a copy of Rick's, its blocks the room names painted dark in place, the lanes' blocks added
         var library = (byte[])rickLibrary.Clone();

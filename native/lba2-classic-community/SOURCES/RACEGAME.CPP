@@ -3100,15 +3100,18 @@ static int PlayersPage(void) {
 // the player wins a game of darts in 9 darts (the minimum possible), let's have the other half of the achievement for the user checking out
 // on 170": RACEMOD.CPP DartLand)
 typedef struct { const char *Id, *Group, *Title, *Lead; const char *Part[2], *PartTitle[2]; } T_RG_ACH;
+// (in the order the story meets them -- the user, 2026-11-16: "Let's order the achievements by the order which we'd encounter them in the
+// game. Polar: Dinofly, Citadel: Darts, Citadel: Wizard Cow, Citadel: Spanked, Moon: Stella En-Titties, Otringal: Bowling" -- then the
+// palace's dungeon, and the postcards, found anywhere)
 static const T_RG_ACH s_ach[] = {
-    {"spanked", "Citadel", "Got spanked by Zoe"},
+    {"dinofly", "Polar", "Reunited with old friend"},
+    {"darts", "Citadel", "Deadly Darts"},   // (a game won in nine darts, its last visit the 170 checkout: RACEMOD.CPP DartAchieve)
     {"telescope", "Citadel", "Wizard cow love okay"},
+    {"spanked", "Citadel", "Got spanked by Zoe"},
     {"stella", "Moon", "Stella EnTitties"},
     {"bowling", "Otringal", "Bowling Baby!"},   // (the hidden bowling alley found: a title the page has room for)
-    {"dinofly", "Polar", "Reunited with old friend"},
     {"dungeon", "Palace", "Found the palace dungeon"},
     {"postcards", "Anywhere", "Found every postcard"},
-    {"darts", "Citadel", "Deadly Darts"},   // (a game won in nine darts, its last visit the 170 checkout: RACEMOD.CPP DartAchieve)
 };
 #define RG_ACH_N ((int)(sizeof(s_ach) / sizeof(s_ach[0])))
 static U8 s_achGot[RG_ACH_N];
