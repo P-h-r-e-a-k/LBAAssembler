@@ -19,23 +19,43 @@ namespace LBAAssembler.Terrain;
 //   - an elevator: the plate and its rails (as the bowling alley's) at the end of a branch; Action on it takes it up, and into the hatch's
 //     scene; the hatch (a sprite on the ground) is an Action pad: Action there switches on a door at its feet that takes Twinsen down,
 //     onto the plate, which brings him to the floor.
+// (2026-11-16, redone -- the user: "We also need to do a total redesign of the tunnels on the island of the francos. The tunnels should match
+// the building locations for the franco village", and 'Let's use "118: Wannies Island, the city (room #69)" as our inspiration': the mine
+// under the Wannies' city, its rock arches, dirt floor, cliffs and fences.) The tunnels laid out as the village lies over them -- the built
+// island is the game's twice over (its cubes and places doubled: x' = 2x - 229,376 both ways), and the tunnels' cells are its places at
+// a fifth of a cell each, give or take a few cells -- in scene 118's own stonework (its block library), copied stretch by stretch:
+//   - north-south tunnels: its north arm's cross-section (x 21-27: the rock wall west, a ledge, four cells of floor, the cliff and its fence
+//     east), its rows five at a time; east-west tunnels: its east arm's (z 25-29: the rock wall north, three cells of floor, the cliff and
+//     its fence south), its columns three at a time; a tunnel's dead end the other way's wall or edge; where two meet, floor;
+//   - the refinery's tunnel north-south, its lower door (140) at its north end and a stub east to its upper door (143); a long tunnel west
+//     from its foot to the huts' tunnel, south, a stub west to the west hut (171) and one east to the north hut (172);
+//   - the four elevators, on the tunnels' floor near the building whose hatch they go up to: the west hut's at the huts' tunnel's south
+//     end, the north hut's halfway up it, the refinery's two up and down its tunnel.
 internal static class FrancoTunnels
 {
-    public const int Scene = 394, Prison = 84;
-    private const int FloorLayer = 3, Tile = 8, Wall = 57, WallLayers = 3, Size = 64, Height = 25;
+    public const int Scene = 394, Prison = 84, Mine = 118;
+    private const int FloorLayer = 6, Size = 64, Height = 25;
     public const int FloorY = (FloorLayer + 1) * 256;
     private const int LiftSpeed = 600, LiftStart = 506, LiftStop = 510, ClubDown = 1200, ClubUp = 1800;
     private const int LiftRide = 1, LiftDown = 2, LiftPlace = 5;
 
-    // the floors, in cells (x0, x1, z0, z1): the tunnel along the middle, the two branches north to the huts' doors, the four south to the lifts
-    private static readonly (int X0, int X1, int Z0, int Z1)[] Floors =
+    // the tunnels: along z (north-south) or x, the first cross cell (the wall's), the first and last cells along, a dead end's wall at either
+    // end (the door there); NS seven cells across (floor the third to the sixth), EW five (floor the second to the fourth)
+    private record Tunnel(bool AlongZ, int Cross, int From, int To, bool CapFrom, bool CapTo);
+    private static readonly Tunnel[] Tunnels =
     {
-        (8, 58, 30, 32),
-        (14, 16, 10, 29), (28, 30, 10, 29),
-        (19, 22, 33, 47), (33, 36, 33, 47), (43, 46, 33, 47), (51, 54, 33, 47),
+        new(true, 25, 4, 31, true, false),      // the refinery's, its lower door (140) at its north end
+        new(false, 15, 31, 37, false, true),    // east from it to the refinery's upper door (143)
+        new(false, 28, 14, 30, false, false),   // west from its foot to the huts' tunnel
+        new(true, 12, 29, 60, false, true),     // the huts', south
+        new(false, 50, 5, 13, true, false),     // west from it to the west hut (171)
+        new(false, 40, 18, 24, false, true),    // east from it to the north hut (172)
     };
-    // the lifts' middles (the corner between four cells), by the branches' ends: the first two near the huts' doors, the last two the refinery's
-    public static readonly (int X, int Z)[] Lifts = { (21, 46), (35, 46), (45, 46), (53, 46) };
+    // (the corners the tunnels' meeting leaves open: a stack of the east-west tunnel's wall or edge each)
+    private static readonly (int X, int Z, bool North)[] Corners = { (12, 28, true), (13, 28, true), (31, 32, false) };
+    // the lifts' middles (the corner between four cells): the west hut's, the north hut's, the refinery's upper door's, its lower door's --
+    // in the order of the hatches (RaceTrackStory.FrancoTunnels TunnelHatches)
+    public static readonly (int X, int Z)[] Lifts = { (16, 58), (16, 47), (29, 22), (29, 10) };
     public const int LiftCount = 4;
 
     // where the doors of each interior come out in the tunnels (T_ZONE Info: the corner of where a walker's offset in the zone is added to):
@@ -43,24 +63,28 @@ internal static class FrancoTunnels
     public record Door(int Interior, int X0, int X1, int Z0, int Z1, int InX, int InY, int InZ);
     public static readonly Door[] Doors =
     {
-        // the refinery's lower door (scene 140): the tunnel's east end, walked east into it
-        new(140, 58 * 512 + 256, 59 * 512 - 1, 30 * 512, 33 * 512 - 1, 12800, 3584, 25088),
-        // the refinery's upper door (scene 143): the west end, walked west
-        new(143, 8 * 512, 8 * 512 + 255, 30 * 512, 33 * 512 - 1, 31744 - 200, 1536, 25344 - 768),
-        // the huts' doors (171 the west branch, 172 the east): walked north
-        new(171, 14 * 512, 17 * 512 - 1, 10 * 512, 10 * 512 + 255, 19456 - 768, 768, 19456 - 220),
-        new(172, 28 * 512, 31 * 512 - 1, 10 * 512, 10 * 512 + 255, 18432 - 768, 256, 17920 - 220),
+        // the refinery's lower door (scene 140): the refinery tunnel's north end, walked north into it
+        new(140, 27 * 512, 31 * 512 - 1, 5 * 512, 5 * 512 + 255, 12800, 3584, 25088),
+        // the refinery's upper door (scene 143): the east stub's end, walked east
+        new(143, 36 * 512 + 256, 37 * 512 - 1, 16 * 512, 19 * 512 - 1, 31744 - 200, 1536, 25344 - 768),
+        // the huts' doors: the west hut (171) at the west stub's end, walked west; the north hut (172) at the east stub's end, walked east
+        new(171, 6 * 512, 6 * 512 + 255, 51 * 512, 54 * 512 - 1, 19456 - 768, 768, 19456 - 220),
+        new(172, 23 * 512 + 256, 24 * 512 - 1, 41 * 512, 44 * 512 - 1, 18432 - 768, 256, 17920 - 220),
     };
-    // each interior's way out into the tunnels, as the zone's info (x, y, z of the corner a walker's offset is added to): the arrival
-    // three cells in from the door
+    // each interior's way out into the tunnels, as the zone's info (x, y, z of the corner a walker's offset is added to): a few cells in
+    // from its door
     public static (int X, int Y, int Z) Exit(int interior) => interior switch
     {
-        140 => (55 * 512 - 512, FloorY + 20, 31 * 512 + 256 - 768),
-        143 => (11 * 512 + 256, FloorY + 20, 31 * 512 + 256 - 768),
-        171 => (15 * 512 + 256 - 512, FloorY + 20, 13 * 512),
-        172 => (29 * 512 + 256 - 512, FloorY + 20, 13 * 512),
+        140 => (29 * 512 - 768, FloorY + 20, 7 * 512),
+        143 => (34 * 512, FloorY + 20, 17 * 512 + 256 - 768),
+        171 => (8 * 512, FloorY + 20, 52 * 512 + 256 - 768),
+        172 => (21 * 512, FloorY + 20, 42 * 512 + 256 - 768),
         _ => throw new ArgumentOutOfRangeException(nameof(interior)),
     };
+
+    // scene 118's stretches: the north arm's cross-section (its columns, its rows' repeat and floor layer) and the east arm's
+    private const int NsX = 21, NsZ = 15, NsRepeat = 5, NsFloor = 14, EwX = 39, EwZ = 25, EwRepeat = 3, EwFloor = 6;
+    private const int FloorBlock = 12;
 
     private const string Idle = "label(0);\nstop();\n";
     private static string Still() => "void comportement_0()\n{\n}\n";
@@ -74,37 +98,69 @@ internal static class FrancoTunnels
         var scenePath = Path.Combine(gameDirectory, "SCENE.HQR");
         var bkgPath = Path.Combine(gameDirectory, "LBA_BKG.HQR");
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
-        if (!store.SceneExists(Prison)) { log.Add("The Francos' tunnels left out: no Otringal prison (scene 84)"); return log; }
+        if (!store.SceneExists(Mine)) { log.Add("The Francos' tunnels left out: no Wannies' mine (scene 118)"); return log; }
         if (pads.Count != LiftCount) { log.Add("The Francos' tunnels left out: no room for the elevators' hatches"); return log; }
         var scenes = HqrFile.Parse(File.ReadAllBytes(scenePath));
         if (Scene + 1 < scenes.Count && !scenes.IsEmpty(Scene + 1)) { log.Add($"The Francos' tunnels left out: scene {Scene} is already another part of the build's"); return log; }
         var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
         var header = new MapBricks.BkgHeader(bkg.Read(0));
         var table = bkg.Read(header.Brk + header.MaxBrk);
-        var type = table[Prison * 2];
-        var raw = bkg.Read(header.Gri + table[Prison * 2 + 1]);
+        if (!store.SceneExists(Mine) || table.Length < (Mine + 1) * 2) { log.Add("The Francos' tunnels left out: no Wannies' mine (scene 118)"); return log; }
+        var type = table[Mine * 2];
+        var raw = bkg.Read(header.Gri + table[Mine * 2 + 1]);
         var shape = Lba2GridBackend.ToLba1Shape(raw);
-
-        // ---- the grid: flagstones along the tunnels, the prison's tall stone round them
-        var set = new Dictionary<(int, int, int), (int Block, int Pos)>();
+        var mine = Lba1GridCodec.Decode(shape);
+        int At(int x, int y, int z) => ((z * Size + x) * Height + y) * 2;
         int Mod(int a, int m) => ((a % m) + m) % m;
+        // a column of the mine's, its layers moved by `shift`: (layer, block, place) of every cell with something (an empty cell with collision too)
+        List<(int Y, int Block, int Pos)> Column(int x, int z, int shift)
+        {
+            var list = new List<(int, int, int)>();
+            for (var y = 0; y < Height; y++)
+            {
+                var at = At(x, y, z);
+                if (mine[at] == 0 && mine[at + 1] == 0) continue;
+                if (y + shift >= 0 && y + shift < Height) list.Add((y + shift, mine[at], mine[at + 1]));
+            }
+            return list;
+        }
+        var ns = FloorLayer - NsFloor;
+        List<(int, int, int)> NsColumn(int d, int z) => Column(NsX + d, NsZ + Mod(z, NsRepeat), ns);
+        List<(int, int, int)> EwColumn(int x, int d) => Column(EwX + Mod(x, EwRepeat), EwZ + d, 0);
+
+        // ---- the tunnels' columns, the floor's cells
+        var columns = new Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>>();
         var floor = new HashSet<(int X, int Z)>();
-        foreach (var (x0, x1, z0, z1) in Floors)
-            for (var z = z0; z <= z1; z++)
-                for (var x = x0; x <= x1; x++) floor.Add((x, z));
-        foreach (var (x, z) in floor)
-            for (var dz = -1; dz <= 1; dz++)
-                for (var dx = -1; dx <= 1; dx++)
-                    if (!floor.Contains((x + dx, z + dz)))
-                        for (var y = FloorLayer; y < FloorLayer + WallLayers; y++) set[(x + dx, y, z + dz)] = (Wall, 0);
-        foreach (var (x, z) in floor) set[(x, FloorLayer, z)] = (Tile, Mod(x, 3) + 3 * Mod(z, 3));
+        var floorColumn = new HashSet<(int X, int Z)>();
+        foreach (var t in Tunnels)
+            for (var a = t.From; a <= t.To; a++)
+            {
+                var capped = (a == t.From && t.CapFrom) || (a == t.To && t.CapTo);
+                for (var d = 0; d < (t.AlongZ ? 7 : 5); d++)
+                {
+                    var (x, z) = t.AlongZ ? (t.Cross + d, a) : (a, t.Cross + d);
+                    var isFloor = !capped && (t.AlongZ ? d is >= 2 and <= 5 : d is >= 1 and <= 3);
+                    columns[(x, z)] = capped
+                        ? (t.AlongZ ? EwColumn(x, a == t.From ? 0 : 4) : NsColumn(a == t.From ? 0 : 6, z))
+                        : (t.AlongZ ? NsColumn(d, z) : EwColumn(x, d));
+                    if (isFloor) { floor.Add((x, z)); floorColumn.Add((x, z)); }
+                    else floorColumn.Remove((x, z));
+                }
+            }
+        foreach (var (x, z, north) in Corners) columns[(x, z)] = EwColumn(x, north ? 0 : 4);
+        // (where tunnels meet, a wall's or an edge's column on another's floor is floor: the mine's own tile)
+        foreach (var c in floor.Where(c => !floorColumn.Contains(c)))
+            columns[c] = new List<(int, int, int)> { (FloorLayer, FloorBlock, Mod(c.X + 1, 4) + 4 * Mod(c.Z, 4)) };
         var edits = new List<Lba1GridCell>();
         for (var z = 0; z < Size; z++)
-        for (var y = 0; y < Height; y++)
         for (var x = 0; x < Size; x++)
         {
-            var (block, pos) = set.TryGetValue((x, y, z), out var c) ? c : (0, 0);
-            edits.Add(new Lba1GridCell(x, y, z, block, pos));
+            var stack = columns.TryGetValue((x, z), out var col) ? col : null;
+            for (var y = 0; y < Height; y++)
+            {
+                var cell = stack?.FirstOrDefault(c => c.Y == y);
+                edits.Add(cell is { } k && (k.Block != 0 || k.Pos != 0) ? new Lba1GridCell(x, y, z, k.Block, k.Pos) : new Lba1GridCell(x, y, z, 0, 0));
+            }
         }
         var grid = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
         grid[0] = raw[0];
@@ -124,7 +180,7 @@ internal static class FrancoTunnels
         bkg.SetStored(header.Brk + header.MaxBrk, table);
 
         // ---- the scene: the prison's header (its dim light, its music), Twinsen arriving on the first lift
-        var model = store.Load(Prison).Clone();
+        var model = store.Load(Mine).Clone();
         model.Island = RaceTrackIsland.Knartas.IslandByte;
         model.Actors.RemoveRange(1, model.Actors.Count - 1);
         model.Zones.Clear();
@@ -220,7 +276,7 @@ void comportement_3()
             { var size = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(size, result.Record.Length); scenes.SetStored(0, size); }
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
-        log.Add($"The Francos' tunnels: scene {Scene} (grid {gridNumber}, the prison's library {raw[0]}): {floor.Count} cells of tunnel, {Doors.Length} doors into the refinery and the huts, {LiftCount} elevators to the surface");
+        log.Add($"The Francos' tunnels: scene {Scene} (grid {gridNumber}, the Wannies' mine's library {raw[0]}): {floor.Count} cells of tunnel floor, {Doors.Length} doors into the refinery and the huts, {LiftCount} elevators to the surface");
         return log;
     }
 
