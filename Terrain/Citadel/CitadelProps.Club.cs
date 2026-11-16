@@ -250,6 +250,9 @@ internal static partial class CitadelProps
     // A two-post car lift (body 94) for the Desert's garage (the user, 2026-11-13: "some of the cars are raised up on car lifts being worked
     // on"): its posts either side of the car (local x), its arms under the car at CarLiftHigh, turned with the car (its front local +z)
     public const int CarLift = 94, CarLiftHigh = 760;
+    // (and lowered: its arms on the floor, a car parked over them -- a lift in every racer's bay, the user, 2026-11-16: "Let's add in a car
+    // lift for every racer, even if the car isn't on it, they should have one")
+    public const int CarLiftDown = 159, CarLiftLow = 90;
     // A twinkling star on Stella Entities' night sky (bodies 93 and 92: bright -- a four-pointed star in a pale halo -- and dim), the two swapped
     // by its track as the candle's flame is: its front +z, towards the hall's middle (RaceTrackStory.StellaLounge)
     public const int ClubStar = 93, ClubStarDim = 92;
@@ -283,7 +286,9 @@ internal static partial class CitadelProps
             foreach (var (dx, dy) in new[] { (0f, 45f), (0f, -45f), (45f, 0f), (-45f, 0f) }) Ray(dx, dy, 0.3f, TwinkleGold);
         return m.ToBody(header);
     }
-    public static Body BuildCarLift(byte[] header)
+    public static Body BuildCarLift(byte[] header) => CarLiftBody(header, CarLiftHigh);
+    public static Body BuildCarLiftDown(byte[] header) => CarLiftBody(header, CarLiftLow);
+    private static Body CarLiftBody(byte[] header, int CarLiftHigh)
     {
         var m = new CarMesh("a car lift", new[] { -1 });
         m.Light = 0.9f;

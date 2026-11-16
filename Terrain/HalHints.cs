@@ -5,8 +5,10 @@ namespace LBAAssembler.Terrain;
 // HAL on the radio (the user, 2026-11-16: "Adding HAL as an option to call with our phone, calling HAL should give a hint for hidden areas
 // on the players current island"): the engine's HALHINTS.TXT (RACEMOD.CPP HalCall) -- the portable radio used with nobody's call to answer
 // calls HAL, who gives the next hint for the island Twinsen is on whose hidden place the player hasn't found (its achievement not earned:
-// RACEGAME.CPP's list), else any island's; before he's mended on the Emerald Moon (the story's race file's hal_mended=, Q_HAL) he only
-// crackles. Lines: "hal <island file without .ILE, or *> <achievement id, or - for none> <his words>".
+// RACEGAME.CPP's list), else any island's -- only once Twinsen has beaten him in the Emerald Moon's race, when HAL puts his number on the
+// radio (the story's race file's hal_mended=, Q_HAL at HalWon; before then no one answers), and only when the player calls: the user,
+// 2026-11-16, "This should be player initiated. I will give you the hint lines for us to use later" (these are to be replaced by theirs).
+// Lines: "hal <island file without .ILE, or *> <achievement id, or - for none> <his words>".
 internal static class HalHints
 {
     public const string File = "HALHINTS.TXT";

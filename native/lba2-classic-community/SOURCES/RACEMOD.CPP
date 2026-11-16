@@ -477,7 +477,7 @@ static int s_loopCut = -1;                 // the ring just come round, cut away
 static S32 s_loopCutAt = 0;
 
 // the opponents: each one's line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
-#define RACE_MAX_OPPONENTS 6
+#define RACE_MAX_OPPONENTS 8         // (8 since 2026-11-16: the Desert race's entrants from all round Twinsun -- seven and Twinsen; it was 6)
 #define RACE_MAX_OPPONENT_SCENES 64
 typedef struct {
     int Count;                             // points on its line (0: no line, no opponent)
@@ -562,14 +562,14 @@ static double HazardChance(double chance);
 // for what follows a line -- the jet-pack's driving, the penguins' walks, the laps, the rescue. The first opponent's when there is one.
 static T_RACE_OPPONENT s_guide;
 // this scene's actor of each opponent's car, as placed this frame (-1 none), and the scene (RaceMod_FreeOfCube)
-static int s_carActor[RACE_MAX_OPPONENTS] = {-1, -1, -1, -1, -1, -1};
+static int s_carActor[RACE_MAX_OPPONENTS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 static S32 s_carsScene = -1;
 static const T_RACE_OPPONENT *Guide(void) { return s_opp[0].Count ? &s_opp[0] : s_guide.Count ? &s_guide : NULL; }
 static int s_oppStarted = 0;               // (no grid: the race has started when the player first drove off)
 #define RACE_MERGE (12 * 512)
 
 // the grid and the start: a qualifying lap (when the file asks for one), then the grid and its count-down, then the race
-#define RACE_MAX_SPOTS 6
+#define RACE_MAX_SPOTS 9             // (the grid's places and the pit lane's: Twinsen and RACE_MAX_OPPONENTS -- 6 till 2026-11-16)
 typedef struct {
     S32 CubeX, CubeZ, X, Y, Z, Beta;
 } T_RACE_SPOT;
@@ -1465,6 +1465,13 @@ static int s_heroSmall = -1, s_heroIsSmall = 0;
 static int s_heroBody = -1, s_heroFire = -1, s_heroBodyChecked = 0;
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
 static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
+// helmet_hook=<scene> <actor> (2026-11-16, the moon's airlocks -- the user: "let's have him enter wearing his helmet, go into the airlock,
+// and emerge not wearing his helmet, this mirrors behaviour in the retail game"; "We should show Twinsen's helmet left in the airlocks
+// instead of the spacesuit"): indoors in that scene the foot_body= helmet stays on him while the actor -- the airlock's hook, where the game
+// hung the empty suit (no_body() while he wears it, body() once it's hung) -- has no body, and comes off once it has one. Every other
+// scene indoors, off as he comes in.
+#define RACE_MAX_HOOKS 8
+static int s_nbHooks = 0, s_hookScene[RACE_MAX_HOOKS], s_hookActor[RACE_MAX_HOOKS];
 // breakdown= (2026-11-08): its variable (-1 none), the least it wants, after which checkpoint, the speed then, its words; broken down
 // this race, and the last puff of smoke
 static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000, s_broken = 0;
@@ -2512,6 +2519,53 @@ typedef struct {
     T_OBJ_3D Obj;
 } T_RACE_PIT;
 static T_RACE_PIT s_pit;
+// Figures (figure=<entity> <body> <anim> <x> <y> <z> <turn> [<var> <least> <most>]...: an entity's body -- a generic number, its animation
+// one too or -1 for none -- standing at a place of the island (island units), drawn as the pit crew is: no actor, so seen from every cube.
+// Not drawn in the cubes figure_cubes=<x> <z>... lists: there they're the scenes' own actors. Up to two conditions, a game variable within
+// least..most (the user, 2026-11-16, of the White Leaf Desert's garage tent: "Our racers on Desert Island need to be visible from all
+// cubes" -- the tent drawn from the cubes beside it, its people only in its own two: RaceTrackStory.Garage.cs)
+#define RACE_MAX_FIGURES 48
+#define RACE_MAX_FIGURE_CUBES 8
+typedef struct {
+    int Entity, Body, Anim, Ready, Bad, NbWhen, WhenVar[2], WhenLo[2], WhenHi[2];
+    S32 BodyIndex, AnimIndex, Beta;
+    double X, Y, Z;
+    T_OBJ_3D Obj;
+} T_RACE_FIGURE;
+static T_RACE_FIGURE s_figures[RACE_MAX_FIGURES];
+static int s_nbFigures = 0, s_nbFigCubes = 0, s_figCubeX[RACE_MAX_FIGURE_CUBES], s_figCubeZ[RACE_MAX_FIGURE_CUBES];
+static void ParseFigure(const char *v) {
+    T_RACE_FIGURE f;
+    memset(&f, 0, sizeof(f));
+    int x, y, z, turn, used = 0;
+    if (s_nbFigures < RACE_MAX_FIGURES && sscanf(v, "%d %d %d %d %d %d %d%n", &f.Entity, &f.Body, &f.Anim, &x, &y, &z, &turn, &used) == 7 && f.Entity >= 0 && f.Body >= 0) {
+        f.X = x; f.Y = y; f.Z = z; f.Beta = turn & 4095;
+        const char *rest = v + used;
+        int a, lo, hi, n2 = 0;
+        while (f.NbWhen < 2 && sscanf(rest, "%d %d %d%n", &a, &lo, &hi, &n2) == 3) { f.WhenVar[f.NbWhen] = a; f.WhenLo[f.NbWhen] = lo; f.WhenHi[f.NbWhen] = hi; f.NbWhen++; rest += n2; }
+        s_figures[s_nbFigures++] = f;
+    }
+}
+static void ParseFigureCubes(const char *v) {
+    const char *rest = v;
+    int cx, cz, n2 = 0;
+    while (s_nbFigCubes < RACE_MAX_FIGURE_CUBES && sscanf(rest, "%d %d%n", &cx, &cz, &n2) == 2) { s_figCubeX[s_nbFigCubes] = cx; s_figCubeZ[s_nbFigCubes] = cz; s_nbFigCubes++; rest += n2; }
+}
+// (figures=<file>: the figure= and figure_cubes= lines of a file in the game's folder -- the build writes the Desert garage's there, its
+// places only known once the island's story is built, after the race files are)
+static void LoadFigures(const char *name) {
+    char path[260], line[256];
+    GetResPath(path, sizeof(path), name);
+    FILE *f = fopen(path, "r");
+    if (!f) { Log_Warn("[racemod] figures: %s could not be read", path); return; }
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\r\n")] = 0;
+        if (!strncmp(line, "figure_cubes=", 13)) ParseFigureCubes(line + 13);
+        else if (!strncmp(line, "figure=", 7)) ParseFigure(line + 7);
+    }
+    fclose(f);
+    Log_Info("[racemod] figures: %d from %s, not drawn in %d cube(s)", s_nbFigures, name, s_nbFigCubes);
+}
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -5092,6 +5146,13 @@ static void Load(const char *path, int carOnly = 0) {
             s_broken = 0;
         }
         else if (!strcmp(key, "foot_body")) { const int g = atoi(v); s_footBody = g > 0 && g < 255 ? g : -1; s_footChecked = 0; }
+        else if (!strcmp(key, "figure")) ParseFigure(v);
+        else if (!strcmp(key, "figure_cubes")) ParseFigureCubes(v);
+        else if (!strcmp(key, "figures")) LoadFigures(v);
+        else if (!strcmp(key, "helmet_hook")) {
+            int sc, ac;
+            if (s_nbHooks < RACE_MAX_HOOKS && sscanf(v, "%d %d", &sc, &ac) == 2 && sc >= 0 && ac > 0) { s_hookScene[s_nbHooks] = sc; s_hookActor[s_nbHooks] = ac; s_nbHooks++; }
+        }
         else if (!strcmp(key, "twinsen_body")) {
             int body = -1, fire = -1, small = -1;
             const int n = sscanf(v, "%d %d %d", &body, &fire, &small);
@@ -6376,7 +6437,20 @@ static void ReplayEndFrame(void) {
     s_replayOver = 1;
 }
 
+// (Twinsen's own view, pov=, showing now: its scene, its variable at its value)
+static int PovShowing(void) {
+    return s_povScene >= 0 && (S32)NumCube == s_povScene && CubeMode == CUBE_INTERIEUR && s_povVar >= 0 && s_povVar < MAX_VARS_CUBE
+           && ListVarCube[s_povVar] == s_povValue;
+}
+static int s_povWas = 0;
+
 void RaceMod_Story(void) {
+    // (Twinsen's own view just ended: the whole picture drawn again -- with only what moved drawn over the picture kept, the room came back
+    // in patches over her close-up as the private show ended, the user, 2026-11-16: "We need to fix whatever this is. It's at the end of
+    // the private show. It looks like a screen redraw issue")
+    const int pov = PovShowing();
+    if (s_povWas && !pov && NewCube == -1) { FirstTime = AFF_ALL_FLIP; Log_Info("[racemod] pov: Twinsen's own view off -- the whole picture drawn again"); }
+    s_povWas = pov;
     // (a car lapping on its own, parade=: the whole picture drawn again -- this runs just before the frame is drawn, AffScene(FirstTime))
     if (s_paradeFlip) { FirstTime = AFF_ALL_FLIP; s_paradeFlip = 0; }
     // (and every frame of a race out of doors: with the camera still -- the car stopped, bitten, hit -- the engine draws only what moves over
@@ -9049,6 +9123,53 @@ static void DrawPitCrew(void) {
     BackdropDisplay(o, zr, SceneClut());
 }
 
+// The figures (figure=), as the pit crew is drawn -- their fog by their distance, their depth written; each body (and animation) looked up
+// in its entity's table when first drawn, its animation stepped every frame
+static void DrawFigures(void) {
+    if (!s_nbFigures || CubeMode != CUBE_EXTERIEUR) return;
+    for (int i = 0; i < s_nbFigCubes; i++) if (s_figCubeX[i] == (int)CurrentCubeX && s_figCubeZ[i] == (int)CurrentCubeY) return;
+    const U32 clut = SceneClut();
+    for (int i = 0; i < s_nbFigures; i++) {
+        T_RACE_FIGURE *f = &s_figures[i];
+        if (f->Bad) continue;
+        int show = 1;
+        for (int k = 0; k < f->NbWhen; k++) {
+            const int a = f->WhenVar[k];
+            if (a < 0 || a >= MAX_VARS_GAME || ListVarGame[a] < f->WhenLo[k] || ListVarGame[a] > f->WhenHi[k]) show = 0;
+        }
+        if (!show) continue;
+        T_OBJ_3D *o = &f->Obj;
+        const S32 x = (S32)floor(f->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(f->Y + 0.5), z = (S32)floor(f->Z - CurrentCubeY * 32768.0 + 0.5);
+        if (!f->Ready) {
+            if ((f->BodyIndex = EntityEntry(f->Entity, F_BODY, f->Body)) < 0 || !GivePtrBody(f->BodyIndex)) {
+                Log_Info("[racemod] figure %d: entity %d has no body %d -- left out", i, f->Entity, f->Body);
+                f->Bad = 1;
+                continue;
+            }
+            ObjectReady(o, f->BodyIndex);
+            f->AnimIndex = f->Anim >= 0 ? EntityEntry(f->Entity, F_ANIM, f->Anim) : -1;
+            if (f->AnimIndex >= 0 && !GivePtrAnim(f->AnimIndex)) f->AnimIndex = -1;
+            o->X = x; o->Y = y; o->Z = z; o->Beta = f->Beta;
+            if (f->AnimIndex >= 0) { o->Anim.Num = -1; ObjectInitAnim(o, (void *)(uintptr_t)(U32)f->AnimIndex); o->Status |= FLAG_BODY; }
+            f->Ready = 1;
+            if (i == 0) Log_Info("[racemod] figures: %d, drawn but in %d cube(s) of their own", s_nbFigures, s_nbFigCubes);
+        }
+        if (f->AnimIndex >= 0) {
+            o->X = x; o->Y = y; o->Z = z;
+            ObjectSetInterDep(o);
+            o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = f->Beta; o->Gamma = 0;
+            ObjectSetInterFrame(o);
+        } else {
+            o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = f->Beta; o->Gamma = 0;
+            memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+        }
+        LongWorldRotatePoint(x, y + 500, z);
+        const S32 zr = CameraZr - Z0;
+        if (zr < -4000 || zr > ClipZFar + 4000) continue;
+        BackdropDisplay(o, zr, clut);
+    }
+}
+
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
 static void DrawSpooks(void);
 static void DrawWebs(void);
@@ -9061,6 +9182,7 @@ void RaceMod_DrawBackdrop(void) {
     if (s_nbJetSignals && s_signalBody[0] >= 0) DrawJetSignals();
     DrawMarshal();
     DrawPitCrew();
+    DrawFigures();
     DrawStoryCar();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
@@ -12538,8 +12660,21 @@ static void HeroLook(S32 now, int driving) {
         // (and his tunic's with a weapon -- the sabre, the blowpipes, the glove, the laser pistol, the ball's throw -- which the game's
         // ChoiceHeroBody gives him for the weapon in hand when a behaviour puts his tunic back on: in any but the normal behaviour the moon's
         // helmet came off, the user, 2026-11-09, "it only keeps him in the racing outfit in normal mode". Not the Wizard's robe, 7-9, 11)
-        if (CubeMode == CUBE_EXTERIEUR && g != s_footBody && (g <= GEN_BODY_PISTOLASER || g == GEN_BODY_TUNIQUE_TIR)) InitBody((U8)s_footBody, NUM_PERSO);
-        else if (CubeMode != CUBE_EXTERIEUR && g == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+        // (indoors, an airlock's hook empty: still on him -- helmet_hook=)
+        int hooked = 0;
+        if (CubeMode != CUBE_EXTERIEUR)
+            for (int i = 0; i < s_nbHooks; i++)
+                if (s_hookScene[i] == (int)NumCube && s_hookActor[i] < (int)NbObjets && ListObjet[s_hookActor[i]].GenBody == NO_BODY) hooked = 1;
+        {
+            static int s_hookedWas = -1;
+            if (hooked != s_hookedWas) {
+                Log_Info("[racemod] helmet_hook: scene %d, the hook %s -- his body %d (the helmet's %d)", (int)NumCube, hooked ? "empty: the helmet on him" : "not empty, or no hook here",
+                         (int)g, s_footBody);
+                s_hookedWas = hooked;
+            }
+        }
+        if ((CubeMode == CUBE_EXTERIEUR || hooked) && g != s_footBody && (g <= GEN_BODY_PISTOLASER || g == GEN_BODY_TUNIQUE_TIR)) InitBody((U8)s_footBody, NUM_PERSO);
+        else if (CubeMode != CUBE_EXTERIEUR && !hooked && g == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     }
 }
 
@@ -19542,6 +19677,7 @@ static void FruitDraw(void) {
     const S32 now = TimerRefHR, w = (S32)ModeDesiredX, cw = 150, ch = 90, gap = 16, x0 = w / 2 - (3 * cw + 2 * gap) / 2, y0 = 130;
     Box(x0 - 14, y0 - 40, x0 + 3 * cw + 2 * gap + 13, y0 + ch + 44, 4 * 16 + 2);
     Box(x0 - 10, y0 - 36, x0 + 3 * cw + 2 * gap + 9, y0 + ch + 40, 0);
+    BoxMovingAdd(x0 - 14, y0 - 40, x0 + 3 * cw + 2 * gap + 13, y0 + ch + 44);   // (as HAL's panel: all of it to redraw)
     HudLine(w / 2 - SizeFont((char *)"THE ONE-ARMED BANDIT") / 2, y0 - 32, "THE ONE-ARMED BANDIT", -1);
     for (int r = 0; r < 3; r++) {
         const S32 x = x0 + r * (cw + gap);
@@ -19575,14 +19711,23 @@ static void HalLoad(void) {
     fclose(f);
     Log_Info("[racemod] HAL: %d hint(s) (HALHINTS.TXT)", s_halN);
 }
-// (the use's time, and the last time a script took the radio's use: taken within a moment of the use, either side, it was a call answered)
+// (the use's time, and the last time a script took the radio's use: taken within a moment of the use, either side, it was a call answered.
+// The use's time is the game's, once the inventory is shut: the inventory's own clock runs on while it's open and is put back as it shuts
+// (INVENT.CPP SaveTimer/RestoreTimer), so a time taken in it was later than the script's answer by as long as the inventory was open --
+// HAL called over Baldino's answered call, the user, 2026-11-16: "using the radio on the emerald moon triggers both Baldino and HAL")
+#define HAL_TAKEN_MS 1000
 static S32 s_halTakenAt = -100000;
-void RaceMod_RadioUsed(S32 item) { if (item == HAL_RADIO && !s_halUsedAt) s_halUsedAt = TimerRefHR; }
+static int s_halPending = 0;
+void RaceMod_RadioUsed(S32 item) { if (item == HAL_RADIO) s_halPending = 1; }
 void RaceMod_RadioTaken(S32 item) { if (item == HAL_RADIO) s_halTakenAt = TimerRefHR; }
 static void HalCall(S32 now) {
     HalLoad();
+    // (his number not on the radio yet -- the race file's hal_mended=, the story's: once Twinsen has beaten him on the Emerald Moon -- no one
+    // to call, nothing said)
     if (s_halMendVar >= 0 && s_halMendVar < MAX_VARS_GAME && ListVarGame[s_halMendVar] < s_halMendValue) {
-        snprintf(s_halSay, sizeof(s_halSay), "HAL!! ZX81!! HAL!! ... his voice box only crackles: he isn't mended yet.");
+        Log_Info("[racemod] the radio used, no call to answer and HAL's number not on it yet (game variable %d at %d, below %d)", s_halMendVar,
+                 (int)ListVarGame[s_halMendVar], s_halMendValue);
+        return;
     } else {
         // (this island's hints, then any island's; the next one on from the last given, its achievement not the player's yet)
         int pick = -1;
@@ -19603,9 +19748,11 @@ static void HalCall(S32 now) {
 }
 static void HalFrame(S32 now) {
     // (a use from the console's useitem too: InventoryAction set without the inventory)
-    if (InventoryAction == HAL_RADIO) RaceMod_RadioUsed(HAL_RADIO);
+    if (InventoryAction == HAL_RADIO) s_halPending = 1;
+    if (s_halPending && !s_halUsedAt) s_halUsedAt = now ? now : 1;
+    s_halPending = 0;
     if (s_halUsedAt && now - s_halUsedAt > 200) {
-        const int taken = s_halTakenAt >= s_halUsedAt - 100 && s_halTakenAt <= now;
+        const int taken = s_halTakenAt >= s_halUsedAt - HAL_TAKEN_MS && s_halTakenAt <= now;
         if (!taken && Comportement != C_BUGGY) HalCall(now);
         s_halUsedAt = 0;
     }
@@ -19633,8 +19780,11 @@ static void HalDraw(void) {
         p += take;
         while (*p == ' ') p++;
     }
+    // (the whole box marked to redraw, not only its lines: with the camera still the game redraws only what's marked, and the box stayed on
+    // the screen once he'd done -- the user, 2026-11-16, "HAL's text is also staying on screen and not clearing")
     Box(x0 - 4, y0 - 4, x0 + pw + 3, y0 + 36 + n * 26 + 10, 9 * 16 + 4);
     Box(x0, y0, x0 + pw - 1, y0 + 36 + n * 26 + 6, 0);
+    BoxMovingAdd(x0 - 4, y0 - 4, x0 + pw + 3, y0 + 36 + n * 26 + 10);
     HudLine(w / 2 - SizeFont("HAL on the radio") / 2, y0 + 4, "HAL on the radio", -1);
     for (int i = 0; i < n; i++) HudLine(x0 + 14, y0 + 36 + i * 26, lines[i], -1);
 }
@@ -19985,10 +20135,10 @@ void RaceMod_TestDarts(int n, const char *const *spots) {
     Log_Info("[racemod] darts: the player's next %d darts set (test)", s_dtQueueN);
 }
 
-// Half of the darts achievement earned (RACEGAME.CPP's "darts": its halves "darts9", "darts170"): its banner, as the race file's achieve= ones
-static void DartAchieve(S32 now, const char *half) {
+// The darts achievement earned (RACEGAME.CPP's "darts", Deadly Darts): its banner, as the race file's achieve= ones
+static void DartAchieve(S32 now, const char *id) {
     char title[96];
-    if (!RaceGame_Achieve(half, title, sizeof(title))) return;
+    if (!RaceGame_Achieve(id, title, sizeof(title))) return;
     snprintf(s_achText, sizeof(s_achText), "%s", title);
     snprintf(s_achId, sizeof(s_achId), "%s", "darts");
     s_achUntil = now + 6000;
@@ -20035,12 +20185,10 @@ static void DartLand(S32 now, double x, double y) {
         }
         DartSay(now, said, 6000);
         Log_Info("[racemod] darts: %s (%d darts, the turn from %d)", said, s_dtDarts[who], s_dtStartScore[who]);
-        // (the darts achievement's halves, the player's: won in nine darts, the fewest 501 can be; won from 170, the biggest checkout --
-        // treble 20, treble 20, the bull)
-        if (who == 0) {
-            if (s_dtDarts[0] <= 9) DartAchieve(now, "darts9");
-            if (s_dtStartScore[0] == 170) DartAchieve(now, "darts170");
-        }
+        // (the darts achievement, Deadly Darts, the player's: a game won in nine darts, the fewest 501 can be, its last visit the 170
+        // checkout, the biggest -- treble 20, treble 20, the bull: say 180, 151, 170. One achievement, not two halves -- the user,
+        // 2026-11-16, "let's just have it activate if the user completes a game of darts in 9 darts and finishes with a throw of 170")
+        if (who == 0 && s_dtDarts[0] <= 9 && s_dtStartScore[0] == 170) DartAchieve(now, "darts");
         return;
     }
     s_dtState = 2; s_dtAt = now;   // the dart's moment over, then the next
@@ -23644,7 +23792,7 @@ static void ResetTrack(void) {
     s_victoryOn = 0;
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
-    s_footBody = -1; s_footChecked = 0;
+    s_footBody = -1; s_footChecked = 0; s_nbHooks = 0; s_nbFigures = 0; s_nbFigCubes = 0;
     s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;

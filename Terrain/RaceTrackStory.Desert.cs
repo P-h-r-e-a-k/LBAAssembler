@@ -94,8 +94,8 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\n" + GarageRaceLines()
-        : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\n"
+        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\n" + GarageRaceLines()
+        : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\n" + MoonHelmetHooks()
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
         : null;
@@ -310,7 +310,12 @@ void comportement_1()
         HangarOffer, HangarYes, HangarNo, HangarBoard, HangarLater, HangarLift, HangarClosed,
         // (the Temple of Bu's gate: the racing licence -- RaceTrackStory.Licence.cs, 2026-11-14)
         GateLicence, GateNoLicence, GateInCar, TempleThrough,
+        // (the island winner's trophy shown to Flick -- the user, 2026-11-16)
+        FlickTrophy,
     }
+    // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
+    // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
+    public const int TrophyShown = 260;
     private static readonly string[][] DesertLines =
     {
         new[]
@@ -477,12 +482,12 @@ void comportement_1()
         },
         new[]
         {
-            "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. The Esmers' freighter takes cars to the moon -- show your racing licence at the Temple of Bú, by the track.",
-            "Tu te crois rapide ? Sur la lune, j'ai un atterrisseur qui laisserait ta voiture sur place. Viens me défier là-haut. Le cargo des Esmers emmène les voitures sur la lune -- montre ta licence de course au Temple de Bù, près de la piste.",
-            "Du hältst dich für schnell? Auf dem Mond habe ich eine Landefähre, die dein Auto stehen ließe. Komm und fahr dort oben gegen mich. Der Frachter der Esmer bringt Autos zum Mond -- zeig deine Rennlizenz am Tempel von Bù an der Strecke.",
-            "¿Te crees rápido? En la luna tengo un módulo de aterrizaje que dejaría tu coche parado. Ven a correr contra mí allí arriba. El carguero de los Esmers lleva coches a la luna: enseña tu licencia de carreras en el Templo de Bú, junto a la pista.",
-            "Ti credi veloce? Sulla luna ho un modulo d'atterraggio che lascerebbe la tua macchina ferma. Vieni a sfidarmi lassù. Il cargo degli Esmer porta le auto sulla luna: mostra la tua licenza di corsa al Tempio di Bù, vicino alla pista.",
-            "Achas que és rápido? Na lua tenho um módulo de alunagem que deixava o teu carro parado. Vem correr contra mim lá em cima. O cargueiro dos Esmers leva carros para a lua -- mostra a tua licença de corrida no Templo de Bú, junto à pista.",
+            "You think you're fast? The Cup goes on to the Emerald Moon, and up there the moon base's own computer races -- HAL, never beaten. The Esmers' freighter takes cars to the moon -- show your racing licence at the Temple of Bú, by the track.",
+            "Tu te crois rapide ? La Coupe continue sur la Lune d'Émeraude, et là-haut c'est l'ordinateur de la base lunaire qui court -- HAL, jamais battu. Le cargo des Esmers emmène les voitures sur la lune -- montre ta licence de course au Temple de Bù, près de la piste.",
+            "Du hältst dich für schnell? Der Pokal geht weiter auf den Smaragdmond, und dort oben fährt der Computer der Mondbasis selbst -- HAL, noch nie geschlagen. Der Frachter der Esmer bringt Autos zum Mond -- zeig deine Rennlizenz am Tempel von Bù an der Strecke.",
+            "¿Te crees rápido? La Copa sigue en la Luna Esmeralda, y allí arriba corre el propio ordenador de la base lunar: HAL, nunca vencido. El carguero de los Esmers lleva coches a la luna: enseña tu licencia de carreras en el Templo de Bú, junto a la pista.",
+            "Ti credi veloce? La Coppa prosegue sulla Luna di Smeraldo, e lassù corre il computer stesso della base lunare: HAL, mai battuto. Il cargo degli Esmer porta le auto sulla luna: mostra la tua licenza di corsa al Tempio di Bù, vicino alla pista.",
+            "Achas que és rápido? A Taça continua na Lua Esmeralda, e lá em cima corre o próprio computador da base lunar -- o HAL, nunca vencido. O cargueiro dos Esmers leva carros para a lua -- mostra a tua licença de corrida no Templo de Bú, junto à pista.",
         },
         // (the easter eggs, from PageEgg on: RaceTrackStory.Eggs.Desert.cs)
         new[]
@@ -775,6 +780,16 @@ void comportement_1()
             "Gli Esmer fanno passare l'auto dai cancelli del Tempio di Bù, giù per le sue antiche sale, fino al loro hangar laggiù.",
             "Os Esmers fazem passar o carro pelos portões do Templo de Bú, pelas suas velhas salas, até ao hangar lá em baixo.",
         },
+        // (the island winner's trophy shown to Flick: the user, 2026-11-16)
+        new[]
+        {
+            "Citadel Island's winner? Let me see your trophy... That's the one. Welcome to the race of Twinsun's best, Twinsen!",
+            "Le vainqueur de l'île de la Citadelle ? Montre-moi ton trophée... C'est bien lui. Bienvenue à la course des meilleurs de Twinsun, Twinsen !",
+            "Der Sieger der Zitadelleninsel? Zeig mal deinen Pokal... Das ist er. Willkommen beim Rennen der Besten von Twinsun, Twinsen!",
+            "¿El ganador de la isla de la Ciudadela? Déjame ver tu trofeo... Es ese. ¡Bienvenido a la carrera de los mejores de Twinsun, Twinsen!",
+            "Il vincitore dell'isola della Cittadella? Fammi vedere il trofeo... È proprio lui. Benvenuto alla corsa dei migliori di Twinsun, Twinsen!",
+            "O vencedor da ilha da Cidadela? Deixa-me ver o teu troféu... É esse mesmo. Bem-vindo à corrida dos melhores de Twinsun, Twinsen!",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -908,7 +923,13 @@ void comportement_1()
 ")));
 
         // Flick at her plinth: the track shut (Q_PAGES 1), still shut, open
-        MarshalA(b, report, desert, FlickEggs(Say) + $@"            if (0 == var_game({QPages}))
+        // (and first, Citadel Island's winner's trophy: she sees it, he's in the race of Twinsun's best)
+        MarshalA(b, report, desert, FlickEggs(Say) + $@"            if (0 == var_game({TrophyShown}) && {ErrandTrophy} == var_game({ErrandSlot}))
+            {{
+                message({Say(DesertLine.FlickTrophy)});
+                set_var_game({TrophyShown}, 1);
+            }}
+            if (0 == var_game({QPages}))
             {{
                 message({Say(DesertLine.FlickShut)});
                 set_var_game({QPages}, 1);
@@ -1066,7 +1087,9 @@ void comportement_2()
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in any order (the user, 2026-11-08: "can we
         // have these count in any order and go into inventory") -- each a page lying on the road to be seen (CitadelProps.Page), once the
         // Dean has told of them; found, one more in Twinsen's inventory (item PagesSlot's count, and Q_PAGES with it: 3, 4, then 5 -- all
-        // three), its own arrow off, and gone. Which pages are found is a bit each in one variable (PagesFoundVar); the lines go by how many are found,
+        // three), its own arrow off, and gone -- shown going into it, the game's found-object box (the user, 2026-11-16: "I'm not seeing the
+        // dean's cards/notes going into our inventory, they should visibly go into our inventory even if we haven't spoken to the dean
+        // yet"). Which pages are found is a bit each in one variable (PagesFoundVar); the lines go by how many are found,
         // not by which. On the road at its height, and never under the ground there ("check that they're all above ground")
         var lines = pages.Select(pg => pg.Item2).ToArray();
         string ByCount() => $@"if (1 == var_game({PagesFoundVar}) || 2 == var_game({PagesFoundVar}) || 4 == var_game({PagesFoundVar}))
@@ -1120,7 +1143,8 @@ void comportement_1()
             {{
                 add_var_game({QPages}, 1);
             }}
-            add_var_game({PagesSlot}, 1);{arrowOff}
+            add_var_game({PagesSlot}, 1);
+            found_object({PagesSlot});{arrowOff}
             {ByCount()}
             invisible(1);
             suicide();

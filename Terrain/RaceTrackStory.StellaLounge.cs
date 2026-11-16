@@ -413,6 +413,18 @@ void comportement_3()
     if (3 < var_cube({ShowRounds}))
     {{
         set_var_cube({PovVar}, 0);
+        set_var_cube({ShowFrames}, 0);
+        set_comportement(comportement_5);
+    }}
+}}
+
+// (her thanks a few frames after his own view is off: the room drawn whole again first -- RACEMOD.CPP RaceMod_Story -- not her close-up
+// left behind the dialog with the room's moving things drawn over it in patches, the user, 2026-11-16)
+void comportement_5()
+{{
+    add_var_cube({ShowFrames}, 1);
+    if (4 < var_cube({ShowFrames}))
+    {{
         if (1 == var_cube({ShowWho}))
         {{
             message_obj({groboIndex}, {say(MoonLine.ClubThanks)});

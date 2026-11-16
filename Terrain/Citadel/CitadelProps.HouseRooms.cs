@@ -464,6 +464,49 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
+    // The island winner's trophy (the inventory's: RaceTrackStory.Errands, TrophyModel): a gold cup on a stem, two handles, on a dark wooden
+    // plinth with a gold plate on its front
+    public static Body BuildTrophy(byte[] header)
+    {
+        var m = new CarMesh("the island winner's trophy", new[] { -1 });
+        m.Light = 0.8f;
+        const int N = 12;
+        m.Box(0, new Vector3(0, 90, 0), new Vector3(420, 180, 420), HrWoodDark, top: HrWood);
+        m.Box(0, new Vector3(0, 95, 213), new Vector3(240, 80, 6), HrBrass);
+        Cylinder(m, Vector3.Zero, 120, 180, 230, N, HrBrass, HrBrass);
+        Cylinder(m, Vector3.Zero, 45, 230, 520, N, HrBrass);
+        var foot = Ellipse(m, Vector3.Zero, 520, 70, 70, N);
+        var belly = Ellipse(m, Vector3.Zero, 700, 230, 230, N);
+        var lip = Ellipse(m, Vector3.Zero, 860, 260, 260, N);
+        m.Skin(foot, belly, _ => HrBrass, new Vector3(0, 610, 0));
+        m.Skin(belly, lip, _ => HrBrass, new Vector3(0, 780, 0));
+        var inner = Ellipse(m, Vector3.Zero, 850, 230, 230, N);
+        RingTop(m, lip, inner, HrBrass);
+        Inside(m, inner, Ellipse(m, Vector3.Zero, 720, 150, 150, N), HrBrass - 3, Vector3.Zero);
+        foreach (var side in new[] { -1f, 1f })
+        {
+            m.Strut(0, new Vector3(side * 250, 820, 0), new Vector3(side * 360, 790, 0), 26, HrBrass);
+            m.Strut(0, new Vector3(side * 360, 790, 0), new Vector3(side * 330, 640, 0), 26, HrBrass);
+            m.Strut(0, new Vector3(side * 330, 640, 0), new Vector3(side * 215, 620, 0), 26, HrBrass);
+        }
+        return m.ToBody(header);
+    }
+
+    // Twinsen's racing helmet left on a stand in the moon's airlocks, where the game hung the empty space suit (the user, 2026-11-16: "We
+    // should show Twinsen's helmet left in the airlocks instead of the spacesuit" -- RaceTrackStory.Emerald, MoonAirlocks): a round steel
+    // foot, a pole, the helmet on its top at a head's height (his own: CitadelOveralls.HelmetInto, a head's size)
+    public const int HangingHelmet = 156;
+    private const float HelmetStandTop = 650, HelmetOnStand = 170;   // (its top under the closet's lintel: at 1000 the helmet hid behind it)
+    public static Body BuildHangingHelmet(byte[] header)
+    {
+        var m = new CarMesh("Twinsen's helmet on its stand", new[] { -1 });
+        m.Light = 0.6f;
+        Cylinder(m, Vector3.Zero, 170, 0, 40, 12, HrChrome, HrChrome);
+        Cylinder(m, Vector3.Zero, 26, 40, HelmetStandTop, 8, HrChrome);
+        CitadelOveralls.HelmetInto(m, new Vector3(0, HelmetStandTop + HelmetOnStand * 0.5f, 0), HelmetOnStand);
+        return m.ToBody(header);
+    }
+
     // The kitchen's chair: the bedroom's (BuildChair), its seat KitchenSeatTop over the floor -- Twinsen sits on it
     public static Body BuildKitchenChair(byte[] header) => ChairBody(header, "the kitchen's chair", KitchenSeatTop);
 }

@@ -258,6 +258,8 @@ internal static class CitadelOveralls
         HqrWriter.ReplaceInFile(objfixPath, OverallsSlot, InventorySized(OverallsModel(header)).Write());
         HqrWriter.ReplaceInFile(objfixPath, HelmetSlot, InventorySized(GearModel(header)).Write());
         log.Add($"OBJFIX.HQR {OverallsSlot}: the racing overalls (the tunic's model); {HelmetSlot}: the racing gloves and helmet together (the pearl's) -- the gloves' slot's second kind");
+        // (and Twinsen at the wheel in his helmet: every island's but Citadel's)
+        log.AddRange(InstallHelmetBuggy(gameDirectory));
 
         // ---- their texts: found, name, description
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -381,14 +383,14 @@ internal static class CitadelOveralls
 
     // The helmet on his head: a shell round the head bone's points -- red, a white stripe over the top, a dark visor across the face, the
     // padding dark inside the rim -- its points the head's (added after the head's own, every later bone's moved along)
-    internal static Body WithHelmet(Body body, int around = 12, int down = 6)
+    internal static Body WithHelmet(Body body, int around = 12, int down = 6, int headBone = Head)
     {
         var world = body.World().ToList();
-        var head = body.Bones[Head];
+        var head = body.Bones[headBone];
         // (his hair's tuft -- a brown sphere at the back of his head -- tucked into the helmet: the head's spheres and its children's off)
-        bool UnderHead(int b) { while (b > Head) b = body.Bones[b].Parent; return b == Head; }
+        bool UnderHead(int b) { while (b > headBone) b = body.Bones[b].Parent; return b == headBone; }
         int BoneOfPoint(int p) => body.Bones.FindIndex(x => p >= x.Start && p < x.Start + x.Count);
-        body.Spheres.RemoveAll(sp => BoneOfPoint(sp.Point) is var bp && bp >= Head && UnderHead(bp));
+        body.Spheres.RemoveAll(sp => BoneOfPoint(sp.Point) is var bp && bp >= headBone && UnderHead(bp));
         var own = world.Skip(head.Start).Take(head.Count).ToArray();
         var lo = new Vector3(own.Min(p => p.X), own.Min(p => p.Y), own.Min(p => p.Z));
         var hi = new Vector3(own.Max(p => p.X), own.Max(p => p.Y), own.Max(p => p.Z));
@@ -438,7 +440,56 @@ internal static class CitadelOveralls
             faces.Add((q, Dark)); faces.Add((q.Reverse().ToArray(), Dark));
         }
 
-        return AddToBone(body, world, Head, points, faces);
+        return AddToBone(body, world, headBone, points, faces);
+    }
+
+    // Twinsen at the wheel in his helmet (the user, 2026-11-16: "We need a model of Twinsen in his car where he's wearing the helmet for when
+    // he's racing everywhere but Citadel Island" -- he wins it on the White Leaf Desert, the giant clam's): the buggy's entity's driving and
+    // firing bodies (its generics 1 and 10, his head their bone 15), the helmet on, as more of its bodies -- HelmetBuggy, HelmetBuggyFiring
+    // and the half-size HelmetBuggySmall -- that the race file's twinsen_body= puts on him on every island but Citadel's (RaceCarEngineFile).
+    // After the overalls (his tunic in the car the suit's colour). The helmet the buggy drivers' lighter one: the firing body is 465
+    // polygons of the engine's 550.
+    public const int BuggyEntity = 12, HelmetBuggy = 62, HelmetBuggyFiring = 63, HelmetBuggySmall = 162;
+    private const int BuggyDriving = 1, BuggyFiring = 10, BuggyHead = 15;
+    private static List<string> InstallHelmetBuggy(string gameDirectory)
+    {
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var bodies = HqrArchive.Open(bodyPath);
+        var driving = RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, BuggyDriving);
+        var firing = RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, BuggyFiring);
+        if (driving is null) return new() { $"Twinsen's car with his helmet on: not made -- the buggy's entity ({BuggyEntity}) has no body {BuggyDriving}" };
+        byte[] car, gun;
+        try
+        {
+            car = WithHelmet(Body.Read(bodies.Read(driving.Value.Body), 2), 8, 4, BuggyHead).Write();
+            gun = firing is { } f ? WithHelmet(Body.Read(bodies.Read(f.Body), 2), 8, 4, BuggyHead).Write() : car;
+        }
+        catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or ArgumentOutOfRangeException)
+        { return new() { $"Twinsen's car with his helmet on: not made -- {e.Message}" }; }
+        // (a second pass: its entries again)
+        var had = RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, HelmetBuggy);
+        if (had is { } h)
+        {
+            HqrWriter.ReplaceInFile(bodyPath, h.Body, car);
+            if (RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, HelmetBuggyFiring) is { } hf) HqrWriter.ReplaceInFile(bodyPath, hf.Body, gun);
+            if (RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, HelmetBuggySmall) is { } hs) HqrWriter.ReplaceInFile(bodyPath, hs.Body, RaceTrackSmallCars.Halved(car));
+            return new() { $"Twinsen's car with his helmet on: BODY.HQR {h.Body} again (the buggy's entity's body {HelmetBuggy})" };
+        }
+        var file = File.ReadAllBytes(bodyPath);
+        var own = HqrArchive.CountEntries(bodyPath);
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(car));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(gun));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(RaceTrackSmallCars.Halved(car)));
+        File.WriteAllBytes(bodyPath, file);
+        // (the driving and firing bodies' records the buggy's own, but for the body: its collision box with them)
+        table = RaceTrackCharacterCars.WithBodyRecord(table, BuggyEntity, driving.Value.Record, HelmetBuggy, own);
+        table = RaceTrackCharacterCars.WithBodyRecord(table, BuggyEntity, (firing ?? driving).Value.Record, HelmetBuggyFiring, own + 1);
+        table = RaceTrackBaldinoCar.WithBody(table, BuggyEntity, HelmetBuggySmall, own + 2);
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
+        var made = Body.Read(car, 2);
+        return new() { $"Twinsen's car with his helmet on: BODY.HQR {own} (driving: {made.Faces.Count} polygons, {made.Vertices.Count} points), {own + 1} (firing), {own + 2} (half size); the buggy's entity ({BuggyEntity}) bodies {HelmetBuggy}, {HelmetBuggyFiring}, {HelmetBuggySmall}" };
     }
 
     // Twinsen arm in arm with Zoe (entity 5's body, BODY.HQR 17: the user, 2026-11-12, "Twinsen with Zoe is still Twinsen in his tunic rather
@@ -714,17 +765,22 @@ internal static class CitadelOveralls
     {
         var m = new CarMesh("the racing helmet", new[] { -1 });
         m.Light = 0.6f;
+        HelmetInto(m, Vector3.Zero, 1000);
+        return m.ToBody(header);
+    }
+    // (the helmet into a mesh: its middle `at`, R its radius -- its rim R * 0.64 under the middle, its crown R over it)
+    internal static void HelmetInto(CarMesh m, Vector3 at, float R)
+    {
         const int Around = 16, Down = 7;
-        const float R = 1000;
         // rings from the crown (latitude 80) down to the rim (latitude -40); the crown a point
-        var crown = m.P(0, new Vector3(0, R, 0));
+        var crown = m.P(0, at + new Vector3(0, R, 0));
         var rings = new int[Down][];
         float Lat(int k) => (80 - k * 20) * MathF.PI / 180;
         for (var k = 0; k < Down; k++)
             rings[k] = Enumerable.Range(0, Around).Select(i =>
             {
                 var a = i * MathF.Tau / Around;
-                return m.P(0, new Vector3(R * MathF.Cos(Lat(k)) * MathF.Sin(a), R * MathF.Sin(Lat(k)), R * 1.08f * MathF.Cos(Lat(k)) * MathF.Cos(a)));
+                return m.P(0, at + new Vector3(R * MathF.Cos(Lat(k)) * MathF.Sin(a), R * MathF.Sin(Lat(k)), R * 1.08f * MathF.Cos(Lat(k)) * MathF.Cos(a)));
             }).ToArray();
         // (which colour a polygon is by where its middle is: its angle round from the front, +z, and its height)
         int Colour(float around, float lat)
@@ -740,11 +796,11 @@ internal static class CitadelOveralls
             var n = (i + 1) % Around;
             var mid = (i + 0.5f) * MathF.Tau / Around;
             var top = Colour(mid, Lat(0) + 0.1f) == White ? White : Red;
-            m.Out(new[] { crown, rings[0][n], rings[0][i] }, top, Vector3.Zero, top != Red);
+            m.Out(new[] { crown, rings[0][n], rings[0][i] }, top, at, top != Red);
             for (var k = 0; k + 1 < Down; k++)
             {
                 var c = Colour(mid, (Lat(k) + Lat(k + 1)) / 2);
-                m.Out(new[] { rings[k][i], rings[k][n], rings[k + 1][n], rings[k + 1][i] }, c, Vector3.Zero, c != Red);
+                m.Out(new[] { rings[k][i], rings[k][n], rings[k + 1][n], rings[k + 1][i] }, c, at, c != Red);
             }
         }
         // the padding inside the rim, dark, seen from underneath
@@ -752,14 +808,13 @@ internal static class CitadelOveralls
         {
             var a = i * MathF.Tau / Around;
             var r = R * 0.8f * MathF.Cos(Lat(Down - 1));
-            return m.P(0, new Vector3(r * MathF.Sin(a), R * MathF.Sin(Lat(Down - 1)) + 60, r * 1.08f * MathF.Cos(a)));
+            return m.P(0, at + new Vector3(r * MathF.Sin(a), R * MathF.Sin(Lat(Down - 1)) + R * 0.06f, r * 1.08f * MathF.Cos(a)));
         }).ToArray();
         for (var i = 0; i < Around; i++)
         {
             var n = (i + 1) % Around;
             m.Both(new[] { rings[Down - 1][i], rings[Down - 1][n], inner[n], inner[i] }, Dark, 0);
         }
-        return m.ToBody(header);
     }
 
     // A model at the inventory's size: centred on its middle and scaled so its widest side is InventoryExtent (RaceTrackStory.Errands.cs)

@@ -343,6 +343,9 @@ internal static class RaceTrackScenes
     // the Temple of Bú's, its flag marshal between them.)
     public const double GridFirst = 3, DefaultGridStep = 3.5, GridSide = 1.75;
     public const int GridSpots = 6;
+    // A track's grid: GridSpots, or one for each of its drivers and Twinsen's (the Desert race's entrants from all round Twinsun, seven and
+    // Twinsen, 2026-11-16; the engine takes RACEMOD.CPP RACE_MAX_SPOTS, 9)
+    public static int GridOf(int drivers) => Math.Max(GridSpots, drivers + 1);
     public static (double Back, double Side) GridSpot(int k, double step = DefaultGridStep, double first = GridFirst, double side = GridSide) =>
         (first + step * k, k % 2 == 0 ? -side : side);
     private static (double Back, double Side) GridSpot(int k, RaceTrackOptions o) => GridSpot(k, o.GridStep, o.GridFirst, o.GridSide);
@@ -763,7 +766,8 @@ internal static class RaceTrackScenes
                 var y = (int)Math.Round(s.Y);
                 // the buggy stands a few cells before the line, Twinsen beside it; each on the ground at its own spot (the road climbs there).
                 // Straight back from the line, or, where the lap bends behind it (the lava lake's line is just out of a corner), on the lap.
-                var curved = Behind(t.Report, s, GridSpot(GridSpots - 1, t.Options).Back + 2, 0) is { } far && Math.Abs((far.X - s.X) * -s.DirZ + (far.Z - s.Z) * s.DirX) > 0.25;
+                var spots = GridOf(t.Drivers.Count);
+                var curved = Behind(t.Report, s, GridSpot(spots - 1, t.Options).Back + 2, 0) is { } far && Math.Abs((far.X - s.X) * -s.DirZ + (far.Z - s.Z) * s.DirX) > 0.25;
                 int At(double back, double side, bool z)
                 {
                     if (curved && Behind(t.Report, s, back, side) is { } on) return (int)Math.Round(((z ? on.Z : on.X) - (z ? cz : cx) * 64.0) * 512);
@@ -794,7 +798,7 @@ internal static class RaceTrackScenes
                 // (moved across onto the race lanes, where the plan says: the Emerald Moon's pit lane shares its deck)
                 var shift = t.Options.GridShift;
                 if (racing)
-                    for (var k = 0; k < GridSpots; k++)
+                    for (var k = 0; k < spots; k++)
                     {
                         var (back, side) = GridSpot(k, t.Options);
                         side += shift;

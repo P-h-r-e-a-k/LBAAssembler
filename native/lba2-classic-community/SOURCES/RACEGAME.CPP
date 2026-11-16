@@ -3104,11 +3104,11 @@ static const T_RG_ACH s_ach[] = {
     {"spanked", "Citadel", "Got spanked by Zoe"},
     {"telescope", "Citadel", "Wizard cow love okay"},
     {"stella", "Moon", "Stella EnTitties"},
-    {"bowling", "Otringal", "Found the hidden bowling alley"},
+    {"bowling", "Otringal", "Bowling Baby!"},   // (the hidden bowling alley found: a title the page has room for)
     {"dinofly", "Polar", "Reunited with old friend"},
     {"dungeon", "Palace", "Found the palace dungeon"},
     {"postcards", "Anywhere", "Found every postcard"},
-    {"darts", "Citadel", "Darts: a nine-dart finish and a 170 checkout", "Darts", {"darts9", "darts170"}, {"a nine-dart finish", "a 170 checkout"}},
+    {"darts", "Citadel", "Deadly Darts"},   // (a game won in nine darts, its last visit the 170 checkout: RACEMOD.CPP DartAchieve)
 };
 #define RG_ACH_N ((int)(sizeof(s_ach) / sizeof(s_ach[0])))
 static U8 s_achGot[RG_ACH_N];

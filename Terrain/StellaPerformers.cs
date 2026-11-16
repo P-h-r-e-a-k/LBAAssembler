@@ -17,6 +17,9 @@ namespace LBAAssembler.Terrain;
 //   1 a rabbibunny (the Hacienda's bather, 121)        pole        5 a Franco (the shop lady, 443)               stage
 //   2 a Quetch (the umbrella lady, 172)                stage       6 a wizard (the statue's, 189)                pole
 //   3 a Sup (the Imperial Hotel's, 440, as the flag marshal's bikini, GridGirl) pole
+// (4 was the saucer's stewardess, 144, in her blue cap -- the user, 2026-11-16: "This character in the strip joint with the blue hat on needs
+// replacing as she looks terrible, let's add a second copy of the stripper I attached a picture of, just in a different coloured thong,
+// and perhaps a darker skin tone": now 3 again, on the stage, her skin the brown ramp's, a pink thong)
 // Installed as bodies of the hero's entity (0) -- generics Body0.. -- each with an animation of her own (Anim0 + her number) made for her
 // bones from one routine (StageRoutine or PoleRoutine, below) by what each bone is (her Rig).
 //
@@ -38,7 +41,9 @@ internal static class StellaPerformers
     public sealed record Spec(string Name, int Source, Rig Rig, bool Pole, Rule[] Rules, int DropFrom = -1, bool GridGirl = false);
 
     private static int[] B(params int[] b) => b;
-    private const int Red = 69, Gold = 100, Black = 49, Purple = 210, Teal = 147;
+    private const int Red = 69, Gold = 100, Black = 49, Purple = 210, Teal = 147, Pink = 72;
+    // (the Sup's skin -- the palette's skin ramp, 32-47: 36 most of her, 32 and 35 its shades -- a darker one, the brown ramp's (16-31))
+    private const int DarkSkin = 22, DarkSkinShade = 19, DarkSkinMid = 21;
     // (a pole dancer's grip: how high her hand holds the pole, bone 1's pivot -- what she turns and tips about)
     private const float GripHigh = 1500;
 
@@ -67,11 +72,14 @@ internal static class StellaPerformers
             new(36, 69, B(3, 17, 18, 19)),                 // the marshal's bikini top: her skin
             new(Black, 69),                                // its bottom and her shoes: black
         }, GridGirl: true),
-        new("a Sup stewardess", 144, new Rig(2, 3, 4, 6, B(7, 8), B(10, 11), B(13, 14, 15), B(16, 17, 18)), false, new Rule[]
+        new("a Sup, darker, in pink", 440, new Rig(2, 3, -1, 4, B(8, 9), B(5, 6), B(14, 15, 16), B(11, 12, 13)), false, new Rule[]
         {
-            new(38, 194, B(13, 16)),                       // her shorts' legs: skin
-            new(Teal, 194, B(2)),                          // their seat: a teal thong
-        }),
+            new(DarkSkin, 69, B(3, 17, 18, 19)),           // the marshal's bikini top: her skin
+            new(Pink, 69),                                 // its bottom: a pink thong
+            new(DarkSkin, 36),                             // her skin, darker
+            new(DarkSkinShade, 32),
+            new(DarkSkinMid, 35),
+        }, GridGirl: true),
         new("a Franco", 443, new Rig(3, 4, -1, 6, B(10, 11), B(13, 14), B(16, 17, 18), B(20, 21, 22)), false, new Rule[]
         {
             new(Purple, 70, B(3), YMax: 400),              // her shorts' low band: a purple thong

@@ -1,18 +1,26 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using LBAAssembler.Grids;
+using LBAAssembler.Lba1;
 using LBAAssembler.LbaScript;
+using LBAAssembler.Maps;
 using LBAAssembler.Scenes;
 
 namespace LBAAssembler.Terrain;
 
 // The race mod's story on the Emerald Moon, chapter 4 (docs/LBRA_WALKTHROUGH.md; the build notes: docs/LBRA_STORY_SCRIPT.md):
-//   - Arriving by Baldino's rocket (the Desert's win: scene 229, the track's start), the radio rings and Baldino calls from his lander.
+//   - Arriving at the track's start (scene 229). (No call from Baldino any more, nor Baldino on the moon at all -- the user, 2026-11-16:
+//     "Baldino is no longer going to be on Emerald Moon, let's make it just Twinsen and HAL, and a random guard in the moon spacesuit".
+//     The radio is HAL's, RACEMOD.CPP HalCall, once he's mended.)
 //   - Lyra, the marshal, at her plinth: the base's computer won't switch on the start lights (Q_HAL 1).
-//   - In the moon base (scene 23, by Baldino's old cell), HAL: "HAL!! ZX81!!" (the game's own 546 and 545) and Zoe's word; his mechanics
-//     there: his voice box is broken, any radio would do -- Twinsen hands over the portable radio (item 26 taken, Q_HAL 3); HAL again,
-//     mended: the start lights on, and the radio given back, improved (item 26, Q_HAL 4: the race file's gate=216 4).
-//   - Won (win=216 5): out of the car, in any of the track's outside scenes --Baldino, Lyra, HAL's log of a black car launched to Zeelich, Zoe -- and the
-//     Esmers' ship to Otringal (inc_chapter: 5; change_cube(88), Otringal's start).
+//   - In the moon base (scene 23, by Baldino's old cell), HAL: "HAL!! ZX81!!" (the game's own 546 and 545) and Twinsen's word; his
+//     mechanics there: his voice box is broken, any radio would do -- Twinsen hands over the portable radio (item 26 taken, Q_HAL 3); HAL
+//     again, mended: the start lights on, and the radio given back, improved (item 26, Q_HAL 4: the race file's gate=216 4).
+//   - Won (win=216 5): out of the car, in any of the track's outside scenes -- the moon guard he beat, Lyra, HAL's log of a black car
+//     launched to Zeelich, Twinsen -- and the Esmers' ship to Otringal (inc_chapter: 5; change_cube(88), Otringal's start).
+// (Zoe isn't on the moon: her lines there -- MESSAGE_ZOE, her colour at Twinsen -- read as nobody's, the user, 2026-11-16: "I'm not sure
+// who's talking when inside the Emerald moon next to HAL, especially delivering the lines "Baldino won't mind" and "Baldino will mind"";
+// Twinsen and the mechanics say them now, each by his own mouth.)
 // HAL and his mechanics talk through invisible actors of their own beside the game's (HAL is a sprite over the base's bricks, and the
 // game's scripts there -- HAL's sparks, the mechanics' tracks -- are left as they are).
 internal static partial class RaceTrackStory
@@ -28,6 +36,15 @@ internal static partial class RaceTrackStory
     // the moon's scenes whose scripts put the spacesuit on: the X building's airlock, the outside by the circle and the square entrances,
     // the Esmers' shuttle
     private static readonly int[] MoonSuitScenes = { 53, 75, 77, 115 };
+    // The moon's airlocks and each one's hook (the actor the game hung the empty space suit on -- entity 83, no_body() while Twinsen wears
+    // it, body(0) once it's hung): the base's (31), the circle entrance's (52), the X building's (53). The hook shows his helmet on its
+    // stand now (CitadelProps.HangingHelmet), and the race file's helmet_hook= keeps the helmet on him indoors there till it's hung --
+    // he walks in in it, the airlock cycles, he comes out without it, and takes it again on the way out (the user, 2026-11-16: "When
+    // Twinsen enters the emerald moon, let's have him enter wearing his helmet, go into the airlock, and emerge not wearing his helmet,
+    // this mirrors behaviour in the retail game"; "We should show Twinsen's helmet left in the airlocks instead of the spacesuit")
+    private static readonly (int Scene, int Actor)[] MoonAirlocks = { (31, 12), (52, 9), (53, 6) };
+    private const int EmptySuitEntity = 83;
+    internal static string MoonHelmetHooks() => string.Concat(MoonAirlocks.Select(a => $"helmet_hook={a.Scene} {a.Actor}\n"));
 
     // A story driver who races only while the story has him at the track (the race file's opponentN_when=<var> <least> <below>, RACEMOD.CPP):
     // HAL, from his mending to the race's end -- in the moon base before and after (ApplyEmerald)
@@ -36,8 +53,9 @@ internal static partial class RaceTrackStory
 
     private enum MoonLine
     {
-        Ringing, BaldinoRadio, LyraWelcome, LyraGate, LyraOpen, ZoeNo, MechanicSpare, ZoeRadio, TwinsenMind, ZoeWillMind, MechanicLeave,
-        MechanicWorking, HalThanks, HalRadio, BaldinoBeaten, LyraZeelich, HalLog, ZoeLaugh,
+        // (Ringing and BaldinoRadio: Baldino's call from his lander, gone with him -- kept, unsaid, so the lines after keep their numbers)
+        Ringing, BaldinoRadio, LyraWelcome, LyraGate, LyraOpen, TwinsenNo, MechanicSpare, TwinsenOffer, MechanicThanks, TwinsenBack, MechanicLeave,
+        MechanicWorking, HalThanks, HalRadio, GuardBeaten, LyraZeelich, HalLog, TwinsenLaugh,
         // (the eggs': RaceTrackStory.Eggs.Emerald.cs)
         HalDaisy, HalDiagnostic, BowlerUp, BowlerTuesday,
         // (one HAL at a time, 2026-11-07: a mechanic's word while he is out at the track)
@@ -52,6 +70,8 @@ internal static partial class RaceTrackStory
         ClubLapOffer, ClubLapBroke,
         // (the moon's hangar, the freighter on to Otringal -- RaceTrackStory.Hangar.cs, MoonHangar, 2026-11-14)
         HangarOffer, HangarYes, HangarNo, HangarBoard, HangarLater, HangarLift, HangarClosed, HangarGo,
+        // (HAL beaten: his number on Twinsen's radio -- the user, 2026-11-16)
+        HalNumber,
     }
     private static readonly string[][] MoonLines =
     {
@@ -120,30 +140,30 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Twinsen... your radio.",
-            "Twinsen... ta radio.",
-            "Twinsen... dein Funkgerät.",
-            "Twinsen... tu radio.",
-            "Twinsen... la tua radio.",
-            "Twinsen... o teu rádio.",
+            "Would my radio do? Here, take it.",
+            "Ma radio ferait l'affaire ? Tenez, prenez-la.",
+            "Würde mein Funkgerät gehen? Hier, nehmt es.",
+            "¿Serviría mi radio? Tomad, cogedla.",
+            "Andrebbe bene la mia radio? Ecco, prendetela.",
+            "O meu rádio serve? Tomem, fiquem com ele.",
         },
         new[]
         {
-            "Baldino won't mind.",
-            "Baldino ne m'en voudra pas.",
-            "Baldino wird nichts dagegen haben.",
-            "A Baldino no le importará.",
-            "A Baldino non dispiacerà.",
-            "O Baldino não se vai importar.",
+            "A portable! Perfect. He'll have his voice back in no time.",
+            "Une portative ! Parfait. Il aura retrouvé sa voix en un rien de temps.",
+            "Ein tragbares! Perfekt. Er hat seine Stimme im Nu wieder.",
+            "¡Una portátil! Perfecto. Recuperará la voz en un momento.",
+            "Una portatile! Perfetto. Riavrà la voce in un attimo.",
+            "Um portátil! Perfeito. Vai recuperar a voz num instante.",
         },
         new[]
         {
-            "Baldino will mind.",
-            "Baldino t'en voudra.",
-            "Baldino wird etwas dagegen haben.",
-            "A Baldino sí le importará.",
-            "A Baldino dispiacerà eccome.",
-            "O Baldino vai importar-se.",
+            "I'll want it back before the race.",
+            "Je la veux de retour avant la course.",
+            "Ich will es vor dem Rennen zurück.",
+            "La quiero de vuelta antes de la carrera.",
+            "La rivoglio prima della corsa.",
+            "Quero-o de volta antes da corrida.",
         },
         new[]
         {
@@ -165,12 +185,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Thank you, Twinsen. The start lights are on. I have calculated your chances against Baldino: they are poor. I will race too, to see if I am right.",
-            "Merci, Twinsen. Les feux de départ sont allumés. J'ai calculé tes chances contre Baldino : elles sont faibles. Je cours aussi, pour voir si j'ai raison.",
-            "Danke, Twinsen. Die Startampel ist an. Ich habe deine Chancen gegen Baldino berechnet: Sie sind gering. Ich fahre auch mit, um zu sehen, ob ich recht habe.",
-            "Gracias, Twinsen. El semáforo de salida está encendido. He calculado tus posibilidades contra Baldino: son escasas. Yo también correré, para ver si tengo razón.",
-            "Grazie, Twinsen. Il semaforo di partenza è acceso. Ho calcolato le tue probabilità contro Baldino: sono scarse. Correrò anch'io, per vedere se ho ragione.",
-            "Obrigado, Twinsen. As luzes da partida estão acesas. Calculei as tuas hipóteses contra o Baldino: são fracas. Também vou correr, para ver se tenho razão.",
+            "Thank you, Twinsen. The start lights are on. I have calculated your chances against me: they are poor. I will race you, to see if I am right.",
+            "Merci, Twinsen. Les feux de départ sont allumés. J'ai calculé tes chances contre moi : elles sont faibles. Je cours contre toi, pour voir si j'ai raison.",
+            "Danke, Twinsen. Die Startampel ist an. Ich habe deine Chancen gegen mich berechnet: Sie sind gering. Ich fahre gegen dich, um zu sehen, ob ich recht habe.",
+            "Gracias, Twinsen. El semáforo de salida está encendido. He calculado tus posibilidades contra mí: son escasas. Correré contra ti, para ver si tengo razón.",
+            "Grazie, Twinsen. Il semaforo di partenza è acceso. Ho calcolato le tue probabilità contro di me: sono scarse. Correrò contro di te, per vedere se ho ragione.",
+            "Obrigado, Twinsen. As luzes da partida estão acesas. Calculei as tuas hipóteses contra mim: são fracas. Vou correr contra ti, para ver se tenho razão.",
         },
         new[]
         {
@@ -183,12 +203,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Beaten in my own lander! I'll have to tune the other one.",
-            "Battu dans mon propre atterrisseur ! Il va falloir que je règle l'autre.",
-            "Geschlagen in meiner eigenen Landefähre! Ich werde die andere tunen müssen.",
-            "¡Vencido en mi propio módulo! Tendré que ajustar el otro.",
-            "Battuto nel mio stesso modulo! Dovrò mettere a punto l'altro.",
-            "Vencido no meu próprio módulo! Vou ter de afinar o outro.",
+            "Beaten by a fellow without a spacesuit! The base will never let me hear the end of it.",
+            "Battu par un type sans scaphandre ! À la base, on ne va pas me laisser l'oublier.",
+            "Geschlagen von einem Kerl ohne Raumanzug! Das wird man mir in der Basis ewig vorhalten.",
+            "¡Vencido por un tipo sin escafandra! En la base no me dejarán olvidarlo nunca.",
+            "Battuto da uno senza tuta spaziale! Alla base non me lo faranno dimenticare mai.",
+            "Vencido por um tipo sem escafandro! Na base nunca mais me deixam esquecer isto.",
         },
         new[]
         {
@@ -506,6 +526,15 @@ internal static partial class RaceTrackStory
             "Un disco degli Esmer ti aspetta sulla piattaforma di atterraggio per portare te e la tua auto a Otringal. Vai, pilota.",
             "Um disco dos Esmers espera-te na plataforma de aterragem para te levar a Otringal com o teu carro. Vai, piloto.",
         },
+        new[]
+        {
+            "Congratulations for beating me. I've added my number to your phone, if you ever need any help.",
+            "Félicitations, tu m'as battu. J'ai ajouté mon numéro à ta radio, si jamais tu as besoin d'aide.",
+            "Glückwunsch, du hast mich geschlagen. Ich habe meine Nummer in dein Funkgerät eingespeichert, falls du je Hilfe brauchst.",
+            "Enhorabuena por ganarme. He añadido mi número a tu radio, por si alguna vez necesitas ayuda.",
+            "Congratulazioni per avermi battuto. Ho aggiunto il mio numero alla tua radio, se mai avessi bisogno di aiuto.",
+            "Parabéns por me venceres. Adicionei o meu número ao teu rádio, se alguma vez precisares de ajuda.",
+        },
     };
 
     // The moon's landing pad (the outside scene with the game's door into its Esmer shuttle, scene 115 -- the platform's west face): the
@@ -580,6 +609,84 @@ void comportement_2()
 ");
         });
     }
+    // The moon base's X door (scene 23's actor 7, its X-striped door down into the floor while var_game 93 is 1) has its wheel (actor 3, on
+    // its striped stand, block 151 at cells 47-48, 42-43) only on the far side of the glass: come in from the X building (scene 53), on the
+    // corridor's side, Twinsen was shut in -- the user, 2026-11-16: "If Twinsen enters the Emerald Moon base area by the "x" entrance, where
+    // in the retail game he escapes with Baldino he gets trapped at this door as the controls are on the other side of the door. Let's add
+    // an extra control for it the other side of the barrier to prevent this". A second stand (the same block) in the corridor beside the
+    // door, cells 46-47, 39-40, and a second wheel on it (actor 3's sprite and its turning, the same height over its stand): Action by it
+    // works the door as the first does.
+    private const int XDoorVar = 93, XWheel = 3, XStandBlock = 151, XStandFloor = 60, XStandX = 44, XStandZ = 35, XWheelFrom = 47 * 512, XWheelFromZ = 42 * 512;
+    private static void XDoorWheel(string gameDirectory, IslandBeatsA b, List<string> log)
+    {
+        if (!b.Store.SceneExists(BaseScene)) return;
+        var bkgPath = Path.Combine(gameDirectory, "LBA_BKG.HQR");
+        var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        if (BaseScene * 2 + 1 >= table.Length) { log.Add("the X door's second wheel left out: no grid for scene 23"); return; }
+        var gridEntry = header.Gri + table[BaseScene * 2 + 1];
+        var raw = bkg.Read(gridEntry);
+        var shape = Lba2GridBackend.ToLba1Shape(raw);
+        var cells = Lba1GridCodec.Decode(shape);
+        int At(int x, int y, int z) => ((z * 64 + x) * 25 + y) * 2;
+        // (the first stand's bricks, each of its four columns layers 2-4, to the same places of the second)
+        var edits = new List<Lba1GridCell>();
+        for (var dz = 0; dz < 2; dz++)
+        for (var dx = 0; dx < 2; dx++)
+        {
+            int fx = XWheelFrom / 512 + dx, fz = XWheelFromZ / 512 + dz, tx = XStandX + dx, tz = XStandZ + dz;
+            if (cells[At(tx, 1, tz)] != XStandFloor || Enumerable.Range(2, 3).Any(y => cells[At(tx, y, tz)] != 0)) { log.Add($"the X door's second wheel left out: cell ({tx}, {tz}) isn't the corridor's bare floor"); return; }
+            for (var y = 2; y <= 4; y++)
+            {
+                if (cells[At(fx, y, fz)] != XStandBlock) { log.Add($"the X door's second wheel left out: the first stand isn't block {XStandBlock} at ({fx}, {y}, {fz})"); return; }
+                edits.Add(new Lba1GridCell(tx, y, tz, XStandBlock, cells[At(fx, y, fz) + 1]));
+            }
+        }
+        var entry = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
+        bkg.SetStored(gridEntry, entry);
+        if (header.MaxGri < (uint)entry.Length) { header.MaxGri = (uint)entry.Length; bkg.SetStored(0, header.Bytes); }
+        new FileTransaction().Write(bkgPath, bkg.ToBytes()).Commit();
+        b.Edit(BaseScene, "the X door's second wheel, in the corridor (Action: the door, var_game 93)", model =>
+        {
+            var first = model.Actors[XWheel];
+            var wheel = first.Clone();
+            wheel.X = first.X - (XWheelFrom - XStandX * 512); wheel.Z = first.Z - (XWheelFromZ - XStandZ * 512);
+            wheel.Life = new byte[] { 0 }; wheel.Track = new byte[] { 0 };
+            var index = SceneOps.AddActor(model, wheel);
+            return scripts =>
+            {
+                scripts.SetText(index, ScriptKind.Track, scripts.GetText(XWheel, ScriptKind.Track));
+                scripts.SetText(index, ScriptKind.Life, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if (1500 > distance(0))
+        {{
+            if (0 == var_game({XDoorVar}))
+            {{
+                set_var_game({XDoorVar}, 1);
+                set_track(label_0);
+            }}
+            else
+            {{
+                set_var_game({XDoorVar}, 0);
+                set_track(label_1);
+            }}
+        }}
+    }}
+}}
+");
+            };
+        });
+        log.Add($"the X door's second wheel: block {XStandBlock} at cells {XStandX}-{XStandX + 1}, {XStandZ}-{XStandZ + 1} in scene {BaseScene}'s grid, a wheel on it working var_game {XDoorVar}");
+    }
+
     // (scene 115's cell variable counting the moments before the lift-off -- its own scripts use 0-3)
     private const int SaucerWait = 20, BoardReach = 1800;
 
@@ -606,10 +713,9 @@ void comportement_2()
             }}";
         const string moon = "4 == chapter()";
 
-        // the radio, on the track's outside scenes (the copies of the moon's: 229 on)
-        foreach (var scene in b.OutsideScenes.ToList())
-            b.Edit(scene, "the radio rings in chapter 4: Baldino's call from his lander", model => IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 4),
-                RadioController(4, Say(MoonLine.Ringing), new[] { Say(MoonLine.BaldinoRadio) })));
+        // (no radio call on the moon: Baldino's from his lander went with him -- the user, 2026-11-16, "Baldino is no longer going to be on
+        // Emerald Moon"; his call and HAL's both came of one use of the radio, "using the radio on the emerald moon triggers both Baldino and
+        // HAL" -- RACEMOD.CPP's HalFrame mended too)
 
         // Lyra at her plinth: the start lights dark (Q_HAL 1), still dark, on
         MarshalA(b, report, moon, $@"            if (0 == var_game({QHal}))
@@ -661,6 +767,24 @@ void comportement_2()
                 }
             });
 
+        // the airlocks' hooks: Twinsen's helmet on its stand where the empty suit hung (MoonAirlocks)
+        foreach (var (scene, actor) in MoonAirlocks.Where(a => b.Store.SceneExists(a.Scene)))
+            b.Edit(scene, $"the airlock's hook (actor {actor}): Twinsen's helmet on its stand, not the empty suit", model =>
+            {
+                if (actor >= model.Actors.Count || model.Actors[actor].Entity != EmptySuitEntity) { log.Add($"the airlock's hook: scene {scene}'s actor {actor} isn't the empty suit -- left"); return _ => { }; }
+                model.Actors[actor].Entity = Citadel.CitadelProps.Prop;
+                model.Actors[actor].Body = unchecked((sbyte)Citadel.CitadelProps.HangingHelmet);
+                return scripts =>
+                {
+                    var life = scripts.GetText(actor, ScriptKind.Life);
+                    var now = life.Replace("body(0);", $"body({Citadel.CitadelProps.HangingHelmet});");
+                    if (now != life) scripts.SetText(actor, ScriptKind.Life, now);
+                };
+            });
+
+        // the base's X door's second wheel, inside (XDoorWheel)
+        XDoorWheel(gameDirectory, b, log);
+
         // the moon base: HAL and his mechanics. One HAL at a time (the user, 2026-11-06: "HAL waits as a racer in the pit lane, and HAL is
         // also inside the moon base ... Only one should exist at a time"): in the base until he is mended, then out at the track racing
         // -- from the next visit his talker gone from the base and his screen (the game's actor 4: the glow of his coils and his hum) off,
@@ -697,7 +821,7 @@ void comportement_2()
                 message({HalCry});
                 message({HalZx});
                 message({HalCry});
-                message_zoe({Say(MoonLine.ZoeNo)});
+                message_obj(0, {Say(MoonLine.TwinsenNo)});
                 set_var_game({QHal}, {HalHeard});
             }}
             else if ({HalWon} == var_game({QHal}))
@@ -711,9 +835,9 @@ void comportement_2()
                 var mechanics = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(MechanicSpot.X, MechanicSpot.Y, MechanicSpot.Z, 4), Talker(moon, $@"            if ({RadioLent} > var_game({QHal}) && 0 < var_game({Radio}))
             {{
                 message({Say(MoonLine.MechanicSpare)});
-                message_zoe({Say(MoonLine.ZoeRadio)});
-                message_obj(0, {Say(MoonLine.TwinsenMind)});
-                message_zoe({Say(MoonLine.ZoeWillMind)});
+                message_obj(0, {Say(MoonLine.TwinsenOffer)});
+                message({Say(MoonLine.MechanicThanks)});
+                message_obj(0, {Say(MoonLine.TwinsenBack)});
                 set_var_game({Radio}, 0);
                 message({Say(MoonLine.MechanicLeave)});
                 set_var_game({QHal}, {RadioLent});
@@ -735,13 +859,17 @@ void comportement_2()
         }
         else log.Add($"HAL and the mechanics left out: no scene {BaseScene}");
 
-        // won: out of the car by the start line -- Baldino, Lyra, HAL's log, Zoe -- and the Esmers' ship to Otringal
+        // won: out of the car by the start line -- the moon guard, Lyra, HAL's number on Twinsen's radio -- and the Esmers' ship to Otringal.
+        // (HAL's log of the black car, and Twinsen's word on it, no longer said unasked here: the user, 2026-11-16, "Twinsen seems to be
+        // getting an automatic hint from HAL, let's stop this. Let's have HAL say at the end of the Emerald Moon race "Congratulations for
+        // beating me, I've added my number to your phone if you ever need any help" - then leave it. This should be player initiated" --
+        // the log is still his in the base, talked to; the radio calls him from now on: RACEMOD.CPP HalCall, the race file's hal_mended=)
         foreach (var after in b.OutsideScenes.ToList())
-        b.Edit(after, "after a win: Baldino, Lyra, HAL's log of the black car, Zoe, and the Esmers' ship to Otringal (inc_chapter, scene 88)", model =>
+        b.Edit(after, "after a win: the moon guard, Lyra, HAL's log of the black car, Twinsen, and the Esmers' ship to Otringal (inc_chapter, scene 88)", model =>
         {
             var spot = AfterRaceSpot(report);
             if ((int)Math.Floor(spot.X / 64) != model.CubeX || (int)Math.Floor(spot.Z / 64) != model.CubeY) spot = (model.CubeX * 64 + 32, model.CubeY * 64 + 32, report.StartLine[0].Y, 0);
-            var baldino = model.Actors.Count; var hal = baldino + 1;
+            var guard = model.Actors.Count; var hal = guard + 1;
             var edits = new List<Action<SceneScripts>>
             {
                 IslandBeatsA.Add(model, Voice(model, spot, 4), "void comportement_0()\n{\n}\n"),
@@ -758,10 +886,9 @@ void comportement_1()
     if ({HalWon} == var_game({QHal}) && {Driving} != comportement_hero())
     {{
         set_var_game({QHal}, {HalDone});
-        message_obj({baldino}, {Say(MoonLine.BaldinoBeaten)});
+        message_obj({guard}, {Say(MoonLine.GuardBeaten)});
         message({Say(MoonLine.LyraZeelich)});
-        message_obj({hal}, {Say(MoonLine.HalLog)});
-        message_zoe({Say(MoonLine.ZoeLaugh)});
+        message_obj({hal}, {Say(MoonLine.HalNumber)});
         message({Say(MoonLine.HangarGo)});
         if (5 > chapter())
         {{

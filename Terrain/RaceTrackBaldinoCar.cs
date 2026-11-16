@@ -21,6 +21,9 @@ internal static class RaceTrackBaldinoCar
     public const int RacerBody = 227;        // BODY.HQR: the retail racer's car, whose header this one starts from
     public const int RacerEntity = 157;
     public const int Generic = 1;            // the racer entity's body number for this car (its own car is 0)
+    // (and his car with nobody in it -- the Desert's garage, where he works on it: the user, 2026-11-16, "Baldino is both standing at the
+    // front of the tent garage and in his car, let's have him working on his car instead of in it")
+    public const int EmptyGeneric = 94;
 
     // Palette ramp starts (the engine adds the light, up to about nine steps), and the unlit colours drawn as they are.
     private const int Plank = 224, PlankDark = 16, Stripe = 192, Metal = 48, MetalLight = 52, Brass = 100, Glass = 164, Tyre = 48;
@@ -247,9 +250,11 @@ internal static class RaceTrackBaldinoCar
         var car = Build(Body.Read(bodies.Read(BaldinoBody), 2), Body.Read(bodies.Read(RacerBody), 2));
         var index = HqrArchive.CountEntries(bodyPath);
         HqrWriter.AppendToFile(bodyPath, car.Write());
+        HqrWriter.AppendToFile(bodyPath, RaceTrackCharacterCars.WithoutDriver(Body.Read(car.Write(), 2)).Write());
 
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = WithBody(HqrArchive.Open(ressPath).Read(44), RacerEntity, Generic, index);
+        table = WithBody(table, RacerEntity, EmptyGeneric, index + 1);
         HqrWriter.ReplaceInFile(ressPath, 44, table);
         return (index, $"Baldino's car: BODY.HQR entry {index} ({car.Faces.Count} polygons, {car.Lines.Count} lines, {car.Spheres.Count} spheres, {car.Vertices.Count} points), " +
                        $"the racer's entity ({RacerEntity}) body {Generic}, driven with the racer's animations");

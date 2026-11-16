@@ -1201,7 +1201,11 @@ void comportement_1()
         // Cup's purse and the racing licence (the main event's, the intergalactic racing), and the herald's word that Twinsen leads the Cup.
         // Not the ferry ticket since 2026-11-16 (the user: "Let's make Twinsen have to buy the ferry ticket instead of giving it to him for
         // winning the race, His race prize is the racing licence and the right to participate in the intergalactical racing"): the ferry
-        // office sells it once the race is won (RaceTrackStory.Retired, scene 8's clerk, the game's 10 kashes)
+        // office sells it once the race is won (RaceTrackStory.Retired, scene 8's clerk, the game's 10 kashes). And the island winner's trophy
+        // (the errands' slot, ErrandTrophy: shown to Flick at the Desert's line -- RaceTrackStory.Desert), and the magic slate if the herald's
+        // wasn't taken before the race (the user, 2026-11-16: "Let's have Twinsen given the magic slate at the end of the Citadel 2 race if
+        // he doesn't pick it up before. For winning Citadel 2 he gets an island winners trophy that he has to present to be allowed to enter
+        // the desert race")
         var paulColour = paul?.CoulObj ?? 4;
         for (var scene = RaceTrackIsland.Citadel.FirstScene; scene <= RaceTrackIsland.Citadel.LastScene; scene++)
         {
@@ -1227,6 +1231,14 @@ void comportement_1()
         message({Say(ChapterLine.PaulLicence)});
         found_object({LicenceSlot});
         set_var_game({LicenceSlot}, 1);
+        set_var_game({ErrandSlot}, {ErrandTrophy});
+        found_object({ErrandSlot});
+        if (0 == var_game({Slate}))
+        {{
+            message({Say(ChapterLine.HeraldSlate)});
+            found_object({Slate});
+            set_var_game({Slate}, 1);
+        }}
         message({Say(ChapterLine.HeraldLeads)});
         set_var_game({WonVar}, 2);
     }}

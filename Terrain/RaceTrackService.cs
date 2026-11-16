@@ -651,6 +651,8 @@ internal static class RaceTrackService
             log.AddRange(RaceTrackCharacterCars.InstallMonsters(gameDirectory));
             // (and LBA1's digger, Polar Island's tractor, from the LBA1 folder -- RaceTrackCharacterCars.InstallDigger -- after even those)
             log.AddRange(RaceTrackCharacterCars.InstallDigger(gameDirectory, Lba1Folder()));
+            // (and the Desert race's entrants from LBA1's islands, their drivers LBA1's bodies -- RaceTrackCharacterCars.InstallLba1Entrants)
+            log.AddRange(RaceTrackCharacterCars.InstallLba1Entrants(gameDirectory, Lba1Folder()));
             // (and Polar Island's grobo's body as this version makes it -- the folder's originals may have an earlier one: until 2026-10-27
             // it was written unlit, his grey skin black)
             if (LBAAssembler.Terrain.Polar.PolarIsland.IsInstalled(gameDirectory)) log.AddRange(LBAAssembler.Terrain.Polar.PolarGrobo.InstallBody(gameDirectory));

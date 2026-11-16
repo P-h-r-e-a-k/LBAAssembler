@@ -21,7 +21,9 @@ namespace LBAAssembler.Terrain;
 internal static partial class RaceTrackCharacterCars
 {
     public enum Kind { Sup, Franco, Grobo, Rabbibunny, Quetch, Sphero, Wannie, Mosquibee, Gloom, Pighead, Dog, Robot, Monster, Creature, Ghost, Child }
-    public enum Style { Roadster, Jeep, Truck, Kart, Bubble, Ball, Cart, Glider, Boat, Monster, Robot, Basket, Ghost }
+    public enum Style { Roadster, Jeep, Truck, Kart, Bubble, Ball, Cart, Glider, Boat, Monster, Robot, Basket, Ghost,
+        // (the Desert race's entrants from LBA1's islands, each car made after the one who drives it: RaceTrackCharacterCars.Lba1Entrants)
+        Telescope, Suv, Carrot, Disco, PaintCan }
 
     // A character of the cast: its body (BODY.HQR), the car's name ("<Short>'s <its style>"), who drives, its island and kind -- and where the
     // automatic seat went wrong, its own (Seat) or another style.
@@ -216,7 +218,8 @@ internal static partial class RaceTrackCharacterCars
     {
         Style.Roadster => "roadster", Style.Jeep => "jeep", Style.Truck => "truck", Style.Kart => "kart", Style.Bubble => "bubble car", Style.Ball => "ball car",
         Style.Cart => "mine cart", Style.Glider => "glider", Style.Boat => "swamp boat", Style.Monster => "monster truck", Style.Robot => "robot car",
-        Style.Basket => "basket car", _ => "ghost car",
+        Style.Basket => "basket car", Style.Telescope => "telescope", Style.Suv => "SUV", Style.Carrot => "carrot", Style.Disco => "disco car",
+        Style.PaintCan => "paint can", _ => "ghost car",
     };
 
     public static string CastName(CastMember c) => $"{c.Short}'s {Noun(StyleOf(c))}";
@@ -599,6 +602,175 @@ internal static partial class RaceTrackCharacterCars
                 return new Parts(hull, new Cabin(0, Math.Max(rx, 230), 230, Up: 14, Rim: p.Second, Rail: p.TrimFlat),
                     Look(Steel, Dark, p.Second, p.TrimFlat), new Axle(new Vector3(240, 280, 300), new Vector3(420, 150, 300), 150, 100), new Axle(new Vector3(240, 280, -300), new Vector3(420, 150, -300), 150, 100));
             }
+            case Style.Telescope:
+            {
+                // (Bob Vortix, the astronomer: the user, 2026-11-16, "an astronomer themed car, perhaps with a giant telescope making up most of the
+                // car") the hull a great brass telescope lying along the car, widening to its lens at the nose, dark bands round it, the eyepiece
+                // by the cockpit at the back, a small finder scope on top, stars on a midnight band
+                var hull = new Hull(m, 300, sides, 2, 0.5f, (700, 225, 225, 225), (650, 232, 232, 232), (560, 222, 222, 222), (200, 205, 205, 205), (-200, 185, 185, 185),
+                    (-480, 160, 160, 160), (-560, 120, 120, 120));
+                hull.Skin(m, (band, k) => band is 0 or 2 ? GoldDark : band == 4 ? NightBlue : Gold);
+                hull.Nose(m, 706, Cyan);
+                hull.Tail(m, -600, Steel);
+                if (trim)
+                {
+                    // (the eyepiece: up and back from the tail; the finder scope along the top; the lens's glint; the stars)
+                    m.Strut(2, new Vector3(0, hull.Cy + 40, -560), new Vector3(0, hull.Cy + 170, -680), 36, Steel);
+                    m.Sphere(m.P(2, new(0, hull.Cy + 175, -688)), 30, Dark);
+                    m.Strut(2, hull.OnTop(110, 320, 34), hull.OnTop(110, 20, 34), 30, GoldDark);
+                    m.Sphere(m.P(2, hull.OnTop(110, 330, 34)), 30, Cyan);
+                    foreach (var side in Sides) m.Strut(2, hull.OnTop(side * 60, 260, 0), hull.OnTop(110, 260, 30), 10, Steel);
+                    m.Sphere(m.P(2, new(-90, hull.Cy + 120, 712)), 30, Lamp);
+                    foreach (var (x, z) in new[] { (1f, -260f), (-1f, -300f), (1f, -380f), (-1f, -230f) })
+                        m.Sphere(m.P(2, new(x * (hull.Side(hull.Cy + 60, z) + 4), hull.Cy + 60, z)), 16, Yellow);
+                }
+                return new Parts(hull, new Cabin(-360, Math.Min(rx, 210), 170, Up: 30, Rim: GoldDark, Rail: GoldFlat),
+                    Look(Steel, Dark, GoldDark, GoldFlat), new Axle(new Vector3(230, 220, 430), new Vector3(410, 160, 430), 160, 110), new Axle(new Vector3(220, 230, -400), new Vector3(400, 170, -400), 170, 120));
+            }
+            case Style.Suv:
+            {
+                // (Lieutenant Grap of the rebellion: "an SUV vehicle in camouflage colours") a big square-shouldered off-roader, high sides, its
+                // panels in patches of olive, dark green, brown and khaki; a roll cage over the seats, a spare wheel and jerrycans on the back,
+                // a whip aerial with a pennant
+                var hull = new Hull(m, 340, sides, 7, 0.5f, (640, 250, 140, 130), (560, 280, 190, 140), (420, 290, 230, 145), (-420, 290, 240, 145), (-600, 280, 220, 140),
+                    (-660, 250, 180, 130));
+                int Camo(int band, int k) => ((band * 5 + k * 3 + (band * k) % 4) % 4) switch { 0 => CamoOlive, 1 => CamoDark, 2 => Brown, _ => Cream };
+                hull.Skin(m, (band, k) => k >= sides / 2 - 1 && k <= sides / 2 ? Dark : Camo(band, k));
+                hull.Nose(m, 650, Dark);
+                hull.Tail(m, -664, CamoOlive);
+                if (trim)
+                {
+                    var front = 120f; var back = -380f; var high = hull.Top(0, 0) + 360;
+                    foreach (var side in Sides)
+                    {
+                        m.Strut(2, hull.OnTop(side * 250, front, -6), new Vector3(side * 230, high, front - 40), 24, Dark);
+                        m.Strut(2, hull.OnTop(side * 250, back, -6), new Vector3(side * 230, high, back), 24, Dark);
+                        m.Strut(2, new Vector3(side * 230, high, front - 40), new Vector3(side * 230, high, back), 24, Dark);
+                        m.Sphere(m.P(2, new(side * 185, hull.Cy + 80, 652)), 40, Lamp);
+                    }
+                    m.Strut(2, new Vector3(-230, high, front - 40), new Vector3(230, high, front - 40), 24, Dark);
+                    m.Strut(2, new Vector3(-230, high, back), new Vector3(230, high, back), 24, Dark);
+                    // (the spare wheel, the jerrycans, the aerial and its pennant; the grille's bars)
+                    var spare = new Vector3(0, hull.Cy + 60, -690);
+                    var tyre = m.Loop(2, spare, new Vector3(140, 0, 0), new Vector3(0, 140, 0), 8);
+                    var hub = m.P(2, spare + new Vector3(0, 0, -30));
+                    for (var k = 0; k < 8; k++) m.Out(new[] { tyre[k], tyre[(k + 1) % 8], hub }, Dark, spare + new Vector3(0, 0, 40));
+                    foreach (var side in Sides) m.Box(2, new Vector3(side * 175, hull.Top(side * 175, -560) + 80, -560), new Vector3(90, 160, 120), CamoOlive, CamoDark);
+                    m.Rod(2, hull.OnTop(-200, -520, 0), hull.OnTop(-200, -520, 620), Steel + 6);
+                    m.Both(new[] { m.P(2, hull.OnTop(-200, -520, 620)), m.P(2, hull.OnTop(-200, -520, 520)), m.P(2, hull.OnTop(-200, -660, 570)) }, RedFlat);
+                    for (var i = -3; i <= 3; i++) m.Line(m.P(2, new(i * 55, hull.Cy - 30, 652)), m.P(2, new(i * 55, hull.Cy + 110, 652)), Steel + 6);
+                }
+                return new Parts(hull, new Cabin(-130, rx, 210, Rim: Dark, Screen: 230, ScreenHalf: rx - 10, Rail: Steel + 6),
+                    Look(Dark, Dark, CamoOlive, Steel + 6), new Axle(new Vector3(260, 300, 420), new Vector3(470, 200, 420), 200, 140), new Axle(new Vector3(260, 300, -420), new Vector3(470, 200, -420), 200, 140));
+            }
+            case Style.Carrot:
+            {
+                // (the Hamalayi rabbibunny: "a giant carrot themed car. Perhaps some small carrots sticking out of the wheels, and a giant carrot
+                // leaf at the back") the hull a giant carrot, its point the nose, its rings ridged, a crown of great green leaves fanning up and
+                // back from its top end; a small carrot out of each wheel's hub (WheelLook.Carrot)
+                var hull = new Hull(m, 290, sides, 2, 0.5f, (760, 30, 30, 30), (620, 95, 95, 95), (420, 160, 160, 160), (180, 210, 205, 205), (-120, 245, 235, 235),
+                    (-420, 260, 245, 245), (-560, 230, 220, 220), (-620, 150, 150, 150));
+                // (low in its ramp: lit, Orange + 3 ran up to a pale peach)
+                hull.Skin(m, (band, k) => band % 2 == 1 && k % 3 == 0 ? Orange - 1 : Orange - 2);
+                hull.Nose(m, 780, Orange - 1);
+                hull.Tail(m, -650, CarrotTop);
+                if (trim)
+                {
+                    // (the ridges round the root: thin dark rings)
+                    for (var i = 1; i + 1 < hull.Rings.Count; i++) for (var k = 0; k < hull.Rings[i].Length; k += 2) m.Line(hull.Rings[i][k], hull.Rings[i][(k + 1) % hull.Rings[i].Length], Orange - 2 + 16 * 0);
+                    // (the leaves: long blades fanning up and back from the top, each a pair of triangles about its midrib, both sides drawn)
+                    var root = new Vector3(0, hull.Cy + 40, -630);
+                    foreach (var (dx, rise, len, w) in new[] { (0f, 1.0f, 900f, 120f), (0.45f, 0.85f, 820f, 110f), (-0.45f, 0.85f, 820f, 110f), (0.85f, 0.55f, 700f, 100f), (-0.85f, 0.55f, 700f, 100f) })
+                    {
+                        var dir = Vector3.Normalize(new Vector3(dx, rise, -0.6f));
+                        var tip = root + dir * len;
+                        var mid = root + dir * len * 0.5f;
+                        var across = Vector3.Normalize(Vector3.Cross(dir, new Vector3(0, 0, 1))) * w;
+                        if (float.IsNaN(across.X)) across = new Vector3(w, 0, 0);
+                        int a = m.P(2, root), b = m.P(2, mid + across), t = m.P(2, tip), d = m.P(2, mid - across);
+                        m.Both(new[] { a, b, t }, LeafGreen); m.Both(new[] { a, t, d }, LeafGreen + 2);
+                        m.Line(a, t, LeafGreen - 2);
+                    }
+                }
+                return new Parts(hull, new Cabin(-260, Math.Min(rx, 220), 180, Up: 26, Rim: Orange - 1, Rail: OrangeFlat),
+                    Look(LeafGreen, Dark, Orange - 1, OrangeFlat) with { Carrot = Orange - 2 }, new Axle(new Vector3(200, 230, 380), new Vector3(400, 160, 380), 160, 110), new Axle(new Vector3(240, 250, -380), new Vector3(440, 180, -380), 180, 130));
+            }
+            case Style.Disco:
+            {
+                // (the hipster of Tippet Island: "a disco music inspired car") long and low, its bands the colours of a rainbow, a lit dance
+                // floor's squares on the bonnet, a mirror ball spinning on a pole over the back, two great speakers behind the seat
+                var hull = new Hull(m, 270, sides, 3, 0.5f, (660, 140, 70, 80), (560, 230, 110, 112), (280, 262, 128, 128), (-60, 268, 138, 130), (-360, 268, 140, 130),
+                    (-580, 240, 120, 118), (-660, 170, 85, 92));
+                int[] bands = { DiscoPink, Orange + 2, Gold, Green, Blue + 2, DiscoViolet };
+                hull.Skin(m, (band, k) => k >= sides / 2 - 1 && k <= sides / 2 ? Dark : bands[band % bands.Length]);
+                hull.Nose(m, 680, DiscoViolet);
+                hull.Tail(m, -680, DiscoViolet);
+                if (trim)
+                {
+                    // (the dance floor: three rows of lit squares across the bonnet)
+                    int[] lights = { Lamp, Cyan, Yellow, RedFlat + 2 };
+                    for (var r = 0; r < 3; r++)
+                        for (var q = -1; q <= 1; q++)
+                        {
+                            float z = 470 - r * 110, x = q * 100;
+                            m.Up(new[] { m.P(2, hull.OnTop(x - 45, z + 45, 3)), m.P(2, hull.OnTop(x + 45, z + 45, 3)), m.P(2, hull.OnTop(x + 45, z - 45, 3)), m.P(2, hull.OnTop(x - 45, z - 45, 3)) },
+                                lights[(r + q + 4) % lights.Length], unlit: true);
+                        }
+                    // (the mirror ball on its pole, glints round it; the speakers, their cones)
+                    var top = hull.OnTop(0, -470, 520);
+                    m.Rod(2, hull.OnTop(0, -470, 0), top, Steel + 6);
+                    m.Ball(2, top + new Vector3(0, 90, 0), 95, Steel + 4);
+                    foreach (var (x, y, z) in new[] { (60f, 150f, 50f), (-70f, 120f, -40f), (20f, 40f, 80f), (-30f, 170f, 30f) }) m.Sphere(m.P(2, top + new Vector3(x, y, z)), 14, Lamp);
+                    foreach (var side in Sides)
+                    {
+                        var sp = new Vector3(side * 150, hull.Top(side * 150, -560) + 110, -560);
+                        m.Box(2, sp, new Vector3(150, 220, 120), Dark, Dark + 1);
+                        m.Sphere(m.P(2, sp + new Vector3(0, 40, -64)), 40, Steel + 2);
+                        m.Sphere(m.P(2, sp + new Vector3(0, -55, -64)), 26, Steel + 2);
+                    }
+                }
+                return new Parts(hull, new Cabin(-200, Math.Min(rx, 220), 180, Rim: DiscoViolet, Screen: 170, ScreenHalf: Math.Min(rx, 220) - 10, Rail: GoldFlat),
+                    Look(Steel, Dark, DiscoPink, Lamp), new Axle(new Vector3(240, 250, 420), new Vector3(430, 160, 420), 160, 110), new Axle(new Vector3(250, 255, -420), new Vector3(450, 170, -420), 170, 120));
+            }
+            case Style.PaintCan:
+            {
+                // (the painter of Brundle Island: "a white paint can inspired car, perhaps with a comedy paint brush at the back") the hull a great
+                // white paint can lying along the car, its lid's rim at the nose, a blue label round its middle, paint run down its sides, its
+                // wire handle arched over; a huge brush stuck in the back, its bristles loaded with red paint
+                var hull = new Hull(m, 310, sides, 2, 0.5f, (620, 225, 225, 225), (590, 240, 240, 240), (560, 228, 228, 228), (120, 228, 228, 228), (-120, 228, 228, 228),
+                    (-520, 228, 228, 228), (-560, 240, 240, 240), (-590, 225, 225, 225));
+                // (the can's white low in the greys: White, their top, lit ran into the reds -- the house's porcelain's way, 56)
+                hull.Skin(m, (band, k) => band is 0 or 1 or 5 or 6 ? Steel + 2 : band == 3 ? Blue + 2 : CanWhite);
+                hull.Nose(m, 630, Steel + 3);
+                hull.Tail(m, -600, Steel + 3);
+                if (trim)
+                {
+                    // (the drips: runs of paint down the sides from the top, red and yellow)
+                    foreach (var (side, z, colour, len) in new[] { (1f, 400f, RedFlat + 2, 170f), (1f, 250f, YellowPaint, 120f), (-1f, 340f, RedFlat + 2, 140f), (-1f, 180f, YellowPaint, 190f), (1f, -300f, RedFlat + 2, 100f) })
+                    {
+                        float y0 = hull.Cy + 150, y1 = y0 - len;
+                        float x0 = side * (hull.Side(y0, z) + 3), x1 = side * (hull.Side(y1, z) + 3);
+                        m.Both(new[] { m.P(2, new(x0, y0, z - 30)), m.P(2, new(x0, y0, z + 30)), m.P(2, new(x1, y1, z + 12)), m.P(2, new(x1, y1, z - 12)) }, colour);
+                    }
+                    // (the handle: a wire arched over from side to side)
+                    var arch = new List<Vector3>();
+                    for (var i = 0; i <= 6; i++) { var a = MathF.PI * i / 6; arch.Add(new Vector3(260 * MathF.Cos(a), hull.Cy + 260 * MathF.Sin(a) + 40, 120)); }
+                    for (var i = 0; i < 6; i++) m.Strut(2, arch[i], arch[i + 1], 12, Steel + 6);
+                    // (the brush: its handle up and back out of the tail, its ferrule, its bristles fanned and red at their tips)
+                    var foot = new Vector3(0, hull.Cy + 160, -560);
+                    var neck = new Vector3(0, hull.Cy + 520, -760);
+                    m.Strut(2, foot, neck, 40, Wood);
+                    var ferrule = neck + new Vector3(0, 70, -40);
+                    m.Strut(2, neck, ferrule, 70, Steel + 4);
+                    var b0 = ferrule; var b1 = ferrule + new Vector3(0, 210, -110);
+                    int l0 = m.P(2, b0 + new Vector3(-90, 0, 0)), r0 = m.P(2, b0 + new Vector3(90, 0, 0)), l1 = m.P(2, b1 + new Vector3(-120, 0, 0)), r1 = m.P(2, b1 + new Vector3(120, 0, 0));
+                    m.Both(new[] { l0, r0, r1, l1 }, Brown + 2);
+                    int l2 = m.P(2, b1 + new Vector3(-125, 60, -30)), r2 = m.P(2, b1 + new Vector3(125, 60, -30));
+                    m.Both(new[] { l1, r1, r2, l2 }, RedFlat + 2);
+                }
+                return new Parts(hull, new Cabin(-240, Math.Min(rx, 215), 175, Up: 24, Rim: Steel + 2, Rail: WhiteFlat),
+                    Look(Steel, Dark, CanWhite, RedFlat + 2), new Axle(new Vector3(230, 230, 400), new Vector3(420, 160, 400), 160, 110), new Axle(new Vector3(230, 240, -380), new Vector3(430, 170, -380), 170, 120));
+            }
             default:
             {
                 // a car you can see through: pale and glassy, the wheels too
@@ -690,7 +862,7 @@ internal static partial class RaceTrackCharacterCars
             // (CastFirst, 64 on) twice, and LBRA's setup failed on the doubled numbers, 2026-11-13)
             // (nor the masked driver's black car, MaskedGeneric 95: a story prop, no car to pick -- listed it doubled the cast's car 95, 2026-11-14)
             var empties = EmptyOnes.Length;
-            foreach (var (generic, body) in racerEntity.Bodies.Where(b => b.Generic < RaceTrackSmallCars.First && b.Generic != MaskedGeneric && (b.Generic < EmptyFirst || b.Generic >= EmptyFirst + empties)).OrderBy(b => b.Generic))
+            foreach (var (generic, body) in racerEntity.Bodies.Where(b => b.Generic < RaceTrackSmallCars.First && b.Generic != MaskedGeneric && b.Generic != RaceTrackBaldinoCar.EmptyGeneric && (b.Generic < EmptyFirst || b.Generic >= EmptyFirst + empties)).OrderBy(b => b.Generic))
             {
                 var small = racerEntity.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(generic)).Select(b => b.Body).DefaultIfEmpty(-1).First();
                 var (name, who, island) = names.TryGetValue(generic, out var n) ? n : ($"Car {generic}", "", "");

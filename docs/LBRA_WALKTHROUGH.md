@@ -641,45 +641,46 @@ through at night, slow, like it was looking for something."
 
 **9. To the moon.**
 
-**Baldino:** "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there. My
-rocket leaves now, room for three."
+**Baldino:** "You think you're fast? The Cup goes on to the Emerald Moon, and up there the moon base's own computer races -- HAL, never
+beaten. The Esmers' freighter takes cars to the moon -- show your racing licence at the Temple of Bú, by the track."
 
-Baldino's rocket takes them to the Emerald Moon, there and then.
+The Esmers' freighter takes Twinsen and his car to the Emerald Moon. (Baldino stays on Twinsun: he isn't on the moon at all.)
 
 ---
 
 ## Chapter 4: The Emerald Moon
 
-**Track:** the moon's loops. **To beat:** Baldino in his lander.
+**Track:** the moon's loops. **To beat:** HAL, driving itself. (And one of the base's guards in his spacesuit, in the moon rover.)
 
-**1. Landing.** Lyra, the Cup's new marshal, stands on the deck's edge by the start.
+**1. Landing.** Twinsen steps out in his racing helmet: there's no air outside. Lyra, the Cup's new marshal, stands on the deck's edge
+by the start.
+
+*Airlocks:* into the moon base through an airlock, Twinsen keeps his helmet on until it has cycled, then leaves it on its stand there;
+on the way out he takes it again.
 
 **Lyra:** "Welcome to the moon, racers. I'm Lyra, the Cup's marshal from here to the end. Bad news: the base's computer won't switch on
 the start lights, and nobody can get it to talk sense."
 
 A new page on the slate: the Emerald Moon.
 
-**2. The radio rings.** Baldino calls from his lander's cockpit.
-
-**Baldino** (radio): "Twinsen? Baldino, from the pits. Low gravity up here: I've softened your springs and put weight in the nose, so
-you won't flip on the loops. And don't touch HAL, he hates me."
+**2.** (No radio call here: Baldino isn't on the moon.)
 
 **3. HAL.** In the moon base, beside Baldino's old cell, stands HAL, its screen cracked. (The road is raised high over the moon:
 Twinsen jumps down off it, and back up by the ladders on its sides -- one in each stretch of ground below it a jump lands in.)
 
 **HAL:** "HAL!! ZX81!! HAL!!"
 
-**Zoe:** "I think that means no."
+**Twinsen:** "I think that means no."
 
 **4. The stores.** HAL's mechanics are hiding among the crates in the base's stores.
 
 **A mechanic:** "It shouted at us all night. Its voice box is broken. There's a spare in... no, wait, we used it. Any radio would do."
 
-**Zoe:** "Twinsen... your radio."
+**Twinsen:** "Would my radio do? Here, take it."
 
-**Twinsen:** "Baldino won't mind."
+**A mechanic:** "A portable! Perfect. He'll have his voice back in no time."
 
-**Zoe:** "Baldino will mind."
+**Twinsen:** "I'll want it back before the race."
 
 Twinsen hands the radio over.
 
@@ -689,8 +690,8 @@ The mechanics troop out to HAL and set to work. HAL's screen lights up, whole ag
 
 **5. HAL, mended.**
 
-**HAL:** "Thank you, Twinsen. The start lights are on. I have calculated your chances against Baldino: they are poor. I will race too,
-to see if I am right."
+**HAL:** "Thank you, Twinsen. The start lights are on. I have calculated your chances against me: they are poor. I will race you, to
+see if I am right."
 
 **HAL:** "Your radio is returned. I have improved it: it now receives the Esmers' channel."
 
@@ -700,20 +701,20 @@ HAL goes out to race: his car waits in the pit lane from now on (before, the pit
 cabinet is dark and silent. **A mechanic:** "HAL's loaded himself into a racing car and gone out to the track. That cabinet's just a box
 till he's back."
 
-**6. The race.** Baldino in his lander (the one to beat), HAL driving itself. Lyra drops the flag.
+**6. The race.** HAL driving itself (the one to beat), and a guard of the base in his spacesuit in the moon rover. Lyra drops the flag.
 
 *Tip:* in low gravity the car floats over the crests. Ease off before each loop so you land on the road, not beside it.
 
 **7. Won.**
 
-**Baldino** (climbing out): "Beaten in my own lander! I'll have to tune the other one."
+**The moon guard** (climbing out): "Beaten by a fellow without a spacesuit! The base will never let me hear the end of it."
 
 **Lyra:** "Two worlds, two races... and now Zeelich. The Esmers' ship leaves for Otringal."
 
 **HAL:** "My log shows a launch from this moon last night: one black car, one passenger, to Zeelich. The passenger's name was not given.
 His laugh was on file."
 
-**Zoe:** "Who leaves a laugh on file?"
+**Twinsen:** "Who leaves a laugh on file?"
 
 The Esmers' ship takes them to Otringal, on the planet Zeelich.
 

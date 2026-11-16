@@ -29,13 +29,21 @@ internal static partial class RaceTrackStory
     // (an actor's height in its scene's file over CubeShift: a cube past one of its cube's edges -- the band of CubeShiftBand it's in: +x, +z,
     // -x, -z -- its height in the band its own: RACEMOD.CPP cube_shift_marks)
     internal const int CubeShift = 24576, CubeShiftBand = 2048;
+    // The garage's people and cars drawn from every cube but the tent's own (the race file's figure= and figure_cubes=, RACEMOD.CPP
+    // DrawFigures): there they're the scenes' actors, seen only from those cubes -- the user, 2026-11-16, "Our racers on Desert Island need
+    // to be visible from all cubes" (DesertGarage writes them)
+    internal const string GarageFiguresFile = "GARAGEFIG.TXT";
+    // (the game's chapter variable, FLAG_CHAPTER, and the Desert's last chapter: its talkers' "4 > chapter()")
+    private const int ChapterVar = 253, DesertChapterLast = 3;
+    // (a racer, a mechanic, Baldino beside a bay's car: this share of the bay's width off its middle -- clear of the lift's posts, 905 out)
+    private const double RacerOut = 0.42, RacerFront = 600;
     // the breakdown: after which checkpoint of the first lap, and how fast the car goes then (units a second: about 13 km/h)
     private const int BreakdownCheckpoint = 2, BreakdownSpeed = 1800;
     private const string BreakdownText = "Sand in the engine! Zoe needs Baldino's sand filters: back to the garage.";
 
     // The Desert race file's lines for the filters
     internal static string GarageRaceLines() =>
-        $"cube_shift_marks=1\ninv_kinds={FiltersSlot} {FiltersModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\n" +
+        $"cube_shift_marks=1\ninv_kinds={FiltersSlot} {FiltersModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\nfigures={GarageFiguresFile}\n" +
         // (and Chedil Amiradoo on his magic carpet, round the island: on the ground as the game had him, but never under the track's raised
         // ground nor stopped by its decors, and well over the road wherever he comes near it -- F14, the user, 2026-11-08: "raise his
         // actors path above ground", "check that during a race he won't be in the way of the track at any point": RACEMOD.CPP hover=)
@@ -134,11 +142,12 @@ internal static partial class RaceTrackStory
         var liftBays = new HashSet<int> { 2, 5 };
         var liftMechanic = Copy(b.Originals, 23, 14);
         var start = b.Store.Load(startScene);
-        var grid = start.Actors.Where(a => a.Entity == RaceTrackScenes.RacerEntity && a.Body >= 0).Take(5).ToList();
+        var grid = start.Actors.Where(a => a.Entity == RaceTrackScenes.RacerEntity && a.Body >= 0).Take(Math.Max(5, report.GarageSize.Bays - 1)).ToList();
         var mechanic = start.Actors.FirstOrDefault(a => a.Entity == 30 && a.Body >= 0);
         var size = report.GarageSize;
         // where Baldino and Zoe stand: the tent's ends, or (with its bays) Zoe in Twinsen's bay and Baldino in the aisle before the bays
         double baldinoU = 2050, baldinoV = 500, zoeU = -2050, zoeV = 500;
+        var baldinoBeta = facingOut;
         if (size.Bays > 0)
         {
             // A bay for each car (the user, 2026-11-11: "A specific garage space for every car with room around them to be worked on"):
@@ -148,41 +157,53 @@ internal static partial class RaceTrackStory
             // The first bay, the end nearest the start line, is Twinsen's: his car is out on the road, Zoe waits in it with the tools.
             double hl = size.Long * 256, hd = size.Deep * 256, w = 2 * hl / size.Bays, bayV = -hd + size.BayDeep * 512 / 2;
             var kinds = Lba2EntityTable.Load(gameDirectory);
-            for (var k = 1; k < size.Bays && k - 1 < grid.Count; k++)
+            // (turned from (fu, fv) to (tu, tv), the tent's u and v)
+            int TurnTo(double fu, double fv, double tu, double tv) =>
+                RaceTrackMath.Turn(Math.Atan2(g.AlongX * (tu - fu) + g.OutX * (tv - fv), g.AlongZ * (tu - fu) + g.OutZ * (tv - fv)));
+            for (var k = 0; k < size.Bays; k++)
             {
                 var u = -hl + w * (k + 0.5);
+                // (a lift in every bay, Twinsen's too -- raised where a car's up on it, lowered under the rest: the user, 2026-11-16, "Let's add
+                // in a car lift for every racer, even if the car isn't on it, they should have one")
+                people.Add((Citadel.CitadelProps.Actor(liftBays.Contains(k) ? Citadel.CitadelProps.CarLift : Citadel.CitadelProps.CarLiftDown, 0, 0, 0), u, bayV, facingOut, stand, liftBays.Contains(k) ? "a car lift" : "a car lift, lowered"));
+                if (k == 0 || k - 1 >= grid.Count) continue;
                 var car = grid[k - 1].Clone();
                 car.Flags &= ~1u;
+                // (Baldino's rocket car: empty, Baldino at work on it -- not in it and in the aisle as well)
+                var baldinos = car.Body == RaceTrackBaldinoCar.Generic;
                 var who = RaceTrackCharacterCars.OfGeneric(car.Body);
                 var empty = RaceTrackCharacterCars.EmptyGeneric(car.Body);
                 var racer = who is not null && kinds?.KindForBody(who.Character) is { } kind ? kind : ((int Entity, int Body, int Anim)?)null;
-                if (empty is { } e && racer is not null) car.Body = e;
+                if (empty is { } e && (racer is not null || baldinos)) car.Body = e;
                 if (liftBays.Contains(k)) rise[people.Count] = Citadel.CitadelProps.CarLiftHigh;
-                people.Add((car, u, bayV, facingOut, stand, empty is not null && racer is not null ? $"{who!.Name}, empty" : "a car in its bay"));
-                if (liftBays.Contains(k))
+                people.Add((car, u, bayV, facingOut, stand, baldinos ? "Baldino's car, empty" : empty is not null && racer is not null ? $"{who!.Name}, empty" : "a car in its bay"));
+                var side = k % 2 == 0 ? 1 : -1;
+                if (liftBays.Contains(k) && liftMechanic is not null)
                 {
-                    people.Add((Citadel.CitadelProps.Actor(Citadel.CitadelProps.CarLift, 0, 0, 0), u, bayV, facingOut, stand, "a car lift"));
-                    if (liftMechanic is not null)
-                    {
-                        // (beside the raised car, on the other side from its racer, turned to it)
-                        var mside = k % 2 == 0 ? -1 : 1;
-                        var mech = liftMechanic.Clone();
-                        mech.Move = 0;
-                        people.Add((mech, u + mside * w * 0.36, bayV - 250, RaceTrackMath.Turn(Math.Atan2(-mside * g.AlongX, -mside * g.AlongZ)), stand, "a mechanic at the lift"));
-                    }
+                    // (beside the raised car, on the other side from its racer, turned to it)
+                    var mech = liftMechanic.Clone();
+                    mech.Move = 0;
+                    people.Add((mech, u - side * w * RacerOut, bayV - 250, TurnTo(u - side * w * RacerOut, bayV - 250, u, bayV - 250), stand, "a mechanic at the lift"));
+                }
+                if (baldinos)
+                {
+                    // (beside it, a little towards its front, turned to it)
+                    baldinoU = u + side * w * RacerOut; baldinoV = bayV + RacerFront;
+                    baldinoBeta = TurnTo(baldinoU, baldinoV, u, bayV + RacerFront * 0.5);
+                    continue;
                 }
                 if (racer is { } r && empty is not null && mechanic is not null)
                 {
-                    // (its racer by its side, a little towards the front, turned to the tent's way out -- the side alternating bay by bay)
-                    var side = k % 2 == 0 ? 1 : -1;
+                    // (its racer by its side, a little towards the front -- clear of the lift's posts -- turned to the tent's way out, the side
+                    // alternating bay by bay)
                     var man = mechanic.Clone();
                     man.Entity = r.Entity; man.Body = r.Body; man.Anim = r.Anim;
-                    people.Add((man, u + side * w * 0.3, bayV + 500, facingOut, stand, who!.Driver));
+                    people.Add((man, u + side * w * RacerOut, bayV + RacerFront, facingOut, stand, who!.Driver));
                 }
                 else log.Add($"the racers' garage: bay {k + 1}'s car (body {grid[k - 1].Body}) has no empty copy or no racer to stand by it -- the car as it is");
             }
-            zoeU = -hl + w * 0.5; zoeV = bayV + 600;
-            baldinoU = 0; baldinoV = -hd + size.BayDeep * 512 + 900;
+            // (Zoe in Twinsen's bay, by its lift's post nearer the tent's end, clear of it)
+            zoeU = -hl + w * (0.5 - RacerOut); zoeV = bayV + RacerFront;
         }
         else
         {
@@ -199,7 +220,7 @@ internal static partial class RaceTrackStory
         }
         // Baldino: the filters, then (fitted) his tune and tip -- while it's garage time
         if (baldino is not null)
-            people.Add((baldino.Clone(), baldinoU, baldinoV, facingOut, Talker(garageTime, $@"            if (0 == var_game({QFilters}))
+            people.Add((baldino.Clone(), baldinoU, baldinoV, baldinoBeta, Talker(garageTime, $@"            if (0 == var_game({QFilters}))
             {{
                 message({say(DesertLine.BaldinoFilters)});
                 set_var_game({FiltersSlot}, 1);
@@ -269,6 +290,20 @@ internal static partial class RaceTrackStory
                 return scripts => { foreach (var e in edits) e(scripts); };
             });
         }
-        log.Add($"the racers' garage: {people.Count} placed (Baldino {(baldino is null ? "left out" : "there")} while {garageTime})");
+        // ... and drawn from every other cube (figure=; not in the cubes reached, where they're the scenes' own): Baldino and Zoe while
+        // their talkers are there -- the chapter (FLAG_CHAPTER, 253) the Desert's, and Baldino's till the race is won
+        var figures = new StringBuilder($"figure_cubes={string.Join(" ", reached.Select(c => $"{c.Item1} {c.Item2}"))}\n");
+        for (var pi = 0; pi < people.Count; pi++)
+        {
+            var (actor, u, v, beta, _, who) = people[pi];
+            double wx = g.X * 512 + g.AlongX * u + g.OutX * v, wz = g.Z * 512 + g.AlongZ * u + g.OutZ * v;
+            var y = (int)Math.Round(g.Y) + (rise.TryGetValue(pi, out var up) ? up : 0);
+            // (the cars and the lifts posed as they stand: no animation)
+            var anim = actor.Entity == RaceTrackScenes.RacerEntity || actor.Entity == Citadel.CitadelProps.Prop ? -1 : actor.Anim;
+            var when = who == "Baldino" ? $" {ChapterVar} 0 {DesertChapterLast} {QPages} 0 {PagesWon - 1}" : who == "Zoe" ? $" {ChapterVar} 0 {DesertChapterLast}" : "";
+            figures.Append($"figure={actor.Entity} {actor.Body & 255} {anim} {(int)Math.Round(wx)} {y} {(int)Math.Round(wz)} {beta}{when}\n");
+        }
+        File.WriteAllText(Path.Combine(gameDirectory, GarageFiguresFile), figures.ToString());
+        log.Add($"the racers' garage: {people.Count} placed (Baldino {(baldino is null ? "left out" : "there")} while {garageTime}), and drawn as figures from every cube but {string.Join(", ", reached)}");
     }
 }

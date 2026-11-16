@@ -33,6 +33,10 @@ internal static class RaceCarEngineFile
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
+        // (the story: Twinsen at the wheel in his helmet on every island but Citadel's -- Citadel/CitadelOveralls.InstallHelmetBuggy; first,
+        // so that a track's own car for him, drive_as= after it, still takes his car's place)
+        var helmet = story && info is not null && RaceTrackIsland.ByName(info.Island) is var helmetIsland && helmetIsland != RaceTrackIsland.Citadel && helmetIsland != RaceTrackIsland.CitadelStorm;
+        if (helmet) text.Append($"twinsen_body={Citadel.CitadelOveralls.HelmetBuggy} {Citadel.CitadelOveralls.HelmetBuggyFiring} {Citadel.CitadelOveralls.HelmetBuggySmall}\n");
         // (the track's best setup, when the setup says so: its top speed, acceleration and steering in place of the sliders' -- a dreamt
         // sprint's in place of the dream's own top speed too)
         var best = car.UseTrackSetups ? BestSetup(info) : null;
@@ -314,7 +318,7 @@ internal static class RaceCarEngineFile
             // (the super jet-pack the car turns into while it drives it)
             if (track.SuperJetModel is { } jetModel) text.Append($"superjet_model={jetModel}\n");
             // (Twinsen's buggy at half its size, for an opponent's lightning)
-            if (track.TwinsenSmall is { } small) text.Append($"twinsen_small={small}\n");
+            if (track.TwinsenSmall is { } small) text.Append($"twinsen_small={(helmet ? Citadel.CitadelOveralls.HelmetBuggySmall : small)}\n");
             // (the ghost power-up, the Temple of Bú's: its ghost and its icon)
             if (track.Haunt is [var hauntGhost, var hauntIcon]) text.Append($"haunt={hauntGhost} {hauntIcon}\n");
             if (track.Balloons is { Length: > 0 } balloons) text.Append($"haunt_balloons={string.Join(' ', balloons)}\n");
@@ -701,11 +705,12 @@ internal static class RaceCarEngineFile
                 // (the Tavern's darts: RaceTrackStory.Darts)
                 foreach (var line in RaceTrackStory.DartsLines()) text.Append(line + "\n");
                 foreach (var line in RaceTrackStory.Achievements) text.Append(line + "\n");
-                // (HAL on the radio: mended on the Emerald Moon -- Q_HAL at HalMended -- before then he only crackles: HalHints)
-                text.Append($"hal_mended={RaceTrackStory.QHal} {RaceTrackStory.HalMended}\n");
+                // (HAL on the radio: his number Twinsen's once he has beaten him on the Emerald Moon -- Q_HAL at HalWon -- and before then no
+                // one to call: HalHints)
+                text.Append($"hal_mended={RaceTrackStory.QHal} {RaceTrackStory.HalWon}\n");
             }
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
-            if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");
+            if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel} {RaceTrackStory.TrophyModel}\n");
             // (the racing gear's one slot: the gloves, then the gloves and the helmet -- Citadel/CitadelOveralls.GearModel)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.HelmetSlot}\n");
             // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)

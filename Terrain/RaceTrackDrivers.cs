@@ -51,22 +51,33 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Luc, "Luc", 0.5, 1.01, 0.96),
     };
 
-    // The Desert island: Moya, the Dino-Fly, the Dean of the School of Magic, the retail track's racer (its champion: the one to beat) and
-    // Baldino
+    // The Desert island: the race of entrants from all round Twinsun (the user, 2026-11-16: "Winning the Citadel 2 track allows Twinsen to
+    // enter the Desert island track with entrants from all around Twinsun") -- one of each of LBA1's islands: the retail track's racer for
+    // the White Leaf Desert (its champion: the one to beat), Baldino for Proxima Island, and LBA1's own people in cars made after them
+    // (RaceTrackCharacterCars.Lba1Entrants, from the LBA1 folder): Bob Vortix the astronomer for Principal Island, Lieutenant Grap for
+    // Rebellion Island, a rabbibunny of the Hamalayi Mountains, the hipster of Tippet Island and the painter of Brundle Island -- seven,
+    // Twinsen the eighth on the grid (RACEMOD.CPP RACE_MAX_OPPONENTS 8, RACE_MAX_SPOTS 9). Moya, the Dino-Fly and the Dean, who raced it
+    // before, out (the user, 2026-11-16: "We were removing dinofly and moya"; "Drop the dean from the desert race").
     public static readonly List<RaceDriver> Desert = new()
     {
-        Of(RaceTrackCharacterCars.Moya, "Moya", 2.5, 0.95, 1.08),
-        Of(RaceTrackCharacterCars.DinoFly, "The Dino-Fly", 0, 1.04, 0.94),
-        Of(RaceTrackCharacterCars.Dean, "The Dean", -1.5, 0.99, 1.0),
         Racer,
         Baldino,
+        OfLba1("Bob Vortix", "Bob Vortix", 2.5, 0.97, 1.03),
+        OfLba1("Grap", "Grap", -0.5, 1.0, 0.98),
+        OfLba1("The Hamalayi rabbibunny", "The Hamalayi rabbibunny", 0.5, 0.96, 1.05),
+        OfLba1("The Tippet hipster", "The Tippet hipster", 1.5, 0.99, 1.0),
+        OfLba1("The Brundle painter", "The Brundle painter", -2.5, 0.95, 1.06),
     };
+    private static RaceDriver OfLba1(string entrant, string name, double side, double top, double grip) =>
+        new(name, RaceTrackCharacterCars.EntrantOf(entrant).Generic, new RaceTrackBuilder.RacingLine(side, 4, top, grip));
 
-    // The Emerald Moon: Baldino in his space suit, in his lander (the one to beat), and HAL, the moon base's computer, driving itself
+    // The Emerald Moon: HAL, the moon base's computer, driving itself (the one to beat: "I will race you, to see if I am right"), and one of
+    // the base's guards in his space suit in the moon rover -- Baldino and his lander no more (the user, 2026-11-16: "Baldino is no longer
+    // going to be on Emerald Moon, let's make it just Twinsen and HAL, and a random guard in the moon spacesuit")
     public static readonly List<RaceDriver> Emerald = new()
     {
-        Of(RaceTrackCharacterCars.Lander, "Baldino", 0, 1.02, 0.95, main: true),
-        Of(RaceTrackCharacterCars.Hal, "HAL", 2.0, 1.0, 1.01),
+        Of(RaceTrackCharacterCars.Hal, "HAL", 2.0, 1.02, 0.95, main: true),
+        Of(RaceTrackCharacterCars.Spaceman, "The moon guard", 0, 1.0, 1.01),
     };
 
     // The Elevator Platform: the monkey monster himself in his crate (the one to beat -- the user, 2026-10-31: "The elevator platform race in story line is to be

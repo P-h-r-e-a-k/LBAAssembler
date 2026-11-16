@@ -2966,7 +2966,8 @@ internal static class RaceTrackBuilder
     // line, which a qualifying lap has to cross. The spots are found by where they lie along the lap, not by counting points: the pit lane
     // is its own road, and its points may run either way round the lap.
     private const double PitFirst = 2, PitStep = 4;
-    private const int PitWaitSpots = 5;
+    // (8 since 2026-11-16: the Desert race's seven entrants from all round Twinsun -- the engine's RACE_MAX_OPPONENTS)
+    private const int PitWaitSpots = 8;
 
     // (a planned lap's short pit lane -- Mosquibees Island's plateau has room for 24 cells of it -- is still moving out from the lap where
     // the third spot before the line would be: a car waiting there stood on the lap. There a spot must be PitClear cells to the side, and
@@ -4419,6 +4420,7 @@ internal static class RaceTrackBuilder
     // and end walls both ways. Three decors: the tent (its solid box the back wall) and its two end walls (theirs each). report.Garage:
     // where it stands, for the story's people and cars in it.
     private const double TentLong = 10, TentDeep = 6, TentOut = 2.5;   // cells: along the road, back from it; past the verge
+    private const double TentKerbClear = 1.0;                          // (its floor's grey no nearer a road's verge than this: cells)
     private const float TentEave = 2100, TentRidge = 3400, TentValance = 380, TentPole = 45, TentWall = 40;
     // (the tent's cells, for painting its floor)
     private sealed class TentCells(IEnumerable<(int Gx, int Gz)> cells) : IslandRegion
@@ -4560,12 +4562,18 @@ internal static class RaceTrackBuilder
             // (a cell past the tent all round: the sand between its walls' foot and the painted cells showed -- the user, 2026-11-14)
             double hu = tentLong / 2 + 1.5, hv = tentDeep / 2 + 1.5;
             var under = new List<(int, int)>();
+            // (none at a road's verge: its corner by the lap covered the road's red and white kerb -- the user, 2026-11-16, "A patch of the
+            // garage ground spills onto the race track, we just need to trim this corner so it doesn't cover the red/white line")
+            var trimmed = 0;
             for (var gz = (int)Math.Floor(at.Z - hu - hv); gz <= (int)Math.Ceiling(at.Z + hu + hv); gz++)
             for (var gx = (int)Math.Floor(at.X - hu - hv); gx <= (int)Math.Ceiling(at.X + hu + hv); gx++)
             {
                 double cx = gx + 0.5 - at.X, cz = gz + 0.5 - at.Z;
-                if (Math.Abs(cx * ax + cz * az) <= hu && Math.Abs(cx * lx + cz * lz) <= hv) under.Add((gx, gz));
+                if (Math.Abs(cx * ax + cz * az) > hu || Math.Abs(cx * lx + cz * lz) > hv) continue;
+                if (Off(gx + 0.5, gz + 0.5) < TentKerbClear) { trimmed++; continue; }
+                under.Add((gx, gz));
             }
+            if (trimmed > 0) report.Notes.Add($"garage tent: {trimmed} of its floor's cells left the sand's, by a road's verge");
             var painted = IslandGround.Paint(island, new TentCells(under), asphalt, PolygonFields.All);
             report.Notes.Add($"garage tent: its floor the road's grey ({painted} ground triangles, {under.Count} cells)");
         }

@@ -39,7 +39,9 @@ internal sealed record RaceTrackIsland(
         // small bit of blue that cuts in", then "Let's build it there. A specific garage space for every car with room around them to be
         // worked on": south of the start straight, just past the line, 38 by 22 cells, open north to the road; a bay for each of the
         // race's six cars)
-        GarageAt = (571.5, 722.0, 38, 22, 0, 1, 6),
+        // (eight bays since 2026-11-16 -- Twinsen's and the Desert race's seven opponents': the user, "our tent garage currently only
+        // allows for 6 so we'll need to extend it slightly to the right" -- its west end where it was, six cells longer to the east)
+        GarageAt = (574.5, 722.0, 44, 22, 0, 1, 8),
         // (the School of Magic's gates open from the start -- the game unlocks them later, game variable 65, which also shows the open gates'
         // decor: the user, 2026-10-27, "The gates to the school of magic are initially closed on Desert island and get unlocked later in the
         // game, let's just start the game with them open")

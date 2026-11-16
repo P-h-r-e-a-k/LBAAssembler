@@ -17,8 +17,11 @@ namespace LBAAssembler.Terrain;
 //     which the slot shows by its variable (RACEMOD.CPP).
 internal static partial class RaceTrackStory
 {
-    public const int ErrandSlot = 19, ErrandBait = 1, ErrandTyre = 2;
-    public const int BaitModel = 154, TyreModel = 155;
+    // (3: the island winner's trophy, Citadel Island's, won on the town circuit -- the errands done by then, the slot free -- shown to Flick
+    // at the Desert's start line to race there: the user, 2026-11-16, "For winning Citadel 2 he gets an island winners trophy that he has
+    // to present to be allowed to enter the desert race")
+    public const int ErrandSlot = 19, ErrandBait = 1, ErrandTyre = 2, ErrandTrophy = 3;
+    public const int BaitModel = 154, TyreModel = 155, TrophyModel = 157;   // (156 the sand filters': RaceTrackStory.Garage FiltersModel)
     // (the inventory's tin less than half the counter's height: the user, 2026-11-08, "Its inventory model is too tall: at least half the
     // height"; scaled to the inventory's size by its width then)
     private const float InventoryBaitHeight = 0.45f;
@@ -35,6 +38,15 @@ internal static partial class RaceTrackStory
             new[] { "Has comprado una lata de cebo. Felix, en el puerto, la querrá.", "Lata de cebo", "Una lata de gusanos bien vivos de la tienda del señor Bazoo. Felix, en el puerto, la cambiará con gusto." },
             new[] { "Hai comprato una scatola di esche. Felix, al porto, la vorrà.", "Scatola di esche", "Una scatola di vermi vivaci dal negozio del signor Bazoo. Felix, al porto, la scambierà volentieri." },
             new[] { "Compraste uma lata de isco. O Felix, no porto, vai querê-la.", "Lata de isco", "Uma lata de minhocas bem vivas da loja do senhor Bazoo. O Felix, no porto, troca-a de bom grado." },
+        }),
+        (TrophyModel, new[]
+        {
+            new[] { "Mr. Paul gives you Citadel Island's winner's trophy. The Desert's race lets in only the islands' winners: show it there.", "Island winner's trophy", "Citadel Island's winner's trophy, won on the town circuit. Show it at the Desert to race Twinsun's best." },
+            new[] { "M. Paul te remet le trophée du vainqueur de l'île de la Citadelle. La course du Désert n'accepte que les vainqueurs des îles : montre-le là-bas.", "Trophée du vainqueur de l'île", "Le trophée du vainqueur de l'île de la Citadelle, gagné sur le circuit de la ville. Montre-le au Désert pour courir contre les meilleurs de Twinsun." },
+            new[] { "Herr Paul überreicht dir den Siegerpokal der Zitadelleninsel. Zum Rennen in der Wüste kommen nur die Sieger der Inseln: Zeig ihn dort vor.", "Siegerpokal der Insel", "Der Siegerpokal der Zitadelleninsel, gewonnen auf dem Stadtkurs. Zeig ihn in der Wüste, um gegen die Besten von Twinsun zu fahren." },
+            new[] { "El señor Paul te entrega el trofeo del ganador de la isla de la Ciudadela. La carrera del Desierto solo admite a los ganadores de las islas: muéstralo allí.", "Trofeo del ganador de la isla", "El trofeo del ganador de la isla de la Ciudadela, ganado en el circuito de la ciudad. Muéstralo en el Desierto para correr contra los mejores de Twinsun." },
+            new[] { "Il signor Paul ti consegna il trofeo del vincitore dell'isola della Cittadella. La corsa del Deserto ammette solo i vincitori delle isole: mostralo là.", "Trofeo del vincitore dell'isola", "Il trofeo del vincitore dell'isola della Cittadella, vinto sul circuito della città. Mostralo nel Deserto per correre contro i migliori di Twinsun." },
+            new[] { "O senhor Paul entrega-te o troféu do vencedor da ilha da Cidadela. A corrida do Deserto só aceita os vencedores das ilhas: mostra-o lá.", "Troféu do vencedor da ilha", "O troféu do vencedor da ilha da Cidadela, ganho no circuito da cidade. Mostra-o no Deserto para correr contra os melhores de Twinsun." },
         }),
         (TyreModel, new[]
         {
@@ -55,7 +67,7 @@ internal static partial class RaceTrackStory
         var objfix = HqrArchive.Open(objfixPath);
         var header = Body.Read(objfix.Read(20), 2, allowStatic: true).Header;
         var bodyHeader = Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(30), 2, allowStatic: true).Header;
-        var models = new (int Model, Func<byte[], Body> Build)[] { (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre) };
+        var models = new (int Model, Func<byte[], Body> Build)[] { (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre), (TrophyModel, Citadel.CitadelProps.BuildTrophy) };
         var bytes = File.ReadAllBytes(objfixPath);
         var count = HqrArchive.CountEntries(objfixPath);
         // (the entries up to the models: each empty one a copy of the game's first, never shown)
@@ -64,7 +76,7 @@ internal static partial class RaceTrackStory
         foreach (var (model, build) in models)
             bytes = HqrWriter.ReplaceEntry(bytes, model, HqrWriter.StoredEntry(InventorySized(build(bodyHeader)).Write()));
         File.WriteAllBytes(objfixPath, bytes);
-        log.Add($"the errands' slot {ErrandSlot}: OBJFIX.HQR {BaitModel} the tin of bait, {TyreModel} the old tyre (the props' bodies at an inventory object's size)");
+        log.Add($"the errands' slot {ErrandSlot}: OBJFIX.HQR {BaitModel} the tin of bait, {TyreModel} the old tyre, {TrophyModel} the island winner's trophy (the props' bodies at an inventory object's size)");
 
         var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
         var text = HqrArchive.Open(textPath);
@@ -91,7 +103,7 @@ internal static partial class RaceTrackStory
             hqr = bank.WriteInto(hqr);
         }
         if (written > 0) File.WriteAllBytes(textPath, hqr);
-        log.Add($"the errands' texts: {written} written ({BaitModel}, {TyreModel} and +100, +200, in all {languages} languages)");
+        log.Add($"the errands' texts: {written} written ({BaitModel}, {TyreModel}, {TrophyModel} and +100, +200, in all {languages} languages)");
         return log;
     }
 

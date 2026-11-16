@@ -85,9 +85,13 @@ internal static partial class RaceTrackStory
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Office, X0 = ox - 450, X1 = ox + 450, Z0 = oz - 450, Z1 = oz + 450, Y0 = StellaEntities.FloorY, Y1 = StellaEntities.FloorY + 1800,
                 Info = new[] { StellaRooms.InsideX - 450, StellaRooms.InsideY, StellaRooms.InsideZ - 450, 0, 0, 0, 0, 1 } });
             var stageTop = StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh;
-            var backZ1 = StellaEntities.CatwalkEndZ + 540;
+            // (back to the catwalk's last cell's edge, z 15: its end pinches between the walls either side of the doorway, and walking up
+            // its middle Twinsen stopped short of a shallower zone -- the user, 2026-11-16, "Twinsen is still getting blocked by an invisible
+            // wall just here"; the room's place moved back as far, so he comes in where he did)
+            const int BackDeep = 860, BackDeepWas = 540;
+            var backZ1 = StellaEntities.CatwalkEndZ + BackDeep;
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Backstage, X0 = StellaEntities.CatwalkX0World, X1 = StellaEntities.CatwalkX0World + 1023, Z0 = StellaEntities.CatwalkEndZ, Z1 = backZ1, Y0 = stageTop, Y1 = stageTop + 1800,
-                Info = new[] { StellaRooms.InsideX - 512, StellaRooms.InsideY, StellaRooms.InsideZ - 270, 0, 0, 0, 0, 1 } });
+                Info = new[] { StellaRooms.InsideX - 512, StellaRooms.InsideY, StellaRooms.InsideZ - 270 - (BackDeep - BackDeepWas), 0, 0, 0, 0, 1 } });
             Place(barman, StellaEntities.At(142, 16.6f), say(MoonLine.ClubBarman), 1700, onAction: true);
             // the seven performers (StellaPerformers: the game's own bodies recoloured, bodies of the hero's entity, each her own dance): three
             // on the poles (10, 60 and 110 degrees -- the actor on the pole's spot: her body stands beside it, her dance takes her round,

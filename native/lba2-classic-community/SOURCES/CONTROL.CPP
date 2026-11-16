@@ -1297,14 +1297,14 @@ static void control_dump_state(const char *path) {
             "\"alpha\": %d, \"beta\": %d, \"gamma\": %d, "
             "\"life\": %d, \"behaviour\": %d, \"weapon\": %d, "
             "\"body\": %d, \"anim\": %d, \"gen_anim\": %d, \"last_frame\": %d, \"nb_frames\": %d, "
-            "\"move\": %d, \"zone_sce\": %d, \"flags\": %u, \"work_flags\": %u },\n",
+            "\"move\": %d, \"zone_sce\": %d, \"flags\": %u, \"work_flags\": %u, \"obj_col\": %d },\n",
             (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z,
             (int)hero->Obj.Alpha, (int)hero->Obj.Beta, (int)hero->Obj.Gamma,
             (int)hero->LifePoint, (int)Comportement, (int)Weapon,
             (int)hero->Obj.Body.Num, (int)hero->Obj.Anim.Num, (int)hero->GenAnim,
             (int)hero->Obj.LastFrame, (int)hero->Obj.NbFrames,
             (int)hero->Move, (int)hero->ZoneSce, (unsigned int)hero->Flags,
-            (unsigned int)hero->WorkFlags);
+            (unsigned int)hero->WorkFlags, hero->ObjCol == 255 ? -1 : (int)hero->ObjCol);
 
     /* Where the camera is and who is deciding that. `zone`, `forced` and `cine` say
      * whether an authored shot or a cutscene holds the view rather than the player's

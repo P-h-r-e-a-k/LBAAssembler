@@ -78,6 +78,14 @@ internal static class StellaEntities
     private static readonly (int X, int Z) ExtinguisherAt = (22527, 25599);
     // (scene 54's cell variable counting the lift helper's first frames -- the hero's script uses 0, the cell door's opening 9)
     private const int SettleVar = 8;
+    // (come up from the club, the cell's door opened for him -- its actor 4, its track's label 0, the hero's script's CellOpening variable
+    // 9 set as when a key opens it: the user, 2026-11-16, "We need to make sure that when Twinsen enters the cell from the strip club that
+    // the door isn't locked so he doesn't get stuck in the cell")
+    private const int CellDoor = 4, CellOpeningVar = 9;
+    // (how near the club lift's first plate Twinsen comes into the club when he comes down by it: on its 2 x 2 cells)
+    private const int ClubLiftReach = 1500;
+    // the fires about the cell's floor (world units, its floor CellFloor), each turned its own way
+    private static readonly (int X, int Z, int Beta)[] CellFires = { (16300, 11000, 0), (17800, 12100, 900), (15700, 12900, 2300), (17200, 10200, 3300) };
     // (the spot reaching a cell further east, towards the door: walked into the corner from the doorway he comes to rest against the
     // pillar about 250 short of its edge, hidden behind it -- the user, 2026-11-14, "still having trouble walking into the corner")
     private const int SpotEast = 1023;
@@ -332,12 +340,15 @@ internal static class StellaEntities
         hero.Life = new byte[] { 0 }; hero.Track = new byte[] { 0 };
         // (the cell's way down: a door over the spot at Twinsen's feet, off till Action there (LiftSwitch), which takes him onto the club's
         // lift high in its shaft -- where on the club's platform is where he stood on the spot; tall, as the floor's a step lower at its edge)
-        const int Tall = 700, Big = 1024, DontReadjust = 1;
+        // (he comes out standing on the plate's top, ArriveOver above it: dropped from 100 over it, as the plates set off down at the seam
+        // of the four of them, he was pushed off them sideways and fell to the floor beside the lift -- the user, 2026-11-16, "he needs to
+        // be set to NoMove until the elevator is all the way down")
+        const int Tall = 700, Big = 1024, DontReadjust = 1, ArriveOver = 1;
         cell.Zones.RemoveAll(zn => zn.Type == 0 && zn.Num == Scene);
         cell.Zones.Add(new SceneZoneModel
         {
             Type = 0, Num = Scene, X0 = CellFoot.X - 512, X1 = CellFoot.X + SpotEast, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall,
-            Info = new[] { clubArrival.X - 512, clubArrival.Y + 100 - Tall, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
+            Info = new[] { clubArrival.X - 512, clubArrival.Y + ArriveOver - Tall, clubArrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
         cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = CellFoot.X - 512, X1 = CellFoot.X + SpotEast, Z0 = CellFoot.Z - 512, Z1 = CellFoot.Z + 511, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
         // (and the same way down from inside the cell: the corner just behind the door's left pillar -- the lift's own corner is the alcove
@@ -348,7 +359,7 @@ internal static class StellaEntities
         cell.Zones.Add(new SceneZoneModel
         {
             Type = 0, Num = Scene, X0 = InsideX - InsideHalf, X1 = InsideX + InsideHalf - 1, Z0 = InsideZ - InsideHalf, Z1 = InsideZ + InsideHalf - 1, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall,
-            Info = new[] { clubArrival.X - InsideHalf, clubArrival.Y + 100 - Tall, clubArrival.Z - InsideHalf, 0, LiftSwitch, 0, DontReadjust, 0 },
+            Info = new[] { clubArrival.X - InsideHalf, clubArrival.Y + ArriveOver - Tall, clubArrival.Z - InsideHalf, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
         cell.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftZone, X0 = InsideX - InsideHalf, X1 = InsideX + InsideHalf - 1, Z0 = InsideZ - InsideHalf, Z1 = InsideZ + InsideHalf - 1, Y0 = CellFloor - Tall, Y1 = CellFloor + Tall, Info = new int[8] });
         // (the club's way up: over its lift, higher than he comes in on it, on from the start; out on the cell's plate down its shaft)
@@ -363,6 +374,8 @@ internal static class StellaEntities
 
         // the lifts' actors: the cell's helper (Action on the spot); the club's platform, four plates two by two
         var cellHelper = SceneOps.AddActor(cell, RaceTrackScenes.InvisibleHelper(CellFoot.X, CellFloor, CellFoot.Z));
+        // (the cell alight: a few fires about its floor, each flickering at its own pace -- CellFires)
+        var fires = CellFires.Select(f => SceneOps.AddActor(cell, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Fire, f.X, CellFloor, f.Z, f.Beta))).ToList();
         // (walked onto, as well as Action on it: the user, 2026-11-14, "I'm also still having trouble walking into the corner to the left of
         // the door to trigger the elevator" -- armed once he has been off it since the scene started, as he comes back up onto the spot)
         // (a few frames first: where he stands is only known once the zones have been looked at for him, after the scene's first life pass)
@@ -391,6 +404,11 @@ void comportement_4()
 
 void comportement_2()
 {{
+    if (0 == var_cube({CellOpeningVar}))
+    {{
+        set_var_cube({CellOpeningVar}, 1);
+        set_track_obj({CellDoor}, label_0);
+    }}
     if ({LiftZone} != zone_obj(0))
     {{
         set_comportement(comportement_1);
@@ -436,11 +454,17 @@ void comportement_3()
         string ClubTrack((int Low, int High) t) => $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({t.Low});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
                         $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({t.High});\nstop();\n";
         var ride = string.Concat(clubParts.Select(i => $"        set_track_obj({i}, label_{LiftRide});\n"));
+        // (come down by the lift -- beside its plate as the scene opens, the plates high in the shaft: they glide down whenever the scene
+        // starts -- held still till it's down. Not by his scenario zone: he arrives falling onto the plate, and the engine looks at no
+        // scenario zone of his while he falls -- zone() stayed -1 and he walked off it in mid-air; and standing still, not in the walk he came
+        // in with: a walk's own step carried him off the plate's edge though he was held; the user, 2026-11-16, "When Twinsen
+        // enters the transition zone in Baldino's cell he needs to be set to NoMove until the elevator is all the way down")
         var heroLife = $@"void comportement_0()
 {{
-    if ({ArrivalZone} == zone())
+    if ({ClubLiftReach} > distance({clubPlate}))
     {{
         set_dir(NO_MOVE);
+        anim(0);
         set_comportement(comportement_2);
     }}
     else
@@ -478,6 +502,11 @@ void comportement_3()
         var cellScripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(cell), Cell);
         cellScripts.SetText(cellHelper, LbaScript.ScriptKind.Life, cellLife);
         cellScripts.SetText(cellHelper, LbaScript.ScriptKind.Track, "label(0);\nstop();\n");
+        for (var f = 0; f < fires.Count; f++)
+        {
+            cellScripts.SetText(fires[f], LbaScript.ScriptKind.Life, Still());
+            cellScripts.SetText(fires[f], LbaScript.ScriptKind.Track, $"label(0);\nbody({Citadel.CitadelProps.Fire});\nwait_nb_dizieme_rnd({2 + f % 2});\nbody({Citadel.CitadelProps.Fire2});\nwait_nb_dizieme_rnd({2 + (f + 1) % 2});\ngoto(label_0);\n");
+        }
         var cellBuilt = cellScripts.Build();
         if (!cellBuilt.Ok) { log.AddRange(cellBuilt.Errors.Select(e => $"Stella Entities left out: the cell's lift script: {e}")); return log; }
         var clubScripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), Scene);

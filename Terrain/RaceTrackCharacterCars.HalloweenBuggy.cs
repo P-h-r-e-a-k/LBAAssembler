@@ -232,7 +232,7 @@ internal static partial class RaceTrackCharacterCars
 
     // An entity's body record for a generic body (RESS.HQR 44: 1, generic, size, BODY.HQR index (S16), ...): its bytes and its body; null
     // when it has none.
-    private static (byte[] Record, int Body)? BodyRecord(byte[] table, int entity, int generic)
+    internal static (byte[] Record, int Body)? BodyRecord(byte[] table, int entity, int generic)
     {
         foreach (var r in Lba2EntityTable.Records(table, entity))
             if (r.Command == 1 && r.Generic == generic) return (table.AsSpan(r.At, r.Size).ToArray(), BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(r.At + 3)));
@@ -241,7 +241,7 @@ internal static partial class RaceTrackCharacterCars
 
     // The table with a body record for `generic` of an entity: a copy of `record` (another of its bodies' -- its collision box with it) for
     // BODY.HQR body `bodyIndex`, in place of the generic's own record or before the entity's end mark.
-    private static byte[] WithBodyRecord(byte[] table, int entity, byte[] record, int generic, int bodyIndex)
+    internal static byte[] WithBodyRecord(byte[] table, int entity, byte[] record, int generic, int bodyIndex)
     {
         var copy = (byte[])record.Clone();
         copy[1] = (byte)generic;

@@ -129,7 +129,14 @@ internal static partial class RaceTrackCharacterCars
 
     // What the four wheels are made of: the struts, the tyres (tread and wall), the wheel inside the tyre and the cap on its hub.
     // (Lean: five-sided, the wall and the wheel sharing their points -- for a car whose driver takes most of the body's points)
-    private sealed record WheelLook(int Strut, float StrutThickness, int Tyre, float TyreLight, int Rim, float RimLight, int Cap, int Sides = 6, bool Lean = false);
+    // (Carrot: a small carrot out of the hub along the axle, in that colour, its leaves at its root -- the carrot car's: -1 none)
+    private sealed record WheelLook(int Strut, float StrutThickness, int Tyre, float TyreLight, int Rim, float RimLight, int Cap, int Sides = 6, bool Lean = false)
+    {
+        public int Carrot { get; init; } = -1;
+    }
+    // the Desert race's LBA1 entrants' colours (Cast.cs: Telescope, Suv, Carrot, Disco, PaintCan): ramp starts lit, and colours drawn as they are
+    private const int GoldDark = Gold - 2, NightBlue = Blue, CamoOlive = Green, CamoDark = Green - 2, CarrotTop = Green - 1, LeafGreen = Green + 1,
+        DiscoPink = Red + 4, DiscoViolet = 208 + 4, OrangeFlat = Orange + 6, YellowPaint = Amber, CanWhite = 56;
     // An axle's right-hand wheel (the left one mirrored): where its strut leaves the hull, the wheel's middle, its radius and width.
     private sealed record Axle(Vector3 Mount, Vector3 Hub, float Radius, float Width);
 
@@ -179,6 +186,22 @@ internal static partial class RaceTrackCharacterCars
                 m.Out(new[] { rim[k], rim[next], cap }, look.Rim, centre - new Vector3(side * width, 0, 0));
             }
             m.Sphere(cap, (int)(radius * 0.26f), look.Cap);
+            // (the carrot car's: a small carrot out of the hub, its point outward, its leaves at its root)
+            if (look.Carrot >= 0)
+            {
+                var root = face + new Vector3(side * 20, 0, 0);
+                var tip = m.P(wheelBone, face + new Vector3(side * (radius * 0.95f), 0, 0));
+                var round = new int[5];
+                for (var k = 0; k < 5; k++) { var a = k * MathF.Tau / 5; round[k] = m.P(wheelBone, root + new Vector3(0, radius * 0.2f * MathF.Cos(a), radius * 0.2f * MathF.Sin(a))); }
+                for (var k = 0; k < 5; k++) m.Out(new[] { round[k], round[(k + 1) % 5], tip }, look.Carrot, root);
+                foreach (var a in new[] { 0.5f, 2.6f, 4.7f })
+                {
+                    var leafFoot = m.P(wheelBone, root + new Vector3(0, radius * 0.15f * MathF.Cos(a), radius * 0.15f * MathF.Sin(a)));
+                    var leafTip = m.P(wheelBone, root + new Vector3(-side * 10, radius * 0.45f * MathF.Cos(a), radius * 0.45f * MathF.Sin(a)));
+                    var leafSide = m.P(wheelBone, root + new Vector3(-side * 6, radius * 0.35f * MathF.Cos(a + 0.35f), radius * 0.35f * MathF.Sin(a + 0.35f)));
+                    m.Both(new[] { leafFoot, leafSide, leafTip }, Green + 1);
+                }
+            }
         }
     }
 
@@ -510,6 +533,7 @@ internal static partial class RaceTrackCharacterCars
     public static Car[] EmptyOnes => All.Where(c => c.Island == Desert).Append(Raph).Distinct().Take(100 - EmptyFirst).ToArray();
     public static int? EmptyGeneric(int generic)
     {
+        if (generic == RaceTrackBaldinoCar.Generic) return RaceTrackBaldinoCar.EmptyGeneric;
         var k = Array.FindIndex(EmptyOnes, c => c.Generic == generic);
         return k < 0 ? null : EmptyFirst + k;
     }
