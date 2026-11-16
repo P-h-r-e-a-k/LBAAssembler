@@ -409,7 +409,12 @@ public partial class MainWindow : Window
             lastNativeActorScreens = null;
             lastNativeActorRoutes = null;
             RegenerateMinimap();
-            if (nativeRenderer.DirectRendererReady)
+            // (an island file with no objects file beside it -- OrigDESERT.ILE, a copy left in a game folder, has no OrigDESERT.OBL: the
+            // engine's island load ended the editor on it, the user, 2026-11-16 -- drawn by the software view, and said)
+            var objects = Path.ChangeExtension(path, ".OBL");
+            var hasObjects = File.Exists(objects);
+            if (!hasObjects) DebugLog.Log($"MainWindow: {Path.GetFileName(path)} has no {Path.GetFileName(objects)} beside it: the software view");
+            if (nativeRenderer.DirectRendererReady && hasObjects)
             {
                 nativeViewActive = true;
                 nativeAlpha = 240; nativeBeta = -256; nativeGamma = 0; nativeDistance = 30000;
@@ -420,7 +425,7 @@ public partial class MainWindow : Window
             {
                 nativeViewActive = false;
                 cameraDistance = DefaultCameraDistance;
-                DocumentSummary.Text += " / software 3D";
+                DocumentSummary.Text += hasObjects ? " / software 3D" : $" / software 3D (no {Path.GetFileName(objects)} beside it)";
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(RenderSoftwareTerrain));
             }
             UpdateZoomLabel();

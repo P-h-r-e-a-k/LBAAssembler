@@ -31,6 +31,7 @@ internal static class Program
             "show" => Show.Run(archive, args),
             "selftest" => SelfTest.Run(),
             "nativemap" => NativeMap.Run(),
+            "nativeislandload" => NativeIslandLoad.Run(args),
             "scenetests" => SceneTests.Run(archive),
             "commenttests" => CommentTests.Run(archive),
             "commentdemo" => CommentTests.Demo(archive),

@@ -7,6 +7,7 @@
 #include "HQR_NAMES.H"
 #include "COMMON.H"
 #include <SYSTEM/EVENTS.H>
+#include <SYSTEM/LOG.H>
 #include <POLYGON/POLY.H>
 #include <SVGA/CLIP.H>
 #include <SVGA/INITMODE.H>
@@ -264,6 +265,17 @@ static S32 islandGeneration = 0;
 int lba2_renderer_load_island(const char *name)
 {
     if (!name || !name[0]) return 0;
+    // (both of its files there first: the engine's LoadIsland ends the process on one it can't open -- TheEndCheckFile -- and the editor
+    // went with it, no crash logged; the user, 2026-11-16, opening OrigDESERT.ILE, a copy with no OrigDESERT.OBL beside it)
+    static const char *const exts[2] = {".obl", ".ile"};
+    for (const char *ext : exts) {
+        char file[ADELINE_MAX_PATH], filePath[ADELINE_MAX_PATH];
+        snprintf(file, ADELINE_MAX_PATH, "%.*s%s", (int)(ADELINE_MAX_PATH - 5), name, ext);
+        GetResPath(filePath, ADELINE_MAX_PATH, file);
+        FILE *f = fopen(filePath, "rb");
+        if (!f) { Log_Warn("[renderer] island %s: %s can't be opened -- not loaded", name, filePath); return 0; }
+        fclose(f);
+    }
     strncpy(IslandName, name, ADELINE_MAX_PATH - 1);
     IslandName[ADELINE_MAX_PATH - 1] = '\0';
     LoadIsland();
