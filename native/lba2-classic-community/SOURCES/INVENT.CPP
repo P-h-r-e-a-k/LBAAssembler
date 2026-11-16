@@ -445,6 +445,11 @@ void InitInventory() {
     //		Je m'ecoute jamais, pourtant, je devrais ;)
 }
 /*──────────────────────────────────────────────────────────────────────────*/
+// (an empty box's item is FLAG_DONT_USE, 255 -- a game variable a race-track story may use: LBRA's lighthouse telescope's ship seen,
+// RaceTrackStory.Chapters ShipSeen. With it set every empty box was an item -- TabInv read past its end: holomaps in all of them, the user's
+// game, 2026-11-16 -- so a box's item counts only when the box has one)
+static S32 BoxHas(S32 box) { return box >= 0 && box < MAX_BOX_INVENTORY && TabIndir[box] != FLAG_DONT_USE && TabIndir[box] < MAX_INVENTORY ? ListVarGame[TabIndir[box]] : 0; }
+
 void InitTabIndir() //	NEW
 {
     T_INV_OBJ *pt;
@@ -766,7 +771,7 @@ U32 DrawOneInventory(S32 numbox) {
 #ifdef LBA_EDITOR
     if (ListVarGame[numinv].Value)
 #else
-    if (ListVarGame[numinv])
+    if (BoxHas(numbox))
 #endif
     {
         // Definit si la box est shadée      *
@@ -873,7 +878,7 @@ U32 DrawOneInventory(S32 numbox) {
 #ifdef LBA_EDITOR
     return (ListVarGame[numinv].Value);
 #else
-    return (ListVarGame[numinv]);
+    return (BoxHas(numbox));
 #endif
 }
 /*──────────────────────────────────────────────────────────────────────────*/
@@ -1237,7 +1242,7 @@ void MenuInventory(U32 tempo) {
 #ifdef LBA_EDITOR
             if (ListVarGame[TabIndir[InvSelect]].Value <= 0)
 #else
-            if (ListVarGame[TabIndir[InvSelect]] <= 0)
+            if (BoxHas(InvSelect) <= 0)
 #endif
             {
                 PlayErrorSample();
@@ -1308,7 +1313,7 @@ void MenuInventory(U32 tempo) {
 #ifdef LBA_EDITOR
                 if (ListVarGame[TabIndir[oldselect]].Value > 0)
 #else
-                if (ListVarGame[TabIndir[oldselect]] > 0)
+                if (BoxHas(oldselect) > 0)
 #endif
                 {
                     TabInv[TabIndir[oldselect]].BetaObj += (TimerRefHR - TimerRot);
@@ -1317,7 +1322,7 @@ void MenuInventory(U32 tempo) {
 #ifdef LBA_EDITOR
             if ((ListVarGame[TabIndir[InvSelect]].Value > 0))
 #else
-            if ((ListVarGame[TabIndir[InvSelect]] > 0))
+            if ((BoxHas(InvSelect) > 0))
 #endif
             {
                 AffObjName(InvSelect);
@@ -1347,7 +1352,7 @@ void MenuInventory(U32 tempo) {
 #ifdef LBA_EDITOR
             if ((ListVarGame[TabIndir[InvSelect]].Value > 0)
 #else
-            if ((ListVarGame[TabIndir[InvSelect]] > 0)
+            if ((BoxHas(InvSelect) > 0)
 #endif
                     AND !(TabInv[TabIndir[InvSelect]].FlagInv & FLAG_INV_UNUSABLE)) {
                 InventoryAction = TabIndir[InvSelect];
