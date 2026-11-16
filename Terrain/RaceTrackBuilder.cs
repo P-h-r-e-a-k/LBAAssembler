@@ -3897,6 +3897,37 @@ internal static class RaceTrackBuilder
         return body;
     }
 
+    // A lift's shaft (RaceTrackIsland.LiftShafts): the ground under its 2-cell plate sunk ShaftDepth, round it level at the rim, and four
+    // walls a cell thick round the plate from the shaft's floor up to just over the rim -- as the game's own sewer lift by the start line
+    // (scene 42's actor 21) sinks between four walls into a hollow of the ground. The ground's points are a cell apart, so from the rim to
+    // the floor it falls across a whole cell: under the walls, which are that thick, the plate exactly between them (its ride a lift's
+    // track in the scene, RaceTrackStory.Chapters' quay lift). After the road is built (its ground's own), before the island is saved.
+    public const int ShaftDepth = 1500, ShaftLip = 8;
+    public static void LiftShafts(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
+    {
+        foreach (var (cx, cz, rim) in o.Island.LiftShafts ?? Array.Empty<(int, int, int)>())
+        {
+            if (o.NewBodyBase < 0 || IslandDecors.Locate(island, cx * 512.0, cz * 512.0) is not { } at || at.Cube.Decors.Count + 4 > IslandDecors.MaxPerCubeRaceTrack)
+            { report.Notes.Add($"WARNING: no shaft for the lift at cell ({cx}, {cz}): no room for its walls"); continue; }
+            var floor = rim - ShaftDepth;
+            for (var gz = cz - 2; gz <= cz + 2; gz++)
+                for (var gx = cx - 2; gx <= cx + 2; gx++)
+                    island.SetHeight(gx, gz, Math.Abs(gx - cx) <= 1 && Math.Abs(gz - cz) <= 1 ? floor : rim);
+            // (north and south the whole 4 cells across, west and east the 2 between them; each its own decor, its own box)
+            var top = rim + ShaftLip;
+            foreach (var (dx, dz, halfX, halfZ) in new[] { (0.0, -1.5, 1024, 256), (0.0, 1.5, 1024, 256), (-1.5, 0.0, 256, 512), (1.5, 0.0, 256, 512) })
+            {
+                if (IslandDecors.Locate(island, (cx + dx) * 512, (cz + dz) * 512) is not { } w) continue;
+                var body = o.NewBodyBase + report.NewBodies.Count;
+                report.NewBodies.Add(RaceTrackRaisedBody.Block(halfX, halfZ, top - floor, RaceTrackRaisedBody.PierLight, RaceTrackRaisedBody.PierDark, RaceTrackRaisedBody.PierCap));
+                var d = IslandDecors.Blank(body, w.X, floor, w.Z, 0);
+                d.XMin = w.X - halfX; d.XMax = w.X + halfX; d.ZMin = w.Z - halfZ; d.ZMax = w.Z + halfZ; d.YMin = floor; d.YMax = top;
+                w.Cube.Decors.Add(d);
+            }
+            report.Notes.Add($"a lift's shaft at cell ({cx}, {cz}): its ground sunk to {floor} under the plate, level at {rim} round it, walled a cell thick");
+        }
+    }
+
     // The building at each door: of the decor there (RaceTrackOptions.DecorsAtDoor's), the pieces against the door's zone -- not a rope
     // bridge's railings beside it, the Mosquibees' cliff house's -- and the rest of each one's object there, the decors at its origin (a
     // Mosquibee village gate's beams over its posts); copied as they are with their cube cells, before the build takes any away

@@ -768,6 +768,7 @@ internal static class RaceTrackService
         var report = RaceTrackBuilder.Build(island, plan, options);
         NoteLostDoors(island, options.DoorBoxes, atDoors, report);
         if (doorPieces is not null) RaceTrackBuilder.RestoreLostBuildings(island, options.DoorBoxes, doorPieces, options, report);
+        RaceTrackBuilder.LiftShafts(island, options, report);
         // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
         // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
         if (island.GroundPages.Count > 0)
@@ -850,6 +851,7 @@ internal static class RaceTrackService
         NoteLostDoors(twin, twinOptions.DoorBoxes, atDoors, report);
         if (museum is { } front) RaceTrackBuilder.PlaceTwinMuseum(twin, front, twinOptions, report);
         if (options.Island.TwinLadders is { } ladders) RaceTrackBuilder.FixedLadders(twin, ladders, twinOptions, report);
+        RaceTrackBuilder.LiftShafts(twin, twinOptions, report);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)

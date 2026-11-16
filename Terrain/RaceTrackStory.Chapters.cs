@@ -108,7 +108,13 @@ internal static partial class RaceTrackStory
     // onto it, the lift's NO_MOVE left him running on in his run's animation off it into the sea, and the clover put him back frozen;
     // now anim_obj(0, 0) stops him on it as it takes him)
     private const int OffQuayLift = 900;
-    private const int LiftHalf = 512, LiftDip = 400, QuayLiftZone = 70, QuaySettle = 40, QuayLiftStart = 506, QuayLiftStop = 510, QuayLiftSpeed = 900;
+    // (LiftDip: down its shaft -- RaceTrackBuilder.ShaftDepth, 1500 -- till Twinsen's head is under the quay, the plate's underside 100
+    // over the shaft's floor: 400 left him standing on the ground as the plate sank through it, the user, 2026-11-16, "it sort of just fades
+    // through the ground then Twinsen drops afterwards"; ShaftClear: the roads that far from its middle, its walls 2 cells out)
+    private const int LiftHalf = 512, LiftDip = 1400, QuayLiftZone = 70, QuaySettle = 40, QuayLiftStart = 506, QuayLiftStop = 510, QuayLiftSpeed = 900;
+    private const double ShaftClear = 3;
+    // (the hero's track's labels in the harbour's scene putting him on the lift's middle -- the scene's own are 0-5)
+    private const int OnLiftMiddle = 40;
     // (QuayLiftSpeed: the game's own lifts' -- every lift track in the game goes at speed(900), Citadel's scenes 12 and 15 too; ours went
     // at 300 -- the user, 2026-11-16, "The elevator speed also seems a little slow. Can we make it the same speed as the retail elevators")
     // the thief's run aimed this far past the plate's middle, on along his way: a track's goto_point ends within 500 of its point -- he
@@ -126,7 +132,8 @@ internal static partial class RaceTrackStory
     // the island's places (cells): the harbour's quay below the warehouses (the thief, the hatch further along it -- a straight run on its
     // paving: from behind the warehouses he ran into their walls), the scrap on the quay, the Tavern's doorstep (outside scene 42's door
     // zone into scene 3; the Tavern's front either side of it is a search zone, see Givers), the yard by the carport (RaceTrackIsland's CarHome)
-    private static readonly (double X, double Z) ThiefSpot = (478.0, 605.5), Hatch = (470.5, 604.5), Scrap = (472.0, 604.0), TavernDoor = (546.9, 591.6),
+    // (the lift into the sewers further along it: RaceTrackIsland.Citadel's LiftShafts, its shaft cut by the build)
+    private static readonly (double X, double Z) ThiefSpot = (478.0, 605.5), Scrap = (472.0, 604.0), TavernDoor = (546.9, 591.6),
                                                    YardSpot = (547.5, 652.5);
     // the umbrella's hook in the Tavern (scene 3): on the left side of the front door's arch (the door's zone x 6656-7680 through the wall
     // at z 15360-15872), the side the camera sees, at a hand's height; the tin of bait on Mr. Bazoo's counter (scene 14: its front, the
@@ -1514,15 +1521,20 @@ stop();
         // line -- as if from that lift -- switched on in the storm once he is down (HatchSwitch); the far room's ladder comes out beside it.
         var thief = Copy(p.Originals, UmbrellaScene, UmbrellaThief);
         var behind = OffRoad(p.Storm, ThiefSpot.X, ThiefSpot.Z, 1);
-        var hatch = OffRoad(p.Storm, Hatch.X, Hatch.Z, 1);
+        // (the lift on its shaft, the build's in both files' ground -- RaceTrackIsland.LiftShafts: its plate's middle, its top the quay's
+        // height round it; clear of both roads by more than the shaft's 2 cells)
+        (double X, double Z, double Y)? hatch = RaceTrackIsland.Citadel.LiftShafts is [var shaft, ..]
+            && OffRoads(p.Storm, shaft.X, shaft.Z) >= ShaftClear && OffRoads(p.Town, shaft.X, shaft.Z) >= ShaftClear ? (shaft.X, shaft.Z, shaft.Rim) : null;
+        // (beside it on the quay, where the far room's ladder comes out: past the shaft's walls, 2 cells from its middle, along the pier --
+        // east or west, the sea north of it and its railing south)
         (double X, double Z, double Y)? quay = null;
         if (hatch is { } h)
-            for (var d = 1.5; d <= 4 && quay is null; d += 0.5)
-                foreach (var (dx, dz) in new[] { (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0) })
-                    if (OffRoad(p.Storm, h.X + dx * d, h.Z + dz * d, 1, 0) is { } q) { quay = q; break; }
+            for (var d = 2.5; d <= 5 && quay is null; d += 0.5)
+                foreach (var dx in new[] { 1.0, -1.0 })
+                    if (OffRoad(p.Storm, h.X + dx * d, h.Z, 1, 0) is { } q) { quay = q; break; }
         if (thief is null || behind is not { } b || hatch is not { } ht || quay is not { } qy)
         {
-            p.Log.Add($"the thief left out: {(thief is null ? $"no umbrella thief in scene {UmbrellaScene}" : "no room off the storm track's roads at the harbour")}");
+            p.Log.Add($"the thief left out: {(thief is null ? $"no umbrella thief in scene {UmbrellaScene}" : behind is null ? "no room off the storm track's roads at the harbour" : hatch is null ? "no lift shaft on the quay clear of the roads" : "no room on the quay beside the lift's shaft")}");
             return;
         }
         p.Edit(Harbour, $"the thief on the harbour's quay at cell ({b.X:0.#}, {b.Z:0.#}) runs from Twinsen onto the sewers' lift at ({ht.X:0.#}, {ht.Z:0.#}) and down it, Twinsen held till it is back up (variable {QThief} {ThiefDown})", model =>
@@ -1547,6 +1559,10 @@ stop();
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = QuayLiftZone, X0 = hx - LiftHalf + 64, X1 = hx + LiftHalf - 65, Z0 = hz - LiftHalf + 64, Z1 = hz + LiftHalf - 65, Y0 = hy - 300, Y1 = hy + 900, Info = new int[8] });
             var low = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy - LiftDip, hz));
             var high = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy - Citadel.CitadelProps.LiftTop, hz));
+            // (Twinsen put on the plate's middle as it starts -- his own track's OnLiftMiddle: anywhere else on it his box reached over the
+            // shaft's walls, whose tops held him at the quay's height as the plate went down without him; the game's own lifts put him so,
+            // scene 12's pos_point, and the sewer lift's ride by the start line, RACEMOD.CPP GrateRide)
+            var middle = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy, hz));
             // (the plate and the lift's helper -- before the thief, who must stay the scene's last actor)
             // (the retail lifts' look -- the harbour's own lift down to the sewers, scene 48's entity 104, a dark teal grating: the user,
             // 2026-11-16, "needs to be the same colour as the retail elevators" -- on the chamber's plate's ride: CitadelProps.QuayLift.
@@ -1571,6 +1587,7 @@ void comportement_1()
         {{
             set_dir_obj(0, NO_MOVE);
             anim_obj(0, 0);
+            set_track_obj(0, label_{OnLiftMiddle});
             set_track_obj({plateIndex}, label_1);
             set_comportement(comportement_3);
         }}
@@ -1659,6 +1676,14 @@ void comportement_4()
             return scripts =>
             {
                 helperLife(scripts);
+                scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $@"
+
+label({OnLiftMiddle});
+pos_point({middle});
+
+label({OnLiftMiddle + 1});
+stop();
+");
                 scripts.SetText(plateIndex, ScriptKind.Life, @"void comportement_0()
 {
 }
