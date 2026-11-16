@@ -1447,7 +1447,10 @@ stop();
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = QuayLiftZone, X0 = hx - LiftHalf + 64, X1 = hx + LiftHalf - 65, Z0 = hz - LiftHalf + 64, Z1 = hz + LiftHalf - 65, Y0 = hy - 300, Y1 = hy + 900, Info = new int[8] });
             var low = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy - LiftDip, hz));
             // (the plate and the lift's helper -- before the thief, who must stay the scene's last actor)
-            var plate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.LiftPlatform, hx, hy - Citadel.CitadelProps.LiftTop, hz);
+            // (the retail lifts' look -- the harbour's own lift down to the sewers, scene 48's entity 104, a dark teal grating: the user,
+            // 2026-11-16, "needs to be the same colour as the retail elevators" -- on the chamber's plate's ride: CitadelProps.QuayLift.
+            // Entity 104 itself, tried that day, left Twinsen beside it in the water as it sank: its box isn't the plate's)
+            var plate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.QuayLift, hx, hy - Citadel.CitadelProps.LiftTop, hz);
             plate.Flags |= RaceTrackScenes.CarrierFlag;
             plate.Move = 3;
             var plateIndex = SceneOps.AddActor(model, plate);
@@ -2103,6 +2106,9 @@ stop();
             // (no shadow: the engine laid his on Rosa's back as he hopped behind her, a brown blot on the cow -- the user, 2026-11-14,
             // "the wizard casting a brown shadow onto the cow, let's remove this"; NO_SHADOW)
             wizard.Flags |= 1u << 12;
+            // (and Rosa's own: with the Wizard's gone the brown blot stayed -- the user, 2026-11-16, "The wizard is still casting a brown
+            // shadow onto the cow" -- her shadow, laid on the ground under her, drawn over her flank as the two stand pressed together)
+            rosa.Flags |= 1u << 12;
             var moveThere = therePoint < 0 ? "" : $@"        if ({asideWeather} == var_game({WeatherVar}))
         {{
             pos_point({therePoint});

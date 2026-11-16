@@ -303,6 +303,33 @@ internal static partial class CitadelProps
         }
         return m.ToBody(header);
     }
+    // The harbour's sewer lift (RaceTrackStory.Chapters: the thief's way down from the quay), the game's own lifts' look -- the user, 2026-11-16,
+    // "needs to be the same colour as the retail elevators": the harbour's lift down to the sewers in scene 48 (entity 104) is a grating of
+    // dark teal bars, not planks. The chamber's plate's size and top (its box, its ride the same), a grating of bars both ways over a dark
+    // floor, in a dark steel frame
+    public const int QuayLift = 20;
+    public static Body BuildQuayLift(byte[] header)
+    {
+        var m = new CarMesh("the harbour's sewer lift", new[] { -1 });
+        m.Light = 0.6f;
+        const float H = LiftSize / 2f, Rim = 40;
+        const int Floor = 10 * 16 + 1, Bar = 10 * 16 + 6, Frame = 11 * 16 + 4;
+        m.Box(0, new Vector3(0, LiftTop - 30, 0), new Vector3(LiftSize - 2 * Rim, 20, LiftSize - 2 * Rim), Floor, Floor);
+        const int Bars = 9;
+        for (var k = 0; k < Bars; k++)
+        {
+            var at = -H + Rim + (k + 0.5f) * (LiftSize - 2 * Rim) / Bars;
+            m.Box(0, new Vector3(at, LiftTop - 12, 0), new Vector3(26, 24, LiftSize - 2 * Rim), Bar, Bar + 2);
+            m.Box(0, new Vector3(0, LiftTop - 10, at), new Vector3(LiftSize - 2 * Rim, 20, 26), Bar, Bar + 2);
+        }
+        foreach (var s in new[] { -1, 1 })
+        {
+            m.Box(0, new Vector3(s * (H - Rim / 2), LiftTop - 20, 0), new Vector3(Rim, 44, LiftSize), Frame);
+            m.Box(0, new Vector3(0, LiftTop - 20, s * (H - Rim / 2)), new Vector3(LiftSize, 44, Rim), Frame);
+        }
+        return m.ToBody(header);
+    }
+
     // a side of the rail: posts at its ends and middle, a bar along their tops -- the back (-z), the left (-x) or the right (+x)
     private static Body BuildLiftRail(byte[] header, int side)
     {
@@ -428,7 +455,7 @@ internal static partial class CitadelProps
     // (the rail's sides' boxes: thin, as high as the rail)
     public static short[]? LiftBox(int generic) => generic switch
     {
-        LiftPlatform or HouseLiftPlatform or MoonLiftPlatform => new short[] { -512, 0, -512, 511, LiftTop, 511 },
+        LiftPlatform or HouseLiftPlatform or MoonLiftPlatform or QuayLift => new short[] { -512, 0, -512, 511, LiftTop, 511 },
         LiftRailBack => new short[] { -512, 0, -512, 511, LiftTop + RailHigh + 20, -460 },
         LiftRailLeft => new short[] { -512, 0, -512, -460, LiftTop + RailHigh + 20, 511 },
         LiftRailRight => new short[] { 460, 0, -512, 511, LiftTop + RailHigh + 20, 511 },
