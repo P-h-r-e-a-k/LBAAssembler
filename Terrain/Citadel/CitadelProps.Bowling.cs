@@ -103,13 +103,14 @@ internal static partial class CitadelProps
 
     // The poker table: round, green baize in a dark wooden rim on a thick post and a cross foot; the pot's chips in the middle, a hand of cards
     // face down before each of four places, a bottle -- its top TableTop up, Radius round
-    public const int TableTop = 560, TableRadius = 520;
+    // (bigger since 2026-11-16 -- the user: "The poker table looks too small against the other tables and with the three large NPCs sat at it")
+    public const int TableTop = 600, TableRadius = 780;
     public static Body BuildPokerTable(byte[] header)
     {
         var m = new CarMesh("the poker table", new[] { -1 });
         m.Light = 0.45f;
         const int Felt = 8 * 16 + 3, Rim = 1 * 16 + 3, Foot = 1 * 16 + 1, CardBack = 4 * 16 + 4, CardFace = 2 * 16 + 12, Chip = 4 * 16 + 6, ChipW = 3 * 16 + 12, ChipG = 6 * 16 + 9;
-        const int N = 16;
+        const int N = 20;
         // (the top: the felt, the rim round it a little higher, the rim's edge down)
         // (fans of triangles about the middle: no face of more than a few points)
         var felt = m.Loop(0, new Vector3(0, TableTop, 0), new Vector3(TableRadius - 60, 0, 0), new Vector3(0, 0, TableRadius - 60), N);
@@ -128,16 +129,16 @@ internal static partial class CitadelProps
         var low = m.P(0, new Vector3(0, TableTop - 60, 0));
         for (var i = 0; i < N; i++) m.Out(new[] { low, rimLow[i], rimLow[(i + 1) % N] }, Foot, new Vector3(0, TableTop + 200, 0));
         // (the post and the foot)
-        m.Box(0, new Vector3(0, (TableTop - 60) / 2, 0), new Vector3(120, TableTop - 60, 120), Foot);
-        m.Box(0, new Vector3(0, 30, 0), new Vector3(620, 60, 110), Foot);
-        m.Box(0, new Vector3(0, 30, 0), new Vector3(110, 60, 620), Foot);
+        m.Box(0, new Vector3(0, (TableTop - 60) / 2, 0), new Vector3(180, TableTop - 60, 180), Foot);
+        m.Box(0, new Vector3(0, 30, 0), new Vector3(900, 60, 140), Foot);
+        m.Box(0, new Vector3(0, 30, 0), new Vector3(140, 60, 900), Foot);
         // (the pot: stacks of chips, red, white and gold)
         foreach (var (x, z, h, c) in new[] { (-40, 20, 70, Chip), (30, -30, 50, ChipW), (60, 50, 90, ChipG), (-20, -70, 40, Chip), (-80, -20, 60, ChipG) })
             m.Box(0, new Vector3(x, TableTop + h / 2, z), new Vector3(56, h, 56), c, top: c + 1);
         // (a hand of cards face down before each place, and one turned up; a few chips by each)
         foreach (var (dx, dz) in new[] { (0, 1), (1, 0), (0, -1), (-1, 0) })
         {
-            var (cx, cz) = (dx * 300f, dz * 300f);
+            var (cx, cz) = (dx * (TableRadius - 260f), dz * (TableRadius - 260f));
             var (ux, uz) = (dz * 1f, -dx * 1f);   // across the place
             for (var k = -1; k <= 1; k++)
             {

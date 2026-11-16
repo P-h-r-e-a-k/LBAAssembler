@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO;
+using LBAAssembler.Assets;
 using LBAAssembler.Grids;
 using LBAAssembler.Lba1;
 using LBAAssembler.Maps;
@@ -43,9 +44,8 @@ internal static class BowlingRoom
     // "You've also added stairs to nowhere that just causes twinsen to drop down to the floor below"; his wall lamps, on his wall there,
     // left out too -- "These wall lights appear to be floating in the air" -- in the room's middle east; his bar its own blocks only, its
     // back to the north wall -- "push the back of a bar up against a wall", "a corner section of post by the bar that looks out of place")
-    private static readonly (int X0, int Z0, int X1, int Z1, int Dx, int Dz) Booths = (18, 23, 29, 37, 18, 3), Bar = (36, 37, 44, 44, 8, -29);
+    private static readonly (int X0, int Z0, int X1, int Z1, int Dx, int Dz) Booths = (18, 23, 29, 37, 18, 3);
     private static readonly HashSet<int> BoothBlocks = new() { 32, 33, 35, 36, 39, 80, 205, 206 };   // (his potted plant, 81 and 40, left out: it stood before the poker table)
-    private static readonly HashSet<int> BarBlocks = new() { 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 204, 205, 207, 140 };
     // the fruit machines' fronts, for the engine (RACEMOD.CPP FruitFrame): his two (block 80: by his platform's foot, x 19-20 z 36, and up
     // on it, x 23-24 z 23 -- his 81/40 is a potted plant), where they land (world units), the front of each its south side
     public static readonly (int X, int Z)[] FruitMachines = { ((19 + 18 + 1) * 512, (36 + 3) * 512 + 768), ((23 + 18 + 1) * 512, (23 + 3) * 512 + 768) };
@@ -85,7 +85,10 @@ internal static class BowlingRoom
         for (var x = RoomX0; x <= RoomX1 + 1; x++) { Put(x, FloorLayer, RoomZ1 + 1, Tile, Mod(x, 3)); Put(x, FloorLayer + 1, RoomZ1 + 1, LowWall, Mod(x, 2)); }
         for (var z = RoomZ0; z <= RoomZ1; z++) { Put(RoomX1 + 1, FloorLayer, z, Tile, 3 * Mod(z, 3)); Put(RoomX1 + 1, FloorLayer + 1, z, LowWall, Mod(z, 2)); }
         // ---- Rick's booths (on the floor) and his bar (its back to the north wall)
-        foreach (var (r, keep) in new[] { (Booths, BoothBlocks), (Bar, BarBlocks) })
+        // (his bar's bricks no longer: since 2026-11-16 the bar is props -- BowlingAlley, CitadelProps.BarCounter -- its U open to the north
+        // wall, the barman in it; the user: "the U shape of the bar in the bowling alley needs turning around so the gap is against the wall",
+        // and Rick's blocks can't be turned)
+        foreach (var (r, keep) in new[] { (Booths, BoothBlocks) })
             for (var z = r.Z0; z <= r.Z1; z++)
                 for (var x = r.X0; x <= r.X1; x++)
                     for (var y = 1; y < Height; y++)
@@ -120,6 +123,14 @@ internal static class BowlingRoom
                 library = GridPaint.SetEntry(library, block, pos, brick);
             }
             if (painted.Count > 0) darkened++;
+        }
+        // the fruit machines' screens: a hole in Rick's machine's bricks, the floor seen through it (the user, 2026-11-16: "The fruit machines
+        // show the floor tiles through the screens") -- filled: dark glass with three lit reels
+        {
+            var filled = FillScreen(library, FruitBlock, Brick);
+            foreach (var (pos, image) in filled)
+                library = GridPaint.SetEntry(library, FruitBlock, pos, CitadelMuseum.AddBrickPublic(bkg, header, CitadelMuseum.EncodeBrick(image)));
+            if (filled.Count == 0) log.Add("The bowling alley's room: the fruit machine's screen not found (no hole in block 80's picture)");
         }
         // the lanes' floor: the floor tile painted (its nine places alike), a block each kind
         var kinds = new Dictionary<LaneKind, int>();
@@ -169,6 +180,88 @@ internal static class BowlingRoom
         log.Add($"The bowling alley's room: Rick's bricks in a library of its own ({libraryNumber}), {darkened} of his {used.Count} blocks it uses painted dark, " +
                 $"{kinds.Count} lane floor blocks ({string.Join(", ", kinds.Select(k => $"{k.Key} {k.Value}"))})");
         return new Built(-1, type, grid, libraryNumber);
+    }
+
+    private const int FruitBlock = 80;
+    // A block's picture's holes -- its transparent pixels the outside of the picture can't reach through other transparent ones -- filled, each
+    // in the brick drawn last over it: a slot machine's screen, three reels across it (each row's hole split in three, light with a dark edge,
+    // a symbol in each's middle row). The positions whose bricks it changed, with their new pictures.
+    private static Dictionary<int, GphImage> FillScreen(byte[] library, int block, Func<int, byte[]?> brick)
+    {
+        var info = GridPaint.Info(library, block)!.Value;
+        var entries = GridPaint.Entries(library, block).ToList();
+        var images = new Dictionary<int, GphImage>();
+        var placed = new List<(int Pos, int Left, int Top)>();
+        for (var k = 0; k < info.Dz; k++)
+            for (var i = 0; i < info.Dx; i++)
+                for (var j = 0; j < info.Dy; j++)
+                {
+                    var pos = i + info.Dx * (j + info.Dy * k);
+                    if (pos >= entries.Count || brick(entries[pos].Brick) is not { Length: >= 4 } data) continue;
+                    images[pos] = GphImage.Decode(data);
+                    placed.Add((pos, 24 * (i - k) + (sbyte)data[2], 12 * (i + k) - 15 * j + (sbyte)data[3]));
+                }
+        if (placed.Count == 0) return new();
+        int minX = placed.Min(p => p.Left) - 1, minY = placed.Min(p => p.Top) - 1;
+        int w = placed.Max(p => p.Left + images[p.Pos].Width) - minX + 1, h = placed.Max(p => p.Top + images[p.Pos].Height) - minY + 1;
+        var opaque = new bool[w * h];
+        var owner = new (int Pos, int At)[w * h];
+        for (var q = 0; q < owner.Length; q++) owner[q] = (-1, 0);
+        foreach (var (pos, left, top) in placed)
+        {
+            var image = images[pos];
+            for (var v = 0; v < image.Height; v++)
+                for (var u = 0; u < image.Width; u++)
+                {
+                    var at = (top - minY + v) * w + left - minX + u;
+                    owner[at] = (pos, v * image.Width + u);
+                    if (image.Opaque[v * image.Width + u]) opaque[at] = true;
+                }
+        }
+        // (the outside: every transparent pixel reached from the picture's edge)
+        var outside = new bool[w * h];
+        var stack = new Stack<int>();
+        for (var x = 0; x < w; x++) { stack.Push(x); stack.Push((h - 1) * w + x); }
+        for (var y = 0; y < h; y++) { stack.Push(y * w); stack.Push(y * w + w - 1); }
+        while (stack.Count > 0)
+        {
+            var q = stack.Pop();
+            if (outside[q] || opaque[q]) continue;
+            outside[q] = true;
+            int x = q % w, y = q / w;
+            if (x > 0) stack.Push(q - 1);
+            if (x < w - 1) stack.Push(q + 1);
+            if (y > 0) stack.Push(q - w);
+            if (y < h - 1) stack.Push(q + w);
+        }
+        var hole = Enumerable.Range(0, w * h).Where(q => !opaque[q] && !outside[q] && owner[q].Pos >= 0).ToList();
+        if (hole.Count == 0) return new();
+        // (the screen's rows: three reels across each, light grey with a dark edge; the middle rows a symbol: red, gold, red)
+        const byte Glass = 3 * 16 + 1, Reel = 3 * 16 + 11, Edge = 3 * 16 + 3, Red = 4 * 16 + 7, Gold = 6 * 16 + 10;
+        // (split across by columns -- a slot machine's screen leans back, its sides stay upright in the picture -- each column's top and
+        // bottom the screen's there, its middle row a symbol's)
+        int x0 = hole.Min(q => q % w), x1 = hole.Max(q => q % w), span = x1 - x0 + 1;
+        var changed = new HashSet<int>();
+        foreach (var column in hole.GroupBy(q => q % w))
+        {
+            int x = column.Key, y0 = column.Min(q => q / w), y1 = column.Max(q => q / w), middle = (y0 + y1) / 2;
+            var third = Math.Min(2, (x - x0) * 3 / span);
+            double inThird = (x - x0) * 3.0 / span - third;
+            // (every pixel down the column between the screen's top and bottom: the dark streaks drawn on Rick's glass too)
+            for (var y = y0; y <= y1; y++)
+            {
+                var q = y * w + x;
+                if (owner[q].Pos < 0) continue;
+                byte c = y <= y0 + 1 || y >= y1 - 1 || inThird < 0.1 || inThird > 0.9 ? Glass : Reel;
+                if (c == Reel && (y == y0 + 2 || y == y1 - 2)) c = Edge;
+                if (c == Reel && Math.Abs(y - middle) <= 2 && Math.Abs(inThird - 0.5) < 0.18) c = third == 1 ? Gold : Red;
+                var (pos, at) = owner[q];
+                images[pos].Pixels[at] = c;
+                images[pos].Opaque[at] = true;
+                changed.Add(pos);
+            }
+        }
+        return changed.ToDictionary(p => p, p => images[p]);
     }
 
     private static bool InLane(int x) => LaneGutterLeft.Any(g => x >= g && x <= g + 5);

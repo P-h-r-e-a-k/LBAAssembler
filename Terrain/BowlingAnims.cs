@@ -19,7 +19,7 @@ internal static class BowlingAnims
     // (2026-11-15, second round: the throw itself, each bowler's own -- the user, "Let's make the custom animations that you mentioned were
     // still missing to bowl with" -- the ball swung in the hand on the bowler's world east as he faces the pins, his body's left (-x: he faces
     // north, turned half round), let go at 1.0 s as RACEMOD.CPP BOWL_RELEASE_MS has it; and the poker players' sitting at the table)
-    public const int Bowl = 643, Poker = 644;
+    public const int Bowl = 643, Poker = 644, Pool = 645;   // (Pool: the sailor's shot at the pool table, 2026-11-16)
     // the swordsman monkey without his sword (the user: "The NPC that bowls whilst holding a sword let's add a new model without the sword"):
     // his entity's body of this number -- his own, the sword's faces in his left hand (bone 14: the blade 52, the hilt 100) left out
     public const int Swordless = 1, SwordEntity = 252, SwordBone = 14;
@@ -204,6 +204,20 @@ internal static class BowlingAnims
             HqrWriter.AppendToFile(animPath, MakePoker(p, body, basis, k).Write());
             table = RaceTrackJumpAnim.WithAnim(table, p.Entity, Poker, at);
             log.Add($"the bowling alley's poker: {p.Name} (entity {p.Entity}) sits and plays as ANIM.HQR {at} (animation {Poker})");
+        }
+        // the sailor's pool shot (CitadelProps.PoolAims: bent over the table, the cue drawn back twice, through, held)
+        if (entities.FirstOrDefault(e => e.Id == 297) is { } sailor && !sailor.Anims.Any(a => a.Generic == Pool) && RaceTrackGuards.BodyOf(table, 297, 0) is { } sailorBody
+            && sailor.Anims.FirstOrDefault(a => a.Generic == 0).Anim is var sailorStand)
+        {
+            var body = Body.Read(HqrArchive.Open(bodyPath).Read(sailorBody), 2);
+            var basis = Palace.PalaceTorturers.ReadFrames(HqrArchive.Open(animPath).Read(sailorStand), body.Bones.Count)[0].Bones;
+            var pool = new Anim { Game = 2, LoopFrame = 0 };
+            foreach (var (ms, stroke) in new[] { (1400, 1), (500, 0), (400, 1), (600, 0), (250, 2), (1800, 2), (3000, 1) })
+                pool.Frames.Add(Citadel.CitadelSpanking.Frame(body, ms, basis, Citadel.CitadelProps.PoolAims(stroke), -Citadel.CitadelProps.PoolDrop, -1));
+            var at = HqrArchive.CountEntries(animPath);
+            HqrWriter.AppendToFile(animPath, pool.Write());
+            table = RaceTrackJumpAnim.WithAnim(table, 297, Pool, at);
+            log.Add($"the bowling alley's pool: the sailor (entity 297) plays a shot as ANIM.HQR {at} (animation {Pool})");
         }
         // the swordsman without his sword
         if (entities.FirstOrDefault(e => e.Id == SwordEntity) is { } sword && !sword.Bodies.Any(b => b.Generic == Swordless) && RaceTrackGuards.BodyOf(table, SwordEntity, 0) is { } own)

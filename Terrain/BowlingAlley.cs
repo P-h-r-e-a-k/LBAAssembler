@@ -52,7 +52,7 @@ internal static class BowlingAlley
     // (the chains' anchors in the dark over the pins: this far over the floor)
     private const int ChainAnchor = 4400;
     // (the poker table's middle -- cells 42, 36: between the booths and the fruit machines -- and its players' distance from it)
-    private const int PokerX = 42 * 512, PokerZ = 36 * 512, PokerSeat = 800;
+    private const int PokerX = 42 * 512, PokerZ = 36 * 512 + 256, PokerSeat = 1060;   // (2026-11-16: the table bigger, its players out)
 
     // (the game of bowling the engine plays -- RACEMOD.CPP bowling_game=: it holds this scene variable, and the lane scripts wait)
     public const int GameVar = 99;
@@ -303,10 +303,26 @@ void comportement_3()
         // over the lanes, a scoreboard over each played lane's pins, the ball returns the Spheros wait in, kegs and crates
         void Decor(int generic, int x, int y, int z, int beta = 0) { var d = Prop(generic, x, y, z, beta); Text(d, Still(), "label(0);\nstop();\n"); }
         Decor(CitadelProps.NeonPin, CitadelProps.LaneMiddleX, FloorY + 1700, (BowlingRoom.RoomZ0 * 512) + 40);
-        // (the bar's back to the north wall since 2026-11-15's second round -- BowlingRoom: its counter's U at cells x 45-52, z 8-15, open
-        // to the south, the barman in it -- its neon on the wall over it)
-        Decor(CitadelProps.NeonBar, 25088, FloorY + 2100, BowlingRoom.RoomZ0 * 512 + 60);
-        Decor(CitadelProps.HangingLamp, 25088, FloorY + 2300, 6400);
+        // ---- the bar (since 2026-11-16 props -- CitadelProps.BowlingBar -- its U's gap against the north wall, the user: "the U shape of the
+        // bar in the bowling alley needs turning around so the gap is against the wall"): its front run facing the room, its arms back to the
+        // wall, the bottles' shelf on the wall in the U, the barman between, stools along the front; its neon on the wall over it
+        const int barWall = BowlingRoom.RoomZ0 * 512, barX0 = 45 * 512, barX1 = 53 * 512, barFront = 15 * 512;
+        const int barMiddle = (barX0 + barX1) / 2;
+        Decor(CitadelProps.BarFront, barMiddle, FloorY, barFront - CitadelProps.BarDepth / 2);
+        Decor(CitadelProps.BarWest, barX0 + CitadelProps.BarDepth / 2, FloorY, barWall + CitadelProps.BarArmLength / 2);
+        Decor(CitadelProps.BarEast, barX1 - CitadelProps.BarDepth / 2, FloorY, barWall + CitadelProps.BarArmLength / 2);
+        Decor(CitadelProps.BarShelf, barMiddle, FloorY, barWall + 10);
+        foreach (var sx in new[] { barMiddle - 1500, barMiddle - 500, barMiddle + 500, barMiddle + 1500 }) Decor(CitadelProps.ClubBarStool, sx, FloorY, barFront + 380);
+        Decor(CitadelProps.NeonBar, barMiddle, FloorY + 2100, barWall + 60);
+        Decor(CitadelProps.HangingLamp, barMiddle, FloorY + 2300, barFront - 1200);
+        // ---- the pool table (the user, 2026-11-16: "perhaps a pool table for a couple of NPCs to be playing on to help fill up the space"):
+        // between the bar and the booths, along x; the sailor bent over it at its west end, cue in hand (three poses of him, his track
+        // changing them: drawn back, at the ball, through), a Franco dissident waiting his turn by its south side, a cue against its east end
+        const int poolX = 48 * 512 + 256, poolZ = 21 * 512;
+        Decor(CitadelProps.PoolTable, poolX, FloorY, poolZ);
+        Decor(CitadelProps.HangingLamp, poolX, FloorY + 2200, poolZ);
+        Decor(CitadelProps.PoolCue, poolX + CitadelProps.PoolLength / 2 + 90, FloorY, poolZ - 300);
+        var (shotX, shotZ) = (poolX - CitadelProps.PoolLength / 2 - CitadelProps.PoolStand, poolZ);
         Decor(CitadelProps.HangingLamp, PokerX, FloorY + 2300, PokerZ);
         foreach (var lx in new[] { CitadelProps.LaneX0, CitadelProps.LaneMiddleX, CitadelProps.LaneX1 })
             foreach (var lz in new[] { 9216, 14336 }) Decor(CitadelProps.HangingLamp, lx, FloorY + 2300, lz);
@@ -328,9 +344,24 @@ void comportement_3()
             r.Life = new byte[] { 0 }; r.Track = new byte[] { 0 };
             Text(SceneOps.AddActor(model, r), Still(), "label(0);\nstop();\n");
         }
-        foreach (var (entity, body, x, z, beta) in new[] { (294, 0, 22784, 5888, 1024), (295, 0, 22784, 6912, 1024), (56, 93, 27392, 6400, 3072),
-                                                         (297, 187, 24832, 6400, 0), (206, 148, 20736, 15104, 3072), (56, 93, 25856, 22272, 2048) })
+        foreach (var (entity, body, x, z, beta) in new[] { (294, 0, barMiddle - 1000, barFront + 520, 2048), (295, 0, barMiddle + 1000, barFront + 520, 2048),
+                                                         (56, 93, barX1 + 420, barWall + 1900, 3072), (297, 187, barMiddle, barWall + 1500, 0),
+                                                         (56, 93, poolX + 500, poolZ + CitadelProps.PoolWidth / 2 + 380, 2048), (56, 93, 25856, 22272, 2048) })
             Regular(entity, body, x, z, beta);
+        Regular(297, 0, shotX, shotZ, 1024, BowlingAnims.Pool);
+        // ---- more tables (the user, 2026-11-16: "We should add more tables"): a second big round table east of the booths, a sailor and a
+        // dissident at a hand of cards there, two chairs free; and one of Rick's card tables between the lanes' end and the booths, empty
+        // (Rick's is too small for the sailors to sit at: the poker table's size, the user's same day)
+        Decor(CitadelProps.ClubTable, 39 * 512, FloorY, 22 * 512);
+        const int cardsX = 52 * 512, cardsZ = 35 * 512 + 256;
+        Decor(CitadelProps.PokerTable, cardsX, FloorY, cardsZ);
+        Decor(CitadelProps.HangingLamp, cardsX, FloorY + 2300, cardsZ);
+        foreach (var (entity, body, dx, dz, beta) in new[] { (297, 0, -1, 0, 1024), (56, 93, 0, -1, 0), (-1, 0, 1, 0, 3072), (-1, 0, 0, 1, 2048) })
+        {
+            var (sx, sz) = (cardsX + dx * PokerSeat, cardsZ + dz * PokerSeat);
+            Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
+            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker);
+        }
         // ---- the poker table (the user, 2026-11-15: "add a round table with people sitting playing poker"): round, among the booths and the
         // fruit machines, a sailor, a blue sailor and a Franco dissident sat at it (BowlingAnims.Poker, each at his own pace), the fourth chair
         // empty, toward the room. Each sits PokerSeat from its middle facing it, his chair's seat under him (a chair's seat ChairAhead in front
