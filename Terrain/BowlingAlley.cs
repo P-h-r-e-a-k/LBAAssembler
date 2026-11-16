@@ -55,7 +55,8 @@ internal static class BowlingAlley
     private const int PokerX = 42 * 512, PokerZ = 36 * 512 + 256, PokerSeat = 1060;   // (2026-11-16: the table bigger, its players out)
 
     // (the game of bowling the engine plays -- RACEMOD.CPP bowling_game=: it holds this scene variable, and the lane scripts wait)
-    public const int GameVar = 99;
+    // (78: the scene variables are 0-79, ListVarCube[80] -- 99 was past them, the engine writing it as the player bowled: 2026-11-16)
+    public const int GameVar = 78;
 
     private static string Still() => "void comportement_0()\n{\n}\n";
 

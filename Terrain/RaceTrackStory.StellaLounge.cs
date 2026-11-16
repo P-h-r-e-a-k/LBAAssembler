@@ -25,6 +25,10 @@ internal static partial class RaceTrackStory
     // (seated in a booth: 1; the engine makes it 2 at a key -- RACEMOD.CPP seat_var= -- and he gets up)
     // (247 since 2026-11-14: 210 was the Dark Monk statuette's EggStatuette as well)
     internal const int SeatVar = 247;
+    // (seated: the scene variable SeatCube 1, 2 once a key gets him up -- RACEMOD.CPP seat_cube=; SeatVar keeps who he paid. 2026-11-16:
+    // the seat was SeatVar too, and SeatVar is the Polar dream's EggSendell -- the engine turned her 1 to 2 at the first key; no game
+    // variable is free, every one is some script's)
+    internal const int SeatCube = 79;
     private const int StewardessScene = 41, StewardessActor = 6;
     private const int BoothZone0 = 80, SitLabel = 100, StandLabel = 120, HostGo = 200, HostAt = 210, HostBack = 220, HostHome = 230;
     private const int SeatBooth = 60, SeatWait = 61, Offered = 62, LaterRounds = 63, ShowFrames = 0, ShowRounds = 1;
@@ -169,7 +173,7 @@ internal static partial class RaceTrackStory
             string sit = string.Concat(Enumerable.Range(0, angles.Length).Select(k => $@"            if ({BoothZone0 + k} == zone_obj(0))
             {{
                 comportement_hero(0);
-                set_var_game({SeatVar}, 1);
+                set_var_cube({SeatCube}, 1);
                 set_dir_obj(0, NO_MOVE);
                 set_track_obj(0, label_{SitLabel + k});
                 set_var_cube({SeatBooth}, {k});
@@ -203,10 +207,10 @@ void comportement_2()
     {{
         add_var_cube({SeatWait}, 1);
     }}
-    if (2 == var_game({SeatVar}))
+    if (2 == var_cube({SeatCube}))
     {{
 {ForBooth(k => $"            set_track_obj(0, label_{StandLabel + k});\n")}        set_dir_obj(0, MOVE_MANUAL);
-        set_var_game({SeatVar}, 0);
+        set_var_cube({SeatCube}, 0);
         set_comportement(comportement_1);
     }}
     if (2 == var_cube({Offered}) && 249 < var_cube({SeatWait}))

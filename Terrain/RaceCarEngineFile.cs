@@ -675,8 +675,9 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.LateFadeLines);
             // (the giant frog's mouth, open or shut, for the Wannies' glove: RACEMOD.CPP frog_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"frog_var={RaceTrackStory.FrogOpenVar}\n");
-            // (Stella Entities' booths: Twinsen got up by any key -- RACEMOD.CPP seat_var=)
-            if (t.Story is { TiredText: >= 0 }) text.Append($"seat_var={RaceTrackStory.SeatVar}\n");
+            // (a seat -- Stella Entities' booths, the house's kitchen chairs: Twinsen got up by any key -- RACEMOD.CPP seat_cube=, a scene
+            // variable, in every file: the kitchen is in every Citadel build. No longer seat_var= 247: that is the Polar dream's EggSendell too)
+            text.Append($"seat_cube={RaceTrackStory.SeatCube}\n");
             // (the player 18 or more: Stella Entities' lift down open -- RACEMOD.CPP adult_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)

@@ -1585,14 +1585,19 @@ static void LensDraw(void) {
 // seat_var=<game var>: Twinsen seated by a script (it sets the variable to 1 and holds him still, NO_MOVE -- which leaves his keys unread,
 // so no script sees Action) -- a key pressed once all are let go, a way or Action, sets it to 2: the script stands him up. The user,
 // 2026-11-13, Stella Entities' booths: "Twinsen also seems unable to get down from the chair", "The second action isn't working"
-static int s_seatVar = -1, s_seatFree = 0;
+// seat_cube=<scene var>: the same with a scene variable, in every scene (the user, 2026-11-16: the kitchen's chairs "useable" -- and no game
+// variable is free: seat_var=247 was the Polar dream's EggSendell too, its 1 turned to 2 by the first key after Sendell's light, so her
+// line at the wake was never said; a scene variable is the room's own, cleared as it loads)
+static int s_seatVar = -1, s_seatFree = 0, s_seatCube = -1;
 static void SeatFrame(void) {
-    if (s_seatVar < 0 || s_seatVar > 255) return;
-    if (ListVarGame[s_seatVar] != 1) { s_seatFree = 0; return; }
+    U8 *seat = s_seatCube >= 0 && s_seatCube < MAX_VARS_CUBE && ListVarCube[s_seatCube] == 1 ? &ListVarCube[s_seatCube] : NULL;
+    const int game = !seat && s_seatVar >= 0 && s_seatVar <= 255 && ListVarGame[s_seatVar] == 1;
+    if (!seat && !game) { s_seatFree = 0; return; }
     const U32 keys = I_UP | I_DOWN | I_LEFT | I_RIGHT | I_ACTION_M | I_ACTION_ALWAYS;
     if (!(Input & keys)) { s_seatFree = 1; return; }
     if (!s_seatFree) return;
-    ListVarGame[s_seatVar] = 2; s_seatFree = 0;
+    if (seat) *seat = 2; else ListVarGame[s_seatVar] = 2;
+    s_seatFree = 0;
     Log_Info("[racemod] seat: a key pressed -- Twinsen gets up");
 }
 // drive_marks=<game var> <count>: a story's scripted drive (the user, 2026-11-14: the racing licence shown at the Temple of Bu's gate,
@@ -5183,6 +5188,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "frog_var")) { if (!setRead) s_frogVar = atoi(v); }
         else if (!strcmp(key, "hal_mended")) { if (!setRead && sscanf(v, "%d %d", &s_halMendVar, &s_halMendValue) != 2) s_halMendVar = -1; }
         else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
+        else if (!strcmp(key, "seat_cube")) { if (!setRead) s_seatCube = atoi(v); }
         else if (!strcmp(key, "adult_var")) { if (!setRead) s_adultVar = atoi(v); }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
@@ -14283,7 +14289,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -19669,7 +19675,7 @@ static void BowlFrame(S32 now) {
     T_OBJET *bo = &ListObjet[me->Actor], *hero = &ListObjet[NUM_PERSO], *ball = &ListObjet[ln->Ball];
     const double dt = fmin(0.1, fmax(0.0, (now - s_bowlLast) / 1000.0));
     s_bowlLast = now;
-    ListVarCube[s_blVar] = 1;
+    if (s_blVar >= 0 && s_blVar < MAX_VARS_CUBE) ListVarCube[s_blVar] = 1;   // (BOWLMAP's 99 was past the 80 scene variables: written out of bounds)
     if (!s_bowlInit) {
         s_bowlInit = 1; s_bowlState = 0; s_bowlX = ln->Cx; s_bowlNRolls = 0; s_bowlOverSaid = 0;
         for (int i = 0; i < BOWL_PINS; i++) { s_bowlDown[i] = 0; s_bowlHome[i][0] = ListObjet[ln->Pin[i]].Obj.X; s_bowlHome[i][1] = ListObjet[ln->Pin[i]].Obj.Z; }
