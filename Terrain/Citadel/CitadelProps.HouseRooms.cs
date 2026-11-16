@@ -8,34 +8,65 @@ namespace LBAAssembler.Terrain.Citadel;
 // the hob and a tall glass-fronted cabinet at the end, its bath on a rug; the look the LBA2 house's: its brown woods, brass, teal): each built
 // round its own place on the floor, its back to -z (a wall) unless it says otherwise. The rooms' cells: floor x 5-14, z 1-8; the north wall's
 // face at z 512, the west wall's at x 2,560.
+// Round 2 (the user, 2026-11-16 afternoon: "The shower, sink and toilet all look terrible and need improving", "The bathmat in the bathroom is
+// too small and can't be walked on", "Let's add taps to the bath so using action on the taps causes the bath to fill with water. We also need
+// to improve the bath, it's gold on two sides and not the third", "A table and two chairs... chairs would typically be either side of the
+// table and useable"):
+//   - the colours kept low enough in their ramps that the light's steps never run them into the next ramp (the porcelain and chrome were the
+//     grey ramp's top, 3 * 16 + 14: lit, they ran into the reds -- the sink and toilet came out dark red);
+//   - the shower, sink and toilet rounded (rings skinned, the bowls hollow), slimmer chrome;
+//   - the corner bath one brass rim all round (the north strip, the curve, the east strip), its basin porcelain, brass taps at its west end;
+//     filled by stages, bodies of its own (BathWaterLow/Mid/Full: the same bath, its water at three heights) the taps' Action swaps in;
+//   - the bath mat bigger, and walked over: its box under the floor (BathMatBox, as the rugs' tiles);
+//   - the kitchen's chairs (KitchenChair): the bedroom's chair a seat's height taller, for Twinsen's sitting (CitadelSpanking.TwinsenSit,
+//     made at the Tralu's bench), set either side of the table facing it.
 internal static partial class CitadelProps
 {
     public const int Shower = 140, BathSink = 141, Toilet = 142, CornerBath = 143, TowelRail = 144, BathMat = 145;
     public const int KitchenCounter = 146, KitchenRange = 147, Dresser = 148, KitchenTable = 149, PlateShelf = 150;
-    private const int HrPorcelain = 3 * 16 + 14, HrPorcelainShade = 3 * 16 + 11, HrChrome = 3 * 16 + 10, HrWood = 1 * 16 + 5, HrWoodDark = 1 * 16 + 3,
-        HrWoodLight = 1 * 16 + 8, HrBrass = 6 * 16 + 8, HrTeal = 10 * 16 + 6, HrTealDark = 10 * 16 + 3, HrTile = 3 * 16 + 12, HrIron = 3 * 16 + 2, HrCopper = 5 * 16 + 7;
+    public const int KitchenChair = 151, BathWaterLow = 152, BathWaterMid = 153, BathWaterFull = 154;
+    // (each colour this far or more from its ramp's top: the light runs a colour up to 0.8 x 9 steps)
+    private const int HrPorcelain = 3 * 16 + 8, HrPorcelainShade = 3 * 16 + 5, HrChrome = 3 * 16 + 7, HrWood = 1 * 16 + 5, HrWoodDark = 1 * 16 + 3,
+        HrWoodLight = 1 * 16 + 8, HrBrass = 6 * 16 + 8, HrTeal = 10 * 16 + 6, HrTealDark = 10 * 16 + 3, HrTile = 3 * 16 + 7, HrIron = 3 * 16 + 2,
+        HrCopper = 5 * 16 + 7, HrWater = 10 * 16 + 7, HrMirror = 11 * 16 + 8, HrHot = 4 * 16 + 8, HrCold = 11 * 16 + 6;
     private const int HrNorthFace = 512, HrWestFace = 2560;
+    // the kitchen chairs' seat (its top over the floor): Twinsen's sitting drops his hips TwinsenSitDrop -- made for the Tralu's 512 bench
+    public const int KitchenSeatTop = 500;
+    // the bath's corner (its place's offset: the room's north-east corner), its sizes, its taps (from its place)
+    public static readonly Vector3 BathCorner = new(760, 0, -760);
+    private const float BathOuter = 1450, BathInner = 1250, BathStrip = 200, BathRim = 520, BathBottom = 140;
+    public static readonly Vector3 BathTaps = new(-340, 520, -660);
 
     // (generic, x, z, facing) of each room's fittings
     public static readonly (int Generic, int X, int Z, int Beta)[] BathroomFittings =
     {
         (Shower, 6 * 512, 2 * 512, 0),                       // the north-west corner: cells 5-6, 1-2
         (BathSink, 8 * 512 + 256, HrNorthFace + 230, 0),        // against the north wall, its mirror over it
-        (Toilet, 10 * 512 + 256, HrNorthFace + 280, 0),
+        (Toilet, 10 * 512 + 256, HrNorthFace + 310, 0),
         (CornerBath, 13 * 512 + 256, 2 * 512 + 256, 0),       // the north-east corner: cells 12-14, 1-3
-        (TowelRail, HrWestFace + 30, 7 * 512, 1024),            // on the west wall, facing the room (+x)
-        (BathMat, 11 * 512 + 256, 4 * 512 + 128, 0),          // before the bath
+        (TowelRail, HrWestFace + 30, 1950, 1024),             // on the west wall between the shower and the door, facing the room (+x)
+        (BathMat, 6300, 2250, 0),                             // before the bath
+    };
+    // the kitchen's chairs either side of its table (its middle 5,888 / 3,072), facing it: each one's place behind its seat (ChairAhead)
+    public static readonly (int X, int Z, int Beta, int SeatX)[] KitchenChairs =
+    {
+        (5888 - 800 - ChairAhead, 3072, 1024, 5888 - 800),
+        (5888 + 800 + ChairAhead, 3072, 3072, 5888 + 800),
     };
     public static readonly (int Generic, int X, int Z, int Beta)[] KitchenFittings =
     {
         (KitchenCounter, 5 * 512 + 1536, HrNorthFace + 300, 0), // cells 5-10 along the north wall: cupboards, the worktop, the sink
         (KitchenRange, 11 * 512 + 512, HrNorthFace + 330, 0),          // cells 11-12: the range, its hob, a kettle and a pan
         (Dresser, 14 * 512, HrNorthFace + 260, 0),              // cells 13-14: the tall glass-fronted dresser
-        (KitchenTable, 11 * 512 + 256, 5 * 512 + 512, 0),     // the table, the house's two chairs east of it
+        (KitchenTable, 11 * 512 + 256, 5 * 512 + 512, 0),     // the round table
         (PlateShelf, HrWestFace + 40, 3 * 512, 1024),           // on the west wall: a shelf of plates
+        (KitchenChair, KitchenChairs[0].X, KitchenChairs[0].Z, KitchenChairs[0].Beta),
+        (KitchenChair, KitchenChairs[1].X, KitchenChairs[1].Z, KitchenChairs[1].Beta),
     };
+    // the bath mat's box: under the floor, so Twinsen walks over it (RugTileBox's way)
+    private static short[]? BathMatBox(int generic) => generic == BathMat ? new short[] { -650, -16, -400, 650, 0, 400 } : null;
 
-    // a box's six faces seen from out; a cylinder's sides (n facets) between two heights
+    // a cylinder's sides (n facets) between two heights, a top fan if asked
     private static void Cylinder(CarMesh m, Vector3 at, float r, float y0, float y1, int n, int colour, int top = -1)
     {
         var low = m.Loop(0, at + new Vector3(0, y0, 0), new Vector3(r, 0, 0), new Vector3(0, 0, r), n);
@@ -43,117 +74,223 @@ internal static partial class CitadelProps
         m.Skin(low, high, _ => colour, at + new Vector3(0, (y0 + y1) / 2, 0));
         if (top >= 0) { var hub = m.P(0, at + new Vector3(0, y1, 0)); for (var k = 0; k < n; k++) m.Up(new[] { hub, high[k], high[(k + 1) % n] }, top); }
     }
+    // an ellipse's ring at a height (rx along x, rz along z)
+    private static int[] Ellipse(CarMesh m, Vector3 at, float y, float rx, float rz, int n) => m.Loop(0, at + new Vector3(0, y, 0), new Vector3(rx, 0, 0), new Vector3(0, 0, rz), n);
+    // the faces between two rings, each turned toward the axis (a bowl's inside)
+    private static void Inside(CarMesh m, int[] a, int[] b, int colour, Vector3 axis)
+    {
+        for (var k = 0; k < a.Length; k++)
+        {
+            var q = new[] { a[k], a[(k + 1) % a.Length], b[(k + 1) % b.Length], b[k] };
+            var c = (m.At(a[k]) + m.At(b[k])) / 2;
+            m.In(q, colour, new Vector3(axis.X, c.Y, axis.Z));
+        }
+    }
+    // a flat ring's top between an outer and an inner ring
+    private static void RingTop(CarMesh m, int[] outer, int[] inner, int colour)
+    {
+        for (var k = 0; k < outer.Length; k++) m.Up(new[] { outer[k], outer[(k + 1) % outer.Length], inner[(k + 1) % inner.Length], inner[k] }, colour);
+    }
+    private static void Fan(CarMesh m, Vector3 hub, int[] ring, int colour)
+    {
+        var h = m.P(0, hub);
+        for (var k = 0; k < ring.Length; k++) m.Up(new[] { h, ring[k], ring[(k + 1) % ring.Length] }, colour);
+    }
 
-    // The shower: a white tray a step up, two glass screens on its open sides in chrome frames, the chrome riser and its head in the corner
+    // The shower: a white tray with its recess and drain, frameless glass on its open sides in a slim chrome frame (a door's gap at the
+    // front's west end), a slim riser in the corner up to an arm and a round rain head, the mixer on the back wall, a corner shelf
     public static Body BuildShower(byte[] header)
     {
         var m = new CarMesh("the shower", new[] { -1 });
         m.Light = 0.8f;
-        const float H = 480, High = 1750;
-        m.Box(0, new Vector3(0, 40, 0), new Vector3(2 * H, 80, 2 * H), HrPorcelain, top: HrPorcelainShade);
-        m.Box(0, new Vector3(-H + 120, 84, -H + 120), new Vector3(60, 6, 60), HrIron);   // the drain
-        // (the screens: the front (+z) and the east (+x) sides, a door's gap at the front's west end)
-        m.Pane(0, HrTeal + 8, new Vector3(-H + 300, 80, H), new Vector3(H, 80, H), new Vector3(H, High, H), new Vector3(-H + 300, High, H));
-        m.Pane(0, HrTeal + 8, new Vector3(H, 80, -H), new Vector3(H, 80, H), new Vector3(H, High, H), new Vector3(H, High, -H));
-        foreach (var (a, b) in new[] { (new Vector3(-H + 300, 80, H), new Vector3(-H + 300, High, H)), (new Vector3(H, 80, H), new Vector3(H, High, H)), (new Vector3(H, 80, -H), new Vector3(H, High, -H)),
-                                       (new Vector3(-H + 300, High, H), new Vector3(H, High, H)), (new Vector3(H, High, H), new Vector3(H, High, -H)) })
-            m.Strut(0, a, b, 26, HrChrome);
-        // (the riser up the corner, the head on its arm, the taps)
-        m.Strut(0, new Vector3(-H + 70, 900, -H + 70), new Vector3(-H + 70, 1850, -H + 70), 30, HrChrome);
-        m.Strut(0, new Vector3(-H + 70, 1850, -H + 70), new Vector3(-H + 300, 1850, -H + 300), 26, HrChrome);
-        Cylinder(m, new Vector3(-H + 320, 0, -H + 320), 110, 1780, 1820, 8, HrChrome, HrChrome + 2);
-        foreach (var dx in new[] { -60f, 60f }) m.Ball(0, new Vector3(-H + 70 + dx, 1000, -H + 30), 28, dx < 0 ? 4 * 16 + 8 : 12 * 16 + 8);
+        const float H = 480, Tray = 70, High = 1900;
+        m.Box(0, new Vector3(0, Tray / 2, 0), new Vector3(2 * H, Tray, 2 * H), HrPorcelain, top: HrPorcelain);
+        m.Box(0, new Vector3(0, Tray + 1, 0), new Vector3(2 * H - 110, 2, 2 * H - 110), HrPorcelainShade, top: HrPorcelainShade);
+        Cylinder(m, new Vector3(0, 0, 0), 38, Tray, Tray + 4, 10, HrChrome, HrIron);
+        // (the glass: the front (+z) from the door's gap, the east side (+x) whole)
+        const float Door = -H + 260;
+        m.Pane(0, HrTeal + 8, new Vector3(Door, Tray, H - 8), new Vector3(H - 8, Tray, H - 8), new Vector3(H - 8, High, H - 8), new Vector3(Door, High, H - 8));
+        m.Pane(0, HrTeal + 8, new Vector3(H - 8, Tray, -H), new Vector3(H - 8, Tray, H - 8), new Vector3(H - 8, High, H - 8), new Vector3(H - 8, High, -H));
+        foreach (var (a, b) in new[] { (new Vector3(Door, Tray, H - 8), new Vector3(Door, High, H - 8)), (new Vector3(H - 8, Tray, H - 8), new Vector3(H - 8, High, H - 8)),
+                                       (new Vector3(Door, High, H - 8), new Vector3(H - 8, High, H - 8)), (new Vector3(H - 8, High, H - 8), new Vector3(H - 8, High, -H)) })
+            m.Strut(0, a, b, 14, HrChrome);
+        m.Strut(0, new Vector3(Door + 30, 1000, H + 6), new Vector3(Door + 30, 1250, H + 6), 12, HrChrome);   // (the door's handle)
+        // (the riser up the corner, its arm, the rain head)
+        var riser = new Vector3(-H + 70, 0, -H + 70);
+        Cylinder(m, riser, 15, 950, 2000, 8, HrChrome);
+        m.Strut(0, riser + new Vector3(0, 1990, 0), riser + new Vector3(230, 1990, 230), 16, HrChrome);
+        Cylinder(m, riser + new Vector3(250, 0, 250), 130, 1950, 1975, 14, HrChrome, HrChrome);
+        // (the mixer on the back wall: its plate, its lever)
+        m.Box(0, new Vector3(-H + 330, 1150, -H + 8), new Vector3(170, 170, 14), HrChrome);
+        Cylinder(m, new Vector3(-H + 330, 0, -H + 30), 30, 1120, 1180, 8, HrChrome, HrChrome);
+        m.Strut(0, new Vector3(-H + 330, 1180, -H + 40), new Vector3(-H + 400, 1220, -H + 70), 14, HrChrome);
+        m.Ball(0, new Vector3(-H + 290, 1225, -H + 20), 10, HrHot);
+        m.Ball(0, new Vector3(-H + 370, 1225, -H + 20), 10, HrCold);
+        // (the corner shelf and a bottle on it)
+        m.Up(new[] { m.P(0, new Vector3(-H + 8, 1350, -H + 8)), m.P(0, new Vector3(-H + 8, 1350, -H + 200)), m.P(0, new Vector3(-H + 200, 1350, -H + 8)) }, HrChrome);
+        Cylinder(m, new Vector3(-H + 60, 0, -H + 60), 22, 1352, 1460, 6, HrTeal, HrTealDark);
         return m.ToBody(header);
     }
 
-    // The sink: a white basin on its pedestal, chrome taps, and over it on the wall a mirror in a brass frame, a little shelf under it
+    // The sink: an oval basin, rounded, hollowed into a bowl, on a slim tapering pedestal; a chrome mixer at its back, its spout over the bowl;
+    // over it on the wall a mirror in a brass frame, a little glass shelf under it, a mug and a toothbrush
     public static Body BuildBathSink(byte[] header)
     {
         var m = new CarMesh("the bathroom's sink", new[] { -1 });
         m.Light = 0.8f;
-        Cylinder(m, new Vector3(0, 0, 0), 110, 0, 620, 8, HrPorcelain);
-        m.Box(0, new Vector3(0, 700, 0), new Vector3(600, 160, 420), HrPorcelain, top: HrPorcelainShade);
-        m.Box(0, new Vector3(0, 781, 20), new Vector3(420, 4, 280), HrTeal + 4);   // (the water in its bowl)
-        m.Strut(0, new Vector3(0, 780, -170), new Vector3(0, 900, -170), 30, HrChrome);
-        m.Strut(0, new Vector3(0, 900, -170), new Vector3(0, 880, -60), 24, HrChrome);
-        foreach (var dx in new[] { -110f, 110f }) m.Ball(0, new Vector3(dx, 810, -170), 30, HrChrome);
-        // (the mirror: on the wall's face, -z of the basin's middle by its depth)
+        const int N = 14;
+        var o = Vector3.Zero;
+        // (the pedestal, its foot a little wider)
+        var foot = Ellipse(m, o, 0, 150, 125, N);
+        var waist = Ellipse(m, o, 520, 95, 80, N);
+        var neck = Ellipse(m, o, 620, 150, 115, N);
+        m.Skin(foot, waist, _ => HrPorcelain, o + new Vector3(0, 260, 0));
+        m.Skin(waist, neck, _ => HrPorcelain, o + new Vector3(0, 570, 0));
+        // (the basin: its belly, its rim, its bowl)
+        var belly = Ellipse(m, o, 700, 300, 215, N);
+        var lip = Ellipse(m, o, 790, 310, 225, N);
+        m.Skin(neck, belly, _ => HrPorcelain, o + new Vector3(0, 660, 0));
+        m.Skin(belly, lip, _ => HrPorcelain, o + new Vector3(0, 745, 0));
+        var rimIn = Ellipse(m, o + new Vector3(0, 0, 25), 790, 245, 165, N);
+        RingTop(m, lip, rimIn, HrPorcelain);
+        var bowl = Ellipse(m, o + new Vector3(0, 0, 30), 700, 150, 100, N);
+        Inside(m, rimIn, bowl, HrPorcelainShade, o + new Vector3(0, 0, 25));
+        Fan(m, o + new Vector3(0, 695, 30), bowl, HrPorcelainShade);
+        Cylinder(m, o + new Vector3(0, 0, 30), 20, 696, 699, 8, HrChrome, HrIron);
+        // (the mixer: its pillar at the back of the rim, the spout reaching over the bowl, the lever)
+        Cylinder(m, o + new Vector3(0, 0, -170), 28, 790, 930, 10, HrChrome, HrChrome);
+        m.Strut(0, o + new Vector3(0, 915, -165), o + new Vector3(0, 935, -60), 18, HrChrome);
+        m.Strut(0, o + new Vector3(0, 935, -60), o + new Vector3(0, 890, -20), 16, HrChrome);
+        m.Strut(0, o + new Vector3(0, 935, -175), o + new Vector3(0, 990, -210), 12, HrChrome);
+        // (the mirror on the wall's face, its brass frame; the glass shelf under it; a mug, a toothbrush)
         const float Wall = -225;
-        m.Box(0, new Vector3(0, 1350, Wall + 15), new Vector3(560, 560, 30), HrBrass);
-        m.Box(0, new Vector3(0, 1350, Wall + 32), new Vector3(470, 470, 6), HrTeal + 9, top: HrTeal + 9);
-        m.Box(0, new Vector3(0, 1030, Wall + 60), new Vector3(520, 30, 120), HrWoodLight);
-        m.Box(0, new Vector3(-150, 1080, Wall + 60), new Vector3(50, 70, 50), 12 * 16 + 9);   // a tooth mug
+        m.Box(0, new Vector3(0, 1400, Wall + 12), new Vector3(560, 600, 24), HrBrass);
+        m.Box(0, new Vector3(0, 1400, Wall + 26), new Vector3(480, 520, 6), HrMirror, top: HrMirror);
+        m.Box(0, new Vector3(0, 1060, Wall + 55), new Vector3(500, 14, 100), HrTeal + 4, top: HrTeal + 4);
+        Cylinder(m, new Vector3(-160, 0, Wall + 55), 32, 1067, 1170, 8, HrTeal, HrTealDark);
+        m.Strut(0, new Vector3(-150, 1100, Wall + 50), new Vector3(-130, 1230, Wall + 62), 8, HrHot);
         return m.ToBody(header);
     }
 
-    // The toilet: a white bowl and pedestal, a wooden seat and lid (up), the cistern against the wall, its chrome flush handle
+    // The toilet: a rounded bowl on its pedestal, hollow, the water in it; a wooden seat on the rim and its lid up against the cistern; the
+    // cistern against the wall, its lid, the chrome flush button; the pipe between them
     public static Body BuildToilet(byte[] header)
     {
         var m = new CarMesh("the toilet", new[] { -1 });
         m.Light = 0.8f;
-        m.Box(0, new Vector3(0, 160, 40), new Vector3(240, 320, 320), HrPorcelain);
-        Cylinder(m, new Vector3(0, 0, 80), 190, 300, 400, 10, HrPorcelain, HrTeal + 3);
-        // (the seat: a wooden ring on the rim; the lid up against the cistern)
-        var outer = m.Loop(0, new Vector3(0, 410, 80), new Vector3(200, 0, 0), new Vector3(0, 0, 200), 10);
-        var inner = m.Loop(0, new Vector3(0, 410, 80), new Vector3(120, 0, 0), new Vector3(0, 0, 120), 10);
-        for (var k = 0; k < 10; k++) m.Up(new[] { outer[k], outer[(k + 1) % 10], inner[(k + 1) % 10], inner[k] }, HrWood);
-        m.Box(0, new Vector3(0, 620, -150), new Vector3(400, 420, 40), HrWood);
-        // (the cistern)
-        m.Box(0, new Vector3(0, 650, -230), new Vector3(460, 500, 160), HrPorcelain, top: HrPorcelainShade);
-        m.Strut(0, new Vector3(180, 840, -150), new Vector3(240, 840, -150), 24, HrChrome);
+        const int N = 14;
+        var o = new Vector3(0, 0, 70);
+        var foot = Ellipse(m, o + new Vector3(0, 0, -30), 0, 150, 185, N);
+        var waist = Ellipse(m, o + new Vector3(0, 0, -10), 230, 125, 160, N);
+        var belly = Ellipse(m, o, 340, 205, 255, N);
+        var lip = Ellipse(m, o, 400, 210, 262, N);
+        m.Skin(foot, waist, _ => HrPorcelain, o + new Vector3(0, 115, -20));
+        m.Skin(waist, belly, _ => HrPorcelain, o + new Vector3(0, 285, -5));
+        m.Skin(belly, lip, _ => HrPorcelain, o + new Vector3(0, 370, 0));
+        var rimIn = Ellipse(m, o + new Vector3(0, 0, 10), 400, 145, 190, N);
+        RingTop(m, lip, rimIn, HrPorcelain);
+        var deep = Ellipse(m, o + new Vector3(0, 0, -10), 300, 85, 110, N);
+        Inside(m, rimIn, deep, HrPorcelainShade, o + new Vector3(0, 0, 10));
+        Fan(m, o + new Vector3(0, 300, -10), deep, HrWater);
+        // (the seat: a wooden ring a little over the rim, its edge; the lid up, a flat oval against the cistern)
+        var seatOut = Ellipse(m, o, 420, 215, 266, N);
+        var seatIn = Ellipse(m, o + new Vector3(0, 0, 10), 420, 140, 185, N);
+        var seatEdge = Ellipse(m, o, 402, 215, 266, N);
+        RingTop(m, seatOut, seatIn, HrWood);
+        m.Skin(seatEdge, seatOut, _ => HrWoodDark, o + new Vector3(0, 410, 0));
+        var lid = m.Loop(0, new Vector3(0, 640, -175), new Vector3(205, 0, 0), new Vector3(0, 230, -25), N);
+        var lidHub = m.P(0, new Vector3(0, 640, -175));
+        for (var k = 0; k < N; k++) m.Both(new[] { lidHub, lid[k], lid[(k + 1) % N] }, HrWood);
+        // (the cistern, its lid, the button; the pipe down to the bowl)
+        m.Box(0, new Vector3(0, 640, -235), new Vector3(470, 460, 150), HrPorcelain, top: HrPorcelain);
+        m.Box(0, new Vector3(0, 880, -235), new Vector3(490, 30, 170), HrPorcelain, top: HrPorcelainShade);
+        Cylinder(m, new Vector3(0, 0, -235), 40, 895, 905, 10, HrChrome, HrChrome);
+        m.Strut(0, new Vector3(0, 420, -200), new Vector3(0, 340, -110), 40, HrPorcelain);
         return m.ToBody(header);
     }
 
-    // The corner bath: big, its two backs against the walls (-x is open: the room's middle; the north-east corner is +x, -z), the front a
-    // quarter round, white in a panel of the house's wood, a brass rim; the water; brass taps in the corner
-    public static Body BuildCornerBath(byte[] header)
+    // The corner bath: big, its back two sides against the walls, its front a quarter round about the corner (BathCorner) in the house's wood;
+    // a brass rim all round its top -- the north strip, the curve, the east strip -- its basin porcelain, inset BathStrip from both walls;
+    // brass taps at its west end, their spout over the basin. `water`: how high it stands (0 empty), BuildCornerBathWater's three
+    private static Body CornerBathBody(byte[] header, string name, float water)
     {
-        var m = new CarMesh("the corner bath", new[] { -1 });
+        var m = new CarMesh(name, new[] { -1 });
         m.Light = 0.8f;
-        const float R = 1450, Rim = 520, Inner = 1250;
-        const int N = 12;
-        var corner = new Vector3(760, 0, -760);
-        // (round the corner: from the west wall's way (-x) to the room's (+z), a quarter circle about the corner)
-        Vector3 Arc(float r, float y, int k) { var a = k * MathF.PI / 2 / N; return corner + new Vector3(-r * MathF.Cos(a), y, r * MathF.Sin(a)); }
-        int[] Ring(float r, float y) => Enumerable.Range(0, N + 1).Select(k => m.P(0, Arc(r, y, k))).ToArray();
-        var footOut = Ring(R, 0); var rimOut = Ring(R, Rim);
-        var rimIn = Ring(Inner, Rim); var bottom = Ring(Inner, 120);
+        const int N = 16;
+        var c = BathCorner;
+        Vector3 Arc(float r, float y, float a) => c + new Vector3(-r * MathF.Cos(a), y, r * MathF.Sin(a));
+        float a0 = MathF.Asin(BathStrip / BathInner), a1 = MathF.PI / 2 - a0;
+        // the outline: outer -- the corner, its west end W on the north wall, the curve, its south end E on the east wall; inner -- the
+        // basin's corner c', A0 on the north strip's edge, its curve, A1 on the east strip's edge
+        var inset = c + new Vector3(-BathStrip, 0, BathStrip);
+        Vector3 Inner(float y, int k) => Arc(BathInner, y, a0 + (a1 - a0) * k / N);
+        Vector3 Outer(float y, int k) => Arc(BathOuter, y, MathF.PI / 2 * k / N);
+        // (the front: the curve's panel, wood, a darker plinth)
         for (var k = 0; k < N; k++)
         {
-            m.Out(new[] { footOut[k], footOut[k + 1], rimOut[k + 1], rimOut[k] }, k % 2 == 0 ? HrWood : HrWoodDark, corner + new Vector3(0, Rim / 2, 0));
-            m.Up(new[] { rimOut[k], rimOut[k + 1], rimIn[k + 1], rimIn[k] }, HrBrass);
-            m.In(new[] { rimIn[k], rimIn[k + 1], bottom[k + 1], bottom[k] }, HrPorcelain, corner + new Vector3(0, Rim, 0));
+            m.Out(new[] { m.P(0, Outer(60, k)), m.P(0, Outer(60, k + 1)), m.P(0, Outer(BathRim, k + 1)), m.P(0, Outer(BathRim, k)) }, HrWood, c + new Vector3(0, BathRim / 2, 0));
+            m.Out(new[] { m.P(0, Outer(0, k)), m.P(0, Outer(0, k + 1)), m.P(0, Outer(60, k + 1)), m.P(0, Outer(60, k)) }, HrWoodDark, c + new Vector3(0, 30, 0));
         }
-        // (the water, the bath's floor under it at the corner's fan; the two straight backs' tops along the walls)
-        var hub = m.P(0, corner + new Vector3(0, 380, 0));
-        var water = Ring(Inner, 380);
-        for (var k = 0; k < N; k++) m.Up(new[] { hub, water[k], water[k + 1] }, HrTeal + 7);
-        m.Box(0, new Vector3(corner.X - R / 2, Rim / 2, corner.Z + 40), new Vector3(R, Rim, 80), HrWood, top: HrBrass);
-        m.Box(0, new Vector3(corner.X - 40, Rim / 2, corner.Z + R / 2), new Vector3(80, Rim, R), HrWood, top: HrBrass);
-        foreach (var d in new[] { 150f, 300f }) m.Ball(0, corner + new Vector3(-d, Rim + 60, 140), 34, HrBrass);
-        m.Strut(0, corner + new Vector3(-220, Rim + 20, 120), corner + new Vector3(-220, Rim + 120, 260), 30, HrBrass);
+        // (its east side, seen over the room's low east edge)
+        m.Out(new[] { m.P(0, c), m.P(0, Outer(0, N)), m.P(0, Outer(BathRim, N)), m.P(0, c + new Vector3(0, BathRim, 0)) }, HrWood, c + new Vector3(-400, BathRim / 2, 400));
+        // (the rim: the north strip, the curve's band, the east strip -- one brass top)
+        m.Up(new[] { m.P(0, c + new Vector3(0, BathRim, 0)), m.P(0, Outer(BathRim, 0)), m.P(0, Inner(BathRim, 0)), m.P(0, inset + new Vector3(0, BathRim, 0)) }, HrBrass);
+        for (var k = 0; k < N; k++)
+            m.Up(new[] { m.P(0, Outer(BathRim, k)), m.P(0, Outer(BathRim, k + 1)), m.P(0, Inner(BathRim, k + 1)), m.P(0, Inner(BathRim, k)) }, HrBrass);
+        m.Up(new[] { m.P(0, Outer(BathRim, N)), m.P(0, c + new Vector3(0, BathRim, 0)), m.P(0, inset + new Vector3(0, BathRim, 0)), m.P(0, Inner(BathRim, N)) }, HrBrass);
+        // (the basin: its walls inward, porcelain; its floor)
+        var middle = c + new Vector3(-700, 0, 700);
+        void Wall(Vector3 a, Vector3 b) => m.In(new[] { m.P(0, a + new Vector3(0, BathRim, 0)), m.P(0, b + new Vector3(0, BathRim, 0)), m.P(0, b + new Vector3(0, BathBottom, 0)), m.P(0, a + new Vector3(0, BathBottom, 0)) },
+            HrPorcelain, new Vector3(middle.X, (BathRim + BathBottom) / 2, middle.Z));
+        Wall(inset, Inner(0, 0));
+        for (var k = 0; k < N; k++) Wall(Inner(0, k), Inner(0, k + 1));
+        Wall(Inner(0, N), inset);
+        void Surface(float y, int colour)
+        {
+            var hub = m.P(0, inset + new Vector3(0, y, 0));
+            for (var k = 0; k < N; k++) m.Up(new[] { hub, m.P(0, Inner(y, k)), m.P(0, Inner(y, k + 1)) }, colour);
+        }
+        Surface(BathBottom, HrPorcelainShade);
+        if (water > 0) Surface(water, HrWater);
+        // (the taps at the west end: the mixer's pillar, its spout over the basin, the hot and the cold)
+        var t = BathTaps;
+        Cylinder(m, new Vector3(t.X, 0, t.Z), 45, BathRim, BathRim + 100, 10, HrBrass, HrBrass);
+        m.Strut(0, t + new Vector3(0, 90, 0), t + new Vector3(0, 150, 120), 26, HrBrass);
+        m.Strut(0, t + new Vector3(0, 150, 120), t + new Vector3(0, 110, 210), 22, HrBrass);
+        foreach (var (dx, dot) in new[] { (-110f, HrHot), (110f, HrCold) })
+        {
+            Cylinder(m, new Vector3(t.X + dx, 0, t.Z), 22, BathRim, BathRim + 70, 8, HrBrass, HrBrass);
+            m.Strut(0, t + new Vector3(dx - 40, 80, 0), t + new Vector3(dx + 40, 80, 0), 16, HrBrass);
+            m.Ball(0, t + new Vector3(dx, 92, 0), 12, dot);
+        }
         return m.ToBody(header);
     }
+    public static Body BuildCornerBath(byte[] header) => CornerBathBody(header, "the corner bath", 0);
+    public static Body BuildCornerBathLow(byte[] header) => CornerBathBody(header, "the corner bath, filling", BathBottom + 120);
+    public static Body BuildCornerBathMid(byte[] header) => CornerBathBody(header, "the corner bath, half full", BathBottom + 230);
+    public static Body BuildCornerBathFull(byte[] header) => CornerBathBody(header, "the corner bath, full", BathRim - 70);
 
     // The towel rail: two brass brackets off the wall (-z), the bar, a folded towel over it in the house's teal
     public static Body BuildTowelRail(byte[] header)
     {
         var m = new CarMesh("the towel rail", new[] { -1 });
         m.Light = 0.8f;
-        foreach (var x in new[] { -350f, 350f }) m.Strut(0, new Vector3(x, 1100, -20), new Vector3(x, 1100, 90), 30, HrBrass);
-        m.Strut(0, new Vector3(-380, 1100, 90), new Vector3(380, 1100, 90), 28, HrBrass);
-        m.Box(0, new Vector3(0, 900, 90), new Vector3(520, 420, 40), HrTeal);
-        m.Box(0, new Vector3(0, 900, 112), new Vector3(520, 30, 6), HrTealDark);
+        foreach (var x in new[] { -350f, 350f }) m.Strut(0, new Vector3(x, 1100, -20), new Vector3(x, 1100, 90), 26, HrBrass);
+        m.Strut(0, new Vector3(-380, 1100, 90), new Vector3(380, 1100, 90), 24, HrBrass);
+        m.Box(0, new Vector3(0, 880, 90), new Vector3(520, 440, 40), HrTeal);
+        m.Box(0, new Vector3(0, 860, 112), new Vector3(520, 30, 6), HrTealDark);
+        m.Box(0, new Vector3(0, 700, 112), new Vector3(520, 30, 6), HrTealDark);
         return m.ToBody(header);
     }
 
-    // The bath mat: a flat teal rug with a darker border
+    // The bath mat: a wide teal rug with a darker border and two stripes, flat on the floor (walked over: BathMatBox)
     public static Body BuildBathMat(byte[] header)
     {
         var m = new CarMesh("the bath mat", new[] { -1 });
         m.Light = 0.75f;
-        m.Box(0, new Vector3(0, 4, 0), new Vector3(900, 8, 560), HrTealDark, top: HrTealDark);
-        m.Box(0, new Vector3(0, 9, 0), new Vector3(760, 4, 420), HrTeal, top: HrTeal);
+        m.Box(0, new Vector3(0, 4, 0), new Vector3(1300, 8, 800), HrTealDark, top: HrTealDark);
+        m.Box(0, new Vector3(0, 9, 0), new Vector3(1160, 4, 660), HrTeal, top: HrTeal);
+        foreach (var z in new[] { -220f, 220f }) m.Box(0, new Vector3(0, 12, z), new Vector3(1160, 2, 50), HrTealDark, top: HrTealDark);
         return m.ToBody(header);
     }
 
@@ -176,14 +313,13 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(-L + 700, High + 52, 0), new Vector3(520, 8, 380), HrPorcelain, top: HrPorcelainShade);
         m.Box(0, new Vector3(-L + 700, High + 54, 0), new Vector3(420, 4, 280), HrTeal + 4, top: HrTeal + 4);
         for (var k = 0; k < 6; k++) m.Box(0, new Vector3(-L + 1050 + k * 50, High + 54, 0), new Vector3(20, 6, 340), HrChrome);
-        m.Strut(0, new Vector3(-L + 700, High + 50, -230), new Vector3(-L + 700, High + 280, -230), 26, HrChrome);
-        m.Strut(0, new Vector3(-L + 700, High + 280, -230), new Vector3(-L + 700, High + 240, -100), 22, HrChrome);
+        m.Strut(0, new Vector3(-L + 700, High + 50, -230), new Vector3(-L + 700, High + 280, -230), 22, HrChrome);
+        m.Strut(0, new Vector3(-L + 700, High + 280, -230), new Vector3(-L + 700, High + 240, -100), 18, HrChrome);
         // (things on it: a bread board and loaf, two jars)
         m.Box(0, new Vector3(L - 500, High + 60, 0), new Vector3(360, 20, 240), HrWoodLight);
-        m.Box(0, new Vector3(L - 500, High + 120, 0), new Vector3(240, 110, 140), 6 * 16 + 7, top: 6 * 16 + 9);
-        foreach (var x in new[] { L - 180, L - 90 }) Cylinder(m, new Vector3(x, 0, -150), 45, High + 50, High + 220, 6, 3 * 16 + 12, 4 * 16 + 6);
-        // (tiles up the wall)
-        // (the house's teal: 3 * 16 + 13 came out dark red in Citadel's palette -- the story build's picture, 2026-11-16)
+        m.Box(0, new Vector3(L - 500, High + 120, 0), new Vector3(240, 110, 140), 6 * 16 + 6, top: 6 * 16 + 7);
+        foreach (var x in new[] { L - 180, L - 90 }) Cylinder(m, new Vector3(x, 0, -150), 45, High + 50, High + 220, 6, 3 * 16 + 7, 4 * 16 + 6);
+        // (tiles up the wall, the house's teal -- 3 * 16 + 13 came out dark red in Citadel's palette: the story build's picture, 2026-11-16)
         m.Box(0, new Vector3(0, High + 330, -D + 8), new Vector3(2 * L, 560, 16), HrTeal - 1);
         return m.ToBody(header);
     }
@@ -198,9 +334,9 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(-180, 420, D + 8), new Vector3(400, 380, 16), HrIron + 2);
         m.Strut(0, new Vector3(-W + 40, 680, D + 50), new Vector3(W - 40, 680, D + 50), 22, HrBrass);
         foreach (var (x, z) in new[] { (-230f, -120f), (230f, -120f), (-230f, 150f), (230f, 150f) }) Cylinder(m, new Vector3(x, 0, z), 110, High, High + 12, 8, HrIron + 4);
-        Cylinder(m, new Vector3(-230, 0, 150), 140, High + 12, High + 150, 8, HrCopper, HrCopper - 2);
+        Cylinder(m, new Vector3(-230, 0, 150), 140, High + 12, High + 150, 10, HrCopper, HrCopper - 2);
         m.Strut(0, new Vector3(-370, High + 140, 150), new Vector3(-620, High + 150, 150), 30, HrWoodDark);
-        Cylinder(m, new Vector3(230, 0, -120), 120, High + 12, High + 230, 8, HrChrome, HrChrome + 2);
+        Cylinder(m, new Vector3(230, 0, -120), 120, High + 12, High + 230, 10, HrChrome, HrChrome);
         m.Strut(0, new Vector3(350, High + 160, -120), new Vector3(450, High + 260, -120), 24, HrChrome);
         m.Box(0, new Vector3(0, 1600, -D + 120), new Vector3(240, 1500, 240), HrIron);
         return m.ToBody(header);
@@ -218,9 +354,9 @@ internal static partial class CitadelProps
         foreach (var y in new[] { 1180f, 1500f, 1820f })
         {
             m.Box(0, new Vector3(0, y, 20), new Vector3(2 * W - 120, 20, 200), HrWoodLight);
-            for (var k = -3; k <= 3; k += 2) m.Box(0, new Vector3(k * 110, y + 110, 10), new Vector3(180, 200, 16), y < 1400 ? 12 * 16 + 9 : HrPorcelain);
+            for (var k = -3; k <= 3; k += 2) m.Box(0, new Vector3(k * 110, y + 110, 10), new Vector3(180, 200, 16), y < 1400 ? 12 * 16 + 7 : HrPorcelain);
         }
-        m.Pane(0, HrTeal + 9, new Vector3(-W + 40, 900, D - 60), new Vector3(W - 40, 900, D - 60), new Vector3(W - 40, 2100, D - 60), new Vector3(-W + 40, 2100, D - 60));
+        m.Pane(0, HrTeal + 8, new Vector3(-W + 40, 900, D - 60), new Vector3(W - 40, 900, D - 60), new Vector3(W - 40, 2100, D - 60), new Vector3(-W + 40, 2100, D - 60));
         m.Box(0, new Vector3(0, 2190, 0), new Vector3(2 * W + 40, 100, 2 * D), HrWood, top: HrBrass);
         return m.ToBody(header);
     }
@@ -230,12 +366,12 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("the kitchen's table", new[] { -1 });
         m.Light = 0.8f;
-        Cylinder(m, Vector3.Zero, 520, 640, 700, 14, HrWoodDark, HrWood);
-        Cylinder(m, Vector3.Zero, 70, 0, 640, 6, HrWoodDark);
+        Cylinder(m, Vector3.Zero, 520, 640, 700, 16, HrWoodDark, HrWood);
+        Cylinder(m, Vector3.Zero, 70, 0, 640, 8, HrWoodDark);
         m.Box(0, new Vector3(0, 30, 0), new Vector3(560, 60, 120), HrWoodDark);
         m.Box(0, new Vector3(0, 30, 0), new Vector3(120, 60, 560), HrWoodDark);
         m.Box(0, new Vector3(0, 703, 0), new Vector3(900, 4, 260), HrPorcelain, top: HrPorcelain);
-        foreach (var x in new[] { -260f, 260f }) Cylinder(m, new Vector3(x, 0, 0), 110, 705, 720, 8, HrPorcelain, HrPorcelainShade);
+        foreach (var x in new[] { -280f, 280f }) Cylinder(m, new Vector3(x, 0, 0), 110, 705, 720, 10, HrPorcelain, HrPorcelainShade);
         Cylinder(m, new Vector3(0, 0, 0), 70, 705, 900, 8, HrTeal, HrTealDark);
         return m.ToBody(header);
     }
@@ -249,9 +385,12 @@ internal static partial class CitadelProps
         {
             m.Box(0, new Vector3(0, y, 90), new Vector3(1000, 30, 180), HrWood);
             for (var k = -2; k <= 2; k++) Cylinder(m, new Vector3(k * 180, 0, 60), 85, y + 15, y + 30, 8, k % 2 == 0 ? HrPorcelain : HrTeal, k % 2 == 0 ? HrPorcelainShade : HrTealDark);
-            for (var k = -2; k <= 2; k++) m.Box(0, new Vector3(k * 180, y + 110, 40), new Vector3(170, 170, 12), k % 2 == 0 ? 12 * 16 + 9 : HrPorcelain);
+            for (var k = -2; k <= 2; k++) m.Box(0, new Vector3(k * 180, y + 110, 40), new Vector3(170, 170, 12), k % 2 == 0 ? 12 * 16 + 7 : HrPorcelain);
         }
         foreach (var x in new[] { -480f, 480f }) m.Box(0, new Vector3(x, 1380, 90), new Vector3(30, 420, 180), HrWoodDark);
         return m.ToBody(header);
     }
+
+    // The kitchen's chair: the bedroom's (BuildChair), its seat KitchenSeatTop over the floor -- Twinsen sits on it
+    public static Body BuildKitchenChair(byte[] header) => ChairBody(header, "the kitchen's chair", KitchenSeatTop);
 }

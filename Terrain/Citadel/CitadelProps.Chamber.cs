@@ -147,12 +147,14 @@ internal static partial class CitadelProps
     // top at CitadelSpanking.StoolTop (Zoe sits on it) and its seat's middle ChairAhead in front of its own place (+z): the actor stands
     // back behind it, so its box -- the engine's sort -- keeps it behind Zoe, who sits on it
     public const int ChairAhead = 500;
-    public static Body BuildChair(byte[] header)
+    public static Body BuildChair(byte[] header) => ChairBody(header, "the bedroom's chair", CitadelSpanking.StoolTop);
+    // (its seat's top `Top` over the floor: the kitchen's chairs a seat taller, CitadelProps.HouseRooms KitchenChair)
+    private static Body ChairBody(byte[] header, string name, float Top)
     {
-        var m = new CarMesh("the bedroom's chair", new[] { -1 });
+        var m = new CarMesh(name, new[] { -1 });
         m.Light = 0.7f;
-        const float Top = CitadelSpanking.StoolTop, Half = 200, Cushion = 70, Apron = 80, Leg = 46, Z = ChairAhead;
-        const float SeatUnder = Top - Cushion;
+        const float Half = 200, Cushion = 70, Apron = 80, Leg = 46, Z = ChairAhead;
+        float SeatUnder = Top - Cushion;
         // the cushion, its top a shade lighter, and the apron under it all round
         m.Box(0, new Vector3(0, Top - Cushion / 2, Z + 8), new Vector3(2 * Half - 10, Cushion, 2 * Half - 26), Teal, Teal + 1);
         m.Box(0, new Vector3(0, SeatUnder - Apron / 2, Z + Half - 12), new Vector3(2 * Half, Apron, 24), Wood);
@@ -166,7 +168,7 @@ internal static partial class CitadelProps
             m.Box(0, new Vector3(s * (Half - Leg / 2), 70, Z), new Vector3(20, 22, 2 * Half - Leg), Wood);
         m.Box(0, new Vector3(0, 90, Z + Half - Leg / 2), new Vector3(2 * Half - Leg, 22, 20), Wood);
         // the back: its posts from the floor up past the seat, leaning back as they rise; the slats and the top rail across them
-        const float PostTop = Top + 560, Lean = 90;
+        float PostTop = Top + 560; const float Lean = 90;
         float Back(float y) => Z - Half + Leg / 2 - Lean * MathF.Max(0, y - SeatUnder) / (PostTop - SeatUnder);
         foreach (var s in new[] { -1, 1 })
         {
