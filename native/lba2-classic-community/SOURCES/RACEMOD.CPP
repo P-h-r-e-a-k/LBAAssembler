@@ -899,7 +899,8 @@ static int s_bowlDown[6], s_bowlHome[6][2], s_bowlRolls[21], s_bowlNRolls = 0, s
 static char s_bowlMsg[64] = "";
 static U32 s_bowlInput = 0;
 // darts=<scene> <spot x> <spot z> <reach> <board x> <board z> <board y>, dart_foe=<body> <anim> <scatter> <name>, dart_zoe=<same>: the Tavern's darts (DartFrame)
-typedef struct { S32 Body, Anim, Scatter; char Name[24]; } T_DART_FOE;
+typedef struct { S32 Body, Anim, Scatter; char Name[24]; S32 Entity, Walk; } T_DART_FOE;   // (Entity, Walk: dart_foe='s last two, or -1 -- the regular
+// sat in the scene who is this foe, and its walk: he gets up and comes over to ask the wager, DartFrame's states 7 and 8)
 static T_DART_FOE s_dtFoes[16], s_dtZoe;
 static int s_nbDtFoe = 0, s_dtHasZoe = 0, s_dtScene = -1, s_dtSpot[3], s_dtBoard[3];
 // (more than one board -- the Tavern's, the Tralu's bar's: the user, 2026-11-15, "Let's add a dart board to the tralu bar area too ... Let's
@@ -928,6 +929,10 @@ static S32 s_dtMarkAt[3];                        // when each dart of the turn l
 static double s_dtFrom[3][3];                    // ... and where from
 static T_DART s_dtMemo[MAX_DARTS];               // Twinsen's own darts as they were before the match: given back after it
 static S32 s_dtMemoVar = 0, s_dtSwapAt = 0;
+// (the regular who gets up to play: his seated actor, hidden in the match, its flags as they were; where the stand-in walks to)
+static int s_dtSeat = -1;
+static U32 s_dtSeatFlags = 0;
+static double s_dtWalkTo[2];
 static int s_dtMemoOn = 0, s_dtHeroWalk = -1, s_dtNextState = 0;
 static U8 *s_dtPic = NULL;                        // the board drawn once at its size on the screen (0xFF: not the board)
 static S32 s_dtPicR = 0;
@@ -4508,7 +4513,8 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
             memset(&f, 0, sizeof(f));
-            if (sscanf(v, "%d %d %d %23s", &f.Body, &f.Anim, &f.Scatter, f.Name) == 4) {
+            f.Entity = -1; f.Walk = -1;
+            if (sscanf(v, "%d %d %d %23s %d %d", &f.Body, &f.Anim, &f.Scatter, f.Name, &f.Entity, &f.Walk) >= 4) {
                 for (char *q = f.Name; *q; q++) if (*q == '_') *q = ' ';
                 if (!strcmp(key, "dart_zoe")) { s_dtZoe = f; s_dtHasZoe = 1; }
                 else if (s_nbDtFoe < 16) { s_dtFoes[s_nbDtFoe++] = f; if (s_nbDtBoards) s_dtBoards[s_nbDtBoards - 1].NbFoe++; }
@@ -19901,10 +19907,30 @@ static void DartPlaces(S32 now) {
             if (!foe) continue;   // (against Zoe, player 2's, he keeps the spot)
             hero->Obj.X = (S32)x; hero->Obj.Z = (S32)z; hero->Obj.Beta = beta; ClearRealAngle(hero);
             if (!s_dtThrown) DartHeroAnim(moving);
-        } else if (foe) {
+        } else if (foe && s_dtState != 6 && s_dtState != 7 && s_dtState != 8) {
             foe->Obj.X = (S32)x; foe->Obj.Z = (S32)z; foe->Obj.Beta = beta; ClearRealAngle(foe);
         }
     }
+}
+static void DartStandAnim(S32 anim) {
+    T_OBJET *foe = DartStand();
+    if (!foe || anim < 0 || !GivePtrAnim(anim)) return;
+    foe->Obj.Anim.Num = -1; ObjectInitAnim(&foe->Obj, (void *)(uintptr_t)(U32)anim);
+}
+// (a step of the stand-in toward (x, z) at a walker's pace, turned to it: whether it is there)
+static int DartStandWalk(double x, double z, double dt) {
+    T_OBJET *foe = DartStand();
+    if (!foe) return 1;
+    const double dx = x - foe->Obj.X, dz = z - foe->Obj.Z, d = sqrt(dx * dx + dz * dz), step = 900 * dt;
+    if (d <= step + 1) { foe->Obj.X = (S32)x; foe->Obj.Z = (S32)z; return 1; }
+    foe->Obj.X += (S32)(dx / d * step); foe->Obj.Z += (S32)(dz / d * step);
+    foe->Obj.Beta = (S32)(atan2(dx, dz) * 4096 / (2 * 3.14159265358979)) & 4095; ClearRealAngle(foe);
+    return 0;
+}
+// (the regular back in his seat: his seated actor shown again)
+static void DartSeatBack(void) {
+    if (s_dtSeat > 0 && s_dtSeat < NbObjets) ListObjet[s_dtSeat].Flags = (ListObjet[s_dtSeat].Flags & ~INVISIBLE) | (s_dtSeatFlags & INVISIBLE);
+    s_dtSeat = -1;
 }
 static void DartStandShow(int on) {
     T_OBJET *foe = DartStand();
@@ -19987,7 +20013,12 @@ static void DartFoeThrow(S32 now) {
     ax = r * sin(a); ay = -r * cos(a);
     if (rem == 50) { ax = 0; ay = 0; want = -1; }   // (the bull)
     else if (rem <= 40 && rem >= 2 && (rem % 2) == 0) { want = rem / 2; for (int i = 0; i < 20; i++) if (order[i] == want) sec = i; ax = 0.95 * sin(sec * 3.14159265358979 / 10); ay = -0.95 * cos(sec * 3.14159265358979 / 10); }
-    const double sigma = f->Scatter / 100.0;
+    // (the bigger the wager, the steadier his hand -- the user, 2026-11-16, "Let's make the skill of our opponent increase with the wager": his
+    // scatter by the stake's place in the list, none to 100, down to a little over half)
+    static const double steadier[4] = {1.0, 0.85, 0.7, 0.55};
+    int stakeAt = 0;
+    for (int k = 0; k < 4; k++) if (s_dtStakes[k] == s_dtStake) stakeAt = k;
+    const double sigma = f->Scatter / 100.0 * steadier[stakeAt];
     const double ex = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma, ey = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma;
     s_dtFx = ax + ex; s_dtFy = ay + ey;
     DartLand(now, s_dtFx, s_dtFy);
@@ -19995,6 +20026,7 @@ static void DartFoeThrow(S32 now) {
 // (the match over or left: the opponent hidden, Twinsen's own darts given back)
 static void DartEnd(void) {
     s_dtOn = 0;
+    DartSeatBack();
     DartStandShow(0);
     DartsGiveBack();
     s_dtHeroWalk = -1;
@@ -20015,7 +20047,7 @@ static void DartBoardPick(void) {
 static void DartFrame(S32 now) {
     DartBoardPick();
     if (s_dtScene < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene || RaceGame_StoryZoe()) {
-        if (s_dtOn && (S32)NumCube != s_dtScene) { s_dtOn = 0; DartsGiveBack(); s_dtHeroWalk = -1; }
+        if (s_dtOn && (S32)NumCube != s_dtScene) { s_dtOn = 0; DartsGiveBack(); s_dtHeroWalk = -1; s_dtSeat = -1; }
         return;
     }
     T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -20045,6 +20077,28 @@ static void DartFrame(S32 now) {
             DartStandShow(1);
             s_dtStake = 0; s_dtStakePick = 0; s_dtSideWas = 1;
             if (s_dtFoe >= 0) s_dtState = 6;   // (the wager first, against a regular)
+            // (the regular sat in the scene who is the foe -- the nearest actor of his entity -- gets up: his seated actor hidden, the stand-in
+            // at his seat walking over to stand before Twinsen and ask the wager; the user, 2026-11-16, "If Twinsen triggers a dart game, one
+            // of the NPCs at the table stands up, walks over to him, and asks the question")
+            s_dtSeat = -1;
+            if (s_dtFoe >= 0 && s_dtFoes[s_dtFoe].Entity >= 0 && s_dtFoes[s_dtFoe].Walk >= 0 && DartStand()) {
+                double best = 1e18;
+                for (int i = 1; i < NbObjets; i++) {
+                    if (i == s_dtStand || ListObjet[i].IndexFile3D != s_dtFoes[s_dtFoe].Entity || (ListObjet[i].WorkFlags & OBJ_DEAD)) continue;
+                    const double dx = ListObjet[i].Obj.X - hero->Obj.X, dz = ListObjet[i].Obj.Z - hero->Obj.Z;
+                    if (dx * dx + dz * dz < best) { best = dx * dx + dz * dz; s_dtSeat = i; }
+                }
+                if (s_dtSeat > 0) {
+                    T_OBJET *seat = &ListObjet[s_dtSeat], *foe = DartStand();
+                    s_dtSeatFlags = seat->Flags; seat->Flags |= INVISIBLE;
+                    foe->Obj.X = seat->Obj.X; foe->Obj.Z = seat->Obj.Z;
+                    const double dx = seat->Obj.X - hero->Obj.X, dz = seat->Obj.Z - hero->Obj.Z, d = sqrt(dx * dx + dz * dz) + 1;
+                    s_dtWalkTo[0] = hero->Obj.X + dx / d * 750; s_dtWalkTo[1] = hero->Obj.Z + dz / d * 750;
+                    DartStandAnim(s_dtFoes[s_dtFoe].Walk);
+                    s_dtState = 7;
+                    Log_Info("[racemod] darts: %s gets up (actor %d) and comes over", DartOpponent()->Name, s_dtSeat);
+                }
+            }
             else DartSay(now, "Arrows aim, Action throws", 3000);
             Log_Info("[racemod] darts: a match of %d against %s (opponent's actor %d)", DART_START, DartOpponent()->Name, s_dtStand);
         }
@@ -20054,6 +20108,24 @@ static void DartFrame(S32 now) {
     if (s_dtThrown && now - s_dtThrowAt > 800) { s_dtThrown = 0; s_dtHeroWalk = -1; DartHeroAnim(0); }
     hero->WorkFlags &= ~FALLING;
     const double t = now / 1000.0;
+    if (s_dtState == 7) {
+        // the regular coming over from his seat: there, he turns to Twinsen, stands, and asks (the wager, 6)
+        T_OBJET *foe = DartStand();
+        if (DartStandWalk(s_dtWalkTo[0], s_dtWalkTo[1], dt) || !foe) {
+            if (foe) { foe->Obj.Beta = (S32)(atan2((double)hero->Obj.X - foe->Obj.X, (double)hero->Obj.Z - foe->Obj.Z) * 4096 / (2 * 3.14159265358979)) & 4095; ClearRealAngle(foe); }
+            DartStandAnim(DartOpponent()->Anim);
+            s_dtState = 6; s_dtSideWas = 1;
+        }
+        return;
+    }
+    if (s_dtState == 8) {
+        // the wager made: to the waiting place behind Twinsen, then the match
+        if (DartStandWalk(s_dtFace[4], s_dtFace[5], dt)) {
+            DartStandAnim(DartOpponent()->Anim);
+            s_dtState = 0; s_dtAt = now;
+        }
+        return;
+    }
     if (s_dtState == 6) {
         // the wager: the opponent asks how much it is for; Left and Right through every stake, Action takes it -- one he hasn't the money for
         // and the opponent says so and it's a friendly game (the user, 2026-11-16: "I can't seem to trigger the wager feature ... Let's have
@@ -20066,6 +20138,7 @@ static void DartFrame(S32 now) {
         if (pressed) {
             s_dtStake = s_dtStakes[s_dtStakePick];
             s_dtState = 0; s_dtAt = now;
+            if (s_dtSeat > 0) { s_dtState = 8; DartStandAnim(DartOpponent()->Walk); }
             if (s_dtStake > purse) {
                 // (the opponent's words alone: with his name before them the line ran off the screen's sides)
                 Log_Info("[racemod] darts: %d %s asked, %d in the purse -- a friendly game", s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes", (int)purse);

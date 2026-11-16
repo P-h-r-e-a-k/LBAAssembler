@@ -13,7 +13,9 @@ internal static partial class RaceTrackStory
 {
     // a foe: its body and standing animation (BODY.HQR, ANIM.HQR: shown beside the board), its name, how steady its hand is (the tenths of
     // the board's radius its darts scatter by: smaller is better)
-    internal sealed record DartBoard(int Scene, int X, int Z, int Beta, int Floor, int FromChapter, (int Body, int Anim, string Name, int Scatter)[] Foes);
+    // (and, for a regular sat in the scene, its entity and its walk -- ANIM.HQR: he gets up and walks over to ask the wager, the user, 2026-11-16,
+    // "If Twinsen triggers a dart game, one of the NPCs at the table stands up, walks over to him, and asks the question"; -1: none)
+    internal sealed record DartBoard(int Scene, int X, int Z, int Beta, int Floor, int FromChapter, (int Body, int Anim, string Name, int Scatter, int Entity, int Walk)[] Foes);
 
     // the Tavern's (scene 3): on the window wall in the corner at the end of the bar where the potted plant stood (the user, 2026-11-12:
     // "remove plant from the corner at the end of the bar and put the dart board against that wall instead"; the plant is
@@ -25,11 +27,12 @@ internal static partial class RaceTrackStory
     {
         new(TavernScene, 584, 7930, 1024, 1024, 2, new[]
         {
-            (39, 282, "Luc", 9), (139, 715, "Baldino", 11), (32, 224, "Raph", 14), (40, 289, "Tim", 16), (59, 383, "Mr. Paul", 18), (44, 302, "Pat", 22),
+            (39, 282, "Luc", 9, -1, -1), (139, 715, "Baldino", 11, -1, -1), (32, 224, "Raph", 14, -1, -1), (40, 289, "Tim", 16, -1, -1), (59, 383, "Mr. Paul", 18, -1, -1), (44, 302, "Pat", 22, -1, -1),
         }),
         new(TraluBarHall, 14408, 24560, 1024, 2304, 1, new[]
         {
-            (44, 302, "Pat", 20), (41, 297, "Fab", 15), (38, 277, "Bunny", 24),
+            // (Pat and Fab walk -- entities 29 and 28's walks; the drunk rabbibunny, entity 25, has none: he lurches over, his sway)
+            (44, 302, "Pat", 20, 29, 304), (41, 297, "Fab", 15, 28, 299), (38, 277, "Bunny", 24, 25, 279),
         }),
     };
     private const int TraluBarHall = 19;
@@ -99,7 +102,7 @@ internal static partial class RaceTrackStory
             var (faceX, faceZ) = DartsAt(b, Citadel.CitadelProps.DartStandOff, 0);
             var (waitX, waitZ) = DartsAt(b, DartsWaitOut, DartsWaitAside);
             yield return $"dart_board={faceX} {faceZ} {Citadel.CitadelProps.DartRadius} {b.Beta} {waitX} {waitZ}";
-            foreach (var f in b.Foes) yield return $"dart_foe={f.Body} {f.Anim} {f.Scatter} {f.Name.Replace(' ', '_')}";
+            foreach (var f in b.Foes) yield return $"dart_foe={f.Body} {f.Anim} {f.Scatter} {f.Name.Replace(' ', '_')}" + (f.Entity >= 0 ? $" {f.Entity} {f.Walk}" : "");
         }
         yield return $"dart_zoe={ZoeDartBody} {ZoeDartAnim} 12 Zoe";
     }
