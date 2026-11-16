@@ -91,9 +91,12 @@ internal static partial class RaceTrackStory
     // corner by the barrels beside the far halls' lift)
     // (the hatch a cell in front of the quay's railing: behind it, by the water, Twinsen couldn't come to it -- 2026-11-04)
     private static readonly (int X, int Z) DemoPainter = (17664, 15664);
-    private static readonly (int X, int Y, int Z) DemoSewerArrival = (20357, 1536, 15140), DemoDeadEnd = (12800, 3072, 2300);
+    private static readonly (int X, int Y, int Z) DemoSewerArrival = (20480, 1536, 15360), DemoDeadEnd = (12800, 3072, 2300);
     private const int DemoPainterActor = 7;
     private const int HatchSwitch = 213, LadderSwitch = 214;
+    // the sewers' lift back up to the quay (the user, 2026-11-16: "There's currently no elevator in the sewers for Twinsen to go back up
+    // again"): its door's switch, how far it rises -- under 1,500, distance()'s height for its helper's off-the-plate test -- its zone
+    private const int SewerLiftSwitch = 219, SewerLiftRise = 1200, SewerLiftZone = 70;
     // (the quay's lift into the sewers: its plate's half width, how far it sinks, its scenario zone, the helper's settling count (a cell
     // variable of scene 43's), its sounds and speed -- the Stella Entities lift's)
     // (OffQuayLift: from the plate's middle, Twinsen not on it -- its corner is 724 off -- the controls his again: the user, 2026-11-16, ran
@@ -1446,7 +1449,7 @@ stop();
             p.Log.Add($"the thief left out: {(thief is null ? $"no umbrella thief in scene {UmbrellaScene}" : "no room off the storm track's roads at the harbour")}");
             return;
         }
-        p.Edit(Harbour, $"the thief on the harbour's quay at cell ({b.X:0.#}, {b.Z:0.#}) runs from Twinsen to a sewer hatch at ({ht.X:0.#}, {ht.Z:0.#}) and down it (variable {QThief} {ThiefDown})", model =>
+        p.Edit(Harbour, $"the thief on the harbour's quay at cell ({b.X:0.#}, {b.Z:0.#}) runs from Twinsen onto the sewers' lift at ({ht.X:0.#}, {ht.Z:0.#}) and down it, Twinsen held till it is back up (variable {QThief} {ThiefDown})", model =>
         {
             if (model.CubeX != (int)Math.Floor(b.X / 64) || model.CubeY != (int)Math.Floor(b.Z / 64) || model.CubeX != (int)Math.Floor(ht.X / 64) || model.CubeY != (int)Math.Floor(ht.Z / 64))
                 throw new NotTheGames("the thief's place and the hatch aren't in the harbour's cube");
@@ -1465,6 +1468,7 @@ stop();
             });
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = QuayLiftZone, X0 = hx - LiftHalf + 64, X1 = hx + LiftHalf - 65, Z0 = hz - LiftHalf + 64, Z1 = hz + LiftHalf - 65, Y0 = hy - 300, Y1 = hy + 900, Info = new int[8] });
             var low = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy - LiftDip, hz));
+            var high = SceneOps.AddTrackPoint(model, new SceneTrackPoint(hx, hy - Citadel.CitadelProps.LiftTop, hz));
             // (the plate and the lift's helper -- before the thief, who must stay the scene's last actor)
             // (the retail lifts' look -- the harbour's own lift down to the sewers, scene 48's entity 104, a dark teal grating: the user,
             // 2026-11-16, "needs to be the same colour as the retail elevators" -- on the chamber's plate's ride: CitadelProps.QuayLift.
@@ -1474,44 +1478,24 @@ stop();
             plate.Move = 3;
             var plateIndex = SceneOps.AddActor(model, plate);
             var helper = RaceTrackScenes.InvisibleHelper(hx, hy, hz);
+            // (Action on it only -- the user, 2026-11-16: "The port elevator to the sewers should only work when Twinsen uses action on it,
+            // not when he walks on it": walked over it, it took him; and the thief rides it, below)
             var helperLife = p.Add(model, helper, $@"void comportement_0()
 {{
-    set_var_cube({QuaySettle}, 0);
-    set_comportement(comportement_4);
-}}
-
-void comportement_4()
-{{
-    add_var_cube({QuaySettle}, 1);
-    if (5 < var_cube({QuaySettle}))
-    {{
-        if ({QuayLiftZone} == zone_obj(0))
-        {{
-            set_comportement(comportement_2);
-        }}
-        else
-        {{
-            set_comportement(comportement_1);
-        }}
-    }}
-}}
-
-void comportement_2()
-{{
-    if ({QuayLiftZone} != zone_obj(0))
-    {{
-        set_comportement(comportement_1);
-    }}
+    set_comportement(comportement_1);
 }}
 
 void comportement_1()
 {{
-    if ({QuayLiftZone} == zone_obj(0) && {Driving} != comportement_hero() && (1 < chapter() || {ThiefDown} <= var_game({QThief})))
+    swif (1 == action())
     {{
-        set_dir_obj(0, NO_MOVE);
-        anim_obj(0, 0);
-        set_track_obj({plateIndex}, label_1);
-        set_comportement(comportement_3);
+        if ({QuayLiftZone} == zone_obj(0) && {Driving} != comportement_hero() && (1 < chapter() || {ThiefDown} <= var_game({QThief})))
+        {{
+            set_dir_obj(0, NO_MOVE);
+            anim_obj(0, 0);
+            set_track_obj({plateIndex}, label_1);
+            set_comportement(comportement_3);
+        }}
     }}
 }}
 
@@ -1560,9 +1544,35 @@ void comportement_1()
 
 void comportement_2()
 {{
-    if (11 == l_track() || 6000 < distance(0))
+    if (11 == l_track())
+    {{
+        set_dir_obj(0, NO_MOVE);
+        anim_obj(0, 0);
+        set_track_obj({plateIndex}, label_1);
+        set_comportement(comportement_3);
+    }}
+    else if (6000 < distance(0))
     {{
         invisible(1);
+        suicide();
+    }}
+}}
+
+void comportement_3()
+{{
+    if (2 == l_track_obj({plateIndex}))
+    {{
+        invisible(1);
+        set_track_obj({plateIndex}, label_3);
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if (4 == l_track_obj({plateIndex}))
+    {{
+        set_dir_obj(0, MOVE_MANUAL);
         suicide();
     }}
 }}
@@ -1585,6 +1595,15 @@ sample({QuayLiftStop});
 
 label(2);
 stop();
+
+label(3);
+sample({QuayLiftStart});
+speed({QuayLiftSpeed});
+goto_point_3d({high});
+sample({QuayLiftStop});
+
+label(4);
+stop();
 ");
                 life(scripts);
                 var index = model.Actors.Count - 1;
@@ -1601,6 +1620,73 @@ stop();
 ");
             };
         });
+
+        // the sewers' lift back up to the quay: a plate as the quay's, its top the walkway's floor where the quay's lift lands him (DemoSewerArrival);
+        // Action on it -- on foot -- it rises SewerLiftRise and its door (SewerLiftSwitch) takes him onto the quay's plate, at its top
+        if (demoSewers)
+        {
+            int qx = RaceTrackScenes.CubeLocal(ht.X, (int)Math.Floor(ht.X / 64)), qz = RaceTrackScenes.CubeLocal(ht.Z, (int)Math.Floor(ht.Z / 64)), qyTop = (int)Math.Round(ht.Y);
+            p.Edit(Sewers, $"the sewers' lift back up to the harbour's quay, at ({DemoSewerArrival.X}, {DemoSewerArrival.Z}): Action on it", model =>
+            {
+                var (sx, sy, sz) = DemoSewerArrival;
+                var plate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.QuayLift, sx, sy - Citadel.CitadelProps.LiftTop, sz);
+                plate.Flags |= RaceTrackScenes.CarrierFlag;
+                plate.Move = 3;
+                var plateIndex = SceneOps.AddActor(model, plate);
+                var up = SceneOps.AddTrackPoint(model, new SceneTrackPoint(sx, sy - Citadel.CitadelProps.LiftTop + SewerLiftRise, sz));
+                model.Zones.Add(new SceneZoneModel { Type = 2, Num = SewerLiftZone, X0 = sx - LiftHalf + 64, X1 = sx + LiftHalf - 65, Z0 = sz - LiftHalf + 64, Z1 = sz + LiftHalf - 65, Y0 = sy - 300, Y1 = sy + 900, Info = new int[8] });
+                // (its door: over the plate risen, onto the quay's plate -- where he stood on this one, there; DontReadjust, as the quay's)
+                model.Zones.Add(new SceneZoneModel
+                {
+                    Type = 0, Num = Harbour, X0 = sx - LiftHalf, X1 = sx + LiftHalf - 1, Z0 = sz - LiftHalf, Z1 = sz + LiftHalf - 1, Y0 = sy + SewerLiftRise - 300, Y1 = sy + SewerLiftRise + 1500,
+                    Info = new[] { qx - LiftHalf, qyTop - 300, qz - LiftHalf, 0, SewerLiftSwitch, 0, 1, 0 },
+                });
+                var helperLife = p.Add(model, RaceTrackScenes.InvisibleHelper(sx, sy, sz), $@"void comportement_0()
+{{
+    set_change_cube({SewerLiftSwitch}, 0);
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if ({SewerLiftZone} == zone_obj(0) && {Driving} != comportement_hero())
+        {{
+            set_dir_obj(0, NO_MOVE);
+            anim_obj(0, 0);
+            set_track_obj({plateIndex}, label_1);
+            set_comportement(comportement_3);
+        }}
+    }}
+}}
+
+void comportement_3()
+{{
+    if ({OffQuayLift} < distance(0))
+    {{
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }}
+    if (2 == l_track_obj({plateIndex}))
+    {{
+        set_change_cube({SewerLiftSwitch}, 1);
+        set_comportement(comportement_5);
+    }}
+}}
+
+void comportement_5()
+{{
+}}
+");
+                return scripts =>
+                {
+                    helperLife(scripts);
+                    scripts.SetText(plateIndex, ScriptKind.Life, "void comportement_0()\n{\n}\n");
+                    scripts.SetText(plateIndex, ScriptKind.Track, $"label(0);\nstop();\n\nlabel(1);\nsample({QuayLiftStart});\nspeed({QuayLiftSpeed});\ngoto_point_3d({up});\nsample({QuayLiftStop});\n\nlabel(2);\nstop();\n");
+                };
+            });
+        }
 
         // the sewers: the painter (scene 17's actor 12, the game's sewer worker) says his own line first, then -- asked again in the same
         // visit, while the thief is somewhere ahead -- that he went through to the far tunnel (the game's 237, retold so); and the far
