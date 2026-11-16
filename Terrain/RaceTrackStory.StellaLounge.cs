@@ -21,10 +21,13 @@ namespace LBAAssembler.Terrain;
 //     two kashes a zlito). The hall's and the private room's money is zlitos (zlitos_scene=), what the scripts count and pay and the counter shows.
 internal static partial class RaceTrackStory
 {
-    internal const int ExchangeVar = 196;
+    // (256: past the game's 256 -- 196 until 2026-11-16, the postcards' EggCards too: the engine took any of them for an exchange, its
+    // money changed and the count wiped, whenever a postcard was found with the story's race file loaded)
+    internal const int ExchangeVar = 256;
     // (seated in a booth: 1; the engine makes it 2 at a key -- RACEMOD.CPP seat_var= -- and he gets up)
     // (247 since 2026-11-14: 210 was the Dark Monk statuette's EggStatuette as well)
-    internal const int SeatVar = 247;
+    // (258: past the game's 256 -- 247 until 2026-11-16, the Polar dream's EggSendell too)
+    internal const int SeatVar = 258;
     // (seated: the scene variable SeatCube 1, 2 once a key gets him up -- RACEMOD.CPP seat_cube=; SeatVar keeps who he paid. 2026-11-16:
     // the seat was SeatVar too, and SeatVar is the Polar dream's EggSendell -- the engine turned her 1 to 2 at the first key; no game
     // variable is free, every one is some script's)

@@ -323,6 +323,16 @@ void DoFuncLife(T_OBJET *ptrobj) {
         break;
 
         //---------------------------------------------------------------------------
+    case LF_VAR_GAME_W: {
+        U16 wide;
+        memcpy(&wide, PtrPrg, 2);
+        PtrPrg += 2;
+        Value = wide < MAX_VARS_GAME ? ListVarGame[wide] : 0;
+        TypeAnswer = RET_S16;
+        break;
+    }
+
+        //---------------------------------------------------------------------------
     case LF_USE_INVENTORY:
         num = *PtrPrg++; // var game
 
@@ -1491,6 +1501,32 @@ void DoLife(U8 numobj) {
             PtrPrg += 2;
             LIFETRACE_ACT("SUB game_var[%d] -> %d", (int)num, (int)ListVarGame[num]);
             break;
+
+            //---------------------------------------------------------------------------
+        case LM_SET_VAR_GAME_W:
+        case LM_ADD_VAR_GAME_W:
+        case LM_SUB_VAR_GAME_W: {
+            // (a game variable by its two-byte number: as SET/ADD/SUB_VAR_GAME do, past 255 too)
+            U16 wide;
+            S16 value;
+            memcpy(&wide, PtrPrg, 2);
+            memcpy(&value, PtrPrg + 2, 2);
+            PtrPrg += 4;
+            if (wide < MAX_VARS_GAME) {
+                S32 now = *ptrmacro == LM_SET_VAR_GAME_W ? value : ListVarGame[wide] + (*ptrmacro == LM_ADD_VAR_GAME_W ? value : -value);
+                if (now > MAX_S16) now = MAX_S16;
+                if (now < MIN_S16) now = MIN_S16;
+                ListVarGame[wide] = (S16)now;
+                if (wide == FLAG_MONEY) {
+                    if (MONEY_ZLITOS)
+                        NbGoldPieces = ListVarGame[FLAG_MONEY];
+                    else
+                        NbZlitosPieces = ListVarGame[FLAG_MONEY];
+                }
+                LIFETRACE_ACT("SET game_var[%d] = %d", (int)wide, (int)ListVarGame[wide]);
+            }
+            break;
+        }
 
             //---------------------------------------------------------------------------
         case LM_SET_USED_INVENTORY:

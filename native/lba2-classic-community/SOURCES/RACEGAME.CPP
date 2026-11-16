@@ -3171,9 +3171,9 @@ static const T_RG_REPLAY s_replays[] = {
     {"bowling", 393, 0, 1, {{253, 5}}},                            // the bowling alley
     // (the Dino-Fly on the dream's Polar Island, on its jetty -- the user, 2026-11-14: "spawn Twinsen next to dinofly, with dinofly already
     // posing the question "Where do you want to go?" Then after Twinsen answers fade back to the menu a couple of seconds later": Twinsen
-    // in front of him, facing him (the Dino-Fly at (3456, 1024, 8832), facing 1204); the replay's own variable, 250, has him ask at once
+    // in front of him, facing him (the Dino-Fly at (3456, 1024, 8832), facing 1204); the replay's own variable, 257 (RaceTrackStory.ReplayVar -- 250 until 2026-11-16, the weather egg's too), has him ask at once
     // (Polar/PolarDinofly.cs); over two seconds after his TalkedVar, 194, comes to 1 as the answer is given)
-    {"dinofly", 254, 0, 2, {{253, 0}, {250, 1}}, 0, {194, 1, 2000}, {4322, 1024, 8587, 3252}},
+    {"dinofly", 254, 0, 2, {{253, 0}, {257, 1}}, 0, {194, 1, 2000}, {4322, 1024, 8587, 3252}},
     {"dungeon", 159, 0, 1, {{253, 13}}},                           // the Emperor's palace, the room whose fireplace is the way down
     {"postcards", 95, 0, 3, {{253, 14}, {196, 13}, {197, 14}}},    // Celebration Island, every postcard found: the reward told
 };

@@ -241,7 +241,7 @@ internal static class Bytecode
         var at = r.Pos;
         ins.Func = r.U8();
         cd = Opcodes.Cond(ins.Func) ?? throw new ScriptFormatException($"Unknown life condition {ins.Func}", at);
-        ins.FuncArg = cd.OperandName is null ? -1 : r.U8();
+        ins.FuncArg = cd.OperandName is null ? -1 : cd.Wide ? r.U16() : r.U8();
     }
 
     private static byte ReadTest(ref ByteReader r)
@@ -323,7 +323,7 @@ internal static class Bytecode
     {
         var cd = Opcodes.Cond(ins.Func) ?? throw new InvalidOperationException($"Unknown life condition {ins.Func}");
         w.U8(ins.Func);
-        if (cd.OperandName is not null) w.U8(ins.FuncArg);
+        if (cd.OperandName is not null) { if (cd.Wide) w.S16(ins.FuncArg); else w.U8(ins.FuncArg); }
         return cd;
     }
 

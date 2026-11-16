@@ -160,6 +160,47 @@ static S32 SaveLoadRoom(size_t n) {
     return n <= (size_t)(g_save_read_limit - PtrSave);
 }
 
+// The game variables past the game's 256 (COMMON.H MAX_VARS_GAME, 2026-11-16): a block of their own right after the scene variables --
+// a tag, how many, the values, a check. A save made before has the hero's behaviour there, never the tag: those variables are 0 then.
+// (After the scene variables, not at the context's end: a load whose scene's checksum differs stops reading before the end.)
+#define SAVE_VARX_TAG 0x58524156u /* "VARX" */
+static U32 SaveVarxSum(const S16 *v, S32 n) {
+    U32 sum = SAVE_VARX_TAG;
+    for (S32 i = 0; i < n; i++)
+        sum = sum * 31u + (U16)v[i];
+    return sum;
+}
+static void SaveVarsWide(const S16 *vars) {
+    const S32 n = MAX_VARS_GAME - RETAIL_VARS_GAME;
+    const U32 tag = SAVE_VARX_TAG, sum = SaveVarxSum(vars + RETAIL_VARS_GAME, n);
+    const U16 count = (U16)n;
+    memcpy(PtrSave, &tag, 4);
+    memcpy(PtrSave + 4, &count, 2);
+    memcpy(PtrSave + 6, vars + RETAIL_VARS_GAME, n * sizeof(S16));
+    memcpy(PtrSave + 6 + n * sizeof(S16), &sum, 4);
+    PtrSave += 6 + n * sizeof(S16) + 4;
+}
+static void LoadVarsWide(S16 *vars) {
+    static S16 tmp[MAX_VARS_GAME - RETAIL_VARS_GAME];
+    U32 tag, stored;
+    U16 n;
+    memset(vars + RETAIL_VARS_GAME, 0, (MAX_VARS_GAME - RETAIL_VARS_GAME) * sizeof(S16));
+    if (!SaveLoadRoom(6))
+        return;
+    memcpy(&tag, PtrSave, 4);
+    if (tag != SAVE_VARX_TAG)
+        return;
+    memcpy(&n, PtrSave + 4, 2);
+    if (n > MAX_VARS_GAME - RETAIL_VARS_GAME || !SaveLoadRoom(6 + (size_t)n * sizeof(S16) + 4))
+        return;
+    memcpy(tmp, PtrSave + 6, n * sizeof(S16));
+    memcpy(&stored, PtrSave + 6 + n * sizeof(S16), 4);
+    if (stored != SaveVarxSum(tmp, n))
+        return;
+    memcpy(vars + RETAIL_VARS_GAME, tmp, n * sizeof(S16));
+    PtrSave += 6 + n * sizeof(S16) + 4;
+}
+
 static S32 SaveLoadReadPlayerName(void) {
     S32 i;
     for (i = 0; i <= MAX_SIZE_PLAYER_NAME; i++) {
@@ -606,11 +647,11 @@ void LoadGameNumCube() {
     PtrSave += 160 * 120; // Skip Image
 
     // list Var game
-    if (!SaveLoadRoom((size_t)MAX_VARS_GAME * sizeof(ListVarGame[0]))) {
+    if (!SaveLoadRoom((size_t)RETAIL_VARS_GAME * sizeof(ListVarGame[0]))) {
         SaveLoadClearReadLimit();
         return;
     }
-    LbaRead(ListVarGame, MAX_VARS_GAME * sizeof(ListVarGame[0]));
+    LbaRead(ListVarGame, RETAIL_VARS_GAME * sizeof(ListVarGame[0]));
 
     SaveLoadClearReadLimit();
 }
@@ -965,10 +1006,11 @@ S32 LoadGameOldVersion(void) {
 
     // list Var game and cube
 #ifdef EDITLBA2
-    LbaRead(SaveListVarGame, MAX_VARS_GAME * sizeof(SaveListVarGame[0]));
+    LbaRead(SaveListVarGame, RETAIL_VARS_GAME * sizeof(SaveListVarGame[0]));
     LbaRead(SaveListVarCube, MAX_VARS_CUBE * sizeof(SaveListVarCube[0]));
 #else
-    LbaRead(ListVarGame, MAX_VARS_GAME * sizeof(ListVarGame[0]));
+    LbaRead(ListVarGame, RETAIL_VARS_GAME * sizeof(ListVarGame[0]));
+    memset(&ListVarGame[RETAIL_VARS_GAME], 0, (MAX_VARS_GAME - RETAIL_VARS_GAME) * sizeof(ListVarGame[0]));
     LbaRead(ListVarCube, MAX_VARS_CUBE * sizeof(ListVarCube[0]));
 #endif
 
@@ -1075,11 +1117,12 @@ void SaveContexte(S32 savetimerrefhr) {
 
     // list vars game et cube
 #ifdef EDITLBA2
-    LbaWrite(SaveListVarGame, MAX_VARS_GAME * sizeof(SaveListVarGame[0]));
+    LbaWrite(SaveListVarGame, RETAIL_VARS_GAME * sizeof(SaveListVarGame[0]));
     LbaWrite(SaveListVarCube, MAX_VARS_CUBE * sizeof(SaveListVarCube[0]));
 #else
-    LbaWrite(ListVarGame, MAX_VARS_GAME * sizeof(ListVarGame[0]));
+    LbaWrite(ListVarGame, RETAIL_VARS_GAME * sizeof(ListVarGame[0]));
     LbaWrite(ListVarCube, MAX_VARS_CUBE * sizeof(ListVarCube[0]));
+    SaveVarsWide(ListVarGame);
 #endif
 
     // Globales
@@ -1603,11 +1646,12 @@ S32 LoadContexte(S32 *savetimerrefhr) {
 
     // list Var game and cube
 #ifdef EDITLBA2
-    LbaRead(SaveListVarGame, MAX_VARS_GAME * sizeof(SaveListVarGame[0]));
+    LbaRead(SaveListVarGame, RETAIL_VARS_GAME * sizeof(SaveListVarGame[0]));
     LbaRead(SaveListVarCube, MAX_VARS_CUBE * sizeof(SaveListVarCube[0]));
 #else
-    LbaRead(ListVarGame, MAX_VARS_GAME * sizeof(ListVarGame[0]));
+    LbaRead(ListVarGame, RETAIL_VARS_GAME * sizeof(ListVarGame[0]));
     LbaRead(ListVarCube, MAX_VARS_CUBE * sizeof(ListVarCube[0]));
+    LoadVarsWide(ListVarGame);
 #endif
 
     // Globales

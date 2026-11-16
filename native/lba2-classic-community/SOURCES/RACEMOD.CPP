@@ -714,7 +714,7 @@ static int s_place = 0, s_racers = 0;      // the player's place when he finishe
 static int Inert(void) {
     if (!s_onceWon || s_nbWinSet <= 0 || s_place) return 0;
     for (int i = 0; i + 1 < s_nbWinSet; i += 2)
-        if (s_winSet[i] < 0 || s_winSet[i] > 255 || ListVarGame[s_winSet[i]] < s_winSet[i + 1]) return 0;
+        if (s_winSet[i] < 0 || s_winSet[i] >= MAX_VARS_GAME || ListVarGame[s_winSet[i]] < s_winSet[i + 1]) return 0;
     return 1;
 }
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
@@ -759,7 +759,7 @@ static double s_tortoiseX = 0, s_tortoiseZ = 0;   // (where his car stood at GO)
 #define RACE_TORTOISE_MS 9000              // she passes him, then the moral and the race again
 #define RACE_TORTOISE_FAR (48 * 512.0)     // Twinsen this far from where his car stood at GO has gone somewhere, pedal or not
 static void SetAtLeast(int var, int value, const char *why) {
-    if (var < 0 || var > 255 || ListVarGame[var] >= value) return;
+    if (var < 0 || var >= MAX_VARS_GAME || ListVarGame[var] >= value) return;
     ListVarGame[var] = (S16)value;
     Log_Info("[racemod] %s: game variable %d = %d", why, var, value);
 }
@@ -1554,7 +1554,7 @@ S32 RaceMod_HoldFade(void) {
     if (!RaceMod_Active() || !s_nbLateFade) return 0;
     if ((int)NumCube != s_lateFadeScene) { s_lateFadeScene = (int)NumCube; s_lateFadeFrames = 0; }
     for (int k = 0; k < s_nbLateFade; k++)
-        if (s_lateFade[k][0] == (int)NumCube && s_lateFade[k][1] >= 0 && s_lateFade[k][1] < 256 && ListVarGame[s_lateFade[k][1]] == s_lateFade[k][2]) {
+        if (s_lateFade[k][0] == (int)NumCube && s_lateFade[k][1] >= 0 && s_lateFade[k][1] < MAX_VARS_GAME && ListVarGame[s_lateFade[k][1]] == s_lateFade[k][2]) {
             if (++s_lateFadeFrames <= RACE_LATE_FADE_FRAMES) return 1;
             Log_Info("[racemod] late_fade: scene %d faded in after %d frames", (int)NumCube, RACE_LATE_FADE_FRAMES);
             return 0;
@@ -1564,7 +1564,7 @@ S32 RaceMod_HoldFade(void) {
 #define RACE_LENS_RIM 6
 #define RACE_LENS_RIM_COLOUR 50
 static void LensDraw(void) {
-    const int game = s_lensVar >= 0 && s_lensVar < 256 && ListVarGame[s_lensVar] == s_lensValue;
+    const int game = s_lensVar >= 0 && s_lensVar < MAX_VARS_GAME && ListVarGame[s_lensVar] == s_lensValue;
     const int cube = s_lensCubeScene >= 0 && (int)NumCube == s_lensCubeScene && s_lensCubeVar >= 0 && s_lensCubeVar < 80 && ListVarCube[s_lensCubeVar] == s_lensCubeValue;
     if (!game && !cube) return;
     const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, cx = w / 2, cy = h / 2 - (game ? h * s_lensRaise / 100 : 0);
@@ -1591,7 +1591,7 @@ static void LensDraw(void) {
 static int s_seatVar = -1, s_seatFree = 0, s_seatCube = -1;
 static void SeatFrame(void) {
     U8 *seat = s_seatCube >= 0 && s_seatCube < MAX_VARS_CUBE && ListVarCube[s_seatCube] == 1 ? &ListVarCube[s_seatCube] : NULL;
-    const int game = !seat && s_seatVar >= 0 && s_seatVar <= 255 && ListVarGame[s_seatVar] == 1;
+    const int game = !seat && s_seatVar >= 0 && s_seatVar < MAX_VARS_GAME && ListVarGame[s_seatVar] == 1;
     if (!seat && !game) { s_seatFree = 0; return; }
     const U32 keys = I_UP | I_DOWN | I_LEFT | I_RIGHT | I_ACTION_M | I_ACTION_ALWAYS;
     if (!(Input & keys)) { s_seatFree = 1; return; }
@@ -1611,11 +1611,11 @@ void RaceMod_Walk(int n, const double *xz, int car, int more);
 // script keeps a way shut to a younger player by it (Stella Entities' lift)
 static int s_adultVar = -1;
 static void AdultFrame(void) {
-    if (s_adultVar < 0 || s_adultVar > 255) return;
+    if (s_adultVar < 0 || s_adultVar >= MAX_VARS_GAME) return;
     ListVarGame[s_adultVar] = RaceGame_PlayerAdult() ? 1 : 0;
 }
 static void DriveMarksFrame(void) {
-    if (s_markVar < 0 || s_markVar > 255) return;
+    if (s_markVar < 0 || s_markVar >= MAX_VARS_GAME) return;
     const S32 v = ListVarGame[s_markVar];
     if (v >= 2 && v < 240) {
         if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
@@ -1635,17 +1635,17 @@ static void DriveMarksFrame(void) {
     }
 }
 static U32 MarksBrakeInput(void) {
-    if (Comportement != C_BUGGY) { s_markBrake = 0; if (s_markVar >= 0 && s_markVar < 256) ListVarGame[s_markVar] = 251; return 0; }
+    if (Comportement != C_BUGGY) { s_markBrake = 0; if (s_markVar >= 0 && s_markVar < MAX_VARS_GAME) ListVarGame[s_markVar] = 251; return 0; }
     if ((ListBuggy[0].Speed * 36 + 2560) / 5120 > 1) return I_DOWN;
     ListObjet[NUM_PERSO].Move = MOVE_MANUAL;
     LeaveBuggy(C_NORMAL);
     s_markBrake = 0;
-    if (s_markVar >= 0 && s_markVar < 256) ListVarGame[s_markVar] = 251;
+    if (s_markVar >= 0 && s_markVar < MAX_VARS_GAME) ListVarGame[s_markVar] = 251;
     Log_Info("[racemod] drive_marks: stopped -- Twinsen out of the car");
     return 0;
 }
 static void ExchangeFrame(void) {
-    if (s_exchangeVar < 0 || s_exchangeVar > 255 || ListVarGame[s_exchangeVar] == 0) return;
+    if (s_exchangeVar < 0 || s_exchangeVar >= MAX_VARS_GAME || ListVarGame[s_exchangeVar] == 0) return;
     ListVarGame[s_exchangeVar] = 0;
     int z = NbGoldPieces / 2;
     if (NbZlitosPieces + z > 999) z = 999 - NbZlitosPieces;
@@ -3214,7 +3214,7 @@ static int s_leafBorder = -1, s_leaf[3];
 // weather_var= (the Weather Wizard's encore, the user, 2026-11-04): the weather a variable picks for the race, from the grid (the count-down
 // running) to the finish -- 1 rain, 2 snow, else the island's own; on its outside scenes only
 static int WeatherChoice(void) {
-    if (s_weatherVar < 0 || s_weatherVar > 255 || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return 0;
+    if (s_weatherVar < 0 || s_weatherVar >= MAX_VARS_GAME || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return 0;
     if (!s_goAt || s_place || (s_phase != PHASE_GRID && s_phase != PHASE_RACE)) return 0;
     return ListVarGame[s_weatherVar];
 }
@@ -5020,7 +5020,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "vargame")) {
             int n, value;
-            if (s_nbHeld < RACE_MAX_HELD && sscanf(v, "%d %d", &n, &value) == 2 && n >= 0 && n < 256) { s_held[s_nbHeld][0] = n; s_held[s_nbHeld][1] = value; s_nbHeld++; }
+            if (s_nbHeld < RACE_MAX_HELD && sscanf(v, "%d %d", &n, &value) == 2 && n >= 0 && n < MAX_VARS_GAME) { s_held[s_nbHeld][0] = n; s_held[s_nbHeld][1] = value; s_nbHeld++; }
         }
         else if (!strcmp(key, "gate")) {
             T_RACE_GATE *g = &s_gates[s_nbGates];
@@ -5133,7 +5133,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
         else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
         else if (!strcmp(key, "once_won")) s_onceWon = atoi(v) != 0;
-        else if (!strcmp(key, "win_stop")) { s_winStopVar = atoi(v); if (s_winStopVar < 0 || s_winStopVar > 255) s_winStopVar = -1; }
+        else if (!strcmp(key, "win_stop")) { s_winStopVar = atoi(v); if (s_winStopVar < 0 || s_winStopVar >= MAX_VARS_GAME) s_winStopVar = -1; }
         else if (!strcmp(key, "lap_record")) { if (sscanf(v, "%d %d %d", &s_lapRecordMs, &s_lapRecordVar, &s_lapRecordValue) != 3) s_lapRecordVar = -1; }
         else if (!strcmp(key, "margin_win")) { if (sscanf(v, "%d %d %d", &s_marginMs, &s_marginVar, &s_marginValue) != 3) s_marginVar = -1; }
         else if (!strcmp(key, "no_hit")) { if (sscanf(v, "%d %d", &s_noHitVar, &s_noHitValue) != 2) s_noHitVar = -1; }
@@ -5295,7 +5295,7 @@ static void Load(const char *path, int carOnly = 0) {
             else if (!strcmp(rest, "name")) snprintf(o->Name, sizeof(o->Name), "%s", v);
             else if (!strcmp(rest, "when")) {
                 int var, least, below = 0;
-                if (sscanf(v, "%d %d %d", &var, &least, &below) >= 2 && var >= 0 && var < 256) { o->WhenVar = var; o->WhenLeast = least; o->WhenBelow = below; }
+                if (sscanf(v, "%d %d %d", &var, &least, &below) >= 2 && var >= 0 && var < MAX_VARS_GAME) { o->WhenVar = var; o->WhenLeast = least; o->WhenBelow = below; }
             }
             else if (!strcmp(rest, "anim")) { int idle, drive; if (sscanf(v, "%d %d", &idle, &drive) == 2) { o->AnimIdle = idle; o->AnimDrive = drive; o->HasAnims = 1; } }
             else if (!strcmp(rest, "actor")) {
@@ -5642,19 +5642,19 @@ static int NextCrossed(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1) {
 // The story's results: a gate not yet open (gate=), a result's variables set (beat=, win=), and whether they are all set already.
 static const T_RACE_GATE *ClosedGate(void) {
     for (int i = 0; i < s_nbGates; i++)
-        if (s_gates[i].Var >= 0 && s_gates[i].Var < 256 && ListVarGame[s_gates[i].Var] < s_gates[i].Least) return &s_gates[i];
+        if (s_gates[i].Var >= 0 && s_gates[i].Var < MAX_VARS_GAME && ListVarGame[s_gates[i].Var] < s_gates[i].Least) return &s_gates[i];
     return NULL;
 }
 
 static int SetsDone(const int *sets, int n) {
     for (int i = 0; i + 1 < n; i += 2)
-        if (sets[i] >= 0 && sets[i] < 256 && ListVarGame[sets[i]] != sets[i + 1]) return 0;
+        if (sets[i] >= 0 && sets[i] < MAX_VARS_GAME && ListVarGame[sets[i]] != sets[i + 1]) return 0;
     return n > 0;
 }
 
 static void ApplySets(const int *sets, int n) {
     for (int i = 0; i + 1 < n; i += 2)
-        if (sets[i] >= 0 && sets[i] < 256) {
+        if (sets[i] >= 0 && sets[i] < MAX_VARS_GAME) {
             ListVarGame[sets[i]] = (S16)sets[i + 1];
             Log_Info("[racemod] game variable %d = %d", sets[i], sets[i + 1]);
         }
@@ -6361,7 +6361,7 @@ static void CarHome(void) {
 // replay_end=: its variable come to its value -- this frame, after the scripts and before the picture is drawn: the picture as it last was
 // faded to black (and the sound with it), and the menu at once (RaceMod_WantsMenu, RaceMod_ReplayOver). Once.
 static void ReplayEndFrame(void) {
-    if (s_replayEndVar < 0 || s_replayEndVar >= 256 || s_replayPending || NewCube != -1) return;
+    if (s_replayEndVar < 0 || s_replayEndVar >= MAX_VARS_GAME || s_replayPending || NewCube != -1) return;
     if (!s_replayEndDue) {
         if (ListVarGame[s_replayEndVar] != s_replayEndValue) return;
         if (s_replayEndDelay > 0) { s_replayEndDue = TimerRefHR + s_replayEndDelay; return; }
@@ -7444,7 +7444,7 @@ static double Pull(double speed);
 static void ParadeStep(S32 now, S32 dt) {
     if (s_paradeYelling) return;
     s_paradeActorNow = -1;
-    if (s_paradeOpp < 0 || s_paradeVar < 0 || s_paradeVar > 255) return;
+    if (s_paradeOpp < 0 || s_paradeVar < 0 || s_paradeVar >= MAX_VARS_GAME) return;
     const T_RACE_OPPONENT *o = &s_opp[s_paradeOpp];
     if (!o->Count || o->Length <= 0) return;
     int wanted = ListVarGame[s_paradeVar] < s_paradeValue;
@@ -7476,7 +7476,7 @@ static void ParadeStep(S32 now, S32 dt) {
     // lighthouse keeper is just running around in circles instead of off to the lighthouse after Twinsen speaks to him")
     int beaten = s_nbBeatSet > 0;
     for (int i = 0; i + 1 < s_nbBeatSet; i += 2)
-        if (s_beatSet[i] >= 0 && s_beatSet[i] < 256 && ListVarGame[s_beatSet[i]] < s_beatSet[i + 1]) beaten = 0;
+        if (s_beatSet[i] >= 0 && s_beatSet[i] < MAX_VARS_GAME && ListVarGame[s_beatSet[i]] < s_beatSet[i + 1]) beaten = 0;
     if (beaten && !wanted && s_pull != 5) {
         if (s_pull != 0) Log_Info("[racemod] parade: its driver's time beaten -- the car is parked");
         s_pull = 5; s_pullSay = 0; s_walker = -1;
@@ -8442,7 +8442,7 @@ static int FrogOpen(S32 t) {
 }
 
 static void FrogVarFrame(void) {
-    if (s_frogVar < 0 || s_frogVar > 255) return;
+    if (s_frogVar < 0 || s_frogVar >= MAX_VARS_GAME) return;
     ListVarGame[s_frogVar] = (S16)(s_frog.On && FrogOpen(TimerRefHR) ? 1 : 0);
 }
 
@@ -13336,7 +13336,7 @@ void RaceMod_FootArrive(void) {
     if (s_replayPending) {
         s_replayPending = 0;
         for (int i = 0; i < s_nbReplay; i++)
-            if (s_replaySet[i][0] >= 0 && s_replaySet[i][0] < 256) ListVarGame[s_replaySet[i][0]] = (S16)s_replaySet[i][1];
+            if (s_replaySet[i][0] >= 0 && s_replaySet[i][0] < MAX_VARS_GAME) ListVarGame[s_replaySet[i][0]] = (S16)s_replaySet[i][1];
         if (s_replayGold >= 0) NbGoldPieces = s_replayGold;
         if (s_replayMs > 0) { s_menuAt = s_replayEndAt = TimerRefHR + s_replayMs; s_replayOver = 1; Log_Info("[racemod] a replay's clip: the menu in %d ms", (int)s_replayMs); }
         if (s_nbReplay) Log_Info("[racemod] a replayed egg: %d variables set as scene %d loads", s_nbReplay, (int)NewCube);
@@ -14358,7 +14358,7 @@ S32 RaceMod_Takeover(void) {
     if (s_victory && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (victory_lap=: the pilot drives the lap of honour)
     // (drive_marks=: the story's drive through its markers and the stop after them -- the player's keys had the car too, and drove it off at
     // full speed past the last marker, far from the script waiting for the stop: the user, 2026-11-14)
-    if (RaceMod_Active() && Comportement == C_BUGGY && (s_markBrake || (s_markVar >= 0 && s_markVar < 256 && ListVarGame[s_markVar] == 250))) return 1;
+    if (RaceMod_Active() && Comportement == C_BUGGY && (s_markBrake || (s_markVar >= 0 && s_markVar < MAX_VARS_GAME && ListVarGame[s_markVar] == 250))) return 1;
     if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return 1;   // (the console's racewalk)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) return 1;   // (a ghost played back drives the car: GhostWatch)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
@@ -19575,7 +19575,7 @@ void RaceMod_RadioUsed(S32 item) { if (item == HAL_RADIO && !s_halUsedAt) s_halU
 void RaceMod_RadioTaken(S32 item) { if (item == HAL_RADIO) s_halTakenAt = TimerRefHR; }
 static void HalCall(S32 now) {
     HalLoad();
-    if (s_halMendVar >= 0 && s_halMendVar < 256 && ListVarGame[s_halMendVar] < s_halMendValue) {
+    if (s_halMendVar >= 0 && s_halMendVar < MAX_VARS_GAME && ListVarGame[s_halMendVar] < s_halMendValue) {
         snprintf(s_halSay, sizeof(s_halSay), "HAL!! ZX81!! HAL!! ... his voice box only crackles: he isn't mended yet.");
     } else {
         // (this island's hints, then any island's; the next one on from the last given, its achievement not the player's yet)
@@ -20940,7 +20940,7 @@ void RaceMod_Frame(void) {
     }
     TortoiseWatch(TimerRefHR);
     WinStopFrame(TimerRefHR);
-    if (s_unlockAtVar >= 0 && s_unlockAtVar < 256 && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
+    if (s_unlockAtVar >= 0 && s_unlockAtVar < MAX_VARS_GAME && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
         s_unlockAtDone = 1;
         Log_Info("[racemod] game variable %d at %d: the story unlock %s", s_unlockAtVar, (int)ListVarGame[s_unlockAtVar], s_unlockAt);
         StoryUnlock(s_unlockAt);
@@ -23678,7 +23678,7 @@ S32 RaceMod_Dial(S32 num) {
             NumObjDial = speaker;
         }
     }
-    if (!RaceMod_Active() || s_tiredVar < 0 || s_tiredVar > 255 || Island != 0 || NumObjDial == NUM_PERSO) return num;
+    if (!RaceMod_Active() || s_tiredVar < 0 || s_tiredVar >= MAX_VARS_GAME || Island != 0 || NumObjDial == NUM_PERSO) return num;
     if (ListVarGame[s_tiredVar] != s_tiredValue) return num;
     for (int k = 0; k < s_nbTiredKeep; k++) if (num == s_tiredKeep[k]) return num;
     for (int k = 0; k < s_nbTiredSkip; k++) if ((S32)NumCube == s_tiredSkip[k]) return num;

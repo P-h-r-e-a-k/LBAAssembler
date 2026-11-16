@@ -217,7 +217,7 @@ static S32 g_sceneForCube[16][16];
 // RET_U8 -- these two only ever differ in signedness, never in size, so
 // they're not distinguished here). None of the 46 set RET_STRING.
 struct LifeCondInfo { U8 operandBytes; bool valueIsS16; const char *name; };
-static const LifeCondInfo LifeConditions[46] = {
+static const LifeCondInfo LifeConditions[47] = {
     /* 0*/ {0, false, "COL"},
     /* 1*/ {1, false, "COL_OBJ"},
     /* 2*/ {1, true, "DISTANCE"},
@@ -264,6 +264,7 @@ static const LifeCondInfo LifeConditions[46] = {
     /*43*/ {0, false, "PROCESSOR"},
     /*44*/ {1, false, "OBJECT_DISPLAYED"},
     /*45*/ {1, true, "ANGLE_OBJ"},
+    /*46*/ {2, true, "VAR_GAME_W"},   // (COMMON.H LF_VAR_GAME_W: a game variable by a two-byte number)
 };
 
 static const char *TestOpName(U8 test)
@@ -287,11 +288,15 @@ static bool DecodeLifeCondition(U8 *base, S32 *offset, S32 maxBytes, const char 
     S32 o = *offset;
     if (o >= maxBytes) return false;
     U8 lf = base[o];
-    if (lf >= 46) return false;
+    if (lf >= 47) return false;
     const LifeCondInfo &info = LifeConditions[lf];
     o++;
     S32 operand = 0;
-    if (info.operandBytes) {
+    if (info.operandBytes == 2) {
+        if (o + 1 >= maxBytes) return false;
+        operand = base[o] | (base[o + 1] << 8);
+        o += 2;
+    } else if (info.operandBytes) {
         if (o >= maxBytes) return false;
         operand = base[o];
         o++;
@@ -361,6 +366,7 @@ static int LmExtraBytes(U8 op, const char **name)
         {LM_IMPACT_POINT, 3, "IMPACT_POINT"}, {LM_ASK_CHOICE_OBJ, 3, "ASK_CHOICE_OBJ"}, {LM_ADD_MESSAGE_OBJ, 3, "ADD_MESSAGE_OBJ"},
         {LM_IMPACT_OBJ, 5, "IMPACT_OBJ"}, {LM_PARM_SAMPLE, 5, "PARM_SAMPLE"}, {LM_PCX_MESS_OBJ, 5, "PCX_MESS_OBJ"},
         {LM_NEW_SAMPLE, 7, "NEW_SAMPLE"},
+        {LM_SET_VAR_GAME_W, 4, "SET_VAR_GAME_W"}, {LM_ADD_VAR_GAME_W, 4, "ADD_VAR_GAME_W"}, {LM_SUB_VAR_GAME_W, 4, "SUB_VAR_GAME_W"},
     };
     for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++) {
         if (table[i].op == op) { *name = table[i].name; return table[i].bytes; }

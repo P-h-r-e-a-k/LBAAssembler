@@ -116,7 +116,7 @@ void RaceNet_SendCar(const T_RACENET_CAR *car);
 // Story Mode with two players (2026-11-11: player 2 is Zoe): player 1's game sends a save to load as it enters a scene (the same PC: its
 // path), and the game's and the scene's variables as they change; player 2's takes each once
 #define RACENET_STORY_PATH 260
-#define RACENET_STORY_VARS 256
+#define RACENET_STORY_VARS 1024   // (COMMON.H MAX_VARS_GAME)
 #define RACENET_STORY_CUBE_VARS 80
 #define RACENET_CAR_STORY 2                 // a story sample: on foot or in the car, Lap the scene, Progress the hero's generic animation
 void RaceNet_StoryLoad(const char *path, int cube);

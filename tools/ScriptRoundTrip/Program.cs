@@ -43,6 +43,7 @@ internal static class Program
             "commenttests" => CommentTests.Run(archive),
             "commentdemo" => CommentTests.Demo(archive),
             "roundtrip" => RoundTrip.Run(archive, args.Length > 1 ? args[1] : "all"),
+            "widevars" => WideVarsCommand.Run(args),
             "lba1" => Lba1Tests.Run(args),
             "foundation" => FoundationTests.Run(args),
             "store" => StoreTests.Run(args),

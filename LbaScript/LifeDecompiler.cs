@@ -379,7 +379,7 @@ internal static partial class LifeText
             var args = Operands.Format(def.Args, ins, (ix, d) => SymbolFor(ins, def, ix, d), null);
             // SET_DIR / SET_DIR_OBJ: name the move mode.
             if (def.Form == LifeForm.Dir) args = FormatDir(ins, def);
-            return $"{ScriptStyle.Func(def.Name)}({args});";
+            return $"{ScriptStyle.Func(Lba2Tables.Written(def.Name))}({args});";
         }
 
         private static string FormatDir(Instr ins, LifeOpDef def)

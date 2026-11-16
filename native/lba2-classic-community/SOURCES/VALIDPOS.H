@@ -1,7 +1,7 @@
 #ifndef VALIDPOS_H
 #define VALIDPOS_H
 
-#define SIZE_BUFFER_VALIDE_POS 50000L // a reajuster
+#define SIZE_BUFFER_VALIDE_POS 60000L // a reajuster
 
 extern S32 ValideCube;
 

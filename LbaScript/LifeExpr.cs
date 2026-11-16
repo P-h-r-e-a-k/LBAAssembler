@@ -28,7 +28,7 @@ internal static class ExprText
 {
     public static string FuncCall(CondDef cd, int funcArg)
     {
-        var name = ScriptStyle.Func(cd.Name);
+        var name = ScriptStyle.Func(Lba2Tables.Written(cd.Name));
         return cd.OperandName is null ? $"{name}()" : $"{name}({funcArg})";
     }
 
@@ -149,7 +149,13 @@ internal static class ExprText
                 var at = ts.Peek();
                 if (at.Is(")")) throw TokenStream.Error($"{cd.Name} needs an operand: {cd.Name}({cd.OperandName})", name);
                 var v = ts.ExpectInteger();
-                if (v is < 0 or > 255) throw TokenStream.Error($"Operand '{cd.OperandName}' must be 0..255", at);
+                // (a game variable past 255: the wide condition, its number in two bytes)
+                if (v > 255 && Lba2Tables.WideTwin(cd.Name) is { } twin && Opcodes.Cond(twin) is { } wide)
+                {
+                    if (v >= Lba2Tables.MaxGameVars) throw TokenStream.Error($"Game variable {v} is past the engine's {Lba2Tables.MaxGameVars - 1}", at);
+                    cd = wide;
+                }
+                else if (v is < 0 or > 255) throw TokenStream.Error($"Operand '{cd.OperandName}' must be 0..255", at);
                 arg = (int)v;
                 ts.Expect(")");
             }

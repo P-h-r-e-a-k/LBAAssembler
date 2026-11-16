@@ -46,7 +46,8 @@ internal sealed record TrackOpDef(byte Id, string Name, ArgDef[] Args);
 // RET_S16 two-byte signed).
 internal enum ValueKind : byte { S8, U8, S16 }
 
-internal sealed record CondDef(byte Id, string Name, string? OperandName, ValueKind Value);
+// (Wide: the operand two bytes -- LF_VAR_GAME_W's game variable past 255, 2026-11-16)
+internal sealed record CondDef(byte Id, string Name, string? OperandName, ValueKind Value, bool Wide = false);
 
 internal static class Lba2Tables
 {
@@ -214,6 +215,11 @@ internal static class Lba2Tables
         new(152, "NEW_SAMPLE", LifeForm.Plain, new[] { S16("sample"), S16("decalage"), U8("volume"), S16("frequency") }),
         new(153, "POS_OBJ_AROUND", LifeForm.Plain, new[] { Obj(), Obj("around") }),   // both actors: PosObjetAroundAnother(around, obj)
         new(154, "PCX_MESS_OBJ", LifeForm.Plain, new[] { U8("pcx"), U8("effect"), Obj(), S16("message") }),
+        // (the game variables by a two-byte number -- the engine's COMMON.H LM_*_VAR_GAME_W, 2026-11-16: the user, "let's just update the
+        // engine so it uses two bytes for quest flags not one". Written as set_var_game() etc.: past 255 the compiler takes these)
+        new(155, "SET_VAR_GAME_W", LifeForm.Plain, new[] { U16("var"), S16("value") }),
+        new(156, "ADD_VAR_GAME_W", LifeForm.Plain, new[] { U16("var"), S16("value") }),
+        new(157, "SUB_VAR_GAME_W", LifeForm.Plain, new[] { U16("var"), S16("value") }),
     };
 
     // ---------------------------------------------------------------------
@@ -269,7 +275,17 @@ internal static class Lba2Tables
         new(43, "PROCESSOR", null, ValueKind.S8),
         new(44, "OBJECT_DISPLAYED", "obj", ValueKind.S8),
         new(45, "ANGLE_OBJ", "obj", ValueKind.S16),
+        new(46, "VAR_GAME_W", "var", ValueKind.S16, true),   // (var_game() past 255: COMMON.H LF_VAR_GAME_W)
     };
+
+    // The game variables' wide twins (a variable past 255 needs the two-byte form) and the name they are written with
+    public const int RetailGameVars = 256, MaxGameVars = 1024;
+    public static string? WideTwin(string name) => name.ToUpperInvariant() switch
+    {
+        "VAR_GAME" => "VAR_GAME_W", "SET_VAR_GAME" => "SET_VAR_GAME_W", "ADD_VAR_GAME" => "ADD_VAR_GAME_W", "SUB_VAR_GAME" => "SUB_VAR_GAME_W",
+        _ => null,
+    };
+    public static string Written(string name) => name is "VAR_GAME_W" or "SET_VAR_GAME_W" or "ADD_VAR_GAME_W" or "SUB_VAR_GAME_W" ? name[..^2] : name;
 
     // MOVE_* ids (COMMON.H "Script: defines") in id order; index == id.
     public static readonly string[] MoveNames =

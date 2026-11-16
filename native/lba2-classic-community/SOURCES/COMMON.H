@@ -588,7 +588,11 @@ S32 RaceMod_EscLast(S32 dial);   // (RACEMOD.CPP esc_last=: a question whose Esc
 #define MAX_TRACKS              255
 
 #define MAX_VARS_CUBE           80
-#define MAX_VARS_GAME           256
+// (2026-11-16, the user: "let's just update the engine so it uses two bytes for quest flags not one": every one of the game's 256 was
+// some script's -- the race-track mod's story took the same ones twice. The game's own scripts name 0-255 in a byte; the wide opcodes
+// below name any in two, and saves keep 256 on in a block of their own after the context -- SAVEGAME.CPP)
+#define MAX_VARS_GAME           1024
+#define RETAIL_VARS_GAME        256
 
 #define	MAX_INVENTORY		((U8)40)
 #define	MAX_BOX_INVENTORY	((U8)35)
@@ -1377,6 +1381,10 @@ extern	T_MENU_COMP	ListMenuComp[MAX_MENUS_COMP] ;
 #define	LM_NEW_SAMPLE		152
 #define	LM_POS_OBJ_AROUND	153
 #define	LM_PCX_MESS_OBJ		154
+// (the game variables by a two-byte number: SET/ADD/SUB_VAR_GAME's, any variable -- U16 var, S16 value)
+#define	LM_SET_VAR_GAME_W	155
+#define	LM_ADD_VAR_GAME_W	156
+#define	LM_SUB_VAR_GAME_W	157
 
 #define NB_MACROS_LIFE          155
 
@@ -1427,6 +1435,7 @@ extern	T_MENU_COMP	ListMenuComp[MAX_MENUS_COMP] ;
 #define	LF_PROCESSOR		43
 #define	LF_OBJECT_DISPLAYED	44
 #define LF_ANGLE_OBJ            45
+#define LF_VAR_GAME_W           46     // (VAR_GAME by a two-byte number: U16 var)
 
 #define NB_FUNCS_LIFE           46
 

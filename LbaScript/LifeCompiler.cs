@@ -327,6 +327,12 @@ internal static partial class LifeText
 
             var args = Operands.ParseArgList(ts);
             ts.Expect(";");
+            // (a game variable past 255: the wide form, its number in two bytes -- SET/ADD/SUB_VAR_GAME_W)
+            if (args.Count > 0 && args[0].Ident is null && args[0].Num > 255 && Lba2Tables.WideTwin(def.Name) is { } twin && Opcodes.Life(twin) is { } wide)
+            {
+                if (args[0].Num >= Lba2Tables.MaxGameVars) throw TokenStream.Error($"Game variable {args[0].Num} is past the engine's {Lba2Tables.MaxGameVars - 1}", args[0].At);
+                def = wide;
+            }
             asm.Emit(BuildPlain(def, args, nameTok));
         }
 
