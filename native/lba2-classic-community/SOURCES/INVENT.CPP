@@ -1351,6 +1351,7 @@ void MenuInventory(U32 tempo) {
 #endif
                     AND !(TabInv[TabIndir[InvSelect]].FlagInv & FLAG_INV_UNUSABLE)) {
                 InventoryAction = TabIndir[InvSelect];
+                { extern void RaceMod_RadioUsed(S32 item); RaceMod_RadioUsed(InventoryAction); }   // (HAL answers it if nobody's call does: RACEMOD.CPP)
 
                 /*				if( InventoryAction==FLAG_MECA_PINGOUIN )
 				{

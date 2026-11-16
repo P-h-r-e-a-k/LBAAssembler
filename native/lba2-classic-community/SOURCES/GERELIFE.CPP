@@ -328,6 +328,7 @@ void DoFuncLife(T_OBJET *ptrobj) {
 
         if (InventoryAction == num) { // action émise depuis l'inventaire à cette boucle
             Value = TRUE;
+            { extern void RaceMod_RadioTaken(S32 item); RaceMod_RadioTaken(num); }   // (a scene's script took the radio's use: no HAL)
         } else {
             if ((TabInv[num].FlagInv & FLAG_INV_USED)
                     AND(ListVarGame[num] > 0)) {

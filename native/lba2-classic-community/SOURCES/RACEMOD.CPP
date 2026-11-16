@@ -875,6 +875,17 @@ typedef struct {
     int Knocked;                    // (pins down since the last reset)
 } T_BOWL_ANIM;
 static T_BOWL_ANIM s_ba[2];
+// HAL on the radio (the user, 2026-11-16: "Adding HAL as an option to call with our phone, calling HAL should give a hint for hidden areas on
+// the players current island"): the portable radio (item 26) used from the inventory with nobody's call for it to answer -- no scene's
+// script took the use (GERELIFE.CPP LF_USE_INVENTORY: RaceMod_RadioTaken) -- calls HAL, who gives a hint to a hidden place on the island
+// (HALHINTS.TXT, the build's: "hal <island file> <achievement id or -> <words>", "*" for any island; one whose achievement the player
+// has is passed over). Before he's mended (the race file's hal_mended=<var> <value>: the story's Q_HAL) his voice box only crackles.
+#define HAL_RADIO 26
+#define HAL_MAX 24
+#define HAL_SHOW_MS 9000
+static int s_halN = 0, s_halLoaded = 0, s_halNext = 0, s_halMendVar = -1, s_halMendValue = 0;
+static char s_halIsland[HAL_MAX][16], s_halAch[HAL_MAX][16], s_halWords[HAL_MAX][200], s_halSay[220];
+static S32 s_halUsedAt = 0, s_halUntil = 0;
 // The alley's fruit machines (BOWLMAP.TXT fruit x z; the user, 2026-11-15: "You've added fruit machines, but they're lacking wheels, and
 // don't respond when Twinsen attempts to interact with them"): Action by one, a coin of the planet's in, three reels spun on the screen
 static int s_fmN = 0, s_fmX[4], s_fmZ[4], s_fmOn = 0, s_fmReel[3], s_fmPay = 0, s_fmActWas = 0, s_fmPaid = 0;
@@ -5164,6 +5175,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "exchange")) { if (!setRead) s_exchangeVar = atoi(v); }
         else if (!strcmp(key, "frog_var")) { if (!setRead) s_frogVar = atoi(v); }
+        else if (!strcmp(key, "hal_mended")) { if (!setRead && sscanf(v, "%d %d", &s_halMendVar, &s_halMendValue) != 2) s_halMendVar = -1; }
         else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
         else if (!strcmp(key, "adult_var")) { if (!setRead) s_adultVar = atoi(v); }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
@@ -14265,7 +14277,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -19526,6 +19538,88 @@ static void FruitDraw(void) {
         HudLine(w / 2 - SizeFont(t) / 2, y0 + ch + 10, t, -1);
     }
 }
+// HAL's hints, read once
+static void HalLoad(void) {
+    if (s_halLoaded) return;
+    s_halLoaded = 1;
+    char path[260], line[300];
+    GetResPath(path, sizeof(path), "HALHINTS.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    while (fgets(line, sizeof(line), f) && s_halN < HAL_MAX) {
+        int used = 0;
+        if (sscanf(line, "hal %15s %15s %n", s_halIsland[s_halN], s_halAch[s_halN], &used) < 2 || !used) continue;
+        char *w = line + used;
+        w[strcspn(w, "\r\n")] = 0;
+        snprintf(s_halWords[s_halN], sizeof(s_halWords[0]), "%s", w);
+        s_halN++;
+    }
+    fclose(f);
+    Log_Info("[racemod] HAL: %d hint(s) (HALHINTS.TXT)", s_halN);
+}
+// (the use's time, and the last time a script took the radio's use: taken within a moment of the use, either side, it was a call answered)
+static S32 s_halTakenAt = -100000;
+void RaceMod_RadioUsed(S32 item) { if (item == HAL_RADIO && !s_halUsedAt) s_halUsedAt = TimerRefHR; }
+void RaceMod_RadioTaken(S32 item) { if (item == HAL_RADIO) s_halTakenAt = TimerRefHR; }
+static void HalCall(S32 now) {
+    HalLoad();
+    if (s_halMendVar >= 0 && s_halMendVar < 256 && ListVarGame[s_halMendVar] < s_halMendValue) {
+        snprintf(s_halSay, sizeof(s_halSay), "HAL!! ZX81!! HAL!! ... his voice box only crackles: he isn't mended yet.");
+    } else {
+        // (this island's hints, then any island's; the next one on from the last given, its achievement not the player's yet)
+        int pick = -1;
+        for (int pass = 0; pass < 2 && pick < 0; pass++)
+            for (int k = 0; k < s_halN && pick < 0; k++) {
+                const int i = (s_halNext + k) % s_halN;
+                const int here = !strcasecmp(s_halIsland[i], IslandName), any = !strcmp(s_halIsland[i], "*");
+                if (pass == 0 ? !here : !any) continue;
+                if (strcmp(s_halAch[i], "-") && RaceGame_Achieved(s_halAch[i])) continue;
+                pick = i;
+            }
+        if (pick >= 0) { s_halNext = pick + 1; snprintf(s_halSay, sizeof(s_halSay), "%s", s_halWords[pick]); }
+        else snprintf(s_halSay, sizeof(s_halSay), "HAL here. My sensors find nothing hidden on this island that you haven't found already. HAL!!");
+    }
+    s_halUntil = now + HAL_SHOW_MS;
+    HQ_MixSample(575, 0x1000, 0, 1, 64, 127);
+    Log_Info("[racemod] HAL on the radio (island %s): %s", IslandName, s_halSay);
+}
+static void HalFrame(S32 now) {
+    // (a use from the console's useitem too: InventoryAction set without the inventory)
+    if (InventoryAction == HAL_RADIO) RaceMod_RadioUsed(HAL_RADIO);
+    if (s_halUsedAt && now - s_halUsedAt > 200) {
+        const int taken = s_halTakenAt >= s_halUsedAt - 100 && s_halTakenAt <= now;
+        if (!taken && Comportement != C_BUGGY) HalCall(now);
+        s_halUsedAt = 0;
+    }
+    if (s_halUntil && now > s_halUntil) s_halUntil = 0;
+}
+// His words on a panel: "HAL on the radio", the words wrapped to it
+static void HalDraw(void) {
+    if (!s_halUntil || TimerRefHR > s_halUntil) return;
+    const S32 w = (S32)ModeDesiredX, pw = w * 3 / 4, x0 = (w - pw) / 2, y0 = 60;
+    char lines[6][96];
+    int n = 0;
+    const char *p = s_halSay;
+    while (*p && n < 6) {
+        int take = 0, lastSpace = -1;
+        char buf[96];
+        while (p[take] && take < 94) {
+            buf[take] = p[take]; buf[take + 1] = 0;
+            if (p[take] == ' ') lastSpace = take;
+            if (SizeFont(buf) > pw - 30) break;
+            take++;
+        }
+        if (p[take] && lastSpace > 0) take = lastSpace;
+        snprintf(lines[n], sizeof(lines[0]), "%.*s", take, p);
+        n++;
+        p += take;
+        while (*p == ' ') p++;
+    }
+    Box(x0 - 4, y0 - 4, x0 + pw + 3, y0 + 36 + n * 26 + 10, 9 * 16 + 4);
+    Box(x0, y0, x0 + pw - 1, y0 + 36 + n * 26 + 6, 0);
+    HudLine(w / 2 - SizeFont("HAL on the radio") / 2, y0 + 4, "HAL on the radio", -1);
+    for (int i = 0; i < n; i++) HudLine(x0 + 14, y0 + 36 + i * 26, lines[i], -1);
+}
 // The chains: each pin's, link by link from the dark over its home down to its helmet's top -- the helmet where the pin's turned head is
 static void BowlChainsDraw(void) {
     if (CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene) return;
@@ -20752,6 +20846,7 @@ void RaceMod_Frame(void) {
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
     FruitFrame(TimerRefHR);
+    HalFrame(TimerRefHR);
     DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -23030,6 +23125,7 @@ void RaceMod_Draw(void) {
     BowlChainsDraw();
     if (!LbaFont) return;
     FruitDraw();
+    HalDraw();
     // (LBA2_CARVIS=1: the first opponent's car's state logged as it changes -- in this scene or not, out of sight at Y -20000, hidden,
     // bodiless, behind the camera (16), off the screen (32) -- and how many mushrooms of the next cubes are drawn: the user saw FunFrock's
     // car vanish and come back, 2026-10-27, not yet seen here)

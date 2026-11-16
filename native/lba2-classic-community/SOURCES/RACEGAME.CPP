@@ -3125,6 +3125,11 @@ static void ReadAch(void) {
 }
 static int AchievementsEarned(void) { ReadAch(); int n = 0; for (int i = 0; i < RG_ACH_N; i++) n += s_achGot[i]; return n; }
 static int AchievementsAll(void) { return RG_ACH_N; }
+S32 RaceGame_Achieved(const char *id) {
+    ReadAch();
+    for (int i = 0; i < RG_ACH_N; i++) if (!strcmp(id, s_ach[i].Id)) return s_achGot[i];
+    return 0;
+}
 S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
     if (!id) return 0;
     ReadAch();

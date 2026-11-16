@@ -14,6 +14,8 @@
 S32 RaceGame_On(void);
 // An achievement earned (RACEMOD.CPP achieve=): its title in `title`, non-zero when it is new -- kept for the player, ACHIEVEMENTS.TXT
 S32 RaceGame_Achieve(const char *id, char *title, S32 size);
+// ... already earned by the player (HAL's hints pass over it)
+S32 RaceGame_Achieved(const char *id);
 // The bowling game's best score of a bowler, kept for the player: `score` (-1: only asked) kept when it is better; the best then
 S32 RaceGame_BowlingBest(S32 bowler, S32 score);                      // RACEGAME.TXT read: the main menu is the race game's
 // The race game's main menu, and its pages (Specials, a race or a time trial, the car, Best times): what MainGameMenu does next --

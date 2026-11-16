@@ -697,6 +697,8 @@ internal static class RaceCarEngineFile
                 // (the Tavern's darts: RaceTrackStory.Darts)
                 foreach (var line in RaceTrackStory.DartsLines()) text.Append(line + "\n");
                 foreach (var line in RaceTrackStory.Achievements) text.Append(line + "\n");
+                // (HAL on the radio: mended on the Emerald Moon -- Q_HAL at HalMended -- before then he only crackles: HalHints)
+                text.Append($"hal_mended={RaceTrackStory.QHal} {RaceTrackStory.HalMended}\n");
             }
             // (the errands' slot: the tin of bait or the old tyre by its variable -- RaceTrackStory.Errands.cs)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel}\n");
