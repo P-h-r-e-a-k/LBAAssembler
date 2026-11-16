@@ -5,6 +5,11 @@ namespace ScriptRoundTrip;
 
 internal static class Program
 {
+    // houserooms <scratch game folder>: Twinsen's house's bathroom and kitchen made there alone (Citadel/CitadelHouseRooms), to look at
+    // propsinstall <scratch game folder>: the build's props (Citadel/CitadelProps.Install) into it alone, their BODY.HQR numbers printed
+    static int PropsInstallTry(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelProps.Install(args[1])) Console.WriteLine(l); return 0; }
+    static int HouseRoomsTry(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelHouseRooms.Install(args[1])) Console.WriteLine(l); return 0; }
+
     private const string DefaultSceneHqr = @"E:\GOG Games\Little Big Adventure 2 - Level viewer\SCENE.HQR";
 
     private static int Main(string[] args)
@@ -32,6 +37,8 @@ internal static class Program
             "selftest" => SelfTest.Run(),
             "nativemap" => NativeMap.Run(),
             "nativeislandload" => NativeIslandLoad.Run(args),
+            "houserooms" => HouseRoomsTry(args),
+            "propsinstall" => PropsInstallTry(args),
             "scenetests" => SceneTests.Run(archive),
             "commenttests" => CommentTests.Run(archive),
             "commentdemo" => CommentTests.Demo(archive),

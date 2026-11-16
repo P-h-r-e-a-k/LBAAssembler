@@ -121,7 +121,8 @@ internal static class Lba2AreaStudy
         var interiors = new Lba2Interiors(args[1]);
         var image = interiors.RenderArea(new List<Lba1AreaTile> { new(int.Parse(args[2]), 0, 0, 0) });
         PngWriter.Write(args[3], image.Bgra, image.Width, image.Height);
-        Console.WriteLine($"{image.Width} x {image.Height}");
+        // (and where the grid's corner is in the picture: a cell (x, layer y, z) is at 24 (x - z) + origin x, 12 (x + z) - 15 y + origin y)
+        Console.WriteLine($"{image.Width} x {image.Height}, origin {image.OriginX},{image.OriginY}");
         return 0;
     }
 
