@@ -1255,7 +1255,7 @@ internal static class RaceTrackBuilder
         SetBackBanks(island, field, index, main, plan, report);
         FillPockets(island, field, index, report);
         report.Balloons = (options.Island.SharedFrom ?? options.Island) == RaceTrackIsland.Desert || options.Island == RaceTrackIsland.Harvest;
-        var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
+        var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned, plan);
         if (plan.ClearBlueGround && options.Theme.Palette is { } groundPalette) ClearBlueGround(island, field, index, painted, groundPalette, report);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
@@ -6060,7 +6060,7 @@ internal static class RaceTrackBuilder
     private static double Rank(Kind k, RoadHit? h) =>
         k == Kind.Asphalt ? 3 : k is Kind.RedCurb or Kind.WhiteCurb ? 2 : k == Kind.None ? 0 : h is { Jump: true, Bridge: true } && k is Kind.Rock or Kind.Wall ? 1.5 : 1;
 
-    private static HashSet<(int, int)> PaintRoad(IslandFile island, Field field, RoadIndex index, List<TrackRoad> roads, RaceTrackOptions o, RaceTrackReport report, int startIndex, bool planned = false)
+    private static HashSet<(int, int)> PaintRoad(IslandFile island, Field field, RoadIndex index, List<TrackRoad> roads, RaceTrackOptions o, RaceTrackReport report, int startIndex, bool planned = false, RaceTrackPlan? plan = null)
     {
         var b = index.Bounds;
         var kinds = new Dictionary<(int, int), Kind>();
@@ -6232,7 +6232,11 @@ internal static class RaceTrackBuilder
                 // (a wall Twinsen could walk up -- a steep verge of grass, not a cliff's face -- is walled for the cars only, as the steep banks
                 // are: LBRA issue #5, the user, 2026-11-09: "The steep grass section in Citadel 1 at the edge of the race track lets make it
                 // walkable" -- the north end's verges, x 537-560 z 519-542, had become blocking ground the island hadn't had)
-                painter.Keep(gx, gz, land2.A, land2.B, kind == Kind.Wall, carsOnly: kind == Kind.Wall && CellRise(field, gx, gz) <= FootClimb);
+                // (and beside a bank eased into a slope -- EasedBank, within EasedVerge cells of it -- not walled at all: the user, 2026-11-16,
+                // of Citadel's eased slope left of the school, "now allows Twinsen to drive on it if he approaches it from the side, but stops
+                // him coming off and on to it via the track, like there's a thin barrier preventing this" -- the verge's strip of wall between)
+                var open = EasedBank(plan, gx, gz, EasedVerge);
+                painter.Keep(gx, gz, land2.A, land2.B, kind == Kind.Wall && !open, carsOnly: kind == Kind.Wall && !open && CellRise(field, gx, gz) <= FootClimb);
                 kept++;
             }
             else painter.Paint(gx, gz, kind, kind == Kind.Asphalt && arrows.TryGetValue((gx, gz), out var arrow) ? arrow : null);
@@ -6487,15 +6491,20 @@ internal static class RaceTrackBuilder
     // the game code of a triangle walled for the cars only (RaceTrackIsland.SoftBanks; the engine's CJ_CAR_WALL)
     public const int CarWall = 10;
 
+    // A cell in, or within `margin` cells of, one of the plan's banks eased into a slope (its bankEases): driven onto and off from the road
+    private const int EasedVerge = 2;
+    private static bool EasedBank(RaceTrackPlan? plan, int gx, int gz, int margin) =>
+        (plan?.BankEases ?? Array.Empty<double[]>()).Where(f => f.Length >= 5 && f[4] > 0).Any(f =>
+            gx >= (int)f[0] + plan!.OriginCellX - margin && gx < (int)f[2] + plan.OriginCellX + margin &&
+            gz >= (int)f[1] + plan.OriginCellZ - margin && gz < (int)f[3] + plan.OriginCellZ + margin);
+
     private static void WallSteepBanks(IslandFile island, Field natural, Field field, RoadIndex index, HashSet<(int, int)> painted, RaceTrackOptions o, RaceTrackReport report, RaceTrackPlan? plan = null)
     {
         var b = index.Bounds;
         // (a bank eased into a slope -- EaseBanks, the plan's bankEases -- is there to be climbed, in the car too: not walled. Citadel's ridge
         // left of the school, eased to 520 a cell, just over SteepBank, was walled for the cars only -- the user, 2026-11-16, "The area on
         // Citadel Island that we turned into a gentle slope doesn't allow Twinsen to drive up it ... as he can walk on it")
-        var eased = (plan?.BankEases ?? Array.Empty<double[]>()).Where(f => f.Length >= 5 && f[4] > 0)
-            .Select(f => (X0: (int)f[0] + plan!.OriginCellX, Z0: (int)f[1] + plan.OriginCellZ, X1: (int)f[2] + plan.OriginCellX, Z1: (int)f[3] + plan.OriginCellZ)).ToList();
-        bool Eased(int gx, int gz) => eased.Any(r => gx >= r.X0 && gx < r.X1 && gz >= r.Z0 && gz < r.Z1);
+        bool Eased(int gx, int gz) => EasedBank(plan, gx, gz, EasedVerge);
         var painter = new Painter(island, o.Theme);
         var walls = new List<(int, int)>();
         for (var gz = Math.Max(0, b.Z0); gz < Math.Min(Grid, b.Z1); gz++)

@@ -221,7 +221,10 @@ void comportement_1()
             // to buy him a drink; then Twinsen sits down at a table and Luc brings the drink over"): as Twinsen first comes in that evening
             // (Tired, chapter 1, not drunk yet) Pat, Fab and the rabbibunny cheer him, he'll have just the one; he sits on the west bench,
             // Luc comes round the counter with it -- a tankard on the table in front of him as he gets there -- and the drink is what Zoe
-            // will smell (Drunk 1: RaceTrackStory.SecretChamber). Then he gets up and is the player's again.
+            // will smell (Drunk 1: RaceTrackStory.SecretChamber). The scene over he stays sat, his drink before him, till a key -- Action or a
+            // way to walk: the engine's seat_cube=, RaceTrackStory.SeatCube -- gets him up, the player's again (the user, 2026-11-16: "Let's
+            // have him remain seated the whole time, until the player uses action after the cut scene"; and seated he says his line seated,
+            // MESSAGE.CPP InitWhoSpeak).
             var first = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint(SeatAt.X, BenchTop, SeatAt.Z));
             foreach (var (x, z) in LucWay) model.TrackPoints.Add(new SceneTrackPoint(x, TraluBarRoom.FloorY, z));
@@ -352,16 +355,26 @@ void comportement_2()
         message_obj(0, {EveningId(p.Say, EveningLine.TwinsenCheers)});
         set_var_game({Drunk}, {DrankTonight});
         set_track_obj({lucIndex}, label_{LucBack});
-        set_track_obj(0, label_{BarStandUp});
+        cinema_mode(0);
+        set_var_cube({RaceTrackStory.SeatCube}, 1);
         set_comportement(comportement_3);
     }}
 }}
 
 void comportement_3()
 {{
+    if (2 == var_cube({RaceTrackStory.SeatCube}))
+    {{
+        set_var_cube({RaceTrackStory.SeatCube}, 0);
+        set_track_obj(0, label_{BarStandUp});
+        set_comportement(comportement_8);
+    }}
+}}
+
+void comportement_8()
+{{
     if ({BarStoodUp} == l_track_obj(0))
     {{
-        cinema_mode(0);
         set_dir_obj(0, MOVE_MANUAL);
         suicide();
     }}
@@ -399,7 +412,6 @@ label({BarSeated});
 stop();
 
 label({BarStandUp});
-wait_nb_dizieme(20);
 pos_point({stand});
 beta(2048);
 anim(0);

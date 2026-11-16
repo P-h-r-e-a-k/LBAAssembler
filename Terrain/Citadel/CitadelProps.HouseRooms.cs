@@ -20,11 +20,24 @@ namespace LBAAssembler.Terrain.Citadel;
 //   - the bath mat bigger, and walked over: its box under the floor (BathMatBox, as the rugs' tiles);
 //   - the kitchen's chairs (KitchenChair): the bedroom's chair a seat's height taller, for Twinsen's sitting (CitadelSpanking.TwinsenSit,
 //     made at the Tralu's bench), set either side of the table facing it.
+// Round 3 (the user, 2026-11-16 evening): "The bathmat is still too small let's have a large mat taking up most of the centre of the
+// bathroom. Let's also add a pedestal mat around the toilet. The colouring of the toilet seat looks like it's supposed to be brown but has
+// some white patches"; "This point blocks Twinsen from walking forwards, is the bath in the way even though it visibly isn't";
+// "The shower still looks not great either, on one corner it doesn't look like the glass goes up to the wall. Let's change it so that
+// there's a hinged door to the shower that's slightly ajar ... a door that swings when Twinsen connects to it"; "The shelf and lamp that
+// we've added on the wall stop Twinsen from walking ... Twinsen is also kept a block away from being able to walk to the sink":
+//   - every fitting a box of its own (HouseRoomBox): the engine gives a body with none a square round its place, half the width plus
+//     the depth over four (FICHE.CPP InitBodyZV) -- the counter's reached 600 past its front, the bath's 1,000 past its curve; the wall's
+//     shelf, towel rail and the mats' boxes under the floor (walked by, walked over);
+//   - the shower in its corner against both walls (its glass to the wall), its door its own (ShowerDoor: hinged at the west wall, ajar;
+//     it swings open as Twinsen comes up to it and back as he goes -- CitadelHouseRooms);
+//   - the bath mat over most of the floor's middle; a pedestal mat round the toilet's foot;
+//   - the toilet's seat over the bowl's rim, no porcelain under it (the rim's top, sorted over the seat, came through it white).
 internal static partial class CitadelProps
 {
     public const int Shower = 140, BathSink = 141, Toilet = 142, CornerBath = 143, TowelRail = 144, BathMat = 145;
     public const int KitchenCounter = 146, KitchenRange = 147, Dresser = 148, KitchenTable = 149, PlateShelf = 150;
-    public const int KitchenChair = 151, BathWaterLow = 152, BathWaterMid = 153, BathWaterFull = 154;
+    public const int KitchenChair = 151, BathWaterLow = 152, BathWaterMid = 153, BathWaterFull = 154, ShowerDoor = 155;
     // (each colour this far or more from its ramp's top: the light runs a colour up to 0.8 x 9 steps)
     private const int HrPorcelain = 3 * 16 + 8, HrPorcelainShade = 3 * 16 + 5, HrChrome = 3 * 16 + 7, HrWood = 1 * 16 + 5, HrWoodDark = 1 * 16 + 3,
         HrWoodLight = 1 * 16 + 8, HrBrass = 6 * 16 + 8, HrTeal = 10 * 16 + 6, HrTealDark = 10 * 16 + 3, HrTile = 3 * 16 + 7, HrIron = 3 * 16 + 2,
@@ -36,16 +49,24 @@ internal static partial class CitadelProps
     public static readonly Vector3 BathCorner = new(760, 0, -760);
     private const float BathOuter = 1450, BathInner = 1250, BathStrip = 200, BathRim = 520, BathBottom = 140;
     public static readonly Vector3 BathTaps = new(-340, 520, -660);
+    // the shower's half width (its tray from its place), its door's width, its glass's height; the door's hinge (at the west wall, the
+    // front's glass line) and its turns: the closed door's facing, ajar (a little open) and swung open (ShowerSwing more), its turning speed
+    private const float ShowerHalf = 480, ShowerTray = 70, ShowerHigh = 1900;
+    public const float ShowerDoorWide = 300;
+    public const int ShowerX = HrWestFace + (int)ShowerHalf, ShowerZ = HrNorthFace + (int)ShowerHalf;
+    public const int ShowerHingeX = HrWestFace + 8, ShowerHingeZ = ShowerZ + (int)ShowerHalf - 8;
+    public const int ShowerDoorShut = 0, ShowerDoorAjar = 4096 - 200, ShowerDoorOpen = 4096 - 900, ShowerDoorTurn = 400;
 
     // (generic, x, z, facing) of each room's fittings
     public static readonly (int Generic, int X, int Z, int Beta)[] BathroomFittings =
     {
-        (Shower, 6 * 512, 2 * 512, 0),                       // the north-west corner: cells 5-6, 1-2
+        (Shower, ShowerX, ShowerZ, 0),                       // the north-west corner, against both walls: cells 5-6, 1-2
+        (ShowerDoor, ShowerHingeX, ShowerHingeZ, ShowerDoorAjar),  // its door, hinged at the west wall, ajar
         (BathSink, 8 * 512 + 256, HrNorthFace + 230, 0),        // against the north wall, its mirror over it
         (Toilet, 10 * 512 + 256, HrNorthFace + 310, 0),
         (CornerBath, 13 * 512 + 256, 2 * 512 + 256, 0),       // the north-east corner: cells 12-14, 1-3
         (TowelRail, HrWestFace + 30, 1950, 1024),             // on the west wall between the shower and the door, facing the room (+x)
-        (BathMat, 6300, 2250, 0),                             // before the bath
+        (BathMat, 5120, 2800, 0),                             // most of the floor's middle
     };
     // the kitchen's chairs either side of its table (its middle 5,888 / 3,072), facing it: each one's place behind its seat (ChairAhead)
     public static readonly (int X, int Z, int Beta, int SeatX)[] KitchenChairs =
@@ -63,8 +84,27 @@ internal static partial class CitadelProps
         (KitchenChair, KitchenChairs[0].X, KitchenChairs[0].Z, KitchenChairs[0].Beta),
         (KitchenChair, KitchenChairs[1].X, KitchenChairs[1].Z, KitchenChairs[1].Beta),
     };
-    // the bath mat's box: under the floor, so Twinsen walks over it (RugTileBox's way)
-    private static short[]? BathMatBox(int generic) => generic == BathMat ? new short[] { -650, -16, -400, 650, 0, 400 } : null;
+    // the bath mat's size; each fitting's box (x0, y0, z0, x1, y1, z1 from its place): its own footprint, as high as it stands -- the mats,
+    // the wall's shelf and towel rail and the shower's door under the floor (walked over, walked by, swung through)
+    private const int MatHalfX = 1600, MatHalfZ = 900;
+    private static short[]? BathMatBox(int generic) => generic switch
+    {
+        BathMat => new short[] { -MatHalfX, -16, -MatHalfZ, MatHalfX, 0, MatHalfZ },
+        Shower => new short[] { -(short)ShowerHalf, 0, -(short)ShowerHalf, (short)ShowerHalf, 2000, (short)ShowerHalf },
+        ShowerDoor => new short[] { 0, -16, -40, (short)ShowerDoorWide, 0, 40 },
+        BathSink => new short[] { -310, 0, -230, 310, 1000, 250 },
+        Toilet => new short[] { -250, 0, -320, 250, 950, 340 },
+        // (the corner bath: a box square to the walls short of its curve -- 45 degrees round it the curve is 1,025 from the corner, the box's
+        // corner 1,090; its two ends along the walls past the box are solid cells of the room's grid, CitadelHouseRooms)
+        CornerBath or BathWaterLow or BathWaterMid or BathWaterFull => new short[] { (short)(BathCorner.X - 1090), 0, (short)BathCorner.Z, (short)BathCorner.X, 620, (short)(BathCorner.Z + 1090) },
+        TowelRail => new short[] { -400, -16, -40, 400, 0, 140 },
+        PlateShelf => new short[] { -520, -16, -20, 520, 0, 200 },
+        KitchenCounter => new short[] { -1556, 0, -300, 1556, 1200, 360 },
+        KitchenRange => new short[] { -480, 0, -320, 480, 1100, 330 },
+        Dresser => new short[] { -500, 0, -230, 500, 2200, 240 },
+        KitchenTable => new short[] { -470, 0, -470, 470, 720, 470 },
+        _ => null,
+    };
 
     // a cylinder's sides (n facets) between two heights, a top fan if asked
     private static void Cylinder(CarMesh m, Vector3 at, float r, float y0, float y1, int n, int colour, int top = -1)
@@ -97,24 +137,24 @@ internal static partial class CitadelProps
         for (var k = 0; k < ring.Length; k++) m.Up(new[] { h, ring[k], ring[(k + 1) % ring.Length] }, colour);
     }
 
-    // The shower: a white tray with its recess and drain, frameless glass on its open sides in a slim chrome frame (a door's gap at the
-    // front's west end), a slim riser in the corner up to an arm and a round rain head, the mixer on the back wall, a corner shelf
+    // The shower: a white tray with its recess and drain, frameless glass on its open sides in a slim chrome frame (its door's gap at the
+    // front's west end: ShowerDoor), a slim riser in the corner up to an arm and a round rain head, the mixer on the back wall, a corner
+    // shelf. Against both walls (its place ShowerX, ShowerZ): the east glass from the north wall's face
     public static Body BuildShower(byte[] header)
     {
         var m = new CarMesh("the shower", new[] { -1 });
         m.Light = 0.8f;
-        const float H = 480, Tray = 70, High = 1900;
+        const float H = ShowerHalf, Tray = ShowerTray, High = ShowerHigh;
         m.Box(0, new Vector3(0, Tray / 2, 0), new Vector3(2 * H, Tray, 2 * H), HrPorcelain, top: HrPorcelain);
         m.Box(0, new Vector3(0, Tray + 1, 0), new Vector3(2 * H - 110, 2, 2 * H - 110), HrPorcelainShade, top: HrPorcelainShade);
         Cylinder(m, new Vector3(0, 0, 0), 38, Tray, Tray + 4, 10, HrChrome, HrIron);
-        // (the glass: the front (+z) from the door's gap, the east side (+x) whole)
-        const float Door = -H + 260;
+        // (the glass: the front (+z) from the door's gap, the east side (+x) whole, wall to front)
+        const float Door = -H + 8 + ShowerDoorWide;
         m.Pane(0, HrTeal + 8, new Vector3(Door, Tray, H - 8), new Vector3(H - 8, Tray, H - 8), new Vector3(H - 8, High, H - 8), new Vector3(Door, High, H - 8));
         m.Pane(0, HrTeal + 8, new Vector3(H - 8, Tray, -H), new Vector3(H - 8, Tray, H - 8), new Vector3(H - 8, High, H - 8), new Vector3(H - 8, High, -H));
         foreach (var (a, b) in new[] { (new Vector3(Door, Tray, H - 8), new Vector3(Door, High, H - 8)), (new Vector3(H - 8, Tray, H - 8), new Vector3(H - 8, High, H - 8)),
                                        (new Vector3(Door, High, H - 8), new Vector3(H - 8, High, H - 8)), (new Vector3(H - 8, High, H - 8), new Vector3(H - 8, High, -H)) })
             m.Strut(0, a, b, 14, HrChrome);
-        m.Strut(0, new Vector3(Door + 30, 1000, H + 6), new Vector3(Door + 30, 1250, H + 6), 12, HrChrome);   // (the door's handle)
         // (the riser up the corner, its arm, the rain head)
         var riser = new Vector3(-H + 70, 0, -H + 70);
         Cylinder(m, riser, 15, 950, 2000, 8, HrChrome);
@@ -129,6 +169,21 @@ internal static partial class CitadelProps
         // (the corner shelf and a bottle on it)
         m.Up(new[] { m.P(0, new Vector3(-H + 8, 1350, -H + 8)), m.P(0, new Vector3(-H + 8, 1350, -H + 200)), m.P(0, new Vector3(-H + 200, 1350, -H + 8)) }, HrChrome);
         Cylinder(m, new Vector3(-H + 60, 0, -H + 60), 22, 1352, 1460, 6, HrTeal, HrTealDark);
+        return m.ToBody(header);
+    }
+
+    // The shower's door: a glass pane in a slim chrome frame, from its hinge (its place) along +x, ShowerDoorWide; a chrome handle near its
+    // free end, both sides. Turned about its hinge (ShowerDoorAjar, ShowerDoorOpen)
+    public static Body BuildShowerDoor(byte[] header)
+    {
+        var m = new CarMesh("the shower's door", new[] { -1 });
+        m.Light = 0.8f;
+        const float W = ShowerDoorWide, Low = ShowerTray, High = ShowerHigh;
+        m.Pane(0, HrTeal + 8, new Vector3(0, Low, 0), new Vector3(W, Low, 0), new Vector3(W, High, 0), new Vector3(0, High, 0));
+        foreach (var (a, b) in new[] { (new Vector3(0, Low, 0), new Vector3(0, High, 0)), (new Vector3(W, Low, 0), new Vector3(W, High, 0)),
+                                       (new Vector3(0, High, 0), new Vector3(W, High, 0)), (new Vector3(0, Low, 0), new Vector3(W, Low, 0)) })
+            m.Strut(0, a, b, 14, HrChrome);
+        foreach (var z in new[] { -14f, 14f }) m.Strut(0, new Vector3(W - 40, 1000, z), new Vector3(W - 40, 1250, z), 12, HrChrome);
         return m.ToBody(header);
     }
 
@@ -188,7 +243,7 @@ internal static partial class CitadelProps
         m.Skin(waist, belly, _ => HrPorcelain, o + new Vector3(0, 285, -5));
         m.Skin(belly, lip, _ => HrPorcelain, o + new Vector3(0, 370, 0));
         var rimIn = Ellipse(m, o + new Vector3(0, 0, 10), 400, 145, 190, N);
-        RingTop(m, lip, rimIn, HrPorcelain);
+        // (no porcelain top on the rim: the seat covers it -- sorted over the seat, it came through it in white patches)
         var deep = Ellipse(m, o + new Vector3(0, 0, -10), 300, 85, 110, N);
         Inside(m, rimIn, deep, HrPorcelainShade, o + new Vector3(0, 0, 10));
         Fan(m, o + new Vector3(0, 300, -10), deep, HrWater);
@@ -206,6 +261,21 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, 880, -235), new Vector3(490, 30, 170), HrPorcelain, top: HrPorcelainShade);
         Cylinder(m, new Vector3(0, 0, -235), 40, 895, 905, 10, HrChrome, HrChrome);
         m.Strut(0, new Vector3(0, 420, -200), new Vector3(0, 340, -110), 40, HrPorcelain);
+        // (the pedestal mat: a rounded rug round the foot, its cut-out the foot's, open at the back to the wall -- a darker border)
+        const int M = 20;
+        var matAt = o + new Vector3(0, 0, 60);
+        var border = Ellipse(m, matAt, 6, 420, 380, M);
+        var fill = Ellipse(m, matAt, 9, 385, 345, M);
+        var cut = Ellipse(m, o + new Vector3(0, 0, -30), 9, 180, 215, M);
+        var cutLow = Ellipse(m, o + new Vector3(0, 0, -30), 6, 180, 215, M);
+        for (var k = 0; k < M; k++)
+        {
+            // (the back's segments left out: the ones whose outer points lie behind the foot's middle, toward the wall)
+            if (m.At(border[k]).Z < o.Z - 60 || m.At(border[(k + 1) % M]).Z < o.Z - 60) continue;
+            m.Up(new[] { border[k], border[(k + 1) % M], fill[(k + 1) % M], fill[k] }, HrTealDark);
+            m.Up(new[] { fill[k], fill[(k + 1) % M], cut[(k + 1) % M], cut[k] }, HrTeal);
+            m.Out(new[] { cutLow[k], cutLow[(k + 1) % M], cut[(k + 1) % M], cut[k] }, HrTealDark, o + new Vector3(0, 8, -30));
+        }
         return m.ToBody(header);
     }
 
@@ -231,8 +301,10 @@ internal static partial class CitadelProps
             m.Out(new[] { m.P(0, Outer(60, k)), m.P(0, Outer(60, k + 1)), m.P(0, Outer(BathRim, k + 1)), m.P(0, Outer(BathRim, k)) }, HrWood, c + new Vector3(0, BathRim / 2, 0));
             m.Out(new[] { m.P(0, Outer(0, k)), m.P(0, Outer(0, k + 1)), m.P(0, Outer(60, k + 1)), m.P(0, Outer(60, k)) }, HrWoodDark, c + new Vector3(0, 30, 0));
         }
-        // (its east side, seen over the room's low east edge)
-        m.Out(new[] { m.P(0, c), m.P(0, Outer(0, N)), m.P(0, Outer(BathRim, N)), m.P(0, c + new Vector3(0, BathRim, 0)) }, HrWood, c + new Vector3(-400, BathRim / 2, 400));
+        // (its east side, seen over the room's low east edge: a darker wood -- facing the room's light, HrWood ran up its ramp into grey, the
+        // user's "it has some grey on the edge", 2026-11-16 -- and the plinth along its foot as the front's)
+        m.Out(new[] { m.P(0, c + new Vector3(0, 60, 0)), m.P(0, Outer(60, N)), m.P(0, Outer(BathRim, N)), m.P(0, c + new Vector3(0, BathRim, 0)) }, HrWoodDark, c + new Vector3(-400, BathRim / 2, 400));
+        m.Out(new[] { m.P(0, c), m.P(0, Outer(0, N)), m.P(0, Outer(60, N)), m.P(0, c + new Vector3(0, 60, 0)) }, HrWoodDark - 1, c + new Vector3(-400, 30, 400));
         // (the rim: the north strip, the curve's band, the east strip -- one brass top)
         m.Up(new[] { m.P(0, c + new Vector3(0, BathRim, 0)), m.P(0, Outer(BathRim, 0)), m.P(0, Inner(BathRim, 0)), m.P(0, inset + new Vector3(0, BathRim, 0)) }, HrBrass);
         for (var k = 0; k < N; k++)
@@ -288,9 +360,10 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("the bath mat", new[] { -1 });
         m.Light = 0.75f;
-        m.Box(0, new Vector3(0, 4, 0), new Vector3(1300, 8, 800), HrTealDark, top: HrTealDark);
-        m.Box(0, new Vector3(0, 9, 0), new Vector3(1160, 4, 660), HrTeal, top: HrTeal);
-        foreach (var z in new[] { -220f, 220f }) m.Box(0, new Vector3(0, 12, z), new Vector3(1160, 2, 50), HrTealDark, top: HrTealDark);
+        m.Box(0, new Vector3(0, 4, 0), new Vector3(2 * MatHalfX, 8, 2 * MatHalfZ), HrTealDark, top: HrTealDark);
+        m.Box(0, new Vector3(0, 9, 0), new Vector3(2 * MatHalfX - 160, 4, 2 * MatHalfZ - 160), HrTeal, top: HrTeal);
+        foreach (var z in new[] { -MatHalfZ + 260f, MatHalfZ - 260f }) m.Box(0, new Vector3(0, 12, z), new Vector3(2 * MatHalfX - 160, 2, 60), HrTealDark, top: HrTealDark);
+        foreach (var x in new[] { -MatHalfX + 260f, MatHalfX - 260f }) m.Box(0, new Vector3(x, 12, 0), new Vector3(60, 2, 2 * MatHalfZ - 160), HrTealDark, top: HrTealDark);
         return m.ToBody(header);
     }
 

@@ -111,8 +111,9 @@ internal static partial class CitadelLba1Rooms
         var palette = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(0);
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
 
-        // ---- the doorway in the demo's sewers' wall
+        // ---- the doorway in the demo's sewers' wall; the lift's shaft in its walkway
         log.Add(Doorway(bkg));
+        log.Add(LiftShaft(bkg));
 
         // ---- the rooms
         foreach (var room in Rooms)
@@ -347,6 +348,31 @@ internal static partial class CitadelLba1Rooms
         bkg.SetStored(gridEntry, entry);
         if (header.MaxGri < (uint)entry.Length) { header.MaxGri = (uint)entry.Length; bkg.SetStored(0, header.Bytes); }
         return $"the secret room's doorway: the demo's sewers' back wall (scene 17, cell {HoleX}, {HoleZ}) emptied from layer {HoleFirst} to {HoleLast}";
+    }
+
+    // The sewers' lift up to the quay (RaceTrackStory.Chapters, the thief's: its plate's top the walkway's floor, LiftShaftX/Z its 2x2
+    // cells): the walkway's floor slab there (block 14, layer 5, nothing under it) taken out -- the plate in it, not under the floor's
+    // bricks, which the engine drew back over it where they stood in front of it (the user, 2026-11-16, a picture of Twinsen on it: "The lift
+    // also isn't drawn correctly when Twinsen is standing on it in the sewers"); risen, it leaves the shaft dark under it. A line for the log.
+    public const int LiftShaftX = 39, LiftShaftZ = 29, LiftShaftLayer = 5, LiftShaftFloor = 14;
+    private static string LiftShaft(HqrFile bkg)
+    {
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        if (Sewers * 2 + 1 >= table.Length) return "the sewers' lift shaft left out: no scene 17";
+        var gridEntry = header.Gri + table[Sewers * 2 + 1];
+        var raw = bkg.Read(gridEntry);
+        var shape = Lba2GridBackend.ToLba1Shape(raw);
+        var cells = Lba1GridCodec.Decode(shape);
+        int At(int x, int y, int z) => ((z * 64 + x) * 25 + y) * 2;
+        var shaft = new[] { (LiftShaftX, LiftShaftZ), (LiftShaftX + 1, LiftShaftZ), (LiftShaftX, LiftShaftZ + 1), (LiftShaftX + 1, LiftShaftZ + 1) };
+        if (shaft.Any(c => cells[At(c.Item1, LiftShaftLayer, c.Item2)] != LiftShaftFloor || Enumerable.Range(0, LiftShaftLayer).Any(y => cells[At(c.Item1, y, c.Item2)] != 0)))
+            return "the sewers' lift shaft left out: scene 17's walkway there isn't the 1996 demo's sewers' floor slab";
+        var edits = shaft.Select(c => new Lba1GridCell(c.Item1, LiftShaftLayer, c.Item2, 0, 0)).ToList();
+        var entry = Lba2GridBackend.FromLba1Shape(raw, Lba1GridEdit.SetCells(shape, edits));
+        bkg.SetStored(gridEntry, entry);
+        if (header.MaxGri < (uint)entry.Length) { header.MaxGri = (uint)entry.Length; bkg.SetStored(0, header.Bytes); }
+        return $"the sewers' lift shaft: the demo's walkway's floor (scene 17, cells {LiftShaftX}-{LiftShaftX + 1}, {LiftShaftZ}-{LiftShaftZ + 1}, layer {LiftShaftLayer}) taken out under the lift's plate";
     }
 
     // Whether the doorway is there (the story's slab stands in it only then)

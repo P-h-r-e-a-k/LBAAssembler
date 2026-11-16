@@ -2081,8 +2081,10 @@ void InitWhoSpeak(S32 numobj) {
     extern S32 RaceMod_HoldSpeaker(S32 numobj);
     // (nor someone held in a pose of the race-track story's -- the secret chamber's spanking: Twinsen across Zoe's lap (his animations
     // 240, 241) stood up to answer her and lay back down after, the user, 2026-11-09, "let's keep him bent over the whole time"; and
-    // Zoe sitting in her chair (her entity 15's 100, 101))
-    const S32 posed = (numobj == NUM_PERSO && (PtrWhoSpeak->GenAnim == 240 || PtrWhoSpeak->GenAnim == 241))
+    // Zoe sitting in her chair (her entity 15's 100, 101); and Twinsen sitting (his 242, the story's TwinsenSit -- the Tralu's bar's bench,
+    // the kitchen's chairs, the lounge's booths): seated, he stood up to say "Cheers, everyone!" and sat back down, the user, 2026-11-16,
+    // "Let's have him remain seated the whole time")
+    const S32 posed = (numobj == NUM_PERSO && (PtrWhoSpeak->GenAnim == 240 || PtrWhoSpeak->GenAnim == 241 || PtrWhoSpeak->GenAnim == 242))
                       || (PtrWhoSpeak->IndexFile3D == 15 && (PtrWhoSpeak->GenAnim == 100 || PtrWhoSpeak->GenAnim == 101));
     if ((PtrWhoSpeak->Flags & SPRITE_3D) || RaceMod_HoldSpeaker(numobj) || posed) {
         CopyScreen(Log, Screen);

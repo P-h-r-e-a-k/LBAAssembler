@@ -3004,6 +3004,13 @@ static void cmd_racemiss(int argc, const char *argv[]) {
     RaceMod_TestMiss();
     Console_Print("racemiss");
 }
+/* darthits <t20|d12|bull|25|19>...: the player's next darts land there, no aim (RACEMOD.CPP RaceMod_TestDarts: the darts achievement's tests). */
+static void cmd_darthits(int argc, const char *argv[]) {
+    extern void RaceMod_TestDarts(int n, const char *const *spots);
+    if (argc < 2) { Console_Print("Usage: darthits <t20|d12|bull|25|19>..."); return; }
+    RaceMod_TestDarts(argc - 1, argv + 1);
+    Console_Print("darthits: %d darts", argc - 1);
+}
 static void cmd_raceprize(int argc, const char *argv[]) {
     extern void RaceMod_TestPrize(int prize);
     if (argc < 2) { Console_Print("Usage: raceprize <0|1|2>"); return; }
@@ -3346,6 +3353,8 @@ void Console_RegisterAll(void) {
                               "Sets the next checkpoint to k and puts the car before it (RACEMOD.CPP).");
     Console_RegisterCommandEx("racemiss", cmd_racemiss, "Race-track test: the checkpoint just passed forgotten, as if missed", "racemiss",
                               "The next checkpoint goes back one (RACEMOD.CPP).");
+    Console_RegisterCommandEx("darthits", cmd_darthits, "Darts test: where the player's next darts land", "darthits <t20|d12|bull|25|19>...",
+                              "Each dart the player throws next lands on the one named, no aim (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceprize", cmd_raceprize, "Race-track test: the roulette wheel's prize now", "raceprize <0|1|2>",
                               "As the car lands under the wheel: 0 black, 1 red (the slot machine), 2 the green (the golden Gazogem) "
                               "(RACEMOD.CPP).");

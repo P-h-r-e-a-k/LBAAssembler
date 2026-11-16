@@ -243,6 +243,7 @@ internal static class Program
             "cellinfo" => CitadelRoomsCommand.CellInfo(args),
             "gridtops" => TraluBarCommand.Tops(args),
             "gridcells" => TraluBarCommand.Cells(args),
+            "houseshade" => HouseShade(args),
             "blocksheet2" => TraluBarCommand.Sheet(args),
             "actorfields" => TraluBarCommand.Actors(args),
             "blockcodes" => TraluBarCommand.Codes(args),
@@ -402,6 +403,13 @@ internal static class Program
     private static int Echo(string line)
     {
         Console.WriteLine(line);
+        return 0;
+    }
+
+    // houseshade <game folder>: the house's west-wall colours as its north wall's (CitadelHouseRooms.WestToNorth), the map and how well it fits
+    private static int HouseShade(string[] args)
+    {
+        foreach (var line in LBAAssembler.Terrain.Citadel.CitadelHouseRooms.ShadeReport(args[1])) Console.WriteLine(line);
         return 0;
     }
 

@@ -1020,12 +1020,14 @@ internal static partial class IslandRetell
         }),
         (388, new[]
         {
-            "Greetings, Twinsunian! Welcome to the Two Worlds Cup: one race on every island of Twinsun and Zeelich, and a wish for the winner. @ The first race is here, on your new circuit!",
-            "Bonjour twinsunien ! Bienvenue à la Coupe des Deux Mondes : une course sur chaque île de Twinsun et de Zeelich, et un voeu pour le vainqueur. @ La première course a lieu ici, sur votre nouveau circuit !",
-            "Seid gegrüßt, Twinsunier! Willkommen beim Pokal der zwei Welten: ein Rennen auf jeder Insel von Twinsun und Zeelich, und ein Wunsch für den Sieger. @ Das erste Rennen findet hier statt, auf Eurer neuen Strecke!",
-            "¡Saludos, twinsiano! Bienvenido a la Copa de los Dos Mundos: una carrera en cada isla de Twinsun y de Zeelich, y un deseo para el ganador. @ ¡La primera carrera es aquí, en tu nuevo circuito!",
-            "Salve, Twinsuniano! Benvenuto alla Coppa dei Due Mondi: una corsa su ogni isola di Twinsun e di Zeelich, e un desiderio per il vincitore. @ La prima corsa è qui, sul tuo nuovo circuito!",
-            "Bom dia, twinsuniano! Bem-vindo à Taça dos Dois Mundos: uma corrida em cada ilha de Twinsun e de Zeelich, e um desejo para o vencedor. @ A primeira corrida é aqui, no seu novo circuito!",
+            // (the Cup's way: this circuit, then the Desert's race against all Twinsun's best, then the Cup itself on Zeelich and the Emerald Moon
+            // -- not a race on every island, some of the first game's aren't in it: the user, 2026-11-16)
+            "Greetings, Twinsunian! Welcome to the Two Worlds Cup! @ Win on your new circuit and you race on Desert Island against the best drivers from all over Twinsun. The winner there goes on to the Cup's races on Zeelich and the Emerald Moon, and wins a wish!",
+            "Bonjour twinsunien ! Bienvenue à la Coupe des Deux Mondes ! @ Gagnez sur votre nouveau circuit et vous courrez sur l'île du Désert contre les meilleurs pilotes de tout Twinsun. Le vainqueur là-bas ira disputer les courses de la Coupe sur Zeelich et la Lune d'Emeraude, et gagnera un voeu !",
+            "Seid gegrüßt, Twinsunier! Willkommen beim Pokal der zwei Welten! @ Wer auf Eurer neuen Strecke gewinnt, fährt auf der Wüsteninsel gegen die besten Fahrer aus ganz Twinsun. Der Sieger dort fährt die Rennen des Pokals auf Zeelich und dem Smaragdmond und gewinnt einen Wunsch!",
+            "¡Saludos, twinsiano! ¡Bienvenido a la Copa de los Dos Mundos! @ Quien gane en tu nuevo circuito correrá en la isla del Desierto contra los mejores pilotos de todo Twinsun. El ganador de allí pasa a las carreras de la Copa en Zeelich y la Luna Esmeralda, ¡y gana un deseo!",
+            "Salve, Twinsuniano! Benvenuto alla Coppa dei Due Mondi! @ Chi vince sul tuo nuovo circuito correrà sull'isola del Deserto contro i migliori piloti di tutto Twinsun. Il vincitore là passa alle gare della Coppa su Zeelich e sulla Luna di Smeraldo, e vince un desiderio!",
+            "Bom dia, twinsuniano! Bem-vindo à Taça dos Dois Mundos! @ Quem ganhar no seu novo circuito corre na ilha do Deserto contra os melhores pilotos de todo o Twinsun. O vencedor de lá segue para as corridas da Taça em Zeelich e na Lua Esmeralda, e ganha um desejo!",
         }),
         (399, new[]
         {

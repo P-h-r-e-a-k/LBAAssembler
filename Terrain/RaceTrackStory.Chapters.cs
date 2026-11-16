@@ -108,7 +108,12 @@ internal static partial class RaceTrackStory
     // onto it, the lift's NO_MOVE left him running on in his run's animation off it into the sea, and the clover put him back frozen;
     // now anim_obj(0, 0) stops him on it as it takes him)
     private const int OffQuayLift = 900;
-    private const int LiftHalf = 512, LiftDip = 400, QuayLiftZone = 70, QuaySettle = 40, QuayLiftStart = 506, QuayLiftStop = 510, QuayLiftSpeed = 300;
+    private const int LiftHalf = 512, LiftDip = 400, QuayLiftZone = 70, QuaySettle = 40, QuayLiftStart = 506, QuayLiftStop = 510, QuayLiftSpeed = 900;
+    // (QuayLiftSpeed: the game's own lifts' -- every lift track in the game goes at speed(900), Citadel's scenes 12 and 15 too; ours went
+    // at 300 -- the user, 2026-11-16, "The elevator speed also seems a little slow. Can we make it the same speed as the retail elevators")
+    // the thief's run aimed this far past the plate's middle, on along his way: a track's goto_point ends within 500 of its point -- he
+    // stops on the plate, not at its edge or short of it
+    private const int ThiefOvershoot = 350;
     // the museum's blueprints: under the glass of a display case of the hall's own (the user, 2026-11-04, "in a display case instead of
     // just on the floor"; 2026-11-06, the standard cases, not the tunic's: Citadel/CitadelMuseum, the case and the blueprints in it are
     // the museum's bricks) -- read with Action by it: an unseen helper on the case's top, as the game's own book's case has one (actor 13)
@@ -128,6 +133,11 @@ internal static partial class RaceTrackStory
     // grid's cell (6, 8), its top 1792, as the holomap for sale's on its end, actor 8 at (4352, 1792, 3664); dropped onto it)
     private static readonly (int X, int Y, int Z) UmbrellaHook = (6656, 1950, 15616), BaitTin = (3328, 1950, 4352);
     private const int Shop = 14, Bazoo = 2, BaitPrice = 2, QuayPaving = 1074;
+    // the game's own: Mr. Bazoo scared off by a meca-penguin set loose in his shop (his comportement_5 sets it 1 as he flees, and is gone
+    // from then on) -- then the shop's things are free, the game's (its life_point_obj / var_game(45) tests), and the story's bait too (the
+    // user, 2026-11-16: "it's possible to scare the shop owner away and steal a meca penguin, however the bait tin still charges us money
+    // when the shop owner isn't there, we should be able to steal this for free too")
+    private const int ShopkeeperGone = 45;
     // a per-visit flag of a scene's own (var_cube): no script of the game's uses these (42 is Once3, the LBA1 rooms')
     private const int Once1 = 40, Once2 = 41, Once4 = 43;
     // the text file the pharmacist's price is the game's own in (the Desert's: file 5, text 996, "A flask of gallic costs 50 kashes.")
@@ -493,14 +503,17 @@ internal static partial class RaceTrackStory
             "Il primo giro lo offro io, come promesso! Alla Coppa!",
             "A primeira rodada é por minha conta, como prometido! À Taça!",
         },
+        // (the Cup's way, the user, 2026-11-16: "there are islands in the first game, that don't feature in this one and thus don't have races
+        // in them ... Beating Raph's time unlocks the second track on Citadel. Winning the Citadel 2 track allows Twinsen to enter the Desert
+        // island track with entrants from all around Twinsun, the winner of which gets to enter the racing cup on Zeelich and the Emerald Moon")
         new[]
         {
-            "Welcome to the Two Worlds Cup! One race on every island of Twinsun and Zeelich, and to whoever wins them all, a wish. Any wish. The first race is here, on Citadel.",
-            "Bienvenue à la Coupe des Deux Mondes ! Une course sur chaque île de Twinsun et de Zeelich, et pour qui les gagnera toutes, un voeu. N'importe quel voeu. La première course a lieu ici, sur la Citadelle.",
-            "Willkommen zum Pokal der Zwei Welten! Ein Rennen auf jeder Insel von Twinsun und Zeelich, und wer sie alle gewinnt, hat einen Wunsch frei. Jeden Wunsch. Das erste Rennen findet hier statt, auf der Zitadelle.",
-            "¡Bienvenido a la Copa de los Dos Mundos! Una carrera en cada isla de Twinsun y de Zeelich, y para quien las gane todas, un deseo. Cualquier deseo. La primera carrera es aquí, en la Ciudadela.",
-            "Benvenuto alla Coppa dei Due Mondi! Una gara su ogni isola di Twinsun e di Zeelich, e a chi le vince tutte, un desiderio. Qualunque desiderio. La prima gara è qui, sulla Cittadella.",
-            "Bem-vindo à Taça dos Dois Mundos! Uma corrida em cada ilha de Twinsun e de Zeelich, e a quem as ganhar todas, um desejo. Qualquer desejo. A primeira corrida é aqui, na Cidadela.",
+            "Welcome to the Two Worlds Cup! Win here and you race on Desert Island against the best drivers from all over Twinsun. The winner there goes on to the Cup's races on Zeelich and the Emerald Moon, and to whoever wins those, a wish. Any wish.",
+            "Bienvenue à la Coupe des Deux Mondes ! Gagne ici et tu courras sur l'île du Désert contre les meilleurs pilotes de tout Twinsun. Le vainqueur là-bas ira disputer les courses de la Coupe sur Zeelich et la Lune d'Emeraude, et pour qui les gagnera, un voeu. N'importe quel voeu.",
+            "Willkommen zum Pokal der Zwei Welten! Gewinnst du hier, fährst du auf der Wüsteninsel gegen die besten Fahrer aus ganz Twinsun. Der Sieger dort fährt die Rennen des Pokals auf Zeelich und dem Smaragdmond, und wer sie gewinnt, hat einen Wunsch frei. Jeden Wunsch.",
+            "¡Bienvenido a la Copa de los Dos Mundos! Gana aquí y correrás en la isla del Desierto contra los mejores pilotos de todo Twinsun. El ganador de allí pasa a las carreras de la Copa en Zeelich y la Luna Esmeralda, y quien las gane tendrá un deseo. Cualquier deseo.",
+            "Benvenuto alla Coppa dei Due Mondi! Vinci qui e correrai sull'isola del Deserto contro i migliori piloti di tutto Twinsun. Il vincitore là passa alle gare della Coppa su Zeelich e sulla Luna di Smeraldo, e a chi le vince, un desiderio. Qualunque desiderio.",
+            "Bem-vindo à Taça dos Dois Mundos! Ganha aqui e vais correr na ilha do Deserto contra os melhores pilotos de todo o Twinsun. O vencedor de lá segue para as corridas da Taça em Zeelich e na Lua Esmeralda, e a quem as ganhar, um desejo. Qualquer desejo.",
         },
         new[]
         {
@@ -1517,9 +1530,11 @@ stop();
             if (model.CubeX != (int)Math.Floor(b.X / 64) || model.CubeY != (int)Math.Floor(b.Z / 64) || model.CubeX != (int)Math.Floor(ht.X / 64) || model.CubeY != (int)Math.Floor(ht.Z / 64))
                 throw new NotTheGames("the thief's place and the hatch aren't in the harbour's cube");
             Place(thief, model, Facing(b, ht.X, ht.Z));
-            var run = model.TrackPoints.Count;
-            model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(ht.X, model.CubeX), (int)Math.Round(ht.Y), RaceTrackScenes.CubeLocal(ht.Z, model.CubeY)));
             int hx = RaceTrackScenes.CubeLocal(ht.X, model.CubeX), hz = RaceTrackScenes.CubeLocal(ht.Z, model.CubeY), hy = (int)Math.Round(ht.Y);
+            // (his run's end: past the plate's middle on his way from his place -- he stops within 500 of it, on the plate)
+            double fromX = RaceTrackScenes.CubeLocal(b.X, model.CubeX) - hx, fromZ = RaceTrackScenes.CubeLocal(b.Z, model.CubeY) - hz, along = Math.Max(1, Math.Sqrt(fromX * fromX + fromZ * fromZ));
+            var run = model.TrackPoints.Count;
+            model.TrackPoints.Add(new SceneTrackPoint(hx - (int)Math.Round(fromX / along * ThiefOvershoot), hy, hz - (int)Math.Round(fromZ / along * ThiefOvershoot)));
             // (a lift, not a hatch Twinsen was taken through as he stepped on it -- the user, 2026-11-15: "replace the teleport block that
             // accesses the sewers with one of the games elevators": the game's kind of lift plate, dark planks in an iron frame, on the quay;
             // walked onto, or Action on it, it sinks under him and the door into the sewers, under the plate, opens -- switched on by the
@@ -1609,6 +1624,7 @@ void comportement_2()
 {{
     if (11 == l_track())
     {{
+        set_dir(NO_MOVE);
         set_dir_obj(0, NO_MOVE);
         anim_obj(0, 0);
         set_track_obj({plateIndex}, label_1);
@@ -1677,6 +1693,7 @@ stop();
 label(10);
 anim({ThiefRun});
 goto_point({run});
+anim(0);
 
 label(11);
 stop();
@@ -2060,6 +2077,8 @@ void comportement_2()
     private const int ShipSeen = 255;
     // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
+    // (how much further than WizardAtCow: his place 626 from hers -- about 1,000 now, clear of her flank as he hops)
+    private const double WizardBack = 1.6;
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
     private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 3800, 8 };
     private static void LighthouseClimb(StoryParts p)
@@ -2253,7 +2272,11 @@ stop();
             var cow = model.Actors.FindIndex(a => a.Entity == RosaEntity);
             if (cow < 1) throw new NotTheGames("Rosa the cow");
             var rosa = model.Actors[cow];
-            (int X, int Y, int Z) behind = (WizardAtCow.X - RosaAt.X, WizardAtCow.Y - RosaAt.Y, WizardAtCow.Z - RosaAt.Z);
+            // (and further behind her than the game's place for him, WizardBack: pressed against her, the engine -- which sorts whole actors,
+            // not their pixels -- drew his red-brown fur over her flank, a brown patch that moved as he hopped; it was never a shadow: the
+            // user, 2026-11-16, "It looks like you've turned the cows shadow off, but the brown was never the cows shadow. The brownness on
+            // the cow moves as the wizard moves")
+            (int X, int Y, int Z) behind = ((int)Math.Round((WizardAtCow.X - RosaAt.X) * WizardBack), WizardAtCow.Y - RosaAt.Y, (int)Math.Round((WizardAtCow.Z - RosaAt.Z) * WizardBack));
             (int X, int Y, int Z) here = (rosa.X + behind.X, rosa.Y + behind.Y, rosa.Z + behind.Z);
             var aside = (p.Scenes.ActorsAt ?? p.TownScenes.ActorsAt ?? new List<string>())
                 .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -2739,6 +2762,13 @@ void comportement_1()
                 if (0 < var_game({QBait}))
                 {{
                     message_obj({Bazoo}, {p.Say(ChapterLine.BaitPlenty)});
+                }}
+                else if (1 == var_game({ShopkeeperGone}))
+                {{
+                    set_var_game({QBait}, {BaitHeld});
+                    message_obj(0, {p.Say(ChapterLine.BaitBought)});
+                    set_var_game({ErrandSlot}, {ErrandBait});
+                    found_object({ErrandSlot});
                 }}
                 else
                 {{

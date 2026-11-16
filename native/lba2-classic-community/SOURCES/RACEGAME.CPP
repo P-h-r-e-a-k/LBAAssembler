@@ -3095,7 +3095,11 @@ static int PlayersPage(void) {
 // ---- achievements -------------------------------------------------------------------------------------------------------------------
 // Hidden until discovered: each has its island's heading; one not earned yet is shown with its words unreadable, a hint at where to look.
 // Earned by the race file's achieve= lines (RACEMOD.CPP: a game variable at a value, or a scene entered), kept in ACHIEVEMENTS.TXT in the player's folder.
-typedef struct { const char *Id, *Group, *Title; } T_RG_ACH;
+// (an achievement in two halves, each earned on its own -- Lead, Part, PartTitle: kept as each half's id, readable each as it is earned, the
+// whole earned with both -- the darts', the user, 2026-11-16: "Let's add a two part achievement to darts. Let's have half of it unlocked if
+// the player wins a game of darts in 9 darts (the minimum possible), let's have the other half of the achievement for the user checking out
+// on 170": RACEMOD.CPP DartLand)
+typedef struct { const char *Id, *Group, *Title, *Lead; const char *Part[2], *PartTitle[2]; } T_RG_ACH;
 static const T_RG_ACH s_ach[] = {
     {"spanked", "Citadel", "Got spanked by Zoe"},
     {"telescope", "Citadel", "Wizard cow love okay"},
@@ -3104,36 +3108,61 @@ static const T_RG_ACH s_ach[] = {
     {"dinofly", "Polar", "Reunited with old friend"},
     {"dungeon", "Palace", "Found the palace dungeon"},
     {"postcards", "Anywhere", "Found every postcard"},
+    {"darts", "Citadel", "Darts: a nine-dart finish and a 170 checkout", "Darts", {"darts9", "darts170"}, {"a nine-dart finish", "a 170 checkout"}},
 };
 #define RG_ACH_N ((int)(sizeof(s_ach) / sizeof(s_ach[0])))
 static U8 s_achGot[RG_ACH_N];
+static U8 s_achPart[RG_ACH_N][2];
 // (s_achRead: with the players, which forget it)
 static void AchPath(char *out) { GetCfgPath(out, ADELINE_MAX_PATH, "ACHIEVEMENTS.TXT"); }
 static void ReadAch(void) {
     if (s_achRead) return;
     s_achRead = 1;
     memset(s_achGot, 0, sizeof(s_achGot));
+    memset(s_achPart, 0, sizeof(s_achPart));
     char path[ADELINE_MAX_PATH], line[128];
     AchPath(path);
     if (FILE *f = fopen(path, "r")) {
         while (fgets(line, sizeof(line), f)) {
             Trim(line);
-            for (int i = 0; i < RG_ACH_N; i++) if (!strcmp(line, s_ach[i].Id)) s_achGot[i] = 1;
+            for (int i = 0; i < RG_ACH_N; i++) {
+                if (!strcmp(line, s_ach[i].Id)) s_achGot[i] = 1;
+                for (int p = 0; p < 2; p++) if (s_ach[i].Part[p] && !strcmp(line, s_ach[i].Part[p])) s_achPart[i][p] = 1;
+            }
         }
         fclose(f);
     }
+    for (int i = 0; i < RG_ACH_N; i++) if (s_ach[i].Part[0] && s_achPart[i][0] && s_achPart[i][1]) s_achGot[i] = 1;
 }
 static int AchievementsEarned(void) { ReadAch(); int n = 0; for (int i = 0; i < RG_ACH_N; i++) n += s_achGot[i]; return n; }
 static int AchievementsAll(void) { return RG_ACH_N; }
 S32 RaceGame_Achieved(const char *id) {
     ReadAch();
-    for (int i = 0; i < RG_ACH_N; i++) if (!strcmp(id, s_ach[i].Id)) return s_achGot[i];
+    for (int i = 0; i < RG_ACH_N; i++) {
+        if (!strcmp(id, s_ach[i].Id)) return s_achGot[i];
+        for (int p = 0; p < 2; p++) if (s_ach[i].Part[p] && !strcmp(id, s_ach[i].Part[p])) return s_achPart[i][p];
+    }
     return 0;
 }
 S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
     if (!id) return 0;
     ReadAch();
     for (int i = 0; i < RG_ACH_N; i++) {
+        // (a half: kept as its own id; the banner its half, or the whole once both are in)
+        for (int p = 0; p < 2; p++) {
+            if (!s_ach[i].Part[p] || strcmp(id, s_ach[i].Part[p]) || s_achPart[i][p]) continue;
+            s_achPart[i][p] = 1;
+            char path[ADELINE_MAX_PATH];
+            AchPath(path);
+            if (FILE *f = fopen(path, "a")) { fprintf(f, "%s\n", id); fclose(f); }
+            if (s_achPart[i][0] && s_achPart[i][1]) s_achGot[i] = 1;
+            if (title && size > 0) {
+                if (s_achGot[i]) snprintf(title, (size_t)size, "%s", s_ach[i].Title);
+                else snprintf(title, (size_t)size, "%s, half of it: %s", s_ach[i].Lead, s_ach[i].PartTitle[p]);
+            }
+            Log_Info("[racegame] achievement earned: %s, half of %s (%s)%s", id, s_ach[i].Id, s_ach[i].PartTitle[p], s_achGot[i] ? " -- both halves now" : "");
+            return 1;
+        }
         if (strcmp(id, s_ach[i].Id) || s_achGot[i]) continue;
         s_achGot[i] = 1;
         char path[ADELINE_MAX_PATH];
@@ -3185,6 +3214,11 @@ static int AchRowDisabled(int k) { ReadAch(); return k < 0 || k >= RG_ACH_N || !
 static void AchRowLabel(int k, char *out, size_t size) {
     ReadAch();
     if (k < 0 || k >= RG_ACH_N) { out[0] = 0; return; }
+    // (one in halves, one of them earned: the half readable, the other not yet)
+    if (s_ach[k].Lead && !s_achGot[k] && (s_achPart[k][0] || s_achPart[k][1])) {
+        snprintf(out, size, "%s: %s: %s, %s", s_ach[k].Group, s_ach[k].Lead, s_achPart[k][0] ? s_ach[k].PartTitle[0] : "#####", s_achPart[k][1] ? s_ach[k].PartTitle[1] : "#####");
+        return;
+    }
     snprintf(out, size, "%s: %s", s_ach[k].Group, s_achGot[k] ? s_ach[k].Title : "##########");
 }
 static const char *BowlerName(int k) {

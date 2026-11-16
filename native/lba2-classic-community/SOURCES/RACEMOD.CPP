@@ -911,6 +911,8 @@ typedef struct { int Scene, Spot[3], Board[3], Face[6], HasFace, FoeFirst, NbFoe
 static T_DART_BOARD s_dtBoards[RACE_MAX_DART_BOARDS];
 static int s_nbDtBoards = 0, s_dtFoeFirst = 0, s_dtFoeCount = 0, s_dtMinChapter = 2;
 static int s_dtOn = 0, s_dtState = 0, s_dtTurn = 0, s_dtLeft = 3, s_dtScore[2], s_dtStartScore[2], s_dtFoe = -1, s_dtN = 0, s_dtActWas = 0, s_dtZoePress = 0, s_dtThrown = 0;
+// (each one's darts thrown this game: a win in nine is half of the darts achievement -- DartAchieve)
+static int s_dtDarts[2];
 static double s_dtAimX = 0, s_dtAimY = 0, s_dtMark[3][2], s_dtFx = 0, s_dtFy = 0;
 static S32 s_dtAt = 0, s_dtMsgUntil = 0, s_dtLast = 0, s_dtThrowAt = 0;
 static char s_dtMsg[64] = "";
@@ -9012,7 +9014,10 @@ static void PitServe(S32 now, int kmh, const char *who) {
 static void DrawPitCrew(void) {
     T_RACE_PIT *p = &s_pit;
     // (with two players, player 2 is Zoe in the pit box: the drawn one left out)
-    if (!p->On || TwoOn()) return;
+    // (and only while a race is on -- from the grid formed till Twinsen finishes: before it she stood by the start line as Twinsen walked
+    // and talked there, nobody he could bump into or speak to -- the user, 2026-11-16, of the town circuit, "There's a random zoe standing at
+    // the start line ... let's just cull her from here until after the race")
+    if (!p->On || TwoOn() || !(s_phase == PHASE_GRID || (s_goAt && !s_place))) return;
     T_OBJ_3D *o = &p->Obj;
     const S32 x = (S32)floor(p->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(p->Y + 0.5), z = (S32)floor(p->Z - CurrentCubeY * 32768.0 + 0.5);
     if (!p->Ready) {
@@ -19206,6 +19211,7 @@ static void AchievementsFrame(S32 now) {
 // or a spare (the rest the second) as the game scores them, the scores of the pin game with six for ten. Its lane's scripts wait (var_cube
 // BOWLMAP's); the other lane's bowlers bowl on. The game ended, the menu comes after a few seconds; the best score of the bowler is kept by RACEGAME.CPP.
 #define BOWL_PINS 6
+static void HudCentred(S32 w, S32 y, const char *text, int up);
 static void HudLine(S32 x, S32 y, const char *text, int align);
 static void BowlLoad(void) {
     if (s_bowlLoaded) return;
@@ -19526,10 +19532,10 @@ static void FruitDraw(void) {
     if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene || s_bowlGame >= 0) return;
     if (!s_fmOn) {
         const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
-        if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine(w / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
+        if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudCentred(w, 210, s_bowlMsg, 0);
         else if (Comportement != C_BUGGY && FmNear() >= 0) {
             const char *t = MONEY_ZLITOS ? "Action: play the machine, 1 zlito" : "Action: play the machine, 1 kash";
-            HudLine(w / 2 - SizeFont((char *)t) / 2, h - 60, t, -1);
+            HudCentred(w, h - 60, t, 1);
         }
         return;
     }
@@ -19547,7 +19553,7 @@ static void FruitDraw(void) {
     if (s_fmPaid) {
         char t[48];
         if (s_fmPay > 0) snprintf(t, sizeof(t), "Pays %d", s_fmPay); else snprintf(t, sizeof(t), "Nothing");
-        HudLine(w / 2 - SizeFont(t) / 2, y0 + ch + 10, t, -1);
+        HudCentred(w, y0 + ch + 10, t, 0);
     }
 }
 // HAL's hints, read once
@@ -19801,7 +19807,7 @@ static void BowlDraw(void) {
         snprintf(bar, sizeof(bar), "Power %d", (int)(s_bowlPower * 100));
         HudLine(16, 124, bar, -1);
     }
-    if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudLine((S32)ModeDesiredX / 2 - SizeFont(s_bowlMsg) / 2, 210, s_bowlMsg, -1);
+    if (TimerRefHR < s_bowlMsgUntil && s_bowlMsg[0]) HudCentred((S32)ModeDesiredX, 210, s_bowlMsg, 0);
 }
 // ---- the Tavern's darts (the user: "Twinsen to play against a random character from the car, or in two player mode with Zoe ... against Zoe") ----
 // 501 down to nothing (the user, 2026-11-12: "have the dart game playing from 501 not 301"), three darts a turn, a turn over-thrown (below nothing) not counted;
@@ -19955,10 +19961,44 @@ static void DartStandShow(int on) {
     foe->Obj.X = s_dtFace[4]; foe->Obj.Z = s_dtFace[5];
 }
 
+// Tests (darthits): the player's next darts where they land -- t20, d12, bull, 25, 19 (a single) -- no aim, no sway: the darts achievement's
+// nine-darter and 170 checkout thrown on purpose
+static double s_dtQueue[24][2];
+static int s_dtQueueN = 0, s_dtQueueAt = 0;
+void RaceMod_TestDarts(int n, const char *const *spots) {
+    static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
+    s_dtQueueN = s_dtQueueAt = 0;
+    for (int k = 0; k < n && s_dtQueueN < 24; k++) {
+        const char *s = spots[k];
+        if (!strcmp(s, "bull") || !strcmp(s, "50")) { s_dtQueue[s_dtQueueN][0] = 0; s_dtQueue[s_dtQueueN][1] = 0; s_dtQueueN++; continue; }
+        if (!strcmp(s, "25")) { s_dtQueue[s_dtQueueN][0] = 0; s_dtQueue[s_dtQueueN][1] = -0.08; s_dtQueueN++; continue; }
+        double r = 0.8;
+        int v = atoi(s[0] == 't' || s[0] == 'd' ? s + 1 : s);
+        if (s[0] == 't') r = 0.615; else if (s[0] == 'd') r = 0.955;
+        int i = 0;
+        while (i < 20 && order[i] != v) i++;
+        if (i == 20) continue;
+        const double a = i * 3.14159265358979 / 10;
+        s_dtQueue[s_dtQueueN][0] = r * sin(a); s_dtQueue[s_dtQueueN][1] = -r * cos(a);
+        s_dtQueueN++;
+    }
+    Log_Info("[racemod] darts: the player's next %d darts set (test)", s_dtQueueN);
+}
+
+// Half of the darts achievement earned (RACEGAME.CPP's "darts": its halves "darts9", "darts170"): its banner, as the race file's achieve= ones
+static void DartAchieve(S32 now, const char *half) {
+    char title[96];
+    if (!RaceGame_Achieve(half, title, sizeof(title))) return;
+    snprintf(s_achText, sizeof(s_achText), "%s", title);
+    snprintf(s_achId, sizeof(s_achId), "%s", "darts");
+    s_achUntil = now + 6000;
+}
+
 // A dart thrown by the one whose turn it is at (x, y): the score taken, the turn ended or the match won
 static void DartLand(S32 now, double x, double y) {
     char words[48], said[64];
     const int who = s_dtTurn, value = DartScore(x, y, words, sizeof(words));
+    s_dtDarts[who]++;
     if (s_dtN < 3) {
         s_dtMark[s_dtN][0] = x; s_dtMark[s_dtN][1] = y; s_dtMarkAt[s_dtN] = now;
         // (from the thrower's hand: on the spot, at his shoulder's height, a little toward the board)
@@ -19994,7 +20034,13 @@ static void DartLand(S32 now, double x, double y) {
             s_dtStake = 0;
         }
         DartSay(now, said, 6000);
-        Log_Info("[racemod] darts: %s", said);
+        Log_Info("[racemod] darts: %s (%d darts, the turn from %d)", said, s_dtDarts[who], s_dtStartScore[who]);
+        // (the darts achievement's halves, the player's: won in nine darts, the fewest 501 can be; won from 170, the biggest checkout --
+        // treble 20, treble 20, the bull)
+        if (who == 0) {
+            if (s_dtDarts[0] <= 9) DartAchieve(now, "darts9");
+            if (s_dtStartScore[0] == 170) DartAchieve(now, "darts170");
+        }
         return;
     }
     s_dtState = 2; s_dtAt = now;   // the dart's moment over, then the next
@@ -20073,6 +20119,7 @@ static void DartFrame(S32 now) {
             if (!two && s_dtFoe < 0) return;
             s_dtOn = 1; s_dtState = 0; s_dtTurn = 0; s_dtLeft = 3; s_dtN = 0;
             s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = DART_START;
+            s_dtDarts[0] = s_dtDarts[1] = 0;
             s_dtNHist[0] = s_dtNHist[1] = 0;
             s_dtAimX = 0; s_dtAimY = 0; s_dtThrown = 0; s_dtHeroWalk = -1;
             DartsKeep(); DartsPulled();
@@ -20168,7 +20215,8 @@ static void DartFrame(S32 now) {
         if (pressed) {
             s_dtHeroWalk = -1;
             InitAnim(GEN_ANIM_DART, ANIM_REPEAT, NUM_PERSO);
-            DartLand(now, s_dtFx + (DartRnd() - 0.5) * 0.03, s_dtFy + (DartRnd() - 0.5) * 0.03);
+            if (s_dtQueueAt < s_dtQueueN) { DartLand(now, s_dtQueue[s_dtQueueAt][0], s_dtQueue[s_dtQueueAt][1]); s_dtQueueAt++; }
+            else DartLand(now, s_dtFx + (DartRnd() - 0.5) * 0.03, s_dtFy + (DartRnd() - 0.5) * 0.03);
         }
     } else if (s_dtState == 1) {
         // Zoe's turn with two players: a cross sweeping the board, her Action (player 2's) throwing where it is; or the foe's after a moment
@@ -20259,7 +20307,7 @@ static void DartDraw(void) {
     const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
     if (!s_dtOn) {
         const double dx = hero->Obj.X - s_dtSpot[0], dz = hero->Obj.Z - s_dtSpot[1];
-        if (ListVarGame[FLAG_CHAPTER] >= 2 && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) HudLine(w / 2 - SizeFont("Action: play darts") / 2, h - 60, "Action: play darts", -1);
+        if (ListVarGame[FLAG_CHAPTER] >= 2 && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) HudCentred(w, h - 60, "Action: play darts", 1);
         return;
     }
     const S32 slateW = 176;
@@ -20358,12 +20406,11 @@ static void DartDraw(void) {
         else snprintf(wager, sizeof(wager), "Wager: none, a friendly game");
         char ask[96];
         snprintf(ask, sizeof(ask), "%s: How much is the wager?", f->Name);
-        HudLine(w / 2 - SizeFont(ask) / 2, h - 120, ask, -1);
-        HudLine(w / 2 - SizeFont(wager) / 2, h - 90, wager, -1);
-        char keys[] = "Left, Right: the stake -- Action: play";
-        HudLine(w / 2 - SizeFont(keys) / 2, h - 60, keys, -1);
+        HudCentred(w, h - 120, ask, 1);
+        HudCentred(w, h - 90, wager, 0);
+        HudCentred(w, h - 60, "Left, Right: the stake -- Action: play", 0);
     }
-    if (TimerRefHR < s_dtMsgUntil && s_dtMsg[0]) HudLine(w / 2 - SizeFont(s_dtMsg) / 2, h - 60, s_dtMsg, -1);
+    if (TimerRefHR < s_dtMsgUntil && s_dtMsg[0]) HudCentred(w, h - 60, s_dtMsg, 1);
 }
 // Whether Twinsen is in the pool's water -- the basin's box, or the dive on its way -- where he swims and does not drown (OBJECT.CPP's water)
 S32 RaceMod_PoolSwims(void) {
@@ -21478,6 +21525,34 @@ static void HudLineIn(S32 x, S32 y, const char *text, int align, S32 colour) {
     BoxMovingAdd(x0 - 4, y - 4, x0 + w + 6, y + RACE_LINE_STEP + 4);
 }
 static void HudLine(S32 x, S32 y, const char *text, int align) { HudLineIn(x, y, text, align, LBAWHITE); }
+// A HUD line in the middle of the screen, wrapped at its spaces into lines that fit it, each in the middle (the user, 2026-11-16, of the
+// darts' "You seem a bit low on money, let's just have a friendly game" running off both sides: "We need to make sure that any text we add
+// to screen wraps nicely"): four lines at most, RACE_LINE_STEP apart -- from `y` down, or (`up`) the last on `y` and the rest above it, for
+// a line near the screen's foot. Every centred line of the mod's HUD is drawn so.
+static void HudCentred(S32 w, S32 y, const char *text, int up) {
+    if (!text || !text[0]) return;
+    const S32 room = w - 64;
+    char lines[4][128];
+    int n = 0;
+    const char *s = text;
+    while (*s && n < 4) {
+        int cut = (int)strlen(s);
+        if (cut > 127) cut = 127;
+        snprintf(lines[n], sizeof(lines[n]), "%.*s", cut, s);
+        while (n < 3 && SizeFont(lines[n]) > room) {
+            int sp = cut - 1;
+            while (sp > 0 && s[sp] != ' ') sp--;
+            if (sp <= 0) break;
+            cut = sp;
+            snprintf(lines[n], sizeof(lines[n]), "%.*s", cut, s);
+        }
+        s += cut;
+        while (*s == ' ') s++;
+        n++;
+    }
+    const S32 top = up ? y - (n - 1) * RACE_LINE_STEP : y;
+    for (int k = 0; k < n; k++) HudLine(w / 2 - SizeFont(lines[k]) / 2, top + k * RACE_LINE_STEP, lines[k], -1);
+}
 
 // An achievement's toast (the user, 2026-11-12: "Let's have achievements pop up as a small toast in the bottom right corner. Let's add a
 // small image that represents the achievement along with brief text"): a dark box with a frame in the screen's bottom right corner, a little
@@ -23442,7 +23517,7 @@ void RaceMod_Draw(void) {
         // the flag marshal on the road, away from her flag)
         const char *count = NULL;
         // (an online race's held till every player is at the start: NetRaceFrame)
-        if (s_online && !s_netGo && s_phase == PHASE_GRID) HudLine(width / 2 - SizeFont("Waiting for the other players") / 2, height / 3, "Waiting for the other players", -1);
+        if (s_online && !s_netGo && s_phase == PHASE_GRID) HudCentred(width, height / 3, "Waiting for the other players", 0);
         else if (s_phase == PHASE_GRID && now >= s_goAt - 3000) count = now < s_goAt - 2000 ? "3" : now < s_goAt - 1000 ? "2" : "1";
         else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now < s_goAt + 1000) count = "GO!";
         if (count) {
@@ -23456,26 +23531,7 @@ void RaceMod_Draw(void) {
     if (s_sayNext[0] && now >= s_messageUntil) { Message(s_sayNext); s_messageUntil = now + 5000; s_sayNext[0] = 0; }
     // (wrapped at its spaces into lines that fit the screen, each in the middle, three at most: a gate's or a breakdown's words ran off
     // both sides on one line -- the user, 2026-11-08, of Flick's "No helmet, no race!": "doesn't wrap, and goes off the screen")
-    if (hud && now < s_messageUntil && s_message[0]) {
-        const S32 room = width - 64;
-        const char *s = s_message;
-        for (int line = 0; *s && line < 3; line++) {
-            char buf[96];
-            int n = (int)strlen(s), cut = n;
-            if (n > (int)sizeof(buf) - 1) n = cut = (int)sizeof(buf) - 1;
-            snprintf(buf, sizeof(buf), "%.*s", n, s);
-            while (line < 2 && SizeFont(buf) > room) {
-                int sp = cut - 1;
-                while (sp > 0 && s[sp] != ' ') sp--;
-                if (sp <= 0) break;
-                cut = sp;
-                snprintf(buf, sizeof(buf), "%.*s", cut, s);
-            }
-            HudLine(width / 2 - SizeFont(buf) / 2, height / 5 + line * RACE_LINE_STEP, buf, -1);
-            s += cut;
-            while (*s == ' ') s++;
-        }
-    }
+    if (hud && now < s_messageUntil && s_message[0]) HudCentred(width, height / 5, s_message, 0);
     if (hud) DrawNetBoard(now);
 
     RestoreClipWindow();

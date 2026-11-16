@@ -32,6 +32,23 @@ namespace LBAAssembler.Terrain.Citadel;
 //     the bath filled from its taps (Action at them), the kitchen's chairs sat on (Action by one; any key gets up -- RACEMOD.CPP seat_cube=);
 //   - made after the house at night (CitadelNightHouse) is made from scene 0's grid: the night's house keeps its window and its armchair
 //     till the day's is liked (the user's wish), and has no door to the rooms.
+// Round 3 (the user, 2026-11-16 evening, pictures): "The doors we've added into Twinsen's house have a darker background than the rest of
+// the walls that they're in" (WestToNorth); "The bathroom door is on a different wall to where Twinsen logically enters the room, so we
+// should move it", and the kitchen's "the same as with the bathroom, so it matches the direction Twinsen enters from the house. Let's move
+// the lamp from the corner it's at which is where the door needs to move to, into the corner by where the door currently is"; "This corner
+// of the bathroom still looks wrong where the two walls meet"; "The door on the right side to the kitchen let's move it a square left";
+// "The shelf and lamp that we've added on the wall stop Twinsen from walking even though they're not visibly blocking him":
+//   - each room's way in and out a doorway in its front (south) wall -- Twinsen walks north through the house's north wall into it, and
+//     south out of it -- two cells open in the low front wall (BathGapX, KitchenGapX: the bathroom's west of the middle, under the bedroom's
+//     door; the kitchen's in its east corner, where the floor lamp stood -- the lamp to the west corner); the west wall whole, no door;
+//   - the west wall comes down to the front as the house's own partition between the bedroom and the dining room does (column 15,
+//     rows 2-5: its curve, a cell of low wall, the low wall's end post at the corner) -- the tall corner stood over a low wall, the
+//     corner the user's picture showed; the front from that corner to the doorway the house's storeroom front as high as the game's low
+//     walls, past the doorway as low as it was (the east edge too: the bath shows over it) -- the step between the heights the doorway's.
+//     (The storeroom's own corner -- a tall post, a tall cell, its curve -- tried first: its tall front hid the kitchen's lamp, and the
+//     east edge as high hid the bath);
+//   - the kitchen's doorway in the dining room a cell left (x 23-26);
+//   - the kitchen's wall lamp (the house's block 90 at layers 13-14) a copy with no shape: drawn, not in his way (GhostBlock).
 internal static class CitadelHouseRooms
 {
     public const int House = 0, Bathroom = 396, Kitchen = 397;
@@ -39,6 +56,8 @@ internal static class CitadelHouseRooms
     public const int FloorY = (FloorLayer + 1) * 256;
     // a room's floor: x RoomX0-RoomX1, z RoomZ0-RoomZ1 (cells) -- the house's own corner, walls at column 4 and row 0
     private const int RoomX0 = 5, RoomX1 = 14, RoomZ0 = 1, RoomZ1 = 8;
+    // where a room's west wall starts down to its front (the house's partition's curve, two cells, then a cell of low wall)
+    private const int WestCurveZ = 6;
     // the house's own doorway (the bedroom's west wall, to the storeroom passage): its four cells along z from DoorZ0 on column 4, the
     // passage's cells behind it on column 3 (and the row after, its side), the door's sprite and where it stands, the passage's zone
     private const int DoorZ0 = 5, DoorSprite = 100;
@@ -46,16 +65,22 @@ internal static class CitadelHouseRooms
     private const int DoorSpriteX = 2544, DoorSpriteUp = 96, DoorSpriteAlong = 78, DoorSpriteIn = 16;
     // the new doorways in the house's north wall: their four cells from these columns (a jamb, the two open, a jamb) -- the bedroom's, the
     // dining room's; the window's last column after the bedroom's, a wall panel now
-    private const int BathDoorX0 = 5, KitchenDoorX0 = 24;
+    private const int BathDoorX0 = 5, KitchenDoorX0 = 23;
+    // each room's doorway in its front wall: its two open cells from these columns; where it brings him in (z, the doorway's inside, walking
+    // north) -- the house's north doorway's zone adds how deep he is into it (0-DoorDeep), so its Info's z is this less DoorDeep
+    private const int BathGapX = 8, KitchenGapX = 12, RoomArriveZ = 4400;
+    // the house's wall lamp (block 90: the bedroom's, column 5 row 2, layers 13-14), the kitchen's copy of it with no shape
+    private const int WallLamp = 90;
+    // the shower's door: Twinsen this near its hinge, it swings open; this far again, back to ajar
+    private const int ShowerSwingNear = 650, ShowerSwingFar = 900;
     // the dining room's right-hand armchair (block 56 over a floor of 81, cells 25-26 by 1-2)
     private static readonly (int X, int Z)[] Armchair = { (25, 1), (26, 1), (25, 2), (26, 2) };
     // a north doorway's zone: its opening's cells and a step into the room, 48 past the wall's face -- the story build's walk-through of
     // round 1 stopped in an opening short of the outer half of its cell
     private const int DoorDeep = 560;
-    // where a room's door brings him into the room (before its west door, the door's middle -- the zone adds his place across the north
-    // doorway, 0-1,023, to x: how far in he comes) and into the house (before the north doorway, its middle -- the room's zone adds his
-    // place along the west doorway to z: how far out he comes; and ~511 to x, its depth crossed as he walks in)
-    private const int IntoRoomX = 2700, IntoHouseZ = 700;
+    // where a room's doorway brings him into the house: before its north doorway (the room's zone adds how far he is across its doorway to
+    // x, and how deep into its zone to this z -- the engine's GereZoneChangeCube, no turn)
+    private const int IntoHouseZ = 700;
     // the scene variables: a seat taken (RaceTrackStory.SeatCube), which chair, the bath's filling count
     private const int WhichChair = 78, Filling = 77;
     private const int ChairZone0 = 80, TapsZone = 82, SitLabel = 100, StandLabel = 120;
@@ -170,11 +195,14 @@ stop();
         var library = bkg.Read(libraryEntry);
         byte[]? Brick(int b) => b >= 0 && b < header.MaxBrk && !bkg.IsEmpty(header.Brk + b) ? bkg.Read(header.Brk + b) : null;
         var mirrored = new Dictionary<int, int>();
+        // (their colours the north wall's light: WestToNorth)
+        var shade = WestToNorth(library, Brick, log);
         foreach (var block in DoorBlocks)
         {
             if (GridPaint.Info(library, block) is null) { log.Add($"The house's bathroom and kitchen left out: the house's library has no block {block}"); return log; }
-            mirrored[block] = MirrorBlock(bkg, header, ref library, block, Brick);
+            mirrored[block] = MirrorBlock(bkg, header, ref library, block, Brick, shade);
         }
+        var ghostLamp = GhostBlock(ref library, WallLamp);
         bkg.SetStored(libraryEntry, library);
         int MirrorPos(int block, int pos)
         {
@@ -244,28 +272,38 @@ stop();
         if (header.MaxGri < (uint)houseGrid.Length) header.MaxGri = (uint)houseGrid.Length;
 
         // ---- a room: the house's corner, walls (the west one with the house's doorway and its passage), floor, edges; its furniture's columns
-        byte[] Room(Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>> furniture)
+        byte[] Room(Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>> furniture, int gap)
         {
             var columns = new Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>>();
             columns[(4, 0)] = Column(4, 0);
             for (var x = RoomX0; x <= RoomX1; x++)
                 columns[(x, 0)] = x == RoomX0 ? Column(5, 0) : x == RoomX1 ? Column(13, 0) : Column(10 + Mod(x - 6, 3), 0);
+            // (the west wall tall to WestCurveZ, then down as the house's own partition between the bedroom and the dining room comes down
+            // (column 15, rows 2-5): its curve over two cells, a cell of low wall, the low wall's end post at the front corner)
             for (var z = RoomZ0; z <= RoomZ1; z++)
-                columns[(4, z)] = z == RoomZ0 ? Column(4, 1) : Column(4, 2 + Mod(z - 2, 3));
-            for (var k = 0; k < 4; k++) columns[(4, DoorZ0 + k)] = Column(4, DoorZ0 + k);
-            for (var k = 0; k <= 4; k++) columns[(3, DoorZ0 + k)] = Column(3, DoorZ0 + k);
+                columns[(4, z)] = z == RoomZ0 ? Column(4, 1) : z < WestCurveZ ? Column(4, 2 + Mod(z - 2, 3)) : Column(15, 2 + z - WestCurveZ);
             for (var z = RoomZ0; z <= RoomZ1; z++)
                 for (var x = RoomX0; x <= RoomX1; x++)
                     columns[(x, z)] = new() { (FloorLayer, 31, Mod(x, 3) + 3 * Mod(z, 3)) };
-            // (the front edge, row RoomZ1 + 1: the storeroom's front -- its rock, its wooden cap -- two layers down, to stand as a low wall at
-            // the room's floor; the east edge, column RoomX1 + 1: the house's plain east edge three layers up; the front's west corner the
-            // storeroom's, tall, as the west wall is; the east's north end the house's; the rows and columns past them, walls one doesn't see)
+            // (the front edge, row RoomZ1 + 1: its west corner the partition's end post (15, 5); from it to the doorway the house's storeroom
+            // front as the game has it (8-9, 20), as high as the house's own low walls -- the curve's foot, the end post's top (layer 11) --
+            // rock under it to the floor's foot; the doorway, two cells of floor (`gap`); past it the storeroom front two layers down, low
+            // (it was all so: the user's picture, the tall corner over it), as the east edge is -- column RoomX1 + 1, the house's plain east
+            // edge three layers up -- so the bath and the front's things show over them: the step between the two heights the doorway's;
+            // the east's north end the house's; the rows and columns past them, walls one doesn't see)
             var unseen = Enumerable.Range(FloorLayer, 6).Select(y => (y, 0, 1)).ToList();
-            columns[(4, RoomZ1 + 1)] = Column(4, 20);
-            for (var x = RoomX0; x <= RoomX1; x++) columns[(x, RoomZ1 + 1)] = Shifted(8 + Mod(x, 2), 20, -2);
+            List<(int Y, int Block, int Pos)> Footed(List<(int Y, int Block, int Pos)> col, int block, int under) =>
+                Enumerable.Range(FloorLayer - 1, 2).Where(y => !col.Any(c => c.Y == y)).Select(y => (y, block, y == FloorLayer ? under : 0)).Concat(col).ToList();
+            var front = RoomZ1 + 1;
+            columns[(4, front)] = Footed(Column(15, 5), 60, 1);
+            for (var x = RoomX0; x <= RoomX1; x++)
+                columns[(x, front)] = x == gap || x == gap + 1
+                    ? new() { (FloorLayer, 31, Mod(x, 3) + 3 * Mod(front, 3)) }   // (no rock under: the rock's lower piece alone drew broken, white
+                                                                  // through it -- its upper half is the next block's)
+                    : x < gap ? Footed(Column(8 + Mod(x, 2), 20), 60, 1) : Shifted(8 + Mod(x, 2), 20, -2);
             for (var z = RoomZ0; z <= RoomZ1; z++) columns[(RoomX1 + 1, z)] = Shifted(28, 16 + Mod(z, 4), 3);
             columns[(RoomX1 + 1, 0)] = Column(28, 0);
-            columns[(RoomX1 + 1, RoomZ1 + 1)] = Shifted(28, 20, 3);
+            columns[(RoomX1 + 1, front)] = Shifted(28, 20, 3);
             for (var x = 4; x <= RoomX1 + 2; x++) columns[(x, RoomZ1 + 2)] = unseen;
             for (var z = 0; z <= RoomZ1 + 1; z++) columns[(RoomX1 + 2, z)] = unseen;
             foreach (var (c, col) in furniture) columns[c] = col;
@@ -280,16 +318,21 @@ stop();
         // (a piece of the house's furniture where it stands in the house, its floor under it as the room's)
         List<(int, int, int)> Piece(int x, int z, int roomX, int roomZ) =>
             Column(x, z).Where(c => c.Y > FloorLayer).Append((FloorLayer, 31, Mod(roomX, 3) + 3 * Mod(roomZ, 3))).ToList();
+        // (the corner bath's two ends along the walls, past its box -- a box is square to the walls, its front a quarter round: solid cells,
+        // the bath's rim high, CitadelProps.BathBox)
+        List<(int, int, int)> Solid(int x, int z) => new() { (FloorLayer, 31, Mod(x, 3) + 3 * Mod(z, 3)), (FloorLayer + 1, 0, 1), (FloorLayer + 2, 0, 1) };
         var bathFurniture = new Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>>
         {
             [(14, 8)] = Piece(5, 5, 14, 8),   // a floor lamp in the front corner
+            [(12, 1)] = Solid(12, 1),         // the bath's west end
+            [(14, 3)] = Solid(14, 3),         // the bath's south end
         };
         var kitchenFurniture = new Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>>
         {
-            [(5, 4)] = Piece(5, 2, 5, 4),     // the wall lamp
-            [(14, 8)] = Piece(5, 5, 14, 8),   // the floor lamp in the front corner
+            [(5, 4)] = Piece(5, 2, 5, 4).Select(c => c.Item2 == WallLamp ? (c.Item1, ghostLamp, c.Item3) : c).ToList(),   // the wall lamp
+            [(5, 8)] = Piece(5, 5, 5, 8),     // the floor lamp in the front's west corner (the doorway in the east one)
         };
-        var grids = new[] { (Bathroom, Room(bathFurniture)), (Kitchen, Room(kitchenFurniture)) };
+        var grids = new[] { (Bathroom, Room(bathFurniture, BathGapX)), (Kitchen, Room(kitchenFurniture, KitchenGapX)) };
         foreach (var (scene, grid) in grids)
         {
             var gridNumber = header.Grm - header.Gri;
@@ -309,7 +352,7 @@ stop();
         var doorActor = houseModel.Actors.FirstOrDefault(a => a.IsSprite && a.Sprite == DoorSprite);
         if (doorActor is null) { log.Add("The house's bathroom and kitchen left out: scene 0 has no door (sprite 100)"); return log; }
         var intoHouse = new Dictionary<int, int> { [Bathroom] = (BathDoorX0 + 1) * 512, [Kitchen] = (KitchenDoorX0 + 1) * 512 };
-        var roomDoorZ = (DoorZ0 + 1) * 512;
+        var gapOf = new Dictionary<int, int> { [Bathroom] = BathGapX, [Kitchen] = KitchenGapX };
         foreach (var scene in new[] { Bathroom, Kitchen })
         {
             var model = houseModel.Clone();
@@ -318,29 +361,56 @@ stop();
             model.TrackPoints.Clear();
             var texts = new Dictionary<int, (string Life, string Track)>();
             var hero = model.Hero;
-            (hero.X, hero.Y, hero.Z) = (IntoRoomX + 300, FloorY, roomDoorZ + 512);
-            hero.Beta = 1024;
+            (hero.X, hero.Y, hero.Z) = ((gapOf[scene] + 1) * 512, FloorY, RoomArriveZ);
+            hero.Beta = 2048;
             hero.Life = new byte[] { 0 }; hero.Track = new byte[] { 0 };
             // (actor 1 is the engine's own, cleared at each load: an unused helper there)
             texts[SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(0, FloorY, 0))] = ("void comportement_0()\n{\n}\n", "label(0);\nstop();\n");
-            // the door back: the house's own, in the west wall, and the passage behind it (its zone as the house's)
-            var roomDoor = doorActor.Clone();
-            (roomDoor.X, roomDoor.Y, roomDoor.Z) = (doorActor.X, doorActor.Y, doorActor.Z);
-            texts[SceneOps.AddActor(model, roomDoor)] = DoorScripts(DoorZone, "down");
-            model.Zones.Add(new SceneZoneModel { Type = 2, Num = DoorZone, X0 = 5 * 512, X1 = 5 * 512 + DoorFront, Z0 = roomDoorZ, Z1 = roomDoorZ + 1023, Y0 = FloorY - 100, Y1 = FloorY + 1500, Info = new int[8] });
+            // the way back: the front wall's doorway, walked south out of -- into the house before its north doorway, as far across it,
+            // walking on south (no turn: Info3 0)
+            var gapX = gapOf[scene] * 512;
             model.Zones.Add(new SceneZoneModel
             {
-                Type = 0, Num = House, X0 = 3 * 512, X1 = 4 * 512 - 1, Z0 = roomDoorZ, Z1 = roomDoorZ + 1023, Y0 = FloorY - 256, Y1 = FloorY + 1023,
-                Info = new[] { intoHouse[scene] + 1, FloorY, IntoHouseZ, 0, 0, 0, 0, 1 },
+                Type = 0, Num = House, X0 = gapX, X1 = gapX + 1023, Z0 = (RoomZ1 + 1) * 512 + 64, Z1 = (RoomZ1 + 2) * 512 - 1, Y0 = FloorY - 100, Y1 = FloorY + 1500,
+                Info = new[] { intoHouse[scene], FloorY, IntoHouseZ, 0, 0, 0, 0, 1 },
             });
             var bath = -1;
             foreach (var (generic, x, z, beta) in scene == Bathroom ? CitadelProps.BathroomFittings : CitadelProps.KitchenFittings)
             {
                 var a = CitadelProps.Actor(generic > 127 ? (sbyte)generic : generic, x, FloorY, z, beta);
                 a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+                // (the shower's door turns on its hinge: its track's angle(), at its turning speed -- the engine turns any actor not the
+                // player's to its track's angle, OBJECT.CPP DoDir)
+                if (generic == CitadelProps.ShowerDoor) { a.Move = 3; a.SRot = CitadelProps.ShowerDoorTurn; }
                 var index = SceneOps.AddActor(model, a);
                 if (generic == CitadelProps.CornerBath) bath = index;
-                texts[index] = ("void comportement_0()\n{\n}\n", "label(0);\nstop();\n");
+                texts[index] = generic == CitadelProps.ShowerDoor
+                    // (Twinsen comes up to it: it swings open; he goes: back to ajar -- the user, 2026-11-16, "a hinged door to the shower
+                    // that's slightly ajar ... a door that swings when Twinsen connects to it")
+                    ? ($@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if ({ShowerSwingNear} > distance(0))
+    {{
+        set_track(label_1);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({ShowerSwingFar} < distance(0))
+    {{
+        set_track(label_0);
+        set_comportement(comportement_1);
+    }}
+}}
+", $"label(0);\nangle({CitadelProps.ShowerDoorAjar});\nstop();\n\nlabel(1);\nangle({CitadelProps.ShowerDoorOpen});\nstop();\n")
+                    : ("void comportement_0()\n{\n}\n", "label(0);\nstop();\n");
             }
             var heroTrack = "label(0);\nstop();\n";
             if (scene == Bathroom && bath >= 0)
@@ -493,7 +563,7 @@ void comportement_2()
             houseModel.Zones.Add(new SceneZoneModel
             {
                 Type = 0, Num = scene, X0 = opening, X1 = opening + 1023, Z0 = 0, Z1 = DoorDeep, Y0 = FloorY - 100, Y1 = FloorY + 1500,
-                Info = new[] { IntoRoomX, FloorY, roomDoorZ + 512 - DoorDeep, 0, 0, 0, 0, 1 },
+                Info = new[] { gapOf[scene] * 512, FloorY, RoomArriveZ - DoorDeep, 0, 0, 0, 0, 1 },
             });
             var north = doorActor.Clone();
             (north.X, north.Y, north.Z) = (opening + DoorSpriteAlong, FloorY + DoorSpriteUp, 512 - DoorSpriteIn);
@@ -510,7 +580,7 @@ void comportement_2()
         if (houseRecord.Length > BinaryPrimitives.ReadInt32LittleEndian(scenes.Read(0)))
         { var size = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(size, houseRecord.Length); scenes.SetStored(0, size); }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Write(spritesPath, sprites.ToBytes()).Write(ressPath, ress.ToBytes()).Commit();
-        log.Add($"Twinsen's house: the bedroom's window left of the bed a doorway into the bathroom (scene {Bathroom}, its cells x {BathDoorX0}-{BathDoorX0 + 3}), the dining room's right-hand armchair gone for a doorway into the kitchen (scene {Kitchen}, x {KitchenDoorX0}-{KitchenDoorX0 + 3}): the house's own doorway and door (sprite {DoorSprite}) mirrored -- blocks {string.Join(", ", mirrored.Select(m => $"{m.Key} as {m.Value}"))}, sprite {mirrorSprite}; each room in the house's own bricks, its door in its west wall, furnished ({CitadelProps.BathroomFittings.Length} and {CitadelProps.KitchenFittings.Length} fittings: the bath filled at its taps, the kitchen's chairs sat on)");
+        log.Add($"Twinsen's house: the bedroom's window left of the bed a doorway into the bathroom (scene {Bathroom}, its cells x {BathDoorX0}-{BathDoorX0 + 3}), the dining room's right-hand armchair gone for a doorway into the kitchen (scene {Kitchen}, x {KitchenDoorX0}-{KitchenDoorX0 + 3}): the house's own doorway and door (sprite {DoorSprite}) mirrored -- blocks {string.Join(", ", mirrored.Select(m => $"{m.Key} as {m.Value}"))}, sprite {mirrorSprite}; each room in the house's own bricks, its doorway in its front wall (x {BathGapX}-{BathGapX + 1}, {KitchenGapX}-{KitchenGapX + 1}), furnished ({CitadelProps.BathroomFittings.Length} and {CitadelProps.KitchenFittings.Length} fittings: the bath filled at its taps, the kitchen's chairs sat on)");
         return log;
     }
 
@@ -528,9 +598,104 @@ void comportement_2()
         return flipped;
     }
 
+    // The house's west wall's colours as its north wall's (the user, 2026-11-16, a picture of the bathroom's door: "The doors we've added into
+    // Twinsen's house have a darker background than the rest of the walls that they're in"). A brick has its light drawn in: the doorway's
+    // are the west wall's, darker than the north wall's, and mirrored they stay so. Learnt from the house's own wallpaper -- block 1 (the
+    // west wall's, along z) against block 2 (the north wall's, along x): their patterns don't line up pixel for pixel (a quarter agreed), so
+    // by how much of each colour they use -- in each of the palette's ramps of 16 (a colour's shades) that both use enough of
+    // (RampLeast pixels), the west wall's shades matched to the north wall's in order, as far through the ramp's pixels (a quantile map);
+    // only the wallpaper's own two ramps, its teal (176-191) and its pattern's (192-207) -- the browns (208-223, the rails) differ between
+    // the two walls' drawings and would be moved oddly (213 to 216) -- any other colour kept as it is.
+    private const int WestWallpaper = 1, NorthWallpaper = 2, RampLeast = 200;
+    private static readonly int[] WallpaperRamps = { 11, 12 };
+    public static byte[] WestToNorth(byte[] library, Func<int, byte[]?> brick, List<string>? report = null)
+    {
+        var map = new byte[256];
+        for (var c = 0; c < 256; c++) map[c] = (byte)c;
+        int[] Count(int block)
+        {
+            var count = new int[256];
+            foreach (var e in GridPaint.Entries(library, block))
+                if (brick(e.Brick) is { Length: >= 4 } d && GphImage.Decode(d) is var im)
+                    for (var p = 0; p < im.Pixels.Length; p++) if (im.Opaque[p]) count[im.Pixels[p]]++;
+            return count;
+        }
+        if (GridPaint.Info(library, WestWallpaper) is null || GridPaint.Info(library, NorthWallpaper) is null) return map;
+        int[] west = Count(WestWallpaper), north = Count(NorthWallpaper);
+        foreach (var ramp in WallpaperRamps)
+        {
+            int c0 = ramp * 16, westAll = 0, northAll = 0;
+            for (var c = c0; c < c0 + 16; c++) { westAll += west[c]; northAll += north[c]; }
+            if (westAll < RampLeast || northAll < RampLeast) continue;
+            var before = 0;
+            var moved = new List<string>();
+            for (var c = c0; c < c0 + 16; c++)
+            {
+                if (west[c] == 0) continue;
+                var at = (before + west[c] / 2.0) / westAll;
+                before += west[c];
+                int d = c0, upTo = 0;
+                for (; d < c0 + 15; d++) { upTo += north[d]; if ((double)upTo / northAll >= at) break; }
+                map[c] = (byte)d;
+                if (d != c) moved.Add($"{c}->{d}");
+            }
+            report?.Add($"ramp {c0}-{c0 + 15} ({westAll} west, {northAll} north pixels): {(moved.Count == 0 ? "as it is" : string.Join(" ", moved))}");
+        }
+        return map;
+    }
+
+    // A picture's colours through a map (WestToNorth's)
+    private static GphImage Recolour(GphImage image, byte[] map)
+    {
+        var copy = new GphImage(image.Width, image.Height) { OffsetX = image.OffsetX, OffsetY = image.OffsetY };
+        for (var p = 0; p < image.Pixels.Length; p++) { copy.Pixels[p] = map[image.Pixels[p]]; copy.Opaque[p] = image.Opaque[p]; }
+        return copy;
+    }
+
+    // houseshade (ScriptRoundTrip): WestToNorth's map of a game folder's house, to look at
+    public static List<string> ShadeReport(string gameDirectory)
+    {
+        var report = new List<string>();
+        var bkg = HqrFile.Parse(File.ReadAllBytes(Path.Combine(gameDirectory, "LBA_BKG.HQR")));
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        var raw = bkg.Read(header.Gri + table[House * 2 + 1]);
+        var library = bkg.Read(header.Bll + raw[0]);
+        byte[]? Brick(int b) => b >= 0 && b < header.MaxBrk && !bkg.IsEmpty(header.Brk + b) ? bkg.Read(header.Brk + b) : null;
+        WestToNorth(library, Brick, report);
+        // (and each wallpaper's colours, counted)
+        foreach (var block in new[] { WestWallpaper, NorthWallpaper })
+        {
+            var count = new int[256];
+            foreach (var e in GridPaint.Entries(library, block))
+                if (Brick(e.Brick) is { Length: >= 4 } d && GphImage.Decode(d) is var im)
+                    for (var p = 0; p < im.Pixels.Length; p++) if (im.Opaque[p]) count[im.Pixels[p]]++;
+            report.Add($"block {block}: " + string.Join(" ", Enumerable.Range(0, 256).Where(c => count[c] > 0).Select(c => $"{c}:{count[c]}")));
+        }
+        return report;
+    }
+
+    // A block as it is but with no shape at any position: drawn, never in anyone's way (the library's own like it if a build made it before)
+    private static int GhostBlock(ref byte[] library, int block)
+    {
+        var info = GridPaint.Info(library, block)!.Value;
+        var entries = GridPaint.Entries(library, block).ToList();
+        var count = GridPaint.BlockCount(library);
+        for (var b = 1; b <= count; b++)
+        {
+            if (b == block || GridPaint.Info(library, b) is not { } other || (other.Dx, other.Dy, other.Dz) != (info.Dx, info.Dy, info.Dz)) continue;
+            var theirs = GridPaint.Entries(library, b).ToList();
+            if (theirs.Count == entries.Count && theirs.Zip(entries).All(t => t.First.Shape == 0 && t.First.Brick == t.Second.Brick && t.First.Sound == t.Second.Sound)) return b;
+        }
+        if (count >= 255) throw new InvalidDataException("The house's block library has 255 blocks already: a grid can't name another.");
+        library = GridPaint.AppendBlock(library, info.Dx, info.Dy, info.Dz, 0);
+        foreach (var e in entries) library = GridPaint.SetEntry(library, count + 1, e.Pos, e.Brick, 0, e.Sound);
+        return count + 1;
+    }
+
     // A block mirrored x for z -- its sizes swapped, each position's brick drawn flipped (a new brick, or the file's own the same), the shapes
     // full ones (the doorway's are) -- the library's own block like it if a build made it before, else a new one after its last
-    private static int MirrorBlock(HqrFile bkg, MapBricks.BkgHeader header, ref byte[] library, int block, Func<int, byte[]?> brick)
+    private static int MirrorBlock(HqrFile bkg, MapBricks.BkgHeader header, ref byte[] library, int block, Func<int, byte[]?> brick, byte[] shade)
     {
         var info = GridPaint.Info(library, block)!.Value;
         var entries = GridPaint.Entries(library, block).ToList();
@@ -544,7 +709,7 @@ void comportement_2()
             if (e.Brick >= 0 && brick(e.Brick) is { Length: >= 4 } data)
             {
                 var image = GphImage.Decode(data);
-                bricks[q] = CitadelMuseum.AddBrickPublic(bkg, header, CitadelMuseum.EncodeBrick(Flip(image, 48 - image.OffsetX - image.Width)));
+                bricks[q] = CitadelMuseum.AddBrickPublic(bkg, header, CitadelMuseum.EncodeBrick(Recolour(Flip(image, 48 - image.OffsetX - image.Width), shade)));
             }
             else bricks[q] = e.Brick;
         }
