@@ -88,6 +88,23 @@ internal sealed class HqrArchive
         return DecodeLz(source, size, method + 1);
     }
 
+    // A VOX recording in parts: the entry, then -- while a part's first byte says one more follows (MESSAGE.CPP FlagNextVoc) -- the record
+    // stored right after it in the file. No slot of the index names those: the engine's PlaySpeakVoc reads on from where the last part ended.
+    public List<byte[]> ReadParts(int index, int most = 32)
+    {
+        var parts = new List<byte[]> { Read(index) };
+        var offset = checked((int)offsets[index]);
+        while (parts.Count < most && parts[^1].Length > 0 && parts[^1][0] == 1)
+        {
+            var stored = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4)));
+            offset += 10 + stored;
+            if (offset < 0 || offset > data.Length - 10) break;
+            try { parts.Add(DecodeEntry(data.AsSpan(offset))); }
+            catch (InvalidDataException) { break; }
+        }
+        return parts;
+    }
+
     // Decodes one complete entry ([u32 size][u32 stored size][u16 method][payload], padding after it is ignored).
     internal static byte[] DecodeEntry(ReadOnlySpan<byte> entry)
     {

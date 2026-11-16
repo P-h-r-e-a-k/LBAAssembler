@@ -11,7 +11,11 @@ using LBAAssembler.Terrain;
 
 namespace ScriptRoundTrip;
 
-// newlines [--built <LBRA folder>] [--disc <LBA2.GOG>] [--out <folder>] [--work <folder>] [--seconds <n>] [--scan]
+// newlines [--built <LBRA folder>] [--disc <LBA2.GOG>] [--out <folder>] [--work <folder>] [--seconds <n>] [--scan] [--samples-only]
+//   --seconds: a sample this long at most (0, the default since 2026-11-16: all of the character's lines -- the user: "they all seem to be
+//   around 77 seconds at most. Can you extract all of a users lines into the sample.wav"; it was 75)
+//   --samples-only: only each character's sample.wav and samples.tsv written again, into the folders there -- nothing wiped, no .txt touched
+//   (the recordings made from the samples sit beside them)
 //
 // The race mod's new lines, laid out for recording voices for them (the user, 2026-11-15: "For each character we've added new lines for,
 // create a sub-folder ... named after the character, with each new text line spoken in a single txt file, named with the text bank number
@@ -210,7 +214,8 @@ internal static class NewLinesCommand
         var discPath = Arg("--disc", @"E:\GOG Games\Little Big Adventure 2\LBA2.GOG");
         var output = Arg("--out", @"E:\dump\LittleBigRacingAdventure\NewLines");
         var work = Arg("--work", @"E:\dump\TEMP\nov15\newlines");
-        var seconds = double.Parse(Arg("--seconds", "75"), System.Globalization.CultureInfo.InvariantCulture);
+        var seconds = double.Parse(Arg("--seconds", "0"), System.Globalization.CultureInfo.InvariantCulture);
+        var samplesOnly = args.Contains("--samples-only");
         var scan = args.Contains("--scan");
 
         // ---- the retail game, from the disc (its data files into the work folder, for SceneStore and the entity table)
@@ -286,7 +291,9 @@ internal static class NewLinesCommand
                 if (person == "Twinsen" && how != "add_choice" && retailBanks[(0, file)].FirstOrDefault(t => t.Id == id) is { } t && ToTwinsen.IsMatch(Words(t.Bytes))) continue;
                 if (!retailSaid.TryGetValue((file, id), out var who)) retailSaid[(file, id)] = who = new List<string>();
                 who.Add(person);
-                if (person == "Twinsen" && how == "add_choice") answers.Add((file, id));
+                // (his answers; and what another actor's script has him say, message_obj(0, ...) -- the ferry clerk's "message_obj(0, 311)":
+                // his voice for certain too. His own script's plain message() stays out: now and then a sign read, or someone else's)
+                if (person == "Twinsen" && (how == "add_choice" || (how == "message_obj" && actor == 0))) answers.Add((file, id));
             }
         var ownLines = new Dictionary<string, List<(int File, int Id)>>();
         foreach (var ((file, id), who) in retailSaid.OrderBy(p => p.Key.File).ThenBy(p => p.Key.Id))
@@ -326,9 +333,9 @@ internal static class NewLinesCommand
         // ---- 4. the folder, written again
         if (Directory.Exists(output))
         {
-            var ours = File.Exists(Path.Combine(output, "index.tsv")) || !Directory.EnumerateFileSystemEntries(output).Any();
+            var ours = samplesOnly || File.Exists(Path.Combine(output, "index.tsv")) || !Directory.EnumerateFileSystemEntries(output).Any();
             if (!ours) { Console.WriteLine($"{output} has files this didn't write (no index.tsv): not wiped. Empty it or pick another --out."); return 1; }
-            Directory.Delete(output, true);
+            if (!samplesOnly) Directory.Delete(output, true);
         }
         Directory.CreateDirectory(output);
         var utf8 = new UTF8Encoding(false);
@@ -338,8 +345,9 @@ internal static class NewLinesCommand
             foreach (var line in exported)
             {
                 var folder = Path.Combine(output, LanguageNames[lang], Safe(line.Character));
+                if (samplesOnly) continue;
                 Directory.CreateDirectory(folder);
-                File.WriteAllText(Path.Combine(folder, FileName(line)), line.Words.TryGetValue(lang, out var w) ? w : line.English, utf8);
+                if (!samplesOnly) File.WriteAllText(Path.Combine(folder, FileName(line)), line.Words.TryGetValue(lang, out var w) ? w : line.English, utf8);
             }
 
         // the samples: in a voiced language its own VOX, else the English sample
@@ -374,6 +382,8 @@ internal static class NewLinesCommand
                 var source = voiced.Contains(lang) ? lang : 0;
                 byte[]? wav = null;
                 string from = "";
+                // (--samples-only: into the folders there only -- a character new since has none yet)
+                if (samplesOnly && !Directory.Exists(folder)) continue;
                 var hasVoice = voices.TryGetValue(character, out var voice);
                 if (source == lang && hasVoice)
                 {
@@ -386,6 +396,7 @@ internal static class NewLinesCommand
                 if (wav is not null)
                 {
                     File.WriteAllBytes(Path.Combine(folder, "sample.wav"), wav);
+                    if (samplesOnly) { report.Append($"{LanguageNames[lang]}\t{character}\t{(voice.Whose == character ? "" : voice.Whose.Length == 0 ? "(the lines theirs retell) " : $"({voice.Whose}) ")}{from}\n"); continue; }
                     report.Append($"{LanguageNames[lang]}\t{character}\t{(voice.Whose == character ? "" : voice.Whose.Length == 0 ? "(the lines theirs retell) " : $"({voice.Whose}) ")}{from}\n");
                     if (voice.Whose != character)
                         File.WriteAllText(Path.Combine(folder, "README.txt"), voice.Whose.Length == 0
@@ -393,12 +404,12 @@ internal static class NewLinesCommand
                             : $"{character} has no lines of their own in the retail game; sample.wav is {voice.Whose}'s voice: " +
                               $"{(VoiceWhy.TryGetValue(character, out var why) ? why : $"the body {character} wears in the game is theirs")}. Pick another voice if it doesn't suit.\r\n", utf8);
                 }
-                else if (character != Unknown)
+                else if (character != Unknown && !samplesOnly)
                     File.WriteAllText(Path.Combine(folder, "README.txt"),
                         $"{character} has no voice in the retail game{(voiced.Contains(lang) && lang != 0 && ownLines.ContainsKey(character) ? $" in {LanguageNames[lang]}" : "")}: no sample.wav. " +
                         $"A stand-in for the voice: {StandIn(character)}.\r\n", utf8);
             }
-            if (!voiced.Contains(lang))
+            if (!voiced.Contains(lang) && !samplesOnly)
                 File.WriteAllText(Path.Combine(output, LanguageNames[lang], "README.txt"),
                     $"LBA2 has no {LanguageNames[lang]} voices (its CD is voiced in {string.Join(", ", voiced.Select(l => LanguageNames[l]))} only), so each sample.wav in this folder is the character's English sample: " +
                     $"the voice to match, in {LanguageNames[lang]}. The .txt files are the {LanguageNames[lang]} words the game shows.\r\n", utf8);
@@ -411,11 +422,11 @@ internal static class NewLinesCommand
                          $"{(l.Replaced ? "replaced in place (the old recording plays under the new words)" : "added at the end (no recording: shown, not spoken)")}" +
                          $"{(l.OtherPlaces.Count == 0 ? "" : $"; another entry in {string.Join(", ", l.OtherPlaces)}")}\t" +
                          $"{string.Join(" ", l.Said.Select(s => $"scene {s.Scene} actor {s.Actor}").Distinct())}\t{l.English.Replace('\n', ' ')}\n");
-        File.WriteAllText(Path.Combine(output, "index.tsv"), index.ToString(), utf8);
+        if (!samplesOnly) File.WriteAllText(Path.Combine(output, "index.tsv"), index.ToString(), utf8);
         var left = new StringBuilder("bank\ttext_file\tid\twhy\tenglish\n");
         foreach (var l in lines.Values.Where(l => l.Character.Length == 0).OrderBy(l => l.File).ThenBy(l => l.Id))
             left.Append($"{BankName(l.File)}\t{l.File}\t{l.Id}\t{l.Why}\t{l.English.Replace('\n', ' ')}\n");
-        File.WriteAllText(Path.Combine(output, "left_out.tsv"), left.ToString(), utf8);
+        if (!samplesOnly) File.WriteAllText(Path.Combine(output, "left_out.tsv"), left.ToString(), utf8);
         File.WriteAllText(Path.Combine(output, "README.txt"), Readme(languages, voiced, characters, exported, lines.Count - exported.Count), utf8);
         File.WriteAllText(Path.Combine(output, "samples.tsv"), "language\tcharacter\tsample (whose voice, when not their own: length, the VOX files and lines it is from)\n" + report, utf8);
 
@@ -625,22 +636,27 @@ internal static class NewLinesCommand
         }
     }
 
-    // ---- a character's sample: their retail lines' recordings in this language, one after the other, up to `seconds`
+    // ---- a character's sample: their retail lines' recordings in this language, each line once and each recording whole (a recording in
+    // parts, all of them: HqrArchive.ReadParts), one after the other -- up to `seconds` if that is over 0
     private static (byte[]? Wav, string From) Sample(List<(int File, int Id)> own, int lang, Dictionary<(int Lang, int File), List<Text>> retailBanks,
         Func<string, HqrArchive?> vox, double seconds)
     {
         var pcm = new List<short>();
         var used = new Dictionary<string, int>();
         var gap = new short[(int)(Rate * Gap)];
-        foreach (var (file, id) in own)
+        foreach (var (file, id) in own.Distinct())
         {
-            if (pcm.Count >= seconds * Rate) break;
+            if (seconds > 0 && pcm.Count >= seconds * Rate) break;
             var place = retailBanks[(lang, file)].FindIndex(t => t.Id == id);
             var name = VoxName(lang, file);
             var archive = vox(name);
             if (place < 0 || archive is null || !archive.IsValid(place)) continue;
             short[]? clip;
-            try { clip = Decode(archive.Read(place)); }
+            try
+            {
+                var parts = archive.ReadParts(place).Select(Decode).ToList();
+                clip = parts.Any(c => c is null) && parts[0] is null ? null : parts.Where(c => c is not null).SelectMany(c => c!).ToArray();
+            }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { clip = null; }
             if (clip is null || clip.Length < Shortest * Rate) continue;
             if (pcm.Count > 0) pcm.AddRange(gap);
@@ -881,7 +897,7 @@ internal static class NewLinesCommand
         s.Append("Layout\r\n------\r\n");
         s.Append("  <Language>\\<Character>\\<bank>_<id>.txt   one new line, only its words, in that language (UTF-8; a new paragraph in the game\r\n");
         s.Append("                                           is a new line here). One recording per file.\r\n");
-        s.Append("  <Language>\\<Character>\\sample.wav        the character's own voice from the retail game, some of their lines one after\r\n");
+        s.Append("  <Language>\\<Character>\\sample.wav        the character's own voice from the retail game, all of their lines one after\r\n");
         s.Append("                                           another (16-bit mono, 22050 Hz): the voice to match.\r\n");
         s.Append($"  Languages: {string.Join(", ", Enumerable.Range(0, languages).Select(l => LanguageNames[l]))} -- the six the game's texts (TEXT.HQR) carry.\r\n");
         s.Append($"  LBA2 is voiced in {string.Join(", ", voiced.Select(l => LanguageNames[l]))} only: the other languages' sample.wav files are the English ones\r\n");
