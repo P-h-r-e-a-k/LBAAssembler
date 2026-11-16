@@ -1297,7 +1297,7 @@ internal static class RaceTrackBuilder
                 RouteThrough(report.DriverPaths[k], openRoutes[(k - 1) % openRoutes.Length], plan, report);
         report.RacePath.AddRange(report.DriverPaths[0]);
         ClearStaleCol(island, natural, field, index, painted, report, options.Theme.Sand);
-        if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
+        if (planned) WallSteepBanks(island, natural, field, index, painted, options, report, plan);
         if (plan.WallRail) RoadWalls(field, main, plan, report);
         follow.Apply();
         if (options.Island.GateSill is { } sill) GateSill(island, index, RoadEdge, sill, report);
@@ -6487,15 +6487,21 @@ internal static class RaceTrackBuilder
     // the game code of a triangle walled for the cars only (RaceTrackIsland.SoftBanks; the engine's CJ_CAR_WALL)
     public const int CarWall = 10;
 
-    private static void WallSteepBanks(IslandFile island, Field natural, Field field, RoadIndex index, HashSet<(int, int)> painted, RaceTrackOptions o, RaceTrackReport report)
+    private static void WallSteepBanks(IslandFile island, Field natural, Field field, RoadIndex index, HashSet<(int, int)> painted, RaceTrackOptions o, RaceTrackReport report, RaceTrackPlan? plan = null)
     {
         var b = index.Bounds;
+        // (a bank eased into a slope -- EaseBanks, the plan's bankEases -- is there to be climbed, in the car too: not walled. Citadel's ridge
+        // left of the school, eased to 520 a cell, just over SteepBank, was walled for the cars only -- the user, 2026-11-16, "The area on
+        // Citadel Island that we turned into a gentle slope doesn't allow Twinsen to drive up it ... as he can walk on it")
+        var eased = (plan?.BankEases ?? Array.Empty<double[]>()).Where(f => f.Length >= 5 && f[4] > 0)
+            .Select(f => (X0: (int)f[0] + plan!.OriginCellX, Z0: (int)f[1] + plan.OriginCellZ, X1: (int)f[2] + plan.OriginCellX, Z1: (int)f[3] + plan.OriginCellZ)).ToList();
+        bool Eased(int gx, int gz) => eased.Any(r => gx >= r.X0 && gx < r.X1 && gz >= r.Z0 && gz < r.Z1);
         var painter = new Painter(island, o.Theme);
         var walls = new List<(int, int)>();
         for (var gz = Math.Max(0, b.Z0); gz < Math.Min(Grid, b.Z1); gz++)
         for (var gx = Math.Max(0, b.X0); gx < Math.Min(Grid, b.X1); gx++)
         {
-            if (painted.Contains((gx, gz))) continue;
+            if (painted.Contains((gx, gz)) || Eased(gx, gz)) continue;
             if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
             var diagonal = new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0)).Diagonal;
             var steep = false;
