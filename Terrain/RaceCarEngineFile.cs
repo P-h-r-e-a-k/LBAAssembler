@@ -687,6 +687,9 @@ internal static class RaceCarEngineFile
             text.Append($"seat_cube={RaceTrackStory.SeatCube}\n");
             // (the player 18 or more: Stella Entities' lift down open -- RACEMOD.CPP adult_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
+            // (Stella Entities' stage and catwalk drawn whole into the background, no brick over them: its catwalk's cells real bricks that
+            // hide Twinsen behind it -- RACEMOD.CPP no_recover=, StellaEntities' catwalk cells)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={StellaEntities.Scene} {Citadel.CitadelProps.ClubStage}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

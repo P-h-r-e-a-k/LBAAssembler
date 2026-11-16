@@ -5069,6 +5069,8 @@ S32 AffOneObject(T_SORT *pt) {
                     }
 
                     BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+                } else if (RaceMod_NoRecover(numobj)) {
+                    // (a prop drawn whole into the background, no brick over it: RACEMOD.CPP no_recover=)
                 } else {
                     if (DrawRecover(ptrobj->Obj.X, yw, ptrobj->Obj.Z, ptrobj->YMax,
                                     ade_max((ptrobj->XMax - ptrobj->XMin) / 2, (ptrobj->ZMax - ptrobj->ZMin) / 2))) {

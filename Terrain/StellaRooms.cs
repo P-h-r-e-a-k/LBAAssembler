@@ -71,7 +71,9 @@ internal static class StellaRooms
         var (outX, outZ) = StellaEntities.At(Citadel.CitadelProps.OfficeAt, 14.5f);
         // (back out of backstage: onto the catwalk by its door, at the stage's height -- not on the floor at 14.5 cells, inside the
         // catwalk's cells; the engine adds where in the room's door zone he was, 0-1024 along x and 0-512 along z)
-        var (backX, backZ) = (StellaEntities.CatwalkX0World, StellaEntities.CatwalkEndZ + 600);
+        // (past the backstage door's zone, which reaches BackstageZoneDeep back along the catwalk: at 600 a way out from the near half of the
+        // room's door landed in it, and Twinsen went straight back in -- 392, 390, 392 -- found 2026-11-16 after the zone was made deeper)
+        var (backX, backZ) = (StellaEntities.CatwalkX0World, StellaEntities.CatwalkEndZ + StellaEntities.BackstageZoneDeep + 160);
         static string Still() => "void comportement_0()\n{\n}\n";
         var records = new List<(int Scene, byte[] Record)>();
         var (privX, privZ) = StellaEntities.At(215, 15.5f);

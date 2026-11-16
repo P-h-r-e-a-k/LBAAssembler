@@ -1621,6 +1621,9 @@ void RaceMod_Walk(int n, const double *xz, int car, int more);
 // adult_var=<game var>: 1 while the race game's player is 18 or more (RaceGame_PlayerAdult: their date of birth), 0 else -- a story's
 // script keeps a way shut to a younger player by it (Stella Entities' lift)
 static int s_adultVar = -1;
+// (no_recover=: RaceMod_NoRecover)
+#define RACE_MAX_NO_RECOVER 8
+static int s_noRecoverScene = -1, s_noRecoverBody[RACE_MAX_NO_RECOVER], s_nbNoRecover = 0;
 static void AdultFrame(void) {
     if (s_adultVar < 0 || s_adultVar >= MAX_VARS_GAME) return;
     ListVarGame[s_adultVar] = RaceGame_PlayerAdult() ? 1 : 0;
@@ -5255,6 +5258,13 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
         else if (!strcmp(key, "seat_cube")) { if (!setRead) s_seatCube = atoi(v); }
         else if (!strcmp(key, "adult_var")) { if (!setRead) s_adultVar = atoi(v); }
+        else if (!strcmp(key, "no_recover")) {
+            int scene, body, used = 0;
+            if (!setRead && sscanf(v, "%d%n", &scene, &used) == 1) {
+                s_noRecoverScene = scene; s_nbNoRecover = 0;
+                for (const char *q = v + used; s_nbNoRecover < RACE_MAX_NO_RECOVER && sscanf(q, "%d%n", &body, &used) == 1; q += used) s_noRecoverBody[s_nbNoRecover++] = body;
+            }
+        }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
@@ -13242,6 +13252,19 @@ S32 RaceMod_CarThrough(S32 num) {
 
 // (and not stood on, nor bumped by anything moving: OBJECT.CPP's other collision loops -- the footprints' box is the props' entity's)
 S32 RaceMod_WalkOver(S32 numobj) { return numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER; }
+// no_recover=<scene> <generic body> ...: that inside scene's props drawn into the background (OBJ_BACKGROUND) of those bodies have no brick
+// redrawn over them (OBJECT.CPP: DrawRecover left out). Stella Entities' stage and catwalk (the user, 2026-11-16): the catwalk's cells are
+// real bricks so that Twinsen on the floor behind it is hidden by it (the bricks' shapes copy the background, the catwalk's pixels, back
+// over him) -- but the prop's actor stands far back in the room's corner, so every brick was in front of it, and the catwalk's bricks
+// were redrawn over the catwalk itself.
+S32 RaceMod_NoRecover(S32 numobj) {
+    if (s_noRecoverScene < 0 || (S32)NumCube != s_noRecoverScene || CubeMode != CUBE_INTERIEUR || numobj <= 0 || numobj >= (S32)NbObjets) return 0;
+    const T_OBJET *o = &ListObjet[numobj];
+    if (!(o->Flags & OBJ_BACKGROUND)) return 0;
+    for (int i = 0; i < s_nbNoRecover; i++)
+        if ((int)o->GenBody == s_noRecoverBody[i]) return 1;
+    return 0;
+}
 
 S32 RaceMod_NoCollide(S32 numobj) {
     // (the companion Zoe's and the Twinsen double's places, kept out of sight when there's no second player -- still there in the room, at its

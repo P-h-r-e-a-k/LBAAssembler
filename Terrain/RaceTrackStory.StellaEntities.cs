@@ -74,7 +74,10 @@ internal static partial class RaceTrackStory
             // the way in: either side of the corridor's mouth; the catwalk's foot, beside it; the office's door; the barman behind his counter
             Place(bouncer, StellaEntities.At(-12, 16.6f), say(MoonLine.ClubWelcome), 1600);
             Place(bouncer, StellaEntities.At(15, 16.6f), say(MoonLine.ClubWelcome), 0);
-            Place(bouncer, StellaEntities.At(258, 9.6f), say(MoonLine.ClubStaffOnly), 1300);
+            // (the catwalk's: two cells off its west edge, (21.0, 22.9) -- at 258 degrees, (22.0, 22.6), his box reached over the catwalk's edge
+            // up past its top, and Twinsen stepping off it there stopped against him, on top: the user, 2026-11-16, "able to walk on from the
+            // side he has his back to, but not walk off the side he's facing")
+            Place(bouncer, StellaEntities.At(252, 9.6f), say(MoonLine.ClubStaffOnly), 1300);
             // (the guard beside the office's door, not in front of it: the door lets Twinsen in -- the user, 2026-11-13, "Did we add in an
             // office area?")
             Place(guard, StellaEntities.At(Citadel.CitadelProps.OfficeAt - 7, 17.3f), say(MoonLine.ClubNoBoss), 1300);
@@ -88,7 +91,7 @@ internal static partial class RaceTrackStory
             // (back to the catwalk's last cell's edge, z 15: its end pinches between the walls either side of the doorway, and walking up
             // its middle Twinsen stopped short of a shallower zone -- the user, 2026-11-16, "Twinsen is still getting blocked by an invisible
             // wall just here"; the room's place moved back as far, so he comes in where he did)
-            const int BackDeep = 860, BackDeepWas = 540;
+            const int BackDeep = StellaEntities.BackstageZoneDeep, BackDeepWas = 540;
             var backZ1 = StellaEntities.CatwalkEndZ + BackDeep;
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Backstage, X0 = StellaEntities.CatwalkX0World, X1 = StellaEntities.CatwalkX0World + 1023, Z0 = StellaEntities.CatwalkEndZ, Z1 = backZ1, Y0 = stageTop, Y1 = stageTop + 1800,
                 Info = new[] { StellaRooms.InsideX - 512, StellaRooms.InsideY, StellaRooms.InsideZ - 270 - (BackDeep - BackDeepWas), 0, 0, 0, 0, 1 } });

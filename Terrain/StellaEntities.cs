@@ -45,6 +45,9 @@ internal static class StellaEntities
     // door's zone, RaceTrackStory.StellaEntities)
     public const int CatwalkX0World = CatwalkX0 * 512;
     public static readonly int CatwalkEndZ = (int)Math.Round(CentreZ * 512 - RingFrom * 512);
+    // (how far back along the catwalk from its end the backstage door's zone reaches: RaceTrackStory.StellaEntities; the way back out of
+    // backstage puts Twinsen past it, StellaRooms)
+    public const int BackstageZoneDeep = 860;
     // the poles round the column (degrees, the room's middle to them: x = cos, z = sin -- all on the audience's side of it, the camera's:
     // one behind it was drawn over it), the tables', the stools'
     private static readonly float[] PoleAngles = { 10, 60, 110 }, TableAngles = { 20, 60, 200, 235, 305, 335 };
@@ -158,9 +161,19 @@ internal static class StellaEntities
                 // stage's round covers, not only those whose middles it does: with those, Twinsen walked into its skirt where the round reached
                 // past a cell -- the user, 2026-11-13, "it should be solid and high all the way around")
                 var nearX = Math.Clamp(CentreX, x, x + 1.0) - CentreX; var nearZ = Math.Clamp(CentreZ, z, z + 1.0) - CentreZ;
-                if (Hall(x, z) && (Math.Sqrt(nearX * nearX + nearZ * nearZ) < StageCells || (x >= CatwalkX0 && x <= CatwalkX1 && dz < 0 && Math.Sqrt(dx * dx + dz * dz) < RingFrom)))
+                var onStage = Math.Sqrt(nearX * nearX + nearZ * nearZ) < StageCells;
+                if (Hall(x, z) && (onStage || (x >= CatwalkX0 && x <= CatwalkX1 && dz < 0 && Math.Sqrt(dx * dx + dz * dz) < RingFrom)))
                 {
-                    for (var y = FloorLayer + 1; y <= FloorLayer + (int)(Citadel.CitadelProps.StageHigh / 256); y++) Put(x, y, z, 0, 1);
+                    // (the catwalk's cells real bricks, the floor's tile, not invisible ones: the props are drawn into the background, and the
+                    // engine hides what stands behind a brick by copying the background back over it through the brick's shape (GRILLE.CPP
+                    // DrawOverBrick, CopyMask from Screen) -- an invisible cell has no shape, so Twinsen on the floor behind the catwalk was
+                    // drawn over it and looked to stand on it, and walking "off" its front edge walked him into its back -- the user,
+                    // 2026-11-16, "able to walk on from the side he has his back to, but not walk off the side he's facing" (he was at
+                    // (22.5, 14.5) on the floor, read from the running game). The catwalk's box is the cells' exactly (x 23-25, up to the
+                    // stage's top), so the bricks under the prop never show; the round stage's cells reach past its edge, so they stay
+                    // invisible)
+                    for (var y = FloorLayer + 1; y <= FloorLayer + (int)(Citadel.CitadelProps.StageHigh / 256); y++)
+                        if (onStage) Put(x, y, z, 0, 1); else Put(x, y, z, Tile, Mod(x - 1, 3) + 3 * Mod(z - 1, 3));
                     stageCells++;
                 }
                 // (the bar's counter: invisible solid cells along its curve, two layers)
