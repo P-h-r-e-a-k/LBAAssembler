@@ -77,8 +77,12 @@ internal static class CitadelSpanking
             return d;
         }
         var restArm = With(zoeSeat, (4, N(0.2f, -0.85f, 0.45f)), (5, N(-0.2f, -0.6f, 0.75f)));
-        var armUp = With(zoeSeat, (4, N(0.35f, 0.55f, 0.6f)), (5, N(0.05f, 0.95f, 0.3f)));
-        var armDown = With(zoeSeat, (4, N(0.1f, -0.7f, 0.7f)), (5, N(-0.35f, -0.55f, 0.75f)));
+        // (her hand onto his seat, not his legs -- the user, 2026-11-16, "it's currently landing on his legs not his ass": leant back in her
+        // chair, her arm came down 190 short of his seat, beyond her knees, and 125 under its top; now she leans forward into each slap, her
+        // back rocking from 0.4 to 0.65 forward, her arm swung out ahead, the hand landing on his seat's top -- spankposes: the hand at
+        // (73, 528, 222) in her frame, his seat's middle (72, 521, 170))
+        var armUp = With(zoeSeat, (3, N(0, 0.9f, 0.4f)), (4, N(0.3f, 0.6f, 0.6f)), (5, N(0.05f, 0.95f, 0.3f)));
+        var armDown = With(zoeSeat, (3, N(0, 0.75f, 0.65f)), (4, N(0.05f, -0.2f, 0.98f)), (5, N(-0.35f, -0.28f, 0.89f)));
         var sit = new Anim { Game = 2, LoopFrame = 0 };
         sit.Frames.Add(Frame(zoeBody, 500, zoeBasis, restArm, -SitDrop, ZoeHead, SeatBack));
         sit.Frames.Add(Frame(zoeBody, 900, zoeBasis, With(restArm, (3, N(0, 1, 0.16f))), -SitDrop, ZoeHead, SeatBack));

@@ -61,6 +61,8 @@ internal static partial class RaceTrackStory
         CustomerThanks, CustomerTip,
         // (Zoe as companion's hints, chapter 2 -- RaceTrackStory.Companion.cs, 2026-11-11)
         ZoeHintWheel, ZoeHintRace, ZoeHintFerry,
+        // (the spanking's third round, for the driving gloves left in the car and stolen -- RaceTrackStory.SecretChamber, 2026-11-16)
+        ZoeGloves,
     }
     private static readonly string[][] EveningLines =
     {
@@ -405,6 +407,15 @@ internal static partial class RaceTrackStory
             "¡Aquí hemos ganado! El billete del señor Paul nos lleva en el ferry del puerto, al desierto.",
             "Qui abbiamo vinto! Il biglietto del signor Paul ci porta col traghetto dal porto, al deserto.",
             "Aqui ganhámos! O bilhete do Sr. Paul leva-nos no ferry do porto, até ao deserto.",
+        },
+        new[]
+        {
+            "And one more for your driving gloves! How many times have I told you not to leave them in the car? And now they've been stolen!",
+            "Et une de plus pour tes gants de pilote ! Combien de fois je t'ai dit de ne pas les laisser dans la voiture ? Et maintenant, on te les a volés !",
+            "Und noch einer für deine Fahrhandschuhe! Wie oft habe ich dir gesagt, du sollst sie nicht im Auto liegen lassen? Und jetzt sind sie gestohlen!",
+            "¡Y otra más por tus guantes de conducir! ¿Cuántas veces te he dicho que no los dejes en el coche? ¡Y ahora te los han robado!",
+            "E un'altra per i tuoi guanti da pilota! Quante volte ti ho detto di non lasciarli in macchina? E adesso te li hanno rubati!",
+            "E mais uma pelas tuas luvas de condução! Quantas vezes te disse para não as deixares no carro? E agora roubaram-tas!",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)

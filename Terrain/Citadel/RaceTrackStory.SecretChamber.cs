@@ -278,7 +278,9 @@ void comportement_1()
             var lap = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint((int)Math.Round(ZoeInChamber.X + fx * 170), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z + fz * 170)));
             var across = (zoe.Beta - 1024 + 4096) % 4096;
-            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21;
+            // (Slaps3: one more, for the driving gloves left on the car's seat and stolen that morning, as Zoe had told him not to many a time --
+            // the user, 2026-11-16, "get her to spank him an extra time for leaving his driving gloves in his car where they got stolen")
+            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21, Slaps3 = 30, Slapped3 = 31;
             string Slaps(int n) => slap < 0 ? "wait_nb_second(1);\n" : string.Concat(Enumerable.Repeat($"sample({slap});\nwait_nb_dizieme(3);\n", n));
             zoe.Flags &= ~3u;   // (and no brick collision: her hips back over the chair)
             zoe.Flags |= RaceTrackScenes.CarrierFlag;   // (a carrier: goto_point_3d glides her up the lift beside Twinsen)
@@ -323,6 +325,14 @@ anim({Citadel.CitadelSpanking.ZoeSpank});
 wait_nb_dizieme(2);
 {Slaps(4)}
 label({Slapped2});
+anim({Citadel.CitadelSpanking.ZoeSit});
+stop();
+
+label({Slaps3});
+anim({Citadel.CitadelSpanking.ZoeSpank});
+wait_nb_dizieme(2);
+{Slaps(1)}
+label({Slapped3});
 anim({Citadel.CitadelSpanking.ZoeSit});
 stop();
 
@@ -442,6 +452,19 @@ void comportement_3()
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeScoldMore)});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeNoMoreBars)});
         message({EveningId(p.Say, EveningLine.TwinsenPromise)});
+        message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeGloves)});
+        anim({Citadel.CitadelSpanking.TwinsenKick});
+        set_track_obj({zoeIndex}, label_{Slaps3});
+        set_comportement(comportement_6);
+    }}
+}}
+
+void comportement_6()
+{{
+    if ({Slapped3} == l_track_obj({zoeIndex}))
+    {{
+        anim({Citadel.CitadelSpanking.TwinsenLap});
+        message({EveningId(p.Say, EveningLine.TwinsenOw)});
         message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeBed)});
         set_var_game({DayVar}, {Tired});
         set_var_game({Drunk}, {Scolded});
