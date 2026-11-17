@@ -5918,8 +5918,10 @@ void RaceMod_Lap(S32 x, S32 z) {
             said = now;
             return;
         }
+        // (a closed gate says nothing on the screen -- the user, 2026-11-17, of "Mr. Paul: driving gloves first!": "The hint text that's
+        // displaying on screen, let's remove it. Twinsen should be able to find out what he needs to do by talking to people, so the hint text
+        // is redundant": the race stays shut, its text only in the log)
         if (const T_RACE_GATE *gate = ClosedGate()) {
-            Message(gate->Text);
             Log_Info("[racemod] start line crossed, but the race is closed: %s", gate->Text);
             return;
         }
@@ -7994,7 +7996,7 @@ static void QualifyingArrival(int wrongWay, S32 now) {
     s_arrived = 1; s_arriveStill = 0;
     const char *how = wrongWay ? "over it the wrong way" : "stopped by it";
     if (const T_RACE_GATE *gate = ClosedGate()) {
-        Message(gate->Text);
+        // (nothing on the screen: the story's people say why -- see the start line's crossing)
         Log_Info("[racemod] at the start line before the qualifying lap (%s), the race closed: %s", how, gate->Text);
         return;
     }
@@ -23678,8 +23680,8 @@ void RaceMod_Draw(void) {
                     HudSmallIn(col, bottom, a, -1, colour);
                     text[0] = 0;
                 } else snprintf(text, sizeof(text), "Lap %d  %s", (int)lap, a);
-            } else if (const T_RACE_GATE *gate = ClosedGate())
-                snprintf(text, sizeof(text), "%s", gate->Text);
+            } else if (ClosedGate())
+                text[0] = 0;   // (a closed race: no line in the corner -- the start line's crossing says why not)
             else if (!Inert())
                 snprintf(text, sizeof(text), "Cross the start line");
         }
