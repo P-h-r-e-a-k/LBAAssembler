@@ -22,7 +22,10 @@ namespace LBAAssembler.Terrain;
 // performers on each (StellaPosters) in the office.
 internal static class StellaRooms
 {
-    public const int Office = 391, Backstage = 392, RickOffice = 137;
+    // (since 2026-11-17 the catwalk's door leads into the dressing room, 391, and the hall's office door into the office, 392 -- the user,
+    // 2026-11-16: "The doorway at the end of the catwalk needs to go into an area where the performers get changed, it currently connects to
+    // the office" and "let's keep 392 and lose the other one": 392, the office, to be dressed anew once its door is settled)
+    public const int Office = 392, Backstage = 391, RickOffice = 137;
     // the private room (scene 395: 393 and 394 are the bowling alley's and the Francos' tunnels'): the same room again, curtained, a low
     // sofa where Twinsen sits for a private show (RaceTrackStory.StellaEntities: the hostess's offer in the hall, the show there) -- the
     // user, 2026-11-13, "Let's have the curtained booths in a back area that a dancer can lead him off into"
@@ -44,6 +47,20 @@ internal static class StellaRooms
     // the posters' places: on the west wall over the vent, on the north wall over the painting (the walls' inner faces, a little off them)
     private const int SidePosterX = (WallX + 1) * 512 + 24, SidePosterZ = (VentZ + 1) * 512, BackPosterX = PaintingX * 512 + 768, BackPosterZ = (NorthZ + 1) * 512 + 24, PosterY = 1530;
 
+    // the dressing room's furniture (generic, x, z, beta): see Install
+    // (Rick's office's cells: its floor x 5-15, z 5-17; along its west wall his corner piece, lamps and sofa -- the sofa, x 5-6 z 11-14,
+    // the room's couch -- and on its north wall a curtain at x 8: the dressing table free-standing in front of the west wall's things, its
+    // mirrors facing the room; the costume rail in the middle, facing the camera; the lockers on the north wall right of the curtain; the
+    // folding screen by the east wall)
+    internal static readonly (int Generic, int X, int Z, int Beta)[] DressingRoom =
+    {
+        (Citadel.CitadelProps.DressingTable, 3840, 4864, 1024),
+        (Citadel.CitadelProps.ClubBarStool, 4500, 4000, 0), (Citadel.CitadelProps.ClubBarStool, 4500, 4864, 0), (Citadel.CitadelProps.ClubBarStool, 4500, 5730, 0),
+        (Citadel.CitadelProps.CostumeRail, 5888, 4608, 0),
+        (Citadel.CitadelProps.Lockers, 7150, 2800, 0),
+        (Citadel.CitadelProps.FoldingScreen, 7700, 5000, 3072),
+    };
+
     public static List<string> Install(string gameDirectory)
     {
         var log = new List<string>();
@@ -52,7 +69,8 @@ internal static class StellaRooms
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         if (!store.SceneExists(RickOffice) || !store.SceneExists(StellaEntities.Scene)) { log.Add("Stella Entities' office and backstage left out: no Rick's office (scene 137) or no club scene"); return log; }
         var scenes = HqrFile.Parse(File.ReadAllBytes(scenePath));
-        if (Backstage + 1 < scenes.Count && !scenes.IsEmpty(Backstage + 1)) { log.Add($"Stella Entities' rooms left out: scene {Backstage} is already another part of the build's"); return log; }
+        foreach (var mine in new[] { Office, Backstage })
+            if (mine + 1 < scenes.Count && !scenes.IsEmpty(mine + 1)) { log.Add($"Stella Entities' rooms left out: scene {mine} is already another part of the build's"); return log; }
         if (Private + 1 < scenes.Count && !scenes.IsEmpty(Private + 1)) { log.Add($"Stella Entities' rooms left out: scene {Private} is already another part of the build's"); return log; }
         var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
         var header = new MapBricks.BkgHeader(bkg.Read(0));
@@ -62,7 +80,8 @@ internal static class StellaRooms
         if (grid < 0 || privateGrid < 0) return log;
         table = bkg.Read(header.Brk + header.MaxBrk);
         if (table.Length < (Private + 1) * 2) Array.Resize(ref table, (Private + 1) * 2);
-        foreach (var s in new[] { Office, Backstage, Private }) { table[s * 2] = type; table[s * 2 + 1] = (byte)(s == Private ? privateGrid : grid); }
+        // (the dressing room on the grid without Rick's furniture, his desk and armchairs -- bricks -- as the private room's was)
+        foreach (var s in new[] { Office, Backstage, Private }) { table[s * 2] = type; table[s * 2 + 1] = (byte)(s == Office ? grid : privateGrid); }
         // (the private room: the back rooms' grid when the club's build made it -- Rick's bar's library, so its type)
         if (StellaEntities.WingGrid >= 0) { table[Private * 2] = table[StellaEntities.RickBar * 2]; table[Private * 2 + 1] = (byte)StellaEntities.WingGrid; }
         bkg.SetStored(header.Brk + header.MaxBrk, table);
@@ -90,7 +109,8 @@ internal static class StellaRooms
             // (backstage too, since 2026-11-14: the user, there, "we need the desk and chair back, along with the posters on the wall")
             // (not his door, a sprite in the doorway at z 9472: its own scripts open it, these rooms' are still -- shut for ever, Twinsen
             // kept in: the doorway open instead, 2026-11-14)
-            if (number is Office or Backstage) keep.AddRange(model.Actors.Skip(2).Where(a => ((a.Entity == 16 && a.Body >= 0) || a.IsSprite) && !(a.IsSprite && a.Z >= DoorwayZ)));
+            // (the dressing room none of them: his lamps stood on his desk, and on the floor without it)
+            if (number == Office) keep.AddRange(model.Actors.Skip(2).Where(a => ((a.Entity == 16 && a.Body >= 0) || a.IsSprite) && !(a.IsSprite && a.Z >= DoorwayZ)));
             model.Actors.Clear(); model.Actors.AddRange(keep);
             // (his door, not the vent's way out: a door zone up the west wall, from layer 3)
             model.Zones.RemoveAll(z => z.Type != 0 || z.Y0 >= 512);
@@ -152,8 +172,10 @@ internal static class StellaRooms
             }
             if (number == Backstage)
             {
-                // the dressing room: a rack of the performers' things at the back, chairs at the mirrors, mirrors (pictures) on the wall
-                foreach (var (generic, x, z, beta) in new[] { (Citadel.CitadelProps.Rack, 7600, 2900, 0) })   // (its chairs gone with Rick's desk and armchairs back: they stood in them, 2026-11-14)
+                // the dressing room (CitadelProps.Dressing): the dressing table along the west wall under the poster, its mirrors facing into the
+                // room, three stools before them; the costume rail along the north wall left of the sink's alcove, the lockers right of it; the
+                // folding screen by the east wall. Where the camera looks: the north and west walls
+                foreach (var (generic, x, z, beta) in DressingRoom)
                     SceneOps.AddActor(model, Citadel.CitadelProps.Actor(generic, x, 256, z, beta));
             }
             var scripts = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), number);
@@ -175,7 +197,7 @@ internal static class StellaRooms
             { var size = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(size, record.Length); scenes.SetStored(0, size); }
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
-        log.Add($"Stella Entities' rooms: the office (scene {Office}), backstage (scene {Backstage}) and the private room (scene {Private}) on grid {grid} (Rick's office's, its walls the night), each with its door back to the hall");
+        log.Add($"Stella Entities' rooms: the office (scene {Office}, grid {grid}), the dressing room behind the catwalk (scene {Backstage}, grid {privateGrid}: no desk or armchairs) and the private room (scene {Private}) -- Rick's office's walls the night -- each with its door back to the hall");
         return log;
     }
 

@@ -76,6 +76,8 @@ internal static partial class RaceTrackStory
         HangarOffer, HangarYes, HangarNo, HangarBoard, HangarLater, HangarLift, HangarClosed, HangarGo,
         // (HAL beaten: his number on Twinsen's radio -- the user, 2026-11-16)
         HalNumber,
+        // (the performers in the dressing room behind the catwalk -- RaceTrackStory.StellaEntities, DressingPeople, 2026-11-17)
+        DressMirror, DressRail, DressScreen,
     }
     private static readonly string[][] MoonLines =
     {
@@ -538,6 +540,34 @@ internal static partial class RaceTrackStory
             "Enhorabuena por ganarme. He añadido mi número a tu radio, por si alguna vez necesitas ayuda.",
             "Congratulazioni per avermi battuto. Ho aggiunto il mio numero alla tua radio, se mai avessi bisogno di aiuto.",
             "Parabéns por me venceres. Adicionei o meu número ao teu rádio, se alguma vez precisares de ajuda.",
+        },
+        // (the performers in the dressing room -- RaceTrackStory.StellaEntities, DressingPeople, 2026-11-17)
+        new[]
+        {
+            "Out, sweetie, dancers only back here! ... Oh, all right, you can stay. Pass me that eyelash -- no, the other one.",
+            "Dehors, mon chou, c'est réservé aux danseuses ici ! ... Bon, d'accord, tu peux rester. Passe-moi ce cil -- non, l'autre.",
+            "Raus, Schätzchen, hier hinten nur Tänzerinnen! ... Na gut, du darfst bleiben. Gib mir mal die Wimper -- nein, die andere.",
+            "¡Fuera, cielo, aquí detrás solo bailarinas! ... Bueno, vale, puedes quedarte. Pásame esa pestaña... no, la otra.",
+            "Fuori, tesoro, qui dietro solo ballerine! ... E va bene, puoi restare. Passami quella ciglia... no, l'altra.",
+            "Fora, querido, aqui atrás só bailarinas! ... Pronto, está bem, podes ficar. Passa-me essa pestana -- não, a outra.",
+        },
+        new[]
+        {
+            "Has anyone seen my sequinned number? The blue one? It was right here five minutes ago, and I'm on next!",
+            "Quelqu'un a vu ma tenue à paillettes ? La bleue ? Elle était juste là il y a cinq minutes, et c'est mon tour après !",
+            "Hat jemand mein Paillettenkleid gesehen? Das blaue? Vor fünf Minuten hing es noch genau hier, und ich bin als Nächste dran!",
+            "¿Alguien ha visto mi conjunto de lentejuelas? ¿El azul? Estaba aquí mismo hace cinco minutos, ¡y salgo la siguiente!",
+            "Qualcuno ha visto il mio vestito di paillettes? Quello blu? Era proprio qui cinque minuti fa, e tocca a me tra poco!",
+            "Alguém viu o meu fato de lantejoulas? O azul? Estava mesmo aqui há cinco minutos, e sou a próxima a entrar!",
+        },
+        new[]
+        {
+            "Twinsen? The one from the news? Well I never. Mind the screen, darling -- there's a girl changing behind it.",
+            "Twinsen ? Celui des infos ? Ça alors. Attention au paravent, mon chéri -- il y a une fille qui se change derrière.",
+            "Twinsen? Der aus den Nachrichten? Na so was. Vorsicht mit dem Paravent, Schätzchen -- dahinter zieht sich gerade eine um.",
+            "¿Twinsen? ¿El de las noticias? Vaya, vaya. Cuidado con el biombo, cariño: hay una chica cambiándose detrás.",
+            "Twinsen? Quello del telegiornale? Ma guarda un po'. Attento al paravento, tesoro: dietro c'è una ragazza che si cambia.",
+            "Twinsen? O das notícias? Ora vejam só. Cuidado com o biombo, querido -- está uma rapariga a mudar-se atrás dele.",
         },
     };
 

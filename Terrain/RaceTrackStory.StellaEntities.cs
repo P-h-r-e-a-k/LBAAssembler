@@ -383,5 +383,37 @@ stop();
             }
             return scripts => { foreach (var add in adds) add(scripts); };
         });
+        DressingPeople(b, bouncer, say);
+    }
+
+    // The dressing room's performers (StellaRooms.Backstage -- the user, 2026-11-16: "an area where the performers get changed"): three of
+    // the dancers getting ready -- at the mirrors, at the costume rail, by the folding screen -- each a line of her own when Twinsen talks
+    // to her. Standing (the hero's entity's own stand), walked through as the hall's are (their boxes take in their dances: WalkOverArmour,
+    // no shadow)
+    private static readonly (int Who, int X, int Z, int Beta, MoonLine Line)[] Dressing =
+    {
+        (1, 4300, 5300, 3072, MoonLine.DressMirror), (4, 5888, 5250, 2048, MoonLine.DressRail), (6, 7000, 5000, 3376, MoonLine.DressScreen),
+    };
+    private static void DressingPeople(IslandBeatsA b, SceneActorModel bouncer, Func<MoonLine, int> say)
+    {
+        if (!b.Store.SceneExists(StellaRooms.Backstage)) { b.Log.Add($"Stella Entities' dressing room's performers left out: no scene {StellaRooms.Backstage}"); return; }
+        b.Edit(StellaRooms.Backstage, "Stella Entities' dressing room: three performers getting ready, a word each", model =>
+        {
+            var adds = new List<Action<SceneScripts>>();
+            foreach (var (who, x, z, beta, line) in Dressing)
+            {
+                var a = bouncer.Clone();
+                (a.X, a.Y, a.Z, a.Beta) = (x, StellaEntities.FloorY, z, beta);
+                a.Entity = StellaPerformers.Entity;
+                a.Body = StellaPerformers.Body0 + who;
+                a.Anim = 0;
+                a.Flags &= ~1u;
+                a.Flags |= NoShadowFlag;
+                a.Armor = WalkOverArmour;
+                a.Move = 0;
+                adds.Add(IslandBeatsA.Add(model, a, Talker($"1 == var_game({StellaEntities.AdultVar})", $"            message({say(line)});", 1500)));
+            }
+            return scripts => { foreach (var add in adds) add(scripts); };
+        });
     }
 }
