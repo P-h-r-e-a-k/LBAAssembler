@@ -1119,19 +1119,10 @@ void comportement_2()
         // dean's cards/notes going into our inventory, they should visibly go into our inventory even if we haven't spoken to the dean
         // yet"). Which pages are found is a bit each in one variable (PagesFoundVar); the lines go by how many are found,
         // not by which. On the road at its height, and never under the ground there ("check that they're all above ground")
-        var lines = pages.Select(pg => pg.Item2).ToArray();
-        string ByCount() => $@"if (1 == var_game({PagesFoundVar}) || 2 == var_game({PagesFoundVar}) || 4 == var_game({PagesFoundVar}))
-        {{
-            message({Say(lines[0])});
-        }}
-        else if (3 == var_game({PagesFoundVar}) || 5 == var_game({PagesFoundVar}) || 6 == var_game({PagesFoundVar}))
-        {{
-            message({Say(lines[1])});
-        }}
-        else
-        {{
-            message({Say(lines[2])});
-        }}";
+        // (no line said as one is found -- the found-object box and its count in the inventory only: a message stops the game, and a page is
+        // often found driving over it -- the user, 2026-11-17, "The deans exam papers need to go into the inventory and display an object
+        // found notification, let's not have the text telling Twinsen he's found one of the deans papers as this pauses game play". The
+        // lines Page1-3 stay in the island's texts, unsaid, so the lines after keep their numbers)
         for (var k = 0; k < pages.Length; k++)
         {
             var fraction = pages[k].Item1;
@@ -1173,7 +1164,6 @@ void comportement_1()
             }}
             add_var_game({PagesSlot}, 1);
             found_object({PagesSlot});{arrowOff}
-            {ByCount()}
             invisible(1);
             suicide();
         }}
