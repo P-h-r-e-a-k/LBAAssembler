@@ -9,18 +9,22 @@ namespace BodyPipeline;
 
 // castsheet <game folder> <out.png> [columns] [per page]: every race car a game folder's build made (its RACECARS.JSON: the cars made by
 // hand and the cast's, RaceTrackCharacterCars) on one sheet -- each seen three-quarters from the front and above, its number, its name,
-// who drives it and the island -- and the same in pages beside it (<out>_1.png, ...).
+// who drives it and the island -- and the same in pages beside it (<out>_1.png, ...). [island]: that island's cars alone (RACECARS.JSON's
+// Island, e.g. "Otringal"; "" all); [tile width]: each car drawn that wide (320 by default; the height and the lettering in proportion).
 internal static class CastSheet
 {
     private sealed record Entry(int Number, string Name, string Driver, string Island, int Entity, int Generic, int Body, int Small);
 
-    public static int Run(string folder, string output, int columns = 8, int perPage = 48)
+    public static int Run(string folder, string output, int columns = 8, int perPage = 48, string island = "", int tileWidth = 320)
     {
         var entries = JsonSerializer.Deserialize<List<Entry>>(File.ReadAllText(Path.Combine(folder, "RACECARS.JSON"))) ?? new();
+        if (island.Length > 0) entries = entries.Where(e => string.Equals(e.Island, island, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (entries.Count == 0) { Console.WriteLine($"no cars{(island.Length > 0 ? $" of {island}" : "")}"); return 1; }
+        var scale = tileWidth / 320f;
         var bodies = new Hqr(Path.Combine(folder, "BODY.HQR"));
         var texture = new Hqr(Path.Combine(folder, "RESS.HQR")).Read(6);
         var palette = Generator.Palette(folder);
-        const int W = 320, H = 236, Text = 74;
+        int W = tileWidth, H = (int)(236 * scale), Text = (int)(74 * scale);
         var pictures = new List<(Entry Entry, Bitmap? Picture)>();
         foreach (var e in entries)
         {
@@ -32,13 +36,14 @@ internal static class CastSheet
             }
             catch (Exception error) { Console.WriteLine($"  {e.Number} {e.Name}: {error.Message}"); pictures.Add((e, null)); }
         }
-        Save(pictures, output, columns, W, H, Text, $"The race cars: {entries.Count}, by number");
+        var what = island.Length > 0 ? $"{island}'s race cars" : "The race cars";
+        Save(pictures, output, columns, W, H, Text, $"{what}: {entries.Count}, by number", scale);
         var pages = (pictures.Count + perPage - 1) / perPage;
         for (var p = 0; p < pages; p++)
         {
             var part = pictures.Skip(p * perPage).Take(perPage).ToList();
             var name = Path.Combine(Path.GetDirectoryName(output) ?? ".", $"{Path.GetFileNameWithoutExtension(output)}_{p + 1}.png");
-            Save(part, name, columns, W, H, Text, $"The race cars, {part[0].Entry.Number}-{part[^1].Entry.Number} (page {p + 1} of {pages})");
+            Save(part, name, columns, W, H, Text, $"{what}, {part[0].Entry.Number}-{part[^1].Entry.Number} (page {p + 1} of {pages})", scale);
         }
         foreach (var (_, picture) in pictures) picture?.Dispose();
         Console.WriteLine($"{output}: {entries.Count} cars; {pages} pages");
@@ -64,32 +69,33 @@ internal static class CastSheet
         return Renderer.Render(copy, palette, w, h, MathF.PI, false, background: Color.FromArgb(40, 60, 90), gridLine: Color.FromArgb(40, 60, 90));
     }
 
-    private static void Save(List<(Entry Entry, Bitmap? Picture)> cars, string output, int columns, int w, int h, int text, string title)
+    private static void Save(List<(Entry Entry, Bitmap? Picture)> cars, string output, int columns, int w, int h, int text, string title, float scale = 1)
     {
-        const int Top = 56;
+        int Top = (int)(56 * scale);
         var rows = (cars.Count + columns - 1) / columns;
         using var sheet = new Bitmap(columns * w, Top + rows * (h + text));
         using var g = Graphics.FromImage(sheet);
         g.Clear(Color.FromArgb(24, 34, 52));
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var titleFont = new Font("Segoe UI", 22, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var nameFont = new Font("Segoe UI", 14, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var smallFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
-        using var numberFont = new Font("Segoe UI", 20, FontStyle.Bold, GraphicsUnit.Pixel);
-        g.DrawString(title, titleFont, Brushes.White, 12, 12);
+        using var titleFont = new Font("Segoe UI", 22 * scale, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var nameFont = new Font("Segoe UI", 14 * scale, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var smallFont = new Font("Segoe UI", 12 * scale, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var numberFont = new Font("Segoe UI", 20 * scale, FontStyle.Bold, GraphicsUnit.Pixel);
+        g.DrawString(title, titleFont, Brushes.White, 12 * scale, 12 * scale);
         var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
         for (var i = 0; i < cars.Count; i++)
         {
             var (e, picture) = cars[i];
             int x = i % columns * w, y = Top + i / columns * (h + text);
             if (picture is not null) g.DrawImageUnscaled(picture, x, y);
-            using (var badge = new SolidBrush(Color.FromArgb(200, 255, 200, 40))) g.FillRectangle(badge, x + 6, y + 6, 58, 30);
-            g.DrawString(e.Number.ToString(), numberFont, Brushes.Black, new RectangleF(x + 6, y + 6, 58, 30), new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+            float S(float v) => v * scale;
+            using (var badge = new SolidBrush(Color.FromArgb(200, 255, 200, 40))) g.FillRectangle(badge, x + S(6), y + S(6), S(58), S(30));
+            g.DrawString(e.Number.ToString(), numberFont, Brushes.Black, new RectangleF(x + S(6), y + S(6), S(58), S(30)), new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
             using (var panel = new SolidBrush(Color.FromArgb(32, 46, 70))) g.FillRectangle(panel, x, y + h, w, text);
-            g.DrawString(e.Name, nameFont, Brushes.White, new RectangleF(x + 8, y + h + 6, w - 14, 20), format);
-            using (var light = new SolidBrush(Color.FromArgb(215, 225, 240))) g.DrawString($"Driver: {e.Driver}", smallFont, light, new RectangleF(x + 8, y + h + 28, w - 14, 18), format);
-            using (var dim = new SolidBrush(Color.FromArgb(150, 170, 200))) g.DrawString(e.Island, smallFont, dim, new RectangleF(x + 8, y + h + 47, w - 14, 18), format);
+            g.DrawString(e.Name, nameFont, Brushes.White, new RectangleF(x + S(8), y + h + S(6), w - S(14), S(20)), format);
+            using (var light = new SolidBrush(Color.FromArgb(215, 225, 240))) g.DrawString($"Driver: {e.Driver}", smallFont, light, new RectangleF(x + S(8), y + h + S(28), w - S(14), S(18)), format);
+            using (var dim = new SolidBrush(Color.FromArgb(150, 170, 200))) g.DrawString(e.Island, smallFont, dim, new RectangleF(x + S(8), y + h + S(47), w - S(14), S(18)), format);
             using (var line = new Pen(Color.FromArgb(24, 34, 52), 2)) g.DrawRectangle(line, x, y, w, h + text);
         }
         sheet.Save(output, ImageFormat.Png);

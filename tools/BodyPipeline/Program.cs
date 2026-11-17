@@ -120,8 +120,10 @@ internal static class Program
             // lightscales <file.hqr>: the LBA2 bodies whose points do not all take the whole of the light (Body.LightScale: normals shorter or
             // longer than the usual 10240)
             "lightscales" => LightScales(args[1]),
-            // castsheet <game folder> <out.png> [columns] [per page]: every race car of a built folder (RACECARS.JSON), numbered, on one sheet and in pages
-            "castsheet" => CastSheet.Run(args[1], args[2], args.Length > 3 ? int.Parse(args[3]) : 8, args.Length > 4 ? int.Parse(args[4]) : 48),
+            // castsheet <game folder> <out.png> [columns] [per page] [island] [tile width]: every race car of a built folder (RACECARS.JSON) -- or
+            // one island's -- numbered, on one sheet and in pages
+            "castsheet" => CastSheet.Run(args[1], args[2], args.Length > 3 ? int.Parse(args[3]) : 8, args.Length > 4 ? int.Parse(args[4]) : 48,
+                args.Length > 5 ? args[5] : "", args.Length > 6 ? int.Parse(args[6]) : 320),
             // hqrentry <file.hqr> <index> <out>: one entry, uncompressed, to a file
             "hqrentry" => HqrEntry(args[1], int.Parse(args[2]), args[3]),
             "lba1lit" => Lba1Lit(args.Length > 1 ? int.Parse(args[1]) : 0),
