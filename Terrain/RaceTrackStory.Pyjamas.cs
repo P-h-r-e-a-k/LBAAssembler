@@ -81,8 +81,18 @@ stop();
         {
             var front = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == Citadel.CitadelNightHouse.Yard) ?? throw new NotTheGames("the house's front door");
             front.Info[4] = PyjamaDoorSwitch;
-            model.Zones.Add(new SceneZoneModel { Type = 2, Num = PyjamaDoorTry, X0 = front.X0 - 256, X1 = front.X1 + 256, Y0 = front.Y0, Y1 = front.Y1, Z0 = front.Z0 - 256, Z1 = front.Z1 + 256, Info = new int[8] });
-            model.Zones.Add(new SceneZoneModel { Type = 2, Num = DressZone, X0 = ChairSeatX - 500, X1 = ChairSeatX + 1400, Z0 = ChairSeatZ - 900, Z1 = ChairSeatZ + 900, Y0 = 2048 - 100, Y1 = 2048 + 1500, Info = new int[8] });
+            // (each clear of every scenario zone the house has: an actor in two of them is in the later one only -- the dressing zone over the
+            // bathroom door's kept its door shut, the user, 2026-11-17: "Twinsen's bathroom door is refusing to open"; and the door's word over
+            // the game's own zone 3 at the front door, where Zoe's script lets her out. The word's zone just inside the front door's; the
+            // dressing zone east of the chair, short of the bed's zone and south of the bathroom door's)
+            var word = new SceneZoneModel { Type = 2, Num = PyjamaDoorTry, X0 = front.X0 - 256, X1 = front.X1 + 256, Y0 = front.Y0, Y1 = front.Y1, Z0 = front.Z0 - 450, Z1 = front.Z0 - 10, Info = new int[8] };
+            var dress = new SceneZoneModel { Type = 2, Num = DressZone, X0 = ChairSeatX - 550, X1 = 7 * 512 + 254, Y0 = 2048 - 100, Y1 = 2048 + 1500, Z0 = 1720, Z1 = ChairSeatZ + 900, Info = new int[8] };
+            foreach (var mine in new[] { word, dress })
+            {
+                var under = model.Zones.FirstOrDefault(z => z.Type == 2 && z.X0 <= mine.X1 && mine.X0 <= z.X1 && z.Z0 <= mine.Z1 && mine.Z0 <= z.Z1 && z.Y0 <= mine.Y1 && mine.Y0 <= z.Y1);
+                if (under is not null) throw new NotTheGames($"the pyjamas' zone {mine.Num} would lie over the house's zone {under.Num}");
+                model.Zones.Add(mine);
+            }
             var clothes = Citadel.CitadelProps.Actor(Citadel.CitadelProps.FoldedSuit, ChairSeatX + Citadel.CitadelProps.FoldedShiftX, ChairSeatY, ChairSeatZ + Citadel.CitadelProps.FoldedShiftZ, 0);
             clothes.Armor = WalkOverArmour;
             return p.Add(model, clothes, $@"void comportement_0()
