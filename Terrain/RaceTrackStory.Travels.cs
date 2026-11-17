@@ -85,8 +85,11 @@ internal static partial class RaceTrackStory
     //     him, doesn't play).
     //   - The Francos' taxis (scene 109): 5 zlitos to Otringal or Celebration Island -- islands of chapters 5 and 6, from chapter 7's.
     //     Gone in the story: the Francos are left by the Elevator Platform's way, the race's.
-    //   - The Desert's ferry office (scene 40) and the harbour (scene 65): a ticket back to Citadel Island in chapter 3. The clerk sells none
-    //     before chapter 4 (DesertFerryLines), and none boards on one.
+    //   - The Desert's ferry office (scene 40) and the harbour (scene 65): a ticket back to Citadel Island whenever Twinsen has none, as
+    //     the town circuit's office sells one to the Desert from its win on (the user, 2026-11-17: "We need to allow Twinsen to buy ferry
+    //     tickets both to and from Citadel Island after he's won the Citadel 2 race") -- the clerk there in every chapter (the game's
+    //     takes him away in its own chapter 4, the story's Emerald Moon), and the ferry boarding with it. (Till then the clerk sold none
+    //     before chapter 4 and none boarded: DesertFerryLines, its line, is kept in the island's texts, unsaid.)
     //   - Island CX Mk2's copies of the game's Island CX outside (scenes 340-343): its door into scene 179 (walked into from scene 340's
     //     side, x 256, in chapter 12: on to the game's own Island CX, scene 110) taken out, and the Action spot (zone 1) whose ride goes to
     //     scene 176 (on to the Mosquibees' throne room and scene 110) shut from chapter 12 -- both reached in headless runs of the
@@ -242,24 +245,14 @@ internal static partial class RaceTrackStory
             });
         if (story.Contains(RaceTrackIsland.Desert))
         {
-            var no = AddIslandTexts(gameDirectory, RaceTrackIsland.Desert.IslandByte, DesertFerryLines, log, "the Desert's ferry office");
-            if (no >= 0)
-                Edit(DesertFerryOffice, "the ferry office sells no ticket back to Citadel Island before chapter 4", _ => scripts =>
-                {
-                    var clerk = ActorWith(scripts, "found_object(13)");
-                    scripts.SetText(clerk, ScriptKind.Life, Once(scripts.GetText(clerk, ScriptKind.Life), "if (0 == var_game(13))", $@"if (4 > chapter())
-        {{
-            message({no});
-        }}
-        else if (0 == var_game(13))"));
-                });
-            Edit(DesertHarbour, "the ferry to Citadel Island boards no one before chapter 4", _ => scripts =>
+            // (its line kept in the island's texts, unsaid: the lines added after it keep their numbers)
+            AddIslandTexts(gameDirectory, RaceTrackIsland.Desert.IslandByte, DesertFerryLines, log, "the Desert's ferry office");
+            Edit(DesertFerryOffice, "the ferry office's clerk there in every chapter, selling a ticket back to Citadel Island whenever Twinsen has none", _ => scripts =>
             {
-                var hero = scripts.GetText(0, ScriptKind.Life);
-                hero = Once(hero, "if (1 == use_inventory(13))", "if (1 == use_inventory(13) && 3 < chapter())");
-                hero = Once(hero, "if (1 == var_game(13) && (1 == var_cube(8) || 0 == l_track_obj(13) || 1 == use_inventory(13)))",
-                    "if (1 == var_game(13) && (1 == var_cube(8) || 0 == l_track_obj(13) || 1 == use_inventory(13)) && 3 < chapter())");
-                scripts.SetText(0, ScriptKind.Life, hero);
+                var clerk = ActorWith(scripts, "found_object(13)");
+                scripts.SetText(clerk, ScriptKind.Life, Loose(scripts.GetText(clerk, ScriptKind.Life), "if (4 == chapter())\n{\nsuicide();\n}", ""));
+                // (and Twinsen's Action at the counter, the game's before its chapter 4 only)
+                scripts.SetText(0, ScriptKind.Life, Loose(scripts.GetText(0, ScriptKind.Life), "swif (4 > chapter() && 1 == action())", "swif (1 == action())"));
             });
         }
     }
