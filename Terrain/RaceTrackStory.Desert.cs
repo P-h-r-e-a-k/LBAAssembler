@@ -34,7 +34,10 @@ internal static partial class RaceTrackStory
     // (rung and not answered: it answers itself after some 20 seconds -- frames counted in this scene, RadioAutoRounds rounds of 250 -- so it
     // never holds him up: docs/LBRA_STORY_SCRIPT.md, "If he hasn't answered after 20 seconds it answers itself")
     private const int RadioWait = 72, RadioRounds = 73, RadioAutoRounds = 3;
-    private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2, MoonStart = 229;
+    private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2;
+    // (the freighter lands at the moon's landing pad: Twinsen inside the saucer there with his car -- RaceTrackStory.Emerald, MoonArrival;
+    // till 2026-11-17 the track's start scene, 229)
+    private const int MoonStart = ShuttleInside;
     // the game's own: the variable of its Dino-Fly's cure (1 sent to Ker'aooc, 2 his assistant has answered, 3 the School's hall seen)
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113, PearlClam = 5;

@@ -26,6 +26,7 @@ internal sealed class BranchRun
     public double[] Heights { get; set; } = Array.Empty<double>();
     public double[]? Halfs { get; set; }
     public int From { get; set; }
+    // (-1: a spur -- no way back onto the lap, its last point on the ground: the Emerald Moon's ramp up from its landing pad, 2026-11-17)
     public int To { get; set; }
     public int[][]? ArcJumps { get; set; }
     public double[][]? BoostPanels { get; set; }

@@ -198,6 +198,9 @@
  *   The race game (RACEGAME.CPP, 2026-10-16: the standalone Little Big Halloween Racing Adventure composes the file it races from its menu):
  *     start_scene=<scene>        a new game starts in <scene>, the start line's, with no introduction (RaceMod_NewGameScene)
  *     start_in_car=1             Twinsen is in his car as the scene opens, not on foot beside it (FaceTheCar)
+ *     in_car=<var> <beta> [<x> <y> <z>]   (2026-11-17) Twinsen put in his car as he arrives in an outside scene while the game variable is
+ *                                1 -- at <x y z> (cube-local) if given, turned to <beta> -- and the variable 2 (InCarFrame: the Emerald
+ *                                Moon's arrival, the car driven out of the saucer)
  *     trial=1                    a time trial: no opponents, no mushrooms, no power-ups (no Gazogem since 2026-10-19);
  *                                its fastest lap (line to line, RaceMod_Lap) goes to the best laps, with the race's time (GO to the
  *                                last lap's line) beside it (RaceGame_Finished)
@@ -1636,6 +1639,12 @@ static int s_noRecoverScene = -1, s_noRecoverBody[RACE_MAX_NO_RECOVER], s_nbNoRe
 // Stella Entities' bouncer carrying him off the stage to the club's lift (the user, 2026-11-16, "If Twinsen manages to get onto the stage,
 // have a bouncer pick him out, carry him over to the exit platform and throw him onto it"). Back to 0, he is let go where he is.
 static int s_carryScene = -1, s_carryVar = -1, s_carryUp = 0, s_carryAhead = 0, s_carrying = 0;
+// in_car=<game var> <beta> [<x> <y> <z>]: Twinsen into his car as he arrives in an outside scene while the variable is 1 -- put at x y z
+// (cube-local) if given, turned to <beta> (-1 as he came), the car brought under him once the scene's car actor has placed it -- and the
+// variable 2 (InCarFrame): the Emerald Moon's arrival, the car driven out of the Esmers' saucer onto the landing pad (the user, 2026-11-17,
+// "when we first land on the moon let's still be in the spaceship with our car in there too. Twinsen drives the car out")
+static int s_inCarVar = -1, s_inCarBeta = -1, s_inCarScene = -1, s_inCarFrames = 0, s_inCarPlaced = 0;
+static S32 s_inCarX = 0, s_inCarY = 0, s_inCarZ = 0;
 static U32 s_carryFallable = 0;
 static void CarryFrame(void) {
     T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -2924,6 +2933,9 @@ static int s_raisedLoop = 0;               // the road is a whole lap: its last 
 // it -- Wannies Island's shortcut over its boost panel and jump, 2026-10-14. The raised road's file has the lap's own points first (its
 // last its first again, a loop), then each branch after a point with no width: its first point on the lap's road at the lap's point From,
 // its last on it at To, where it comes back. A branch's ends are not open (the lap's road is there); a jump's gap in it is.
+// A spur (To -1): a way off the lap that doesn't come back -- its last point lies on the ground, an open end the car drives off onto it
+// and back up by: the Emerald Moon's ramp from the landing pad up onto the pit lane (the user, 2026-11-17, "there's a short section of
+// extra track that can take him up to the race track ... This should help prevent users struggling to get on and off the race track").
 #define RACE_MAX_BRANCHES 4
 typedef struct { int First, Last, From, To; } T_RACE_BRANCH;
 static T_RACE_BRANCH s_branches[RACE_MAX_BRANCHES];
@@ -2949,7 +2961,7 @@ static int RaisedApart(int i, int j) {
     if (bi >= 0 && bj >= 0) return 1 << 20;
     const int k = bi >= 0 ? i : j, other = bi >= 0 ? j : i;
     const T_RACE_BRANCH *b = &s_branches[bi >= 0 ? bi : bj];
-    const int viaFrom = k - b->First + LapApart(b->From, other), viaTo = b->Last - k + LapApart(b->To, other);
+    const int viaFrom = k - b->First + LapApart(b->From, other), viaTo = b->To < 0 ? 1 << 20 : b->Last - k + LapApart(b->To, other);
     return viaFrom < viaTo ? viaFrom : viaTo;
 }
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
@@ -3026,7 +3038,7 @@ static int RaisedOpenEnd(int i, double tt) {
     if (i >= lap) {
         // (a branch: its ends on the lap's road)
         const int b = BranchOf(i);
-        if (tt > 1) return b >= 0 && i + 1 >= s_branches[b].Last ? 0 : i + 2 >= s_nbRaised || s_raised[i + 2].Half <= 0;
+        if (tt > 1) return b >= 0 && i + 1 >= s_branches[b].Last ? s_branches[b].To < 0 : i + 2 >= s_nbRaised || s_raised[i + 2].Half <= 0;
         if (tt < 0) return b >= 0 && i <= s_branches[b].First ? 0 : s_raised[i - 1].Half <= 0;
         return 0;
     }
@@ -3334,7 +3346,7 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
         // (off a branch's end: on along the lap from where the branch meets it)
         const int br = i > n ? BranchOf(i) : -1;
         if (forward) {
-            if (br >= 0) { if (i + 1 >= s_branches[br].Last) { i = s_branches[br].To; if (i >= n) i = n - 1; } else i++; }
+            if (br >= 0) { if (i + 1 >= s_branches[br].Last) { if (s_branches[br].To < 0) { at = 1; break; } i = s_branches[br].To; if (i >= n) i = n - 1; } else i++; }
             else if (i + 1 >= n) { if (!s_raisedLoop) { at = 1; break; } i = 0; } else i++;
             at = 0;
         } else {
@@ -3411,7 +3423,7 @@ static int GapBetween(int a, int b) {
         else {
             const int k = ba >= 0 ? a : b, other = ba >= 0 ? b : a;
             const T_RACE_BRANCH *br = &s_branches[ba >= 0 ? ba : bb];
-            if (LapApart(br->From, other) <= LapApart(br->To, other)) { from = br->First; to = k; } else { from = k; to = br->Last; }
+            if (br->To < 0 || LapApart(br->From, other) <= LapApart(br->To, other)) { from = br->First; to = k; } else { from = k; to = br->Last; }
         }
         for (int i = from; i <= to; i++) if (s_raised[i].Half <= 0) return 1;
         return 0;
@@ -3713,7 +3725,7 @@ static int RaisedPastEnd(double wx, double wz, double wy) {
             // (end 1: the last point before a gap or the road's end; end 0: the first point after one)
             // (a branch's ends are on the lap's road: not open)
             const int lap = LapPoints(), br = i >= lap ? BranchOf(i) : -1;
-            const int open = br >= 0 ? (end ? i < s_branches[br].Last && s_raised[i + 1].Half <= 0 : i > s_branches[br].First && s_raised[i - 1].Half <= 0)
+            const int open = br >= 0 ? (end ? (i < s_branches[br].Last ? s_raised[i + 1].Half <= 0 : s_branches[br].To < 0) : i > s_branches[br].First && s_raised[i - 1].Half <= 0)
                            : end ? (i + 1 >= lap ? !s_raisedLoop : s_raised[i + 1].Half <= 0)
                                  : (i == 0 ? !s_raisedLoop : s_raised[i - 1].Half <= 0);
             const int j = end ? i - 1 : i + 1;
@@ -4742,7 +4754,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "raised_lap")) s_nbLap = atoi(v);
         else if (!strcmp(key, "raised_branch")) {
             T_RACE_BRANCH b;
-            if (s_nbBranches < RACE_MAX_BRANCHES && sscanf(v, "%d %d %d %d", &b.First, &b.Last, &b.From, &b.To) == 4 && b.First < b.Last) s_branches[s_nbBranches++] = b;
+            if (s_nbBranches < RACE_MAX_BRANCHES && sscanf(v, "%d %d %d %d", &b.First, &b.Last, &b.From, &b.To) == 4 && b.First < b.Last) { if (b.To < 0) b.To = -1; s_branches[s_nbBranches++] = b; }
         }
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
         else if (!strcmp(key, "rescue")) s_rescueOn = atoi(v);
@@ -5380,6 +5392,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "occluder")) { if (!setRead && sscanf(v, "%d %d %d %d %d %d", &s_occScene, &s_occX, &s_occZ, &s_occR, &s_occY0, &s_occY1) != 6) s_occScene = -1; }
         else if (!strcmp(key, "carry_hero")) { if (!setRead && sscanf(v, "%d %d %d %d", &s_carryScene, &s_carryVar, &s_carryUp, &s_carryAhead) != 4) s_carryVar = -1; }
+        else if (!strcmp(key, "in_car")) { if (!setRead) { const int got = sscanf(v, "%d %d %d %d %d", &s_inCarVar, &s_inCarBeta, &s_inCarX, &s_inCarY, &s_inCarZ); if (got < 1) s_inCarVar = -1; s_inCarPlaced = got == 5; } }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
         else if (!strcmp(key, "drive_in")) {
@@ -7037,6 +7050,7 @@ static void BuildShortLine(void) {
     int turn = -1;
     for (int b = 0; b < s_nbBranches; b++) {
         const T_RACE_BRANCH *br = &s_branches[b];
+        if (br->To < 0) { Log_Info("[racemod] autoshort: branch %d, a spur -- left", b + 1); continue; }
         double way = RaisedStep(br->From, br->First) + RaisedStep(br->Last, br->To), round = 0;
         for (int i = br->First; i < br->Last; i++) way += RaisedStep(i, i + 1);
         for (int i = br->From; i != br->To && s_nbLap > 1; i = (i + 1) % s_nbLap) round += RaisedStep(i, (i + 1) % s_nbLap);
@@ -11985,13 +11999,13 @@ static int RedGap(T_RACE_SHOT *sh, const T_RACE_OPPONENT *line, S32 now, double 
         if (hb == sh->Branch) { sh->Gap = BranchRun(sh->Seg, sh->T, hs, ht); return 1; }
         // (its car on the lap: out of the branch's end, then along the line)
         const double rest = BranchRun(sh->Seg, sh->T, b->Last, 0);
-        sh->Gap = rest + NearRound(ts - RaisedOnLine(line, b->To), sh->Gap - rest, len);
+        sh->Gap = rest + NearRound(ts - RaisedOnLine(line, b->To < 0 ? b->From : b->To), sh->Gap - rest, len);
         return 1;
     }
     double raw = ts - sh->S;
     if (hb >= 0) {
         const T_RACE_BRANCH *b = &s_branches[hb];
-        const double dFrom = AheadOn(RaisedOnLine(line, b->From) - sh->S, len), dTo = AheadOn(RaisedOnLine(line, b->To) - sh->S, len);
+        const double dFrom = AheadOn(RaisedOnLine(line, b->From) - sh->S, len), dTo = b->To < 0 ? 1e18 : AheadOn(RaisedOnLine(line, b->To) - sh->S, len);
         if (dFrom <= dTo) { raw = dFrom + BranchRun(b->First, 0, hs, ht); sh->Into = hb; sh->Mouth = dFrom; }
         else raw = dTo - BranchRun(hs, ht, b->Last, 0);
     }
@@ -12139,7 +12153,7 @@ static int RedBall(T_RACE_SHOT *sh, S32 now, double dt) {
                 sh->Y = a->Y + (c->Y - a->Y) * sh->T + RACE_SHOT_RISE;
             } else {
                 // (out of its end: on along the line from where the branch comes back onto the lap)
-                sh->S = RaisedOnLine(line, s_branches[sh->Branch].To); sh->Side = 0;
+                sh->S = RaisedOnLine(line, s_branches[sh->Branch].To < 0 ? s_branches[sh->Branch].From : s_branches[sh->Branch].To); sh->Side = 0;
                 sh->Mode = RED_FOLLOW;
                 GuideAt(line, sh->S, 0, &sh->X, &y, &sh->Z, &hx, &hz);
                 sh->Y = y + RACE_SHOT_RISE;
@@ -14570,7 +14584,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_inCarVar = -1; s_inCarBeta = -1; s_inCarPlaced = 0; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -21298,9 +21312,26 @@ static void DarkFrame(void) {
     }
 }
 
+static void BackInCar(void);
+static void InCarFrame(void) {
+    if (s_inCarVar < 0 || s_inCarVar >= MAX_VARS_GAME || ListVarGame[s_inCarVar] != 1) return;
+    if ((int)NumCube != s_inCarScene || NewCube != -1) { s_inCarScene = (int)NumCube; s_inCarFrames = 0; return; }
+    if (CubeMode != CUBE_EXTERIEUR) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    // (at once where he is to be, and kept there: the camera's first look there)
+    if (s_inCarPlaced) { hero->Obj.X = s_inCarX; hero->Obj.Y = s_inCarY; hero->Obj.Z = s_inCarZ; }
+    if (s_inCarBeta >= 0) { hero->Obj.Beta = s_inCarBeta & 4095; ClearRealAngle(hero); }
+    // (a few frames in: the scene's car actor's life has run its init_buggy, the car is the scene's)
+    if (++s_inCarFrames < 3 || !NumBuggy) return;
+    BackInCar();
+    ListVarGame[s_inCarVar] = 2;
+    Log_Info("[racemod] in_car: Twinsen arrives in his car in scene %d at (%d,%d,%d), turn %d", (int)NumCube, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z, (int)hero->Obj.Beta);
+}
+
 void RaceMod_Frame(void) {
     DarkFrame();
     CarryFrame();
+    InCarFrame();
     ExchangeFrame();
     SeatFrame();
     DriveMarksFrame();

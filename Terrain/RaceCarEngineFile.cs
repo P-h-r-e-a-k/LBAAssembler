@@ -705,6 +705,9 @@ internal static class RaceCarEngineFile
             }
             // (and Twinsen carried off the stage by the catwalk's bouncer: RaceTrackStory.StellaEntities, CatwalkBouncer)
             if (t.Story is { TiredText: >= 0 }) text.Append($"carry_hero={StellaEntities.Scene} {RaceTrackStory.CarryCube} {RaceTrackStory.CarryUp} {RaceTrackStory.CarryAhead}\n");
+            // (the Emerald Moon's arrival: Twinsen in his car outside the saucer he came in, on the landing pad -- RaceTrackStory.Emerald,
+            // MoonArrival; RACEMOD.CPP in_car=, read from the story's file as the keys round it are)
+            if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.MoonInCarLine());
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

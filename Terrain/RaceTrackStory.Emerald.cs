@@ -724,6 +724,111 @@ void comportement_1()
     // (scene 115's cell variable counting the moments before the lift-off -- its own scripts use 0-3)
     private const int SaucerWait = 20, BoardReach = 1800;
 
+    // The moon's arrival (the user, 2026-11-17: "when we first land on the moon let's still be in the spaceship with our car in there too.
+    // Twinsen drives the car out, and there's a short section of extra track that can take him up to the race track. There's already a
+    // landing zone that we're using to fly to Otringal, so we can use this for our Emerald Moon stop off"): the Desert's freighter brings
+    // him to the saucer's inside, scene 115 (RaceTrackStory.Desert's MoonStart), in his car on its lower deck facing the door. A moment, and
+    // it rolls out through the doorway and down the steps, and he is outside on the landing pad in his car (the story file's in_car=,
+    // RACEMOD.CPP InCarFrame: MoonInCar 1, then 2 -- the arrival done), facing north to the ramp up onto the pit lane (the plan's spur:
+    // RaceTrackBuilder, a branch with no way back). Chapter 4, the first time in only. (He sits in it from the start, hidden: the lower deck
+    // is behind the hull's front from the room's camera -- a walk to the car there was never seen, 2026-11-17's test.)
+    public const int MoonInCar = 261;
+    // the car on the lower deck (cells 9-15 x 9-14 at 1536, the doorway x 8-12): its middle, facing the door (+z), as far forward as the
+    // deck goes; the way out -- the deck, the doorway's sill (1792, cells z 14-17), the three steps down to the door (z 18-20)
+    private static readonly (int X, int Y, int Z) ArriveCar = (5376, 1536, 5888);
+    private static readonly (int X, int Y, int Z)[] CarWayOut = { (5376, 1536, 7040), (5376, 1792, 7424), (5376, 1792, 8960), (5376, 1536, 9472), (5376, 1280, 9984), (5376, 1024, 10560) };
+    // outside: the shuttle's door's own landing (scene 115's way out, its zone's info), facing north
+    internal static readonly (int X, int Y, int Z, int Beta) PadArrival = (17920, 512, 15872, 2048);
+    // the car's track labels, the helper's moment counter (a cell variable; the scene's own scripts use 0-3, the lift-off's 20)
+    private const int CarOut = 1, CarDone = 2, ArriveWait = 21;
+    internal static string MoonInCarLine() => $"in_car={MoonInCar} {PadArrival.Beta} {PadArrival.X} {PadArrival.Y} {PadArrival.Z}\n";
+
+    private static void MoonArrival(IslandBeatsA b)
+    {
+        if (!b.Store.SceneExists(ShuttleInside)) return;
+        b.Edit(ShuttleInside, "the moon's arrival: Twinsen in his car on the saucer's lower deck, driven out down its steps onto the landing pad (chapter 4, once)", model =>
+        {
+            // (Twinsen in the car: the scene's start at its middle, he hidden there)
+            (model.Hero.X, model.Hero.Y, model.Hero.Z) = ArriveCar;
+            model.Hero.Beta = 0;
+            int Pt((int X, int Y, int Z) p) => SceneOps.AddTrackPoint(model, new SceneTrackPoint(p.X, p.Y, p.Z));
+            var car = Citadel.CitadelProps.Actor(HangarProps.FreighterBuggy, ArriveCar.X, ArriveCar.Y, ArriveCar.Z, 0);
+            car.Move = 3; car.Armor = WalkOverArmour;
+            var carIndex = model.Actors.Count;
+            var addCar = IslandBeatsA.Add(model, car, $@"void comportement_0()
+{{
+    if (4 != chapter() || 0 != var_game({MoonInCar}))
+    {{
+        invisible(1);
+        suicide();
+    }}
+}}
+");
+            // (rolled a step a tenth of a second at a time: a prop has no walk, and goto_point_3d set it there at once)
+            var drive = new System.Text.StringBuilder($"label(0);\nstop();\n\nlabel({CarOut});\n");
+            var from = ArriveCar;
+            foreach (var to in CarWayOut)
+            {
+                var steps = Math.Max(1, (int)Math.Ceiling(Math.Sqrt((double)(to.X - from.X) * (to.X - from.X) + (double)(to.Z - from.Z) * (to.Z - from.Z)) / 110));
+                for (var k = 1; k <= steps; k++)
+                    drive.Append($"pos_point({Pt((from.X + (to.X - from.X) * k / steps, from.Y + (to.Y - from.Y) * k / steps, from.Z + (to.Z - from.Z) * k / steps))});\nwait_nb_dizieme(1);\n");
+                from = to;
+            }
+            drive.Append($"\nlabel({CarDone});\nstop();\n");
+            var helper = RaceTrackScenes.InvisibleHelper(ArriveCar.X, ArriveCar.Y, ArriveCar.Z);
+            var addHelper = IslandBeatsA.Add(model, helper, $@"void comportement_0()
+{{
+    if (4 != chapter() || 0 != var_game({MoonInCar}))
+    {{
+        suicide();
+    }}
+    else
+    {{
+        cinema_mode(1);
+        set_dir_obj(0, NO_MOVE);
+        set_var_cube({ArriveWait}, 0);
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    add_var_cube({ArriveWait}, 1);
+    if (30 < var_cube({ArriveWait}))
+    {{
+        set_track_obj({carIndex}, label_{CarOut});
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({CarDone} == l_track_obj({carIndex}))
+    {{
+        cinema_mode(0);
+        set_var_game({MoonInCar}, 1);
+        change_cube(230);
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+}}
+");
+            return scripts =>
+            {
+                addCar(scripts); addHelper(scripts);
+                scripts.SetText(carIndex, ScriptKind.Track, drive.ToString());
+                // Twinsen in the car, hidden, held -- before his own scripts, the first time in in chapter 4
+                var life = scripts.GetText(0, ScriptKind.Life);
+                var next = Regex.Matches(life, @"void comportement_(\d+)\(\)").Select(m => int.Parse(m.Groups[1].Value)).DefaultIfEmpty(0).Max() + 1;
+                life = Loose(life, "void comportement_0()\n{", $"void comportement_0()\n{{\n    if (4 == chapter() && 0 == var_game({MoonInCar}))\n    {{\n        invisible(1);\n        set_dir(NO_MOVE);\n        set_comportement(comportement_{next});\n        return;\n    }}");
+                scripts.SetText(0, ScriptKind.Life, life.TrimEnd() + $"\n\nvoid comportement_{next}()\n{{\n}}\n");
+            };
+        });
+    }
+
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
     {
         var log = new List<string>();
@@ -736,6 +841,8 @@ void comportement_1()
         // take us from Emerald Moon to Otringal. Emerald Moon already has a place spaceships take off and land, let's use this area for
         // Twinsen to board a spaceship from the moon to otringal": MoonSaucer. The base's hangar, scene 208, no longer the way)
         MoonSaucer(b, Say(MoonLine.HangarLift));
+        // (and the arrival: in the saucer with his car, driven out onto the landing pad, the ramp up onto the pit lane -- MoonArrival)
+        MoonArrival(b);
         // (Zoe as companion's hints on the Emerald Moon: HAL, then the race -- RaceTrackStory.Companion.cs)
         CompanionTalks[RaceTrackIsland.Emerald.IleFile] = $@"            if ({HalMended} > var_game({QHal}))
             {{

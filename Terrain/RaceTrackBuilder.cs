@@ -931,6 +931,8 @@ internal sealed class TrackRoad
     // A raised road's points with no deck of its own that the cars still drive on (no pieces, no piers; the race-track mode's floor as
     // anywhere: a giant frog's throat, RaceTrackFrog), or null.
     public bool[]? Hidden;
+    // A spur of the raised road (a branch with no way back, RaceTrackPlan.Branches' to -1): driven both ways, up and down, so no arrows on it
+    public bool Spur;
     // A raised road's points with no rail on one side (OpenMinus: the side -Across, OpenPlus: +Across), or null: where another road's
     // deck runs on from it -- a branch leaving the lap or coming back onto it.
     public bool[]? OpenMinus, OpenPlus;
@@ -1123,7 +1125,7 @@ internal static class RaceTrackBuilder
                 {
                     if (run.Points.Length < 4 || run.Heights.Length != run.Points.Length) { report.Notes.Add("WARNING: a branch of the raised road with too few points, or not a height each -- left out"); continue; }
                     report.BranchPlans.Add((run, run.Points.Select(p => p[0] + plan.OriginCellX).ToArray(), run.Points.Select(p => p[1] + plan.OriginCellZ).ToArray(),
-                                            PlanPoint(plan, main, run.From), PlanPoint(plan, main, run.To)));
+                                            PlanPoint(plan, main, run.From), run.To < 0 ? -1 : PlanPoint(plan, main, run.To)));
                 }
             if (plan.Roulette is { } wheel)
             {
@@ -3082,7 +3084,7 @@ internal static class RaceTrackBuilder
         }
         // (not on the stretch of the lap a branch of the raised road goes round -- Wannies Island's shortcut: a car taking it doesn't cross it)
         // (and a branch that runs past the start line -- Wannies Island's pit lane: the stretch round the line)
-        foreach (var bp in report.BranchPlans)
+        foreach (var bp in report.BranchPlans.Where(bp => bp.To >= 0))
         {
             double a = Ahead(bp.From) - 4, b = Ahead(bp.To) + 4;
             if (Ahead(bp.From) > Ahead(bp.To)) { avoid.Add((a, r.Length)); avoid.Add((0, b)); }
@@ -7626,6 +7628,24 @@ internal static class RaceTrackBuilder
         }
 
         bool Striped(int k) => r.Stripe is { } st && (st.From <= st.To ? k >= st.From && k <= st.To : k >= st.From || k <= st.To);
+        // (whether the place `across` (world units, the way Across runs) from point k lies on another road's own deck at about its height --
+        // a branch's, past the edge of the strip beside this road: OpenRails' test, for the strip's edges)
+        bool OnOtherDeck(int k, double across)
+        {
+            if (others is null) return false;
+            double px = r.X[k] - r.Tz[k] * across / 512, pz = r.Z[k] + r.Tx[k] * across / 512;
+            foreach (var other in others)
+            {
+                if (other == r || other.Raised is not { } otherUp) continue;
+                for (var m = 0; m < other.Count; m++)
+                {
+                    if (!otherUp[m] || other.Gap[m] || other.Hidden?[m] == true || Math.Abs(other.H[m] - r.H[k]) > 300) continue;
+                    var reach = (other.RaisedHalfs?[m] ?? o.RaisedHalfWidth) - 0.2;
+                    if (Sq(other.X[m] - px) + Sq(other.Z[m] - pz) <= reach * reach) return true;
+                }
+            }
+            return false;
+        }
 
         // (where the island says so, and this raised road passes over: walls built up from a building cut down for it to the deck's
         // underside, and a lift on the deck down into a building -- RaceTrackIsland.DeckWalls, DeckLifts: Citadel Island's museum, 2026-10-27,
@@ -7703,7 +7723,7 @@ internal static class RaceTrackBuilder
                 return null;
             }).ToArray();
             // (an arrow on every third piece, the way the lap runs; none across the stripe or a boost panel)
-            var arrow = pieces % RaisedArrowEvery == 1 && ids.Count == cells + 1 && line < 0 && !striped.Any(b => b) && boosted.All(b => b is null);
+            var arrow = !r.Spur && pieces % RaisedArrowEvery == 1 && ids.Count == cells + 1 && line < 0 && !striped.Any(b => b) && boosted.All(b => b is null);
             // (a strip beside the road over these cells -- the Emerald Moon's pit lane: where it meets the road's edge, the road's deck
             // reaches across to its far edge, one deck; where it is apart, a deck of its own beside it, clear space between)
             if (ids.Any(k => StripAt(k) is not null))
@@ -7761,8 +7781,10 @@ internal static class RaceTrackBuilder
                     // the strip's own deck (where it has none at a section -- its last cell before the road's edge -- as narrow as a deck goes)
                     double Lo(int k) => StripAt(k) is { } s ? s.Lo * 512 : Half(k);
                     double Hi(int k) => StripAt(k) is { } s ? Math.Max(s.Hi * 512, s.Lo * 512 + 2 * (o.RaisedHalfWidth - r.AsphaltHalf) * 512 + 64) : Half(k) + 2 * (o.RaisedHalfWidth - r.AsphaltHalf) * 512 + 64;
+                    // (no rail along an edge where a branch's deck runs on from it -- the Emerald Moon's ramp off the pit lane, 2026-11-17)
+                    var stripOpen = run.Select(j => (OnOtherDeck(ids[j], Lo(ids[j])), OnOtherDeck(ids[j], Hi(ids[j])))).ToList();
                     var strip = RaceTrackRaisedBody.Tile(Shifted(Lo, Hi), block + j0, r.AsphaltHalf * 512, r.CurbHalf * 512, half, false, lineAt,
-                        Wider(Lo, Hi), double.NaN, null, stripAsphalt, r.Themes?[ids[run[run.Count / 2]]]);
+                        Wider(Lo, Hi), double.NaN, null, stripAsphalt, r.Themes?[ids[run[run.Count / 2]]], null, stripOpen.Any(e => e.Item1 || e.Item2) ? stripOpen : null);
                     if (!Place(strip, origin, Corners(Lo, Hi))) missed++;
                 }
                 j0 = j1;
@@ -7800,7 +7822,7 @@ internal static class RaceTrackBuilder
         var run = plan.Run;
         var n = plan.X.Length;
         var b = new TrackRoad { Name = "branch", Closed = false, X = plan.X.ToArray(), Z = plan.Z.ToArray(), Planned = run.Heights.ToArray(),
-            RaisedHalfs = run.Halfs is { } h && h.Length == n ? h.ToArray() : null };
+            RaisedHalfs = run.Halfs is { } h && h.Length == n ? h.ToArray() : null, Spur = plan.To < 0 };
         b.AsphaltHalf = main.AsphaltHalf; b.CurbHalf = main.CurbHalf; b.VergeHalf = main.VergeHalf; b.Blend = main.Blend;
         Geometry(b, o);
         b.H = run.Heights.ToArray();
@@ -7859,10 +7881,13 @@ internal static class RaceTrackBuilder
         var first = report.Raised.Count;
         PlaceRaised(island, b, o, report, -1, run.ArcJumps ?? Array.Empty<int[]>(), others);
         var last = report.Raised.Count - 1;
-        int from = report.RaisedSpan.IndexOf(plan.From), to = report.RaisedSpan.IndexOf(plan.To);
-        if (last <= first || from < 0 || to < 0) { report.Notes.Add("WARNING: a branch of the raised road doesn't leave the lap's raised road or come back onto it -- left out of the engine's road"); return; }
+        // (a spur, To -1 -- the Emerald Moon's ramp from its landing pad: its last point on the ground, no way back onto the lap there)
+        var spur = plan.To < 0;
+        int from = report.RaisedSpan.IndexOf(plan.From), to = spur ? -1 : report.RaisedSpan.IndexOf(plan.To);
+        if (last <= first || from < 0 || (to < 0 && !spur)) { report.Notes.Add("WARNING: a branch of the raised road doesn't leave the lap's raised road or come back onto it -- left out of the engine's road"); return; }
         report.RaisedBranches.Add(new[] { first, last, from, to });
-        report.Notes.Add($"a branch of the raised road: {b.Length:0} cells from cell ({b.X[0]:0.0}, {b.Z[0]:0.0}) on the lap to ({b.X[n - 1]:0.0}, {b.Z[n - 1]:0.0}), back onto it, " +
+        report.Notes.Add($"a {(spur ? "spur" : "branch")} of the raised road: {b.Length:0} cells from cell ({b.X[0]:0.0}, {b.Z[0]:0.0}) on the lap to ({b.X[n - 1]:0.0}, {b.Z[n - 1]:0.0}), " +
+                         (spur ? $"down onto the ground there ({b.H[n - 1]:0} high), " : "back onto it, ") +
                          $"{run.ArcJumps?.Length ?? 0} carried jump(s), {b.Boosts.Count} boost panel(s)");
     }
 
