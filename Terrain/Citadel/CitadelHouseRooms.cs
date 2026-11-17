@@ -48,7 +48,7 @@ namespace LBAAssembler.Terrain.Citadel;
 //     (The storeroom's own corner -- a tall post, a tall cell, its curve -- tried first: its tall front hid the kitchen's lamp, and the
 //     east edge as high hid the bath);
 //   - the kitchen's doorway in the dining room a cell left (x 23-26);
-//   - the kitchen's wall lamp (the house's block 90 at layers 13-14) a copy with no shape: drawn, not in his way (GhostBlock).
+//   - the kitchen's wall lamp gone (2026-11-17: it stopped Twinsen even as a copy with no shape, GhostBlock).
 internal static class CitadelHouseRooms
 {
     public const int House = 0, Bathroom = 396, Kitchen = 397;
@@ -202,7 +202,6 @@ stop();
             if (GridPaint.Info(library, block) is null) { log.Add($"The house's bathroom and kitchen left out: the house's library has no block {block}"); return log; }
             mirrored[block] = MirrorBlock(bkg, header, ref library, block, Brick, shade);
         }
-        var ghostLamp = GhostBlock(ref library, WallLamp);
         bkg.SetStored(libraryEntry, library);
         int MirrorPos(int block, int pos)
         {
@@ -292,15 +291,17 @@ stop();
             // edge three layers up -- so the bath and the front's things show over them: the step between the two heights the doorway's;
             // the east's north end the house's; the rows and columns past them, walls one doesn't see)
             var unseen = Enumerable.Range(FloorLayer, 6).Select(y => (y, 0, 1)).ToList();
-            List<(int Y, int Block, int Pos)> Footed(List<(int Y, int Block, int Pos)> col, int block, int under) =>
-                Enumerable.Range(FloorLayer - 1, 2).Where(y => !col.Any(c => c.Y == y)).Select(y => (y, block, y == FloorLayer ? under : 0)).Concat(col).ToList();
             var front = RoomZ1 + 1;
-            columns[(4, front)] = Footed(Column(15, 5), 60, 1);
+            // (both sides of the doorway the same -- the low front, the right's: the left was the storeroom front as high as the house's low
+            // walls with a rock foot under it, two layers over the right and another stone -- the user, 2026-11-17, "the wall on the left side
+            // of the door is higher than the right side. We need to make sure the wall colour on the outside is consistent also"; the corner's
+            // end post down with it)
+            columns[(4, front)] = Shifted(15, 5, -2);
             for (var x = RoomX0; x <= RoomX1; x++)
                 columns[(x, front)] = x == gap || x == gap + 1
                     ? new() { (FloorLayer, 31, Mod(x, 3) + 3 * Mod(front, 3)) }   // (no rock under: the rock's lower piece alone drew broken, white
                                                                   // through it -- its upper half is the next block's)
-                    : x < gap ? Footed(Column(8 + Mod(x, 2), 20), 60, 1) : Shifted(8 + Mod(x, 2), 20, -2);
+                    : Shifted(8 + Mod(x, 2), 20, -2);
             for (var z = RoomZ0; z <= RoomZ1; z++) columns[(RoomX1 + 1, z)] = Shifted(28, 16 + Mod(z, 4), 3);
             columns[(RoomX1 + 1, 0)] = Column(28, 0);
             columns[(RoomX1 + 1, front)] = Shifted(28, 20, 3);
@@ -329,7 +330,8 @@ stop();
         };
         var kitchenFurniture = new Dictionary<(int X, int Z), List<(int Y, int Block, int Pos)>>
         {
-            [(5, 4)] = Piece(5, 2, 5, 4).Select(c => c.Item2 == WallLamp ? (c.Item1, ghostLamp, c.Item3) : c).ToList(),   // the wall lamp
+            // (no wall lamp -- the user, 2026-11-17: "The wall light in the kitchen seems to be sticking out quite far and stopping Twinsen
+            // from walking, let's just remove it": its cell plain floor)
             [(5, 8)] = Piece(5, 5, 5, 8),     // the floor lamp in the front's west corner (the doorway in the east one)
         };
         var grids = new[] { (Bathroom, Room(bathFurniture, BathGapX)), (Kitchen, Room(kitchenFurniture, KitchenGapX)) };

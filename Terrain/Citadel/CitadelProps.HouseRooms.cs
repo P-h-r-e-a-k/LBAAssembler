@@ -303,8 +303,16 @@ internal static partial class CitadelProps
         }
         // (its east side, seen over the room's low east edge: a darker wood -- facing the room's light, HrWood ran up its ramp into grey, the
         // user's "it has some grey on the edge", 2026-11-16 -- and the plinth along its foot as the front's)
-        m.Out(new[] { m.P(0, c + new Vector3(0, 60, 0)), m.P(0, Outer(60, N)), m.P(0, Outer(BathRim, N)), m.P(0, c + new Vector3(0, BathRim, 0)) }, HrWoodDark, c + new Vector3(-400, BathRim / 2, 400));
-        m.Out(new[] { m.P(0, c), m.P(0, Outer(0, N)), m.P(0, Outer(60, N)), m.P(0, c + new Vector3(0, 60, 0)) }, HrWoodDark - 1, c + new Vector3(-400, 30, 400));
+        // (in short pieces along it: as one long panel from the room's corner to the front, the engine's sort of the body's faces gave it a
+        // depth halfway to the back, the basin's floor near the front was drawn over its front half -- the grey triangle, the user's
+        // 2026-11-16 and 2026-11-17 pictures: "This grey triangle on the bath in Twinsen's house still needs correcting")
+        const int SidePieces = 6;
+        Vector3 Side(float y, int j) => c + new Vector3(0, y, BathOuter * j / SidePieces);
+        for (var j = 0; j < SidePieces; j++)
+        {
+            m.Out(new[] { m.P(0, Side(60, j)), m.P(0, Side(60, j + 1)), m.P(0, Side(BathRim, j + 1)), m.P(0, Side(BathRim, j)) }, HrWoodDark, c + new Vector3(-400, BathRim / 2, BathOuter * (j + 0.5f) / SidePieces));
+            m.Out(new[] { m.P(0, Side(0, j)), m.P(0, Side(0, j + 1)), m.P(0, Side(60, j + 1)), m.P(0, Side(60, j)) }, HrWoodDark - 1, c + new Vector3(-400, 30, BathOuter * (j + 0.5f) / SidePieces));
+        }
         // (the rim: the north strip, the curve's band, the east strip -- one brass top)
         m.Up(new[] { m.P(0, c + new Vector3(0, BathRim, 0)), m.P(0, Outer(BathRim, 0)), m.P(0, Inner(BathRim, 0)), m.P(0, inset + new Vector3(0, BathRim, 0)) }, HrBrass);
         for (var k = 0; k < N; k++)
@@ -317,10 +325,24 @@ internal static partial class CitadelProps
         Wall(inset, Inner(0, 0));
         for (var k = 0; k < N; k++) Wall(Inner(0, k), Inner(0, k + 1));
         Wall(Inner(0, N), inset);
+        // (in rings from the basin's corner out to its curve, short pieces: as one fan of long triangles from the corner, the engine's sort
+        // of the body's faces put one over the wooden front at the bath's south end -- a grey triangle across it, the user's 2026-11-16 and
+        // 2026-11-17 pictures, "This grey triangle on the bath in Twinsen's house still needs correcting")
         void Surface(float y, int colour)
         {
-            var hub = m.P(0, inset + new Vector3(0, y, 0));
-            for (var k = 0; k < N; k++) m.Up(new[] { hub, m.P(0, Inner(y, k)), m.P(0, Inner(y, k + 1)) }, colour);
+            const int Rings = 3;
+            var corner = inset + new Vector3(0, y, 0);
+            var hub = m.P(0, corner);
+            // (each ring's points made once and shared: the body's points are few -- the engine's limit)
+            var at = new int[Rings + 1, N + 1];
+            for (var ring = 1; ring <= Rings; ring++)
+                for (var k = 0; k <= N; k++) at[ring, k] = m.P(0, corner + (Inner(y, k) - corner) * ring / Rings);
+            for (var k = 0; k < N; k++)
+            {
+                m.Up(new[] { hub, at[1, k], at[1, k + 1] }, colour);
+                for (var ring = 1; ring < Rings; ring++)
+                    m.Up(new[] { at[ring, k], at[ring + 1, k], at[ring + 1, k + 1], at[ring, k + 1] }, colour);
+            }
         }
         Surface(BathBottom, HrPorcelainShade);
         if (water > 0) Surface(water, HrWater);
