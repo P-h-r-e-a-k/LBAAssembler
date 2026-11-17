@@ -269,6 +269,7 @@ internal static partial class CitadelProps
                    (CurtainLeft, "a curtain", BuildCurtainLeft), (CurtainRight, "a curtain", BuildCurtainRight) }
                  .Concat(PictureBodies())
                  .Concat(OfficeBodies())
+                 .Concat(FoldedBodies())
                  .Concat(Enumerable.Range(0, BayeuxParts).Select(k => (Bayeux + k, $"the Bayeux hanging's part {k + 1}", (Func<byte[], Body>)(h => BuildBayeux(h, k))))))
         {
             var bytes = build(header).Write();

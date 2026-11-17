@@ -666,6 +666,8 @@ internal static class RaceTrackService
             // (and the story's racing overalls in the tunic's place and racing helmet in the pearl's -- Twinsen's bodies, the inventory's
             // models and texts -- after every body is made: none moves, the cars' drivers are their own -- Citadel/CitadelOveralls)
             if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelOveralls.Install(gameDirectory));
+            // (and his pyjamas, from his everyday body as the overalls are -- Citadel/CitadelPyjamas, RaceTrackStory.Pyjamas)
+            if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelPyjamas.Install(gameDirectory));
             // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is
             // used -- RaceSounds)
             log.AddRange(RaceSounds.Install(gameDirectory));

@@ -1257,6 +1257,7 @@ void comportement_1()
         TraluBarOpensGate(p);
         TraluBackGate(p);
         SecretChamber(p);
+        Pyjamas(p);
         Lighthouse(p);
         LighthouseClimb(p);
         HiddenPages(p);

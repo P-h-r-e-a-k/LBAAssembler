@@ -65,6 +65,9 @@ internal static partial class RaceTrackStory
         ZoeHintWheel, ZoeHintRace, ZoeHintFerry,
         // (the spanking's third round, for the driving gloves left in the car and stolen -- RaceTrackStory.SecretChamber, 2026-11-16)
         ZoeGloves,
+        // (up from the chamber, sent to wash and to bed; and the next morning in his pyjamas at the front door -- RaceTrackStory.Pyjamas,
+        // 2026-11-17)
+        ZoeTeeth, TwinsenDressFirst,
     }
     private static readonly string[][] EveningLines =
     {
@@ -418,6 +421,24 @@ internal static partial class RaceTrackStory
             "¡Y otra más por tus guantes de conducir! ¿Cuántas veces te he dicho que no los dejes en el coche? ¡Y ahora te los han robado!",
             "E un'altra per i tuoi guanti da pilota! Quante volte ti ho detto di non lasciarli in macchina? E adesso te li hanno rubati!",
             "E mais uma pelas tuas luvas de condução! Quantas vezes te disse para não as deixares no carro? E agora roubaram-tas!",
+        },
+        new[]
+        {
+            "Bathroom, now. Brush your teeth, then straight to bed!",
+            "À la salle de bain, tout de suite. Brosse-toi les dents, et ensuite droit au lit !",
+            "Ab ins Badezimmer. Zähne putzen, und dann sofort ins Bett!",
+            "Al baño, ya. ¡Lávate los dientes y directo a la cama!",
+            "In bagno, subito. Lavati i denti, e poi dritto a letto!",
+            "Para a casa de banho, já. Lava os dentes e depois direto para a cama!",
+        },
+        new[]
+        {
+            "I can't go out in my pyjamas! My racing suit's folded on the chair by the bed.",
+            "Je ne peux pas sortir en pyjama ! Ma combinaison de course est pliée sur la chaise près du lit.",
+            "Im Schlafanzug kann ich nicht raus! Mein Rennanzug liegt gefaltet auf dem Stuhl neben dem Bett.",
+            "¡No puedo salir en pijama! Mi mono de carreras está doblado en la silla junto a la cama.",
+            "Non posso uscire in pigiama! La mia tuta da corsa è piegata sulla sedia accanto al letto.",
+            "Não posso sair de pijama! O meu fato de corrida está dobrado na cadeira ao lado da cama.",
         },
     };
     // (after the chapters' lines in Citadel Island's texts)
@@ -858,6 +879,10 @@ void comportement_1()
             model.TrackPoints.Add(new SceneTrackPoint(foot.X - 250, foot.Y - HouseLiftUp + Citadel.CitadelProps.LiftTop + 4, foot.Z + 330));
             model.TrackPoints.Add(new SceneTrackPoint(foot.X - 250, foot.Y + Citadel.CitadelProps.LiftTop + 4, foot.Z + 330));
             int bed = first, byDoor = first + 1, onLift = first + 2, zoeUnder = first + 3, zoeUp = first + 4;
+            // (up from the chamber, sent to wash: his way from the lift in the storeroom down its two steps, across the bedroom and in at the
+            // bathroom's door -- RaceTrackStory.Pyjamas)
+            var toBath = model.TrackPoints.Count;
+            foreach (var (x, z) in BathWay) model.TrackPoints.Add(new SceneTrackPoint(x, Citadel.CitadelHouseRooms.FloorY, z));
             // (the lift down to the secret chamber, and the front door: a switch of its own, locked once Zoe has had her word -- and Action
             // there says so: RaceTrackStory.SecretChamber)
             var (lift, liftHelper) = AddLift(p, model);
@@ -960,7 +985,50 @@ goto(label_0);
     {{
         set_change_cube({FrontDoorSwitch}, 0);
     }}
-    set_comportement(comportement_1);
+    if ({PyjamasWash} == var_game({PyjamaVar}))
+    {{
+        set_var_game({PyjamaVar}, {PyjamasOn});
+        body({Citadel.CitadelPyjamas.PyjamaBody});
+    }}
+    if ({Scolded} == var_game({Drunk}) && 0 == var_game({PyjamaVar}) && {LiftShaftZone} == zone())
+    {{
+        set_var_cube({PyjamaWait}, 0);
+        set_comportement(comportement_10);
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+// (up from the chamber after the spanking: the lift up, a moment, then Zoe sends him to wash and to bed -- and he goes, into the bathroom;
+// RaceTrackStory.Pyjamas, the user, 2026-11-17)
+void comportement_10()
+{{
+    if ({LiftRisen} == l_track_obj({lift[0]}))
+    {{
+        set_var_cube({PyjamaWait}, 0);
+        set_comportement(comportement_12);
+    }}
+}}
+
+// (a few frames after: the lift's helper gives him back to the player as it is up -- after that)
+void comportement_12()
+{{
+    add_var_cube({PyjamaWait}, 1);
+    if (5 < var_cube({PyjamaWait}))
+    {{
+        set_dir(NO_MOVE);
+        anim(0);
+        {Aside($"message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeTeeth)});")}
+        set_var_game({PyjamaVar}, {PyjamasWash});
+        set_track(label_{ToBath});
+        set_comportement(comportement_11);
+    }}
+}}
+
+void comportement_11()
+{{
 }}
 
 void comportement_1()
@@ -1036,6 +1104,13 @@ anim({Asleep});
 wait_nb_dizieme(15);
 
 label({CandleOut});
+stop();
+
+label({ToBath});
+anim(1);
+{string.Concat(Enumerable.Range(0, BathWay.Length).Select(k => $"goto_point({toBath + k});\n"))}anim(0);
+
+label({ToBath + 1});
 stop();
 ");
                 scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nanim(0);\nstop();\n\nlabel({ZoeLiftRise});\nanim(0);\npos_point({zoeUnder});\nbeta(512);\nspeed({LiftSpeed});\ngoto_point_3d({zoeUp});\nstop();\n");

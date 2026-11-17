@@ -507,7 +507,7 @@ internal static class CitadelOveralls
     // tunic")
     private static readonly int[] CoupleBodies = { 17, 175 };
     private static readonly HashSet<int> MirroredCouples = new() { 175 };
-    private const int CoupleEntity = 5;
+    internal const int CoupleEntity = 5;
     private static readonly Vector3 CoupleShiftLeft = new(-100, 0, 0);
     internal static Body CoupleInSuit(Body couple, Body suit, bool mirrored = false)
     {

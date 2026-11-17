@@ -240,6 +240,11 @@ void comportement_1()
             model.TrackPoints.Add(new SceneTrackPoint(LiftAt.X - 250, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z + 330));
             var zoeHigh = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint(LiftAt.X - 250, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4 + ChamberLiftUp, LiftAt.Z + 330));
+            // (after the spanking: Zoe walks to the lift -- a step off it on the floor, then onto it -- and waits there for him; he is free
+            // to look round the chamber, up off her lap before her -- the user, 2026-11-17: "instead of scripting him back up on the elevator,
+            // let's have Zoe tell him to go to bed, but then leave the player to explore the area", "Let's have Zoe walk to the elevator and
+            // wait for Twinsen to join her before they go upstairs, If Twinsen gets to the elevator first, let's force him to wait for Zoe")
+            var zoeNear = SceneOps.AddTrackPoint(model, new SceneTrackPoint(LiftAt.X - 900, LiftAt.Y, LiftAt.Z + 330));
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftUpZone, X0 = LiftAt.X - 512, X1 = LiftAt.X + 511, Y0 = LiftAt.Y, Y1 = LiftAt.Y + 800, Z0 = LiftAt.Z - 512, Z1 = LiftAt.Z + 511, Info = new int[8] });
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftDownZone, X0 = LiftAt.X - 512, X1 = LiftAt.X + 511, Y0 = LiftAt.Y + ChamberLiftDown - 200, Y1 = LiftAt.Y + ChamberLiftDown + 400, Z0 = LiftAt.Z - 512, Z1 = LiftAt.Z + 511, Info = new int[8] });
             // the bedroom's chair under Zoe (its seat CitadelSpanking.SeatBack behind her place, under her hips; the actor itself
@@ -278,13 +283,14 @@ void comportement_1()
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = LandslideZone, X0 = 15872, X1 = 17919, Y0 = 768, Y1 = 2815, Z0 = 30000, Z1 = 32255, Info = new int[8] });
             var lap = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint((int)Math.Round(ZoeInChamber.X + fx * 170), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z + fz * 170)));
+            var standUp = SceneOps.AddTrackPoint(model, new SceneTrackPoint((int)Math.Round(ZoeInChamber.X + fx * 750), ZoeInChamber.Y, (int)Math.Round(ZoeInChamber.Z + fz * 750)));
             var across = (zoe.Beta - 1024 + 4096) % 4096;
             // (Slaps3: one more, for the driving gloves left on the car's seat and stolen that morning, as Zoe had told him not to many a time --
             // the user, 2026-11-16, "get her to spank him an extra time for leaving his driving gloves in his car where they got stolen")
             // (labels of their own, none ZoeRide's: with Slaps3 at 30 too, set_track_obj to her ride found the gloves' slap first -- she
             // spanked the air once more on the chair while Twinsen rode up alone: the user, 2026-11-17, "she keeps her spanking animation
             // for a couple of seconds after Twinsen has moved")
-            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21, Slaps3 = 32, Slapped3 = 33;
+            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21, Slaps3 = 32, Slapped3 = 33, ZoeToLift = 34, ZoeAtLift = 35;
             string Slaps(int n) => slap < 0 ? "wait_nb_second(1);\n" : string.Concat(Enumerable.Repeat($"sample({slap});\nwait_nb_dizieme(3);\n", n));
             zoe.Flags &= ~3u;   // (and no brick collision: her hips back over the chair)
             zoe.Flags |= RaceTrackScenes.CarrierFlag;   // (a carrier: goto_point_3d glides her up the lift beside Twinsen)
@@ -345,6 +351,15 @@ anim(0);
 pos_point({zoeOn});
 speed({LiftSpeed});
 goto_point_3d({zoeHigh});
+stop();
+
+label({ZoeToLift});
+anim(1);
+goto_point({zoeNear});
+pos_point({zoeOn});
+anim(0);
+
+label({ZoeAtLift});
 stop();
 ");
                 liftLife(scripts);
@@ -474,10 +489,50 @@ void comportement_6()
         set_var_game({Drunk}, {Scolded});
         body(1);
         anim(0);
-        pos_point({onLift});
+        pos_point({standUp});
         obj_col(1);
         cinema_mode(0);
+        set_dir(MOVE_MANUAL);
+        set_track_obj({zoeIndex}, label_{ZoeToLift});
+        set_comportement(comportement_7);
+    }}
+}}
+
+// (free to look round while Zoe goes to the lift; onto it, held there till she is on it too, and up together)
+void comportement_7()
+{{
+    if ({LandslideZone} == zone())
+    {{
+        if (0 == var_cube({LandslideSaid}))
+        {{
+            message({EveningId(p.Say, EveningLine.Landslide)});
+            set_var_cube({LandslideSaid}, 1);
+        }}
+    }}
+    else
+    {{
+        set_var_cube({LandslideSaid}, 0);
+    }}
+    swif (1 == action())
+    {{
+        if ({BoatZone} == zone())
+        {{
+            message({EveningId(p.Say, EveningLine.Boat)});
+        }}
+    }}
+    if ({LiftUpZone} == zone() && {Driving} != comportement_hero())
+    {{
         set_dir(NO_MOVE);
+        anim(0);
+        set_comportement(comportement_8);
+    }}
+}}
+
+void comportement_8()
+{{
+    if ({ZoeAtLift} == l_track_obj({zoeIndex}))
+    {{
+        pos_point({onLift});
         set_track_obj({zoeIndex}, label_{ZoeRide});
         {Ride(lift)}
         set_comportement(comportement_1);

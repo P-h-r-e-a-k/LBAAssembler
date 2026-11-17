@@ -720,6 +720,9 @@ internal static class RaceCarEngineFile
                 text.Append($"follow_decor={RaceTrackStory.QuayLiftScene} {Citadel.CitadelProps.QuayLift} {grate} {Citadel.CitadelProps.LiftTop} {file}\n");
             // (the player 18 or more: Stella Entities' lift down open -- RACEMOD.CPP adult_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
+            // (Twinsen in his pyjamas from the bathroom after the spanking till he dresses from the chair by his bed -- RACEMOD.CPP pyjamas=,
+            // RaceTrackStory.Pyjamas)
+            if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.PyjamaLine);
             // (Stella Entities' stage and catwalk drawn whole into the background, no brick over them: its catwalk's cells real bricks that
             // hide Twinsen behind it -- RACEMOD.CPP no_recover=, StellaEntities' catwalk cells)
             // (and the props drawn after the stage -- the rail, the steps, the shelf: the catwalk's bricks' shapes copied the background, the
