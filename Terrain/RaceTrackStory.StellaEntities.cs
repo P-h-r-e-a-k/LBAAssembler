@@ -379,6 +379,10 @@ stop();
                 patron.Beta = StellaEntities.FacingMiddle(x, z);
                 patron.Move = 0;
                 patron.Flags &= ~(2u | 0x800u);
+                // (walked through, as the dancers are: their boxes, wider than they look, leaning on the rail, walled the way round the
+                // stage -- the user, 2026-11-17, "There's a weird section here preventing Twinsen from walking forwards, I'm not sure why",
+                // the patron at 320 degrees, 8.15 cells out)
+                patron.Armor = WalkOverArmour;
                 adds.Add(IslandBeatsA.Add(model, patron, "void comportement_0()\n{\n}\n"));
             }
             return scripts => { foreach (var add in adds) add(scripts); };
