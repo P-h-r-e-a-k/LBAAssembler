@@ -588,6 +588,10 @@ internal static partial class RaceTrackStory
                 ship.Beta = 0;
                 // (walked through: its box, as wide as the saucer, kept Twinsen from the shuttle's door at the platform's foot)
                 ship.Armor = WalkOverArmour;
+                // (and not moved by what walks into it: with the game's CHECK_OBJ_COL kept, its own collision put it out of Twinsen's way --
+                // he pushed it about the pad, the user, 2026-11-17: "We need to prevent the spaceship actor on Emerald moon being able to be
+                // pushed by Twinsen")
+                ship.Flags &= ~0x1u;
                 var addShip = IslandBeatsA.Add(model, ship, @"void comportement_0()
 {
 }
