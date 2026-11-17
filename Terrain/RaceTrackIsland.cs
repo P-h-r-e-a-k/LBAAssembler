@@ -33,6 +33,8 @@ internal sealed record RaceTrackIsland(
         // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
         // we're not removing any actors or zones we don't need the same as we checked with citadel")
         KeepOffRoadActors = true,
+        // (the Temple of Bu's doorway big enough for a car, which drives into it: TempleDoorway, the user 2026-11-17)
+        WideTempleDoor = true,
         // (the racers' garage, a big tent on the sand after the start line: the user, 2026-11-07)
         GarageTent = true,
         // (... where the user chose it, 2026-11-11 -- "Let's make the tent area bigger and slightly to the left ... so it doesn't go over the
@@ -310,6 +312,8 @@ internal sealed record RaceTrackIsland(
     // (RaceTrackService). Citadel Island's: the path below the town circuit's bank by the museum's door, a fin of the bank's ground across
     // it (RaceTrackIsland.Citadel)
     public (int X0, int Z0, int X1, int Z1, int Height)[]? TwinFlats { get; init; }
+    // The Temple of Bu's doorway widened for a car (TempleDoorway): the Desert's.
+    public bool WideTempleDoor { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }
 
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,

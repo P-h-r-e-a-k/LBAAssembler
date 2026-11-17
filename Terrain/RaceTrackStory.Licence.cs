@@ -21,12 +21,12 @@ internal static partial class RaceTrackStory
 {
     public const int LicenceSlot = 38, LicenceCardText = 800;
     // drive_marks='s variable: the first marker's index while the drive is asked for, 250 under way, 251 Twinsen out at the temple, 252 done
-    public const int DriveMarksVar = 248, DriveMarks = 3, MarksDriving = 250, MarksArrived = 251, MarksDone = 252;
+    public const int DriveMarksVar = 248, DriveMarks = 7, MarksDriving = 250, MarksArrived = 251, MarksDone = 252;
     // the gate's cube variables: what the guard has said (a car wanted, no licence) so he says it once a visit
     private const int GateSaidCar = 43, GateSaidNoLicence = 44;
     // the door down into the temple in the Desert's start scene (its zone's scene), and how far before it along the road the guard and
     // the markers are (cells)
-    private const int TempleScene = 10;
+    private const int TempleScene = 10, TempleDoorSwitch = 3;
     private const double GuardBefore = 13, GuardOut = 4;
     private static readonly double[] MarksBefore = { 9, 5, 1 };
 
@@ -99,6 +99,13 @@ internal static partial class RaceTrackStory
             var firstMark = model.Actors.Count;
             foreach (var m in marks)
                 adds.Add(IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(Local(m.X, model.CubeX), y, Local(m.Z, model.CubeY)), "void comportement_0()\n{\n}\n"));
+            // (and on off the road, down to the temple's doorway -- widened for the car, TempleDoorway -- and into it: the user, 2026-11-17,
+            // "Can we remodel the entrance to the temple of bu so it's big enough to accept a car, and does so")
+            foreach (var (mx, mz) in TempleDoorway.DoorwayMarks)
+                adds.Add(IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(mx, 500, mz), "void comportement_0()\n{\n}\n"));
+            // (the door into the temple, scene 10, switched off while the car is driven in: it stops in the door's zone, and Twinsen got out
+            // into it -- the hangar is the way on. On again as the scene loads next time)
+            foreach (var z in model.Zones.Where(z => z.Type == 0 && z.Num == TempleScene)) z.Info[4] = TempleDoorSwitch;
             var guard = officer.Clone();
             (guard.X, guard.Y, guard.Z) = (Local(guardAt.X, model.CubeX), y, Local(guardAt.Z, model.CubeY));
             guard.Beta = RaceTrackMath.Turn(Math.Atan2(-nx, -nz));
@@ -138,6 +145,7 @@ internal static partial class RaceTrackStory
             {{
                 message_obj({gi}, {say(DesertLine.GateLicence)});
                 set_var_game({DriveMarksVar}, {firstMark});
+                set_change_cube({TempleDoorSwitch}, 0);
                 set_comportement(comportement_1);
             }}
             else

@@ -770,6 +770,7 @@ internal static class RaceTrackService
         NoteLostDoors(island, options.DoorBoxes, atDoors, report);
         if (doorPieces is not null) RaceTrackBuilder.RestoreLostBuildings(island, options.DoorBoxes, doorPieces, options, report);
         RaceTrackBuilder.LiftShafts(island, options, report);
+        if (options.Island.WideTempleDoor) TempleDoorway.Widen(island, Path.Combine(gameDirectory, options.Island.OblFile), options, report);
         // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
         // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
         if (island.GroundPages.Count > 0)
