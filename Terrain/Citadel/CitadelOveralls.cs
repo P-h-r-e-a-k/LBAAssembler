@@ -463,8 +463,14 @@ internal static class CitadelOveralls
         byte[] car, gun;
         try
         {
-            car = WithHelmet(Body.Read(bodies.Read(driving.Value.Body), 2), 8, 4, BuggyHead).Write();
-            gun = firing is { } f ? WithHelmet(Body.Read(bodies.Read(f.Body), 2), 8, 4, BuggyHead).Write() : car;
+            // (written lit: the buggy's polygons are the game's lit ones -- flat-lit and Gouraud, each colour its ramp's first step, the
+            // light added -- and a body read back is written flat and unlit unless Lit says otherwise: the whole car drawn in its ramps'
+            // darkest steps, nearly black -- the user, 2026-11-17, "My car in my open game has just turned very dark when Twinsen is in it"
+            // ... "Is it possible that the remodelled car with Twinsen wearing his helmet has been made in the wrong colours?". Lit, its
+            // lit polygons are Gouraud ones with every point's normal, its solid ones (type 0) and see-through ones (2) as they were)
+            Body Lit(Body b) { b.Lit = true; return b; }
+            car = Lit(WithHelmet(Body.Read(bodies.Read(driving.Value.Body), 2), 8, 4, BuggyHead)).Write();
+            gun = firing is { } f ? Lit(WithHelmet(Body.Read(bodies.Read(f.Body), 2), 8, 4, BuggyHead)).Write() : car;
         }
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or ArgumentOutOfRangeException)
         { return new() { $"Twinsen's car with his helmet on: not made -- {e.Message}" }; }
