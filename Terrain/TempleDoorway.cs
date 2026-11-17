@@ -33,7 +33,10 @@ internal static class TempleDoorway
     // the drive's points off the road (cube-local units of scene 67, cube (9, 10)): south through the wall's gap, round to the doorway's
     // axis and in under the lintel (the car stops about a cell short of its last point) -- the door into the temple (scene 10) switched
     // off meanwhile, the car and Twinsen getting out of it in its zone (RaceTrackStory.Licence, TempleDoorSwitch)
-    public static readonly (int X, int Z)[] DoorwayMarks = { (26266, 8448), (26266, 12032), (27392, 13056), (29440, 13056) };
+    // (the user's first run, 2026-11-17: the car turned for the doorway as it came down through the gap, ran wide up onto the south slab
+    // and stuck under the lintel -- the race mod's rescue put it back on the road: now lined up on the doorway's axis, z 25.5, two cells
+    // before the slabs, x 52 to 54, first)
+    public static readonly (int X, int Z)[] DoorwayMarks = { (26266, 8448), (26266, 11520), (26624, 13056), (27648, 13056), (29440, 13056) };
 
     public static void Widen(IslandFile island, string oblPath, RaceTrackOptions options, RaceTrackReport report)
     {

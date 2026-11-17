@@ -21,7 +21,7 @@ internal static partial class RaceTrackStory
 {
     public const int LicenceSlot = 38, LicenceCardText = 800;
     // drive_marks='s variable: the first marker's index while the drive is asked for, 250 under way, 251 Twinsen out at the temple, 252 done
-    public const int DriveMarksVar = 248, DriveMarks = 7, MarksDriving = 250, MarksArrived = 251, MarksDone = 252;
+    public const int DriveMarksVar = 248, DriveMarks = 8, MarksDriving = 250, MarksArrived = 251, MarksDone = 252;
     // the gate's cube variables: what the guard has said (a car wanted, no licence) so he says it once a visit
     private const int GateSaidCar = 43, GateSaidNoLicence = 44;
     // the door down into the temple in the Desert's start scene (its zone's scene), and how far before it along the road the guard and
