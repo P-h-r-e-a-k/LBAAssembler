@@ -52,7 +52,7 @@ flat = n - 1 - 4
 heights = []
 for i in range(n):
     if i <= leave:
-        heights.append(DECK)
+        heights.append(DECK - 8)
     elif i >= flat:
         heights.append(GROUND)
     else:
@@ -68,7 +68,9 @@ for i in range(n):
         else:
             e = g * (u - BLEND / 2)
         heights.append(round(DECK + (GROUND - DECK) * e, 1))
-hidden_last = max(i for i, q in enumerate(pts) if q[0] > EDGE - 0.2)
+# (its own deck from two cells in on the strip, 8 under its surface there: the strip drawn over it, no gap where they meet -- the user,
+# 2026-11-17, "join the slope neatly to our track without the massive gap")
+hidden_last = max(i for i, q in enumerate(pts) if q[0] > EDGE + 2.0)
 grades = [abs(heights[i + 1] - heights[i]) / (512 * (s[i + 1] - s[i])) for i in range(n - 1)]
 print(f'{n} points, {s[-1]:.1f} cells; leaves the strip at {leave} ({pts[leave][0]:.2f}, {pts[leave][1]:.2f}); hidden 0..{hidden_last}; flat from {flat}; steepest grade {max(grades):.2f}')
 # the lap's point where it leaves: the nearest of the lap's (the straight at x 60.5)

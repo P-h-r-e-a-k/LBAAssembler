@@ -3759,8 +3759,10 @@ static int OnSomeDeck(double wx, double wz, S32 level) {
         const double tt = w.Tt, px = w.Px, pz = w.Pz;
         const double d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz);
         const double half = a->Half + (c->Half - a->Half) * tt;
-        if (d2 > half * half) continue;
         const double side = (w.Sx * (wz - pz) - w.Sz * (wx - px)) / sqrt(w.Len2);
+        // (on the road, or on the strip beside it -- the Emerald Moon's pit lane: a spur off the strip's edge took the car held there for
+        // its own, and with the strip not counted as a deck the rail stood across the strip in front of it and behind, 2026-11-17)
+        if (d2 > half * half && !OnStrip(a, c, tt, side, d2, 0)) continue;
         const double yy = a->Y + (c->Y - a->Y) * tt + side * (a->Bank + (c->Bank - a->Bank) * tt) / RAISED_BANK_UNITS;
         if (fabs(yy - level) <= RAISED_LEVEL) return 1;
     }
