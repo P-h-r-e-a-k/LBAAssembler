@@ -957,6 +957,9 @@ static S32 s_dtPicR = 0;
 static int s_replaySet[8][2], s_nbReplay = 0, s_replayGold = -1, s_replayPending = 0;
 // replay_ms=<ms>: a replay that is a clip, over that long after its first scene loads -- back to the menu (s_menuAt), RaceMod_ReplayOver
 static S32 s_replayMs = 0, s_replayOver = 0, s_replayEndAt = 0;
+// (dart_show=: the Deadly Darts replay -- DartShowFrame)
+static int s_dsVar = -1, s_dsStep = -1, s_dsVisit = 0, s_dsDart = 0;
+static S32 s_dsAt = 0, s_dsLast = 0;
 // replay_end=<var> <value>: a replay over as that game variable comes to that value -- the picture faded out, back to the menu (ReplayEndFrame;
 // the spanking's: Zoe's "straight to bed" said, the user, 2026-11-14: "fade out again back to the menu after Zoe tells Twinsen to go straight to bed")
 static S32 s_replayEndVar = -1, s_replayEndValue = 0;
@@ -4720,6 +4723,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "replay_set") && s_nbReplay < 8) { if (sscanf(v, "%d %d", &s_replaySet[s_nbReplay][0], &s_replaySet[s_nbReplay][1]) == 2) s_nbReplay++; }
         else if (!strcmp(key, "replay_gold")) s_replayGold = atoi(v);
         else if (!strcmp(key, "replay_ms")) s_replayMs = atoi(v);
+        else if (!strcmp(key, "dart_show")) { s_dsVar = atoi(v); s_dsStep = -1; s_dsAt = 0; s_dsLast = 0; }
         else if (!strcmp(key, "replay_end")) { s_replayEndDelay = 0; if (sscanf(v, "%d %d %d", &s_replayEndVar, &s_replayEndValue, &s_replayEndDelay) < 2) s_replayEndVar = -1; }
         else if (!strcmp(key, "replay_at")) s_hasReplayAt = sscanf(v, "%d %d %d %d", &s_replayAt[0], &s_replayAt[1], &s_replayAt[2], &s_replayAt[3]) == 4;
         else if (!strcmp(key, "pool") && s_nbPools < RACE_MAX_POOLS) {
@@ -14595,7 +14599,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -20438,6 +20442,108 @@ static void DartBoardPick(void) {
         return;
     }
 }
+// ---- the Deadly Darts replay (dart_show=<game var>): the nine-darter thrown alone at the darts scene's board -- the user, 2026-11-17: "For
+// the Deadly Darts achievement let's have a short replay of Twinsen throwing the 9 darts, let's have him throw 3 darts, walk to the board,
+// retrieve them, throw the next 3, then throw the final three, with a short celebration pose at the end, before fading back to the
+// achievements menu. Let's have the dart replay feature in the Tavern and not the Tralu cave". Three visits -- 180, 151, the 170 checkout
+// (T20 T20 T20, T20 D20 T17, T20 T20 Bull: 501) -- each dart his throw and its flight into the board where it scores; after the first two
+// visits a walk up to the board, the darts pulled out, and back to the oche; after the last his found-it pose, then the variable 1 (the
+// replay's replay_end= fades back to the menu). Only where the race file says so: RACEGAME.CPP's replay writes the key.
+static const char *const s_dsThrows[9] = {"t20", "t20", "t20", "t20", "d20", "t17", "t20", "t20", "bull"};
+// (where on the board a named dart lands, in its radii: RaceMod_TestDarts's way)
+static void DartSpotOf(const char *s, double *x, double *y) {
+    static const int order[20] = {20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5};
+    *x = 0; *y = 0;
+    if (!strcmp(s, "bull")) return;
+    double r = 0.8;
+    const int v = atoi(s[0] == 't' || s[0] == 'd' ? s + 1 : s);
+    if (s[0] == 't') r = 0.615; else if (s[0] == 'd') r = 0.955;
+    int i = 0;
+    while (i < 20 && order[i] != v) i++;
+    if (i == 20) return;
+    const double a = i * 3.14159265358979 / 10;
+    *x = r * sin(a); *y = -r * cos(a);
+}
+// (Twinsen a walker's step toward (x, z), turned to it: whether he is there)
+static int DartShowWalk(double x, double z, double dt) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z, d = sqrt(dx * dx + dz * dz), step = 900 * dt;
+    if (d <= step + 1) { hero->Obj.X = (S32)x; hero->Obj.Z = (S32)z; return 1; }
+    hero->Obj.X += (S32)(dx / d * step); hero->Obj.Z += (S32)(dz / d * step);
+    hero->Obj.Beta = (S32)(atan2(dx, dz) * 4096 / (2 * 3.14159265358979)) & 4095; ClearRealAngle(hero);
+    return 0;
+}
+static int DartShowFrame(S32 now) {
+    if (s_dsVar < 0 || s_dsVar >= MAX_VARS_GAME || s_dsStep >= 9) return 0;
+    DartBoardPick();
+    if (s_dtScene < 0 || !s_dtHasFace || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene) return 0;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double dt = s_dsLast ? fmin(0.1, fmax(0.0, (now - s_dsLast) / 1000.0)) : 0;
+    s_dsLast = now;
+    // (in front of the board, a walk's way short of its face: where the darts are pulled out)
+    const double fb = s_dtFace[3] * 2 * 3.14159265358979 / 4096, bx = s_dtFace[0] + 650 * sin(fb), bz = s_dtFace[1] + 650 * cos(fb);
+    if (s_dsStep < 0) {
+        // the start: a moment for the scene, then on the oche, facing the board, his own darts kept aside
+        if (!s_dsAt) { s_dsAt = now; return 1; }
+        if (now - s_dsAt < 800) return 1;
+        DartsKeep(); DartsPulled(); s_dtN = 0;
+        hero->Move = NO_MOVE;
+        hero->Obj.X = s_dtSpot[0]; hero->Obj.Z = s_dtSpot[1]; hero->Obj.Beta = DartFacing(hero->Obj.X, hero->Obj.Z); ClearRealAngle(hero);
+        InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO); s_dtHeroWalk = 0;
+        s_dsStep = 0; s_dsVisit = 0; s_dsDart = 0; s_dsAt = now;
+        Log_Info("[racemod] dart_show: the nine-darter at scene %d's board", (int)NumCube);
+    }
+    switch (s_dsStep) {
+    case 0:   // a visit's darts, one at a time
+        if (s_dsDart > 0 && now - s_dsAt > 800 && now - s_dsAt < 900) InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+        if (now - s_dsAt > (s_dsDart == 0 ? 900 : 1300)) {
+            if (s_dsDart == 3) {
+                s_dsStep = s_dsVisit < 2 ? 1 : 4; s_dsAt = now;
+                if (s_dsStep == 4) { InitAnim(GEN_ANIM_TROUVE, ANIM_THEN, NUM_PERSO); Log_Info("[racemod] dart_show: 501 in nine darts -- the pose"); }
+                else InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+                break;
+            }
+            double x, y;
+            DartSpotOf(s_dsThrows[s_dsVisit * 3 + s_dsDart], &x, &y);
+            InitAnim(GEN_ANIM_DART, ANIM_REPEAT, NUM_PERSO);
+            if (s_dtN < 3) {
+                const double b = DartFacing(hero->Obj.X, hero->Obj.Z) * 2 * 3.14159265358979 / 4096;
+                s_dtMark[s_dtN][0] = x; s_dtMark[s_dtN][1] = y; s_dtMarkAt[s_dtN] = now;
+                s_dtFrom[s_dtN][0] = hero->Obj.X + 250 * sin(b) + 120 * cos(b); s_dtFrom[s_dtN][1] = hero->Obj.Y + 950; s_dtFrom[s_dtN][2] = hero->Obj.Z + 250 * cos(b) - 120 * sin(b);
+                s_dtN++;
+            }
+            s_dsDart++; s_dsAt = now;
+        }
+        break;
+    case 1:   // up to the board
+        if (now - s_dsAt < 1200) break;
+        DartHeroAnim(1);
+        if (DartShowWalk(bx, bz, dt)) {
+            hero->Obj.Beta = DartFacing(hero->Obj.X, hero->Obj.Z); ClearRealAngle(hero);
+            s_dtHeroWalk = -1; InitAnim(GEN_ANIM_ACTION, ANIM_THEN, NUM_PERSO);
+            s_dsStep = 2; s_dsAt = now;
+        }
+        break;
+    case 2:   // the darts pulled out
+        if (now - s_dsAt > 700 && s_dtN) { DartsPulled(); s_dtN = 0; }
+        if (now - s_dsAt > 1100) { s_dsStep = 3; s_dsAt = now; s_dtHeroWalk = -1; }
+        break;
+    case 3:   // back to the oche
+        DartHeroAnim(1);
+        if (DartShowWalk(s_dtSpot[0], s_dtSpot[1], dt)) {
+            hero->Obj.Beta = DartFacing(hero->Obj.X, hero->Obj.Z); ClearRealAngle(hero);
+            DartHeroAnim(0);
+            s_dsVisit++; s_dsDart = 0; s_dsStep = 0; s_dsAt = now;
+        }
+        break;
+    case 4:   // the pose, then the end
+        if (now - s_dsAt > 2600) { ListVarGame[s_dsVar] = 1; s_dsStep = 9; Log_Info("[racemod] dart_show: over (variable %d 1)", s_dsVar); }
+        break;
+    }
+    hero->WorkFlags &= ~FALLING;
+    DartsFly(now);
+    return 1;
+}
 static void DartFrame(S32 now) {
     DartBoardPick();
     if (s_dtScene < 0 || CubeMode != CUBE_INTERIEUR || NewCube != -1 || (S32)NumCube != s_dtScene || RaceGame_StoryZoe()) {
@@ -20645,6 +20751,7 @@ static void DartPicDart(S32 x, S32 y, double u, int colour) {
 // 2026-11-12: "dart scores being written on a blackboard at the side of the dart board"), what was said
 static void DartDraw(void) {
     if (s_dtScene < 0 || (S32)NumCube != s_dtScene || CubeMode != CUBE_INTERIEUR || RaceGame_StoryZoe()) return;
+    if (s_dsVar >= 0) return;   // (the Deadly Darts replay, a show: nothing to press -- DartShowFrame)
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
     if (!s_dtOn) {
@@ -21378,7 +21485,7 @@ void RaceMod_Frame(void) {
     FruitFrame(TimerRefHR);
     FruitReels(TimerRefHR);
     HalFrame(TimerRefHR);
-    DartFrame(TimerRefHR);
+    if (!DartShowFrame(TimerRefHR)) DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();

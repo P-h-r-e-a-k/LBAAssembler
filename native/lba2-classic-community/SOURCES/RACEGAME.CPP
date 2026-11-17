@@ -3186,6 +3186,7 @@ S32 RaceGame_Achieve(const char *id, char *title, S32 size) {
 // variable End[0] comes to End[1] (End[0] 0: none), faded out to the menu -- the race file's replay_end=)
 // End[2]: that many ms after it (0: at once). At: where Twinsen stands as it loads (x, y, z, beta; 0 0 0: the scene's start) -- replay_at=
 typedef struct { const char *Id; int Scene, Gold, NVars, Vars[4][2]; int Ms; int End[3]; int At[4]; } T_RG_REPLAY;
+#define RG_DART_SHOW_VAR 262   // (the darts replay's game variable: RACEMOD.CPP dart_show=)
 static const T_RG_REPLAY s_replays[] = {
     // (the spanking, short and to the point -- the user, 2026-11-14: "start with Twinsen on the elevator going down, and fade out again back
     // to the menu after Zoe tells Twinsen to go straight to bed without them coming back up the elevator again": the secret chamber (400,
@@ -3208,6 +3209,9 @@ static const T_RG_REPLAY s_replays[] = {
     {"dinofly", 254, 0, 2, {{253, 0}, {257, 1}}, 0, {194, 1, 2000}, {4322, 1024, 8587, 3252}},
     {"dungeon", 159, 0, 1, {{253, 13}}},                           // the Emperor's palace, the room whose fireplace is the way down
     {"postcards", 95, 0, 3, {{253, 14}, {196, 13}, {197, 14}}},    // Celebration Island, every postcard found: the reward told
+    // (Deadly Darts: the nine-darter thrown alone at the Tavern's board, scene 3 -- not the Tralu's bar's -- RACEMOD.CPP dart_show=, its
+    // variable 262 set as his pose ends: over then, faded to the menu; the user, 2026-11-17)
+    {"darts", 3, 0, 1, {{253, 2}}, 0, {RG_DART_SHOW_VAR, 1, 300}},
 };
 static const T_RG_REPLAY *ReplayOf(int k) {
     for (size_t i = 0; i < sizeof(s_replays) / sizeof(s_replays[0]); i++) if (!strcmp(s_replays[i].Id, s_ach[k].Id)) return &s_replays[i];
@@ -3252,6 +3256,7 @@ static S32 StartReplay(const T_RG_REPLAY *r, int bowler) {
         if (r->Ms > 0) fprintf(f, "replay_ms=%d\n", r->Ms);
         if (r->End[0] > 0) fprintf(f, "replay_end=%d %d %d\n", r->End[0], r->End[1], r->End[2]);
         if (r->At[0] || r->At[2]) fprintf(f, "replay_at=%d %d %d %d\n", r->At[0], r->At[1], r->At[2], r->At[3]);
+        if (!strcmp(r->Id, "darts")) fprintf(f, "dart_show=%d\n", RG_DART_SHOW_VAR);
         if (bowler >= 0) fprintf(f, "bowling_game=%d\n", bowler);
         fclose(f);
     }
