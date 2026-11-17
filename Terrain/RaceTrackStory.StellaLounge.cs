@@ -41,6 +41,9 @@ internal static partial class RaceTrackStory
     // (who comes next to his booth: 0 the rabbibunny, 1 the Grobo; who he paid, SeatVar: 3 the rabbibunny, 4 the Grobo; in the private room,
     // who dances: 1 the Grobo)
     private const int NextHost = 64, PaidBunny = 3, PaidGrobo = 4, ShowWho = 2;
+    // (sitting armed once Action has been let go: stood up by Action in front of the booth, still in its zone, the same press sat him down
+    // again -- the user, 2026-11-17, "Twinsen is being prevented from standing up again")
+    private const int SitArmed = 65;
     // (the private room's: the scene variable the engine's view from Twinsen's eyes watches (RACEMOD.CPP pov=: StellaPovLine), the dancers'
     // armour it knows them by, his eyes' height sitting; the tracks' labels; the chair's seat)
     private const int PovVar = 5, PovArmour = 117, PovEye = 1150, LeadOn = 10, LeadAside = 11, ShowOn = 12, ShowDancing = 13, FollowOn = 20, Seated = 21, ChairSeat = 0;
@@ -199,9 +202,13 @@ internal static partial class RaceTrackStory
 
 void comportement_1()
 {{
+    if (0 == action())
+    {{
+        set_var_cube({SitArmed}, 1);
+    }}
     swif (1 == action())
     {{
-        if ({Driving} != comportement_hero())
+        if ({Driving} != comportement_hero() && 1 == var_cube({SitArmed}))
         {{
 {sit}        }}
     }}
@@ -217,6 +224,7 @@ void comportement_2()
     {{
 {ForBooth(k => $"            set_track_obj(0, label_{StandLabel + k});\n")}        set_dir_obj(0, MOVE_MANUAL);
         set_var_cube({SeatCube}, 0);
+        set_var_cube({SitArmed}, 0);
         set_comportement(comportement_1);
     }}
     if (2 == var_cube({Offered}) && 249 < var_cube({SeatWait}))
