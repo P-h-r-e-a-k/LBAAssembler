@@ -89,6 +89,9 @@ internal static class StellaEntities
     private const int ClubLiftReach = 1500;
     // the fires about the cell's floor (world units, its floor CellFloor), each turned its own way
     private static readonly (int X, int Z, int Beta)[] CellFires = { (16300, 11000, 0), (17800, 12100, 900), (15700, 12900, 2300), (17200, 10200, 3300) };
+    // (and two big ones just inside the door -- its sprite at x 18,448 in the cell's south wall, z 18,144 -- either side of the way in, seen
+    // through it from the corridor; walked through, harmless: no fire zone, the armour walked over)
+    private static readonly (int X, int Z, int Beta)[] DoorFires = { (17550, 17350, 400), (19350, 17350, 3600) };
     // (the spot reaching a cell further east, towards the door: walked into the corner from the doorway he comes to rest against the
     // pillar about 250 short of its edge, hidden behind it -- the user, 2026-11-14, "still having trouble walking into the corner")
     private const int SpotEast = 1023;
@@ -391,6 +394,12 @@ internal static class StellaEntities
         var cellHelper = SceneOps.AddActor(cell, RaceTrackScenes.InvisibleHelper(CellFoot.X, CellFloor, CellFoot.Z));
         // (the cell alight: a few fires about its floor, each flickering at its own pace -- CellFires)
         var fires = CellFires.Select(f => SceneOps.AddActor(cell, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Fire, f.X, CellFloor, f.Z, f.Beta))).ToList();
+        var bigFires = DoorFires.Select(f =>
+        {
+            var a = Citadel.CitadelProps.Actor(Citadel.CitadelProps.FireBig, f.X, CellFloor, f.Z, f.Beta);
+            a.Armor = RaceTrackStory.WalkOverArmour;
+            return SceneOps.AddActor(cell, a);
+        }).ToList();
         // (walked onto, as well as Action on it: the user, 2026-11-14, "I'm also still having trouble walking into the corner to the left of
         // the door to trigger the elevator" -- armed once he has been off it since the scene started, as he comes back up onto the spot)
         // (a few frames first: where he stands is only known once the zones have been looked at for him, after the scene's first life pass)
@@ -521,6 +530,11 @@ void comportement_3()
         {
             cellScripts.SetText(fires[f], LbaScript.ScriptKind.Life, Still());
             cellScripts.SetText(fires[f], LbaScript.ScriptKind.Track, $"label(0);\nbody({Citadel.CitadelProps.Fire});\nwait_nb_dizieme_rnd({2 + f % 2});\nbody({Citadel.CitadelProps.Fire2});\nwait_nb_dizieme_rnd({2 + (f + 1) % 2});\ngoto(label_0);\n");
+        }
+        for (var f = 0; f < bigFires.Count; f++)
+        {
+            cellScripts.SetText(bigFires[f], LbaScript.ScriptKind.Life, Still());
+            cellScripts.SetText(bigFires[f], LbaScript.ScriptKind.Track, $"label(0);\nbody({Citadel.CitadelProps.FireBig});\nwait_nb_dizieme_rnd({2 + f % 2});\nbody({Citadel.CitadelProps.FireBig2});\nwait_nb_dizieme_rnd({2 + (f + 1) % 2});\ngoto(label_0);\n");
         }
         var cellBuilt = cellScripts.Build();
         if (!cellBuilt.Ok) { log.AddRange(cellBuilt.Errors.Select(e => $"Stella Entities left out: the cell's lift script: {e}")); return log; }
