@@ -1784,7 +1784,9 @@ static U32 MarksBrakeInput(void) {
 static void ExchangeFrame(void) {
     if (s_exchangeVar < 0 || s_exchangeVar >= MAX_VARS_GAME || ListVarGame[s_exchangeVar] == 0) return;
     ListVarGame[s_exchangeVar] = 0;
-    int z = NbGoldPieces / 2;
+    // (all but one kash: Otringal's own exchange sells the same zlitos for any kashes at all, so one is left for it -- the user, 2026-11-17,
+    // "Let's have the currency conversion machine leave Twinsen with a single kash")
+    int z = NbGoldPieces > 0 ? (NbGoldPieces - 1) / 2 : 0;
     if (NbZlitosPieces + z > 999) z = 999 - NbZlitosPieces;
     if (z < 0) z = 0;
     NbGoldPieces -= z * 2;

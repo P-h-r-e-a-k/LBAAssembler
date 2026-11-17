@@ -164,8 +164,10 @@ internal static class StellaPerformers
         bytes = p.Write();
         var w = p.World();
         var height = w.Max(v => v.Y);
+        // (one off a pole: her own size -- the engine sorts what it draws by the boxes, and at two cells across hers had the dressing room's
+        // costume rail, behind her, drawn over her: "This model is still partly transparent", the user, 2026-11-17)
         var box = s.Pole ? new float[] { -reach - 900, reach + 900, 0, height + 2200, -reach - 900, reach + 900 }
-                         : new float[] { -1000, 1000, 0, height + 300, -450, 450 };
+                         : new float[] { -350, 350, 0, height + 300, -350, 350 };
         for (var k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(8 + k * 4), (int)box[k]);
         return bytes;
     }

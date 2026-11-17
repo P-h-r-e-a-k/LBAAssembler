@@ -703,7 +703,9 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 })
             {
                 var (sx, sz) = StellaEntities.At(0, 0);
-                text.Append($"occluder={StellaEntities.Scene} {sx} {sz} {(int)Citadel.CitadelProps.StageRadius} {StellaEntities.FloorY} {StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh}\n");
+                // (to the brass rail's outer edge and top, a little outside the stage and over it: the rail was drawn behind Twinsen at the
+                // stage's back, the user, 2026-11-17)
+                text.Append($"occluder={StellaEntities.Scene} {sx} {sz} {(int)Citadel.CitadelProps.RailRadius + 40} {StellaEntities.FloorY} {StellaEntities.FloorY + (int)Math.Max(Citadel.CitadelProps.StageHigh, Citadel.CitadelProps.StageRailHigh) + 40}\n");
             }
             // (and Twinsen carried off the stage by the catwalk's bouncer: RaceTrackStory.StellaEntities, CatwalkBouncer)
             if (t.Story is { TiredText: >= 0 }) text.Append($"carry_hero={StellaEntities.Scene} {RaceTrackStory.CarryCube} {RaceTrackStory.CarryUp} {RaceTrackStory.CarryAhead}\n");
