@@ -123,6 +123,32 @@ internal static partial class RaceTrackStory
         return m.ToBody(header);
     }
 
+    // The racer in a bay's car (the Desert track's own, body 0; the LBA1 entrants, theirs) and their line in the garage
+    private static DesertLine? RacerLine(int body)
+    {
+        if (body == 0) return DesertLine.RacerTalk;
+        var k = Array.FindIndex(RaceTrackCharacterCars.Lba1Entrants, e => e.Generic == body);
+        var lines = new[] { DesertLine.BobTalk, DesertLine.GrapTalk, DesertLine.RabbibunnyTalk, DesertLine.HipsterTalk, DesertLine.PainterTalk };
+        return k >= 0 && k < lines.Length ? lines[k] : null;
+    }
+    // (a car stays whatever the time: its racer answers Action beside it, on foot, while it's garage time -- nearer than the bays are apart)
+    private static string RacerTalker(string garageTime, int line) => $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if ({garageTime} && 1000 > distance(0) && {Driving} != comportement_hero())
+        {{
+            message({line});
+        }}
+    }}
+}}
+";
+
     // The garage's people and cars, each in the scene of the cube it stands in (the tent may reach over a cube's edge: the Desert's does);
     // and Baldino's house without him while he's there. `desert`: the island's chapters (the story's); `baldino`: a copy of the game's
     // Baldino (null: none); `startScene`: the start line's (its grid cars, whose bodies the tent's cars are)
@@ -176,6 +202,7 @@ internal static partial class RaceTrackStory
                 var racer = who is not null && kinds?.KindForBody(who.Character) is { } kind ? kind : ((int Entity, int Body, int Anim)?)null;
                 if (empty is { } e && (racer is not null || baldinos)) car.Body = e;
                 if (liftBays.Contains(k)) rise[people.Count] = Citadel.CitadelProps.CarLiftHigh;
+                var carAt = people.Count;
                 people.Add((car, u, bayV, facingOut, stand, baldinos ? "Baldino's car, empty" : empty is not null && racer is not null ? $"{who!.Name}, empty" : "a car in its bay"));
                 var side = k % 2 == 0 ? 1 : -1;
                 if (liftBays.Contains(k) && liftMechanic is not null)
@@ -200,7 +227,13 @@ internal static partial class RaceTrackStory
                     man.Entity = r.Entity; man.Body = r.Body; man.Anim = r.Anim;
                     people.Add((man, u + side * w * RacerOut, bayV + RacerFront, facingOut, stand, who!.Driver));
                 }
-                else log.Add($"the racers' garage: bay {k + 1}'s car (body {grid[k - 1].Body}) has no empty copy or no racer to stand by it -- the car as it is");
+                else
+                {
+                    // (a racer in the car -- the Desert track's own, an LBA1 entrant -- talked to there: a word of their own and where they're
+                    // from -- the user, 2026-11-17: RacerLines)
+                    if (RacerLine(car.Body) is { } line) people[carAt] = people[carAt] with { Life = RacerTalker(garageTime, say(line)) };
+                    else log.Add($"the racers' garage: bay {k + 1}'s car (body {grid[k - 1].Body}) has no empty copy or no racer to stand by it -- the car as it is");
+                }
             }
             // (Zoe in Twinsen's bay, by its lift's post nearer the tent's end, clear of it)
             zoeU = -hl + w * (0.5 - RacerOut); zoeV = bayV + RacerFront;

@@ -314,6 +314,9 @@ void comportement_1()
         FlickTrophy,
         // (the racing licence, the Desert race's prize -- the user, 2026-11-17)
         FlickLicence,
+        // (the racers in their cars in the garage tent, each a word of their own and where they're from -- the user, 2026-11-17: the Desert
+        // track's racer, then the LBA1 entrants by their Generic order: RaceTrackStory.Garage, RacerLines)
+        RacerTalk, BobTalk, GrapTalk, RabbibunnyTalk, HipsterTalk, PainterTalk,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -805,6 +808,62 @@ void comportement_1()
             "Y aquí tienes la licencia de carreras de la Copa, Twinsen: te la has ganado. Las carreras de la Luna Esmeralda y de Zeelich ya están abiertas para ti. Llévala contigo: algunas barreras no se abren sin ella.",
             "Ed ecco la licenza di corsa della Coppa, Twinsen: te la sei meritata. Le corse sulla Luna di Smeraldo e su Zeelich ora ti sono aperte. Tienila con te: certi cancelli non si aprono senza.",
             "E aqui está a licença de corrida da Taça, Twinsen -- mereceste-a. As corridas da Lua Esmeralda e de Zeelich estão agora abertas para ti. Guarda-a contigo: há barreiras que não abrem sem ela.",
+        },
+        // (the racers in the garage tent -- the user, 2026-11-17: "Let's add dialog to our Desert racers when they're in the garage tent,
+        // perhaps something a little quirky and a mention of which island they're from")
+        new[]
+        {
+            "White Leaf born and bred. Out here you learn to read the dunes like a map -- and to spit sand at whoever's behind you. That'll be you, Twinsen.",
+            "Né et élevé dans le désert de la Feuille Blanche. Ici, on apprend à lire les dunes comme une carte -- et à cracher du sable sur celui qui est derrière. Ce sera toi, Twinsen.",
+            "Geboren und aufgewachsen in der Weißblattwüste. Hier lernt man, die Dünen wie eine Karte zu lesen -- und dem Hintermann Sand ins Gesicht zu spucken. Das wirst du sein, Twinsen.",
+            "Nacido y criado en el desierto de la Hoja Blanca. Aquí aprendes a leer las dunas como un mapa... y a escupir arena al que va detrás. Ese serás tú, Twinsen.",
+            "Nato e cresciuto nel deserto della Foglia Bianca. Qui impari a leggere le dune come una mappa... e a sputare sabbia a chi ti sta dietro. Cioè a te, Twinsen.",
+            "Nascido e criado no deserto da Folha Branca. Aqui aprende-se a ler as dunas como um mapa -- e a cuspir areia em quem vem atrás. Vais ser tu, Twinsen.",
+        },
+        new[]
+        {
+            "Bob Vortix, Principal Island's astronomer. I steer by the stars -- which is tricky in broad daylight. If I'm heading for the sea, do shout.",
+            "Bob Vortix, astronome de l'île Principale. Je me guide aux étoiles -- pas simple en plein jour. Si je fonce vers la mer, crie-le-moi.",
+            "Bob Vortix, Astronom der Hauptinsel. Ich steuere nach den Sternen -- am helllichten Tag gar nicht so einfach. Falls ich aufs Meer zuhalte, ruf bitte.",
+            "Bob Vortix, astrónomo de la isla Principal. Me guío por las estrellas... lo cual es complicado a pleno día. Si voy derecho al mar, avísame a gritos.",
+            "Bob Vortix, astronomo dell'isola Principale. Mi oriento con le stelle... il che è difficile in pieno giorno. Se punto dritto verso il mare, urla.",
+            "Bob Vortix, astrónomo da ilha Principal. Guio-me pelas estrelas -- o que é complicado em pleno dia. Se eu for direito ao mar, grita.",
+        },
+        new[]
+        {
+            "Lieutenant Grap, Rebellion Island! We built this SUV out of FunFrock's old tanks. It still salutes every time I reverse.",
+            "Lieutenant Grap, île de la Rébellion ! On a construit ce 4x4 avec les vieux chars de FunFrock. Il fait encore le salut militaire chaque fois que je recule.",
+            "Leutnant Grap, Rebellionsinsel! Wir haben diesen Geländewagen aus FunFrocks alten Panzern gebaut. Er salutiert immer noch, wenn ich rückwärts fahre.",
+            "¡Teniente Grap, isla de la Rebelión! Construimos este todoterreno con los viejos tanques de FunFrock. Todavía hace el saludo militar cada vez que doy marcha atrás.",
+            "Tenente Grap, isola della Ribellione! Abbiamo costruito questo fuoristrada con i vecchi carri armati di FunFrock. Fa ancora il saluto ogni volta che faccio retromarcia.",
+            "Tenente Grap, ilha da Rebelião! Construímos este todo-o-terreno com os velhos tanques do FunFrock. Ainda faz continência sempre que faço marcha-atrás.",
+        },
+        new[]
+        {
+            "All the way down from the Hamalayi Mountains! Snow up there, sand down here -- and nothing to nibble in between. Don't tell anyone, but I've started on my spoiler.",
+            "Descendu tout droit des monts Hamalayi ! De la neige là-haut, du sable ici -- et rien à grignoter entre les deux. Ne le dis à personne, mais j'ai commencé à manger mon aileron.",
+            "Den ganzen Weg runter aus dem Hamalayi-Gebirge! Oben Schnee, hier unten Sand -- und dazwischen nichts zum Knabbern. Verrat's keinem, aber ich hab schon an meinem Heckflügel genagt.",
+            "¡Bajado directamente de las montañas Hamalayi! Nieve allá arriba, arena aquí abajo... y nada que mordisquear entre medias. No se lo digas a nadie, pero ya he empezado con mi alerón.",
+            "Sceso fin quaggiù dai monti Hamalayi! Neve lassù, sabbia quaggiù... e niente da sgranocchiare nel mezzo. Non dirlo a nessuno, ma ho già cominciato a rosicchiare lo spoiler.",
+            "Desci das montanhas Hamalayi! Neve lá em cima, areia cá em baixo -- e nada para roer pelo meio. Não digas a ninguém, mas já comecei a comer o meu aileron.",
+        },
+        new[]
+        {
+            "Tippet Island, man. I was racing disco cars before it was cool. Actually, it was never cool. That's why I did it.",
+            "Île Tippet, mec. Je faisais la course en voiture disco avant que ce soit à la mode. En fait, ça n'a jamais été à la mode. C'est pour ça que je le faisais.",
+            "Tippet-Insel, Mann. Ich bin Disco-Autos gefahren, bevor es cool war. Eigentlich war es nie cool. Genau deshalb hab ich's gemacht.",
+            "Isla Tippet, tío. Yo corría en coches disco antes de que estuviera de moda. Bueno, nunca estuvo de moda. Por eso lo hacía.",
+            "Isola Tippet, amico. Correvo con le auto disco prima che fosse di moda. A dire il vero non è mai stato di moda. Per questo lo facevo.",
+            "Ilha Tippet, meu. Eu corria em carros disco antes de ser fixe. Na verdade, nunca foi fixe. Foi por isso que o fiz.",
+        },
+        new[]
+        {
+            "From Brundle Island! I was going to paint my car green, but I ran out of green. So I painted it every other colour instead. Mind the wet bits.",
+            "De l'île Brundle ! Je voulais peindre ma voiture en vert, mais je n'avais plus de vert. Alors je l'ai peinte de toutes les autres couleurs. Attention, c'est encore frais.",
+            "Von der Brundle-Insel! Eigentlich wollte ich mein Auto grün streichen, aber das Grün war alle. Also hab ich's in allen anderen Farben gestrichen. Vorsicht, frisch gestrichen.",
+            "¡De la isla Brundle! Iba a pintar mi coche de verde, pero se me acabó el verde. Así que lo pinté de todos los demás colores. Cuidado, que está fresco.",
+            "Dall'isola Brundle! Volevo dipingere la macchina di verde, ma il verde era finito. Così l'ho dipinta di tutti gli altri colori. Attento, è ancora fresca.",
+            "Da ilha Brundle! Ia pintar o carro de verde, mas acabou-se o verde. Então pintei-o de todas as outras cores. Cuidado, que ainda está fresco.",
         },
     };
 
