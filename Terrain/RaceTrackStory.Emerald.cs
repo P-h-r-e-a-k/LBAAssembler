@@ -32,6 +32,10 @@ internal static partial class RaceTrackStory
     // (a scene variable of the base: HAL's talker is there this visit -- the eggs' HalTalks is 70, the base's own scripts use 0-2)
     private const int HalHere = 71;
     private static readonly (int X, int Y, int Z) HalSpot = (23152, 2816, 3904), MechanicSpot = (19344, 2816, 6400);
+    // (HAL mended while Twinsen waits after lending the radio -- the user, 2026-11-17: "After Twinsen talks to the scientist near HAL and
+    // hands over his radio, let's have Twinsen held in a cut scene until HAL is fixed, at which point have a scientist return to him and hand
+    // the radio back, along with telling him to talk to HAL": the mechanics' cut scene's frames, counted in a cell variable)
+    private const int MendWait = 72, MendFrames = 120;
     private const int HalVoice = 10;
     // the moon's scenes whose scripts put the spacesuit on: the X building's airlock, the outside by the circle and the square entrances,
     // the Esmers' shuttle
@@ -80,6 +84,8 @@ internal static partial class RaceTrackStory
         HalNumber,
         // (the performers in the dressing room behind the catwalk -- RaceTrackStory.StellaEntities, DressingPeople, 2026-11-17)
         DressMirror, DressRail, DressScreen,
+        // (HAL mended while Twinsen waits, his radio brought back -- the user, 2026-11-17)
+        MechanicMended,
     }
     private static readonly string[][] MoonLines =
     {
@@ -571,6 +577,15 @@ internal static partial class RaceTrackStory
             "Twinsen? Quello del telegiornale? Ma guarda un po'. Attento al paravento, tesoro: dietro c'è una ragazza che si cambia.",
             "Twinsen? O das notícias? Ora vejam só. Cuidado com o biombo, querido -- está uma rapariga a mudar-se atrás dele.",
         },
+        new[]
+        {
+            "There! HAL's back on his circuits. And here's your radio, good as new -- thanks for the loan. Go and talk to him.",
+            "Voilà ! HAL est de nouveau sur ses circuits. Et voici ta radio, comme neuve -- merci pour le prêt. Va lui parler.",
+            "So! HAL läuft wieder. Und hier ist dein Funkgerät, wie neu -- danke fürs Leihen. Geh und sprich mit ihm.",
+            "¡Listo! HAL vuelve a funcionar. Y aquí tienes tu radio, como nueva: gracias por prestárnosla. Ve a hablar con él.",
+            "Ecco fatto! HAL è di nuovo in funzione. Ed ecco la tua radio, come nuova -- grazie del prestito. Vai a parlargli.",
+            "Pronto! O HAL voltou a funcionar. E aqui está o teu rádio, como novo -- obrigado pelo empréstimo. Vai falar com ele.",
+        },
     };
 
     // The moon's landing pad (the outside scene with the game's door into its Esmer shuttle, scene 115 -- the platform's west face): the
@@ -998,6 +1013,10 @@ void comportement_3()
                 set_var_game({Radio}, 0);
                 message({Say(MoonLine.MechanicLeave)});
                 set_var_game({QHal}, {RadioLent});
+                set_var_cube({MendWait}, 0);
+                cinema_mode(1);
+                set_dir_obj(0, NO_MOVE);
+                set_comportement(comportement_2);
             }}
             else if ({RadioLent} > var_game({QHal}))
             {{
@@ -1010,7 +1029,23 @@ void comportement_3()
             else
             {{
                 message({Say(MoonLine.MechanicWorking)});
-            }}", 2500));
+            }}", 2500) + $@"
+// (HAL mended while Twinsen waits, held in a cut scene; the radio brought back, and the word to go and talk to HAL)
+void comportement_2()
+{{
+    add_var_cube({MendWait}, 1);
+    if ({MendFrames} < var_cube({MendWait}))
+    {{
+        message({Say(MoonLine.MechanicMended)});
+        found_object({Radio});
+        set_var_game({Radio}, 1);
+        set_var_game({QHal}, {HalMended});
+        cinema_mode(0);
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }}
+}}
+");
                 return scripts => { hal(scripts); mechanics(scripts); };
             });
         }
