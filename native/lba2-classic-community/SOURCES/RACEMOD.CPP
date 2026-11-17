@@ -1434,6 +1434,12 @@ static void PoolHide(const int *scene, const int *actor, int n, int k) {
 }
 static int s_nbOilActors = 0;
 static S32 s_skidUntil = 0, s_skidStart = 0, s_skidBeta = 0, s_skidSpeed = 0;
+// oil_patch=<var> <below> <half> <x> <z> <y> ... (world units, up to RACE_MAX_PATCH_POINTS points): a stretch of road under oil while game
+// variable <var> is under <below> -- Twinsen's car on it, within <half> of its line, skids as on a slick, again and again until it is off
+// (the Desert's road by the School of Magic, the Dean's -- RaceTrackStory.DeanOil)
+#define RACE_MAX_PATCH_POINTS 64
+static int s_patchVar = -1, s_patchBelow = 0, s_nbPatch = 0;
+static double s_patchHalf = 0, s_patch[RACE_MAX_PATCH_POINTS][3];
 static int s_skidDir = 1;
 // The handbrake (2026-10-21, RaceMod_Handbrake): what it does, the race file's handbrake= or these --
 //   handbrake=<on 0|1> [brake] [steer] [grip] [slip]
@@ -5346,6 +5352,21 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "laser_models")) sscanf(v, "%d %d", &s_laserModel[0], &s_laserModel[1]);
         else if (!strcmp(key, "fake")) {
             if (s_nbFakeActors < RACE_MAX_FAKE_ACTORS && sscanf(v, "%d %d", &s_fakeScene[s_nbFakeActors], &s_fakeActor[s_nbFakeActors]) == 2) s_nbFakeActors++;
+        }
+        else if (!strcmp(key, "oil_patch")) {
+            int used = 0, var, below;
+            double half;
+            s_nbPatch = 0; s_patchVar = -1;
+            if (sscanf(v, "%d %d %lf %n", &var, &below, &half, &used) == 3 && var >= 0 && var < MAX_VARS_GAME) {
+                const char *q = v + used;
+                double x, z, y;
+                int n = 0;
+                while (s_nbPatch < RACE_MAX_PATCH_POINTS && sscanf(q, "%lf %lf %lf %n", &x, &z, &y, &n) == 3) {
+                    s_patch[s_nbPatch][0] = x; s_patch[s_nbPatch][1] = z; s_patch[s_nbPatch][2] = y; s_nbPatch++;
+                    q += n;
+                }
+                if (s_nbPatch >= 2) { s_patchVar = var; s_patchBelow = below; s_patchHalf = half; }
+            }
         }
         else if (!strcmp(key, "oil")) {
             if (s_nbOilActors < RACE_MAX_OIL_ACTORS && sscanf(v, "%d %d", &s_oilScene[s_nbOilActors], &s_oilActor[s_nbOilActors]) == 2) s_nbOilActors++;
@@ -21532,6 +21553,25 @@ static void DarkFrame(void) {
 }
 
 static void BackInCar(void);
+// Twinsen's car on the oil_patch= stretch: a skid, as on a slick (Slicks), whenever the last one is over and the car is still on it
+static void OilPatchFrame(void) {
+    if (s_patchVar < 0 || ListVarGame[s_patchVar] >= s_patchBelow || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || !RaceMod_Active()) return;
+    const S32 now = TimerRefHR;
+    if (now < s_skidUntil || now < s_protectUntil || now < s_jetUntil) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    for (int i = 0; i + 1 < s_nbPatch; i++) {
+        const double ax = s_patch[i][0], az = s_patch[i][1], sx = s_patch[i + 1][0] - ax, sz = s_patch[i + 1][1] - az, len2 = sx * sx + sz * sz;
+        double t = len2 > 1e-9 ? ((hx - ax) * sx + (hz - az) * sz) / len2 : 0;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const double ex = hx - ax - sx * t, ez = hz - az - sz * t, y = s_patch[i][2] + (s_patch[i + 1][2] - s_patch[i][2]) * t;
+        if (ex * ex + ez * ez > s_patchHalf * s_patchHalf || fabs(hero->Obj.Y - y) > 900) continue;
+        s_skidUntil = now + RACE_SKID_MS; s_skidStart = now; s_skidBeta = hero->Obj.Beta; s_skidSpeed = ListBuggy[0].Speed;
+        s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
+        Log_Info("[racemod] Twinsen skids on the oil over the road (oil_patch=, variable %d at %d)", s_patchVar, (int)ListVarGame[s_patchVar]);
+        return;
+    }
+}
 static void InCarFrame(void) {
     const T_RACE_IN_CAR *c = NULL;
     for (int i = 0; i < s_nbInCar && !c; i++)
@@ -21554,6 +21594,7 @@ void RaceMod_Frame(void) {
     DarkFrame();
     CarryFrame();
     InCarFrame();
+    OilPatchFrame();
     ExchangeFrame();
     SeatFrame();
     DriveMarksFrame();
@@ -24211,7 +24252,7 @@ static void ResetTrack(void) {
     GhostReset();
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0; s_winStopVar = -1; s_onceWon = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
-    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
+    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; s_patchVar = -1; s_nbPatch = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes));
     for (int i = 0; i < RACE_MAX_SHOTS; i++) if (s_shots[i].On && s_shots[i].Extra >= 0 && s_shots[i].Extra < MAX_EXTRAS) ListExtra[s_shots[i].Extra].Sprite = -1;
     memset(s_shots, 0, sizeof(s_shots)); HeardReset();

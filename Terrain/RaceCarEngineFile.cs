@@ -377,6 +377,8 @@ internal static class RaceCarEngineFile
         if (story && info is not null) foreach (var key in RaceTrackStory.LateRaceKeys(RaceTrackIsland.ByName(info.Island))) text.Append(key).Append('\n');
         // chapters 3-5 and 7's (the Desert's pages, HAL: RaceTrackStory.RaceKeysA)
         if (story && info is not null && RaceTrackStory.RaceKeysA(RaceTrackIsland.ByName(info.Island)) is { } keysA) text.Append(keysA);
+        // (the Dean's oil over the Desert's road by the School while his pages are lost: RaceTrackStory.DeanOil)
+        if (story && info is not null && RaceTrackStory.DeanOilLine(info) is { } deanOil) text.Append(deanOil);
         // chapters 8-10's (the Elevator Platform, Wannies Island's glove, Mosquibees Island's ring: RaceTrackStory.StoryRaceKeysB)
         if (story && info is not null) text.Append(RaceTrackStory.StoryRaceKeysB(RaceTrackIsland.ByName(info.Island)));
         // a won story race's end, a cut-scene: the car braked to a stop past the line, Twinsen out of it, the controls his again once the

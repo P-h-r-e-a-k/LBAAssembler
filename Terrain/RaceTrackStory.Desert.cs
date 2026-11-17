@@ -348,12 +348,12 @@ void comportement_1()
         },
         new[]
         {
-            "Twinsen! Good to see you again. Bad news: my Dean has shut the track. The engines blew his students' exam papers all over the island. Three pages. He's at the School, and he's in a mood.",
-            "Twinsen ! Content de te revoir. Mauvaise nouvelle : mon Doyen a fermé le circuit. Les moteurs ont éparpillé les copies d'examen de ses élèves dans toute l'île. Trois pages. Il est à l'École, et il est de mauvaise humeur.",
-            "Twinsen! Schön, dich wiederzusehen. Schlechte Nachrichten: Mein Dekan hat die Strecke gesperrt. Die Motoren haben die Prüfungsblätter seiner Schüler über die ganze Insel geweht. Drei Seiten. Er ist in der Schule, und er hat schlechte Laune.",
-            "¡Twinsen! Me alegro de verte. Malas noticias: mi Decano ha cerrado el circuito. Los motores han esparcido los exámenes de sus alumnos por toda la isla. Tres páginas. Está en la Escuela, y está de mal humor.",
-            "Twinsen! Che piacere rivederti. Brutte notizie: il mio Rettore ha chiuso la pista. I motori hanno sparso i compiti d'esame dei suoi studenti per tutta l'isola. Tre pagine. È alla Scuola, ed è di cattivo umore.",
-            "Twinsen! Que bom ver-te outra vez. Más notícias: o meu Reitor fechou a pista. Os motores espalharam os exames dos alunos dele pela ilha toda. Três páginas. Está na Escola, e está de mau humor.",
+            "Twinsen! Good to see you again. Bad news: my Dean has shut the track, and poured oil all over it by the School so nobody can drive it. The engines blew his students' exam papers all over the island. Three pages. He's at the School, and he's in a mood.",
+            "Twinsen ! Content de te revoir. Mauvaise nouvelle : mon Doyen a fermé le circuit, et il a versé de l'huile partout près de l'École pour que personne ne puisse rouler. Les moteurs ont éparpillé les copies d'examen de ses élèves dans toute l'île. Trois pages. Il est à l'École, et il est de mauvaise humeur.",
+            "Twinsen! Schön, dich wiederzusehen. Schlechte Nachrichten: Mein Dekan hat die Strecke gesperrt und bei der Schule überall Öl verschüttet, damit keiner mehr fahren kann. Die Motoren haben die Prüfungsblätter seiner Schüler über die ganze Insel geweht. Drei Seiten. Er ist in der Schule, und er hat schlechte Laune.",
+            "¡Twinsen! Me alegro de verte. Malas noticias: mi Decano ha cerrado el circuito, y ha echado aceite por todas partes junto a la Escuela para que nadie pueda conducir. Los motores han esparcido los exámenes de sus alumnos por toda la isla. Tres páginas. Está en la Escuela, y está de mal humor.",
+            "Twinsen! Che piacere rivederti. Brutte notizie: il mio Rettore ha chiuso la pista, e ha versato olio dappertutto vicino alla Scuola perché nessuno possa guidarci. I motori hanno sparso i compiti d'esame dei suoi studenti per tutta l'isola. Tre pagine. È alla Scuola, ed è di cattivo umore.",
+            "Twinsen! Que bom ver-te outra vez. Más notícias: o meu Reitor fechou a pista, e despejou óleo por todo o lado junto à Escola para ninguém conseguir conduzir. Os motores espalharam os exames dos alunos dele pela ilha toda. Três páginas. Está na Escola, e está de mau humor.",
         },
         new[]
         {
@@ -375,12 +375,12 @@ void comportement_1()
         },
         new[]
         {
-            "Shut it is! Three pages, gone with the wind of your engines. Bring them back, and I'll think about it.",
-            "Fermé, et bien fermé ! Trois pages, envolées avec le vent de vos moteurs. Rapportez-les, et j'y réfléchirai.",
-            "Gesperrt ist gesperrt! Drei Seiten, vom Wind eurer Motoren davongeweht. Bring sie zurück, dann denke ich darüber nach.",
-            "¡Cerrado está! Tres páginas, volando con el viento de vuestros motores. Tráelas de vuelta y me lo pensaré.",
-            "Chiusa e basta! Tre pagine, volate via col vento dei vostri motori. Riportamele, e ci penserò.",
-            "Fechada está! Três páginas, levadas pelo vento dos vossos motores. Traz-mas de volta, e eu penso nisso.",
+            "Shut it is! Three pages, gone with the wind of your engines. That oil on the track is mine, and it stays. Bring my papers back and... very well, I'll have it cleaned off.",
+            "Fermé, et bien fermé ! Trois pages, envolées avec le vent de vos moteurs. L'huile sur le circuit, c'est moi, et elle reste. Rapportez mes copies et... bon, très bien, je la ferai nettoyer.",
+            "Gesperrt ist gesperrt! Drei Seiten, vom Wind eurer Motoren davongeweht. Das Öl auf der Strecke war ich, und es bleibt. Bring meine Blätter zurück und... na gut, dann lasse ich es wegputzen.",
+            "¡Cerrado está! Tres páginas, volando con el viento de vuestros motores. El aceite de la pista es cosa mía, y se queda. Tráeme mis exámenes y... está bien, haré que lo limpien.",
+            "Chiusa e basta! Tre pagine, volate via col vento dei vostri motori. L'olio sulla pista è opera mia, e resta lì. Riportami i compiti e... va bene, lo farò pulire.",
+            "Fechada está! Três páginas, levadas pelo vento dos vossos motores. O óleo na pista fui eu, e fica lá. Traz-me os exames de volta e... está bem, mando limpá-lo.",
         },
         new[]
         {
@@ -429,12 +429,12 @@ void comportement_1()
         },
         new[]
         {
-            "All three! Very well. Here: a diploma. It says you may use the School's grounds, which include the track. Don't let it go to your head.",
-            "Les trois ! Très bien. Tenez : un diplôme. Il dit que vous pouvez utiliser les terrains de l'École, circuit compris. Que ça ne vous monte pas à la tête.",
-            "Alle drei! Na gut. Hier: ein Diplom. Darauf steht, dass du das Gelände der Schule benutzen darfst, und dazu gehört die Strecke. Lass es dir nicht zu Kopf steigen.",
-            "¡Las tres! Muy bien. Toma: un diploma. Dice que puedes usar los terrenos de la Escuela, circuito incluido. Que no se te suba a la cabeza.",
-            "Tutte e tre! Molto bene. Ecco: un diploma. Dice che puoi usare i terreni della Scuola, pista compresa. Che non ti monti la testa.",
-            "As três! Muito bem. Toma: um diploma. Diz que podes usar os terrenos da Escola, pista incluída. Não te subas à cabeça.",
+            "All three! Very well. The oil's being cleaned off the track as we speak. Here: a diploma. It says you may use the School's grounds, which include the track. Don't let it go to your head.",
+            "Les trois ! Très bien. On nettoie l'huile du circuit en ce moment même. Tenez : un diplôme. Il dit que vous pouvez utiliser les terrains de l'École, circuit compris. Que ça ne vous monte pas à la tête.",
+            "Alle drei! Na gut. Das Öl wird gerade von der Strecke geputzt. Hier: ein Diplom. Darauf steht, dass du das Gelände der Schule benutzen darfst, und dazu gehört die Strecke. Lass es dir nicht zu Kopf steigen.",
+            "¡Las tres! Muy bien. Ya están limpiando el aceite de la pista. Toma: un diploma. Dice que puedes usar los terrenos de la Escuela, circuito incluido. Que no se te suba a la cabeza.",
+            "Tutte e tre! Molto bene. Stanno già pulendo l'olio dalla pista. Ecco: un diploma. Dice che puoi usare i terreni della Scuola, pista compresa. Che non ti monti la testa.",
+            "As três! Muito bem. Já estão a limpar o óleo da pista. Toma: um diploma. Diz que podes usar os terrenos da Escola, pista incluída. Não te subas à cabeça.",
         },
         new[]
         {
@@ -1298,6 +1298,8 @@ void comportement_1()
         // (the sweep of 2026-11-05: "My radio works then" whether it was or not)
         // (and at the racers' garage before the race is won -- never in both: RaceTrackStory.Garage.cs)
         DesertGarage(gameDirectory, b, report, Say, desert, Copy(b.Originals, BaldinoHouse, BaldinoActor), scenes.StartScene, log);
+        // (the Dean's oil over the road by the School while his pages are lost: RaceTrackStory.DeanOil)
+        DeanOil(gameDirectory, b, report, log);
         // (the memory viewer -- item 24, the game's in Baldino's house for the taking (its actor 4), walked into or taken by Action -- out of the
         // house: the user, 2026-11-17, "Twinsen gets given the memory viewer which is an optional object and can be purchased by him on
         // otringal, so we don't need it given to him". The souvenir shop on Otringal, scene 147, still sells it for 30 zlitos)
