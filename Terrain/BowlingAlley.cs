@@ -52,7 +52,12 @@ internal static class BowlingAlley
     // (the chains' anchors in the dark over the pins: this far over the floor)
     private const int ChainAnchor = 4400;
     // (the poker table's middle -- cells 42, 36: between the booths and the fruit machines -- and its players' distance from it)
-    private const int PokerX = 42 * 512, PokerZ = 36 * 512 + 256, PokerSeat = 1060;   // (2026-11-16: the table bigger, its players out)
+    private const int PokerX = 37 * 512 + 256, PokerZ = 28 * 512 + 256, PokerSeat = 1060;   // (2026-11-16: the table bigger, its players out)
+    // (2026-11-17, the room laid out again -- the user, 2026-11-16: "Let's move the poker tables to the middle, and perhaps add an extra pool
+    // table, and poker table even if nobody is using them": both card tables side by side in the room's middle, the second pool table west
+    // of the first, an empty poker table south of the middle booths (BowlingRoom.BoothsAt); the actors few -- the scene near the engine's
+    // hundred: the empty table two chairs, no lamp, the new pool table no cue, Rick's small card table gone)
+    private const int CardsX = 45 * 512 + 256, CardsZ = 28 * 512 + 256, Pool2X = 40 * 512 + 256, Pool2Z = 21 * 512, EmptyPokerX = 41 * 512, EmptyPokerZ = 42 * 512 + 256;
 
     // (the game of bowling the engine plays -- RACEMOD.CPP bowling_game=: it holds this scene variable, and the lane scripts wait)
     // (78: the scene variables are 0-79, ListVarCube[80] -- 99 was past them, the engine writing it as the player bowled: 2026-11-16)
@@ -365,8 +370,13 @@ void comportement_3()
         // ---- more tables (the user, 2026-11-16: "We should add more tables"): a second big round table east of the booths, a sailor and a
         // dissident at a hand of cards there, two chairs free; and one of Rick's card tables between the lanes' end and the booths, empty
         // (Rick's is too small for the sailors to sit at: the poker table's size, the user's same day)
-        Decor(CitadelProps.ClubTable, 39 * 512, FloorY, 22 * 512);
-        const int cardsX = 52 * 512, cardsZ = 35 * 512 + 256;
+        const int cardsX = CardsX, cardsZ = CardsZ;
+        // (the second pool table, no one at it, its lamp over it; the empty poker table, a chair each side of it north and south)
+        Decor(CitadelProps.PoolTable, Pool2X, FloorY, Pool2Z);
+        Decor(CitadelProps.HangingLamp, Pool2X, FloorY + 2200, Pool2Z);
+        Decor(CitadelProps.PokerTable, EmptyPokerX, FloorY, EmptyPokerZ);
+        foreach (var (dz, beta) in new[] { (-1, 0), (1, 2048) })
+            Decor(CitadelProps.Chair, EmptyPokerX, FloorY, EmptyPokerZ + dz * (PokerSeat + CitadelProps.ChairAhead), beta);
         Decor(CitadelProps.PokerTable, cardsX, FloorY, cardsZ);
         Decor(CitadelProps.HangingLamp, cardsX, FloorY + 2300, cardsZ);
         // (its own players: the grey gloom, the gas station's Franco, the blue sailor)

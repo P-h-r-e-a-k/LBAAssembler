@@ -46,23 +46,25 @@ internal static class BowlingRoom
     // "You've also added stairs to nowhere that just causes twinsen to drop down to the floor below"; his wall lamps, on his wall there,
     // left out too -- "These wall lights appear to be floating in the air" -- in the room's middle east; his bar its own blocks only, its
     // back to the north wall -- "push the back of a bar up against a wall", "a corner section of post by the bar that looks out of place")
-    private static readonly (int X0, int Z0, int X1, int Z1, int Dx, int Dz) Booths = (18, 23, 29, 37, 18, 3);
+    // (since 2026-11-17 his booths no longer copied where they stood on his platform: one of them stamped where each goes, BoothsAt)
     // (his potted plant, 81 and 40, left out: it stood before the poker table; his two fruit machines, 80, too since 2026-11-16 -- the alley's
     // own in their places, their reels turning in them: CitadelProps.BowlSlot)
     private static readonly HashSet<int> BoothBlocks = new() { 32, 33, 35, 36, 39, 205, 206 };
-    // the fruit machines (CitadelProps.BowlSlot actors, BowlingAlley): each cabinet's middle (world units), its front south (+z) -- where
-    // Rick's two stood, and five side by side along the south strip under the lanes' approach (the user, 2026-11-16: "Let's add in some
-    // more fruit machines around the edge in a cluster together")
+    // the fruit machines (CitadelProps.BowlSlot actors, BowlingAlley): each cabinet's middle (world units), its front south (+z) -- seven in
+    // a row against the north wall, left of the bar, the change machine at the row's lanes' end (the user, 2026-11-16: "the fruit machines
+    // you've added they're obstructing the bowling, let's move them to the left of the bar where the currency exchange machine is. Let's
+    // also move the currency exchange machine to the far left next to the bowling alley and have them all pushed back flush against the
+    // wall"): their backs on the wall (z 8 cells), 700 apart, from past the change machine (x 33 cells, beside the lanes' east divider) to
+    // a walk's width short of the bar's west arm (x 45)
+    public const int MachineWallZ = RoomZ0 * 512, ChangeMachineX = 33 * 512 + 300, FirstMachineX = ChangeMachineX + 280 + 120 + (int)CitadelProps.SlotWide / 2, MachinePitch = 700;
     public static readonly (int X, int Z)[] FruitMachines =
-    {
-        (42 * 512, 26 * 512 + 256), (38 * 512, 39 * 512 + 256),
-        (14 * 512 + 256, 43 * 512 + 256), (16 * 512 + 256, 43 * 512 + 256), (18 * 512 + 256, 43 * 512 + 256), (20 * 512 + 256, 43 * 512 + 256), (22 * 512 + 256, 43 * 512 + 256),
-    };
-    // (two more booths, Rick's east one -- cells x 44-47, z 27-32 in the room -- again: east of it, a cell further north (clear of the card
-    // table's chair), and south of the poker table by the south rim -- the user, 2026-11-16, "Perhaps add a couple of booth tables, and
-    // essentially just fill the space")
-    private static readonly (int X0, int Z0, int X1, int Z1) EastBooth = (44, 27, 47, 32);
-    private static readonly (int Dx, int Dz)[] MoreBooths = { (5, -1), (-1, 14) };
+        Enumerable.Range(0, 7).Select(k => (FirstMachineX + k * MachinePitch, MachineWallZ + (int)CitadelProps.SlotDeep / 2 + 12)).ToArray();
+    // the booths: one of Rick's (his cells x 26-29, z 24-29 -- 4 across, 6 along z: a back, a seat, the table, a seat, a back) stamped
+    // where each goes, its cells' corner (the user, 2026-11-16: "The red booths, let's have them against the wall - the edge that's at the
+    // right of the screen - which is to the right of the bar with a couple in the middle"): four along the east rim, back to back from
+    // below the bar's stools to the lift's corner (x 51-55, z 42-46), and two in the room's middle, south of the card tables
+    private static readonly (int X0, int Z0) RickBooth = (26, 24);
+    private static readonly (int X, int Z)[] BoothsAt = { (52, 17), (52, 23), (52, 29), (52, 35), (35, 34), (43, 34) };
 
     public readonly record struct Built(int GridNumber, byte Type, byte[] Grid, int Library);
 
@@ -106,23 +108,17 @@ internal static class BowlingRoom
         // (his bar's bricks no longer: since 2026-11-16 the bar is props -- BowlingAlley, CitadelProps.BarCounter -- its U open to the north
         // wall, the barman in it; the user: "the U shape of the bar in the bowling alley needs turning around so the gap is against the wall",
         // and Rick's blocks can't be turned)
-        foreach (var (r, keep) in new[] { (Booths, BoothBlocks) })
-            for (var z = r.Z0; z <= r.Z1; z++)
-                for (var x = r.X0; x <= r.X1; x++)
+        foreach (var (bx, bz) in BoothsAt)
+            for (var dz = 0; dz < 6; dz++)
+                for (var dx = 0; dx < 4; dx++)
                     for (var y = 1; y < Height; y++)
                     {
-                        var at = At(x, y, z);
-                        if (cells[at] == 0 || !keep.Contains(cells[at])) continue;
-                        // (the booths on his raised platform -- x 18-24 up to z 34 -- down its three layers; his steps, 41 and 42, left out)
-                        var ty = r == Booths && x <= 24 && z <= 34 ? y - 3 : y;
-                        var (tx, tz) = (x + r.Dx, z + r.Dz);
-                        if (ty < 1 || tx < RoomX0 || tx > RoomX1 || tz < RoomZ0 || tz > RoomZ1) continue;
-                        Put(tx, ty, tz, cells[at], cells[at + 1]);
+                        var at = At(RickBooth.X0 + dx, y, RickBooth.Z0 + dz);
+                        if (cells[at] == 0 || !BoothBlocks.Contains(cells[at])) continue;
+                        var (tx, tz) = (bx + dx, bz + dz);
+                        if (tx < RoomX0 || tx > RoomX1 || tz < RoomZ0 || tz > RoomZ1) continue;
+                        Put(tx, y, tz, cells[at], cells[at + 1]);
                     }
-
-        foreach (var (dx, dz) in MoreBooths)
-            foreach (var key in set.Keys.Where(k => k.Item1 >= EastBooth.X0 && k.Item1 <= EastBooth.X1 && k.Item3 >= EastBooth.Z0 && k.Item3 <= EastBooth.Z1 && k.Item2 >= 1).ToList())
-                if (BoothBlocks.Contains(set[key].Block)) Put(key.Item1 + dx, key.Item2, key.Item3 + dz, set[key].Block, set[key].Pos);
 
         // ---- the library: a copy of Rick's, its blocks the room names painted dark in place, the lanes' blocks added
         var library = (byte[])rickLibrary.Clone();

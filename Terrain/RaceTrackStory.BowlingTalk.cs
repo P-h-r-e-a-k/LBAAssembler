@@ -136,8 +136,10 @@ internal static partial class RaceTrackStory
         new[] { "Keep them", "Les garder", "Behalten", "Quedármelos", "Tenerli", "Ficar com eles" },
         new[] { "Clunk, clunk... your kashes are zlitos now.", "Clonk, clonk... tes kashes sont des zlitos maintenant.", "Klonk, klonk... deine Kashes sind jetzt Zlitos.", "Clonc, clonc... tus kashes ya son zlitos.", "Clonk, clonk... i tuoi kashes ora sono zlitos.", "Clonk, clonk... os teus kashes agora são zlitos." },
     };
-    // (where the change machine stands: against the north wall west of the bar, its front south)
-    private const int BowlChangeX = 43 * 512 + 256, BowlChangeZ = 9 * 512 + 256;
+    // (where the change machine stands: against the north wall at the end of the machines' row by the lanes, its back on the wall, its front
+    // south -- the user, 2026-11-16: "move the currency exchange machine to the far left next to the bowling alley and have them all pushed
+    // back flush against the wall"; the machine 420 deep)
+    private const int BowlChangeX = BowlingRoom.ChangeMachineX, BowlChangeZ = BowlingRoom.MachineWallZ + 212;
 
     private static void BowlingTalk(IslandBeatsA b, string gameDirectory, List<string> log)
     {

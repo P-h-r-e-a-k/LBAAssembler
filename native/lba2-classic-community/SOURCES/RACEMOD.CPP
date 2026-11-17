@@ -19652,7 +19652,9 @@ static void BowlLanesFrame(S32 now) {
 // A fruit machine: Action by one (on foot, within reach of its front), a coin of the planet's in -- kashes on Twinsun, zlitos on Zeelich --
 // and its three reels spun, stopping one after another; three alike pay (three sevens the most), two sevens give the coin back
 static void BowlSay(S32 now, const char *text);
-#define FM_REACH 1150
+// (600: the machines in a row 700 apart along the wall, the change machine at its end -- at 1150 Action at the change machine was the first
+// machine's too, "No zlitos for the machine" over the exchange: 2026-11-17)
+#define FM_REACH 600
 #define FM_SPIN_MS 900
 #define FM_GAP_MS 450
 #define FM_SHOW_MS 2600

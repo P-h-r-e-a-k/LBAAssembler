@@ -18,7 +18,18 @@ internal static partial class CitadelProps
     public const int BarFrontLength = 4096, BarArmLength = 3164, BarDepth = 420, BarHigh = 600, ShelfLength = 3000;
     public const int PoolLength = 2000, PoolWidth = 1100, PoolTop = 520;
     // (the pool table's box the table alone: its cue reaches out over where the player stands)
-    public static short[]? BarBox(int generic) => generic == PoolTable ? new short[] { -PoolLength / 2, 0, -PoolWidth / 2, PoolLength / 2, PoolTop + 80, PoolWidth / 2 } : null;
+    // (the bar's pieces each their own long box, its top over the slab: with none the engine gave each a square of (width + depth) / 4 round
+    // its middle -- an arm's reached 896 along it of its 1,582, so Twinsen walked into the arm's front half, and with his box south of the
+    // arm's the engine's sort drew him over it: the user, 2026-11-16, "We need to make sure the bar is solid all the way around. Twinsen
+    // can't walk any further but has visually walked through the left side of the bar")
+    private const int BarHalfDeep = BarDepth / 2 + 50, BarBoxTop = BarHigh + 60;
+    public static short[]? BarBox(int generic) => generic switch
+    {
+        PoolTable => new short[] { -PoolLength / 2, 0, -PoolWidth / 2, PoolLength / 2, PoolTop + 80, PoolWidth / 2 },
+        BarFront => new short[] { -BarFrontLength / 2, 0, -BarHalfDeep, BarFrontLength / 2, BarBoxTop, BarHalfDeep },
+        BarWest or BarEast => new short[] { -BarHalfDeep, 0, -BarArmLength / 2, BarHalfDeep, BarBoxTop, BarArmLength / 2 },
+        _ => null,
+    };
     private const int BarWood = 1 * 16 + 3, BarWoodDark = 1 * 16 + 1, BarTop = 4 * 16 + 4, BarBrass = 6 * 16 + 7;
 
     // A straight piece of counter `length` long, its front to `front` (+z, -x or +x), round its own middle: the front panel and its brass foot
