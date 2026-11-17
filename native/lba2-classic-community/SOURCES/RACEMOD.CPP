@@ -1659,6 +1659,76 @@ static void CarryFrame(void) {
         Log_Info("[racemod] carry_hero: Twinsen let go at (%d,%d,%d)", (int)h->Obj.X, (int)h->Obj.Y, (int)h->Obj.Z);
     }
 }
+// occluder=<scene> <x> <z> <radius> <bottom> <top>: in that interior scene, a round prop drawn into the background (OBJ_BACKGROUND) --
+// Stella Entities' stage -- hides an actor on the floor behind it as a brick would: its outline on the screen (its bottom and top rims
+// projected, a convex shape) and, for an actor under its top, outside its round and further from the camera than its middle, the
+// background's pixels copied back over the actor where the two overlap (RaceMod_Occlude, after the bricks' own recover). Its cells
+// are invisible ones -- their squares reach past the round's edge -- so no brick shape hid anyone behind it: Twinsen on the floor
+// beyond the stage looked to stand on it (the user, 2026-11-16, "Twinsen is both behind the catwalk but looks like he's on the stage").
+static int s_occScene = -1, s_occX = 0, s_occZ = 0, s_occR = 0, s_occY0 = 0, s_occY1 = 0;
+#define RACE_OCC_STEPS 32
+void RaceMod_Occlude(S32 numobj) {
+    if (s_occScene < 0 || (int)NumCube != s_occScene || CubeMode != CUBE_INTERIEUR || numobj < 0 || numobj >= (S32)NbObjets) return;
+    const T_OBJET *o = &ListObjet[numobj];
+    if (o->Flags & OBJ_BACKGROUND) return;
+    if (o->Obj.Y >= s_occY1 - 100) return;
+    const double dx = o->Obj.X - s_occX, dz = o->Obj.Z - s_occZ;
+    if (dx * dx + dz * dz < (double)s_occR * s_occR) return;
+    if (o->Obj.X + o->Obj.Z >= s_occX + s_occZ) return;
+    if (ClipXMin > ClipXMax || ClipYMin > ClipYMax) return;
+    // the outline: both rims projected, and their convex hull (monotone chain)
+    int px[2 * RACE_OCC_STEPS], py[2 * RACE_OCC_STEPS], n = 0;
+    for (int r = 0; r < 2; r++)
+        for (int k = 0; k < RACE_OCC_STEPS; k++) {
+            const double a = k * 2 * 3.14159265358979 / RACE_OCC_STEPS;
+            LongWorldRotatePoint(s_occX + (S32)(s_occR * cos(a)), r ? s_occY1 : s_occY0, s_occZ + (S32)(s_occR * sin(a)));
+            if (!LongProjectPoint(X0, Y0, Z0)) return;
+            px[n] = Xp; py[n] = Yp; n++;
+        }
+    int order[2 * RACE_OCC_STEPS];
+    for (int i = 0; i < n; i++) order[i] = i;
+    for (int i = 1; i < n; i++)
+        for (int j = i; j > 0 && (px[order[j]] < px[order[j - 1]] || (px[order[j]] == px[order[j - 1]] && py[order[j]] < py[order[j - 1]])); j--) {
+            const int t = order[j]; order[j] = order[j - 1]; order[j - 1] = t;
+        }
+    int hull[4 * RACE_OCC_STEPS], h = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        const int start = h;
+        for (int s = 0; s < n; s++) {
+            const int i = order[pass ? n - 1 - s : s];
+            while (h >= start + 2) {
+                const int a = hull[h - 2], b = hull[h - 1];
+                const long long cross = (long long)(px[b] - px[a]) * (py[i] - py[a]) - (long long)(py[b] - py[a]) * (px[i] - px[a]);
+                if (cross > 0) break;
+                h--;
+            }
+            hull[h++] = i;
+        }
+        h--;
+    }
+    if (h < 3) return;
+    int ymin = py[hull[0]], ymax = py[hull[0]];
+    for (int i = 1; i < h; i++) { if (py[hull[i]] < ymin) ymin = py[hull[i]]; if (py[hull[i]] > ymax) ymax = py[hull[i]]; }
+    const int y0 = ymin > ClipYMin ? ymin : ClipYMin, y1 = ymax < ClipYMax ? ymax : ClipYMax;
+    for (int row = y0; row <= y1; row++) {
+        // (the outline's span on this row: where its edges cross it)
+        double xl = 1e9, xr = -1e9;
+        for (int i = 0; i < h; i++) {
+            const int a = hull[i], b = hull[(i + 1) % h];
+            if ((py[a] <= row && py[b] >= row) || (py[b] <= row && py[a] >= row)) {
+                const double x = py[a] == py[b] ? px[a] : px[a] + (double)(px[b] - px[a]) * (row - py[a]) / (py[b] - py[a]);
+                if (x < xl) xl = x;
+                if (py[a] == py[b]) { if (px[b] < xl) xl = px[b]; if (px[b] > xr) xr = px[b]; }
+                if (x > xr) xr = x;
+            }
+        }
+        int l = (int)ceil(xl), r = (int)floor(xr);
+        if (l < ClipXMin) l = ClipXMin;
+        if (r > ClipXMax) r = ClipXMax;
+        if (l > r) continue;
+        memcpy((U8 *)Log + TabOffLine[row] + l, (U8 *)Screen + TabOffLine[row] + l, (size_t)(r - l + 1));
+    }
+}
 static void AdultFrame(void) {
     if (s_adultVar < 0 || s_adultVar >= MAX_VARS_GAME) return;
     ListVarGame[s_adultVar] = RaceGame_PlayerAdult() ? 1 : 0;
@@ -5308,6 +5378,7 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
+        else if (!strcmp(key, "occluder")) { if (!setRead && sscanf(v, "%d %d %d %d %d %d", &s_occScene, &s_occX, &s_occZ, &s_occR, &s_occY0, &s_occY1) != 6) s_occScene = -1; }
         else if (!strcmp(key, "carry_hero")) { if (!setRead && sscanf(v, "%d %d %d %d", &s_carryScene, &s_carryVar, &s_carryUp, &s_carryAhead) != 4) s_carryVar = -1; }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
@@ -14499,7 +14570,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)

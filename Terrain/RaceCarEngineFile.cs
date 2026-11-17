@@ -697,6 +697,12 @@ internal static class RaceCarEngineFile
             // catwalk by then, over their parts in front of it -- the steps' top step cut off, the user, 2026-11-16: "We also need to change
             // the stairs onto the catwalk, they now appear too low")
             if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={StellaEntities.Scene} {Citadel.CitadelProps.ClubStage} {Citadel.CitadelProps.ClubRail} {Citadel.CitadelProps.ClubSteps} {Citadel.CitadelProps.ClubShelf}\n");
+            // (and the round stage hiding whoever stands on the floor behind it: RACEMOD.CPP occluder= -- its cells are invisible ones)
+            if (t.Story is { TiredText: >= 0 })
+            {
+                var (sx, sz) = StellaEntities.At(0, 0);
+                text.Append($"occluder={StellaEntities.Scene} {sx} {sz} {(int)Citadel.CitadelProps.StageRadius} {StellaEntities.FloorY} {StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh}\n");
+            }
             // (and Twinsen carried off the stage by the catwalk's bouncer: RaceTrackStory.StellaEntities, CatwalkBouncer)
             if (t.Story is { TiredText: >= 0 }) text.Append($"carry_hero={StellaEntities.Scene} {RaceTrackStory.CarryCube} {RaceTrackStory.CarryUp} {RaceTrackStory.CarryAhead}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)

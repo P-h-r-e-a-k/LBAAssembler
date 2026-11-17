@@ -5072,6 +5072,8 @@ S32 AffOneObject(T_SORT *pt) {
                 } else if (RaceMod_NoRecover(numobj)) {
                     // (a prop drawn whole into the background, no brick over it: RACEMOD.CPP no_recover=)
                 } else {
+                    // (and a round prop in the background in front of it: RACEMOD.CPP occluder=)
+                    RaceMod_Occlude(numobj);
                     if (DrawRecover(ptrobj->Obj.X, yw, ptrobj->Obj.Z, ptrobj->YMax,
                                     ade_max((ptrobj->XMax - ptrobj->XMin) / 2, (ptrobj->ZMax - ptrobj->ZMin) / 2))) {
                         // Objet complètement masqué
