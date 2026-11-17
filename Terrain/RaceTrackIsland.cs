@@ -364,6 +364,10 @@ internal sealed record RaceTrackIsland(
     // the reactor), waiting in the pit lane while the player qualifies. Nothing is drawn on the holomap.
     public static readonly RaceTrackIsland Emerald = new("The Emerald Moon", "EMERAUDE.ILE", "EMERAUDE.OBL", 3, 229, 232, 30, "RaceTrackPlan.Emerald.json", null)
     {
+        // (her pad in the gap between the main straight, x 57-64, and the pit lane, 45.5-53.5, just past the start line, z 61.5: off the
+        // track for the whole race, facing the straight -- the user, 2026-11-17: "Let's add a small section of ground between the tracks by
+        // the start/finish line where our race marshall can stand out of the way")
+        MarshalPad = (448 + 55.25, 448 + 63.5, 5000, 1024),
         CopiesScenes = (74, 4), NoHolomap = true, Roster = RaceDriver.Emerald,
         // (ladders up from the ground under the road: the user, 2026-11-06, "jumping off the raised track on foot can strand Twinsen in low
         // areas with no way back" -- and the moon base's doors come out on the crater's floor, 5,000 under the road)
@@ -483,6 +487,9 @@ internal sealed record RaceTrackIsland(
     // Actors put somewhere else and kept still (RaceTrackScenes): a scene's actor (the game's index), where it stands (cube-local), the way it
     // faces and its body (generic), its scripts stopped
     public (int Scene, int Actor, int X, int Y, int Z, int Beta, int Body)[] Parked { get; init; } = Array.Empty<(int, int, int, int, int, int, int)>();
+    // The flag marshal's own pad (RaceTrackBuilder.MarshalPad): a small slab on a pillar where she stands for the whole race, its middle
+    // (island cells), its top, the way she faces -- or null (her place by the start line as TempleMarshal.Place finds it)
+    public (double X, double Z, int Top, int Beta)? MarshalPad { get; init; }
     public int[] MoreScenes { get; init; } = Array.Empty<int>();
     // Cubes of the island's ground the game has no scene for, that the lap drives over: a scene the build makes for each (IslandScaler
     // .AddCubeScenes), numbered Scene, from a copy of Template (its actors inert stand-ins, cube changes to and from its neighbours) --

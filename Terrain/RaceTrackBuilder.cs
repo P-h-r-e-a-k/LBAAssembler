@@ -3798,6 +3798,27 @@ internal static class RaceTrackBuilder
     // set against the road's bank at To, and a lift on the road above down into it, as the storm file's (the user, 2026-10-27: "In citabau.ile
     // we removed the museum to make way for the track, let's add the museum back in ... just add in the side wall, and the front door, and add
     // an elevator in on the road above the same as we did for citadel.ile")
+    // RaceTrackIsland.MarshalPad: the flag marshal's pad -- a slab two cells across, its top the road's height, on a pillar down to the
+    // ground, an island decor (its box the slab's top: nothing drives over it, it stands in a gap between roads)
+    public static void MarshalPad(IslandFile island, (double X, double Z, int Top, int Beta) pad, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.NewBodyBase < 0) return;
+        var g = IslandOps.Altitude(island, pad.X * 512, pad.Z * 512) ?? 0;
+        if (IslandDecors.Locate(island, pad.X * 512, pad.Z * 512) is not { } spot || pad.Top - g < 300) { report.Notes.Add($"the flag marshal's pad at cell ({pad.X:0.##}, {pad.Z:0.##}): no room ({pad.Top - g:0} over the ground)"); return; }
+        var h = (float)(pad.Top - g);
+        const float Half = 512, Slab = 120, Pillar = 180;
+        var pts = new List<System.Numerics.Vector3>(); var faces = new List<LbaBodyStudio.Face>();
+        RaceTrackPipes.Box(pts, faces, System.Numerics.Vector3.Zero, new System.Numerics.Vector3(Half, 0, 0), new System.Numerics.Vector3(0, 0, Half), h - Slab, h, RaceTrackPipes.SupportLight, RaceTrackPipes.SupportDark, RaceTrackPipes.SupportTop);
+        RaceTrackPipes.Box(pts, faces, System.Numerics.Vector3.Zero, new System.Numerics.Vector3(Pillar, 0, 0), new System.Numerics.Vector3(0, 0, Pillar), 0, h - Slab, RaceTrackPipes.SupportLight, RaceTrackPipes.SupportDark, RaceTrackPipes.SupportTop);
+        var body = o.NewBodyBase + report.NewBodies.Count;
+        report.NewBodies.Add(RaceTrackPipes.Write(pts, faces, true));
+        var decor = IslandDecors.Blank(body, spot.X, (int)Math.Round(g), spot.Z, 0);
+        decor.XMin = spot.X - (int)Half; decor.XMax = spot.X + (int)Half; decor.ZMin = spot.Z - (int)Half; decor.ZMax = spot.Z + (int)Half;
+        decor.YMin = (int)Math.Round(g); decor.YMax = pad.Top;
+        spot.Cube.Decors.Add(decor);
+        report.Notes.Add($"the flag marshal's pad at cell ({pad.X:0.##}, {pad.Z:0.##}): {h:0} over the ground, its top {pad.Top}");
+    }
+
     // RaceTrackIsland.TwinLadders: a ladder at each place given, from the ground at its foot up to the highest ground a cell and a half
     // in front of its back (the top it climbs to), built as the raised road's ladders are, its zone numbered for the story to switch
     public static void FixedLadders(IslandFile island, IEnumerable<(double FootX, double FootZ, double OutX, double OutZ, int Zone)> ladders, RaceTrackOptions o, RaceTrackReport report)

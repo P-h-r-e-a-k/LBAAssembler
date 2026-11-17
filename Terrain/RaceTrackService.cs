@@ -772,6 +772,7 @@ internal static class RaceTrackService
         NoteLostDoors(island, options.DoorBoxes, atDoors, report);
         if (doorPieces is not null) RaceTrackBuilder.RestoreLostBuildings(island, options.DoorBoxes, doorPieces, options, report);
         RaceTrackBuilder.LiftShafts(island, options, report);
+        if (options.Island.MarshalPad is { } marshalPad) RaceTrackBuilder.MarshalPad(island, marshalPad, options, report);
         if (options.Island.WideTempleDoor) TempleDoorway.Widen(island, Path.Combine(gameDirectory, options.Island.OblFile), options, report);
         // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
         // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
@@ -1150,6 +1151,9 @@ internal static class RaceTrackService
         foreach (var placed in own is null ? new[] { report } : new[] { report, own.Report })
         {
             if (LBAAssembler.Terrain.Temple.TempleMarshal.Place(gameDirectory, placed, options.GridFirst, options.GridSide, options.Island) is not { } marshal) continue;
+            // (on her own pad, where the island has one: RaceTrackIsland.MarshalPad -- no plinth, no start from the road)
+            if (options.Island.MarshalPad is { } pad && ReferenceEquals(placed, report))
+                marshal = LBAAssembler.Terrain.Temple.TempleMarshal.Line(pad.X, pad.Z, pad.Top, pad.Beta, null, LBAAssembler.Terrain.Temple.TempleMarshal.For(options.Island), plinth: false);
             placed.Marshal = marshal;
             placed.PitCrew = RaceTrackPitCrew.Place(placed);
             if (placed.PitCrew is { } pit) placed.Notes.Add($"Zoe's pit box: at ({pit[4] / 512.0:0.##}, {pit[5] / 512.0:0.##}), the floor {pit[6]}, turned {pit[7]}");
