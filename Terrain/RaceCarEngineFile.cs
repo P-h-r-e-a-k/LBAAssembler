@@ -697,6 +697,8 @@ internal static class RaceCarEngineFile
             // catwalk by then, over their parts in front of it -- the steps' top step cut off, the user, 2026-11-16: "We also need to change
             // the stairs onto the catwalk, they now appear too low")
             if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={StellaEntities.Scene} {Citadel.CitadelProps.ClubStage} {Citadel.CitadelProps.ClubRail} {Citadel.CitadelProps.ClubSteps} {Citadel.CitadelProps.ClubShelf}\n");
+            // (and Twinsen carried off the stage by the catwalk's bouncer: RaceTrackStory.StellaEntities, CatwalkBouncer)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"carry_hero={StellaEntities.Scene} {RaceTrackStory.CarryCube} {RaceTrackStory.CarryUp} {RaceTrackStory.CarryAhead}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

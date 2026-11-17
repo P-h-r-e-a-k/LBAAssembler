@@ -1631,6 +1631,34 @@ static int s_adultVar = -1;
 // (no_recover=: RaceMod_NoRecover)
 #define RACE_MAX_NO_RECOVER 8
 static int s_noRecoverScene = -1, s_noRecoverBody[RACE_MAX_NO_RECOVER], s_nbNoRecover = 0;
+// carry_hero=<scene> <cube var> <up> <ahead>: in that scene, while the scene variable holds an actor's index (1-254), Twinsen is held up in
+// front of that actor -- <ahead> along its facing, <up> over its feet, turned to face it, and not falling -- whatever it does (CarryFrame):
+// Stella Entities' bouncer carrying him off the stage to the club's lift (the user, 2026-11-16, "If Twinsen manages to get onto the stage,
+// have a bouncer pick him out, carry him over to the exit platform and throw him onto it"). Back to 0, he is let go where he is.
+static int s_carryScene = -1, s_carryVar = -1, s_carryUp = 0, s_carryAhead = 0, s_carrying = 0;
+static U32 s_carryFallable = 0;
+static void CarryFrame(void) {
+    T_OBJET *h = &ListObjet[NUM_PERSO];
+    const int n = s_carryVar >= 0 && s_carryVar < MAX_VARS_CUBE && (int)NumCube == s_carryScene && NewCube == -1 ? ListVarCube[s_carryVar] : 0;
+    if (n > 0 && n < (int)NbObjets) {
+        const T_OBJET *c = &ListObjet[n];
+        if (!s_carrying) {
+            s_carryFallable = h->Flags & OBJ_FALLABLE;
+            h->Flags &= ~OBJ_FALLABLE;
+            s_carrying = 1;
+            Log_Info("[racemod] carry_hero: Twinsen carried by actor %d in scene %d", n, (int)NumCube);
+        }
+        const double a = (c->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096;
+        h->Obj.X = c->Obj.X + (S32)(sin(a) * s_carryAhead);
+        h->Obj.Z = c->Obj.Z + (S32)(cos(a) * s_carryAhead);
+        h->Obj.Y = c->Obj.Y + s_carryUp;
+        h->Obj.Beta = (c->Obj.Beta + 2048) & 4095;
+    } else if (s_carrying) {
+        h->Flags |= s_carryFallable;
+        s_carrying = 0;
+        Log_Info("[racemod] carry_hero: Twinsen let go at (%d,%d,%d)", (int)h->Obj.X, (int)h->Obj.Y, (int)h->Obj.Z);
+    }
+}
 static void AdultFrame(void) {
     if (s_adultVar < 0 || s_adultVar >= MAX_VARS_GAME) return;
     ListVarGame[s_adultVar] = RaceGame_PlayerAdult() ? 1 : 0;
@@ -5280,6 +5308,7 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
+        else if (!strcmp(key, "carry_hero")) { if (!setRead && sscanf(v, "%d %d %d %d", &s_carryScene, &s_carryVar, &s_carryUp, &s_carryAhead) != 4) s_carryVar = -1; }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
         else if (!strcmp(key, "drive_in")) {
@@ -14470,7 +14499,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -21200,6 +21229,7 @@ static void DarkFrame(void) {
 
 void RaceMod_Frame(void) {
     DarkFrame();
+    CarryFrame();
     ExchangeFrame();
     SeatFrame();
     DriveMarksFrame();
