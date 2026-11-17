@@ -87,7 +87,11 @@ internal static class CitadelHouseRooms
     // a door's zone, before it on the room's side: Twinsen in it, it slides down open (the house's door's own way, open_down -- its
     // script without the little key the bedroom's west door wants); away again, it closes. The north doors' zones in scene 0: DoorZone and
     // the one after it
-    private const int DoorZone = 90, DoorOpenDown = 1024, DoorSound = 349, DoorFront = 1200;
+    internal const int DoorZone = 90;
+    private const int DoorOpenDown = 1024, DoorSound = 349, DoorFront = 1200;
+    // (the night's house keeps these doors and their zones -- CitadelNightHouse: a north doorway's door, the sprite where Install puts it)
+    internal static bool IsNorthDoor(SceneActorModel a) => a.IsSprite && a.Entity == -1 && a.Z == 512 - DoorSpriteIn && a.Y == FloorY + DoorSpriteUp;
+    internal static bool IsRoomZone(SceneZoneModel z) => (z.Type == 2 && (z.Num == DoorZone || z.Num == DoorZone + 1)) || (z.Type == 0 && (z.Num == Bathroom || z.Num == Kitchen));
     // (`way`: the way it slides open -- the west doors along +z, "down" (the house's own); the north doors, mirrored, along +x, "right":
     // down, one slid 1,024 out into the bedroom and stood there unseen, clipped, in Twinsen's way)
     private static (string Life, string Track) DoorScripts(int zone, string way) => ($@"void comportement_0()

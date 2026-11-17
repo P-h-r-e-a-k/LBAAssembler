@@ -248,8 +248,13 @@ internal static class CitadelNightHouse
         // it opens: without them the doorway stood empty at night and Twinsen got stuck in it -- the user, 2026-11-10: "The door to
         // Twinsen's back room isn't there at night ... we just need to restore the door")
         var keep = model.Actors.Count > BackRoomDoor && model.Actors[BackRoomDoor] is { Entity: -1, Sprite: > 0 } ? BackRoomDoor + 1 : 2;
+        // (and the doors into the bathroom and the kitchen, with their zones -- the user, 2026-11-17: "Let's add the kitchen and bathroom doors
+        // into the night house now please": the house's grid is the day's with their doorways, CitadelHouseRooms installed first; the rooms
+        // send him back here while he is tired, RaceTrackStory.Evening)
+        var doors = model.Actors.Skip(keep).Where(CitadelHouseRooms.IsNorthDoor).ToList();
         model.Actors.RemoveRange(keep, model.Actors.Count - keep);
-        model.Zones.RemoveAll(zn => !(zn.Type == 0 && zn.Num == Yard) && zn.Type is not (1 or 5 or 6) && !(keep > 2 && zn.Type == 2 && zn.Num == BackRoomDoorZone));
+        model.Actors.AddRange(doors);
+        model.Zones.RemoveAll(zn => !(zn.Type == 0 && zn.Num == Yard) && zn.Type is not (1 or 5 or 6) && !(keep > 2 && zn.Type == 2 && zn.Num == BackRoomDoorZone) && !CitadelHouseRooms.IsRoomZone(zn));
         var hero = model.Hero;
         (hero.X, hero.Y, hero.Z) = Arrival;
         hero.Life = new byte[] { 0 }; hero.Track = new byte[] { 0 };

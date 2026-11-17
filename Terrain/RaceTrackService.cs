@@ -522,13 +522,14 @@ internal static class RaceTrackService
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelMuseum.Install(gameDirectory));
                 // (and the lift's squares in the house's storeroom, before the house at night is made from its grid: Citadel/CitadelHouseLift)
                 made.Add(LBAAssembler.Terrain.Citadel.CitadelHouseLift.Install(gameDirectory));
+                // (and the house's new bathroom and kitchen, through doorways in the bedroom: Citadel/CitadelHouseRooms -- before the house at
+                // night is made from its grid, so that the night's has the doorways too, the user, 2026-11-17: "Let's add the kitchen and bathroom
+                // doors into the night house now please")
+                made.AddRange(LBAAssembler.Terrain.Citadel.CitadelHouseRooms.Install(gameDirectory));
                 // (and Twinsen's house at night, where he goes to bed at the end of chapter 1: Citadel/CitadelNightHouse)
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelNightHouse.Install(gameDirectory));
                 // (and the lift's shaft under the squares, in the night's house only: the lift is the night home drunk's)
                 made.Add(LBAAssembler.Terrain.Citadel.CitadelHouseLift.OpenShaft(gameDirectory));
-                // (and the house's new bathroom and kitchen, through doorways in the bedroom -- the day's house only, after the night's is made from
-                // its grid: Citadel/CitadelHouseRooms)
-                made.AddRange(LBAAssembler.Terrain.Citadel.CitadelHouseRooms.Install(gameDirectory));
                 // (and the Tavern regulars' secret bar: the Tralu's caves' second hall made bigger and furnished -- Citadel/TraluBarRoom)
                 made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.Install(gameDirectory));
                 // (and the stairs up to the back gate's ledge in the caves' first scene, scene 2)

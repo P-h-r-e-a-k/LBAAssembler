@@ -30,6 +30,8 @@ internal static partial class RaceTrackStory
     // code uses it (235-237 are the videos seen, PLAYACF.CPP)
     public const int QEvening = 58, ZoeLeftTop = 1, TimGoneHome = 2;
     public const int NightHouse = Citadel.CitadelNightHouse.Scene;
+    // (the bathroom's and the kitchen's ways out: into the day's house, and into the night's while he is tired -- their zones' switches)
+    private const int RoomOutDay = 11, RoomOutNight = 12;
     // DayVar away from Tired while one of the evening's own lines is said: the race-track mode's tired= says its line in place of anyone's
     // while Twinsen is tired (Tim's lights over the sea are said so too)
     private const int TiredAside = 4;
@@ -811,6 +813,37 @@ stop();
     else");
             scripts.SetText(0, ScriptKind.Life, hero);
         });
+        // the bathroom and the kitchen out into the night's house while Twinsen is tired (the user, 2026-11-17: "Let's add the kitchen and
+        // bathroom doors into the night house now please" -- CitadelNightHouse keeps their doors): each room's way out a second time, into
+        // the night's house at the same place, switched on by the room as it starts while the day is Tired -- the day's house would send him
+        // on there by its front door (its hero's life), not by the room's doorway
+        foreach (var room in new[] { Citadel.CitadelHouseRooms.Bathroom, Citadel.CitadelHouseRooms.Kitchen })
+        {
+            if (!p.Store.SceneExists(room)) continue;
+            p.Edit(room, $"the {(room == Citadel.CitadelHouseRooms.Bathroom ? "bathroom" : "kitchen")}'s way out into the night's house (scene {NightHouse}) while Twinsen is tired", model =>
+            {
+                var day = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == OpeningScene) ?? throw new NotTheGames("no way back into the house");
+                day.Info[4] = RoomOutDay;
+                var night = new SceneZoneModel { Type = 0, Num = NightHouse, X0 = day.X0, X1 = day.X1, Y0 = day.Y0, Y1 = day.Y1, Z0 = day.Z0, Z1 = day.Z1, Info = (int[])day.Info.Clone() };
+                night.Info[4] = RoomOutNight;
+                night.Info[7] = 0;
+                model.Zones.Add(night);
+                return p.Add(model, RaceTrackScenes.InvisibleHelper(0, Citadel.CitadelHouseRooms.FloorY, 0), $@"void comportement_0()
+{{
+    if ({Tired} == var_game({DayVar}))
+    {{
+        set_change_cube({RoomOutDay}, 0);
+        set_change_cube({RoomOutNight}, 1);
+    }}
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+}}
+");
+            });
+        }
         p.Edit(NightHouse, "the house at night: Zoe home, the bed from its three sides, into bed, the candle out, the night", model =>
         {
             foreach (var (x0, x1, z0, z1) in BedSides)
