@@ -685,6 +685,10 @@ internal static class RaceCarEngineFile
             // (a seat -- Stella Entities' booths, the house's kitchen chairs: Twinsen got up by any key -- RACEMOD.CPP seat_cube=, a scene
             // variable, in every file: the kitchen is in every Citadel build. No longer seat_var= 247: that is the Polar dream's EggSendell too)
             text.Append($"seat_cube={RaceTrackStory.SeatCube}\n");
+            // (the harbour quay's lift: the game's grate, copied over its shaft, going down and up with its plate -- RaceTrackBuilder.LiftShafts,
+            // RACEMOD.CPP follow_decor=: the plate's generic body, the grate's decor body in each weather's file, its height over the plate's)
+            foreach (var (file, grate) in RaceTrackBuilder.GameShaftGrates)
+                text.Append($"follow_decor={RaceTrackStory.QuayLiftScene} {Citadel.CitadelProps.QuayLift} {grate} {Citadel.CitadelProps.LiftTop} {file}\n");
             // (the player 18 or more: Stella Entities' lift down open -- RACEMOD.CPP adult_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
             // (Stella Entities' stage and catwalk drawn whole into the background, no brick over them: its catwalk's cells real bricks that

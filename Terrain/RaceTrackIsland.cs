@@ -122,7 +122,8 @@ internal sealed record RaceTrackIsland(
         // the game's own sewer lift by the start line, scene 42's actor 21, sinks between four walls into a hollow of the ground). The quay
         // there is a pier five cells across (z 603-607, the sea north of it, its railing on its south edge), flat at 750 in both files west
         // of x 471 (the town circuit's bank rises east of it, Felix the fisherman at 472): the shaft's 4 cells x 467-471, z 603-607
-        LiftShafts = new[] { (469, 605, 750) },
+        // (2026-11-17: the game's own shaft's way -- its middle a cell's middle, its thin walls and grate copied: RaceTrackBuilder.LiftShafts)
+        LiftShafts = new[] { (469.5, 605.5, 750) },
         // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
         // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
         KeepOffRoadActors = true,
@@ -270,9 +271,9 @@ internal sealed record RaceTrackIsland(
     public (double X, double Z, double Reach)[]? NoPiersAt { get; init; }
     // Lifts on the raised road down into a building: island cell, and the scene and place there they take Twinsen to (a door zone on the deck)
     public (double X, double Z, int Scene, int ToX, int ToY, int ToZ)[]? DeckLifts { get; init; }
-    // Lifts down through the island's ground into a scene below (RaceTrackBuilder.LiftShafts): the 2-cell plate's middle (island cells, a
-    // whole cell -- the ground's points are at whole cells) and the ground's height round it; a shaft is cut there in both weathers' files
-    public (int X, int Z, int Rim)[]? LiftShafts { get; init; }
+    // Lifts down through the island's ground into a scene below (RaceTrackBuilder.LiftShafts): the plate's middle (island cells, a cell's
+    // middle, as the game's own shaft's) and the ground's height round it; the game's shaft is copied there in both weathers' files
+    public (double X, double Z, int Rim)[]? LiftShafts { get; init; }
     // A building's front put back in the other weather's file (RaceTrackBuilder.PlaceTwinMuseum): the retail decor of Body nearest FromX, FromZ
     // moved to ToX, ToZ (island cells; its door zone and way out moved with it, RaceTrackScenes), and a lift on the road at LiftX, LiftZ
     // into the building as DeckLifts' first

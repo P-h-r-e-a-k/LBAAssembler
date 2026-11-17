@@ -110,6 +110,8 @@ internal static partial class RaceTrackStory
     // onto it, the lift's NO_MOVE left him running on in his run's animation off it into the sea, and the clover put him back frozen;
     // now anim_obj(0, 0) stops him on it as it takes him)
     private const int OffQuayLift = 900;
+    // (the quay lift's scene, for the race file's follow_decor=: its plate's grate, RaceCarEngineFile)
+    internal const int QuayLiftScene = Harbour;
     // (LiftDip: down its shaft -- RaceTrackBuilder.ShaftDepth, 1500 -- till Twinsen's head is under the quay, the plate's underside 100
     // over the shaft's floor: 400 left him standing on the ground as the plate sank through it, the user, 2026-11-16, "it sort of just fades
     // through the ground then Twinsen drops afterwards"; ShaftClear: the roads that far from its middle, its walls 2 cells out)
@@ -1526,7 +1528,7 @@ stop();
         // (the lift on its shaft, the build's in both files' ground -- RaceTrackIsland.LiftShafts: its plate's middle, its top the quay's
         // height round it; clear of both roads by more than the shaft's 2 cells)
         (double X, double Z, double Y)? hatch = RaceTrackIsland.Citadel.LiftShafts is [var shaft, ..]
-            && OffRoads(p.Storm, shaft.X, shaft.Z) >= ShaftClear && OffRoads(p.Town, shaft.X, shaft.Z) >= ShaftClear ? (shaft.X, shaft.Z, shaft.Rim) : null;
+            && OffRoads(p.Storm, shaft.X, shaft.Z) >= ShaftClear && OffRoads(p.Town, shaft.X, shaft.Z) >= ShaftClear ? (shaft.X, shaft.Z, shaft.Rim + RaceTrackBuilder.GrateTop) : null;
         // (beside it on the quay, where the far room's ladder comes out: past the shaft's walls, 2 cells from its middle, along the pier --
         // east or west, the sea north of it and its railing south)
         (double X, double Z, double Y)? quay = null;
@@ -1570,7 +1572,9 @@ stop();
             // 2026-11-16, "needs to be the same colour as the retail elevators" -- on the chamber's plate's ride: CitadelProps.QuayLift.
             // Entity 104 itself, tried that day, left Twinsen beside it in the water as it sank: its box isn't the plate's)
             var plate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.QuayLift, hx, hy - Citadel.CitadelProps.LiftTop, hz);
-            plate.Flags |= RaceTrackScenes.CarrierFlag;
+            // (not drawn: the game's own grate, the shaft's decor, goes down and up with it and is what is seen -- RACEMOD.CPP follow_decor=,
+            // the user, 2026-11-17, "Are we able to swap in the retail elevator grid for our blue elevator pad please")
+            plate.Flags |= RaceTrackScenes.CarrierFlag | RaceTrackScenes.InvisibleFlag;
             plate.Move = 3;
             var plateIndex = SceneOps.AddActor(model, plate);
             var helper = RaceTrackScenes.InvisibleHelper(hx, hy, hz);

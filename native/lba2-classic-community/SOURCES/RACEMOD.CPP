@@ -826,6 +826,13 @@ static int s_nbDoorsTo = 0;
 #define RACE_LIFT_MS 1800                  // its ride, down or up
 #define RACE_LIFT_DROP 2000.0              // how far down through the road it goes
 static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16]; int Grate; } s_lifts[RACE_MAX_LIFTS];      // (File: "" or "*" any; Grate: -1 none)
+// follow_decor=<scene> <actor's generic body> <decor body> <dy> <island file>: the decors of that body by the actor (within 900 of it, x and
+// z) drawn at its height plus dy -- a lift's grate, an island's own decor, going down and up with the scene's (invisible) plate that carries
+// Twinsen (the harbour quay's lift into the sewers: the user, 2026-11-17, "The elevator at the quay should look like this, with the flooring
+// flush to the edge" -- the game's own grate in its stone border)
+#define RACE_MAX_FOLLOW 4
+static struct { int Scene, Generic, Body, Dy; char File[16]; } s_follow[RACE_MAX_FOLLOW];
+static int s_nbFollow = 0;
 #define RACE_LIFT_PRESS_MS 1500            // the sewer lift's: Twinsen's animation 11 at most this long
 // ... the grate this far down, or this long, and the scene changes: as the game's own sewer lift by the start line (scene 42) does it,
 // its door zone into the sewers (zone 28) 38 under its grate's top -- the grate barely starts down and the sewers come up. Riding 300
@@ -4554,6 +4561,13 @@ static void Load(const char *path, int carOnly = 0) {
                        &s_actorsAt[s_nbActorsAt].X, &s_actorsAt[s_nbActorsAt].Y, &s_actorsAt[s_nbActorsAt].Z) == 6) {
                 s_actorsAt[s_nbActorsAt].Actor = who[0] == 'p' ? -1 - atoi(who + 1) : atoi(who);
                 s_nbActorsAt++;
+            }
+        }
+        else if (!strcmp(key, "follow_decor") && s_nbFollow < RACE_MAX_FOLLOW) {
+            char file[16] = "";
+            if (sscanf(v, "%d %d %d %d %15s", &s_follow[s_nbFollow].Scene, &s_follow[s_nbFollow].Generic, &s_follow[s_nbFollow].Body, &s_follow[s_nbFollow].Dy, file) >= 4) {
+                snprintf(s_follow[s_nbFollow].File, sizeof(s_follow[s_nbFollow].File), "%s", file);
+                s_nbFollow++;
             }
         }
         else if (!strcmp(key, "deck_lift") && s_nbLifts < RACE_MAX_LIFTS) {
@@ -20748,8 +20762,25 @@ static void LiftDecors(T_DECORS *list, S32 count) {
     }
 }
 
+// (follow_decor=: a decor going down and up with an actor -- its height the actor's plus dy, its box with it)
+static void FollowDecors(T_DECORS *list, S32 count) {
+    for (int f = 0; f < s_nbFollow; f++) {
+        if (s_follow[f].Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || (s_follow[f].File[0] && strcmp(s_follow[f].File, "*") && strcasecmp(s_follow[f].File, IslandName))) continue;
+        const T_OBJET *a = NULL;
+        for (int i = 1; i < (int)NbObjets && !a; i++)
+            if ((int)ListObjet[i].GenBody == s_follow[f].Generic) a = &ListObjet[i];
+        if (!a) continue;
+        const S32 y = a->Obj.Y + s_follow[f].Dy;
+        for (S32 k = 0; k < count; k++) {
+            T_DECORS *d = &list[k];
+            if ((d->Body & 0xFFFF) != s_follow[f].Body || abs(d->Xworld - a->Obj.X) > 900 || abs(d->Zworld - a->Obj.Z) > 900) continue;
+            d->YMin += y - d->Yworld; d->YMax += y - d->Yworld;
+            d->Yworld = y;
+        }
+    }
+}
 static void WheelDecors(T_DECORS *list, S32 count);
-static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count); LiftDecors(list, count); LoopDecors(list, count); }
+static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count); LiftDecors(list, count); FollowDecors(list, count); LoopDecors(list, count); }
 
 // The actors in the way of this weather's road only (actor_at=), put aside as their scene starts: its first frame, after the scripts'
 // own first placing

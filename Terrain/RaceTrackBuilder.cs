@@ -3897,34 +3897,55 @@ internal static class RaceTrackBuilder
         return body;
     }
 
-    // A lift's shaft (RaceTrackIsland.LiftShafts): the ground under its 2-cell plate sunk ShaftDepth, round it level at the rim, and four
-    // walls a cell thick round the plate from the shaft's floor up to just over the rim -- as the game's own sewer lift by the start line
-    // (scene 42's actor 21) sinks between four walls into a hollow of the ground. The ground's points are a cell apart, so from the rim to
-    // the floor it falls across a whole cell: under the walls, which are that thick, the plate exactly between them (its ride a lift's
-    // track in the scene, RaceTrackStory.Chapters' quay lift). After the road is built (its ground's own), before the island is saved.
-    public const int ShaftDepth = 1500, ShaftLip = 8;
+    // A lift's shaft (RaceTrackIsland.LiftShafts) in the game's own way, the sewer lift's by the start line (its shaft's middle GameShaft:
+    // scene 42's actor 21's grate sinking between four walls into a hollow of the ground) -- the user, 2026-11-17, of the first, a cell-wide
+    // grey frame of walls round the plate: "The elevator has a box around it that looks out of place, let's have the normal flooring around
+    // our elevator instead. Are we able to swap in the retail elevator grid for our blue elevator pad please" / "The elevator at the quay
+    // should look like this, with the flooring flush to the edge" (a picture of the game's own grate in its narrow stone border). So: its
+    // middle a cell's middle, as the game's; the ground's four points round it sunk ShaftDepth, those round them level at the rim; and the
+    // game's own decors there copied -- its four thin walls, their tops the stone border, deep enough to meet the ground's slope inside, and
+    // its grate over the opening (drawn only: the scene's plate under it carries Twinsen, the grate going down with it -- RACEMOD.CPP
+    // follow_decor=). After the road is built (its ground's own), before the island is saved.
+    public const int ShaftDepth = 1500;
+    // (the grate's top over the ground round it: the game's, 294 over 250 -- the plate's top, where Twinsen stands on it)
+    public const int GrateTop = 44;
+    public static readonly (double X, double Z, int Rim) GameShaft = (567.5, 589.5, 250);
+    // (its grate's decor body in each weather's file -- CITADEL.OBL's 47, CITABAU.OBL's 64 -- for the engine's follow_decor=, by file name)
+    public static readonly (string File, int Grate)[] GameShaftGrates = { ("citadel", 47), ("citabau", 64) };
     public static void LiftShafts(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
     {
-        foreach (var (cx, cz, rim) in o.Island.LiftShafts ?? Array.Empty<(int, int, int)>())
+        foreach (var (sx, sz, rim) in o.Island.LiftShafts ?? Array.Empty<(double, double, int)>())
         {
-            if (o.NewBodyBase < 0 || IslandDecors.Locate(island, cx * 512.0, cz * 512.0) is not { } at || at.Cube.Decors.Count + 4 > IslandDecors.MaxPerCubeRaceTrack)
-            { report.Notes.Add($"WARNING: no shaft for the lift at cell ({cx}, {cz}): no room for its walls"); continue; }
-            var floor = rim - ShaftDepth;
-            for (var gz = cz - 2; gz <= cz + 2; gz++)
-                for (var gx = cx - 2; gx <= cx + 2; gx++)
-                    island.SetHeight(gx, gz, Math.Abs(gx - cx) <= 1 && Math.Abs(gz - cz) <= 1 ? floor : rim);
-            // (north and south the whole 4 cells across, west and east the 2 between them; each its own decor, its own box)
-            var top = rim + ShaftLip;
-            foreach (var (dx, dz, halfX, halfZ) in new[] { (0.0, -1.5, 1024, 256), (0.0, 1.5, 1024, 256), (-1.5, 0.0, 256, 512), (1.5, 0.0, 256, 512) })
+            // (the game's shaft's decors: every one whose box lies within its 3 x 3 cells round its middle, at its ground)
+            var pieces = IslandOps.CubeCells(island).SelectMany(c => c.Cube.Decors.Select(d => (c.X, c.Z, D: d))).Where(t =>
             {
-                if (IslandDecors.Locate(island, (cx + dx) * 512, (cz + dz) * 512) is not { } w) continue;
-                var body = o.NewBodyBase + report.NewBodies.Count;
-                report.NewBodies.Add(RaceTrackRaisedBody.Block(halfX, halfZ, top - floor, RaceTrackRaisedBody.PierLight, RaceTrackRaisedBody.PierDark, RaceTrackRaisedBody.PierCap));
-                var d = IslandDecors.Blank(body, w.X, floor, w.Z, 0);
-                d.XMin = w.X - halfX; d.XMax = w.X + halfX; d.ZMin = w.Z - halfZ; d.ZMax = w.Z + halfZ; d.YMin = floor; d.YMax = top;
-                w.Cube.Decors.Add(d);
+                double x0 = (t.X * 32768.0 + t.D.XMin) / 512, x1 = (t.X * 32768.0 + t.D.XMax) / 512, z0 = (t.Z * 32768.0 + t.D.ZMin) / 512, z1 = (t.Z * 32768.0 + t.D.ZMax) / 512;
+                return x0 >= GameShaft.X - 1.6 && x1 <= GameShaft.X + 1.6 && z0 >= GameShaft.Z - 1.6 && z1 <= GameShaft.Z + 1.6 && t.D.YMax <= GameShaft.Rim + 100 && t.D.YMin >= GameShaft.Rim - 700;
+            }).ToList();
+            if (pieces.Count < 5) { report.Notes.Add($"WARNING: no shaft for the lift at cell ({sx}, {sz}): the game's shaft has {pieces.Count} decors, not its walls and grate"); continue; }
+            var target = IslandDecors.Locate(island, sx * 512, sz * 512);
+            if (target is null || target.Value.Cube.Decors.Count + pieces.Count > IslandDecors.MaxPerCubeRaceTrack) { report.Notes.Add($"WARNING: no shaft for the lift at cell ({sx}, {sz}): no room for its decors"); continue; }
+            // the ground: its four points round the middle sunk, the twelve round them level with the rim
+            int gx0 = (int)Math.Floor(sx) - 1, gz0 = (int)Math.Floor(sz) - 1, floor = rim - ShaftDepth;
+            for (var gz = gz0; gz <= gz0 + 3; gz++)
+                for (var gx = gx0; gx <= gx0 + 3; gx++)
+                    island.SetHeight(gx, gz, gx > gx0 && gx < gx0 + 3 && gz > gz0 && gz < gz0 + 3 ? floor : rim);
+            // the game's decors copied, as far from its middle as from ours, as high over our rim as over its
+            double dx = (sx - GameShaft.X) * 512, dz = (sz - GameShaft.Z) * 512;
+            var dy = rim - GameShaft.Rim;
+            var grates = 0;
+            foreach (var (cx, cz, d) in pieces)
+            {
+                double wx = cx * 32768.0 + d.X + dx, wz = cz * 32768.0 + d.Z + dz;
+                if (IslandDecors.Locate(island, wx, wz) is not { } at) continue;
+                var copy = d.Clone();
+                copy.MoveTo(at.X, d.Y + dy, at.Z);
+                // (the grate -- inside the walls, low: the plate's look, drawn only; the walls keep their boxes)
+                var x0 = (cx * 32768.0 + d.XMin) / 512; var x1 = (cx * 32768.0 + d.XMax) / 512;
+                if (x1 - x0 > 1.5 && d.YMax - d.YMin < 300) { copy.YMax = NoBoxTop; grates++; }
+                at.Cube.Decors.Add(copy);
             }
-            report.Notes.Add($"a lift's shaft at cell ({cx}, {cz}): its ground sunk to {floor} under the plate, level at {rim} round it, walled a cell thick");
+            report.Notes.Add($"a lift's shaft at cell ({sx}, {sz}): the game's (at {GameShaft.X}, {GameShaft.Z}) copied -- its ground sunk to {floor} under the opening, level at {rim} round it, its {pieces.Count - grates} walls and {grates} grate");
         }
     }
 
