@@ -1271,6 +1271,8 @@ void comportement_1()
         PharmacyHold(p);
         // (the easter eggs' LBA1 rooms: the sewers' secret room, the Tavern's cellar -- Citadel/RaceTrackStory.Lba1Rooms.cs)
         Lba1Rooms(p);
+        // (the Tralu caves' carved darts sums: Citadel/RaceTrackStory.TraluEtching.cs)
+        TraluEtching(p);
         // (chapter 1's evening, the race won to bed: RaceTrackStory.Evening.cs)
         Evening(p);
     }
