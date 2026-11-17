@@ -42,7 +42,9 @@ internal static partial class RaceTrackStory
     // he walks in in it, the airlock cycles, he comes out without it, and takes it again on the way out (the user, 2026-11-16: "When
     // Twinsen enters the emerald moon, let's have him enter wearing his helmet, go into the airlock, and emerge not wearing his helmet,
     // this mirrors behaviour in the retail game"; "We should show Twinsen's helmet left in the airlocks instead of the spacesuit")
-    private static readonly (int Scene, int Actor)[] MoonAirlocks = { (31, 12), (52, 9), (53, 6) };
+    // (and the triangle's and the square's, 167 and 168 -- the user, 2026-11-17: "we need to make sure the helmet works correctly for the 4
+    // airlocks in the main building also. The square, triangle, circle, and X entrances")
+    private static readonly (int Scene, int Actor)[] MoonAirlocks = { (31, 12), (52, 9), (53, 6), (167, 9), (168, 9) };
     private const int EmptySuitEntity = 83;
     internal static string MoonHelmetHooks() => string.Concat(MoonAirlocks.Select(a => $"helmet_hook={a.Scene} {a.Actor}\n"));
 
