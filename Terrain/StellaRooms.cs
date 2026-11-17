@@ -43,19 +43,28 @@ internal static class StellaRooms
     // (Rick's furniture, bricks: his armchairs, his desk and its ends, what stands on it -- gone from the private room's grid: the dancer
     // stood in an armchair)
     private static readonly HashSet<int> Furniture = new() { 78, 82, 143, 144, 145, 62, 205 };
+    // (and the dressing room's: Rick's sofa, x 5-6 z 11-14; the potted plant, x 14-15 z 5-6; the wall lamp, x 16 z 10, the east wall's
+    // block 196 there instead)
+    private const int DressGone1 = 84, DressGone2 = 40, WallLamp = 207, EastWallBlock = 196;
     private const int WestWall = 23, NorthWall = 28, Painting = 195, WallX = 4, VentZ = 12, NorthZ = 4, PaintingX = 11;
     // the posters' places: on the west wall over the vent, on the north wall over the painting (the walls' inner faces, a little off them)
-    private const int SidePosterX = (WallX + 1) * 512 + 24, SidePosterZ = (VentZ + 1) * 512, BackPosterX = PaintingX * 512 + 768, BackPosterZ = (NorthZ + 1) * 512 + 24, PosterY = 1530;
+    // (the west wall's poster north of the dressing table's mirrors, which since 2026-11-17 stand along the wall's south end)
+    private const int SidePosterX = (WallX + 1) * 512 + 24, SidePosterZ = 7 * 512 + 256, BackPosterX = PaintingX * 512 + 768, BackPosterZ = (NorthZ + 1) * 512 + 24, PosterY = 1530;
 
     // the dressing room's furniture (generic, x, z, beta): see Install
     // (Rick's office's cells: its floor x 5-15, z 5-17; along its west wall his corner piece, lamps and sofa -- the sofa, x 5-6 z 11-14,
     // the room's couch -- and on its north wall a curtain at x 8: the dressing table free-standing in front of the west wall's things, its
     // mirrors facing the room; the costume rail in the middle, facing the camera; the lockers on the north wall right of the curtain; the
     // folding screen by the east wall)
+    internal const int DressTableX = 5 * 512 + 290, DressTableZ = 17 * 512 - 1720;
     internal static readonly (int Generic, int X, int Z, int Beta)[] DressingRoom =
     {
-        (Citadel.CitadelProps.DressingTable, 3840, 4864, 1024),
-        (Citadel.CitadelProps.ClubBarStool, 4500, 4000, 0), (Citadel.CitadelProps.ClubBarStool, 4500, 4864, 0), (Citadel.CitadelProps.ClubBarStool, 4500, 5730, 0),
+        // (the table flush to the west wall's face, x 5 cells, at its south end by the door -- where Rick's sofa was; four mirrors, a stool
+        // before each -- the user, 2026-11-17: "have the table with the mirrors moved directly to the left of the door - same orientation as it
+        // is currently, and pushed back flush to the wall")
+        (Citadel.CitadelProps.DressingTable, DressTableX, DressTableZ, 1024),
+        (Citadel.CitadelProps.ClubBarStool, DressTableX + 850, DressTableZ - 1275, 0), (Citadel.CitadelProps.ClubBarStool, DressTableX + 850, DressTableZ - 425, 0),
+        (Citadel.CitadelProps.ClubBarStool, DressTableX + 850, DressTableZ + 425, 0), (Citadel.CitadelProps.ClubBarStool, DressTableX + 850, DressTableZ + 1275, 0),
         (Citadel.CitadelProps.CostumeRail, 5888, 4608, 0),
         (Citadel.CitadelProps.Lockers, 7150, 2800, 0),
         (Citadel.CitadelProps.FoldingScreen, 7700, 5000, 3072),
@@ -322,8 +331,19 @@ internal static class StellaRooms
         if (rooms < 0) return (-1, -1, -1);
         // the private room's: the same without Rick's furniture
         var bare = new Dictionary<(int, int, int), (int Block, int Pos)>(set);
+        var cleared = new HashSet<(int, int)>();
         for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
-            if (Furniture.Contains(Lba1GridEdit.Get(shape, x, y, z).Block)) bare[(x, y, z)] = (0, 0);
+            if (Furniture.Contains(Lba1GridEdit.Get(shape, x, y, z).Block)) { bare[(x, y, z)] = (0, 0); cleared.Add((x, z)); }
+        // (the dressing room's too, the user, 2026-11-17: Rick's sofa, the plant by the lockers, the wall lamp the folding screen stood
+        // against -- the wall's own block there instead; and the invisible solid cells left over his furniture, "an invisible barrier where
+        // the desk previously was")
+        for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
+        {
+            var cell = Lba1GridEdit.Get(shape, x, y, z);
+            if (cell.Block is DressGone1 or DressGone2) bare[(x, y, z)] = (0, 0);
+            else if (cell.Block == WallLamp) bare[(x, y, z)] = (EastWallBlock, 0);
+            else if (cell.Block == 0 && cell.Pos != 0 && cleared.Contains((x, z))) bare[(x, y, z)] = (0, 0);
+        }
         // (backstage on the office's grid, Rick's desk and armchairs kept: the user, 2026-11-14)
         var backstage = rooms;
         // (and the private room's: under the sofa's seat, solid invisible cells up to it -- as under the hall's booths: Twinsen sits on them)

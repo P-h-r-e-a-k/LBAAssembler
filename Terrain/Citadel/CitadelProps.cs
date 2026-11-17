@@ -310,7 +310,7 @@ internal static partial class CitadelProps
 
     // The props whose box isn't the one their body's extent makes: the lift's platform (not its rails), the rugs' tiles (CitadelProps.Rugs)
     private static short[]? BoxOf(int generic) =>
-        LiftBox(generic) ?? RugTileBox(generic) ?? BathMatBox(generic) ?? ClubBox(generic) ?? PoolBox(generic) ?? BarBox(generic) ?? BroomBox(generic) ?? HangarProps.Box(generic);
+        LiftBox(generic) ?? RugTileBox(generic) ?? BathMatBox(generic) ?? ClubBox(generic) ?? PoolBox(generic) ?? BarBox(generic) ?? BroomBox(generic) ?? DressingBox(generic) ?? HangarProps.Box(generic);
 
     // An entity's body record with its own box (the engine's ZV: F_BODY, the generic, the record's size, the body's number, "has
     // actions", F_ZV and the box's six values) in place of the one the body's own extent makes -- the chamber's lift: its rail and chains

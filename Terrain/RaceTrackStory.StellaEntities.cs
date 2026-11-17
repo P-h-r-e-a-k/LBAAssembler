@@ -396,7 +396,7 @@ stop();
     // no shadow)
     private static readonly (int Who, int X, int Z, int Beta, MoonLine Line)[] Dressing =
     {
-        (1, 4300, 5300, 3072, MoonLine.DressMirror), (4, 5888, 5250, 2048, MoonLine.DressRail), (6, 7000, 5000, 3376, MoonLine.DressScreen),
+        (1, StellaRooms.DressTableX + 1250, StellaRooms.DressTableZ, 3072, MoonLine.DressMirror), (4, 5888, 5250, 2048, MoonLine.DressRail), (6, 7000, 5000, 3376, MoonLine.DressScreen),
     };
     private static void DressingPeople(IslandBeatsA b, SceneActorModel bouncer, Func<MoonLine, int> say)
     {

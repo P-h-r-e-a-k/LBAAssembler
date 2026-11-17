@@ -20,11 +20,16 @@ internal static partial class CitadelProps
     // (the costumes' colours: a red, a pink, the gold, a teal, a purple, a white)
     private static readonly int[] CostumeColours = { 4 * 16 + 8, 4 * 16 + 13, 6 * 16 + 10, 10 * 16 + 8, 13 * 16 + 6, 0 * 16 + 14 };
 
+    // (its half length; and its box the scene's way round, the actor turned 1024 against the west wall -- the body's own square box, the
+    // average of its length and depth, reached a cell out into the room)
+    public const float DressTableHalf = 1700;
+    private static short[]? DressingBox(int generic) => generic == DressingTable ? new short[] { -300, 0, -(short)(DressTableHalf + 20), 300, 1600, (short)(DressTableHalf + 20) } : null;
+
     public static Body BuildDressingTable(byte[] header)
     {
         var m = new CarMesh("the dressing table", new[] { -1 });
         m.Light = 0.75f;
-        const float W = 1300, D = 280, Top = 720, Slab = 50;
+        const float W = DressTableHalf, D = 280, Top = 720, Slab = 50;
         // the top and its legs
         m.Box(0, new Vector3(0, Top - Slab / 2, 0), new Vector3(2 * W, Slab, 2 * D), DressWood, DressWood + 2);
         foreach (var sx in new[] { -1, 1 })
@@ -32,9 +37,10 @@ internal static partial class CitadelProps
                 m.Box(0, new Vector3(sx * (W - 50), (Top - Slab) / 2, sz * (D - 50)), new Vector3(60, Top - Slab, 60), DressWoodDark);
         // (a drawer front under the top, its handle)
         m.Box(0, new Vector3(0, Top - Slab - 70, D - 20), new Vector3(2 * W - 200, 140, 30), DressWoodDark, DressWoodDark);
-        // the three mirrors along its back: a frame, the glass, bulbs round the glass's top and sides
+        // the four mirrors along its back: a frame, the glass, bulbs round the glass's top and sides (four since 2026-11-17, the table longer --
+        // the user: "We can probably expend the table and have a fourth mirror")
         const float MirrorW = 330, MirrorH = 820, Back = -D + 60;
-        foreach (var mx in new[] { -2 * W / 3, 0f, 2 * W / 3 })
+        foreach (var mx in new[] { -3 * W / 4, -W / 4, W / 4, 3 * W / 4 })
         {
             m.Box(0, new Vector3(mx, Top + MirrorH / 2, Back - 10), new Vector3(2 * MirrorW + 60, MirrorH + 60, 30), Frame, Frame);
             // (the glass facing forward, +z: away from a point behind it -- Up turned a standing quad either way)
