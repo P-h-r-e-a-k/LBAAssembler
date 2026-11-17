@@ -936,6 +936,32 @@ void comportement_1()
         return arrows;
     }
 
+    // The islet across from the Hacienda (scene 73, cube (10, 11)): its cave's mouth at the end of the water channel (the door into scene
+    // 183, cells x 41-44 at z 37-38, at the water's level) shut by a rock fall like the one on the house basement's old way out (the user,
+    // 2026-11-17: "On Desert Island, the Island across from the hacienda has a cave entrance, we're not doing anything with this area, so
+    // let's block the cave entrance with a rock fall similar to in Twinsen's basement"): its door gone, boulders heaped in the mouth, a
+    // smaller one on top, small ones scattered in the shallows before it (CitadelProps' Boulder, Boulder2, SmallBoulder).
+    private const int HaciendaIslet = 73, IsletCave = 183;
+    private static readonly (int Generic, int X, int Y, int Z, int Beta)[] IsletRockFall =
+    {
+        (Citadel.CitadelProps.Boulder, 21250, 0, 19500, 300), (Citadel.CitadelProps.Boulder, 22300, 0, 19450, 1900),
+        (Citadel.CitadelProps.Boulder2, 21800, 1000, 19650, 2900),
+        (Citadel.CitadelProps.SmallBoulder, 21250, 1250, 19750, 1100), (Citadel.CitadelProps.SmallBoulder, 22350, 1200, 19700, 2600),
+        (Citadel.CitadelProps.SmallBoulder, 20900, 0, 18950, 400), (Citadel.CitadelProps.SmallBoulder, 21650, 0, 18800, 1700),
+        (Citadel.CitadelProps.SmallBoulder, 22500, 0, 18900, 3000), (Citadel.CitadelProps.SmallBoulder, 22850, 0, 19250, 2400),
+    };
+    private static void HaciendaIsletCave(IslandBeatsA b)
+    {
+        if (!b.Store.SceneExists(HaciendaIslet)) return;
+        b.Edit(HaciendaIslet, $"the islet across from the Hacienda: its cave (scene {IsletCave}) shut by a rock fall, its door gone", model =>
+        {
+            var gone = model.Zones.RemoveAll(z => z.Type == 0 && z.Num == IsletCave);
+            if (gone == 0) { b.Log.Add($"the islet's rock fall left out: no door into scene {IsletCave} in scene {HaciendaIslet}"); return _ => { }; }
+            var adds = IsletRockFall.Select(r => IslandBeatsA.Add(model, Citadel.CitadelProps.Actor(r.Generic, r.X, r.Y, r.Z, r.Beta), "void comportement_0()\n{\n}\n")).ToList();
+            return scripts => { foreach (var add in adds) add(scripts); };
+        });
+    }
+
     private static List<string> ApplyDesert(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
     {
         var log = new List<string>();
@@ -947,6 +973,8 @@ void comportement_1()
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
+        // (the cave on the islet across from the Hacienda shut by a rock fall: nothing of the story's in it -- HaciendaIsletCave)
+        HaciendaIsletCave(b);
         Hangar(b, HangarScene, 4, MoonStart, new HangarLines(Say(DesertLine.HangarOffer), Say(DesertLine.HangarYes), Say(DesertLine.HangarNo),
             Say(DesertLine.HangarBoard), Say(DesertLine.HangarLater), Say(DesertLine.HangarLift), Say(DesertLine.HangarClosed)));
         // (Zoe as companion's hints on the Desert: the Dean, his pages, the sand filters, the helmet, the race -- RaceTrackStory.Companion.cs)
