@@ -15,7 +15,11 @@ internal static partial class CitadelProps
     public const int PoolWater = 120, DivingBoard = 121;
     // (and a ladder at the basin's edge -- the user, 2026-11-14: "Let's also make sure there's a ladder in the pool": steel rails up out of the
     // water and over the edge onto the deck, three steps under the surface; swimming to any edge takes Twinsen out, the ladder's included)
-    public const int PoolLadder = 19, LadderX = 15500, LadderZ = 16600, LadderBeta = 1024;
+    // (its rails in the water by the basin's west wall -- x 31 cells, 15,872 -- and the game's ladder zone there: swum up to it Twinsen climbs
+    // out as up any ladder, and backs down it from the deck; the user, 2026-11-17, "let's extend the ladder further down into the water and
+    // script it as a ladder, so Twinsen uses it like a normal ladder" -- at x 15,500 its rails stood in the deck's bricks, cut off at the
+    // water. LadderFootX: where he holds it in the water, facing the wall, LadderFace)
+    public const int PoolLadder = 19, PoolWall = 31 * 512, LadderX = PoolWall - 40, LadderZ = 16600, LadderBeta = 1024, LadderFootX = PoolWall + 220, LadderFace = 3072;
     private const int LadderSteel = 56, LadderStep = 52;
     // the basin (scene units): two rectangles -- x0 z0 x1 z1 -- its floor, the water's surface. Exactly the basin's cells (the floor at
     // 1,536: x 37-45 z 15-38, and the west arm x 31-36 z 27-38) -- the user, 2026-11-16, "Twinsen drowned in the pool in the imperial
@@ -28,10 +32,21 @@ internal static partial class CitadelProps
     // (the user, 2026-11-12, on a picture: the green by the wide arm's west edge -- the stand on the deck at BoardX, the plank pointing
     // east, +x, over the water: the actor turned 1024, the body's own +z along it)
     public const int BoardX = 15000, BoardZ = 14600, BoardHigh = 330, BoardTipX = 16800, BoardLandX = 17900, BoardBeta = 1024;
+    // (walked on: the board and a step behind its stand carry Twinsen -- OBJ_CARRIER -- each top within a step of the one before; their boxes
+    // the scene's own way round, the actors turned 1024: the plank along +x. Sporty's jump on the plank dives -- RACEMOD.CPP PoolBoardDive.
+    // The user, 2026-11-17: "The diving board in the Imperial hotel, we should allow Twinsen to walk on it, Twinsen should only dive if he's
+    // in Sporty mode and presses jump")
+    public const int BoardStep = 171, BoardStepHigh = 195, BoardStepDeep = 360, BoardStepX = BoardX - 320 - BoardStepDeep / 2;
     private const int PoolWaterColour = 192, BoardStand = 50, BoardPlank = 63, BoardGrip = 196;
 
     public const int PoolMiddleX = 21000, PoolMiddleZ = 13500;
-    public static short[]? PoolBox(int generic) => generic == BowlingLanes ? new short[] { -1, 0, -1, 1, 1, 1 } : null;   // (the bowling lanes' boards: no box to be walked round)
+    public static short[]? PoolBox(int generic) => generic switch
+    {
+        BowlingLanes => new short[] { -1, 0, -1, 1, 1, 1 },   // (the bowling lanes' boards: no box to be walked round)
+        DivingBoard => new short[] { -320, 0, -300, (short)(BoardTipX - BoardX + 100), BoardHigh + 60, 300 },
+        BoardStep => new short[] { -BoardStepDeep / 2, 0, -300, BoardStepDeep / 2, BoardStepHigh, 300 },
+        _ => null,
+    };
 
     public static Body BuildPoolWater(byte[] header)
     {
@@ -49,7 +64,7 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("the hotel pool's ladder", new[] { -1 });
         m.Light = 1.0f;
-        const float Rail = 34, Half = 230, Out = 150, Back = 160, Top = 640, Low = -480;
+        const float Rail = 34, Half = 230, Out = 150, Back = 160, Top = 640, Low = -500;
         foreach (var x in new[] { -Half, Half })
         {
             m.Box(0, new Vector3(x, (Top + Low) / 2, Out), new Vector3(Rail, Top - Low, Rail), LadderSteel);
@@ -58,6 +73,15 @@ internal static partial class CitadelProps
         }
         foreach (var y in new[] { -120f, -260f, -400f })
             m.Box(0, new Vector3(0, y, Out), new Vector3(2 * Half, 22, 110), LadderStep);
+        return m.ToBody(header);
+    }
+
+    // The step behind the board's stand, round its foot: its own +z along the plank
+    public static Body BuildBoardStep(byte[] header)
+    {
+        var m = new CarMesh("the diving board's step", new[] { -1 });
+        m.Light = 0.9f;
+        m.Box(0, new Vector3(0, BoardStepHigh / 2f, 0), new Vector3(600, BoardStepHigh, BoardStepDeep), BoardStand, top: BoardStand + 3);
         return m.ToBody(header);
     }
 

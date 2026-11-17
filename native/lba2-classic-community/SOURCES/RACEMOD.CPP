@@ -859,9 +859,14 @@ typedef struct { S32 Scene, X0, Z0, X1, Z1, Floor, Surface; } T_RACE_POOL;
 static T_RACE_POOL s_pools[RACE_MAX_POOLS];
 static int s_nbPools = 0, s_hasBoard = 0, s_poolSwimAnim = -1, s_poolTreadAnim = -1, s_poolDiveAnim = -1, s_poolFlipAnim = -1, s_diveBack = 0;
 static S32 s_board[8];
-static int s_swimming = 0, s_poolDive = 0, s_poolActionWas = 0;
-static S32 s_diveAt = 0, s_poolLast = 0, s_diveFromX = 0, s_diveFromY = 0, s_diveFromZ = 0;
+static int s_swimming = 0, s_poolDive = 0;
+static S32 s_diveAt = 0, s_poolLast = 0, s_diveFromX = 0, s_diveFromY = 0, s_diveFromZ = 0, s_diveLandX = 0, s_diveLandZ = 0;
 static U32 s_poolInput = 0;
+// pool_ladder=<scene> <x> <z> <beta>: the ladder's foot in the water by the wall, facing it; pool_splash= set only once he is in the water
+// (s_splashDue: Lyra scores the dive, and a score in mid-air came too soon)
+static S32 s_poolLadder[4], s_ladderUntil = 0, s_splashDue = 0, s_diveGlide = 0;
+static int s_hasPoolLadder = 0, s_boardSpaceWas = 0;
+static int PoolBoardDive(U32 input);
 // bowling_game=<bowler 0-3>: the alley's game (RACEGAME.CPP's Bowling page; BowlFrame): the player is one of the four bowlers, not Twinsen
 // replay_set=<var> <value> (any number), replay_gold=<n>: a replayed egg's variables, set once as the first scene loads (RaceMod_FootArrive)
 typedef struct { S32 Cx, FoulZ, PinsZ, Ball, Pin[6]; } T_BOWL_LANE;
@@ -4737,6 +4742,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "pool_board")) s_hasBoard = sscanf(v, "%d %d %d %d %d %d %d %d", &s_board[0], &s_board[1], &s_board[2], &s_board[3], &s_board[4], &s_board[5], &s_board[6], &s_board[7]) == 8;
         else if (!strcmp(key, "pool_anims")) sscanf(v, "%d %d %d %d", &s_poolSwimAnim, &s_poolTreadAnim, &s_poolDiveAnim, &s_poolFlipAnim);
         else if (!strcmp(key, "pool_splash")) s_poolSplash = atoi(v);
+        else if (!strcmp(key, "pool_ladder")) s_hasPoolLadder = sscanf(v, "%d %d %d %d", &s_poolLadder[0], &s_poolLadder[1], &s_poolLadder[2], &s_poolLadder[3]) == 4;
         else if (!strcmp(key, "achieve") && s_nbAchs < RACE_MAX_ACH) {
             char kind[12];
             T_RACE_ACH *ac = &s_achs[s_nbAchs];
@@ -14531,6 +14537,7 @@ U32 RaceMod_FilterInput(U32 input) {
     s_dtInput = input;
     if (s_dtOn && (S32)NumCube == s_dtScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
+    if (s_nbPools && !s_swimming && !s_poolDive && PoolBoardDive(input)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     if (s_nbPools && (s_swimming || s_poolDive)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     // (a lift on the raised road: the action key on its pad takes him down; while it moves, no key does anything -- deck_lift=)
     // (the key's last state is kept in every scene, and a press counts only RACE_LIFT_ARRIVE_MS after a scene starts: out of the museum
@@ -14603,7 +14610,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -19478,9 +19485,11 @@ static void FootEdgeFrame(void) {
 }
 // The Imperial Hotel's pool (pool=): below the water's surface in its basin Twinsen swims -- his keys are the pool's (RaceMod_FilterInput), he turns
 // and goes by them at the water's speed, floats half out of it, and plays the crawl (pool_anims=) moving or treads water still; out past the
-// basin's edge he walks again. Action by the diving board's stand (pool_board=) takes him out along its plank and over the end into the water.
-#define POOL_SPEED 800.0
-#define POOL_BACK 380.0
+// basin's edge he walks again. The diving board (pool_board=) is walked on; Sporty's jump on its plank dives -- or, his back to the water by
+// its tip, backflips -- from where he stands into the water (PoolBoardDive). The ladder (pool_ladder=) is the game's own ladder zone: swum
+// up to facing the wall he is put on it and climbs out; down it from the deck he swims once he is in the water.
+#define POOL_SPEED 1500.0
+#define POOL_BACK 700.0
 #define POOL_TURN 2700.0
 #define POOL_FLOAT 120
 static const T_RACE_POOL *PoolAt(double x, double z) {
@@ -20871,81 +20880,141 @@ S32 RaceMod_PoolSwims(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     return s_swimming || s_poolDive || PoolAt(hero->Obj.X, hero->Obj.Z) != NULL;
 }
+// Sporty's jump on the diving board's plank (RaceMod_FilterInput, the key's first frame): facing the water a dive, his back to it by the tip a
+// backflip, from where he stands into the water; anywhere else on the board, or sideways, the game's own jump. Non-zero: the key taken.
+static int PoolBoardDive(U32 input) {
+    const int space = (input & I_ACTION_M) != 0, pressed = space && !s_boardSpaceWas;
+    s_boardSpaceWas = space;
+    if (!pressed || !s_hasBoard || s_board[0] != (S32)NumCube || Comportement != C_SPORTIF || CubeMode != CUBE_INTERIEUR || NewCube != -1) return 0;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (hero->WorkFlags & FALLING) return 0;
+    const double ax = s_board[3] - s_board[1], az = s_board[4] - s_board[2], len = sqrt(ax * ax + az * az);
+    if (len < 1) return 0;
+    const double ux = ax / len, uz = az / len, rx = hero->Obj.X - s_board[1], rz = hero->Obj.Z - s_board[2];
+    const double along = rx * ux + rz * uz, across = -rx * uz + rz * ux;
+    if (along < -400 || along > len + 250 || fabs(across) > 380 || hero->Obj.Y < s_board[5] - 80) return 0;
+    const double fa = hero->Obj.Beta * 2 * 3.14159265358979 / 4096, facing = sin(fa) * ux + cos(fa) * uz;
+    if (facing > 0.4) s_diveBack = 0;
+    else if (facing < -0.4 && along > len - 900) s_diveBack = 1;
+    else return 0;
+    // (down into the water past the tip, where the board's landing is, along the plank from his own place on it)
+    const double land = (s_board[6] - s_board[1]) * ux + (s_board[7] - s_board[2]) * uz, reach = fmax(1000.0, land - along);
+    s_diveLandX = (S32)(hero->Obj.X + ux * reach);
+    s_diveLandZ = (S32)(hero->Obj.Z + uz * reach);
+    if (!PoolAt(s_diveLandX, s_diveLandZ)) { s_diveLandX = s_board[6]; s_diveLandZ = s_board[7]; }
+    s_poolDive = 1;
+    s_diveAt = TimerRefHR;
+    s_diveFromX = hero->Obj.X; s_diveFromY = hero->Obj.Y; s_diveFromZ = hero->Obj.Z;
+    hero->CarryBy = -1;
+    s_splashDue = 0;
+    Log_Info("[racemod] pool: Twinsen dives off the board%s", s_diveBack ? " (a backflip)" : "");
+    return 1;
+}
+static int PoolClimbing(const T_OBJET *hero) {
+    return FlagClimbing || hero->GenAnim == GEN_ANIM_ECHELLE || hero->GenAnim == GEN_ANIM_MONTE || hero->GenAnim == GEN_ANIM_DESCEND || hero->GenAnim == GEN_ANIM_ECHDESC;
+}
 static void PoolFrame(S32 now) {
-    if (!s_nbPools || CubeMode != CUBE_INTERIEUR || Comportement == C_BUGGY || NewCube != -1) { s_swimming = s_poolDive = 0; return; }
+    if (!s_nbPools || CubeMode != CUBE_INTERIEUR || Comportement == C_BUGGY || NewCube != -1) { s_swimming = s_poolDive = 0; s_splashDue = 0; return; }
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double dt = fmin(0.1, fmax(0.0, (now - s_poolLast) / 1000.0));
     s_poolLast = now;
-    const int action = (s_poolInput & I_ACTION_M) != 0, pressed = action && !s_poolActionWas;
-    s_poolActionWas = action;
     const T_RACE_POOL *here = PoolAt(hero->Obj.X, hero->Obj.Z);
     const S32 floatY = (here ? here->Surface : (s_nbPools ? s_pools[0].Surface : 0)) - POOL_FLOAT;
-    // ---- the dive: out along the plank, then over its end in an arc into the water
+    // (the dive scored -- pool_splash= -- once he is in the water and settled, not as he reaches it)
+    if (s_splashDue && now >= s_splashDue) {
+        if (s_swimming && s_poolSplash >= 0 && s_poolSplash < MAX_VARS_CUBE) ListVarCube[s_poolSplash] = 1;
+        s_splashDue = 0;
+    }
+    // ---- the dive: from his place on the plank in an arc into the water
     if (s_poolDive) {
         const S32 t = now - s_diveAt;
         hero->WorkFlags &= ~FALLING;
-        if (t < 500) {
-            const double u = t / 500.0;
-            hero->Obj.X = (S32)(s_diveFromX + (s_board[3] - s_diveFromX) * u);
-            hero->Obj.Z = (S32)(s_diveFromZ + (s_board[4] - s_diveFromZ) * u);
-            hero->Obj.Y = (S32)(s_diveFromY + (s_board[5] - s_diveFromY) * u);
-            PoolAnim(hero, GEN_ANIM_MARCHE);
-        } else if (t < 1500) {
-            const double u = (t - 500) / 1000.0;
-            hero->Obj.X = (S32)(s_board[3] + (s_board[6] - s_board[3]) * u);
-            hero->Obj.Z = (S32)(s_board[4] + (s_board[7] - s_board[4]) * u);
-            hero->Obj.Y = (S32)(s_board[5] + (floatY - s_board[5]) * u + 700.0 * 4 * u * (1 - u));
+        if (t < 1000) {
+            const double u = t / 1000.0;
+            hero->Obj.X = (S32)(s_diveFromX + (s_diveLandX - s_diveFromX) * u);
+            hero->Obj.Z = (S32)(s_diveFromZ + (s_diveLandZ - s_diveFromZ) * u);
+            hero->Obj.Y = (S32)(s_diveFromY + (floatY - s_diveFromY) * u + 700.0 * 4 * u * (1 - u));
             PoolAnim(hero, s_diveBack ? (s_poolFlipAnim >= 0 ? s_poolFlipAnim : GEN_ANIM_SAUTE) : (s_poolDiveAnim >= 0 ? s_poolDiveAnim : GEN_ANIM_SAUTE));
         } else {
             s_poolDive = 0; s_swimming = 1;
-            s_poolX = s_board[6]; s_poolZ = s_board[7]; s_poolY = hero->Obj.Y;
-            if (s_poolSplash >= 0 && s_poolSplash < MAX_VARS_CUBE) ListVarCube[s_poolSplash] = 1;
+            s_poolX = s_diveLandX; s_poolZ = s_diveLandZ; s_poolY = hero->Obj.Y;
+            s_splashDue = now + 1000;
+            // (and out of it he glides on in the crawl a moment before treading water: the tread straight from mid-dive -- its hips turned
+            // over -- kept him upside down)
+            s_diveGlide = now + 700;
             Log_Info("[racemod] pool: the dive ends in the water");
         }
-        hero->Obj.Beta = ((S32)(atan2((double)(s_board[3] - s_board[1]), (double)(s_board[4] - s_board[2])) * 4096 / (2 * 3.14159265358979)) + (s_diveBack && t >= 500 ? 2048 : 0)) & 4095;
+        hero->Obj.Beta = ((S32)(atan2((double)(s_board[3] - s_board[1]), (double)(s_board[4] - s_board[2])) * 4096 / (2 * 3.14159265358979)) + (s_diveBack ? 2048 : 0)) & 4095;
         ClearRealAngle(hero);
         return;
     }
     if (!s_swimming) {
-        if (s_hasBoard && s_board[0] == (S32)NumCube && pressed && NewCube == -1 && !(hero->WorkFlags & FALLING)) {
-            const double dx = hero->Obj.X - s_board[1], dz = hero->Obj.Z - s_board[2], tx = hero->Obj.X - s_board[3], tz = hero->Obj.Z - s_board[4];
-            if (dx * dx + dz * dz < 1500.0 * 1500.0 || tx * tx + tz * tz < 1200.0 * 1200.0) {
-                // (facing the water -- the plank's way, from its stand to its tip -- he dives; his back to it, he flips)
-                const double fa = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
-                s_diveBack = (sin(fa) * (s_board[3] - s_board[1]) + cos(fa) * (s_board[4] - s_board[2])) < 0;
-                s_poolDive = 1; s_diveAt = now;
-                s_diveFromX = hero->Obj.X; s_diveFromY = hero->Obj.Y; s_diveFromZ = hero->Obj.Z;
-                Log_Info("[racemod] pool: Twinsen goes out along the diving board%s", s_diveBack ? " (a backflip)" : "");
-                return;
+        // (down the ladder: in the water he swims; up it, or just off it, he doesn't)
+        if (PoolClimbing(hero) || now < s_ladderUntil) {
+            if (here && FlagClimbing == CLIMBING_DOWN && hero->Obj.Y <= floatY - 150) {
+                FlagClimbing = FALSE;
+                s_swimming = 1;
+                s_poolX = hero->Obj.X; s_poolZ = hero->Obj.Z; s_poolY = hero->Obj.Y;
+                PoolAnim(hero, s_poolTreadAnim);
+                Log_Info("[racemod] pool: down the ladder into the water");
             }
+            return;
         }
         if (here && hero->Obj.Y <= here->Surface - 200 && hero->Obj.Y >= here->Floor - 100) {
             s_swimming = 1;
             s_poolX = hero->Obj.X; s_poolZ = hero->Obj.Z; s_poolY = hero->Obj.Y;
-            if (s_poolSplash >= 0 && s_poolSplash < MAX_VARS_CUBE) ListVarCube[s_poolSplash] = 1;
+            // (in off the side, a jump or a fall: scored as a dive too)
+            s_splashDue = (hero->WorkFlags & FALLING) ? now + 800 : 0;
             Log_Info("[racemod] pool: Twinsen is swimming");
         }
         return;
     }
     // ---- swimming
-    if (!here) { s_swimming = 0; hero->Flags &= ~NO_SHADOW; return; }
+    if (!here) { s_swimming = 0; s_splashDue = 0; hero->Flags &= ~NO_SHADOW; return; }
     const U32 in = s_poolInput;
     S32 beta = hero->Obj.Beta;
-    // (the keys' turns: left anticlockwise from above)
-    if (in & I_LEFT) beta -= (S32)(POOL_TURN * dt);
-    if (in & I_RIGHT) beta += (S32)(POOL_TURN * dt);
+    // (the keys' turns as on land: left anticlockwise on the screen -- ManualRealAngle's, beta up)
+    if (in & I_LEFT) beta += (S32)(POOL_TURN * dt);
+    if (in & I_RIGHT) beta -= (S32)(POOL_TURN * dt);
     beta &= 4095;
+    // (swum up to the ladder facing its wall: onto it -- the game's ladder zone climbs him out)
+    if (s_hasPoolLadder && s_poolLadder[0] == (S32)NumCube && (in & I_UP)) {
+        const double lx = hero->Obj.X - s_poolLadder[1], lz = hero->Obj.Z - s_poolLadder[2];
+        const S32 off = ((beta - s_poolLadder[3]) & 4095) > 2048 ? 4096 - ((beta - s_poolLadder[3]) & 4095) : ((beta - s_poolLadder[3]) & 4095);
+        if (lx * lx + lz * lz < 520.0 * 520.0 && off < 700) {
+            s_swimming = 0;
+            s_splashDue = 0;
+            hero->Flags &= ~NO_SHADOW;
+            hero->Obj.X = s_poolLadder[1]; hero->Obj.Z = s_poolLadder[2];
+            hero->Obj.Y = here->Floor + 64;
+            hero->Obj.Beta = s_poolLadder[3] & 4095;
+            ClearRealAngle(hero);
+            InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+            s_ladderUntil = now + 1500;
+            Log_Info("[racemod] pool: onto the ladder");
+            return;
+        }
+    }
     const double a = beta * 2 * 3.14159265358979 / 4096;
-    const int moving = (in & (I_UP | I_DOWN)) != 0;
+    const int glide = now < s_diveGlide && !(in & (I_UP | I_DOWN)), moving = (in & (I_UP | I_DOWN)) != 0 || glide;
     double nx = s_poolX, nz = s_poolZ;
     if (in & I_UP) { nx += sin(a) * POOL_SPEED * dt; nz += cos(a) * POOL_SPEED * dt; }
+    else if (glide) { nx += sin(a) * POOL_BACK * dt; nz += cos(a) * POOL_BACK * dt; }
     else if (in & I_DOWN) { nx -= sin(a) * POOL_BACK * dt; nz -= cos(a) * POOL_BACK * dt; }
+    // (out past the edge where the deck beyond it is water again -- the corner where the basin's two arms meet: along the wall instead of out
+    // onto a spot he only fell back in from)
+    if (!PoolAt(nx, nz) && PoolAt(nx + sin(a) * 350, nz + cos(a) * 350)) {
+        if (PoolAt(nx, s_poolZ)) nz = s_poolZ;
+        else if (PoolAt(s_poolX, nz)) nx = s_poolX;
+        else { nx = s_poolX; nz = s_poolZ; }
+    }
     if (PoolAt(nx, nz)) { s_poolX = nx; s_poolZ = nz; hero->Obj.X = (S32)nx; hero->Obj.Z = (S32)nz; }
     else {
         // (past the basin's edge: out onto the deck, walking again)
         hero->Obj.X = (S32)(nx + sin(a) * 350); hero->Obj.Z = (S32)(nz + cos(a) * 350);
         hero->Obj.Y = here->Surface + 120;
         s_swimming = 0;
+        s_splashDue = 0;
         hero->Flags &= ~NO_SHADOW;
         InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
         Log_Info("[racemod] pool: Twinsen climbs out");
@@ -24192,7 +24261,7 @@ void RaceMod_Island(S32 island) {
     HoldVars();
     if (want) Log_Info("[racemod] island %d%s: its track, %s", (int)island, island == 0 ? (fine ? " (fine weather)" : " (storm)") : "", path);
     if (want && Inert()) Log_Info("[racemod] this race is won already (once_won=): its start line inert -- no qualifying lap, no grid");
-    else Log_Info("[racemod] island %d: no track -- the car alone", (int)island);
+    else if (!want) Log_Info("[racemod] island %d: no track -- the car alone", (int)island);
 }
 
 // tired=: on Citadel Island, while the story's variable says so, anyone but Twinsen says the tired line instead of their own (GERELIFE.CPP,

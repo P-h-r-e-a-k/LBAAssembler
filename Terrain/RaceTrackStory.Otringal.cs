@@ -449,7 +449,20 @@ void comportement_1()
                 var ladder = Citadel.CitadelProps.Actor(Citadel.CitadelProps.PoolLadder, Citadel.CitadelProps.LadderX, Citadel.CitadelProps.PoolDeck, Citadel.CitadelProps.LadderZ, Citadel.CitadelProps.LadderBeta);
                 ladder.Armor = WalkOverArmour;
                 var addLadder = IslandBeatsA.Add(model, ladder, Still);
-                return scripts => { addWater(scripts); addBoard(scripts); addLadder(scripts); };
+                // (the board walked on, up a step behind its stand: both carry Twinsen -- OBJ_CARRIER)
+                board.Flags |= RaceTrackScenes.CarrierFlag;
+                var step = Citadel.CitadelProps.Actor(Citadel.CitadelProps.BoardStep, Citadel.CitadelProps.BoardStepX, Citadel.CitadelProps.PoolDeck, Citadel.CitadelProps.BoardZ, Citadel.CitadelProps.BoardBeta);
+                step.Flags |= RaceTrackScenes.CarrierFlag;
+                var addStep = IslandBeatsA.Add(model, step, Still);
+                // (the ladder's zone, the game's own -- type 6, on: in the water by the wall from the pool's floor up to the deck -- not on the
+                // deck: walking forward in a ladder's zone climbs, and there he stuck at the edge. He backs over it into the zone to climb down)
+                model.Zones.Add(new SceneZoneModel
+                {
+                    Type = 6, Num = 0, X0 = Citadel.CitadelProps.PoolWall, X1 = Citadel.CitadelProps.PoolWall + 600,
+                    Y0 = Citadel.CitadelProps.PoolFloor - 256, Y1 = Citadel.CitadelProps.PoolDeck,
+                    Z0 = Citadel.CitadelProps.LadderZ - 300, Z1 = Citadel.CitadelProps.LadderZ + 300, Info = new[] { 1, 1, 1, 0, 0, 0, 0, 1 },
+                });
+                return scripts => { addWater(scripts); addBoard(scripts); addLadder(scripts); addStep(scripts); };
             });
 
         // the bowling alley's people's words and its change machine (RaceTrackStory.BowlingTalk)

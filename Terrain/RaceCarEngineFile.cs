@@ -633,6 +633,13 @@ internal static class RaceCarEngineFile
         return alone;
     }
 
+    // A track file's keys for driving its road outside the race: the car's handling, the raised road and its lanes, the island's file
+    private static readonly HashSet<string> DriveOnlyKeys = new()
+    {
+        "twinsen_body", "gears", "gear1", "gear2", "gear3", "gear4", "gear5", "gear6", "accel", "brake", "coast", "reverse", "steer", "automatic",
+        "hud", "raised", "lanes", "gravity", "statue", "roam_free",
+    };
+
     // The game played as a game (RaceTrackService.CarFileWriter's story): every track of the folder in a car file of its own beside `path`,
     // and `path` the set (RACEMOD.CPP track=) -- the car's handling, which of them is raced where and when (the engine loads the one of the
     // island it enters: Citadel Island's storm track in the storm, its town circuit once the storm is over), and the story's tired line.
@@ -670,6 +677,17 @@ internal static class RaceCarEngineFile
                 var (first, last) = !own ? (-1, -1)
                     : scenes.Max() - scenes.Min() + 1 == scenes.Distinct().Count() ? (scenes.Min(), scenes.Max()) : (island.FirstScene, island.LastScene);
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
+                // (a track raced in a copy of the island's scene -- the lava lake's 223, of Celebration Island's 95 before the statue rises: the
+                // island's own scene draws the same file, its raised road with it, and with no track loaded there the road was no floor -- the
+                // car under it, the user, 2026-11-17: "on celebrat.ile in story mode, Twinsen attempting to drive the wrong way on the track
+                // outside of a race is causing him to be under the track instead". The scene the copy is of gets the road alone: the car's
+                // handling and the raised road, no start line, so no race there)
+                if (island.OtherFile && island.CopiesScene is int copied)
+                {
+                    var drive = Path.Combine(folder, $"racecar_track{n}_drive.txt");
+                    File.WriteAllLines(drive, File.ReadAllLines(file).Where(line => DriveOnlyKeys.Contains(line.Split('=')[0])));
+                    text.Append($"track={island.IslandByte} {when} {copied} {copied} {drive}\n");
+                }
             }
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}{string.Concat((s.TiredKeep ?? Array.Empty<int>()).Select(k => $" {k}"))}\n");
             // (... but not in the Tralu's secret bar: its regulars say their own lines at the evening's celebration)
@@ -728,6 +746,7 @@ internal static class RaceCarEngineFile
             {
                 foreach (var (x0, z0, x1, z1) in Citadel.CitadelProps.PoolBasin) text.Append($"pool={RaceTrackStory.HotelSceneNumber} {x0} {z0} {x1} {z1} {Citadel.CitadelProps.PoolFloor} {Citadel.CitadelProps.PoolSurface}\n");
                 text.Append($"pool_board={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.BoardX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.BoardTipX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.BoardHigh + 60} {Citadel.CitadelProps.BoardLandX} {Citadel.CitadelProps.BoardZ}\n");
+                text.Append($"pool_ladder={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.LadderFootX} {Citadel.CitadelProps.LadderZ} {Citadel.CitadelProps.LadderFace}\n");
                 text.Append($"pool_splash={RaceTrackStory.PoolSplash}\npool_anims={PoolSwim.Swim} {PoolSwim.Tread} {PoolSwim.Dive} {PoolSwim.Flip}\n");
                 // (the achievements: RaceTrackStory.Achievements -- a game variable at a value, or a scene entered)
                 // (the Tavern's darts: RaceTrackStory.Darts)
