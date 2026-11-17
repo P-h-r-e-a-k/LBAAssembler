@@ -193,7 +193,9 @@ internal static class StellaEntities
                     counterCells++;
                 }
                 // (the lounge's benches: solid under their seats, up to them -- Twinsen sits on one: CitadelProps.ClubBooth)
-                if (Hall(x, z) && r >= Citadel.CitadelProps.SeatCells - 0.3 && r < RingFrom &&
+                // (from 0.6 in from the seat's line: at 0.3 the cell under the booth at 120 degrees -- its middle 16.8 out -- was left floor, and
+                // Twinsen sat there fell through the seat; not 0.8, which took in the cell where he stands up before the booth at 325, 16.5 out)
+                if (Hall(x, z) && r >= Citadel.CitadelProps.SeatCells - 0.6 && r < RingFrom &&
                     Citadel.CitadelProps.BoothAngles.Any(a => Math.Abs(((angle - a) % 360 + 540) % 360 - 180) <= Citadel.CitadelProps.BoothArc))
                 {
                     for (var y = FloorLayer + 1; y <= FloorLayer + Citadel.CitadelProps.BoothSeat / 256; y++) Put(x, y, z, 0, 1);

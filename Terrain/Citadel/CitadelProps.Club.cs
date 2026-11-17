@@ -328,6 +328,22 @@ internal static partial class CitadelProps
     // arc along the hall's wall BoothArc degrees either side, a high padded back curving with it, high wooden ends; its frame: the actor at
     // the arc's middle, turned to the hall's middle -- +z towards it, the hall's middle BoothCells ahead)
     public const float BoothArc = 6f;
+    // (each booth of the hall a body of its own, the same booth -- BoothBody(k), generics BoothBody0 on -- for a box of its own: a speck at its
+    // back's outer face, BoothBackOut out from its middle, the way the hall's middle isn't. The engine sorts by the boxes: a booth whose
+    // back faces the camera is drawn over Twinsen sat in it, one facing away under him -- the user, 2026-11-17, "Sitting Twinsen should not be
+    // visible thorugh the seat". The private room's sofa keeps ClubBooth)
+    public const int BoothBody0 = 178;
+    private const float BoothBackOut = 420;
+    private const short BoothBackHigh = 1350;
+    public static int BoothBody(int k) => BoothBody0 + k;
+    private static short[]? BoothBox(int generic)
+    {
+        var k = generic - BoothBody0;
+        if (k < 0 || k >= BoothAngles.Length) return null;
+        var a = BoothAngles[k] * MathF.PI / 180;
+        short x = (short)Math.Round(BoothBackOut * MathF.Cos(a)), z = (short)Math.Round(BoothBackOut * MathF.Sin(a));
+        return new short[] { (short)(x - 1), 0, (short)(z - 1), (short)(x + 1), BoothBackHigh, (short)(z + 1) };   // (the back's height: Twinsen sat 512 up was "over" a speck on the floor, the sort's gap in y his)
+    }
     public static Body BuildClubBooth(byte[] header)
     {
         var m = new CarMesh("a booth", new[] { -1 });
@@ -617,6 +633,7 @@ internal static partial class CitadelProps
     {
         ClubCounter or ClubCounter3 => CounterBox(CounterAt.First(c => c.Generic == generic).Angle),
         ClubCounter2 => new short[] { -1, 0, -1, 1, 1, 1 },   // (the middle piece's at its middle, as it was: the barman behind it, kept behind it)
+        >= BoothBody0 and < BoothBody0 + 5 => BoothBox(generic),
         ClubWall or ClubCurb or ClubStage or ClubRail or ClubShelf or ClubFront or ClubBoard or ClubSteps => new short[] { -1, 0, -1, 1, 1, 1 },
         _ => null,
     };

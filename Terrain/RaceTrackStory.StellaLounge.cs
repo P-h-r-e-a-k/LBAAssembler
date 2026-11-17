@@ -84,7 +84,7 @@ internal static partial class RaceTrackStory
             for (var k = 0; k < angles.Length; k++)
             {
                 var (bx, bz) = StellaEntities.At(angles[k], Citadel.CitadelProps.BoothCells);
-                var bench = Citadel.CitadelProps.Actor(Citadel.CitadelProps.ClubBooth, bx, StellaEntities.FloorY, bz, StellaEntities.FacingMiddle(bx, bz));
+                var bench = Citadel.CitadelProps.Actor(Citadel.CitadelProps.BoothBody(k), bx, StellaEntities.FloorY, bz, StellaEntities.FacingMiddle(bx, bz));
                 bench.Armor = WalkOverArmour;
                 SceneOps.AddActor(model, bench);
                 seats.Add(Point(angles[k], Citadel.CitadelProps.SeatCells, StellaEntities.FloorY + Citadel.CitadelProps.BoothSeat));
