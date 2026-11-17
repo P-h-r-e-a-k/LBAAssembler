@@ -862,7 +862,8 @@ internal static partial class RaceTrackCharacterCars
             // (CastFirst, 64 on) twice, and LBRA's setup failed on the doubled numbers, 2026-11-13)
             // (nor the masked driver's black car, MaskedGeneric 95: a story prop, no car to pick -- listed it doubled the cast's car 95, 2026-11-14)
             var empties = EmptyOnes.Length;
-            foreach (var (generic, body) in racerEntity.Bodies.Where(b => b.Generic < RaceTrackSmallCars.First && b.Generic != MaskedGeneric && b.Generic != RaceTrackBaldinoCar.EmptyGeneric && (b.Generic < EmptyFirst || b.Generic >= EmptyFirst + empties)).OrderBy(b => b.Generic))
+            // (nor Luc's barrel parked in the carport, whole or a wheel short: LucEmptyGeneric, LucShortGeneric -- story props as well)
+            foreach (var (generic, body) in racerEntity.Bodies.Where(b => b.Generic < RaceTrackSmallCars.First && b.Generic != MaskedGeneric && b.Generic != LucEmptyGeneric && b.Generic != LucShortGeneric && b.Generic != RaceTrackBaldinoCar.EmptyGeneric && (b.Generic < EmptyFirst || b.Generic >= EmptyFirst + empties)).OrderBy(b => b.Generic))
             {
                 var small = racerEntity.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(generic)).Select(b => b.Body).DefaultIfEmpty(-1).First();
                 var (name, who, island) = names.TryGetValue(generic, out var n) ? n : ($"Car {generic}", "", "");

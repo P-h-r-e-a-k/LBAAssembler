@@ -2889,6 +2889,15 @@ stop();
     // (one Action, one telling: Twinsen beside them both was answered by Luc and then by Zoe too, the same lines twice -- the user,
     // 2026-11-06, "the missing back wheel is told twice". Luc, before Zoe in the scene's order, marks each frame whether he spoke
     // (var_cube Once2), and Zoe keeps quiet for an Action he has answered)
+    // Luc's barrel waits in Twinsen's carport, a back wheel short, not in the pit lane (the race file's opponent_when=, OpponentWhen), and
+    // the tyre handed over is a cut scene (the user, 2026-11-17: "When Twinsen hands over the tyre to Zoe to fit, we get a small scripted cut
+    // scene where Zoe fits the tyre then Luc drives off to join the racers. This stops him being in two places at once"): Twinsen watching
+    // from FitView, Zoe walks to the lost wheel and works at it (her animation 87), the wheel on; back by Luc, the lines; Luc walks to his
+    // barrel, gets in, and drives it out of the carport and north up the path out of the yard (the car's life runs it all). Where
+    // Twinsen's own car stands in the carport (the island new, or fetched home) there's no room for the barrel: none in the yard then, and
+    // the tyre fitted at once as before. While the barrel is in the carport Zoe doesn't fetch Twinsen's car home (it would be made under it).
+    private const int FitStage = 50, CarHere = 51, FitView = 60, ZoeFit = 60, ZoeFitted = 61, ZoeBack = 62, ZoeHome = 63, LucToCar = 60, LucAtCar = 61;
+    private const int BarrelDrive = 1, BarrelGone = 2, FitClank = 510, BuggyNear = 1500;
     private static void Yard(StoryParts p)
     {
         var luc = Copy(p.Originals, TavernScene, TavernLuc);
@@ -2906,11 +2915,8 @@ stop();
             var lucIndex = model.Actors.Count;
             var zoeIndex = lucIndex + 1;
             var tyre = $"{WheelFitted} > var_game({QLucCar}) && {BaitTraded} == var_game({QBait})";
-            var fitted = $@"                if ({LucTold} > var_game({QLucCar}))
-                {{
-                    message_obj({lucIndex}, {p.Say(ChapterLine.LucTyre)});
-                }}
-                message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeGoodAsOld)});
+            // (the lines once the wheel's on -- said in the cut scene by the barrel's life, or at once without it -- and what it does)
+            var fittedLines = $@"                message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeGoodAsOld)});
                 message_obj({lucIndex}, {p.Say(ChapterLine.LucRound)});
                 if ({Scolded} == var_game({Drunk}))
                 {{
@@ -2920,18 +2926,38 @@ stop();
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeRadio)});
                 found_object({Radio});
                 set_var_game({Radio}, 1);
-                message_obj({zoeIndex}, {p.Say(ChapterLine.ZoePitBox)});
+                message_obj({zoeIndex}, {p.Say(ChapterLine.ZoePitBox)});";
+            var fitted = $@"                if ({LucTold} > var_game({QLucCar}))
+                {{
+                    message_obj({lucIndex}, {p.Say(ChapterLine.LucTyre)});
+                }}
+{fittedLines}
                 set_var_game({QLucCar}, {WheelFitted});
                 set_var_game({ErrandSlot}, 0);
                 clr_holo_pos({HarbourPos});";
+            var handOver = $@"                if (1 == var_cube({CarHere}))
+                {{
+                    if ({LucTold} > var_game({QLucCar}))
+                    {{
+                        message_obj({lucIndex}, {p.Say(ChapterLine.LucTyre)});
+                    }}
+                    set_var_cube({FitStage}, 1);
+                }}
+                else
+                {{
+{fitted}
+                }}";
             var told = $@"                message_obj({lucIndex}, {p.Say(ChapterLine.LucWheel)});
                 message_obj({zoeIndex}, {p.Say(ChapterLine.ZoeFitIt)});
                 set_var_game({QLucCar}, {LucTold});
                 set_holo_pos({HarbourPos});";
-            var lucLife = p.Add(model, luc, Talker($"2 == chapter() && {WheelFitted} > var_game({QLucCar})", $@"            set_var_cube({Once2}, 1);
+            luc.Move = 3; zoe.Move = 3;
+            var lucLife = p.Add(model, luc, Talker($"2 == chapter() && {WheelFitted} > var_game({QLucCar})", $@"            if (0 == var_cube({FitStage}))
+            {{
+            set_var_cube({Once2}, 1);
             if ({tyre})
             {{
-{fitted}
+{handOver}
             }}
             else if ({WheelFitted} > var_game({QLucCar}))
             {{
@@ -2940,18 +2966,22 @@ stop();
             else
             {{
                 message({p.Say(ChapterLine.LucRound)});
+            }}
             }}", 1200, $"    set_var_cube({Once2}, 0);\n"));
             // (first, the car left abandoned in another of the island's scenes -- RACEMOD.CPP car_home=: she has had it brought home, and it
             // is made again under the carport the next time the yard is entered. LBRA issues #17 and #16, the user: "when the car is in a
             // different scene she tells us she found it abandoned and returned it to the house")
-            var zoeLife = p.Add(model, zoe, Talker("2 == chapter()", $@"            if (0 == var_cube({Once2}) && 1 == var_game({CarAwayVar}))
+            var zoeLife = p.Add(model, zoe, Talker("2 == chapter()", $@"            if (0 != var_cube({FitStage}))
+            {{
+            }}
+            else if (0 == var_cube({Once2}) && 1 == var_game({CarAwayVar}) && 0 == var_cube({CarHere}))
             {{
                 message({EveningId(p.Say, EveningLine.ZoeCarHome)});
                 set_var_game({CarFetchVar}, 1);
             }}
             else if (0 == var_cube({Once2}) && {tyre})
             {{
-{fitted}
+{handOver}
             }}
             else if (0 == var_cube({Once2}) && {WheelFitted} > var_game({QLucCar}))
             {{
@@ -2973,7 +3003,129 @@ stop();
             {{
                 message({p.Say(ChapterLine.ZoePitBox)});
             }}", 1000));
-            return scripts => { lucLife(scripts); zoeLife(scripts); };
+
+            // the barrel in the carport, where Twinsen's car stands (CarHome), nose in: its lost back wheel on the open side, towards the
+            // camera; Twinsen's car (the carport's actor, the one there) -- if it is here, the barrel isn't
+            int Local(double cells, int cube) => Math.Clamp(RaceTrackScenes.CubeLocal(cells, cube), 0, IslandFile.CubeSize - 1);
+            var home = RaceTrackIsland.Citadel.CarHome!.Value;
+            var (carX, carZ) = (Local(home.X, model.CubeX), Local(home.Z, model.CubeY));
+            const int CarY = 250, NoseIn = 3072;
+            // (Twinsen's car: the buggy's entity's actor, as RaceTrackScenes finds it -- where the scene file has it isn't the carport, the
+            // engine puts it there as the scene starts: InitBuggy)
+            var buggy = model.Actors.FindIndex(1, a => a.Entity == RaceTrackScenes.BuggyEntity);
+            var buggyHere = buggy > 0 ? $" || {BuggyNear} > distance({buggy})" : "";
+            var barrel = SceneOps.BlankActor(SceneGame.Lba2, carX, CarY, carZ, RaceTrackBaldinoCar.RacerEntity);
+            barrel.Body = RaceTrackCharacterCars.LucShortGeneric; barrel.Beta = NoseIn;
+            // (a carrier: a body glides on goto_point_3d only as one -- GERETRAK.CPP TM_GOTO_POINT_3D)
+            barrel.Flags = 0x1000u | RaceTrackScenes.CarrierFlag; barrel.Move = 3; barrel.LifePoints = -1;
+            int Point(int x, int z) => SceneOps.AddTrackPoint(model, new SceneTrackPoint(x, CarY, z));
+            // (Zoe at the lost wheel, outside it, facing it: the back axle 310 behind the barrel's middle, its wheel 470 out; by a point
+            // clear of the house's corner, there and back; Luc to the same spot; Twinsen watching from the yard, clear of the barrel's
+            // way out; the barrel's way: backed out east, then north up the path to the road, past the yard's edge)
+            const int ViaX = 1850, ViaZ = 50;
+            var via = Point(carX + ViaX, carZ + ViaZ);
+            // (a walk's goto_point is done 500 short of its point: each walker's point that far past where he is to stop, along his way
+            // from `via`)
+            int Walk(int x, int z, int fromX, int fromZ)
+            {
+                double dx = x - fromX, dz = z - fromZ, d = Math.Max(1, Math.Sqrt(dx * dx + dz * dz));
+                return Point((int)Math.Round(x + dx / d * 500), (int)Math.Round(z + dz / d * 500));
+            }
+            var atWheel = Walk(carX + 310, carZ + 850, carX + ViaX, carZ + ViaZ);
+            var zoeHomePt = Walk(model.Actors[zoeIndex].X, model.Actors[zoeIndex].Z, carX + ViaX, carZ + ViaZ);
+            // (Luc in by the open side, where Zoe worked: a point past the barrel's back is inside its box, and he walked into it for ever)
+            var lucCarPt = atWheel;
+            var (viewX, viewZ) = (carX + 1550, carZ + 1050);
+            var view = Point(viewX, viewZ);
+            var out1 = Point(carX + 3050, carZ);
+            var out2 = Point(carX + 3450, carZ - 4230);
+            var out3 = Point(carX + 3450, 300);
+            var barrelIndex = model.Actors.Count;
+            var barrelLife = p.Add(model, barrel, $@"void comportement_0()
+{{
+    if (2 != chapter() || {WheelFitted} <= var_game({QLucCar}){buggyHere})
+    {{
+        invisible(1);
+        suicide();
+    }}
+    else
+    {{
+        set_var_cube({CarHere}, 1);
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+    if (1 == var_cube({FitStage}))
+    {{
+        set_var_cube({FitStage}, 2);
+        cinema_mode(1);
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj(0, label_{FitView});
+        set_track_obj({zoeIndex}, label_{ZoeFit});
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({ZoeFitted} == l_track_obj({zoeIndex}))
+    {{
+        body({RaceTrackCharacterCars.LucEmptyGeneric});
+        set_track_obj({zoeIndex}, label_{ZoeBack});
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if ({ZoeHome} == l_track_obj({zoeIndex}))
+    {{
+{fittedLines}
+        set_track_obj({lucIndex}, label_{LucToCar});
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if ({LucAtCar} == l_track_obj({lucIndex}))
+    {{
+        kill_obj({lucIndex});
+        body({RaceTrackCharacterCars.Luc.Generic});
+        set_track(label_{BarrelDrive});
+        set_comportement(comportement_5);
+    }}
+}}
+
+void comportement_5()
+{{
+    if ({BarrelGone} == l_track())
+    {{
+        set_var_game({QLucCar}, {WheelFitted});
+        set_var_game({ErrandSlot}, 0);
+        clr_holo_pos({HarbourPos});
+        set_var_cube({CarHere}, 0);
+        set_var_cube({FitStage}, 0);
+        cinema_mode(0);
+        set_dir_obj(0, MOVE_MANUAL);
+        invisible(1);
+        suicide();
+    }}
+}}
+");
+            var viewBeta = RaceTrackMath.Turn(Math.Atan2(carX - viewX, carZ - viewZ));
+            return scripts =>
+            {
+                lucLife(scripts); zoeLife(scripts); barrelLife(scripts);
+                // (turned to the path north in steps a tenth of a second apart: the racer entity's own turning, angle(), took half a minute)
+                var turn = string.Concat(Enumerable.Range(1, 8).Select(k => $"beta({NoseIn - 128 * k});\nwait_nb_dizieme(1);\n"));
+                scripts.SetText(barrelIndex, ScriptKind.Track, $"label(0);\nstop();\n\nlabel({BarrelDrive});\nspeed(1400);\ngoto_point_3d({out1});\n{turn}speed(2600);\ngoto_point_3d({out2});\ngoto_point_3d({out3});\n\nlabel({BarrelGone});\nstop();\n");
+                scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nstop();\n\nlabel({ZoeFit});\nanim(1);\ngoto_point({via});\ngoto_point({atWheel});\nanim(0);\nangle(2048);\nanim(87);\nwait_nb_dizieme(6);\nsample({FitClank});\nwait_nb_dizieme(8);\nsample({FitClank});\nwait_nb_dizieme(8);\nsample({FitClank});\nwait_nb_dizieme(8);\nanim(0);\n\nlabel({ZoeFitted});\nstop();\n\nlabel({ZoeBack});\nanim(1);\ngoto_point({via});\ngoto_point({zoeHomePt});\nanim(0);\nangle({model.Actors[zoeIndex].Beta});\n\nlabel({ZoeHome});\nstop();\n");
+                scripts.SetText(lucIndex, ScriptKind.Track, $"label(0);\nstop();\n\nlabel({LucToCar});\nanim(1);\ngoto_point({via});\ngoto_point({lucCarPt});\nanim(0);\n\nlabel({LucAtCar});\nstop();\n");
+                scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $"\n\nlabel({FitView});\npos_point({view});\nbeta({viewBeta});\nanim(0);\nstop();\n");
+            };
         });
     }
 

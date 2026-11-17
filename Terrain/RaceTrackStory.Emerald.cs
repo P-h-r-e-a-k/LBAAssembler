@@ -48,8 +48,12 @@ internal static partial class RaceTrackStory
 
     // A story driver who races only while the story has him at the track (the race file's opponentN_when=<var> <least> <below>, RACEMOD.CPP):
     // HAL, from his mending to the race's end -- in the moon base before and after (ApplyEmerald)
+    // (and Luc on Citadel Island's town circuit: his barrel in Twinsen's carport till Zoe has fitted Bob's tyre, not in the pit lane --
+    // the user, 2026-11-17, "This stops him being in two places at once": RaceTrackStory.Chapters, Yard)
     internal static string? OpponentWhen(RaceTrackIsland island, string driver) =>
-        island == RaceTrackIsland.Emerald && driver == "HAL" ? $"{QHal} {HalMended} {HalDone}" : null;
+        island == RaceTrackIsland.Emerald && driver == "HAL" ? $"{QHal} {HalMended} {HalDone}"
+        : island == RaceTrackIsland.Citadel && driver == "Luc" ? $"{QLucCar} {WheelFitted}"
+        : null;
 
     private enum MoonLine
     {

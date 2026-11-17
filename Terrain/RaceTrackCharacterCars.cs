@@ -550,6 +550,22 @@ internal static partial class RaceTrackCharacterCars
         emptyCar.Spheres = emptyCar.Spheres.Select(sp => sp with { Colour = MaskedGrey + (sp.Colour & 15) / 4 }).ToList();
         return emptyCar;
     }
+    // Luc's barrel in Twinsen's carport while it is a back wheel short (the user, 2026-11-17: "let's have Luc's car under Twinsen's car
+    // port instead of on in the pitlane. When Twinsen hands over the tyre to Zoe to fit, we get a small scripted cut scene where Zoe fits
+    // the tyre then Luc drives off to join the racers" -- RaceTrackStory.Chapters, Yard): the barrel empty (Luc stands by it), and the same
+    // with its right-hand back wheel (bone 12: Wheels) gone, its strut left bare -- the racer's entity's bodies LucEmptyGeneric and
+    // LucShortGeneric
+    public const int LucEmptyGeneric = 92, LucShortGeneric = 93, LostWheelBone = 12;
+    public static Body WithoutWheel(Body car)
+    {
+        if (car.Bones.Count <= LostWheelBone) return car;
+        var bone = car.Bones[LostWheelBone];
+        bool Wheel(int point) => point >= bone.Start && point < bone.Start + bone.Count;
+        car.Faces.RemoveAll(f => f.Points.All(Wheel));
+        car.Lines.RemoveAll(l => Wheel(l.A) && Wheel(l.B));
+        car.Spheres.RemoveAll(sp => Wheel(sp.Point));
+        return car;
+    }
     public static Body WithoutDriver(Body car)
     {
         if (car.Bones.Count <= DriverSeatBone) return car;
@@ -594,6 +610,20 @@ internal static partial class RaceTrackCharacterCars
             index[car.Name + ", empty"] = next;
             log.Add($"{car.Name}, empty: BODY.HQR entry {next}, the racer's entity's body {EmptyGeneric(car.Generic)}");
             next++;
+        }
+        // (Luc's barrel, empty, whole and a back wheel short: the yard's carport till Zoe has fitted Bob's tyre)
+        if (cars.FirstOrDefault(c => c.Car == Luc) is { Body: { } lucBody })
+        {
+            foreach (var (generic, name, wheelShort) in new[] { (LucEmptyGeneric, "Luc's barrel, empty", false), (LucShortGeneric, "Luc's barrel, empty, a back wheel short", true) })
+            {
+                var parked = WithoutDriver(Body.Read(lucBody.Write(), 2));
+                if (wheelShort) parked = WithoutWheel(parked);
+                bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(parked.Write()));
+                table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, generic, next);
+                index[name] = next;
+                log.Add($"{name}: BODY.HQR entry {next}, the racer's entity's body {generic}");
+                next++;
+            }
         }
         // (the masked driver's black car: Raph's, empty, black)
         if (cars.FirstOrDefault(c => c.Car == Raph) is { Body: { } raphBody })
