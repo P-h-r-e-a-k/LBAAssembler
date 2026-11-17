@@ -1020,6 +1020,12 @@ void comportement_1()
         message({Say(DesertLine.FlickLicence)});
         found_object({LicenceSlot});
         set_var_game({LicenceSlot}, 1);
+        if (0 == var_game({Translator}))
+        {{
+            found_object({Translator});
+            set_var_game({Translator}, 1);
+            set_used_inventory({Translator});
+        }}
         message({Say(DesertLine.RacerNext)});
         message({Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});
@@ -1335,6 +1341,12 @@ void comportement_1()
         message({Say(DesertLine.FlickLicence)});
         found_object({LicenceSlot});
         set_var_game({LicenceSlot}, 1);
+        if (0 == var_game({Translator}))
+        {{
+            found_object({Translator});
+            set_var_game({Translator}, 1);
+            set_used_inventory({Translator});
+        }}
         message_obj({racer}, {Say(DesertLine.RacerNext)});
         message_obj({moya}, {Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});

@@ -48,6 +48,8 @@ internal static class TempleMarshal
     // flag's
     private const int GreenUpper = 10, GreenFore = 11, GreenHand = 12, CheckUpper = 13, CheckFore = 14, CheckHand = 15, Torso = 4;
     private const int Own = 22, GreenPole = Own, CheckPole = Own + 3;
+    // (the body with no flags: the entity's body Body + NoFlags -- 42 for the Sup's, 40 her flagged one, 41 her plinth)
+    public const int NoFlags = 2;
     public const int GreenPoleBone = GreenPole, CheckPoleBone = CheckPole;
 
     // Who carries the flags (the user, 2026-11-03: "We already have a quetch marshal for the start of the race on the Temple track, let's
@@ -109,15 +111,17 @@ internal static class TempleMarshal
         var retail = HqrArchive.Open(bodyPath).Read(r.Retail);
         var bytes = Make(retail, out var standing, r);
         var plinth = MakePlinth(retail, r);
+        var bare = Make(retail, out _, r, flags: false);
         var anims = Anims(standing, HqrArchive.Open(animPath).Read(entity.Anims.First(a => a.Generic == 0).Anim), r);
         var bodyIndex = HqrArchive.CountEntries(bodyPath);
-        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes)), HqrWriter.StoredEntry(plinth)));
+        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(HqrWriter.AppendEntry(HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes)), HqrWriter.StoredEntry(plinth)), HqrWriter.StoredEntry(bare)));
         var animIndex = HqrArchive.CountEntries(animPath);
         var file = File.ReadAllBytes(animPath);
         foreach (var anim in anims) file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(anim.Write()));
         File.WriteAllBytes(animPath, file);
         table = RaceTrackBaldinoCar.WithBody(table, r.Entity, r.Body, bodyIndex);
         table = RaceTrackBaldinoCar.WithBody(table, r.Entity, r.Plinth, bodyIndex + 1);
+        table = RaceTrackBaldinoCar.WithBody(table, r.Entity, r.Body + NoFlags, bodyIndex + 2);
         var generics = new[] { r.Ready, r.Raise, r.Drop, r.Wave };
         for (var k = 0; k < generics.Length; k++) table = RaceTrackJumpAnim.WithAnim(table, r.Entity, generics[k], animIndex + k);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
@@ -334,7 +338,10 @@ internal static class TempleMarshal
 
     // The marshal's body from the game's (`retail`: BODY.HQR Retail), its bytes, Scale times as big; `standing`: the body as it stands, for
     // the animations (not scaled).
-    public static byte[] Make(byte[] retail, out Body standing, Rig? rig = null)
+    // (flags false: the same body -- its flags' bones and points, so the same animations move it -- with no face of the flags': Lyra off duty
+    // by the Imperial Hotel's pool, the user, 2026-11-17, "Lyra by the pool in the hotel, let's have a model of her that's not holding any
+    // racing flags please")
+    public static byte[] Make(byte[] retail, out Body standing, Rig? rig = null, bool flags = true)
     {
         var r = rig ?? TempleRig;
         var p = PalaceTorturers.Parts.Read(r.Remodel is { } remodel ? remodel(retail) : retail);
@@ -412,8 +419,10 @@ internal static class TempleMarshal
                     Face(q, colour(c, r), -normal, lit: false);
                 }
         }
+        var ownFaces = polys.Count;
         Flag(r.GreenHand, r.GreenPole, 1, (_, _) => Green);
         Flag(r.CheckHand, r.CheckPole, CheckRows, (c, row) => (c + row) % 2 == 0 ? Black : White);
+        if (!flags) polys.RemoveRange(ownFaces, polys.Count - ownFaces);
         if (newBones.Count + r.Own > 30) throw new InvalidDataException("The flag marshal has more than 30 bones.");
 
         // ---- written: the new points after the body's own -- each from its bone's pivot

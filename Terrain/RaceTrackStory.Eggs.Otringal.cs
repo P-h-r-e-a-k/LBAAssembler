@@ -75,7 +75,7 @@ internal static partial class RaceTrackStory
         "achieve=dungeon below 159 7400",
         "achieve=dungeon below 163 7400",
     };
-    private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40, LyraReady = 660, LyraRaise = 661;
+    private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40 + Temple.TempleMarshal.NoFlags, LyraReady = 660, LyraRaise = 661;
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)
     private const int Clovers = 251, MostClovers = 10;
     // (on the deck at the pool's south side, a few cells from where the dive lands -- (18278, 1536, 18432) -- facing the water)

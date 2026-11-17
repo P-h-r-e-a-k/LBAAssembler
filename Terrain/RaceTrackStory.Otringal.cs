@@ -8,9 +8,8 @@ namespace LBAAssembler.Terrain;
 // scene 135).
 //   - Arriving by the Esmers' ship (the moon's win: scene 88, the track's start), Lyra at her plinth: the stewards' entry fee, and the
 //     Esmers' 10 zlitos (Q_FEE 1); the radio rings, Baldino's call.
-//   - The steward beside the start line (a copy of the Casino's doorman, scene 135's actor 8): a Travel Token costs 30 zlitos; short, the
-//     Casino round the corner (the game's own slot machines); with 30, "Pay 30 zlitos?" -- yes: the Travel Token (item 24, Q_FEE 2: the
-//     race file's gate=217 2).
+//   - Lyra herself takes the stewards' fee, 30 zlitos (Q_FEE 2: the race file's gate=217 2) -- short, the Casino round the corner (the
+//     game's own slot machines). (The steward by the line, a copy of the Casino's doorman, and his Travel Token: gone, 2026-11-17.)
 //   - In the Casino, the first time a visit: Zoe "Baldino said don't", Twinsen "I'm going in a little".
 //   - Won (win=217 3): out of the car -- Lyra and the Fragment of the Sups (item 32), a Dark Monk priest's word, Zoe (Q_FEE 4); Johnny
 //     Rocket at the space port (a copy of the game's, scene 81's actor 3, by the shuttles' pads in scene 92): the black car took the
@@ -71,12 +70,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "The steward by the line sells the Travel Tokens. No token, no grid.",
-            "L'intendant près de la ligne vend les Jetons de Voyage. Pas de jeton, pas de grille.",
-            "Der Verwalter an der Linie verkauft die Reisemarken. Keine Marke, kein Startplatz.",
-            "El administrador junto a la línea vende las Fichas de Viaje. Sin ficha, no hay parrilla.",
-            "L'intendente vicino alla linea vende i Gettoni di Viaggio. Niente gettone, niente griglia.",
-            "O intendente junto à linha vende as Fichas de Viagem. Sem ficha, não há grelha.",
+            "The stewards want a Travel Token from every racer: 30 zlitos. I sell them for the Cup. No token, no grid.",
+            "Les intendants exigent un Jeton de Voyage de chaque pilote : 30 zlitos. Je les vends pour la Coupe. Pas de jeton, pas de grille.",
+            "Die Verwalter wollen von jedem Fahrer eine Reisemarke: 30 Zlitos. Ich verkaufe sie für den Pokal. Keine Marke, kein Startplatz.",
+            "Los administradores exigen una Ficha de Viaje a cada piloto: 30 zlitos. Yo las vendo para la Copa. Sin ficha, no hay parrilla.",
+            "Gli intendenti vogliono un Gettone di Viaggio da ogni pilota: 30 zlitos. Li vendo io per la Coppa. Niente gettone, niente griglia.",
+            "Os intendentes exigem uma Ficha de Viagem a cada piloto: 30 zlitos. Sou eu que as vendo para a Taça. Sem ficha, não há grelha.",
         },
         new[]
         {
@@ -318,95 +317,45 @@ void comportement_1()
                 return scripts => { foreach (var e in edits) e(scripts); };
             });
 
-        // Lyra at her plinth: the fee and the Esmers' 10 zlitos (Q_FEE 1), the steward, the token. And the translator (item 29), which the
-        // control tower's staff and the space port's mechanic answer only to: the game gives it in Baldino's old cell on the moon, which
-        // the story doesn't open (the sweep of 2026-11-05)
+        // Lyra (at her plinth, and by the hotel's pool): the Esmers' 10 zlitos (Q_FEE 1), then the fee -- 30 zlitos, taken by her (Q_FEE 2).
+        // (The steward by the line who sold a Travel Token is gone, and the token with him: the user, 2026-11-17, "The dog by the race track
+        // currently sells us the travel token, but we have to talk to Lyra inside the Imperial hotel first, this makes no sense. Let's remove
+        // the dog" -- and the token was inventory slot 24, the game's memory viewer, "an optional object and can be purchased by him on
+        // otringal, so we don't need it given to him".) The translator (item 29), which the control tower's staff and the space port's
+        // mechanic answer only to, is the Desert race's prize now, with the licence (RaceTrackStory.Desert: "The translator let's have this
+        // given to Twinsen when he wins the race on Desert Island as this makes most sense")
         var lyraTalk = $@"            if (0 == var_game({QFee}))
             {{
                 message({Say(OtringalLine.LyraZeelich)});
                 add_gold_pieces({StarterZlitos});
                 set_var_game({QFee}, 1);
-                if (0 == var_game({Translator}))
-                {{
-                    message({Say(OtringalLine.LyraTranslator)});
-                    found_object({Translator});
-                    set_var_game({Translator}, 1);
-                    set_used_inventory({Translator});
-                }}
             }}
             else if ({FeePaid} > var_game({QFee}))
             {{
-                message({Say(OtringalLine.LyraFee)});
+                if ({Fee} > nb_gold_pieces())
+                {{
+                    message({Say(OtringalLine.LyraFee)});
+                    message({Say(OtringalLine.StewardShort)});
+                }}
+                else
+                {{
+                    message({Say(OtringalLine.LyraFee)});
+                    add_choice({Say(OtringalLine.Yes)});
+                    add_choice({Say(OtringalLine.No)});
+                    ask_choice({Say(OtringalLine.StewardAsk)});
+                    if ({Say(OtringalLine.Yes)} == choice())
+                    {{
+                        give_gold_pieces({Fee});
+                        message({Say(OtringalLine.StewardToken)});
+                        set_var_game({QFee}, {FeePaid});
+                    }}
+                }}
             }}
             else if ({FeeWon} > var_game({QFee}))
             {{
                 message({Say(OtringalLine.LyraOpen)});
             }}";
         MarshalA(b, report, otringal, lyraTalk, "Lyra");
-
-        // the steward beside the start line: a copy of the Casino's doorman
-        var start = report.StartLine[0];
-        // (four cells or more from Lyra, so that Action by one isn't heard by both)
-        var lyra = report.Marshal is { Length: >= 10 } mm ? (X: mm[6] / 512.0, Z: mm[7] / 512.0) : (X: double.MaxValue, Z: double.MaxValue);
-        (double X, double Z, double Y, int Beta)? StewardSpot()
-        {
-            // (the nearest ground off the roads, at the road's height, round a point a few cells before or past the line)
-            if (report.GroundAfter is { } ground)
-                foreach (var back in new[] { 6.0, -6, 10, -10 })
-                    for (var r = 0.0; r <= 8; r += 0.5)
-                    {
-                        double cx = start.X - start.DirX * back, cz = start.Z - start.DirZ * back;
-                        var steps = r == 0 ? 1 : (int)Math.Ceiling(2 * Math.PI * r / 0.5);
-                        for (var k = 0; k < steps; k++)
-                        {
-                            double a = 2 * Math.PI * k / steps, px = cx + r * Math.Sin(a), pz = cz + r * Math.Cos(a);
-                            if (OffRoads(report, px, pz) < 1 || Math.Sqrt((px - lyra.X) * (px - lyra.X) + (pz - lyra.Z) * (pz - lyra.Z)) <= 4) continue;
-                            var g = ground(px, pz);
-                            if (Math.Abs(g - start.Y) > 600) continue;
-                            return Facing((px, pz, g), start.X, start.Z);
-                        }
-                    }
-            foreach (var back in new[] { 6.0, -6, 10, -10 })
-                foreach (var side in new[] { 1, -1 })
-                    if (Beside(report, start, back, 1, new[] { side }) is { } s && Math.Sqrt((s.X - lyra.X) * (s.X - lyra.X) + (s.Z - lyra.Z) * (s.Z - lyra.Z)) > 4) return s;
-            return OffRoadA(report, start.X - start.DirX * 6, start.Z - start.DirZ * 6, 1) is { } o ? Facing(o, start.X, start.Z) : null;
-        }
-        if (Copy(b.Originals, CasinoScene, Doorman) is { } steward && StewardSpot() is { } at && b.SceneAt(at.X, at.Z) is var stewardScene and >= 0)
-            b.Edit(stewardScene, $"the steward beside the start line at cell ({at.X:0.#}, {at.Z:0.#}): 30 zlitos for a Travel Token (item {TravelToken}, Q_FEE 2)", model =>
-            {
-                Place(steward, model, at);
-                // (no token sold before Lyra has told of the fee, Q_FEE 1: zlitos from selling things on Zeelich would otherwise buy it
-                // first, and Lyra's welcome -- the Esmers' 10 zlitos -- would never be said; the price only, until then)
-                return IslandBeatsA.Add(model, steward, Talker(otringal, $@"            if ({FeePaid} <= var_game({QFee}) || 0 < var_game({TravelToken}))
-            {{
-                message({Say(OtringalLine.StewardOnGrid)});
-            }}
-            else if (0 == var_game({QFee}))
-            {{
-                message({Say(OtringalLine.StewardFee)});
-            }}
-            else if ({Fee} > nb_gold_pieces())
-            {{
-                message({Say(OtringalLine.StewardFee)});
-                message({Say(OtringalLine.StewardShort)});
-            }}
-            else
-            {{
-                message({Say(OtringalLine.StewardFee)});
-                add_choice({Say(OtringalLine.Yes)});
-                add_choice({Say(OtringalLine.No)});
-                ask_choice({Say(OtringalLine.StewardAsk)});
-                if ({Say(OtringalLine.Yes)} == choice())
-                {{
-                    give_gold_pieces({Fee});
-                    message({Say(OtringalLine.StewardToken)});
-                    found_object({TravelToken});
-                    set_var_game({TravelToken}, 1);
-                    set_var_game({QFee}, {FeePaid});
-                }}
-            }}"));
-            });
-        else log.Add("the steward left out: no doorman in the Casino (scene 135's actor 8), or no room beside the start line");
 
         // the Casino: Zoe and Twinsen at the door, the first time a visit (the slot machines are the game's own)
         b.Edit(CasinoScene, "in the Casino, Zoe: \"Baldino said don't\"", model => IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 4), $@"void comportement_0()
