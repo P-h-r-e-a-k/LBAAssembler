@@ -267,6 +267,8 @@ internal static partial class CitadelProps
             {
                 if (done[c - c0, r - r0]) continue;
                 var colour = at(c, r);
+                // (a square of no colour the picture has: nothing there -- the beast's hide, its outline its own shape)
+                if (!colours.ContainsKey(colour)) { done[c - c0, r - r0] = true; continue; }
                 var w = 1;
                 while (c + w < c1 && !done[c + w - c0, r - r0] && at(c + w, r) == colour) w++;
                 var h = 1;
@@ -288,8 +290,9 @@ internal static partial class CitadelProps
 
     // A picture's pieces: bands of `band` rows (all of them: 0), each into column ranges as wide as keeps a body under the engine's limits
     // (550 points and polygons, kept well under)
-    public static List<(int C0, int C1, int R0, int R1)> PictureTiles(string[] rows, int band)
+    public static List<(int C0, int C1, int R0, int R1)> PictureTiles(string[] rows, int band, IReadOnlyDictionary<char, int>? colours = null)
     {
+        colours ??= RugColours;
         var tiles = new List<(int, int, int, int)>();
         int width = rows[0].Length, height = rows.Length;
         if (band <= 0) band = height;
@@ -299,15 +302,16 @@ internal static partial class CitadelProps
             (int Faces, int Points) Count(int a, int b)
             {
                 var m = new CarMesh("count", new[] { -1 });
-                var faces = Stitched(m, a, b, r0, r1, (c, r) => rows[r][c], Corners(m, (c, r) => new Vector3(c, 0, r)), RugColours, new Vector3(0, -100, 0), Grow);
-                return (faces, m.ToBody(new byte[0]).Vertices.Count);
+                var faces = Stitched(m, a, b, r0, r1, (c, r) => rows[r][c], Corners(m, (c, r) => new Vector3(c, 0, r)), colours, new Vector3(0, -100, 0), Grow);
+                return faces == 0 ? (0, 0) : (faces, m.ToBody(new byte[0]).Vertices.Count);
             }
             var c0 = 0;
             while (c0 < width)
             {
                 var c1 = c0 + 1;
                 while (c1 < width) { var (f, p) = Count(c0, c1 + 1); if (f > 420 || p > 430) break; c1++; }
-                tiles.Add((c0, c1, r0, r1));
+                // (none of a picture's own empty squares -- the beast's hide's corners: no body without a point)
+                if (Count(c0, c1).Faces > 0) tiles.Add((c0, c1, r0, r1));
                 c0 = c1;
             }
         }

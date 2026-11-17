@@ -59,6 +59,11 @@ internal static class StellaRooms
     // (and the dressing room's: Rick's sofa, x 5-6 z 11-14; the potted plant, x 14-15 z 5-6; the wall lamp, x 16 z 10, the east wall's
     // block 196 there instead)
     private const int DressGone1 = 84, DressGone2 = 40, WallLamp = 207, EastWallBlock = 196;
+    // (the office's: the plant's cells, x 14-15 z 5-6, moved this far south -- the corner right of the doorway; the curtains' colour ramp,
+    // orange, made the purple's)
+    private const int PlantX = 14, PlantZ = 5, PlantMoveZ = 11, OrangeRamp = 5, CurtainRamp = 13;
+    // (the floor's tile, and its darker ones -- the shadows his desk and armchairs left on it, cells x 9-15 z 7-14)
+    private const int FloorTile = 24, FloorShadow = 26, FloorShadow2 = 136, DeskShadowX0 = 9, DeskShadowX1 = 15, DeskShadowZ0 = 7, DeskShadowZ1 = 14;
     private const int WestWall = 23, NorthWall = 28, Painting = 195, WallX = 4, VentZ = 12, NorthZ = 4, PaintingX = 11;
     // the posters' places: on the west wall over the vent, on the north wall over the painting (the walls' inner faces, a little off them)
     // (the west wall's poster north of the dressing table's mirrors, which since 2026-11-17 stand along the wall's south end)
@@ -81,6 +86,20 @@ internal static class StellaRooms
         (Citadel.CitadelProps.CostumeRail, 5888, 4608, 0),
         (Citadel.CitadelProps.Lockers, 7150, 2800, 0),
         (Citadel.CitadelProps.FoldingScreen, 7700, 5000, 3072),
+    };
+
+    // the office's furniture (generic, x, z, beta): the desk its back to the west wall's face (x 5 cells), from z 8 to 11 -- between the
+    // basin's alcove and Rick's sofa -- its chair before it facing it; the bed its head to the north wall's face (z 5 cells) under the
+    // poster; the paddles' stand beside the plant's new corner, facing into the room. The hide's middle (RugX, RugZ): before the desk, short
+    // of the doorway's way in
+    internal const int OfficeDeskX = 5 * 512 + (int)Citadel.CitadelProps.DeskDepth + 30, OfficeDeskZ = 9 * 512 + 256;
+    internal const int RugX = 10 * 512 + 256, RugZ = 12 * 512 + 150;
+    internal static readonly (int Generic, int X, int Z, int Beta)[] OfficeFurniture =
+    {
+        (Citadel.CitadelProps.OfficeDesk, OfficeDeskX, OfficeDeskZ, 1024),
+        (Citadel.CitadelProps.Chair, OfficeDeskX + (int)Citadel.CitadelProps.DeskDepth + 330, OfficeDeskZ, 3072),
+        (Citadel.CitadelProps.MoonBed, 12 * 512 + 256, 5 * 512 + (int)Citadel.CitadelProps.BedLength + 40, 0),
+        (Citadel.CitadelProps.Rack, 13 * 512 + 256, 17 * 512 + 200, 2048),
     };
 
     public static List<string> Install(string gameDirectory)
@@ -132,7 +151,9 @@ internal static class StellaRooms
             // (not his door, a sprite in the doorway at z 9472: its own scripts open it, these rooms' are still -- shut for ever, Twinsen
             // kept in: the doorway open instead, 2026-11-14)
             // (the dressing room none of them: his lamps stood on his desk, and on the floor without it)
-            if (number == Office) keep.AddRange(model.Actors.Skip(2).Where(a => ((a.Entity == 16 && a.Body >= 0) || a.IsSprite) && !(a.IsSprite && a.Z >= DoorwayZ)));
+            // (not, since 2026-11-17, what stood on his desk -- the desk gone from the grid, a green triangle of it was left on the floor)
+            if (number == Office) keep.AddRange(model.Actors.Skip(2).Where(a => ((a.Entity == 16 && a.Body >= 0) || a.IsSprite) && !(a.IsSprite && a.Z >= DoorwayZ)
+                && !(!a.IsSprite && a.X / 512 >= DeskShadowX0 && a.X / 512 <= DeskShadowX1 && a.Z / 512 >= DeskShadowZ0 && a.Z / 512 <= DeskShadowZ1)));
             model.Actors.Clear(); model.Actors.AddRange(keep);
             // (his door, not the vent's way out: a door zone up the west wall, from layer 3)
             model.Zones.RemoveAll(z => z.Type != 0 || z.Y0 >= 512);
@@ -143,7 +164,9 @@ internal static class StellaRooms
             }
             if (number is Office or Backstage)
             {
-                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterSide, SidePosterX, PosterY, SidePosterZ, 1024));
+                // (the office's over the vent walled up, as it was before the dressing room's moved north of its mirrors: there it hid
+                // behind the basin's curtain, the vent's grille bare -- 2026-11-17)
+                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterSide, SidePosterX, PosterY, number == Office ? (VentZ + 1) * 512 : SidePosterZ, 1024));
                 SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterBack, BackPosterX, PosterY, BackPosterZ, 0));
             }
             if (number == Private && StellaEntities.WingGrid >= 0)
@@ -176,6 +199,24 @@ internal static class StellaRooms
                 var sofa = Citadel.CitadelProps.Actor(Citadel.CitadelProps.ClubBooth, 6256, 256, 3100, 0);
                 sofa.Armor = RaceTrackStory.WalkOverArmour;
                 SceneOps.AddActor(model, sofa);
+            }
+            if (number == Office)
+            {
+                // the office's new look (the user, item 10 of 2026-11-17's list -- "Left"/"right" as he sees it coming in at the south wall's
+                // doorway, walking north): the desk against the left (west) wall facing into the room, its chair before it; the big bed, its
+                // head against the north wall under the poster; the beast's hide on the floor between them and the door; the stand of paddles
+                // beside the plant in the corner right of the door (the plant moved there in the grid, NightGrid)
+                foreach (var (generic, x, z, beta) in OfficeFurniture)
+                    SceneOps.AddActor(model, Citadel.CitadelProps.Actor(generic, x, 256, z, beta));
+                foreach (var (t, k) in Citadel.CitadelProps.BeastTiles.Take(Citadel.CitadelProps.BeastMost).Select((t, k) => (t, k)))
+                {
+                    var tile = Citadel.CitadelProps.Actor(Citadel.CitadelProps.BeastFirst + k, RugX + (int)MathF.Round((t.C0 - Citadel.CitadelProps.BeastRows[0].Length / 2f) * Citadel.CitadelProps.BeastStitch), 256,
+                        RugZ + (int)MathF.Round((t.R0 - Citadel.CitadelProps.BeastRows.Length / 2f) * Citadel.CitadelProps.BeastStitch), 0);
+                    tile.Armor = RaceTrackStory.WalkOverArmour;
+                    SceneOps.AddActor(model, tile);
+                }
+                // (and come in at the doorway, not where Rick's scene starts its hero -- in the bed now)
+                (model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z, model.Actors[0].Beta) = (InsideX, InsideY, InsideZ, 2048);
             }
             if (number == Backstage)
             {
@@ -307,6 +348,41 @@ internal static class StellaRooms
         for (var y = 4; y <= 9; y++)
             for (var k = 0; k < 3; k++)
                 set[(PaintingX + k, y, NorthZ)] = (B(NorthWall), 1 + k + 4 * (y - 1));
+        // the office's own (the user, 2026-11-16/17, item 10 of the 17th's list): Rick's desk, its armchairs and what stood on it gone, and the
+        // invisible cells left over them -- a desk of the room's own stands against the west wall (CitadelProps.OfficeDesk, Install); his
+        // plant moved, all its cells, to the corner right of the doorway (x 14-15, z 16-17); the curtains round his basin -- blocks mostly
+        // of the orange ramp -- that ramp the purple's
+        var office = new Dictionary<(int, int, int), (int Block, int Pos)>(set);
+        var deskGone = new HashSet<(int, int)>();
+        for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
+            if (Furniture.Contains(Lba1GridEdit.Get(shape, x, y, z).Block)) { office[(x, y, z)] = (0, 0); deskGone.Add((x, z)); }
+        for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
+        { var c = Lba1GridEdit.Get(shape, x, y, z); if (c.Block == 0 && c.Pos != 0 && deskGone.Contains((x, z))) office[(x, y, z)] = (0, 0); }
+        // (and the floor's shadows his desk and armchairs cast, darker tiles: the plain floor's tile there, its four by four pattern)
+        for (var x = DeskShadowX0; x <= DeskShadowX1; x++) for (var z = DeskShadowZ0; z <= DeskShadowZ1; z++)
+            if (Lba1GridEdit.Get(shape, x, 0, z).Block is FloorShadow or FloorShadow2) office[(x, 0, z)] = (B(FloorTile), x % 4 + 4 * (z % 4));
+        var plantMoved = 0;
+        for (var x = PlantX; x <= PlantX + 1; x++) for (var z = PlantZ; z <= PlantZ + 1; z++) for (var y = 1; y < Height; y++)
+        {
+            var c = Lba1GridEdit.Get(shape, x, y, z);
+            if (c.Block != DressGone2 && !(c.Block == 0 && c.Pos != 0)) continue;
+            office[(x, y, z)] = (0, 0);
+            office[(x, y, z + PlantMoveZ)] = (B(c.Block), c.Pos);
+            plantMoved++;
+        }
+        var curtains = new Dictionary<int, int>();
+        foreach (var block in used.Where(b => !swap.ContainsKey(b) && b != Painting).OrderBy(b => b))
+        {
+            int all = 0, orange = 0;
+            Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) => { all++; if (c >> 4 == OrangeRamp) orange++; return c; });
+            if (all == 0 || orange * 100 < all * 40) continue;
+            var painted = Citadel.CitadelMuseum.Repaint(library, block, Brick, (x, y, c) => c >> 4 == OrangeRamp ? (byte)(CurtainRamp * 16 + (c & 15)) : c);
+            if (painted.Count == 0) continue;
+            try { curtains[block] = Citadel.CitadelMuseum.AddBlock(bkg, header, ref library, block, painted); }
+            catch (InvalidDataException e) { log.Add($"Stella Entities' office: block {block} left orange -- {e.Message}"); }
+        }
+        for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
+        { var c = Lba1GridEdit.Get(shape, x, y, z); if (curtains.TryGetValue(c.Block, out var to) && !office.ContainsKey((x, y, z))) office[(x, y, z)] = (to, c.Pos); }
         bkg.SetStored(libraryEntry, library);
         if (header.MaxBll < (uint)library.Length) header.MaxBll = (uint)library.Length;
         int Insert(Dictionary<(int, int, int), (int Block, int Pos)> cells, string what)
@@ -325,7 +401,8 @@ internal static class StellaRooms
             log.Add($"Stella Entities' rooms: grid {number}, {what}");
             return number;
         }
-        var rooms = Insert(set, $"Rick's office's with its stucco (colour ramps {string.Join(", ", ramps)}) the night in {swap.Count} blocks ({string.Join(", ", swap.Select(kv => $"{kv.Key} as {kv.Value}"))}), the vent and the painting walled over");
+        var rooms = Insert(office, $"Rick's office's with its stucco (colour ramps {string.Join(", ", ramps)}) the night in {swap.Count} blocks ({string.Join(", ", swap.Select(kv => $"{kv.Key} as {kv.Value}"))}), the vent and the painting walled over; " +
+            $"the office's: his desk and armchairs gone ({deskGone.Count} columns), his plant to the corner right of the door ({plantMoved} cells), the curtains purple (blocks {string.Join(", ", curtains.Select(kv => $"{kv.Key} as {kv.Value}"))})");
         if (rooms < 0) return (-1, -1, -1);
         // the private room's: the same without Rick's furniture
         var bare = new Dictionary<(int, int, int), (int Block, int Pos)>(set);
