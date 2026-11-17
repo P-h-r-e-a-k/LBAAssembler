@@ -708,6 +708,9 @@ internal static class RaceCarEngineFile
             // (the Emerald Moon's arrival: Twinsen in his car outside the saucer he came in, on the landing pad -- RaceTrackStory.Emerald,
             // MoonArrival; RACEMOD.CPP in_car=, read from the story's file as the keys round it are)
             if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.MoonInCarLine());
+            // (the museum security room's door with panes of its glass out: Twinsen's magic ball through it, at the broom -- Citadel/
+            // CitadelMuseumDoor, RaceTrackStory.Chapters' MuseumBroom; RACEMOD.CPP ball_through=)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"ball_through={Citadel.CitadelMuseumDoor.Scene} {Citadel.CitadelMuseumDoor.DoorActor}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

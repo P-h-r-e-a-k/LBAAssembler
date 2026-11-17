@@ -396,7 +396,8 @@ U8	ExtraCheckObjCol( T_EXTRA *ptrextra, U8 owner )
 	{
 		if( (ptrobjt->Obj.Body.Num != -1)
 		AND (!(ptrobjt->Flags&INVISIBLE) OR !(ptrextra->Flags&EXTRA_BONUS))
-		AND ((n != owner) OR (ptrextra->Flags&EXTRA_HIT_ANY) ) )
+		AND ((n != owner) OR (ptrextra->Flags&EXTRA_HIT_ANY) )
+		AND !(owner == NUM_PERSO AND RaceMod_BallThrough(n)) )	// (a race-track mod's door Twinsen's ball goes through: ball_through=)
 		{
 			xt0 = ptrobjt->Obj.X + ptrobjt->XMin ;
 			xt1 = ptrobjt->Obj.X + ptrobjt->XMax ;

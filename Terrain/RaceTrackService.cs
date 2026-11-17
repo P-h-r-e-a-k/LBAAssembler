@@ -520,6 +520,8 @@ internal static class RaceTrackService
             {
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelLba1Rooms.Install(gameDirectory, Lba1Folder()));
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelMuseum.Install(gameDirectory));
+                // (and the security room's door with panes of its glass out, for the broom puzzle: Citadel/CitadelMuseumDoor)
+                made.Add(LBAAssembler.Terrain.Citadel.CitadelMuseumDoor.Install(gameDirectory));
                 // (and the lift's squares in the house's storeroom, before the house at night is made from its grid: Citadel/CitadelHouseLift)
                 made.Add(LBAAssembler.Terrain.Citadel.CitadelHouseLift.Install(gameDirectory));
                 // (and the house's new bathroom and kitchen, through doorways in the bedroom: Citadel/CitadelHouseRooms -- before the house at

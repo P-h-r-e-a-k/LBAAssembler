@@ -970,6 +970,11 @@ internal static partial class RaceTrackStory
         Func<ChapterLine, int> Say, Func<Line, int> Said);
 
     // `what` found in a script, whatever the spaces and line breaks between its words, and replaced once
+    // the museum security room's door and red button (the game's actors 5 and 6 of scene 15, the button's state its cell variable 2, its
+    // click), the broom's foot by the west wall between the cupboard and the desk, its fall's first track label
+    private const int MuseumDoor = 5, MuseumButton = 6, MuseumButtonState = 2, MuseumButtonSample = 362, BroomLabel = 10;
+    private static readonly (int X, int Y, int Z) BroomFoot = (10560, 2560, 15616);
+
     private static string Loose(string text, string what, string with)
     {
         var pattern = string.Join(@"\s*", what.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(Regex.Escape));
@@ -2518,6 +2523,63 @@ void comportement_{HeroWatching}()
                 }
                 else if (15 <= nb_gold_pieces())
                 {"));
+        });
+
+        // the museum's security room (upstairs, its door the game's actor 5 -- opened by the red button on its desk, actor 6, when that is hit):
+        // the door's lower panes of glass out (Citadel/CitadelMuseumDoor; the race file's ball_through= lets Twinsen's ball through it) and a
+        // broom leaning on the west wall between the cupboard and the desk: hit, it tips over onto the button in a short cut scene, and the
+        // door opens as the button's own hit opens it (the user, 2026-11-17: "The user needs to throw their magic ball through the missing
+        // glass in the door, to hit the broom, the broom then falls in a short cut scene and activates the red button which causes the door
+        // to open")
+        p.Edit(Museum, "the security room: a broom by the desk, hit through the door's broken panes it falls on the red button and the door opens", model =>
+        {
+            if (Citadel.CitadelMuseumDoor.GapSprite >= 0 && model.Actors.Count > MuseumDoor) model.Actors[MuseumDoor].Sprite = Citadel.CitadelMuseumDoor.GapSprite;
+            var broom = Citadel.CitadelProps.Actor(Citadel.CitadelProps.BroomUp, BroomFoot.X, BroomFoot.Y, BroomFoot.Z);
+            broom.Flags |= 1u;               // (CHECK_OBJ_COL: in the way, and hit by a ball -- hit_by() tells)
+            broom.Armor = 51; broom.LifePoints = 50;
+            var frames = Citadel.CitadelProps.BroomFrames;
+            var steps = string.Concat(Enumerable.Range(1, frames.Length - 1).Select(k => $"    if ({BroomLabel + k} == l_track())\n    {{\n        body({frames[k]});\n    }}\n"));
+            var broomIndex = model.Actors.Count;
+            var addBroom = p.Add(model, broom, $@"void comportement_0()
+{{
+    if (0 == hit_by())
+    {{
+        cinema_mode(1);
+        set_dir_obj(0, NO_MOVE);
+        set_track(label_{BroomLabel});
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_1()
+{{
+{steps}    if ({BroomLabel + frames.Length} == l_track())
+    {{
+        sample({MuseumButtonSample});
+        set_track_obj({MuseumButton}, label_10);
+        set_track_obj({MuseumDoor}, label_0);
+        set_var_cube({MuseumButtonState}, 1);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if (100 == l_track_obj({MuseumDoor}))
+    {{
+        cinema_mode(0);
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+}}
+");
+            var track = $"label(0);\nstop();\n\nlabel({BroomLabel});\nwait_nb_dizieme(3);\nlabel({BroomLabel + 1});\nwait_nb_dizieme(2);\nlabel({BroomLabel + 2});\nwait_nb_dizieme(1);\n" +
+                        $"label({BroomLabel + 3});\nwait_nb_dizieme(1);\nlabel({BroomLabel + 4});\nwait_nb_dizieme(5);\nlabel({BroomLabel + 5});\nstop();\n";
+            return scripts => { addBroom(scripts); scripts.SetText(broomIndex, ScriptKind.Track, track); };
         });
 
         // the museum: the picture of Twinsen with a cup on the hall's north wall (Citadel/CitadelMuseum), Action in front of it says what it

@@ -198,6 +198,7 @@
  *   The race game (RACEGAME.CPP, 2026-10-16: the standalone Little Big Halloween Racing Adventure composes the file it races from its menu):
  *     start_scene=<scene>        a new game starts in <scene>, the start line's, with no introduction (RaceMod_NewGameScene)
  *     start_in_car=1             Twinsen is in his car as the scene opens, not on foot beside it (FaceTheCar)
+ *     ball_through=<scene> <actor>   (2026-11-17) Twinsen's magic ball flies through that actor of that scene (the museum's door)
  *     in_car=<var> <beta> [<x> <y> <z>]   (2026-11-17) Twinsen put in his car as he arrives in an outside scene while the game variable is
  *                                1 -- at <x y z> (cube-local) if given, turned to <beta> -- and the variable 2 (InCarFrame: the Emerald
  *                                Moon's arrival, the car driven out of the saucer)
@@ -1675,6 +1676,11 @@ static void CarryFrame(void) {
 // are invisible ones -- their squares reach past the round's edge -- so no brick shape hid anyone behind it: Twinsen on the floor
 // beyond the stage looked to stand on it (the user, 2026-11-16, "Twinsen is both behind the catwalk but looks like he's on the stage").
 static int s_occScene = -1, s_occX = 0, s_occZ = 0, s_occR = 0, s_occY0 = 0, s_occY1 = 0;
+// ball_through=<scene> <actor>: in that scene, Twinsen's magic ball (anything he throws) flies through that actor as if it weren't there
+// (EXTRA.CPP ExtraCheckObjCol): the museum security room's door with panes of its glass out (the user, 2026-11-17, "The user needs to throw
+// their magic ball through the missing glass in the door, to hit the broom") -- the door still a door to him on foot
+static int s_ballScene = -1, s_ballActor = -1;
+S32 RaceMod_BallThrough(S32 numobj) { return s_ballScene >= 0 && (int)NumCube == s_ballScene && numobj == s_ballActor; }
 #define RACE_OCC_STEPS 32
 void RaceMod_Occlude(S32 numobj) {
     if (s_occScene < 0 || (int)NumCube != s_occScene || CubeMode != CUBE_INTERIEUR || numobj < 0 || numobj >= (S32)NbObjets) return;
@@ -5392,6 +5398,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
         else if (!strcmp(key, "occluder")) { if (!setRead && sscanf(v, "%d %d %d %d %d %d", &s_occScene, &s_occX, &s_occZ, &s_occR, &s_occY0, &s_occY1) != 6) s_occScene = -1; }
         else if (!strcmp(key, "carry_hero")) { if (!setRead && sscanf(v, "%d %d %d %d", &s_carryScene, &s_carryVar, &s_carryUp, &s_carryAhead) != 4) s_carryVar = -1; }
+        else if (!strcmp(key, "ball_through")) { if (!setRead && sscanf(v, "%d %d", &s_ballScene, &s_ballActor) != 2) s_ballScene = -1; }
         else if (!strcmp(key, "in_car")) { if (!setRead) { const int got = sscanf(v, "%d %d %d %d %d", &s_inCarVar, &s_inCarBeta, &s_inCarX, &s_inCarY, &s_inCarZ); if (got < 1) s_inCarVar = -1; s_inCarPlaced = got == 5; } }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
@@ -14584,7 +14591,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_inCarVar = -1; s_inCarBeta = -1; s_inCarPlaced = 0; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_inCarVar = -1; s_inCarBeta = -1; s_inCarPlaced = 0; s_ballScene = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
