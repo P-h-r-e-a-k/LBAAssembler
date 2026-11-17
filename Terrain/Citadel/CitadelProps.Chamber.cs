@@ -162,8 +162,12 @@ internal static partial class CitadelProps
         foreach (var s in new[] { -1, 1 })
             m.Box(0, new Vector3(s * (Half - 12), SeatUnder - Apron / 2, Z), new Vector3(24, Apron, 2 * Half), Wood);
         // the front legs, and the low stretchers between all four
+        // (every leg up to the seat's top, through the cushion's corner, and no cap: a body's faces are drawn far to near by each one's
+        // farthest corner, and a leg ending under the cushion had its far corner nearer than the seat's -- the far leg was drawn over the
+        // seat, the user, 2026-11-17: "the chair leg is visible through the chair seat, we should make the chair seats solid". Reaching
+        // the top a hair outside the cushion's corner, the far leg goes first and the seat covers it; a near one is in front of it anyway)
         foreach (var s in new[] { -1, 1 })
-            m.Box(0, new Vector3(s * (Half - Leg / 2), SeatUnder / 2, Z + Half - Leg / 2), new Vector3(Leg, SeatUnder, Leg), Wood);
+            m.Strut(0, new Vector3(s * (Half - Leg / 2), 0, Z + Half - Leg / 2), new Vector3(s * (Half - Leg / 2), Top, Z + Half - Leg / 2), Leg, Wood);
         foreach (var s in new[] { -1, 1 })
             m.Box(0, new Vector3(s * (Half - Leg / 2), 70, Z), new Vector3(20, 22, 2 * Half - Leg), Wood);
         m.Box(0, new Vector3(0, 90, Z + Half - Leg / 2), new Vector3(2 * Half - Leg, 22, 20), Wood);
@@ -173,8 +177,8 @@ internal static partial class CitadelProps
         foreach (var s in new[] { -1, 1 })
         {
             var x = s * (Half - Leg / 2);
-            m.Strut(0, new Vector3(x, 0, Z - Half + Leg / 2), new Vector3(x, SeatUnder, Back(SeatUnder)), Leg, Wood);
-            m.Strut(0, new Vector3(x, SeatUnder, Back(SeatUnder)), new Vector3(x, PostTop, Back(PostTop)), Leg, Wood);
+            m.Strut(0, new Vector3(x, 0, Z - Half + Leg / 2), new Vector3(x, Top, Back(SeatUnder)), Leg, Wood);
+            m.Strut(0, new Vector3(x, Top, Back(Top)), new Vector3(x, PostTop, Back(PostTop)), Leg, Wood);
         }
         foreach (var y in new[] { Top + 150, Top + 290, Top + 430 })
             m.Box(0, new Vector3(0, y, Back(y)), new Vector3(2 * Half - Leg, 70, 22), Wood);
@@ -288,23 +292,11 @@ internal static partial class CitadelProps
     // of its own (CitadelProps.BoxOf), so the rail stops Twinsen as the platform carries him ("they have no colission, so we need to add
     // this"). All of them carriers riding the same track (RaceTrackStory.SecretChamber.LiftRig).
     public const int LiftPlatform = 62, LiftRailBack = 100, LiftRailLeft = 101, LiftRailRight = 102, LiftSize = 1024, LiftTop = 40, RailHigh = 460;
-    public static Body BuildLiftPlatform(byte[] header)
-    {
-        var m = new CarMesh("the lift", new[] { -1 });
-        m.Light = 0.7f;
-        const float H = LiftSize / 2f, Rim = 40;
-        for (var k = 0; k < 8; k++)
-        {
-            var z0 = -H + Rim + k * (LiftSize - 2 * Rim) / 8f;
-            m.Box(0, new Vector3(0, LiftTop - 20, z0 + (LiftSize - 2 * Rim) / 16f), new Vector3(LiftSize - 2 * Rim, 40, (LiftSize - 2 * Rim) / 8f - 4), k % 2 == 0 ? Wood : Rust, k % 2 == 0 ? Wood : Rust);
-        }
-        foreach (var s in new[] { -1, 1 })
-        {
-            m.Box(0, new Vector3(s * (H - Rim / 2), LiftTop - 20, 0), new Vector3(Rim, 44, LiftSize), Steel);
-            m.Box(0, new Vector3(0, LiftTop - 20, s * (H - Rim / 2)), new Vector3(LiftSize, 44, Rim), Steel);
-        }
-        return m.ToBody(header);
-    }
+    // (since 2026-11-17 the chamber's plate is the house's four squares in the house's daytime tiles -- its floor's terracotta, the
+    // storeroom's darker squares (27) and the grout's brown (23) -- with no rail: the user, "let's redesign the elevator so it loses the
+    // guard rail and resembles the tiles from the house". The rail's bodies are left unused)
+    public const int DayTile = 27, DayGrout = 23;
+    public static Body BuildLiftPlatform(byte[] header) => SquaresPlate(header, "the chamber's lift", DayTile, DayGrout);
     // The harbour's sewer lift (RaceTrackStory.Chapters: the thief's way down from the quay), the game's own lifts' look -- the user, 2026-11-16,
     // "needs to be the same colour as the retail elevators": the harbour's lift down to the sewers in scene 48 (entity 104) is a grating of
     // dark teal bars, not planks. The chamber's plate's size and top (its box, its ride the same), a grating of bars both ways over a dark
@@ -350,9 +342,10 @@ internal static partial class CitadelProps
     // "Leave the 4 dark squares, the lift still exists even if Twinsen can't activate it"). Four tiles in the night house's floor's
     // colours a shade darker (its floor is 209-210 by night), near-black grout between them and round its sides, unlit as the bricks are.
     public const int HouseLiftPlatform = 103, SquareTile = 208, SquareGrout = 224;
-    public static Body BuildHouseLiftPlatform(byte[] header)
+    public static Body BuildHouseLiftPlatform(byte[] header) => SquaresPlate(header, "the house's lift", SquareTile, SquareGrout);
+    private static Body SquaresPlate(byte[] header, string name, int SquareTile, int SquareGrout)
     {
-        var m = new CarMesh("the house's lift", new[] { -1 });
+        var m = new CarMesh(name, new[] { -1 });
         const float H = LiftSize / 2f, G = 10, Y = LiftTop;
         foreach (var (x0, x1) in new[] { (-H, -G), (G, H) })
             foreach (var (z0, z1) in new[] { (-H, -G), (G, H) })

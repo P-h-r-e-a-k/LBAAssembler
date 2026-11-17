@@ -42,7 +42,8 @@ namespace LBAAssembler.Terrain;
 //       Mr. Paul takes the entry, 20 kashes (ENTRY_PAID 259 1, the start line's other gate: gate=259 1).
 //     - the slate's hidden pages: the blueprints copied onto it (Q_BLUEPRINT 2), the pharmacy's gallic acid for 50 kashes (item 17), the
 //       neighbour's sheet brought out with it (Q_SHEET 2). The pages themselves -- their pictures, memo_ardoise -- are for later.
-//     - Mr. Paul's prize (Apply step 6) is the Cup's purse and the racing licence; the ferry office sells the ticket once the race is won
+//     - Mr. Paul's prize (Apply step 6) is the Cup's purse and the island winner's trophy (the Desert race's entry; the racing licence is
+//       the Desert race's prize since 2026-11-17); the ferry office sells the ticket once the race is won
 //       (2026-11-16: bought, not won), and Mrs. Brune there lets Zoe aboard as crew.
 // The game's own lines that the story's people still say are IslandRetell's (it runs after this and repoints every one of the game's text
 // ids); the lines here are the story's new ones, texts after RaceTrackStory's own at the end of Citadel's file.
@@ -172,8 +173,9 @@ internal static partial class RaceTrackStory
         TyreBait, TyreDeal, BobAfter, BaitPrice, BaitBought, BaitPlenty, LucTyre, TimLucAway, UmbrellaTaken,
         // (Raph's fiancée at the foot of the lighthouse, his time beaten and the storm still on -- 2026-11-08)
         FianceeStorm,
-        // (the town circuit's prize: the Cup's racing licence -- RaceTrackStory.Licence.cs, 2026-11-14)
-        PaulLicence,
+        // (the town circuit's prize: the island winner's trophy, the way into the Desert's race -- since 2026-11-17 the licence is the
+        // Desert race's prize, RaceTrackStory.Licence.cs)
+        PaulTrophy,
         // (Mr. Paul at the town circuit's start line: the entry, the prize, the main event -- the user, 2026-11-16)
         PaulEntry,
         // (and the entry paid to him before the race: his question, Twinsen's two answers, then on the grid or short -- 2026-11-16)
@@ -873,24 +875,24 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "And your racing licence, Twinsen: you're in the main event, the intergalactic racing! Keep it with you -- some gates won't open without it.",
-            "Et ta licence de course, Twinsen : tu es de l'épreuve principale, les courses intergalactiques ! Garde-la sur toi -- certaines barrières ne s'ouvrent pas sans elle.",
-            "Und deine Rennlizenz, Twinsen: Du bist beim Hauptwettbewerb dabei, den intergalaktischen Rennen! Behalte sie bei dir -- manche Tore öffnen sich nicht ohne sie.",
-            "Y tu licencia de carreras, Twinsen: ¡estás en la prueba principal, las carreras intergalácticas! Llévala contigo: algunas barreras no se abren sin ella.",
-            "E la tua licenza di corsa, Twinsen: sei nella gara principale, le corse intergalattiche! Tienila con te: certi cancelli non si aprono senza.",
-            "E a tua licença de corrida, Twinsen: estás na prova principal, as corridas intergalácticas! Guarda-a contigo -- há barreiras que não abrem sem ela.",
+            "And your island winner's trophy, Twinsen! Show it to Flick at the start line on Desert Island and you're in the race there. Win that one and the Cup's racing licence is yours -- the races on the Emerald Moon and Zeelich.",
+            "Et ton trophée de vainqueur de l'île, Twinsen ! Montre-le à Flick sur la ligne de départ de l'île du Désert et tu es de la course là-bas. Gagne-la et la licence de course de la Coupe est à toi -- les courses de la Lune d'Émeraude et de Zeelich.",
+            "Und dein Inselsieger-Pokal, Twinsen! Zeig ihn Flick an der Startlinie auf der Wüsteninsel, dann bist du dort beim Rennen dabei. Gewinn es, und die Rennlizenz des Pokals gehört dir -- die Rennen auf dem Smaragdmond und auf Zeelich.",
+            "¡Y tu trofeo de ganador de la isla, Twinsen! Enséñaselo a Flick en la línea de salida de la isla del Desierto y estarás en la carrera de allí. Gánala y la licencia de carreras de la Copa será tuya: las carreras de la Luna Esmeralda y de Zeelich.",
+            "E il tuo trofeo di vincitore dell'isola, Twinsen! Mostralo a Flick sulla linea di partenza dell'isola del Deserto e sarai nella corsa di laggiù. Vincila e la licenza di corsa della Coppa sarà tua: le corse sulla Luna di Smeraldo e su Zeelich.",
+            "E o teu troféu de vencedor da ilha, Twinsen! Mostra-o à Flick na linha de partida da ilha do Deserto e estás na corrida de lá. Ganha-a e a licença de corrida da Taça é tua -- as corridas da Lua Esmeralda e de Zeelich.",
         },
         // (the user, 2026-11-16: "Entry to the race costs 20 kashes, the winner of the race wins 50 kashes, and a racing licence to access the
         // main event. The main event is first a race on Desert island, then a race across the alien's moon and planet. Only one space left
         // for race entrants. It doesn't have to be those exact words, but words to that effect")
         new[]
         {
-            "Entry is twenty kashes, Twinsen. The winner takes fifty kashes and a racing licence for the main event: a race on Desert Island first, then one across the aliens' moon and their planet. One place left on the grid!",
-            "L'inscription coûte vingt kashes, Twinsen. Le vainqueur gagne cinquante kashes et une licence de course pour l'épreuve principale : d'abord une course sur l'île du Désert, puis une à travers la lune des extraterrestres et leur planète. Il reste une place sur la grille !",
-            "Die Startgebühr beträgt zwanzig Kashes, Twinsen. Der Sieger bekommt fünfzig Kashes und eine Rennlizenz für den Hauptwettbewerb: zuerst ein Rennen auf der Wüsteninsel, dann eins über den Mond der Außerirdischen und ihren Planeten. Ein Startplatz ist noch frei!",
-            "La inscripción cuesta veinte kashes, Twinsen. El ganador se lleva cincuenta kashes y una licencia de carreras para la prueba principal: primero una carrera en la isla del Desierto, luego otra por la luna de los extraterrestres y su planeta. ¡Queda una plaza en la parrilla!",
-            "L'iscrizione costa venti kashes, Twinsen. Il vincitore si prende cinquanta kashes e una licenza di corsa per la gara principale: prima una corsa sull'isola del Deserto, poi una attraverso la luna degli alieni e il loro pianeta. Resta un posto sulla griglia!",
-            "A inscrição custa vinte kashes, Twinsen. O vencedor leva cinquenta kashes e uma licença de corrida para a prova principal: primeiro uma corrida na ilha do Deserto, depois uma pela lua dos extraterrestres e o seu planeta. Resta um lugar na grelha!",
+            "Entry is twenty kashes, Twinsen. The winner takes fifty kashes and the island winner's trophy -- a place in the Desert Island race. Win that one too, and the Cup's racing licence is yours: the races on the Emerald Moon and Zeelich. One place left on the grid!",
+            "L'inscription coûte vingt kashes, Twinsen. Le vainqueur gagne cinquante kashes et le trophée du vainqueur de l'île -- une place dans la course de l'île du Désert. Gagne celle-là aussi, et la licence de course de la Coupe est à toi : les courses de la Lune d'Émeraude et de Zeelich. Il reste une place sur la grille !",
+            "Die Startgebühr beträgt zwanzig Kashes, Twinsen. Der Sieger bekommt fünfzig Kashes und den Inselsieger-Pokal -- einen Startplatz im Rennen auf der Wüsteninsel. Gewinn auch das, und die Rennlizenz des Pokals gehört dir: die Rennen auf dem Smaragdmond und auf Zeelich. Ein Startplatz ist noch frei!",
+            "La inscripción cuesta veinte kashes, Twinsen. El ganador se lleva cincuenta kashes y el trofeo de ganador de la isla: una plaza en la carrera de la isla del Desierto. Gana esa también y la licencia de carreras de la Copa será tuya: las carreras de la Luna Esmeralda y de Zeelich. ¡Queda una plaza en la parrilla!",
+            "L'iscrizione costa venti kashes, Twinsen. Il vincitore si prende cinquanta kashes e il trofeo di vincitore dell'isola: un posto nella corsa dell'isola del Deserto. Vinci anche quella e la licenza di corsa della Coppa sarà tua: le corse sulla Luna di Smeraldo e su Zeelich. Resta un posto sulla griglia!",
+            "A inscrição custa vinte kashes, Twinsen. O vencedor leva cinquenta kashes e o troféu de vencedor da ilha -- um lugar na corrida da ilha do Deserto. Ganha essa também e a licença de corrida da Taça é tua: as corridas da Lua Esmeralda e de Zeelich. Resta um lugar na grelha!",
         },
         // (the entry paid before the race -- the user, 2026-11-16: "Let's force Twinsen to have to have paid Mr. Paul the entry fee before he
         // may enter the race")

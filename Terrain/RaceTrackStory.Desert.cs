@@ -312,6 +312,8 @@ void comportement_1()
         GateLicence, GateNoLicence, GateInCar, TempleThrough,
         // (the island winner's trophy shown to Flick -- the user, 2026-11-16)
         FlickTrophy,
+        // (the racing licence, the Desert race's prize -- the user, 2026-11-17)
+        FlickLicence,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -755,12 +757,12 @@ void comportement_1()
         },
         new[]
         {
-            "No racing licence, no way through. The Cup gives one to the winner of Citadel Island's town circuit.",
-            "Pas de licence de course, pas de passage. La Coupe en donne une au vainqueur du circuit de la ville de l'île de la Citadelle.",
-            "Ohne Rennlizenz kein Durchgang. Der Pokal gibt eine dem Sieger des Stadtkurses der Zitadelleninsel.",
-            "Sin licencia de carreras no se pasa. La Copa da una al ganador del circuito urbano de la isla de la Ciudadela.",
-            "Niente licenza di corsa, niente passaggio. La Coppa ne dà una al vincitore del circuito cittadino dell'isola della Cittadella.",
-            "Sem licença de corrida não se passa. A Taça dá uma ao vencedor do circuito da cidade da ilha da Cidadela.",
+            "No racing licence, no way through. The Cup gives one to the winner of the Desert Island race.",
+            "Pas de licence de course, pas de passage. La Coupe en donne une au vainqueur de la course de l'île du Désert.",
+            "Ohne Rennlizenz kein Durchgang. Der Pokal gibt eine dem Sieger des Rennens auf der Wüsteninsel.",
+            "Sin licencia de carreras no se pasa. La Copa da una al ganador de la carrera de la isla del Desierto.",
+            "Niente licenza di corsa, niente passaggio. La Coppa ne dà una al vincitore della corsa dell'isola del Deserto.",
+            "Sem licença de corrida não se passa. A Taça dá uma ao vencedor da corrida da ilha do Deserto.",
         },
         new[]
         {
@@ -789,6 +791,18 @@ void comportement_1()
             "¿El ganador de la isla de la Ciudadela? Déjame ver tu trofeo... Es ese. ¡Bienvenido a la carrera de los mejores de Twinsun, Twinsen!",
             "Il vincitore dell'isola della Cittadella? Fammi vedere il trofeo... È proprio lui. Benvenuto alla corsa dei migliori di Twinsun, Twinsen!",
             "O vencedor da ilha da Cidadela? Deixa-me ver o teu troféu... É esse mesmo. Bem-vindo à corrida dos melhores de Twinsun, Twinsen!",
+        },
+        // (the Desert race won: the Cup's racing licence, for the Emerald Moon's and Zeelich's races -- the user, 2026-11-17, "the racing
+        // licence needs to be for winning the Desert Island race. Winning the Citadel race grants the right to participate in the Desert
+        // Island race for the chance to race Emerald Moon and Zeelich")
+        new[]
+        {
+            "And here's the Cup's racing licence, Twinsen -- you've earned it. The races on the Emerald Moon and Zeelich are open to you now. Keep it with you: some gates won't open without it.",
+            "Et voici la licence de course de la Coupe, Twinsen -- tu l'as bien méritée. Les courses de la Lune d'Émeraude et de Zeelich te sont ouvertes. Garde-la sur toi : certaines barrières ne s'ouvrent pas sans elle.",
+            "Und hier ist die Rennlizenz des Pokals, Twinsen -- die hast du dir verdient. Die Rennen auf dem Smaragdmond und auf Zeelich stehen dir jetzt offen. Behalte sie bei dir: Manche Tore öffnen sich nicht ohne sie.",
+            "Y aquí tienes la licencia de carreras de la Copa, Twinsen: te la has ganado. Las carreras de la Luna Esmeralda y de Zeelich ya están abiertas para ti. Llévala contigo: algunas barreras no se abren sin ella.",
+            "Ed ecco la licenza di corsa della Coppa, Twinsen: te la sei meritata. Le corse sulla Luna di Smeraldo e su Zeelich ora ti sono aperte. Tienila con te: certi cancelli non si aprono senza.",
+            "E aqui está a licença de corrida da Taça, Twinsen -- mereceste-a. As corridas da Lua Esmeralda e de Zeelich estão agora abertas para ti. Guarda-a contigo: há barreiras que não abrem sem ela.",
         },
     };
 
@@ -911,6 +925,9 @@ void comportement_1()
     {{
         set_var_game({QPages}, {PagesDone});
         message({Say(DesertLine.FlickWon)});
+        message({Say(DesertLine.FlickLicence)});
+        found_object({LicenceSlot});
+        set_var_game({LicenceSlot}, 1);
         message({Say(DesertLine.RacerNext)});
         message({Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});
@@ -1224,6 +1241,9 @@ void comportement_1()
     {{
         set_var_game({QPages}, {PagesDone});
         message({Say(DesertLine.FlickWon)});
+        message({Say(DesertLine.FlickLicence)});
+        found_object({LicenceSlot});
+        set_var_game({LicenceSlot}, 1);
         message_obj({racer}, {Say(DesertLine.RacerNext)});
         message_obj({moya}, {Say(DesertLine.MoyaOil)});
         message_zoe({Say(DesertLine.ZoeOil)});

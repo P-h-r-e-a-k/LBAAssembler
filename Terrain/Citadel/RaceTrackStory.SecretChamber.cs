@@ -52,10 +52,10 @@ internal static partial class RaceTrackStory
     // the Sendell rug's middle (the hall's floor, x 35-48 and z 34-45, almost all of it) and the Dinofly rug's (the lower room's middle)
     private static readonly (int X, int Y, int Z) SendellRugAt = (21504, 1792, 20480), DinoRugAt = (21760, 1280, 28416);
 
-    // A lift: its platform (and its rail, `rails`), each a carrier with a body on its own track, at `foot` (the platform's foot at its
+    // A lift: its platform, a carrier with a body on its own track, at `foot` (the platform's foot at its
     // lowest), starting `startUp` over it. Label 0: down to its foot if it started up (then label LiftDown), else still; label LiftRide:
     // to `rideTo` over its foot. Its actors, and their scripts.
-    private static (int[] Actors, Action<SceneScripts> Scripts) LiftRig(StoryParts p, SceneModel model, (int X, int Y, int Z) foot, int startUp, int rideTo, bool rails, int riseFrom = 0)
+    private static (int[] Actors, Action<SceneScripts> Scripts) LiftRig(StoryParts p, SceneModel model, (int X, int Y, int Z) foot, int startUp, int rideTo, int body, int riseFrom = 0)
     {
         var low = model.TrackPoints.Count;
         model.TrackPoints.Add(new SceneTrackPoint(foot.X, foot.Y, foot.Z));
@@ -65,9 +65,10 @@ internal static partial class RaceTrackStory
         if (riseFrom != 0) model.TrackPoints.Add(new SceneTrackPoint(foot.X, foot.Y - riseFrom, foot.Z));
         var actors = new List<int>();
         var adds = new List<Action<SceneScripts>>();
-        // (the chamber's: planks in an iron frame, and the rail; the house's: the storeroom's four darker squares)
-        var parts = rails ? new[] { Citadel.CitadelProps.LiftPlatform, Citadel.CitadelProps.LiftRailBack, Citadel.CitadelProps.LiftRailLeft, Citadel.CitadelProps.LiftRailRight }
-                          : new[] { Citadel.CitadelProps.HouseLiftPlatform };
+        // (its plate, `body`: the house's, the storeroom's four darker squares; the chamber's, those squares in the house's daytime tiles,
+        // no rail -- the user, 2026-11-17: "let's redesign the elevator so it loses the guard rail and resembles the tiles from the house";
+        // he is held still while it moves either way, NO_MOVE)
+        var parts = new[] { body };
         foreach (var generic in parts)
         {
             actors.Add(model.Actors.Count);
@@ -105,7 +106,7 @@ internal static partial class RaceTrackStory
             Info = new[] { arrival.X - 512, arrival.Y - (DoorTop - DoorBottom) + ArriveOver, arrival.Z - 512, 0, LiftSwitch, 0, DontReadjust, 0 },
         });
         var foot = Citadel.CitadelHouseLift.Foot;
-        var (lift, liftScripts) = LiftRig(p, model, (foot.X, foot.Y, foot.Z), 0, -HouseLiftDown, false, HouseLiftUp);
+        var (lift, liftScripts) = LiftRig(p, model, (foot.X, foot.Y, foot.Z), 0, -HouseLiftDown, Citadel.CitadelProps.HouseLiftPlatform, HouseLiftUp);
         model.Zones.Add(new SceneZoneModel { Type = 2, Num = LiftShaftZone, X0 = b.X0, X1 = b.X1, Y0 = foot.Y - HouseLiftUp - 300, Y1 = foot.Y - 200, Z0 = b.Z0, Z1 = b.Z1, Info = new int[8] });
         var helper = p.Add(model, RaceTrackScenes.InvisibleHelper(foot.X, foot.Y, foot.Z), LiftHelper(lift));
         return (lift, scripts => { liftScripts(scripts); helper(scripts); });
@@ -231,7 +232,7 @@ void comportement_1()
             }
             // the lift: a platform Twinsen stands on (OBJ_CARRIER), on its track -- still, or rising (LiftRide) -- and the zone over it Action
             // is pressed in; Zoe's place on it beside him, and both up
-            var (lift, liftLife) = LiftRig(p, model, LiftAt, ChamberLiftDown, ChamberLiftUp, true);
+            var (lift, liftLife) = LiftRig(p, model, LiftAt, ChamberLiftDown, ChamberLiftUp, Citadel.CitadelProps.LiftPlatform);
             var platform = lift[0];
             var onLift = model.TrackPoints.Count;
             model.TrackPoints.Add(new SceneTrackPoint(LiftAt.X + 220, LiftAt.Y + Citadel.CitadelProps.LiftTop + 4, LiftAt.Z + 150));
@@ -280,7 +281,10 @@ void comportement_1()
             var across = (zoe.Beta - 1024 + 4096) % 4096;
             // (Slaps3: one more, for the driving gloves left on the car's seat and stolen that morning, as Zoe had told him not to many a time --
             // the user, 2026-11-16, "get her to spank him an extra time for leaving his driving gloves in his car where they got stolen")
-            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21, Slaps3 = 30, Slapped3 = 31;
+            // (labels of their own, none ZoeRide's: with Slaps3 at 30 too, set_track_obj to her ride found the gloves' slap first -- she
+            // spanked the air once more on the chair while Twinsen rode up alone: the user, 2026-11-17, "she keeps her spanking animation
+            // for a couple of seconds after Twinsen has moved")
+            const int Slaps1 = 10, Slapped1 = 11, Slaps2 = 20, Slapped2 = 21, Slaps3 = 32, Slapped3 = 33;
             string Slaps(int n) => slap < 0 ? "wait_nb_second(1);\n" : string.Concat(Enumerable.Repeat($"sample({slap});\nwait_nb_dizieme(3);\n", n));
             zoe.Flags &= ~3u;   // (and no brick collision: her hips back over the chair)
             zoe.Flags |= RaceTrackScenes.CarrierFlag;   // (a carrier: goto_point_3d glides her up the lift beside Twinsen)

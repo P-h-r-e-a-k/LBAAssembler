@@ -9,7 +9,10 @@ namespace LBAAssembler.Terrain;
 //   - The item: inventory slot 38, the game's burgomaster's note (Zeelich's, which the story never reaches): its found message, name and
 //     description (file 2's 38, 138, 238) the licence's, each of the game's moved aside (Retired), as the exam pages' were; its model the
 //     note's own paper; used from the inventory, the engine shows file 2's text 800 (PERSO.CPP FLAG_NOTE_BOURGMESTRE) -- the licence card.
-//   - The prize: the town circuit won (chapter 2), Mr. Paul hands it over with the ferry ticket (RaceTrackStory.cs, the prize's helper).
+//   - The prize: the Desert race won (chapter 3), Flick hands it over after her word on the win (RaceTrackStory.Desert, both of the race
+//     won's scripts) -- the user, 2026-11-17: "the racing licence needs to be for winning the Desert Island race. Winning the Citadel race
+//     grants the right to participate in the Desert Island race for the chance to race Emerald Moon and Zeelich" (the town circuit's
+//     prize the island winner's trophy, shown to Flick to enter: RaceTrackStory.cs, the prize's helper).
 //   - The Temple of Bú's gate (the Desert's start scene, where its door down to the Esmers' base is): the Desert won (chapter 4), an Esmer
 //     at the roadside by the temple checks it -- Twinsen in his car with the licence: waved on, and the car driven by itself along the road
 //     to the temple (DriveMarks markers: RACEMOD.CPP drive_marks=), stopped there, Twinsen out, and down through the temple to the hangar

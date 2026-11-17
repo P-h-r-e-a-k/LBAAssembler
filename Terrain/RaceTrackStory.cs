@@ -1198,7 +1198,9 @@ void comportement_1()
             });
 
         // 6. the town circuit won: Mr. Paul's prize, once Twinsen is out of his car -- in whichever of the island's outside scenes that is: the
-        // Cup's purse and the racing licence (the main event's, the intergalactic racing), and the herald's word that Twinsen leads the Cup.
+        // Cup's purse and the island winner's trophy, and the herald's word that Twinsen leads the Cup. (No racing licence since 2026-11-17:
+        // it is the Desert race's prize -- the user, "Winning the Citadel race grants the right to participate in the Desert Island race for
+        // the chance to race Emerald Moon and Zeelich"; RaceTrackStory.Desert, the race won.)
         // Not the ferry ticket since 2026-11-16 (the user: "Let's make Twinsen have to buy the ferry ticket instead of giving it to him for
         // winning the race, His race prize is the racing licence and the right to participate in the intergalactical racing"): the ferry
         // office sells it once the race is won (RaceTrackStory.Retired, scene 8's clerk, the game's 10 kashes). And the island winner's trophy
@@ -1210,7 +1212,7 @@ void comportement_1()
         for (var scene = RaceTrackIsland.Citadel.FirstScene; scene <= RaceTrackIsland.Citadel.LastScene; scene++)
         {
             if (!store.SceneExists(scene)) continue;
-            Edit(scene, "Mr. Paul hands over his prize, the purse and the racing licence, after a win on the town circuit; Twinsen driving here means he has his car", model =>
+            Edit(scene, "Mr. Paul hands over his prize, the purse and the island winner's trophy, after a win on the town circuit; Twinsen driving here means he has his car", model =>
             {
                 var prize = RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, paulColour);
                 return Add(model, prize, $@"void comportement_0()
@@ -1228,9 +1230,7 @@ void comportement_1()
     {{
         message({Id(Line.PaulTicket)});
         add_gold_pieces({Purse});
-        message({Say(ChapterLine.PaulLicence)});
-        found_object({LicenceSlot});
-        set_var_game({LicenceSlot}, 1);
+        message({Say(ChapterLine.PaulTrophy)});
         set_var_game({ErrandSlot}, {ErrandTrophy});
         found_object({ErrandSlot});
         if (0 == var_game({Slate}))
