@@ -541,6 +541,8 @@ typedef struct {
     int Placed;
     int WhenVar, WhenLeast, WhenBelow;     // opponentN_when=: its car not there (out of sight, not placed, not on the grid) while game
                                            // variable WhenVar (-1 none) is below WhenLeast, or WhenBelow and more (0: no top)
+    int Pull; S32 PullAt;                  // win_pull=: 1 pulling up beside Twinsen after his win, 2 stopped there (its pose its own, not its line's)
+    double PullX0, PullZ0, PullY0, PullX1, PullZ1, PullY1, PullDX, PullDZ;
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
 #define RACE_PACK_SKILL 0.6                // a skill drawn between two (opponent_pace=<lo> <hi>): this share of the way out from their middle
@@ -1096,6 +1098,14 @@ static int s_victoryFresh = 0;              // (the lap of honour's halfway mark
 // (the file's key, read again with each track; the stage and the variable watched outlive a track loaded again on the way -- the car
 // braking over a cube's edge into the next scene)
 static int s_winStopVar = -1, s_winStop = 0, s_winStopWatch = -1, s_winStopHeld = 0;
+// win_pull=<opponent> <var> <value> <delay ms> (the Emerald Moon's HAL, the user, 2026-11-17: "have Twinsen held in a cut scene and have HAL
+// pull up next to him a couple of seconds after Twinsen wins the race, and then HAL talks to him from his car"): out of his car after the
+// win (win_stop=), <delay> later the opponent's car comes up the road from behind him and stops alongside (WinPullFrame), then game
+// variable <var> is set to <value> -- the story's cue for its words
+#define RACE_PULL_MS 2600.0
+#define RACE_PULL_BACK 8000.0
+#define RACE_PULL_SIDE 1100.0
+static int s_winPullOpp = -1, s_winPullVar = -1, s_winPullValue = 1, s_winPullDelay = 0, s_winPulled = 0;
 static S32 s_winStopSince = 0;
 #define RACE_WINSTOP_MS 20000              // (the game's clock, which a dialogue stops: this long out of the car with nothing said)
 S32 RaceMod_OnFoot(void);
@@ -5377,6 +5387,13 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
         else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
         else if (!strcmp(key, "once_won")) s_onceWon = atoi(v) != 0;
+        else if (!strcmp(key, "win_pull")) {
+            int n, var, value, delay;
+            s_winPullOpp = -1;
+            if (sscanf(v, "%d %d %d %d", &n, &var, &value, &delay) == 4 && n >= 1 && n <= RACE_MAX_OPPONENTS && var >= 0 && var < MAX_VARS_GAME) {
+                s_winPullOpp = n - 1; s_winPullVar = var; s_winPullValue = value; s_winPullDelay = delay;
+            }
+        }
         else if (!strcmp(key, "win_stop")) { s_winStopVar = atoi(v); if (s_winStopVar < 0 || s_winStopVar >= MAX_VARS_GAME) s_winStopVar = -1; }
         else if (!strcmp(key, "lap_record")) { if (sscanf(v, "%d %d %d", &s_lapRecordMs, &s_lapRecordVar, &s_lapRecordValue) != 3) s_lapRecordVar = -1; }
         else if (!strcmp(key, "margin_win")) { if (sscanf(v, "%d %d %d", &s_marginMs, &s_marginVar, &s_marginValue) != 3) s_marginVar = -1; }
@@ -7474,9 +7491,37 @@ static const T_RACE_OPPONENT *AutoGuide(void) { return (s_autoShort || s_autoSmo
 static void WinStopStart(S32 now) {
     if (s_winStopVar < 0 || s_winStop) return;
     s_winStop = 1; s_winStopSince = now; s_winStopWatch = s_winStopVar; s_winStopHeld = ListVarGame[s_winStopVar];
+    s_winPulled = 0; for (int i = 0; i < RACE_MAX_OPPONENTS; i++) s_opp[i].Pull = 0;
     s_auto = 0; s_stopReach = 0; s_stopping = 0; s_walkN = 0; s_walkCar = 0;
     Log_Info("[racemod] win_stop: the race won -- the car braked to a stop past the line, Twinsen out of it, the controls his again once variable %d moves on from %d",
              s_winStopVar, s_winStopHeld);
+}
+// Every frame: out of his car after the win, a moment, and the win_pull= opponent comes up the road from behind him and stops alongside
+// -- its line's way, RACE_PULL_BACK back, to RACE_PULL_SIDE off his own place across the road (the side away from him), a little ahead
+static double GuideS(const T_RACE_OPPONENT *o, double x, double y, double z, double hint, double *side);
+static void WinPullFrame(S32 now) {
+    if (s_winPullOpp < 0 || s_winPulled || s_winStop != 2 || now - s_winStopSince < s_winPullDelay || CubeMode != CUBE_EXTERIEUR) return;
+    s_winPulled = 1;
+    T_RACE_OPPONENT *o = &s_opp[s_winPullOpp];
+    const T_RACE_OPPONENT *g = Guide();
+    if (!o->Count || !o->Scenes || !g || g->Length <= 0) {
+        if (s_winPullVar >= 0) ListVarGame[s_winPullVar] = (S16)s_winPullValue;
+        Log_Info("[racemod] win_pull: no car of opponent %d here -- variable %d at %d at once", s_winPullOpp + 1, s_winPullVar, s_winPullValue);
+        return;
+    }
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    const double hx = h->Obj.X + CurrentCubeX * 32768.0, hz = h->Obj.Z + CurrentCubeY * 32768.0;
+    const double gs = GuideS(g, hx, h->Obj.Y, hz, -1, NULL);
+    double gx, gz, gy, gv, gdx, gdz, bx, bz, by, bdx, bdz;
+    PathAt(g, gs + 600, &gx, &gz, &gy, &gv, &gdx, &gdz);
+    PathAt(g, gs - RACE_PULL_BACK, &bx, &bz, &by, &gv, &bdx, &bdz);
+    const double l = sqrt(gdx * gdx + gdz * gdz) > 0 ? sqrt(gdx * gdx + gdz * gdz) : 1, ux = gdx / l, uz = gdz / l, nx = -uz, nz = ux;
+    const double lat = (hx - gx) * nx + (hz - gz) * nz, off = lat > 0 ? lat - RACE_PULL_SIDE : lat + RACE_PULL_SIDE;
+    o->PullX1 = gx + nx * off; o->PullZ1 = gz + nz * off; o->PullY1 = gy;
+    o->PullX0 = bx + nx * off; o->PullZ0 = bz + nz * off; o->PullY0 = by;
+    o->PullDX = ux; o->PullDZ = uz;
+    o->Pull = 1; o->PullAt = now;
+    Log_Info("[racemod] win_pull: %s's car comes up beside Twinsen -- from (%.0f,%.0f) to (%.0f,%.0f,%.0f)", o->Name, o->PullX0, o->PullZ0, o->PullX1, o->PullZ1, o->PullY1);
 }
 // Every frame (RaceMod_Frame): the controls back once the story's scene has played
 static void WinStopFrame(S32 now) {
@@ -21619,6 +21664,7 @@ void RaceMod_Frame(void) {
         if (s_footRoom != was) Log_Info("[racemod] Twinsen on foot %s", s_footRoom >= 0 ? "in a room under the ground: the camera under its ceiling" : "out of the room under the ground");
     }
     TortoiseWatch(TimerRefHR);
+    WinPullFrame(TimerRefHR);
     WinStopFrame(TimerRefHR);
     if (s_unlockAtVar >= 0 && s_unlockAtVar < MAX_VARS_GAME && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
         s_unlockAtDone = 1;
@@ -21901,6 +21947,18 @@ void RaceMod_Frame(void) {
             PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
             // (past the flag marshal on the road first, in its grid column)
             MarshalColumn(n, o, x, z);
+        }
+        // (pulled up beside Twinsen after his win -- win_pull=: its own way there, eased to a stop, then still)
+        if (o->Pull) {
+            const double u = fmin(1.0, (now - o->PullAt) / RACE_PULL_MS), e = 1 - (1 - u) * (1 - u);
+            x = o->PullX0 + (o->PullX1 - o->PullX0) * e; z = o->PullZ0 + (o->PullZ1 - o->PullZ0) * e; y = o->PullY0 + (o->PullY1 - o->PullY0) * e;
+            dx = o->PullDX; dz = o->PullDZ;
+            o->Speed = 0; o->Side = 0; o->SideV = 0; o->MergeLeft = 0;
+            if (u >= 1 && o->Pull == 1) {
+                o->Pull = 2;
+                if (s_winPullVar >= 0) ListVarGame[s_winPullVar] = (S16)s_winPullValue;
+                Log_Info("[racemod] win_pull: %s's car stops beside Twinsen -- variable %d at %d", o->Name, s_winPullVar, s_winPullValue);
+            }
         }
         // (where its car is, for the others passing it)
         {
@@ -24250,7 +24308,7 @@ static void ResetTrack(void) {
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_trialHide[0] = s_trialHide[1] = -1; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0; s_raceRun = 0;
     GhostReset();
-    s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0; s_winStopVar = -1; s_onceWon = 0;
+    s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0; s_winStopVar = -1; s_winPullOpp = -1; s_winPulled = 0; s_onceWon = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; s_patchVar = -1; s_nbPatch = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes));

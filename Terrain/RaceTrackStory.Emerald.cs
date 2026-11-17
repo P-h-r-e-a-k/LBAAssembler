@@ -36,6 +36,11 @@ internal static partial class RaceTrackStory
     // hands over his radio, let's have Twinsen held in a cut scene until HAL is fixed, at which point have a scientist return to him and hand
     // the radio back, along with telling him to talk to HAL": the mechanics' cut scene's frames, counted in a cell variable)
     private const int MendWait = 72, MendFrames = 120;
+    // (the race won: out of his car, held, Twinsen sees HAL's car come up the road and stop beside him -- RACEMOD.CPP win_pull=, HAL the
+    // first opponent -- and the words after the win wait for it (game variable HalPullVar 1); the user, 2026-11-17: "After the race HAL
+    // currently talks to us off screen, let's have Twinsen held in a cut scene and have HAL pull up next to him a couple of seconds after
+    // Twinsen wins the race, and then HAL talks to him from his car")
+    public const int HalPullVar = 264, HalPullDelay = 1500;
     private const int HalVoice = 10;
     // the moon's scenes whose scripts put the spacesuit on: the X building's airlock, the outside by the circle and the square entrances,
     // the Esmers' shuttle
@@ -1075,8 +1080,9 @@ void comportement_2()
 
 void comportement_1()
 {{
-    if ({HalWon} == var_game({QHal}) && {Driving} != comportement_hero())
+    if ({HalWon} == var_game({QHal}) && 1 == var_game({HalPullVar}) && {Driving} != comportement_hero())
     {{
+        set_var_game({HalPullVar}, 2);
         set_var_game({QHal}, {HalDone});
         message_obj({guard}, {Say(MoonLine.GuardBeaten)});
         message({Say(MoonLine.LyraZeelich)});
