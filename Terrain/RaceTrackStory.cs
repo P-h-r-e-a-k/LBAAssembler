@@ -57,6 +57,9 @@ internal static partial class RaceTrackStory
     // the harbour (scene 43): the ferry, and Twinsen's own script that takes him aboard with the ticket; Citadel Island's weather (1 fine:
     // RACEMOD.CPP RaceMod_CitadelWeather)
     private const int FerryScene = 43, WeatherVar = 206, TraluLedgeScene = 45;
+    // the Spider Cave, its way out by the blue egg (into scene 47), the switch its gate turns that door by; the Tralu caves' padlocked gate
+    private const int SpiderCaveScene = 51, SpiderCaveOut = 47, SpiderGateSwitch = 3, TraluGateScene = 2, TraluGateActor = 8, TraluBarsSprite = 124;
+    private static readonly (int X, int Y, int Z) SpiderGateAt = (8448, 1280, 17408);
     // (the ladder's zone number up from the Tralu's cave's ledge: RaceTrackIsland.TwinLadders)
     internal const int TraluLadderZone = 5;
     public const int DayVar = 200, Tired = 1, Rested = 2, WonVar = 201, BeatVar = 202;
@@ -1254,6 +1257,47 @@ void comportement_1()
         // The ladder from the Tralu's cave's ledge up to the town circuit's road (RaceTrackIsland.TwinLadders: in the fine weather's file
         // only, where the road was built over the ledge's way in): its zone on only in the fine weather -- the storm's file has no ladder
         // there, and its ledge runs on east under where the zone is (LBRA issue #12)
+        // The Spider Cave's way out by the blue egg (scene 51, its door 0 into scene 47 -- towards the Tralu's caves): locked in the fine
+        // weather, the island's CITABAU, open in the storm's, CITADEL (the user, 2026-11-17: "we need the exit to the Tralu caves blocked when
+        // we enter from citabau.ile but accessible when we enter from citadel.ile Let's just add a locked door here similar in style to the ones
+        // in the Tralu cave"): the Tralu caves' own padlocked gate (scene 2's actor 8, sprite 183) in its archway (the wall's column x 16, cells
+        // z 34-35, the floor 1280), its screen clip moved with it, and the door's zone switched off while it stands
+        var spiderGate = originals.SceneExists(TraluGateScene) ? originals.Load(TraluGateScene).Actors.ElementAtOrDefault(TraluGateActor)?.Clone() : null;
+        if (spiderGate is not null)
+            Edit(SpiderCaveScene, $"the Spider Cave's way out by the blue egg: the Tralu caves' padlocked gate across it in the fine weather", model =>
+            {
+                var door = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == SpiderCaveOut && z.X0 == 8192);
+                if (door is null) throw new NotTheGames("the Spider Cave's way out by the egg");
+                door.Info[4] = SpiderGateSwitch;
+                var gate = spiderGate.Clone();
+                int dx = SpiderGateAt.X - gate.X, dy = SpiderGateAt.Y - gate.Y, dz = SpiderGateAt.Z - gate.Z;
+                (gate.X, gate.Y, gate.Z) = SpiderGateAt;
+                // (the clip rectangle is the iso projection's: x by (x - z) * 24 / 512, y by (x + z) * 12 / 512 - y * 15 / 256)
+                int sx = (dx - dz) * 24 / 512, sy = (dx + dz) * 12 / 512 - dy * 15 / 256;
+                gate.Info = new[] { gate.Info[0] + sx, gate.Info[1] + sy, gate.Info[2] + sx, gate.Info[3] + sy };
+                gate.Life = new byte[] { 0 }; gate.Track = new byte[] { 0 };
+                // (and the arch is wider than one gate: the plain barred one, sprite 124, beside it over the rest, z 36-37, its clip moved on)
+                var bars = gate.Clone();
+                bars.Z += 1024; bars.Sprite = TraluBarsSprite;
+                int bsx = -1024 * 24 / 512, bsy = 1024 * 12 / 512;
+                bars.Info = new[] { gate.Info[0] + bsx, gate.Info[1] + bsy, gate.Info[2] + bsx, gate.Info[3] + bsy };
+                string Life(bool switches) => $@"void comportement_0()
+{{
+    if (1 == var_game({WeatherVar}))
+    {{
+{(switches ? $"        set_change_cube({SpiderGateSwitch}, 0);\n" : "")}    }}
+    else
+    {{
+{(switches ? $"        set_change_cube({SpiderGateSwitch}, 1);\n" : "")}        invisible(1);
+        suicide();
+    }}
+}}
+";
+                var addGate = Add(model, gate, Life(true));
+                var addBars = Add(model, bars, Life(false));
+                return scripts => { addGate(scripts); addBars(scripts); };
+            });
+
         Edit(TraluLedgeScene, $"the ladder up from the Tralu's cave's ledge: its zone ({TraluLadderZone}) on in the fine weather only", model =>
             Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), $@"void comportement_0()
 {{
