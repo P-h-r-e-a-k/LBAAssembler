@@ -50,7 +50,7 @@ internal static class StellaEntities
     public const int BackstageZoneDeep = 860;
     // the poles round the column (degrees, the room's middle to them: x = cos, z = sin -- all on the audience's side of it, the camera's:
     // one behind it was drawn over it), the tables', the stools'
-    private static readonly float[] PoleAngles = { 10, 60, 110 }, TableAngles = { 20, 60, 200, 235, 305, 335 };
+    private static readonly float[] PoleAngles = { 10, 60, 110 }, TableAngles = { 20, 60, 125, 170, 305, 335 };
     internal const float PoleCells = 5; private const float TableCells = 11.5f, StoolCells = 14.2f;
     private const int CorridorX0 = 43, CorridorX1 = 56, CorridorZ0 = 30, CorridorZ1 = 34;
     private const int FootX0 = 55, FootX1 = 60, FootZ0 = 26, FootZ1 = 34;
@@ -157,6 +157,8 @@ internal static class StellaEntities
                 // (the hall's ring of invisible solid cells inside the curb: block 0, collision 1 -- not where the corridor comes in)
                 double dx = x + 0.5 - CentreX, dz = z + 0.5 - CentreZ;
                 var angle = Math.Atan2(dz, dx) * 180 / Math.PI;
+                // (and round from 0 to 360, for the bar's arc -- BarFrom-BarTo past 180 since it moved round to the north-west)
+                var around = angle < 0 ? angle + 360 : angle;
                 // (the stage and its catwalk: invisible solid cells under the props, up to its top -- the dancers stand on it. Every cell the
                 // stage's round covers, not only those whose middles it does: with those, Twinsen walked into its skirt where the round reached
                 // past a cell -- the user, 2026-11-13, "it should be solid and high all the way around")
@@ -179,7 +181,7 @@ internal static class StellaEntities
                 // (the bar's counter: invisible solid cells along its curve, two layers)
                 var r = Math.Sqrt(dx * dx + dz * dz);
                 if (Hall(x, z) && r >= Citadel.CitadelProps.CounterIn / 512 - 0.15 && r <= Citadel.CitadelProps.CounterOut / 512 + 0.1 &&
-                    angle >= Citadel.CitadelProps.BarFrom - 3 && angle <= Citadel.CitadelProps.BarTo + 3)
+                    around >= Citadel.CitadelProps.BarFrom - 3 && around <= Citadel.CitadelProps.BarTo + 3)
                 {
                     // (up to the wall's top, not only the counter's own two layers: a jump onto it (it's 768 up, a jump nearly 1000) and a
                     // step off its far side put Twinsen on the barman's side, under the bar's pieces -- the user, 2026-11-15, "jump all
@@ -198,8 +200,8 @@ internal static class StellaEntities
                 // between the counter and the bottles, and the pieces drawn by their boxes put him under them: the user, 2026-11-13, "Twinsen
                 // disappears under the bar")
                 var behind = r > Citadel.CitadelProps.CounterOut / 512 - 0.2 && r < RingFrom + 0.5;
-                if (Hall(x, z) && behind && ((angle >= Citadel.CitadelProps.BarFrom - 4 && angle <= Citadel.CitadelProps.BarFrom + 1) ||
-                                             (angle >= Citadel.CitadelProps.BarTo - 1 && angle <= Citadel.CitadelProps.BarTo + 4)))
+                if (Hall(x, z) && behind && ((around >= Citadel.CitadelProps.BarFrom - 4 && around <= Citadel.CitadelProps.BarFrom + 1) ||
+                                             (around >= Citadel.CitadelProps.BarTo - 1 && around <= Citadel.CitadelProps.BarTo + 4)))
                 {
                     for (var y = FloorLayer + 1; y <= RingTop; y++) Put(x, y, z, 0, 1);
                     barEnds++;

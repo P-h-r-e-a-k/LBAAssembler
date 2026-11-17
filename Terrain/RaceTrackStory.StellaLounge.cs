@@ -47,7 +47,10 @@ internal static partial class RaceTrackStory
     internal static string StellaPovLine => $"pov={StellaRooms.Private} {PovVar} 1 {PovEye} {PovArmour}\n";
     // (into the private room: a door zone over each booth's seat, off till the hostess's "Follow me" -- change_cube takes scenes up to 255)
     private const int PrivateSwitch = 8;
-    private const float LoungePath = 13.3f, HostHomeAngle = 250, GroboHomeAngle = 236, HostHomeCells = 15.5f, FrontCells = 15.9f;
+    // (the hostesses' home just before the bar's near end, BarFrom: by the catwalk's foot the bar is there now; walking round with the angle
+    // going down, they reach every booth without passing it. And the way back from the private room in front of the booths, PrivateBack)
+    private const float LoungePath = 13.3f, HostHomeAngle = 190, GroboHomeAngle = 178, HostHomeCells = 15.5f, FrontCells = 15.9f;
+    internal const float PrivateBack = 140;
 
     private static void StellaLounge(IslandBeatsA b, Func<MoonLine, int> say)
     {
@@ -350,7 +353,7 @@ void comportement_4()
             string DancerTrack(int walk, int lap) => $"label(0);\nstop();\n\nlabel({LeadOn});\nanim({walk});\ngoto_point({up});\ngoto_point({aside});\nanim(0);\n\nlabel({LeadAside});\nstop();\n\n" +
                 $"label({ShowOn});\nanim({walk});\ngoto_point({show});\nbeta(2048);\nanim({lap});\n\nlabel({ShowDancing});\nstop();\n";
             // (the way back: a door zone round the chair, off till the show's end -- into the hall in front of the booths)
-            var (rx, rz) = StellaEntities.At(215, 15.5f);
+            var (rx, rz) = StellaEntities.At(PrivateBack, 15.5f);
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaEntities.Scene, X0 = StellaRooms.SofaX - 300, X1 = StellaRooms.SofaX + 300, Z0 = StellaRooms.SofaZ - 300, Z1 = StellaRooms.SofaZ + 300, Y0 = 0, Y1 = 2000,
                 Info = new[] { rx - 300, StellaEntities.FloorY, rz - 300, 0, ReturnSwitch, 0, 0, 0 } });
             var heroLife = $@"void comportement_0()

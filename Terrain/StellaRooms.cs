@@ -76,7 +76,7 @@ internal static class StellaRooms
         var (backX, backZ) = (StellaEntities.CatwalkX0World, StellaEntities.CatwalkEndZ + StellaEntities.BackstageZoneDeep + 160);
         static string Still() => "void comportement_0()\n{\n}\n";
         var records = new List<(int Scene, byte[] Record)>();
-        var (privX, privZ) = StellaEntities.At(215, 15.5f);
+        var (privX, privZ) = StellaEntities.At(RaceTrackStory.PrivateBack, 15.5f);
         foreach (var (number, name, outAt) in new[] { (Office, "office", (outX, outZ)), (Backstage, "backstage", (backX, backZ)), (Private, "private room", (privX, privZ)) })
         {
             var model = original.Clone();

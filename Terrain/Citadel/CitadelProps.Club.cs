@@ -121,13 +121,15 @@ internal static partial class CitadelProps
     //     wall behind it (113, into the backdrop), bar stools (115);
     //   - a table (114): Rick's round green card table on its brass foot, three chairs round it.
     public const int ClubStage = 109, ClubColumn = 110, ClubPole = 111, ClubCounter = 112, ClubShelf = 113, ClubTable = 114, ClubBarStool = 115, ClubCounter2 = 116, ClubCounter3 = 117;
-    public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 115), (ClubCounter2, 135), (ClubCounter3, 155) };
+    // (the bar round the hall's north-west, its far end just short of the catwalk -- the user, 2026-11-16, "Let's reposition the bar area by
+    // sliding it around the room to the left of the catwalk, as a consequence we'll slide the chairs around"; it was 105-165, the south-west)
+    public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 210), (ClubCounter2, 230), (ClubCounter3, 250) };
     // (StageHigh: about Twinsen's chest -- three layers, 768; it was one, 256: the user, 2026-11-13, "The stage area needs raising to about
     // the height of Twinsen's chest")
     // (the catwalk right up to the wall, under the backstage door: the user, 2026-11-13, "This stage should also go right to the edge of the room")
     public const float StageRadius = 7.5f * 512, StageHigh = 768, CatwalkHalf = 512, CatwalkTo = ClubWallRadius - 40;
     public const float CounterIn = 15.0f * 512, CounterOut = 16.0f * 512, CounterArc = 20, CounterMiddle = 15.5f * 512, ShelfIn = 17.3f * 512, ShelfOut = 17.9f * 512;
-    public const float BarFrom = 105, BarTo = 165;
+    public const float BarFrom = 200, BarTo = 260;
     public const int PoleHigh = 3900, ColumnHigh = 5200;
     private const int ClubWood = 22, ClubWoodLight = 25, ClubVelvet = 68, ClubReactor = 158, ClubSteel = 56, ClubFelt = 133, ClubLeather = 69;
 
@@ -315,7 +317,8 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, 70, -220), new Vector3(330, 140, 140), Cuff, Cuff);
         return m.ToBody(header);
     }
-    public static readonly float[] BoothAngles = { 35, 70, 185, 220, 325 };
+    // (two of them where the bar was, south-west: 185 and 220 were in its way round the north-west)
+    public static readonly float[] BoothAngles = { 35, 70, 120, 155, 325 };
     public const float BoothCells = 17.4f, SeatCells = 17.2f, MachineAngle = 94, MachineCells = 17.6f;
     public const int BoothSeat = 512;
     // (a booth, not a bench -- the user, 2026-11-13, "change these chairs for more of a booth ... shaped to allow for the curved room": its seat an
