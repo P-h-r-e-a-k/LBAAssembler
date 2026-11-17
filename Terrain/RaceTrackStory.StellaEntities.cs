@@ -346,7 +346,7 @@ stop();
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Backstage, X0 = StellaEntities.CatwalkX0World, X1 = StellaEntities.CatwalkX0World + 1023, Z0 = StellaEntities.CatwalkEndZ, Z1 = backZ1, Y0 = stageTop, Y1 = stageTop + 1800,
                 Info = new[] { StellaRooms.InsideX - 512, StellaRooms.InsideY, StellaRooms.InsideZ - 270 - (BackDeep - BackDeepWas), 0, BackstageSwitch, 0, 0, 1 } });
             // (behind the counter's last third, clear of the reactor's column in front of its middle from the camera)
-            Place(barman, StellaEntities.At(242, 16.6f), say(MoonLine.ClubBarman), 1700, onAction: true);
+            Place(barman, StellaEntities.At(237, 16.6f), say(MoonLine.ClubBarman), 1700, onAction: true);
             // the seven performers (StellaPerformers: the game's own bodies recoloured, bodies of the hero's entity, each her own dance): three
             // on the poles (10, 60 and 110 degrees -- the actor on the pole's spot: her body stands beside it, her dance takes her round,
             // up and over it), four on the stage's other sides, strutting along its edge; no one's blows stopped by them (CHECK_OBJ_COL off).

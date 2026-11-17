@@ -123,13 +123,16 @@ internal static partial class CitadelProps
     public const int ClubStage = 109, ClubColumn = 110, ClubPole = 111, ClubCounter = 112, ClubShelf = 113, ClubTable = 114, ClubBarStool = 115, ClubCounter2 = 116, ClubCounter3 = 117;
     // (the bar round the hall's north-west, its far end just short of the catwalk -- the user, 2026-11-16, "Let's reposition the bar area by
     // sliding it around the room to the left of the catwalk, as a consequence we'll slide the chairs around"; it was 105-165, the south-west)
-    public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 210), (ClubCounter2, 230), (ClubCounter3, 250) };
+    public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 205), (ClubCounter2, 225), (ClubCounter3, 245) };
     // (StageHigh: about Twinsen's chest -- three layers, 768; it was one, 256: the user, 2026-11-13, "The stage area needs raising to about
     // the height of Twinsen's chest")
     // (the catwalk right up to the wall, under the backstage door: the user, 2026-11-13, "This stage should also go right to the edge of the room")
     public const float StageRadius = 7.5f * 512, StageHigh = 768, CatwalkHalf = 512, CatwalkTo = ClubWallRadius - 40;
     public const float CounterIn = 15.0f * 512, CounterOut = 16.0f * 512, CounterArc = 20, CounterMiddle = 15.5f * 512, ShelfIn = 17.3f * 512, ShelfOut = 17.9f * 512;
-    public const float BarFrom = 200, BarTo = 260;
+    // (195-255, five degrees round from 200-260: its far end's wall, behind the counter, stood a cell from the catwalk, and that cell was
+    // filled as a slot -- an invisible wall all along the catwalk's west side north of the bouncer; the user, 2026-11-17, "Twinsen can walk
+    // off the catwalk on the side where the stairs are, but is being prevented from dropping off the other side". Two cells of floor now)
+    public const float BarFrom = 195, BarTo = 255;
     public const int PoleHigh = 3900, ColumnHigh = 5200;
     private const int ClubWood = 22, ClubWoodLight = 25, ClubVelvet = 68, ClubReactor = 158, ClubSteel = 56, ClubFelt = 133, ClubLeather = 69;
 
