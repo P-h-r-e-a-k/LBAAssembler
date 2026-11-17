@@ -689,7 +689,10 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
             // (Stella Entities' stage and catwalk drawn whole into the background, no brick over them: its catwalk's cells real bricks that
             // hide Twinsen behind it -- RACEMOD.CPP no_recover=, StellaEntities' catwalk cells)
-            if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={StellaEntities.Scene} {Citadel.CitadelProps.ClubStage}\n");
+            // (and the props drawn after the stage -- the rail, the steps, the shelf: the catwalk's bricks' shapes copied the background, the
+            // catwalk by then, over their parts in front of it -- the steps' top step cut off, the user, 2026-11-16: "We also need to change
+            // the stairs onto the catwalk, they now appear too low")
+            if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={StellaEntities.Scene} {Citadel.CitadelProps.ClubStage} {Citadel.CitadelProps.ClubRail} {Citadel.CitadelProps.ClubSteps} {Citadel.CitadelProps.ClubShelf}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

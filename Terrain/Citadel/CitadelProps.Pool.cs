@@ -17,8 +17,12 @@ internal static partial class CitadelProps
     // water and over the edge onto the deck, three steps under the surface; swimming to any edge takes Twinsen out, the ladder's included)
     public const int PoolLadder = 19, LadderX = 15500, LadderZ = 16600, LadderBeta = 1024;
     private const int LadderSteel = 56, LadderStep = 52;
-    // the basin (scene units): two rectangles -- x0 z0 x1 z1 -- its floor, the water's surface
-    public static readonly (int X0, int Z0, int X1, int Z1)[] PoolBasin = { (18500, 7500, 23500, 19500), (15500, 13500, 18500, 19500) };
+    // the basin (scene units): two rectangles -- x0 z0 x1 z1 -- its floor, the water's surface. Exactly the basin's cells (the floor at
+    // 1,536: x 37-45 z 15-38, and the west arm x 31-36 z 27-38) -- the user, 2026-11-16, "Twinsen drowned in the pool in the imperial
+    // hotel, can we make sure that all of it is swimmable please": the rectangles stopped short at z 19,500 and x 23,500, half a cell inside
+    // its south and east edges; there he was in the game's water but not the pool's, and drowned -- and swimming out over the south edge
+    // put him down 350 past the rectangle, still over the basin, and he fell back in there
+    public static readonly (int X0, int Z0, int X1, int Z1)[] PoolBasin = { (37 * 512, 15 * 512, 46 * 512, 39 * 512), (31 * 512, 27 * 512, 37 * 512, 39 * 512) };
     public const int PoolFloor = 1536, PoolSurface = 1990, PoolDeck = 2048;
     // the board: its stand's middle on the deck by the basin's north edge, the plank's tip over the water, where a dive comes down
     // (the user, 2026-11-12, on a picture: the green by the wide arm's west edge -- the stand on the deck at BoardX, the plank pointing
