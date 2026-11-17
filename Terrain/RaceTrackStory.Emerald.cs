@@ -648,9 +648,11 @@ void comportement_2()
     // corridor's side, Twinsen was shut in -- the user, 2026-11-16: "If Twinsen enters the Emerald Moon base area by the "x" entrance, where
     // in the retail game he escapes with Baldino he gets trapped at this door as the controls are on the other side of the door. Let's add
     // an extra control for it the other side of the barrier to prevent this". A second stand (the same block) in the corridor beside the
-    // door, cells 46-47, 39-40, and a second wheel on it (actor 3's sprite and its turning, the same height over its stand): Action by it
-    // works the door as the first does.
-    private const int XDoorVar = 93, XWheel = 3, XStandBlock = 151, XStandFloor = 60, XStandX = 44, XStandZ = 35, XWheelFrom = 47 * 512, XWheelFromZ = 42 * 512;
+    // door, and a second wheel on it (actor 3's sprite and its turning, the same height over its stand): Action by it works the door as
+    // the first does. Its stand in the corridor's corner by the first's, across the wall from it, cells 44-45, 41-42 (the user, 2026-11-17:
+    // "move it into the corner that's exactly next to where the second switch is on the other side of the door" -- it stood in front of the
+    // doorway, at 44-45, 35-36)
+    private const int XDoorVar = 93, XWheel = 3, XStandBlock = 151, XStandFloor = 60, XStandX = 44, XStandZ = 41, XWheelFrom = 47 * 512, XWheelFromZ = 42 * 512;
     private static void XDoorWheel(string gameDirectory, IslandBeatsA b, List<string> log)
     {
         if (!b.Store.SceneExists(BaseScene)) return;
