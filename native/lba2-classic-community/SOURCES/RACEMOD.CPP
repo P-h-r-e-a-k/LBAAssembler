@@ -1652,8 +1652,11 @@ static int s_carryScene = -1, s_carryVar = -1, s_carryUp = 0, s_carryAhead = 0, 
 // (cube-local) if given, turned to <beta> (-1 as he came), the car brought under him once the scene's car actor has placed it -- and the
 // variable 2 (InCarFrame): the Emerald Moon's arrival, the car driven out of the Esmers' saucer onto the landing pad (the user, 2026-11-17,
 // "when we first land on the moon let's still be in the spaceship with our car in there too. Twinsen drives the car out")
-static int s_inCarVar = -1, s_inCarBeta = -1, s_inCarScene = -1, s_inCarFrames = 0, s_inCarPlaced = 0;
-static S32 s_inCarX = 0, s_inCarY = 0, s_inCarZ = 0;
+// (in_car= any number of times, up to RACE_MAX_IN_CAR: each arrival its own variable -- the Emerald Moon's landing, Otringal's space port)
+#define RACE_MAX_IN_CAR 4
+typedef struct { int Var, Beta, Placed, Scene; S32 X, Y, Z; } T_RACE_IN_CAR;   // (Scene: only there, -1 any)
+static T_RACE_IN_CAR s_inCar[RACE_MAX_IN_CAR];
+static int s_nbInCar = 0, s_inCarScene = -1, s_inCarFrames = 0;
 static U32 s_carryFallable = 0;
 static void CarryFrame(void) {
     T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -5421,7 +5424,14 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "occluder")) { if (!setRead && sscanf(v, "%d %d %d %d %d %d", &s_occScene, &s_occX, &s_occZ, &s_occR, &s_occY0, &s_occY1) != 6) s_occScene = -1; }
         else if (!strcmp(key, "carry_hero")) { if (!setRead && sscanf(v, "%d %d %d %d", &s_carryScene, &s_carryVar, &s_carryUp, &s_carryAhead) != 4) s_carryVar = -1; }
         else if (!strcmp(key, "ball_through")) { if (!setRead && sscanf(v, "%d %d", &s_ballScene, &s_ballActor) != 2) s_ballScene = -1; }
-        else if (!strcmp(key, "in_car")) { if (!setRead) { const int got = sscanf(v, "%d %d %d %d %d", &s_inCarVar, &s_inCarBeta, &s_inCarX, &s_inCarY, &s_inCarZ); if (got < 1) s_inCarVar = -1; s_inCarPlaced = got == 5; } }
+        else if (!strcmp(key, "in_car")) {
+            if (!setRead && s_nbInCar < RACE_MAX_IN_CAR) {
+                T_RACE_IN_CAR *c = &s_inCar[s_nbInCar];
+                c->Beta = -1; c->Scene = -1;
+                const int got = sscanf(v, "%d %d %d %d %d %d", &c->Var, &c->Beta, &c->X, &c->Y, &c->Z, &c->Scene);
+                if (got >= 1 && c->Var >= 0 && c->Var < MAX_VARS_GAME) { c->Placed = got >= 5; s_nbInCar++; }
+            }
+        }
         else if (!strcmp(key, "lens")) { s_lensRaise = 0; if (!setRead && sscanf(v, "%d %d %d", &s_lensVar, &s_lensValue, &s_lensRaise) < 2) s_lensVar = -1; }
         else if (!strcmp(key, "late_fade")) { if (!setRead && s_nbLateFade < 8 && sscanf(v, "%d %d %d", &s_lateFade[s_nbLateFade][0], &s_lateFade[s_nbLateFade][1], &s_lateFade[s_nbLateFade][2]) == 3) s_nbLateFade++; }
         else if (!strcmp(key, "drive_in")) {
@@ -14628,7 +14638,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_inCarVar = -1; s_inCarBeta = -1; s_inCarPlaced = 0; s_ballScene = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_nbInCar = 0; s_ballScene = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
@@ -21523,17 +21533,20 @@ static void DarkFrame(void) {
 
 static void BackInCar(void);
 static void InCarFrame(void) {
-    if (s_inCarVar < 0 || s_inCarVar >= MAX_VARS_GAME || ListVarGame[s_inCarVar] != 1) return;
+    const T_RACE_IN_CAR *c = NULL;
+    for (int i = 0; i < s_nbInCar && !c; i++)
+        if (ListVarGame[s_inCar[i].Var] == 1 && (s_inCar[i].Scene < 0 || s_inCar[i].Scene == (int)NumCube)) c = &s_inCar[i];
+    if (!c) return;
     if ((int)NumCube != s_inCarScene || NewCube != -1) { s_inCarScene = (int)NumCube; s_inCarFrames = 0; return; }
     if (CubeMode != CUBE_EXTERIEUR) return;
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     // (at once where he is to be, and kept there: the camera's first look there)
-    if (s_inCarPlaced) { hero->Obj.X = s_inCarX; hero->Obj.Y = s_inCarY; hero->Obj.Z = s_inCarZ; }
-    if (s_inCarBeta >= 0) { hero->Obj.Beta = s_inCarBeta & 4095; ClearRealAngle(hero); }
+    if (c->Placed) { hero->Obj.X = c->X; hero->Obj.Y = c->Y; hero->Obj.Z = c->Z; }
+    if (c->Beta >= 0) { hero->Obj.Beta = c->Beta & 4095; ClearRealAngle(hero); }
     // (a few frames in: the scene's car actor's life has run its init_buggy, the car is the scene's)
     if (++s_inCarFrames < 3 || !NumBuggy) return;
     BackInCar();
-    ListVarGame[s_inCarVar] = 2;
+    ListVarGame[c->Var] = 2;
     Log_Info("[racemod] in_car: Twinsen arrives in his car in scene %d at (%d,%d,%d), turn %d", (int)NumCube, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z, (int)hero->Obj.Beta);
 }
 

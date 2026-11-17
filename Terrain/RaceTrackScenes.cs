@@ -548,6 +548,17 @@ internal static class RaceTrackScenes
                     log.Add($"scene {scene}: actor {actor} (entity {model.Actors[actor].Entity}) has no place in a race: stopped, out of sight");
                     count++;
                 }
+            // (the island's own put somewhere else and kept still: RaceTrackIsland.Parked)
+            foreach (var (from, actor, px, py, pz, beta, body) in options.Island.Parked)
+                if (from == scene && actor < model.Actors.Count)
+                {
+                    var a = model.Actors[actor].Clone();
+                    a.X = px; a.Y = py; a.Z = pz; a.Beta = beta; a.Body = body; a.Move = 0;
+                    a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+                    model.Actors[actor] = a;
+                    log.Add($"scene {scene}: actor {actor} (entity {a.Entity}) parked at ({px},{py},{pz}), turned {beta}, body {body}, its scripts stopped");
+                    count++;
+                }
             // (the place before the doors of a building put back by hand went with it -- RaceTrackReport.Frontages: the actors standing there,
             // the scene's points there and its zones there but its doors (moved with their building) and its cameras -- Otringal's casino's
             // hostess, the passer-by and their ways, the user, 2026-11-15: "There's some NPCs we can move in front of the casino")

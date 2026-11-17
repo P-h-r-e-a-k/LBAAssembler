@@ -480,6 +480,9 @@ internal sealed record RaceTrackIsland(
     // on the road it comes down onto (cube-local x and z) -- Otringal's spaceship on the square island hovers over the road, lands on it a
     // while and rises straight up again, over and over (the user, 2026-10-08).
     public (int Scene, int Actor, int Entity, int X, int Z)[] Shuttles { get; init; } = Array.Empty<(int, int, int, int, int)>();
+    // Actors put somewhere else and kept still (RaceTrackScenes): a scene's actor (the game's index), where it stands (cube-local), the way it
+    // faces and its body (generic), its scripts stopped
+    public (int Scene, int Actor, int X, int Y, int Z, int Beta, int Body)[] Parked { get; init; } = Array.Empty<(int, int, int, int, int, int, int)>();
     public int[] MoreScenes { get; init; } = Array.Empty<int>();
     // Cubes of the island's ground the game has no scene for, that the lap drives over: a scene the build makes for each (IslandScaler
     // .AddCubeScenes), numbered Scene, from a copy of Template (its actors inert stand-ins, cube changes to and from its neighbours) --
@@ -611,7 +614,12 @@ internal sealed record RaceTrackIsland(
         HeldVars = new[] { (83, 4) },
         // (its spaceships: scene 92's actor 2, on its pad on the road along the square island's north side -- its script's own pos_point(1)
         // -- and actor 3, parked on the other pad, beside the road along its east side: the ground-level road runs into it, so it flies too)
-        Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },
+        Shuttles = new[] { (92, 2, 47, 19200, 9472) },
+        // (the other, actor 3, landed for good nearer the control tower, off the road it hung over -- the ship Twinsen arrives in from the
+        // Emerald Moon, the spaceport's spur down beside it: the user, 2026-11-17, "When Twinsen lands in Ortingal let's have him arrive at
+        // the spaceport via the spaceship on the left of this picture. Let's also push this spaceship closer to the control tower so it's not
+        // overhanging the track. Leave the spaceship on the right, this is an intentional track obstacle". Its legs out, as actor 2 rests)
+        Parked = new[] { (92, 3, 28 * 512, 3400, 27 * 512 + 256, 1024, 56) },
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,

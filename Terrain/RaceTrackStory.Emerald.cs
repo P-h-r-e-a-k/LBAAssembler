@@ -617,7 +617,7 @@ void comportement_1()
                 return scripts => { addShip(scripts); addHelper(scripts); };
             });
         if (!b.Store.SceneExists(ShuttleInside)) { b.Log.Add($"the saucer to Otringal left out: no scene {ShuttleInside}"); return; }
-        b.Edit(ShuttleInside, $"aboard the Esmers' saucer once the moon is won: the lift-off, on to Otringal (scene {OtringalStart})", model =>
+        b.Edit(ShuttleInside, $"aboard the Esmers' saucer once the moon is won: the lift-off, on to Otringal's space port (scene {SpaceportScene}, in his car)", model =>
         {
             var helper = RaceTrackScenes.InvisibleHelper(model.Hero.X, model.Hero.Y, model.Hero.Z);
             return IslandBeatsA.Add(model, helper, $@"void comportement_0()
@@ -636,7 +636,8 @@ void comportement_1()
     if (20 < var_cube({SaucerWait}))
     {{
         message({liftLine});
-        change_cube({OtringalStart});
+        set_var_game({OtringalInCar}, 1);
+        change_cube({SpaceportScene});
         set_comportement(comportement_2);
     }}
 }}
@@ -747,7 +748,14 @@ void comportement_1()
     internal static readonly (int X, int Y, int Z, int Beta) PadArrival = (17920, 512, 15872, 2048);
     // the car's track labels, the helper's moment counter (a cell variable; the scene's own scripts use 0-3, the lift-off's 20)
     private const int CarOut = 1, CarDone = 2, ArriveWait = 21;
-    internal static string MoonInCarLine() => $"in_car={MoonInCar} {PadArrival.Beta} {PadArrival.X} {PadArrival.Y} {PadArrival.Z}\n";
+    internal static string MoonInCarLine() => $"in_car={MoonInCar} {PadArrival.Beta} {PadArrival.X} {PadArrival.Y} {PadArrival.Z} 230\n" +
+        $"in_car={OtringalInCar} {SpaceportArrival.Beta} {SpaceportArrival.X} {SpaceportArrival.Y} {SpaceportArrival.Z} {SpaceportScene}\n";
+    // On to Otringal: the Esmers' saucer lands him at the space port (scene 92) in his car, beside the ship parked there (RaceTrackIsland
+    // Otringal's Parked, actor 3, cells 28, 27.5) at the foot of the spur up onto the east leg, facing it -- the user, 2026-11-17: "When
+    // Twinsen lands in Ortingal let's have him arrive at the spaceport via the spaceship on the left of this picture" (OtringalInCar 1 at the
+    // lift-off, 2 once he is in it there)
+    public const int OtringalInCar = 263, SpaceportScene = 92;
+    internal static readonly (int X, int Y, int Z, int Beta) SpaceportArrival = (30 * 512, 3400, 33 * 512, 1024);
 
     private static void MoonArrival(IslandBeatsA b)
     {
