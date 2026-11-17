@@ -23,7 +23,18 @@ internal static partial class CitadelProps
     // (its half length; and its box the scene's way round, the actor turned 1024 against the west wall -- the body's own square box, the
     // average of its length and depth, reached a cell out into the room)
     public const float DressTableHalf = 1700;
-    private static short[]? DressingBox(int generic) => generic == DressingTable ? new short[] { -300, 0, -(short)(DressTableHalf + 20), 300, 1600, (short)(DressTableHalf + 20) } : null;
+    // (and the room's other furniture the same: each one's own footprint, the scene's way round as each stands -- the costume rail along x
+    // (beta 0), the folding screen's panels along z (3072), the lockers along x (0). The bodies' square boxes, as deep as they were long,
+    // took in the performer standing before the rail: the sort drew its upright over her legs -- the user, 2026-11-17, "the latest stripper
+    // is still partly transparent")
+    private static short[]? DressingBox(int generic) => generic switch
+    {
+        DressingTable => new short[] { -300, 0, -(short)(DressTableHalf + 20), 300, 1600, (short)(DressTableHalf + 20) },
+        CostumeRail => new short[] { -690, 0, -220, 690, 1550, 220 },
+        FoldingScreen => new short[] { -200, 0, -800, 200, 1600, 800 },
+        Lockers => new short[] { -820, 0, -250, 820, 1800, 250 },
+        _ => null,
+    };
 
     public static Body BuildDressingTable(byte[] header)
     {

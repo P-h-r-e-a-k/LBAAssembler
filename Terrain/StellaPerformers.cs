@@ -46,7 +46,10 @@ internal static class StellaPerformers
     // (deeper in it than the stage's wooden floor, which the light puts on 27-32 -- at 19-22 she was lit to 23-30, its very colour, and
     // standing on it parts of her vanished into it: the user, 2026-11-16, "The new stripper we've added in is partially transparent". The
     // light climbs up to 9 steps from these, so all at the ramp's start: 16-25, a dark brown clear of the floor -- at 20 she still lit to 28-30)
-    private const int DarkSkin = 16, DarkSkinShade = 16, DarkSkinMid = 16;
+    // (and not the brown ramp at all since 2026-11-17: lit, its start still climbed into the dressing room's and the stage's browns, and
+    // standing on them she looked see-through -- the user, "the latest stripper is STILL partly transparent". The cool cocoa ramp, 224-239,
+    // that no floor of the club's uses: 225 lit up to 234 at most)
+    private const int DarkSkin = 225, DarkSkinShade = 224, DarkSkinMid = 225;
     // (a pole dancer's grip: how high her hand holds the pole, bone 1's pivot -- what she turns and tips about)
     private const float GripHigh = 1500;
 
