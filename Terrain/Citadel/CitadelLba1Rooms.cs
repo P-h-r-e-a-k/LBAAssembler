@@ -113,7 +113,9 @@ internal static partial class CitadelLba1Rooms
 
         // ---- the doorway in the demo's sewers' wall; the lift's shaft in its walkway
         log.Add(Doorway(bkg));
-        log.Add(LiftShaft(bkg));
+        // (the lift's shaft no longer: its plate stands ON the walkway's floor -- the user, 2026-11-17, "The elevator into the sewers by the
+        // quay, when it's going up it reveals a hole in the floor. Let's have the elevator sit on top of the floor with the floor beneath it";
+        // RaceTrackStory.Chapters' DemoSewerArrival a plate's thickness up)
 
         // ---- the rooms
         foreach (var room in Rooms)

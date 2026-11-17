@@ -96,7 +96,9 @@ internal static partial class RaceTrackStory
     // corner by the barrels beside the far halls' lift)
     // (the hatch a cell in front of the quay's railing: behind it, by the water, Twinsen couldn't come to it -- 2026-11-04)
     private static readonly (int X, int Z) DemoPainter = (17664, 15664);
-    private static readonly (int X, int Y, int Z) DemoSewerArrival = (20480, 1536, 15360), DemoDeadEnd = (12800, 3072, 2300);
+    // (DemoSewerArrival: the sewers' lift's plate's top, where the quay's lift lands Twinsen -- the plate ON the walkway's floor (1,536), its
+    // thickness over it: in the floor, the floor taken out under it, it left a hole as it rose -- the user, 2026-11-17)
+    private static readonly (int X, int Y, int Z) DemoSewerArrival = (20480, 1536 + Citadel.CitadelProps.LiftTop, 15360), DemoDeadEnd = (12800, 3072, 2300);
     private const int DemoPainterActor = 7;
     private const int HatchSwitch = 213, LadderSwitch = 214;
     // the sewers' lift back up to the quay (the user, 2026-11-16: "There's currently no elevator in the sewers for Twinsen to go back up
@@ -2129,6 +2131,9 @@ void comportement_2()
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = DoorFront, X0 = 13250, X1 = 13439, Z0 = 10350, Z1 = 10771, Y0 = top.Y - 200, Y1 = top.Y + 1200, Info = new int[8] });
             var scope = RaceTrackScenes.InvisibleHelper(Citadel.CitadelLighthouse.ScopeX, Citadel.CitadelLighthouse.ScopeY + 900, Citadel.CitadelLighthouse.ScopeZ, 9);
             var index = model.Actors.Count;
+            // (no way out by Action at the top: only by walking into the lamp room's door, the LampDoor rule -- the user, 2026-11-17, "the exit
+            // should only react if Twinsen walks into the door, and not with action. It's causing him to go through the door sometimes instead
+            // of using the telescope": Action in front of the door, or at the top facing away from the telescope, took him out)
             var life = p.Add(model, scope, $@"void comportement_0()
 {{
     if (2 == var_game({ScopeVar}))
@@ -2175,10 +2180,6 @@ void comportement_1()
                 set_dir_obj(0, NO_MOVE);
                 set_track_obj(0, label_{Up});
                 set_comportement(comportement_2);
-            }}
-            else if ((0 == var_cube({Once5}) || {ZoeAsksAfter} < var_cube({ZoeWaits})) && ({LampDoor} == zone_obj(0) || ({DoorFront} == zone_obj(0) && (2151 > beta_obj(0) || 3583 < beta_obj(0)))))
-            {{
-                set_comportement(comportement_3);
             }}
             else if ({DoorFront} == zone_obj(0))
             {{
@@ -2235,10 +2236,6 @@ void comportement_1()
                             message_obj(0, {NoKashes});
                         }}
                     }}
-                }}
-                else
-                {{
-                    set_comportement(comportement_3);
                 }}
             }}
         }}
