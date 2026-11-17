@@ -263,7 +263,7 @@ void comportement_1()
             Math.Clamp(RaceTrackScenes.CubeLocal(at.Z, model.CubeY), 0, IslandFile.CubeSize - 1), colour);
 
     // A talker at the flag marshal's place by a track's start line (Chapters.cs Marshal, for any island)
-    private static void MarshalA(IslandBeatsA b, RaceTrackReport track, string when, string talk, string who)
+    private static void MarshalA(IslandBeatsA b, RaceTrackReport track, string when, string talk, string who, string extra = "")
     {
         if (track.Marshal is not { Length: >= 10 } m) { b.Log.Add($"{who} at the start line left out: no flag marshal there"); return; }
         double x = m[6] / 512.0, z = m[7] / 512.0;
@@ -273,7 +273,7 @@ void comportement_1()
         b.Edit(scene, $"{who}, the marshal, talks at the start line (cell {x:0.#}, {z:0.#})", model =>
         {
             var marshal = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(Math.Max(y, m[8])), RaceTrackScenes.CubeLocal(z, model.CubeY), 9);
-            return IslandBeatsA.Add(model, marshal, Talker(when, talk, 1800));
+            return IslandBeatsA.Add(model, marshal, Talker(when, talk, 1800, extra));
         });
     }
 
@@ -318,6 +318,8 @@ void comportement_1()
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
     public const int TrophyShown = 260;
+    // (how near her plinth -- in his car at the line, or on foot -- Flick sees the trophy)
+    private const int TrophySeen = 3000;
     private static readonly string[][] DesertLines =
     {
         new[]
@@ -963,7 +965,16 @@ void comportement_1()
             {{
                 message({Say(DesertLine.FlickHelmet)});
                 set_holo_pos({PearlCave});
-            }}", "Flick");
+            }}", "Flick",
+            // (and the trophy seen as Twinsen comes up to her, in his car or on foot: talked to, she only answers him on foot, and driving up to
+            // the line her gate turned him back with "show me your trophy" and nothing more -- the user, 2026-11-17, "Flick on the start line
+            // on Desert island says to show her our winners trophy but doesn't seem to react to it")
+            $@"    if (0 == var_game({TrophyShown}) && {ErrandTrophy} == var_game({ErrandSlot}) && {TrophySeen} > distance(0))
+    {{
+        message({Say(DesertLine.FlickTrophy)});
+        set_var_game({TrophyShown}, 1);
+    }}
+");
 
         // the three pages' places on the road, at 30, 55 and 80 % of the lap (each found driving over it or walking to it, in lap order),
         // and the pages as Twinsen carries them: the item and the arrows (PagesInstall)

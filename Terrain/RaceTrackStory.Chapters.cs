@@ -2390,6 +2390,19 @@ void comportement_2()
 }}
 ");
             var w = model.Actors.Count - 1;
+            // (her clover in the weather she's put aside in: Twinsen's hop behind her is counted in the game's zone 11, behind her own place
+            // -- in CITABAU the town circuit's road, where she isn't. A zone of its own as far behind her other place, counted in that
+            // weather only, and zone 11 in the other only -- the user, 2026-11-17, "The cow's script to give a clover bonus seems to be broken
+            // in citabau.ile")
+            const int GameCowZone = 11;
+            var asideZone = -1;
+            if (aside is not null && model.Zones.FirstOrDefault(zn => zn.Type == 2 && zn.Num == GameCowZone) is { } cowZone)
+            {
+                asideZone = Enumerable.Range(GameCowZone + 20, 200).First(n => model.Zones.All(zn => zn.Type != 2 || zn.Num != n));
+                int dx = int.Parse(aside[3]) - rosa.X, dy = int.Parse(aside[4]) - rosa.Y, dz = int.Parse(aside[5]) - rosa.Z;
+                // (its height: her place's ground falls away behind her there -- Twinsen stood 200 under zone 11's height moved with her)
+                model.Zones.Add(new SceneZoneModel { Type = 2, Num = asideZone, X0 = cowZone.X0 + dx, X1 = cowZone.X1 + dx, Y0 = cowZone.Y0 + dy - 1200, Y1 = cowZone.Y1 + dy, Z0 = cowZone.Z0 + dz, Z1 = cowZone.Z1 + dz, Info = new int[8] });
+            }
             return scripts =>
             {
                 life(scripts);
@@ -2414,6 +2427,9 @@ label({Watched});
 stop();
 ");
                 var hero = scripts.GetText(0, ScriptKind.Life);
+                if (asideZone >= 0)
+                    hero = Loose(hero, $"{GameCowZone} == zone() && 2500 < beta()",
+                        $"({GameCowZone} == zone() && {1 - asideWeather} == var_game({WeatherVar}) || {asideZone} == zone() && {asideWeather} == var_game({WeatherVar})) && 2500 < beta()");
                 hero = Loose(hero, "if (6 == var_game(83))", $@"if (1 == var_game({ScopeVar}))
     {{
         invisible(1);
