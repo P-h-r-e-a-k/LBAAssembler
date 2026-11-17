@@ -2642,6 +2642,9 @@ typedef struct {
     double EyeBack; int EyeSide;           // the rail camera: how far behind the car its eye is on the grid (0: as usual), the side it swerves to
     double EyeAcross;                      // ... and how far across from her middle (MarshalEyeAcross: clear of the gantry's posts)
     S32 EyeFrom;                           // ... and since when it eases back to the usual (0: not yet)
+    int HasFlags, GreenBody, CheckBody;    // marshal_flags=: her body with the green flag alone, with the chequered alone (generic numbers) ...
+    S32 GreenIndex, CheckIndex;            // ... their BODY.HQR entries, and the one she is drawn with
+    int ShownFlag;                         // 0 the body with both, 1 the green, 2 the chequered
 } T_RACE_MARSHAL;
 static T_RACE_MARSHAL s_marshal;
 // (Zoe in the pit box: pit_crew=, PitCrew)
@@ -4967,6 +4970,11 @@ static void Load(const char *path, int carOnly = 0) {
                 m->CX = m->X; m->CZ = m->Z; m->CY = m->Y; m->CBeta = m->Beta; m->Where = MARSHAL_AT_PLINTH;
                 m->On = 1;
             }
+        }
+        else if (!strcmp(key, "marshal_flags")) {
+            // (after marshal=: one flag in her hand at a time -- the green from the start, the chequered from the finish)
+            int g, c;
+            if (sscanf(v, "%d %d", &g, &c) == 2 && g >= 0 && c >= 0) { s_marshal.GreenBody = g; s_marshal.CheckBody = c; s_marshal.HasFlags = 1; }
         }
         else if (!strcmp(key, "marshal_plinth")) {
             // (after marshal=, which starts her afresh)
@@ -9186,7 +9194,13 @@ static void DrawMarshal(void) {
             m->On = 0;
             return;
         }
-        ObjectReady(o, m->BodyIndex);
+        if (m->HasFlags && ((m->GreenIndex = EntityEntry(m->Entity, F_BODY, m->GreenBody)) < 0 || !GivePtrBody(m->GreenIndex) ||
+                            (m->CheckIndex = EntityEntry(m->Entity, F_BODY, m->CheckBody)) < 0 || !GivePtrBody(m->CheckIndex))) {
+            Log_Info("[racemod] the flag marshal: entity %d has no body %d or %d (one flag in hand) -- both flags in her hands", m->Entity, m->GreenBody, m->CheckBody);
+            m->HasFlags = 0;
+        }
+        m->ShownFlag = m->HasFlags ? 1 : 0;
+        ObjectReady(o, m->HasFlags ? m->GreenIndex : m->BodyIndex);
         o->X = x; o->Y = y; o->Z = z; o->Beta = m->CBeta;
         o->Anim.Num = -1;
         ObjectInitAnim(o, (void *)(uintptr_t)(U32)m->Index[MARSHAL_READY]);
@@ -9195,6 +9209,12 @@ static void DrawMarshal(void) {
         m->Ready = 1;
         Log_Info("[racemod] the flag marshal: body %d (BODY.HQR), animations %d %d %d %d (ANIM.HQR), her plinth at (%.0f,%.0f,%.0f), turned %d", (int)m->BodyIndex,
                  (int)m->Index[0], (int)m->Index[1], (int)m->Index[2], (int)m->Index[3], m->X, m->Y, m->Z, (int)m->Beta);
+    }
+    // (one flag in hand: the green -- ready, the start, a qualifying lap's -- until the finish, the chequered from the first car's last-lap
+    // wave on, till the race is over)
+    if (m->HasFlags) {
+        const int flag = (m->Want == MARSHAL_WAVE || m->Finishers > 0) ? 2 : 1;
+        if (flag != m->ShownFlag) { ObjectInitBody(o, (void *)(uintptr_t)(U32)(flag == 2 ? m->CheckIndex : m->GreenIndex)); m->ShownFlag = flag; }
     }
     if (m->Want != m->Shown) { ObjectInitAnim(o, (void *)(uintptr_t)(U32)m->Index[m->Want]); m->Shown = m->Want; }
     o->X = x; o->Y = y; o->Z = z;
@@ -10293,7 +10313,9 @@ static S32 RaceCameraEye(S32 *eye, S32 *target) {
     if (ArcCamera(eye, target)) { FollowCamEyeWho = "arc"; return TRUE; }
     if (JumpCamera(eye, target)) { FollowCamEyeWho = "jump"; return TRUE; }
     if (LoopCamera(eye, target)) { FollowCamEyeWho = "loop"; return TRUE; }
-    if (TunnelCamera(eye, target)) { FollowCamEyeWho = "tunnel"; s_viewTunnel = 1; return TRUE; }
+    // (the tunnel's camera close behind the car: the near plane pulled in as the inside view's is, or the back of Twinsen's helmet, nearer
+    // the eye than the exterior's near plane, was cut away)
+    if (TunnelCamera(eye, target)) { FollowCamEyeWho = "tunnel"; s_viewTunnel = 1; InsideNear(1); return TRUE; }
     if (WheelCamera(eye, target)) { FollowCamEyeWho = "wheel"; return TRUE; }
     if (OpenCamera(eye, target)) { FollowCamEyeWho = "open"; return TRUE; }
     return RailCamera(eye, target);

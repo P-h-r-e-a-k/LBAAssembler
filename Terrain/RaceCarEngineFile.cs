@@ -165,7 +165,12 @@ internal static class RaceCarEngineFile
         {
             text.Append($"marshal={string.Join(' ', marshal.Take(10))}\n");
             if (marshal.Length >= 11 && marshal[10] >= 0) text.Append($"marshal_plinth={marshal[10]}\n");
-            if (marshal.Length >= 15) text.Append($"marshal_start={string.Join(' ', marshal.Skip(11).Take(4))}\n");
+            // (one flag in hand at a time: the green till the finish, then the chequered -- Temple.TempleMarshal.GreenOnly, CheckOnly)
+            text.Append($"marshal_flags={marshal[1] + Temple.TempleMarshal.GreenOnly} {marshal[1] + Temple.TempleMarshal.CheckOnly}\n");
+            // (not on the Emerald Moon: there she stays off the road for the whole race, the user, 2026-11-17: "we also need the race marshall
+            // totally off the track for the duration of the race")
+            var offRoad = info is not null && RaceTrackIsland.ByName(info.Island) == RaceTrackIsland.Emerald;
+            if (marshal.Length >= 15 && !offRoad) text.Append($"marshal_start={string.Join(' ', marshal.Skip(11).Take(4))}\n");
         }
         // Zoe in the pit box by the start line, in the story's races from chapter 2 (RaceTrackPitCrew): a pit stop under 20 km/h beside her
         if (story && track?.PitCrew is { Length: >= 8 } pit && RaceTrackPitCrew.InStory(info?.Island, track.Dream is not null))
@@ -210,9 +215,11 @@ internal static class RaceCarEngineFile
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
         if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying && track.Dream is null ? 1 : 0)}\n");
         // (Citadel 2 -- the town circuit -- and the Desert: a qualifying lap before every race, the race game's "skip qualifying" or not --
-        // the user, 2026-11-06; RACEMOD.CPP qualifying_always=)
+        // the user, 2026-11-06; RACEMOD.CPP qualifying_always=. And the Emerald Moon and Otringal, the user, 2026-11-17: "We need to force a
+        // qualifying lap on Emerald moon", "We need to force a qualifying lap on Otringal also")
         if (track?.Grid is { Count: > 0 } && track.Dream is null && info is not null && RaceTrackIsland.ByName(info.Island) is var qualIsland
-            && (qualIsland == RaceTrackIsland.Desert || (qualIsland == RaceTrackIsland.Citadel && ReferenceEquals(track, info.Twin))))
+            && (qualIsland == RaceTrackIsland.Desert || qualIsland == RaceTrackIsland.Emerald || qualIsland == RaceTrackIsland.Otringal
+                || (qualIsland == RaceTrackIsland.Citadel && ReferenceEquals(track, info.Twin))))
             text.Append("qualifying_always=1\n");
         // a dreamt sprint (Polar Island's): start line to finish line once, its intro, and a win's waking up (a loss runs it again)
         if (track?.Dream is { } dream)

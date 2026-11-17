@@ -1298,6 +1298,17 @@ void comportement_1()
         // (the sweep of 2026-11-05: "My radio works then" whether it was or not)
         // (and at the racers' garage before the race is won -- never in both: RaceTrackStory.Garage.cs)
         DesertGarage(gameDirectory, b, report, Say, desert, Copy(b.Originals, BaldinoHouse, BaldinoActor), scenes.StartScene, log);
+        // (the memory viewer -- item 24, the game's in Baldino's house for the taking (its actor 4), walked into or taken by Action -- out of the
+        // house: the user, 2026-11-17, "Twinsen gets given the memory viewer which is an optional object and can be purchased by him on
+        // otringal, so we don't need it given to him". The souvenir shop on Otringal, scene 147, still sells it for 30 zlitos)
+        b.Edit(BaldinoHouse, "the memory viewer not lying in Baldino's house: only the Otringal souvenir shop's, bought", _ => scripts =>
+        {
+            var hero = scripts.GetText(0, ScriptKind.Life);
+            hero = Loose(hero, "if (4 == col_obj(0))\n{\nkill_obj(4);\nset_var_game(24, 1);\nfound_object(24);\n}", "");
+            hero = Loose(hero, "else if (800 > distance_message(4))\n{\nkill_obj(4);\nset_var_game(24, 1);\nfound_object(24);\n}", "");
+            hero = Loose(hero, "set_comportement(comportement_1);", "kill_obj(4);\nset_comportement(comportement_1);");
+            scripts.SetText(0, ScriptKind.Life, hero);
+        });
         if (Copy(b.Originals, BaldinoHouse, BaldinoActor) is { } baldino)
         {
             b.Hide(BaldinoHouse, BaldinoActor, desert, "Baldino");
