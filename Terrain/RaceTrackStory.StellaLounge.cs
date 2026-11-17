@@ -52,7 +52,8 @@ internal static partial class RaceTrackStory
     private const int PrivateSwitch = 8;
     // (the hostesses' home just before the bar's near end, BarFrom: by the catwalk's foot the bar is there now; walking round with the angle
     // going down, they reach every booth without passing it. And the way back from the private room in front of the booths, PrivateBack)
-    private const float LoungePath = 13.3f, HostHomeAngle = 190, GroboHomeAngle = 178, HostHomeCells = 15.5f, FrontCells = 15.9f;
+    // (the walkers' circle: between the tables' edge, 11.5 out and 1.5 across, and the bar stools at 14.2 -- 13.3 brushed the tables)
+    private const float LoungePath = 13.6f, HostHomeAngle = 190, GroboHomeAngle = 178, HostHomeCells = 15.5f, FrontCells = 15.9f;
     internal const float PrivateBack = 140;
 
     private static void StellaLounge(IslandBeatsA b, Func<MoonLine, int> say)
@@ -123,7 +124,9 @@ internal static partial class RaceTrackStory
             var (groboIndex, groboTrack) = Hostess(GroboHomeAngle, StellaStaff.GroboHost, StellaStaff.GroboStand, StellaStaff.GroboWalk);
             // two waitresses, back and forth round the hall between the booths and the bar
             var waits = new List<(int Index, string Track)>();
-            foreach (var (from, to) in new[] { (245f, 175f), (95f, -35f) })
+            // (the first one's round clear of the bar, 200-260 since it moved there: from 245 she walked into its stools and stuck at its
+            // end -- the user, 2026-11-17, "This waitress is getting stuck on the bar, we should check our actors scripts to prevent this")
+            foreach (var (from, to) in new[] { (195f, 130f), (95f, -35f) })
             {
                 var w = stewardess.Clone();
                 var (wx, wz) = StellaEntities.At(from, LoungePath);
