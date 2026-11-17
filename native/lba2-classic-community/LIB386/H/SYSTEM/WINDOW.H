@@ -10,6 +10,8 @@ extern "C" {
 
 // --- Public state ------------------------------------------------------------
 extern bool AppActive; ///< Application running and in focus status
+/// Called as the window is closed (its close button, Alt+F4), before the program exits: the game marks it a clean end
+extern void (*Window_QuitHook)(void);
 
 // --- Initialization ----------------------------------------------------------
 bool InitWindow(const char *title);

@@ -9,6 +9,7 @@ extern "C" {
 
 // --- Public state ------------------------------------------------------------
 bool AppActive = false;
+void (*Window_QuitHook)(void) = NULL;
 
 // --- Initialization ----------------------------------------------------------
 bool InitWindow(const char *title) { return g_platform.window.init(title); }
@@ -71,6 +72,8 @@ void HandleEventsWindow(const PlatformEvent *event) {
         AppFocusAudio_OnChange(false);
         break;
     case PLATFORM_EVENT_QUIT:
+        // (the player closed the window: a clean end, not a crash -- the game's hook says so before the exit handlers run)
+        if (Window_QuitHook) Window_QuitHook();
         exit(0); // TODO: Implement graceful exit
         break;
     default:

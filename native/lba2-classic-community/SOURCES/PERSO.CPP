@@ -2657,6 +2657,9 @@ int Lba2Main(int argc, char *argv[]) {
 
     atexit(TheEndInfo);
     register_crash_state();
+    // (the window closed by the player -- its close button, Alt+F4 -- ends the program cleanly, as Quit does: it left End_Num unset, so the
+    // exit handlers took it for a crash and LBRA's updater sent a crash report the next time the game started -- the user, 2026-11-17)
+    Window_QuitHook = [] { InitTheEnd(PROGRAM_OK, (char *)""); };
 
     BootExit_NoteContext(""); /* past the cfg: a later failure names itself */
 
