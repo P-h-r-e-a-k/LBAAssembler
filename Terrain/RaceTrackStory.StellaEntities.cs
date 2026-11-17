@@ -330,7 +330,7 @@ stop();
             CatwalkBouncer(model, bouncer, say(MoonLine.ClubStaffOnly), adds);
             // (the guard beside the office's door, not in front of it: the door lets Twinsen in -- the user, 2026-11-13, "Did we add in an
             // office area?")
-            Place(guard, StellaEntities.At(Citadel.CitadelProps.OfficeAt - 7, 17.3f), say(MoonLine.ClubNoBoss), 1300);
+            Place(guard, StellaEntities.At(Citadel.CitadelProps.OfficeAt + 6, 16.8f), say(MoonLine.ClubNoBoss), 1300);   // (on the bar's side: the private rooms' doorway on the other, since 2026-11-17)
             // the office's door and the backstage door (the catwalk's end, the stage's height): walked into, into the rooms (StellaRooms) --
             // each zone's corner to the room's place just inside its own door, Twinsen as far into it as into the zone (the engine keeps
             // where in a door's zone he is)

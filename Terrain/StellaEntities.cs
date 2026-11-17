@@ -588,16 +588,22 @@ void comportement_3()
     // past -- every one between two of the rooms, and the outer south and east sides -- low.
     public static int WingGrid = -1;
     // (cells) the corridor; the side rooms' columns and their rows (each room's z from, to); the room at the end
-    public const int WingCorrX0 = 30, WingCorrX1 = 33, WingCorrZ0 = 21, WingCorrZ1 = 46;
-    public const int WingWestX0 = 24, WingWestX1 = 28, WingEastX0 = 35, WingEastX1 = 39;
+    // (since 2026-11-17 smaller: the corridor no further than its last booth, the booths along its west side only, four cells deep -- the
+    // user, "It doesn't need to be as big as it is currently. Some smaller booths, perhaps just one side, with curtains drawn that we can't
+    // see into. On testing it, the walk all the way to the end room takes far too long". The east rooms and the room at the end gone)
+    public const int WingCorrX0 = 30, WingCorrX1 = 33, WingCorrZ0 = 28, WingCorrZ1 = 46;
+    public const int WingWestX0 = 25, WingWestX1 = 28, WingEastX0 = 35, WingEastX1 = 39;
     public static readonly (int Z0, int Z1)[] WingRooms = { (40, 44), (34, 38), (28, 32) };
     public const int WingEndX0 = 28, WingEndX1 = 35, WingEndZ0 = 14, WingEndZ1 = 20;
     private static bool WingFloor(int x, int z) =>
         (x >= WingCorrX0 && x <= WingCorrX1 && z >= WingCorrZ0 && z <= WingCorrZ1) ||
-        (x >= WingEndX0 && x <= WingEndX1 && z >= WingEndZ0 && z <= WingEndZ1) ||
-        WingRooms.Any(r => z >= r.Z0 && z <= r.Z1 && ((x >= WingWestX0 && x <= WingWestX1) || (x >= WingEastX0 && x <= WingEastX1))) ||
-        // (each side room's way in from the corridor: the wall's cell between, its middle three rows open)
-        WingRooms.Any(r => z >= r.Z0 + 1 && z <= r.Z1 - 1 && (x == WingWestX1 + 1 || x == WingEastX0 - 1));
+        WingRooms.Any(r => z >= r.Z0 && z <= r.Z1 && x >= WingWestX0 && x <= WingWestX1) ||
+        // (each booth's way in from the corridor: the wall's cell between, its middle three rows open)
+        WingRooms.Any(r => z >= r.Z0 + 1 && z <= r.Z1 - 1 && x == WingWestX1 + 1);
+    // (the booths' block, walls and all: from the wall west of them to the corridor's west wall, the wall north of the last to the one south
+    // of the first)
+    private static bool BoothBlock(int x, int z) =>
+        x >= WingWestX0 - 1 && x <= WingWestX1 + 1 && z >= WingRooms.Min(r => r.Z0) - 1 && z <= WingRooms.Max(r => r.Z1) + 1;
 
     private static int BuildWing(byte[] cells, byte[] raw, Dictionary<int, int> night, HqrFile bkg, ref MapBricks.BkgHeader header, List<string> log)
     {
@@ -621,6 +627,19 @@ void comportement_3()
         for (var x = 0; x < Size; x++)
         {
             if (F(x, z)) { Put(x, FloorLayer, z, Tile, Mod(x - 1, 3) + 3 * Mod(z - 1, 3)); floors++; continue; }
+            // (the booths' walls all full height -- between them, along the corridor either side of each one's curtain, round their backs:
+            // the camera, looking in from the south-east, sees the curtains and nothing behind them -- the user, 2026-11-17, "with curtains
+            // drawn that we can't see into". Facing the corridor, the west wall's blocks; facing a booth to the south, the north wall's)
+            if (BoothBlock(x, z) && (F(x + 1, z) || F(x, z + 1) || F(x - 1, z) || F(x, z - 1) || F(x + 1, z + 1) || F(x - 1, z - 1) || F(x + 1, z - 1) || F(x - 1, z + 1)))
+            {
+                // (every one of them Rick's west wall's, the walls running east-west too: his north wall's columns are half as high -- seven
+                // layers to thirteen -- and over the one south of the first booth the camera saw its chair and its dancer. Only that wall's
+                // first and third columns of four, z 36 and 38 of his bar: the second carries his ladder, a teal block on its top)
+                var lower = Mod(x + z, 2) == 0 ? 0 : 2;
+                Column(x, z, y => (West.X, West.Z + (y >= WestUpper ? Mod(x + z, 3) : lower)));
+                tall++;
+                continue;
+            }
             bool south = F(x, z + 1), east = F(x + 1, z), north = F(x, z - 1), west = F(x - 1, z);
             bool diagBack = F(x + 1, z + 1), diagOther = F(x - 1, z - 1) || F(x + 1, z - 1) || F(x - 1, z + 1);
             // (tall only with nothing to walk on north or west of it, nor on those diagonals: a wall the camera looks past to a floor behind it
@@ -656,7 +675,7 @@ void comportement_3()
         if (header.MaxBrickCube < (uint)((usedBricks + 1) * 4 + bytes)) header.MaxBrickCube = (uint)((usedBricks + 1) * 4 + bytes);
         if (header.MaxMaskCube < (uint)((usedBricks + 1) * 4 + bytes + usedBricks * 64)) header.MaxMaskCube = (uint)((usedBricks + 1) * 4 + bytes + usedBricks * 64);
         bkg.SetStored(0, header.Bytes);
-        log.Add($"Stella Entities' back rooms: grid {gridNumber} -- a corridor (cells x {WingCorrX0}-{WingCorrX1}, z {WingCorrZ0}-{WingCorrZ1}), {WingRooms.Length * 2} rooms off it, the private room at its end; {floors} floor cells, {tall} of tall wall, {low} of low");
+        log.Add($"Stella Entities' back rooms: grid {gridNumber} -- a corridor (cells x {WingCorrX0}-{WingCorrX1}, z {WingCorrZ0}-{WingCorrZ1}), {WingRooms.Length} booths along its west side; {floors} floor cells, {tall} of tall wall, {low} of low");
         return gridNumber;
     }
 

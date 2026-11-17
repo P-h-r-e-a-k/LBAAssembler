@@ -540,7 +540,10 @@ internal static partial class CitadelProps
     // (the name's board a body of its own, 119, drawn before it: in one body the renderer's polygon sort put pieces of the board over
     // letters -- STELLA's E lost its bars)
     public const int ClubFront = 118, ClubBoard = 119;
-    public const float BackstageAt = 270, OfficeAt = 304;
+    // (the private rooms' doorway left of the bar, as the camera sees it, and the office's door right beside it, between it and the bar --
+    // the user, 2026-11-17: "Let's have the entrance to the private show area to the left of the bar here guarded by a bouncer" + "Let's have
+    // the bosses office door immediately to the right of the private show area"; the office's was at 304, across the hall)
+    public const float BackstageAt = 270, OfficeAt = 187, PrivateAt = 177;
     private const int ClubNeon = 79, ClubBoardColour = 49, ClubDoorway = 49, ClubTeal = 150;
     private const string ClubName = "STELLA ENTITIES";
     // a 5 x 7 letter's rows, top first ('#' lit)
@@ -608,6 +611,17 @@ internal static partial class CitadelProps
             Patch(BackstageAt + half - (k + 1) * curtain / 3, BackstageAt + half - k * curtain / 3, StageHigh, DoorTop, 30 + 25 * (k % 2), ClubVelvet + (k % 2));
         }
         var rim = 70 * 180 / (MathF.PI * ClubWallRadius);
+        // the private rooms' doorway: the same, narrower and from the floor -- a dark way in, red curtains drawn back, a brass frame
+        var priv = 420 * 180 / (MathF.PI * ClubWallRadius);
+        Patch(PrivateAt - priv, PrivateAt + priv, 0, DoorTop, 20, ClubDoorway, true);
+        for (var k = 0; k < 3; k++)
+        {
+            Patch(PrivateAt - priv + k * curtain / 3, PrivateAt - priv + (k + 1) * curtain / 3, 0, DoorTop, 30 + 25 * (k % 2), ClubVelvet + (k % 2));
+            Patch(PrivateAt + priv - (k + 1) * curtain / 3, PrivateAt + priv - k * curtain / 3, 0, DoorTop, 30 + 25 * (k % 2), ClubVelvet + (k % 2));
+        }
+        Patch(PrivateAt - priv - rim, PrivateAt + priv + rim, DoorTop, DoorTop + 90, 25, ClubBrass);
+        Patch(PrivateAt - priv - rim, PrivateAt - priv, 0, DoorTop, 25, ClubBrass);
+        Patch(PrivateAt + priv, PrivateAt + priv + rim, 0, DoorTop, 25, ClubBrass);
         Patch(BackstageAt - half - rim, BackstageAt + half + rim, DoorTop, DoorTop + 90, 25, ClubBrass);
         Patch(BackstageAt - half - rim, BackstageAt - half, StageHigh, DoorTop, 25, ClubBrass);
         Patch(BackstageAt + half, BackstageAt + half + rim, StageHigh, DoorTop, 25, ClubBrass);

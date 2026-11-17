@@ -35,6 +35,19 @@ internal static class StellaRooms
     public const int SofaX = 16384, SofaZ = 7680, ShowZ = 9216, EntryZ = 23040;
     // (where Twinsen comes in from the club, either room: just inside the door of Rick's office's that leads out, x 5120-6144 at z 9216)
     public const int InsideX = 5632, InsideY = 256, InsideZ = 8500;
+    // (the booths since 2026-11-17, StellaEntities.WingRooms: the chair half a cell off the back wall, the curtain across the way in, the
+    // middle of its cell x 29 -- the booth's mouth; she dances three cells before the chair, as far as she did in the old end room, he sits
+    // facing her, east)
+    public const int BoothChairX = StellaEntities.WingWestX0 * 512 + 256, BoothDrapeX = (StellaEntities.WingWestX1 + 1) * 512 + 256, BoothShowX = BoothChairX + 1536;
+    public static int BoothMid(int z0, int z1) => (z0 + z1 + 1) * 256;
+    // (a scene actor's body: the props past 127 kept as the engine reads them back, a signed byte -- CitadelProps.Actor)
+    public static int BodyOf(int generic) => generic > 127 ? (sbyte)generic : generic;
+    // the booth's curtain among the private room's actors: the one across booth k's mouth
+    public static int BoothDrapeIndex(SceneModel model, int k)
+    {
+        var (z0, z1) = StellaEntities.WingRooms[k];
+        return model.Actors.FindIndex(a => a.Body == BodyOf(Citadel.CitadelProps.BoothDrape) && a.Z == BoothMid(z0, z1));
+    }
     private const int DoorwayZ = 9216;   // (Rick's doorway: his door's sprite stands past it, in the door zone)
     private const int Prop = Citadel.CitadelProps.Chair;
     // Rick's walls: the west wall's block (its pattern: z mod 5 -- z 12 its positions 35-39 up from layer 6, z 13 its 5-9) and the vent in it
@@ -141,35 +154,20 @@ internal static class StellaRooms
                     Z0 = StellaEntities.WingCorrZ1 * 512, Z1 = (StellaEntities.WingCorrZ1 + 1) * 512 - 1, Y0 = 0, Y1 = 2000,
                     Info = new[] { privX - 512, StellaEntities.FloorY, privZ - 256, 0, 0, 0, 1, 1 } });
                 (model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z, model.Actors[0].Beta) = (SofaX, 256, EntryZ, 2048);
-                // the chair, in the room at the end, facing down the room (south) where she dances
-                var chair = Citadel.CitadelProps.Actor(Prop, SofaX, 256, SofaZ, 0);
-                chair.Armor = RaceTrackStory.WalkOverArmour;
-                SceneOps.AddActor(model, chair);
-                // the curtains: either side of the end room's way in (z 21), and of each side room's
-                var curtains = new List<(int Generic, int X, int Z, int Beta)>
-                {
-                    (Citadel.CitadelProps.CurtainLeft, StellaEntities.WingCorrX0 * 512 + 100, (StellaEntities.WingEndZ1 + 1) * 512, 0),
-                    (Citadel.CitadelProps.CurtainRight, (StellaEntities.WingCorrX1 + 1) * 512 - 100, (StellaEntities.WingEndZ1 + 1) * 512, 0),
-                };
+                // the booths, all on the corridor's west side (the user, 2026-11-17: "Some smaller booths, perhaps just one side, with curtains
+                // drawn that we can't see into" + "a small waste paper bin that's overflowing with tissue to each booth"): in each a chair against
+                // its back wall facing out (east), a tissue bin in its corner, and its curtain drawn across its way in -- the one Twinsen is
+                // led into drawn back by the private show's script (RaceTrackStory.StellaLounge, BoothDrapeIndex)
                 foreach (var (z0, z1) in StellaEntities.WingRooms)
                 {
-                    curtains.Add((Citadel.CitadelProps.CurtainLeft, (StellaEntities.WingWestX1 + 1) * 512 + 256, (z0 + 1) * 512 + 100, 1024));
-                    curtains.Add((Citadel.CitadelProps.CurtainRight, (StellaEntities.WingWestX1 + 1) * 512 + 256, z1 * 512 - 100, 1024));
-                    curtains.Add((Citadel.CitadelProps.CurtainLeft, StellaEntities.WingEastX0 * 512 - 256, z1 * 512 - 100, 3072));
-                    curtains.Add((Citadel.CitadelProps.CurtainRight, StellaEntities.WingEastX0 * 512 - 256, (z0 + 1) * 512 + 100, 3072));
-                }
-                foreach (var (generic, x, z, beta) in curtains)
-                {
-                    var c = Citadel.CitadelProps.Actor(generic, x, 256, z, beta);
-                    c.Armor = RaceTrackStory.WalkOverArmour;
-                    SceneOps.AddActor(model, c);
-                }
-                // the other rooms: a chair in each, facing in from its back wall
-                foreach (var (z0, z1) in StellaEntities.WingRooms)
-                {
-                    var mid = (z0 + z1 + 1) * 256;
-                    SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Prop, (StellaEntities.WingWestX0 + 1) * 512, 256, mid, 1024));
-                    SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Prop, StellaEntities.WingEastX1 * 512, 256, mid, 3072));
+                    var mid = BoothMid(z0, z1);
+                    var chair = Citadel.CitadelProps.Actor(Prop, BoothChairX, 256, mid, 1024);
+                    chair.Armor = RaceTrackStory.WalkOverArmour;
+                    SceneOps.AddActor(model, chair);
+                    SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.TissueBin, StellaEntities.WingWestX0 * 512 + 230, 256, z0 * 512 + 230, 0));
+                    var drape = Citadel.CitadelProps.Actor(Citadel.CitadelProps.BoothDrape, BoothDrapeX, 256, mid, 1024);
+                    drape.Armor = RaceTrackStory.WalkOverArmour;
+                    SceneOps.AddActor(model, drape);
                 }
             }
             else if (number == Private)

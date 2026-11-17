@@ -91,6 +91,8 @@ internal static partial class RaceTrackStory
         DressMirror, DressRail, DressScreen,
         // (HAL mended while Twinsen waits, his radio brought back -- the user, 2026-11-17)
         MechanicMended,
+        // (the private rooms' bouncer, to Twinsen without a dancer -- RaceTrackStory.StellaLounge, 2026-11-17)
+        ClubPrivateOnly,
     }
     private static readonly string[][] MoonLines =
     {
@@ -590,6 +592,15 @@ internal static partial class RaceTrackStory
             "¡Listo! HAL vuelve a funcionar. Y aquí tienes tu radio, como nueva: gracias por prestárnosla. Ve a hablar con él.",
             "Ecco fatto! HAL è di nuovo in funzione. Ed ecco la tua radio, come nuova -- grazie del prestito. Vai a parlargli.",
             "Pronto! O HAL voltou a funcionar. E aqui está o teu rádio, como novo -- obrigado pelo empréstimo. Vai falar com ele.",
+        },
+        new[]
+        {
+            "Private shows only through here, pal. Pay one of the girls and she'll bring you in.",
+            "Par ici, c'est réservé aux spectacles privés, mon gars. Paie une des filles et elle t'emmènera.",
+            "Hier geht's nur zu den Privatshows, Kumpel. Bezahl eins der Mädchen, dann bringt sie dich rein.",
+            "Por aquí solo se pasa a los espectáculos privados, amigo. Paga a una de las chicas y ella te llevará.",
+            "Di qui si passa solo per gli spettacoli privati, amico. Paga una delle ragazze e ti porterà lei.",
+            "Por aqui só se passa para os espetáculos privados, amigo. Paga a uma das raparigas e ela leva-te lá dentro.",
         },
     };
 
