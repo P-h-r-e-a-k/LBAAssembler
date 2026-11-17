@@ -852,6 +852,15 @@ internal static class RaceTrackService
         NoteLostDoors(twin, twinOptions.DoorBoxes, atDoors, report);
         if (museum is { } front) RaceTrackBuilder.PlaceTwinMuseum(twin, front, twinOptions, report);
         if (options.Island.TwinLadders is { } ladders) RaceTrackBuilder.FixedLadders(twin, ladders, twinOptions, report);
+        // (the ground's points levelled by hand where the build left a path off the road tilted: RaceTrackIsland.TwinFlats)
+        foreach (var (x0, z0, x1, z1, h) in options.Island.TwinFlats ?? Array.Empty<(int, int, int, int, int)>())
+        {
+            var set = 0;
+            for (var z = z0; z <= z1; z++)
+                for (var x = x0; x <= x1; x++)
+                    if (twin.HasVertex(x, z)) { twin.SetHeight(x, z, h); set++; }
+            report.Notes.Add($"the ground levelled at {h} over points x {x0}-{x1}, z {z0}-{z1} ({set} points)");
+        }
         RaceTrackBuilder.LiftShafts(twin, twinOptions, report);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);

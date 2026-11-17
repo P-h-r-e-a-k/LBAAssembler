@@ -110,6 +110,11 @@ internal sealed record RaceTrackIsland(
         // moved there, and a lift on the road above -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently
         // facing": scene 48 at (10966, 31375), facing west)
         TwinMuseum = (38, 520.5, 570.5, 525.5, 572.4, 521.5, 573.3),
+        // (and the paved path along the bank south of the museum's door level at 250 again: a fin of the bank's ground crossed it, points x
+        // 529-532 at z 577-578 rising to 2,000 towards the bank, and a bump at (529, 580) -- the user, 2026-11-17, "Part of the path near
+        // the tavern and the museum is angled, it looks like we could flatten this path out without affecting the race track", "just to the
+        // left of the museum entrance in Citabau.ile". The road is on the bank's top, 3,460 and over, x 527 and west: untouched)
+        TwinFlats = new[] { (529, 577, 532, 578, 250), (529, 580, 529, 580, 250) },
         // (the Tralu's cave's door, scene 45: its ledge at 5,625, x 506-511, z 470-474; the ladder against the road's side at its east end)
         TwinLadders = new[] { (511.05, 470.95, -1.0, 0.0, RaceTrackStory.TraluLadderZone) },
         // (the lifts the sewer lift by the storm track's start line: its striped frame, decor body 47 of the storm's file there, and its grate,
@@ -301,6 +306,10 @@ internal sealed record RaceTrackIsland(
     // gone once it is over), each the scene, the island cell and a reach in cells -- the build seats them on the own file's reshaped ground,
     // not on the ground of whichever file's road is nearer (RaceTrackScenes.Reseat).
     public (int Scene, double X, double Z, double Reach)[]? OwnGroundAt { get; init; }
+    // Ground points of the twin file (the other weather's) set to a height by hand, after the build: inclusive point ranges and the height
+    // (RaceTrackService). Citadel Island's: the path below the town circuit's bank by the museum's door, a fin of the bank's ground across
+    // it (RaceTrackIsland.Citadel)
+    public (int X0, int Z0, int X1, int Z1, int Height)[]? TwinFlats { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }
 
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,
