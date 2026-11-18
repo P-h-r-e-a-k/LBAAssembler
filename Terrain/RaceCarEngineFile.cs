@@ -666,6 +666,7 @@ internal static class RaceCarEngineFile
         text.Append(car.CarKeys());
         if (fine) text.Append("set_weather=fine\n");
         var n = 0;
+        var onceWritten = false; // (the file's lines for every track -- seat_cube=, follow_decor= -- written once, not once per track)
         foreach (var t in RaceTrackService.Tracks(info))
         {
             var island = RaceTrackIsland.ByName(t.Island);
@@ -716,11 +717,16 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"frog_var={RaceTrackStory.FrogOpenVar}\n");
             // (a seat -- Stella Entities' booths, the house's kitchen chairs: Twinsen got up by any key -- RACEMOD.CPP seat_cube=, a scene
             // variable, in every file: the kitchen is in every Citadel build. No longer seat_var= 247: that is the Polar dream's EggSendell too)
-            text.Append($"seat_cube={RaceTrackStory.SeatCube}\n");
             // (the harbour quay's lift: the game's grate, copied over its shaft, going down and up with its plate -- RaceTrackBuilder.LiftShafts,
             // RACEMOD.CPP follow_decor=: the plate's generic body, the grate's decor body in each weather's file, its height over the plate's)
-            foreach (var (file, grate) in RaceTrackBuilder.GameShaftGrates)
-                text.Append($"follow_decor={RaceTrackStory.QuayLiftScene} {Citadel.CitadelProps.QuayLift} {grate} {Citadel.CitadelProps.LiftTop} {file}\n");
+            // (once in the file: in the loop over the tracks they came 14 times, and the engine keeps 4 follow_decor= -- RACE_MAX_FOLLOW)
+            if (!onceWritten)
+            {
+                text.Append($"seat_cube={RaceTrackStory.SeatCube}\n");
+                foreach (var (file, grate) in RaceTrackBuilder.GameShaftGrates)
+                    text.Append($"follow_decor={RaceTrackStory.QuayLiftScene} {Citadel.CitadelProps.QuayLift} {grate} {Citadel.CitadelProps.LiftTop} {file}\n");
+                onceWritten = true;
+            }
             // (the player 18 or more: Stella Entities' lift down open -- RACEMOD.CPP adult_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"adult_var={StellaEntities.AdultVar}\n");
             // (Twinsen in his pyjamas from the bathroom after the spanking till he dresses from the chair by his bed -- RACEMOD.CPP pyjamas=,

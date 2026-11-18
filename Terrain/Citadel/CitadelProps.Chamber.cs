@@ -153,31 +153,55 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh(name, new[] { -1 });
         m.Light = 0.7f;
-        const float Half = 200, Cushion = 70, Apron = 80, Leg = 46, Z = ChairAhead;
-        float SeatUnder = Top - Cushion;
-        // the cushion, its top a shade lighter, and the apron under it all round
-        m.Box(0, new Vector3(0, Top - Cushion / 2, Z + 8), new Vector3(2 * Half - 10, Cushion, 2 * Half - 26), Teal, Teal + 1);
-        m.Box(0, new Vector3(0, SeatUnder - Apron / 2, Z + Half - 12), new Vector3(2 * Half, Apron, 24), Wood);
-        m.Box(0, new Vector3(0, SeatUnder - Apron / 2, Z - Half + 12), new Vector3(2 * Half, Apron, 24), Wood);
-        foreach (var s in new[] { -1, 1 })
-            m.Box(0, new Vector3(s * (Half - 12), SeatUnder - Apron / 2, Z), new Vector3(24, Apron, 2 * Half), Wood);
-        // the front legs, and the low stretchers between all four
-        // (every leg up to the seat's top, through the cushion's corner, and no cap: a body's faces are drawn far to near by each one's
-        // farthest corner, and a leg ending under the cushion had its far corner nearer than the seat's -- the far leg was drawn over the
-        // seat, the user, 2026-11-17: "the chair leg is visible through the chair seat, we should make the chair seats solid". Reaching
-        // the top a hair outside the cushion's corner, the far leg goes first and the seat covers it; a near one is in front of it anyway)
-        foreach (var s in new[] { -1, 1 })
-            m.Strut(0, new Vector3(s * (Half - Leg / 2), 0, Z + Half - Leg / 2), new Vector3(s * (Half - Leg / 2), Top, Z + Half - Leg / 2), Leg, Wood);
+        const float Half = 200, Cushion = 70, Apron = 80, Leg = 46, Z = ChairAhead, Proud = 3;
+        float SeatUnder = Top - Cushion, FrameLow = SeatUnder - Apron;
+        // The seat: one solid block -- the apron's wood round its lower part, the teal cushion over it, its top a shade lighter -- with no
+        // faces inside it, its top and its sides in short pieces. A body's faces are drawn far to near by each one's farthest corner: the
+        // cushion as one top reached the seat's far corner and went first, and every face nearer than that was drawn over it -- the
+        // apron's tops under the cushion and the legs' insides where they ran up through its corners (the user, 2026-11-17, "the chair leg
+        // is visible through the chair seat", and 2026-11-18, the kitchen's: "their legs are coming through the seats"). In pieces, each
+        // piece goes by its own corner: what is under the seat's back goes before the back's pieces, under its front before the front's.
+        const int Pieces = 4;
+        var levels = new[] { FrameLow, SeatUnder, Top };
+        var nodes = new Dictionary<(int, int, int), int>();
+        int G(int i, int j, int level)
+        {
+            if (!nodes.TryGetValue((i, j, level), out var h))
+                nodes[(i, j, level)] = h = m.P(0, new Vector3(-Half + 2 * Half * i / Pieces, levels[level], Z - Half + 2 * Half * j / Pieces));
+            return h;
+        }
+        var middle = new Vector3(0, (FrameLow + Top) / 2, Z);
+        for (var i = 0; i < Pieces; i++)
+            for (var j = 0; j < Pieces; j++)
+                m.Up(new[] { G(i, j, 2), G(i + 1, j, 2), G(i + 1, j + 1, 2), G(i, j + 1, 2) }, Teal + 1);
+        // (the sides: round the edge's nodes, the apron's band and the cushion's over it)
+        var edge = new List<(int, int)>();
+        for (var k = 0; k < Pieces; k++) edge.Add((k, 0));
+        for (var k = 0; k < Pieces; k++) edge.Add((Pieces, k));
+        for (var k = Pieces; k > 0; k--) edge.Add((k, Pieces));
+        for (var k = Pieces; k > 0; k--) edge.Add((0, k));
+        for (var k = 0; k < edge.Count; k++)
+        {
+            var (ai, aj) = edge[k];
+            var (bi, bj) = edge[(k + 1) % edge.Count];
+            m.Out(new[] { G(ai, aj, 0), G(bi, bj, 0), G(bi, bj, 1), G(ai, aj, 1) }, Wood, middle);
+            m.Out(new[] { G(ai, aj, 1), G(bi, bj, 1), G(bi, bj, 2), G(ai, aj, 2) }, Teal, middle);
+        }
+        // the legs, from the floor up under the seat -- each a hair proud of its corner, so a leg goes before the seat's piece over it --
+        // and the low stretchers between all four
+        float LegX = Half - Leg / 2 + Proud, LegZ = Half - Leg / 2 + Proud;
+        foreach (var sx in new[] { -1, 1 })
+            foreach (var sz in new[] { -1, 1 })
+                m.Strut(0, new Vector3(sx * LegX, 0, Z + sz * LegZ), new Vector3(sx * LegX, FrameLow, Z + sz * LegZ), Leg, Wood);
         foreach (var s in new[] { -1, 1 })
             m.Box(0, new Vector3(s * (Half - Leg / 2), 70, Z), new Vector3(20, 22, 2 * Half - Leg), Wood);
         m.Box(0, new Vector3(0, 90, Z + Half - Leg / 2), new Vector3(2 * Half - Leg, 22, 20), Wood);
-        // the back: its posts from the floor up past the seat, leaning back as they rise; the slats and the top rail across them
+        // the back: its posts up from the seat's back corners (the back legs under it), leaning back as they rise; the slats and the top rail
         float PostTop = Top + 560; const float Lean = 90;
         float Back(float y) => Z - Half + Leg / 2 - Lean * MathF.Max(0, y - SeatUnder) / (PostTop - SeatUnder);
         foreach (var s in new[] { -1, 1 })
         {
             var x = s * (Half - Leg / 2);
-            m.Strut(0, new Vector3(x, 0, Z - Half + Leg / 2), new Vector3(x, Top, Back(SeatUnder)), Leg, Wood);
             m.Strut(0, new Vector3(x, Top, Back(Top)), new Vector3(x, PostTop, Back(PostTop)), Leg, Wood);
         }
         foreach (var y in new[] { Top + 150, Top + 290, Top + 430 })

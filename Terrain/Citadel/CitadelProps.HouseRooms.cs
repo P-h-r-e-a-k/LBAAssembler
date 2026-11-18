@@ -33,6 +33,10 @@ namespace LBAAssembler.Terrain.Citadel;
 //     it swings open as Twinsen comes up to it and back as he goes -- CitadelHouseRooms);
 //   - the bath mat over most of the floor's middle; a pedestal mat round the toilet's foot;
 //   - the toilet's seat over the bowl's rim, no porcelain under it (the rim's top, sorted over the seat, came through it white).
+// Round 4 (the user, 2026-11-18, a picture with two squares coloured): "can we get the sink moved to the square I've coloured green, and the
+// toilet slid one square over to the red please ... change the colour of the taps on the bath, perhaps the same brown as the sides of the bath":
+//   - the sink on the west wall south of the shower (cell 5,4), facing the room; the towel rail along that wall toward the front, clear of
+//     its mirror; the toilet a cell west along the north wall (cell 9); the bath's taps in the side's dark wood.
 internal static partial class CitadelProps
 {
     public const int Shower = 140, BathSink = 141, Toilet = 142, CornerBath = 143, TowelRail = 144, BathMat = 145;
@@ -62,10 +66,10 @@ internal static partial class CitadelProps
     {
         (Shower, ShowerX, ShowerZ, 0),                       // the north-west corner, against both walls: cells 5-6, 1-2
         (ShowerDoor, ShowerHingeX, ShowerHingeZ, ShowerDoorAjar),  // its door, hinged at the west wall, ajar
-        (BathSink, 8 * 512 + 256, HrNorthFace + 230, 0),        // against the north wall, its mirror over it
-        (Toilet, 10 * 512 + 256, HrNorthFace + 310, 0),
+        (BathSink, HrWestFace + 230, 4 * 512 + 256, 1024),     // against the west wall south of the shower, cell 5,4, facing the room (+x)
+        (Toilet, 9 * 512 + 256, HrNorthFace + 310, 0),         // against the north wall, cell 9
         (CornerBath, 13 * 512 + 256, 2 * 512 + 256, 0),       // the north-east corner: cells 12-14, 1-3
-        (TowelRail, HrWestFace + 30, 1950, 1024),             // on the west wall between the shower and the door, facing the room (+x)
+        (TowelRail, HrWestFace + 30, 3400, 1024),             // on the west wall past the sink, toward the front, facing the room (+x)
         (BathMat, 5120, 2800, 0),                             // most of the floor's middle
     };
     // the kitchen's chairs either side of its table (its middle 5,888 / 3,072), facing it: each one's place behind its seat (ChairAhead)
@@ -92,7 +96,8 @@ internal static partial class CitadelProps
         BathMat => new short[] { -MatHalfX, -16, -MatHalfZ, MatHalfX, 0, MatHalfZ },
         Shower => new short[] { -(short)ShowerHalf, 0, -(short)ShowerHalf, (short)ShowerHalf, 2000, (short)ShowerHalf },
         ShowerDoor => new short[] { 0, -16, -40, (short)ShowerDoorWide, 0, 40 },
-        BathSink => new short[] { -310, 0, -230, 310, 1000, 250 },
+        // (the sink faces +x off the west wall: the engine doesn't turn a box with its actor, so its depth is along x, its width along z)
+        BathSink => new short[] { -230, 0, -310, 250, 1000, 310 },
         Toilet => new short[] { -250, 0, -320, 250, 950, 340 },
         // (the corner bath: a box square to the walls short of its curve -- 45 degrees round it the curve is 1,025 from the corner, the box's
         // corner 1,090; its two ends along the walls past the box are solid cells of the room's grid, CitadelHouseRooms)
@@ -358,15 +363,17 @@ internal static partial class CitadelProps
         }
         Surface(BathBottom, HrPorcelainShade);
         if (water > 0) Surface(water, HrWater);
-        // (the taps at the west end: the mixer's pillar, its spout over the basin, the hot and the cold)
+        // (the taps at the west end: the mixer's pillar, its spout over the basin, the hot and the cold -- in the bath side's dark wood, set
+        // off against the brass rim: the user, 2026-11-18, "perhaps the same brown as the sides of the bath to contrast against the gold")
         var t = BathTaps;
-        Cylinder(m, new Vector3(t.X, 0, t.Z), 45, BathRim, BathRim + 100, 10, HrBrass, HrBrass);
-        m.Strut(0, t + new Vector3(0, 90, 0), t + new Vector3(0, 150, 120), 26, HrBrass);
-        m.Strut(0, t + new Vector3(0, 150, 120), t + new Vector3(0, 110, 210), 22, HrBrass);
+        const int Tap = HrWoodDark;
+        Cylinder(m, new Vector3(t.X, 0, t.Z), 45, BathRim, BathRim + 100, 10, Tap, Tap);
+        m.Strut(0, t + new Vector3(0, 90, 0), t + new Vector3(0, 150, 120), 26, Tap);
+        m.Strut(0, t + new Vector3(0, 150, 120), t + new Vector3(0, 110, 210), 22, Tap);
         foreach (var (dx, dot) in new[] { (-110f, HrHot), (110f, HrCold) })
         {
-            Cylinder(m, new Vector3(t.X + dx, 0, t.Z), 22, BathRim, BathRim + 70, 8, HrBrass, HrBrass);
-            m.Strut(0, t + new Vector3(dx - 40, 80, 0), t + new Vector3(dx + 40, 80, 0), 16, HrBrass);
+            Cylinder(m, new Vector3(t.X + dx, 0, t.Z), 22, BathRim, BathRim + 70, 8, Tap, Tap);
+            m.Strut(0, t + new Vector3(dx - 40, 80, 0), t + new Vector3(dx + 40, 80, 0), 16, Tap);
             m.Ball(0, t + new Vector3(dx, 92, 0), 12, dot);
         }
         return m.ToBody(header);

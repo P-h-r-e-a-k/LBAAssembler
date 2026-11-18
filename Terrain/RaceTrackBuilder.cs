@@ -3965,7 +3965,10 @@ internal static class RaceTrackBuilder
                 copy.MoveTo(at.X, d.Y + dy, at.Z);
                 // (the grate -- inside the walls, low: the plate's look, drawn only; the walls keep their boxes)
                 var x0 = (cx * 32768.0 + d.XMin) / 512; var x1 = (cx * 32768.0 + d.XMax) / 512;
-                if (x1 - x0 > 1.5 && d.YMax - d.YMin < 300) { copy.YMax = NoBoxTop; grates++; }
+                // (and shown whatever the game's variables: the game's grate is hidden till its own var 165 is set -- its Beta's high half,
+                // -165, DECORS.CPP -- which our story never sets, so the quay's shaft stood open; the user, 2026-11-18, "The elevator shaft in
+                // the quay seems to be missing the grate")
+                if (x1 - x0 > 1.5 && d.YMax - d.YMin < 300) { copy.YMax = NoBoxTop; copy.Beta &= 0xFFFF; grates++; }
                 at.Cube.Decors.Add(copy);
             }
             report.Notes.Add($"a lift's shaft at cell ({sx}, {sz}): the game's (at {GameShaft.X}, {GameShaft.Z}) copied -- its ground sunk to {floor} under the opening, level at {rim} round it, its {pieces.Count - grates} walls and {grates} grate");
