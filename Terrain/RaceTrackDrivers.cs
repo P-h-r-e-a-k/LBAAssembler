@@ -30,6 +30,9 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
 
     private static RaceDriver Of(RaceTrackCharacterCars.Car car, string name, double side, double top, double grip, bool main = false) =>
         new(name, car.Generic, new RaceTrackBuilder.RacingLine(side, 4, top, grip), main);
+    // ... and in a car of the cast's, by its number in RACECARS.JSON (its body in its own entity: CastPerEntity to an entity, InstallCast)
+    private static RaceDriver OfCast(int number, string name, double side, double top, double grip, bool main = false) =>
+        new(name, (number - RaceTrackCharacterCars.CastFirst) % RaceTrackCharacterCars.CastPerEntity, new RaceTrackBuilder.RacingLine(side, 4, top, grip), main, Cast: number);
 
     // Citadel Island, the storm track: Raph, the lighthouse keeper, too busy racing to let the weather wizard up the lighthouse -- "beat my
     // time" (StoryNotes.txt). His time is his lap at the setup's skill.
@@ -78,6 +81,18 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
     {
         Of(RaceTrackCharacterCars.Hal, "HAL", 2.0, 1.02, 0.95, main: true),
         Of(RaceTrackCharacterCars.Spaceman, "The moon guard", 0, 1.0, 1.01),
+    };
+
+    // Otringal (2026-11-18, the user, from the sheet of Otringal's cars: "Let's change Twinsen's opponents for Otringal for the following
+    // numbered cars from your screenshot 37, 162, 56, 184"): the heavy metal guitarist of Rick's bar in his guitar (the one to beat, the
+    // first named), the big grey gloom in his monster truck, Rick at his piano and the second Franco lady in her roadster -- the retail
+    // track's racer, Baldino and the biker, the line-up of an island with none, no more. Four, Twinsen the fifth on the grid.
+    public static readonly List<RaceDriver> Otringal = new()
+    {
+        Of(RaceTrackCharacterCars.Guitarist, "The guitarist", 0.8, 1.0, 1.0, main: true),
+        OfCast(162, "The big gloom", -2.4, 1.02, 0.96),
+        Of(RaceTrackCharacterCars.Rick, "Rick", -0.8, 0.98, 1.03),
+        OfCast(184, "The Franco lady", 2.4, 1.01, 0.99),
     };
 
     // The Elevator Platform: the monkey monster himself in his crate (the one to beat -- the user, 2026-10-31: "The elevator platform race in story line is to be

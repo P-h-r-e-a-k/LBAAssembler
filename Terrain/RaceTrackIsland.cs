@@ -604,7 +604,7 @@ internal sealed record RaceTrackIsland(
     // tools/RaceTrackPlan/otringal_design.py.
     public static readonly RaceTrackIsland Otringal = new("Otringal", "OTRINGAL.ILE", "OTRINGAL.OBL", 4, 87, 92, 31, "RaceTrackPlan.Otringal.json", null)
     {
-        Title = "Otringal: through the game's tunnel, through the town and round the palace",
+        Title = "Otringal: through the game's tunnel, through the town and round the palace", Roster = RaceDriver.Otringal,
         // (the casino, bodies 70/71: its back 5.25 cells off the road's middle west from under the wheel, z 532 -- as the search keeps it off
         // a road -- under the wheel, lifted to 12,000 at its hole for it: otringal_design.py RW_YH)
         // (2026-11-15 later: "fully flush to the track" -- its back at the deck's own edge, 536.26 (the deck piece's box), 22 units off it; the
