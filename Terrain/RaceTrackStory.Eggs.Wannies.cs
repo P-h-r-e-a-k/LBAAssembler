@@ -205,6 +205,7 @@ void comportement_1()
     {{
         set_var_cube({HeighHoCube}, 2);
         set_dir_obj(0, NO_MOVE);
+        cinema_mode(1); // (watched: the cut-scene bars -- the user, 2026-11-18)
         cam_follow({last});
         set_track(label_10);
         set_comportement(comportement_2);
@@ -226,6 +227,7 @@ void comportement_3()
     if (13 == l_track())
     {{
         cam_follow(0);
+        cinema_mode(0);
         set_dir_obj(0, MOVE_MANUAL);
         change_cube({MosquibeesArrival});
     }}

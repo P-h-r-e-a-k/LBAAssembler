@@ -12,72 +12,36 @@ namespace LBAAssembler.Terrain;
 //   - PyjamaVar: 1 sent to wash (Zoe's word up from the chamber, RaceTrackStory.Evening's night house), 2 in his pyjamas (out of the bathroom
 //     into the night's house), 3 dressed again (the chair, the morning after) -- the engine keeps his body the pyjamas' while it is 2
 //     (RACEMOD.CPP pyjamas=, PyjamaLine; the body Citadel/CitadelPyjamas);
-//   - the bathroom at night, sent to wash: up to the basin, a while there, and out again through its doorway (into the night's house, where
-//     he comes out in his pyjamas);
+//   - sent to wash: to the bathroom's doorway, gone in it a few seconds and back in it in his pyjamas -- the bathroom itself never loaded
+//     (the user, 2026-11-18: "instead of watching him going in there, let's have him turn invisible at the door way, then a few seconds
+//     later reappear in the doorway facing the other way now dressed in his pyjamas. Let's never actually load the bathroom";
+//     RaceTrackStory.Evening's night house);
 //   - the house by day while he is in them: the front door shut (Twinsen's word there), his racing suit folded on the chair left of the bed
-//     (block 48, cell 5,3 of the house's grid) -- Action by it and he is dressed, his pyjamas folded there instead from then on.
+//     (block 48, cell 5,3 of the house's grid) -- Action by it and he is dressed, his pyjamas folded there instead from then on;
+//   - and the game's first morning too, after the dream (the user, 2026-11-18: "When Twinsen wakes up initially let's have him wake up in
+//     his pyjamas, with his casual clothes on the chair for him to change into"): PolarDream's wake sets PyjamaVar to PyjamasOn, and in
+//     chapter 1 the chair holds his everyday clothes (FoldedCasual) -- dressed, he is in them (the engine's GEN_BODY_TUNIQUE: his everyday
+//     body till he has his tunic, ChoiceHeroBody).
 internal static partial class RaceTrackStory
 {
     public const int PyjamaVar = 265, PyjamasWash = 1, PyjamasOn = 2, PyjamasOff = 3;
     internal static string PyjamaLine => $"pyjamas={PyjamaVar} {PyjamasOn} {Citadel.CitadelPyjamas.PyjamaBody}\n";
     // the night house: a cell variable counting the moment after the lift is up; the hero's track's way to the bathroom (label ToBath, then
-    // ToBath + 1 when there); its points, from the lift in the storeroom (raised two layers) down its two steps (x 10-11, z 12-13), across
-    // the bedroom to the bathroom's door (its opening x 6-7 in the north wall) and on through it -- found walking it, 2026-11-17
-    private const int PyjamaWait = 46, ToBath = 160;
-    private static readonly (int X, int Z)[] BathWay = { (5632, 7400), (5632, 6000), (5632, 4500), (3584, 1800), (3584, -400) };
-    // the bathroom: the hero's track's labels (to the basin, out); where he stands at the basin (the basin against the north wall at x 8.5
-    // cells), how long; the house by day: the chair's seat, the zones round the chair and before the front door, the front door's switch, a
-    // cell variable (his word at the door said once a visit)
-    private const int AtBasin = 150, WashedOut = 151, BasinX = 8 * 512 + 256, BasinZ = 1250, WashSeconds = 3;
+    // ToBath + 1 in its doorway, ToBath + 2 back out of it in his pyjamas); its points, from the lift in the storeroom (raised two layers)
+    // down its two steps (x 10-11, z 12-13), across the bedroom to the bathroom's doorway (its opening x 6-7 in the north wall) -- found
+    // walking it, 2026-11-17 -- and stopping in it short of its zone into the bathroom (x 3072-4095, z 0-560): the bathroom isn't loaded,
+    // he is gone in the doorway BathDoorSeconds and back in it in his pyjamas (the user, 2026-11-18)
+    private const int PyjamaWait = 46, ToBath = 160, BathDoorSeconds = 3;
+    private static readonly (int X, int Z)[] BathWay = { (5632, 7400), (5632, 6000), (5632, 4500), (3584, 1800), (3584, 700) };
+    // the house by day: the chair's seat, the zones round the chair and before the front door, the front door's switch, a cell variable (his
+    // word at the door said once a visit)
     private const int ChairSeatX = 5 * 512 + 290, ChairSeatY = 2048 + 450, ChairSeatZ = 3 * 512 + 256;
     private const int DressZone = 94, PyjamaDoorTry = 95, PyjamaDoorSwitch = 14, PyjamaSaid = 47;
 
     private static void Pyjamas(StoryParts p)
     {
         if (!p.Store.SceneExists(Citadel.CitadelHouseRooms.Bathroom)) { p.Log.Add("Twinsen's pyjamas left out: no bathroom"); return; }
-        p.Edit(Citadel.CitadelHouseRooms.Bathroom, "the bathroom at night, sent to wash: up to the basin, a while, and out again (his pyjamas on in the night's house)", model =>
-        {
-            var basin = SceneOps.AddTrackPoint(model, new SceneTrackPoint(BasinX, Citadel.CitadelHouseRooms.FloorY, BasinZ));
-            var way = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == OpeningScene) ?? throw new NotTheGames("the bathroom's way out");
-            var inside = SceneOps.AddTrackPoint(model, new SceneTrackPoint((way.X0 + way.X1) / 2, Citadel.CitadelHouseRooms.FloorY, way.Z0 - 700));
-            var outside = SceneOps.AddTrackPoint(model, new SceneTrackPoint((way.X0 + way.X1) / 2, Citadel.CitadelHouseRooms.FloorY, way.Z1 + 600));
-            var helper = p.Add(model, RaceTrackScenes.InvisibleHelper(0, Citadel.CitadelHouseRooms.FloorY, 0), $@"void comportement_0()
-{{
-    if ({PyjamasWash} == var_game({PyjamaVar}))
-    {{
-        set_dir_obj(0, NO_MOVE);
-        set_track_obj(0, label_{AtBasin});
-    }}
-    set_comportement(comportement_1);
-}}
-
-void comportement_1()
-{{
-}}
-");
-            return scripts =>
-            {
-                helper(scripts);
-                scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $@"
-
-label({AtBasin});
-anim(1);
-goto_point({basin});
-anim(0);
-beta(2048);
-wait_nb_second({WashSeconds});
-anim(1);
-goto_point({inside});
-goto_point({outside});
-anim(0);
-
-label({WashedOut});
-stop();
-");
-            };
-        });
-
-        p.Edit(OpeningScene, "the morning after the spanking: Twinsen in his pyjamas, the front door shut till he dresses from the chair by his bed", model =>
+        p.Edit(OpeningScene, "the mornings he wakes in his pyjamas (the game's first, after the dream; the one after the spanking): the front door shut till he dresses from the chair by his bed", model =>
         {
             var front = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == Citadel.CitadelNightHouse.Yard) ?? throw new NotTheGames("the house's front door");
             front.Info[4] = PyjamaDoorSwitch;
@@ -99,6 +63,11 @@ stop();
 {{
     if ({PyjamasOn} == var_game({PyjamaVar}))
     {{
+        // (the game's first morning, chapter 1: his everyday clothes on the chair; after the spanking, his racing suit)
+        if (1 >= chapter())
+        {{
+            body({Citadel.CitadelProps.FoldedCasual});
+        }}
         set_change_cube({PyjamaDoorSwitch}, 0);
         set_comportement(comportement_1);
     }}

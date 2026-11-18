@@ -456,12 +456,13 @@ void comportement_1()
         },
         new[]
         {
-            "The Desert champion is beaten -- Twinsen wins! The Cup's next race is on the Emerald Moon.",
-            "Le champion du Désert est battu -- Twinsen gagne ! La prochaine course de la Coupe est sur la Lune d'Émeraude.",
-            "Der Wüstenchampion ist geschlagen -- Twinsen gewinnt! Das nächste Rennen des Pokals ist auf dem Smaragdmond.",
-            "¡El campeón del Desierto ha perdido: gana Twinsen! La próxima carrera de la Copa es en la Luna Esmeralda.",
-            "Il campione del Deserto è battuto: vince Twinsen! La prossima gara della Coppa è sulla Luna di Smeraldo.",
-            "O campeão do Deserto foi vencido: ganha o Twinsen! A próxima corrida da Taça é na Lua Esmeralda.",
+            // (the user, 2026-11-18: "Twinsen wins the Twinsun cup, earning the right to represent Twinsun on Zeelich")
+            "Twinsen wins the Twinsun Cup, earning the right to represent Twinsun on Zeelich!",
+            "Twinsen remporte la Coupe de Twinsun et gagne le droit de représenter Twinsun sur Zeelich !",
+            "Twinsen gewinnt den Twinsun-Pokal und damit das Recht, Twinsun auf Zeelich zu vertreten!",
+            "¡Twinsen gana la Copa de Twinsun y se gana el derecho a representar a Twinsun en Zeelich!",
+            "Twinsen vince la Coppa di Twinsun e si guadagna il diritto di rappresentare Twinsun su Zeelich!",
+            "O Twinsen ganha a Taça de Twinsun e conquista o direito de representar Twinsun em Zeelich!",
         },
         new[]
         {

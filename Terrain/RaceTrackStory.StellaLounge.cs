@@ -456,6 +456,7 @@ void comportement_5()
     set_var_cube({PovVar}, 0);
     set_var_cube({ShowWho}, 0);
     set_dir(NO_MOVE);
+    cinema_mode(1); // (walked in to the booth: the cut-scene bars, off as his own view of the show starts -- the user, 2026-11-18)
     if ({PaidGrobo} == var_game({SeatVar}))
     {{
         set_var_cube({ShowWho}, 1);
@@ -495,6 +496,7 @@ void comportement_2()
 {{
     if ({ShowDancing} == l_track_obj({bunnyIndex}) || {ShowDancing} == l_track_obj({groboIndex}))
     {{
+        cinema_mode(0);
         set_var_cube({PovVar}, 1);
         set_comportement(comportement_3);
     }}

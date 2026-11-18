@@ -36,7 +36,9 @@ internal static class RaceCarEngineFile
         // (the story: Twinsen at the wheel in his helmet on every island but Citadel's -- Citadel/CitadelOveralls.InstallHelmetBuggy; first,
         // so that a track's own car for him, drive_as= after it, still takes his car's place)
         var helmet = story && info is not null && RaceTrackIsland.ByName(info.Island) is var helmetIsland && helmetIsland != RaceTrackIsland.Citadel && helmetIsland != RaceTrackIsland.CitadelStorm;
-        if (helmet) text.Append($"twinsen_body={Citadel.CitadelOveralls.HelmetBuggy} {Citadel.CitadelOveralls.HelmetBuggyFiring} {Citadel.CitadelOveralls.HelmetBuggySmall}\n");
+        // (only once he has the helmet -- the gear slot at both, gloves and helmet, the clam's cave's: the user, 2026-11-18, "Getting into the
+        // car on Desert Island shows Twinsen wearing the helmet even before he's found it")
+        if (helmet) text.Append($"twinsen_body={Citadel.CitadelOveralls.HelmetBuggy} {Citadel.CitadelOveralls.HelmetBuggyFiring} {Citadel.CitadelOveralls.HelmetBuggySmall} {Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth}\n");
         // (the track's best setup, when the setup says so: its top speed, acceleration and steering in place of the sliders' -- a dreamt
         // sprint's in place of the dream's own top speed too)
         var best = car.UseTrackSetups ? BestSetup(info) : null;
@@ -715,7 +717,7 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.LateFadeLines);
             // (the giant frog's mouth, open or shut, for the Wannies' glove: RACEMOD.CPP frog_var=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"frog_var={RaceTrackStory.FrogOpenVar}\n");
-            // (a seat -- Stella Entities' booths, the house's kitchen chairs: Twinsen got up by any key -- RACEMOD.CPP seat_cube=, a scene
+            // (a seat -- Stella Entities' booths, the house's kitchen chairs: Twinsen got up by Action -- RACEMOD.CPP seat_cube=, a scene
             // variable, in every file: the kitchen is in every Citadel build. No longer seat_var= 247: that is the Polar dream's EggSendell too)
             // (the harbour quay's lift: the game's grate, copied over its shaft, going down and up with its plate -- RaceTrackBuilder.LiftShafts,
             // RACEMOD.CPP follow_decor=: the plate's generic body, the grate's decor body in each weather's file, its height over the plate's)

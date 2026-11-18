@@ -1201,7 +1201,7 @@ void comportement_1()
             });
 
         // 6. the town circuit won: Mr. Paul's prize, once Twinsen is out of his car -- in whichever of the island's outside scenes that is: the
-        // Cup's purse and the island winner's trophy, and the herald's word that Twinsen leads the Cup. (No racing licence since 2026-11-17:
+        // Cup's purse and the island winner's trophy, and the herald's word that Twinsen has won the island's race (no Cup to lead yet: 2026-11-18). (No racing licence since 2026-11-17:
         // it is the Desert race's prize -- the user, "Winning the Citadel race grants the right to participate in the Desert Island race for
         // the chance to race Emerald Moon and Zeelich"; RaceTrackStory.Desert, the race won.)
         // Not the ferry ticket since 2026-11-16 (the user: "Let's make Twinsen have to buy the ferry ticket instead of giving it to him for

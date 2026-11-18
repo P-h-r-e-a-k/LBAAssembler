@@ -64,6 +64,9 @@ internal static partial class RaceTrackStory
                 b.Edit(scene, $"the Dean's oil over the road by the School, {stretch.Count} points of the lap, while Q_PAGES is under {PagesDiploma}", model =>
                 {
                     var oil = Citadel.CitadelProps.Actor(DeanOilBody, (int)Math.Round(mid.X - ox), (int)Math.Round(mid.Y + DeanOilLift), (int)Math.Round(mid.Z - oz), 0);
+                    // (walked and driven over -- and, its armour the walk-over one, drawn before every other actor outside, SORT.CPP
+                    // SortFloorFirst: by its box alone, the strip's, it came after the car on it and was drawn over it -- the user, 2026-11-18,
+                    // "It also draws over the top of the car". In the Z-buffer instead, OBJ_ZBUFFER, it cut through the car's wheels.)
                     oil.Armor = WalkOverArmour;
                     return IslandBeatsA.Add(model, oil, $"void comportement_0()\n{{\n    if ({PagesDiploma} <= var_game({QPages}))\n    {{\n        suicide();\n    }}\n}}\n");
                 });

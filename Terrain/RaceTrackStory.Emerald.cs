@@ -658,6 +658,7 @@ void comportement_1()
     if (5 <= chapter() && {HalDone} == var_game({QHal}))
     {{
         set_dir_obj(0, NO_MOVE);
+        cinema_mode(1); // (the lift-off watched: the cut-scene bars, off before Otringal -- the user, 2026-11-18)
         set_var_cube({SaucerWait}, 0);
         set_comportement(comportement_1);
     }}
@@ -670,6 +671,7 @@ void comportement_1()
     {{
         message({liftLine});
         set_var_game({OtringalInCar}, 1);
+        cinema_mode(0);
         change_cube({SpaceportScene});
         set_comportement(comportement_2);
     }}

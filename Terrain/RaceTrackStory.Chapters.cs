@@ -180,6 +180,9 @@ internal static partial class RaceTrackStory
         PaulEntry,
         // (and the entry paid to him before the race: his question, Twinsen's two answers, then on the grid or short -- 2026-11-16)
         PaulAsk, PaulPay, PaulNotNow, PaulPaid, PaulShort, PaulOnGrid,
+        // (Zoe in the bedroom the morning the aliens land, talked to once she has woken him: still in his pyjamas, or dressed and his answer
+        // -- the user, 2026-11-18, "tried to talk to Zoe neither Twinsen nor Zoe say anything. Characters should always have dialogue")
+        ZoeGetDressed, ZoeGoLook, TwinsenOnMyWay,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -539,12 +542,13 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Twinsen of Citadel Island leads the Cup! Next: the Desert, the White Leaf Desert.",
-            "Twinsen de l'île de la Citadelle mène la Coupe ! Prochaine étape : le Désert, le Désert de la Feuille Blanche.",
-            "Twinsen von der Zitadelleninsel führt im Pokal! Als Nächstes: die Wüste, die Weißblattwüste.",
-            "¡Twinsen, de la isla de la Ciudadela, lidera la Copa! Próxima parada: el Desierto, el Desierto de la Hoja Blanca.",
-            "Twinsen dell'isola della Cittadella guida la Coppa! Prossima tappa: il Deserto, il Deserto della Foglia Bianca.",
-            "Twinsen, da ilha da Cidadela, lidera a Taça! A seguir: o Deserto, o Deserto da Folha Branca.",
+            // (no Cup to lead yet on Citadel: the island's race won, the way into the Cup -- the user, 2026-11-18)
+            "Twinsen of Citadel Island wins the island's race! Next: the Desert, the White Leaf Desert.",
+            "Twinsen de l'île de la Citadelle remporte la course de l'île ! Prochaine étape : le Désert, le Désert de la Feuille Blanche.",
+            "Twinsen von der Zitadelleninsel gewinnt das Rennen der Insel! Als Nächstes: die Wüste, die Weißblattwüste.",
+            "¡Twinsen, de la isla de la Ciudadela, gana la carrera de la isla! Próxima parada: el Desierto, el Desierto de la Hoja Blanca.",
+            "Twinsen dell'isola della Cittadella vince la corsa dell'isola! Prossima tappa: il Deserto, il Deserto della Foglia Bianca.",
+            "Twinsen, da ilha da Cidadela, ganha a corrida da ilha! A seguir: o Deserto, o Deserto da Folha Branca.",
         },
         new[]
         {
@@ -949,6 +953,33 @@ internal static partial class RaceTrackStory
             "Estás en la parrilla, Twinsen. ¡Trae tu coche a la línea de salida!",
             "Sei sulla griglia, Twinsen. Porta la tua macchina sulla linea di partenza!",
             "Estás na grelha, Twinsen. Traz o teu carro para a linha de partida!",
+        },
+        new[]
+        {
+            "Not in your pyjamas, Twinsen! Your clothes are on the chair.",
+            "Pas en pyjama, Twinsen ! Tes vêtements sont sur la chaise.",
+            "Nicht im Schlafanzug, Twinsen! Deine Sachen liegen auf dem Stuhl.",
+            "¡En pijama no, Twinsen! Tu ropa está en la silla.",
+            "Non in pigiama, Twinsen! I tuoi vestiti sono sulla sedia.",
+            "De pijama não, Twinsen! A tua roupa está na cadeira.",
+        },
+        new[]
+        {
+            "Go on, go and see them! The whole island's down on the harbour road. I'll catch you up.",
+            "Allez, va les voir ! Toute l'île est sur la route du port. Je te rejoins.",
+            "Los, geh sie dir ansehen! Die ganze Insel ist unten an der Hafenstraße. Ich komme nach.",
+            "¡Venga, ve a verlos! Toda la isla está en la carretera del puerto. Ya te alcanzo.",
+            "Dai, vai a vederli! Tutta l'isola è giù sulla strada del porto. Ti raggiungo.",
+            "Vá, vai vê-los! A ilha inteira está na estrada do porto. Eu já te apanho.",
+        },
+        new[]
+        {
+            "On my way!",
+            "J'y vais !",
+            "Bin schon unterwegs!",
+            "¡Voy para allá!",
+            "Sto andando!",
+            "Vou já!",
         },
     };
 
@@ -1387,6 +1418,8 @@ void comportement_1()
     // (the night's opening black till its scripts have laid Twinsen in his bed: he showed standing at the scene's start a moment first --
     // the user, 2026-11-14; RACEMOD.CPP late_fade=)
     internal static string LateFadeLines => $"late_fade={OpeningScene} {DayVar} {Night}\n";
+    // (how near Zoe Twinsen talks to her in the bedroom that morning)
+    private const int MorningTalkReach = 1500;
     private static void Morning(StoryParts p) => p.Edit(OpeningScene, "the night: Twinsen asleep in his bed, Zoe wakes him to the morning the aliens land (chapter 2); later Zoe's word at the door", model =>
     {
         var first = model.TrackPoints.Count;
@@ -1495,6 +1528,21 @@ void comportement_72()
     if (0 == var_cube({Once1}))
     {{
         set_var_cube({Once1}, 1);
+    }}
+    swif (1 == action())
+    {{
+        if ({MorningTalkReach} > distance(0) && {Driving} != comportement_hero())
+        {{
+            if ({PyjamasOn} == var_game({PyjamaVar}))
+            {{
+                message({p.Say(ChapterLine.ZoeGetDressed)});
+            }}
+            else
+            {{
+                message({p.Say(ChapterLine.ZoeGoLook)});
+                message_obj(0, {p.Say(ChapterLine.TwinsenOnMyWay)});
+            }}
+        }}
     }}
 }}
 ";
@@ -1679,6 +1727,7 @@ void comportement_2()
         set_dir(NO_MOVE);
         set_dir_obj(0, NO_MOVE);
         anim_obj(0, 0);
+        cinema_mode(1); // (Twinsen held to watch the thief go down and the plate come back: the cut-scene bars, the user, 2026-11-18)
         set_track_obj({plateIndex}, label_1);
         set_comportement(comportement_3);
     }}
@@ -1703,6 +1752,7 @@ void comportement_4()
 {{
     if (4 == l_track_obj({plateIndex}))
     {{
+        cinema_mode(0);
         set_dir_obj(0, MOVE_MANUAL);
         suicide();
     }}
@@ -2139,8 +2189,9 @@ void comportement_2()
     private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
     // (how much further than WizardAtCow: his place 626 from hers -- about 1,000 now, clear of her flank as he hops)
     private const double WizardBack = 1.6;
-    // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500)
-    private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 3800, 8 };
+    // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500; 3100,
+    // not 3800, and aimed a little nearer him than her: the user, 2026-11-18, "are we able to get [it] slightly closer to the wizard")
+    private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 3100, 8 };
     private static void LighthouseClimb(StoryParts p)
     {
         p.Edit(LighthouseScene, "the lighthouse's door once the spell is cast: up to its top and down, and the telescope there", model =>
@@ -2172,9 +2223,9 @@ void comportement_2()
     if (2 == var_game({ScopeVar}))
     {{
         set_var_game({ScopeVar}, 0);
-        cinema_mode(0);
         cam_follow(0);
         set_dir_obj(0, NO_MOVE);
+        cinema_mode(1); // (walked up the stairs: the cut-scene bars, the user, 2026-11-18)
         set_track_obj(0, label_{Up});
         set_comportement(comportement_2);
     }}
@@ -2193,6 +2244,7 @@ void comportement_1()
     if (1 == var_cube({DoorAway}) && 4 < var_game({KeeperPlot}) && {Driving} != comportement_hero() && 0 == zone_obj(0) && 2560 < beta_obj(0) && 3584 > beta_obj(0))
     {{
         set_dir_obj(0, NO_MOVE);
+        cinema_mode(1);
         set_track_obj(0, label_{Up});
         set_comportement(comportement_2);
     }}
@@ -2211,6 +2263,7 @@ void comportement_1()
             if (0 == zone_obj(0) && 2560 < beta_obj(0) && 3584 > beta_obj(0))
             {{
                 set_dir_obj(0, NO_MOVE);
+                cinema_mode(1);
                 set_track_obj(0, label_{Up});
                 set_comportement(comportement_2);
             }}
@@ -2281,6 +2334,7 @@ void comportement_2()
     {{
         set_var_cube({DoorAway}, 0);
         set_var_cube({TopAway}, 0);
+        cinema_mode(0);
         set_dir_obj(0, MOVE_MANUAL);
         set_comportement(comportement_1);
     }}
@@ -2289,6 +2343,7 @@ void comportement_2()
 void comportement_3()
 {{
     set_dir_obj(0, NO_MOVE);
+    cinema_mode(1);
     set_track_obj(0, label_{Down});
     set_comportement(comportement_2);
 }}
@@ -2342,7 +2397,7 @@ stop();
             void Shot(int num, (int X, int Y, int Z) at, (int X, int Y, int Z) her)
             {
                 var info = (int[])CowShot.Clone();
-                (info[0], info[1], info[2]) = ((at.X + her.X) / 2 / 512, her.Y / 256 + CowLookUp, (at.Z + her.Z) / 2 / 512);
+                (info[0], info[1], info[2]) = ((3 * at.X + 2 * her.X) / 5 / 512, her.Y / 256 + CowLookUp, (3 * at.Z + 2 * her.Z) / 5 / 512);
                 model.Zones.Add(new SceneZoneModel { Type = 1, Num = num, X0 = at.X - 400, X1 = at.X + 400, Y0 = at.Y - 1500, Y1 = at.Y + 1500, Z0 = at.Z - 500, Z1 = at.Z + 500, Info = info });
             }
             Shot(CowCamera, here, (rosa.X, rosa.Y, rosa.Z));

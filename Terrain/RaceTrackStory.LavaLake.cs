@@ -507,6 +507,7 @@ void comportement_1()
     {{
         set_var_game({LavaDived}, 1);
         set_dir_obj(0, NO_MOVE);
+        cinema_mode(1); // (the dive watched: the cut-scene bars, off as he is back -- the user, 2026-11-18)
         set_track_obj(0, label_{DiveLabel});
         set_comportement(comportement_3);
     }}
@@ -525,6 +526,7 @@ void comportement_4()
 {{
     if (0 < life_point_obj(0))
     {{
+        cinema_mode(0);
         set_dir_obj(0, MOVE_MANUAL);
         set_var_game({LavaDived}, 2);
         message_zoe({lava + (int)LavaLine.LavaNever});

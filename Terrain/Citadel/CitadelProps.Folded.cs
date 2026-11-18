@@ -53,6 +53,28 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
+    // FoldedCasual: his everyday clothes for the game's first morning (the user, 2026-11-18, "his casual clothes on the chair for him to
+    // change into"): the jeans folded twice, the shirt over them, the belt rolled on top -- the everyday body's own colours (BODY.HQR 0:
+    // CitadelPyjamas' Shirt 224, Jeans 194, Belt 97)
+    public const int FoldedCasual = 200;
+    private const int CasualShirt = 224 + 2, CasualJeans = 194, CasualJeansSeam = 176, CasualBelt = 97;
+    public static Body BuildFoldedCasual(byte[] header)
+    {
+        var m = new CarMesh("his everyday clothes, folded", new[] { -1 });
+        m.Light = 0.85f;
+        const float W = 190, D = 150, H = 34;
+        for (var k = 0; k < 3; k++)
+        {
+            float w = W - k * 14, d = D - k * 10, y = H / 2 + k * H;
+            var (cloth, edge) = k < 2 ? (CasualJeans, CasualJeansSeam) : (CasualShirt, CitadelPyjamas.White);
+            m.Box(0, Shift + new Vector3(0, y, 0), new Vector3(2 * w, H - 4, 2 * d), cloth, cloth);
+            m.Box(0, Shift + new Vector3(0, y, d + 2), new Vector3(2 * w - 20, H - 12, 6), edge, edge);
+        }
+        m.Box(0, Shift + new Vector3(60, 3 * H + 10, 20), new Vector3(90, 20, 90), CasualBelt, CasualBelt);
+        return m.ToBody(header);
+    }
+
     public static IEnumerable<(int Generic, string Name, Func<byte[], Body> Build)> FoldedBodies() =>
-        new (int, string, Func<byte[], Body>)[] { (FoldedSuit, "the racing suit, folded", BuildFoldedSuit), (FoldedPyjamas, "the pyjamas, folded", BuildFoldedPyjamas) };
+        new (int, string, Func<byte[], Body>)[] { (FoldedSuit, "the racing suit, folded", BuildFoldedSuit), (FoldedPyjamas, "the pyjamas, folded", BuildFoldedPyjamas),
+            (FoldedCasual, "his everyday clothes, folded", BuildFoldedCasual) };
 }

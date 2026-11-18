@@ -765,13 +765,14 @@ stop();
                 // the climb's helper (LighthouseClimb): Twinsen going down from the top, Zoe there -- her question first
                 var helper = Enumerable.Range(1, scripts.ActorCount - 1).FirstOrDefault(i => scripts.GetText(i, ScriptKind.Life).Contains($"set_track_obj(0, label_{Down});"));
                 if (helper <= 0) throw new NotTheGames("the climb's helper");
-                scripts.SetText(zoeIndex, ScriptKind.Life, ZoeLife($"set_dir_obj(0, NO_MOVE);\n                set_track_obj(0, label_{Down});\n                set_comportement_obj({helper}, comportement_2);"));
-                var down = $"set_dir_obj(0, NO_MOVE);\n            set_track_obj(0, label_{Down});\n            set_comportement(comportement_2);";
+                // (walked down: the cut-scene bars, off again as he is down -- the climb helper's comportement_2; the user, 2026-11-18)
+                scripts.SetText(zoeIndex, ScriptKind.Life, ZoeLife($"set_dir_obj(0, NO_MOVE);\n                cinema_mode(1);\n                set_track_obj(0, label_{Down});\n                set_comportement_obj({helper}, comportement_2);"));
+                var down = $"set_dir_obj(0, NO_MOVE);\n            cinema_mode(1);\n            set_track_obj(0, label_{Down});\n            set_comportement(comportement_2);";
                 var text = scripts.GetText(helper, ScriptKind.Life);
                 // (every way down from the top goes through the climb's comportement_3: there, the night after the spell, Zoe's question
                 // first -- "Yes" and down together, "soon" and Twinsen stays: back to waiting, his walk into the door counted again only once
                 // he's stepped out of it)
-                text = Loose(text, $"void comportement_3()\n{{\nset_dir_obj(0, NO_MOVE);\nset_track_obj(0, label_{Down});\nset_comportement(comportement_2);\n}}",
+                text = Loose(text, $"void comportement_3()\n{{\nset_dir_obj(0, NO_MOVE);\ncinema_mode(1);\nset_track_obj(0, label_{Down});\nset_comportement(comportement_2);\n}}",
                     $@"void comportement_3()
 {{
     if (2 > chapter() && {Tired} == var_game({DayVar}) && 0 == var_game({QEvening}))
@@ -1024,6 +1025,9 @@ void comportement_12()
     {{
         set_dir(NO_MOVE);
         anim(0);
+        // (a scene he watches, the bars across: to the bathroom's doorway and back out in his pyjamas -- the user, 2026-11-18: all cut
+        // scenes where Twinsen is frozen need to have the cut scene bars)
+        cinema_mode(1);
         {Aside($"message_obj({zoeIndex}, {EveningId(p.Say, EveningLine.ZoeTeeth)});")}
         set_var_game({PyjamaVar}, {PyjamasWash});
         set_track(label_{ToBath});
@@ -1031,8 +1035,30 @@ void comportement_12()
     }}
 }}
 
+// (in the bathroom's doorway, the bathroom never loaded -- the user, 2026-11-18: instead of watching him going in there, have him turn
+// invisible at the doorway, then a few seconds later reappear in the doorway facing the other way, dressed in his pyjamas -- gone at the
+// door; his track waits and turns him back to the room; there again, in his pyjamas)
 void comportement_11()
 {{
+    if ({ToBath + 1} == l_track())
+    {{
+        invisible(1);
+        set_comportement(comportement_13);
+    }}
+}}
+
+void comportement_13()
+{{
+    if ({ToBath + 2} == l_track())
+    {{
+        set_var_game({PyjamaVar}, {PyjamasOn});
+        body({Citadel.CitadelPyjamas.PyjamaBody});
+        anim(0);
+        invisible(0);
+        cinema_mode(0);
+        set_dir(MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }}
 }}
 
 void comportement_1()
@@ -1113,8 +1139,13 @@ stop();
 label({ToBath});
 anim(1);
 {string.Concat(Enumerable.Range(0, BathWay.Length).Select(k => $"goto_point({toBath + k});\n"))}anim(0);
+beta(2048);
 
 label({ToBath + 1});
+wait_nb_second({BathDoorSeconds});
+beta(0);
+
+label({ToBath + 2});
 stop();
 ");
                 scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nanim(0);\nstop();\n\nlabel({ZoeLiftRise});\nanim(0);\npos_point({zoeUnder});\nbeta(512);\nspeed({LiftSpeed});\ngoto_point_3d({zoeUp});\nstop();\n");

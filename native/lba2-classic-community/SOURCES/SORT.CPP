@@ -155,6 +155,15 @@ void BaseReset(void) {
     Base.aElem[b].after[IndexAfter(a)] |= BitAfter(a)
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+// A floor prop, outside: an actor a race-track mod marks to be walked over (RACEMOD.CPP RaceMod_WalkOver -- the race story's oil over the
+// road, painted footprints, an oche) lies flat on the ground, so it is drawn before every other actor, extra and shadow. By their boxes
+// alone the Dean's oil -- a strip 14,000 long -- came after the car on it and was drawn over it (the user, 2026-11-18, "It also draws over
+// the top of the car").
+extern S32 RaceMod_WalkOver(S32 numobj);
+static S32 SortFloorFirst(S16 numtype) {
+    return CubeMode == CUBE_EXTERIEUR && (numtype & ~(SORT_NO_PRECLIP | 1023)) == TYPE_OBJ_3D && RaceMod_WalkOver(numtype & 1023);
+}
+
 S32 TreeInsert(S16 numtype, S32 posx, S32 posy, S32 posz,
                S32 txmin, S32 tymin, S32 tzmin,
                S32 txmax, S32 tymax, S32 tzmax) {
@@ -242,7 +251,16 @@ S32 TreeInsert(S16 numtype, S32 posx, S32 posy, S32 posz,
     pt = ListTri;
     elem = Base.aElem;
 
+    const S32 floorNew = SortFloorFirst(numtype);
     for (i = 0; i < Base.cElem; i++, pt++, elem++) {
+        // (a floor prop before every other thing, whatever their boxes say -- SortFloorFirst)
+        if (floorNew != SortFloorFirst(pt->NumObj)) {
+            if (floorNew)
+                BaseAddRelation(i, Base.cElem);
+            else
+                BaseAddRelation(Base.cElem, i);
+            continue;
+        }
         // test d'overlap
         //		if((x0<=elem->x1)&&(x1>=elem->x0)&&(y0<=elem->y1)&&(y1>=elem->y0))
         {

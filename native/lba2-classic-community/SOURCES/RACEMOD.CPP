@@ -965,6 +965,12 @@ static char s_dtMsg[64] = "";
 static const int s_dtStakes[4] = {0, 25, 50, 100};
 static int s_dtStakePick = 0, s_dtStake = 0, s_dtSideWas = 0;
 static U32 s_dtInput = 0;
+// Action as the player means it: End (I_ACTION_ALWAYS) in any behaviour, Space (I_ACTION_M) in Normal -- or in any once a game of ours has
+// the keys (`playing`: a darts match, a bowling frame). The user, 2026-11-13: "Twinsen can use 'action' in any behaviour mode by using the
+// 'End' key"; 2026-11-18, of the darts: "seems to only trigger if he uses space in normal mode, this should work for both"
+static int ActionHeld(U32 input, int playing) {
+    return (input & I_ACTION_ALWAYS) || ((input & I_ACTION_M) && (playing || Comportement == C_NORMAL));
+}
 static U32 s_dtSeed = 12345;
 // dart_board=<face x> <face z> <radius> <beta> <wait x> <wait z>: the board's face on the wall (where the darts stick: the game's own darts,
 // ListDart, drawn in the scene as the target in Twinsen's house has them) and the place the one waiting stands (its actor the opponent's)
@@ -1523,6 +1529,9 @@ static int s_heroSmall = -1, s_heroIsSmall = 0;
 // one while an opponent's lightning has him shrunk (in twinsen_small='s place). Still his buggy -- the game's code turns its wheels, its
 // steering wheel and his head as he drives -- not a car drawn in its place (drive_as=). -1: none (the buggy's own).
 static int s_heroBody = -1, s_heroFire = -1, s_heroBodyChecked = 0;
+// (twinsen_body='s <var> <min>: its bodies only while that game variable is at least <min> -- his helmet on only once he has found it, the
+// user, 2026-11-18: "Getting into the car on Desert Island shows Twinsen wearing the helmet even before he's found it")
+static int s_heroBodyVar = -1, s_heroBodyMin = 0;
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
 static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 static int s_pyjVar = -1, s_pyjValue = 0, s_pyjBody = -1, s_pyjSaid = 0;
@@ -1654,7 +1663,8 @@ static void LensDraw(void) {
     }
 }
 // seat_var=<game var>: Twinsen seated by a script (it sets the variable to 1 and holds him still, NO_MOVE -- which leaves his keys unread,
-// so no script sees Action) -- a key pressed once all are let go, a way or Action, sets it to 2: the script stands him up. The user,
+// so no script sees Action) -- Action (Space or End) pressed once let go sets it to 2: the script stands him up (since 2026-11-18 not a
+// way as well). The user,
 // 2026-11-13, Stella Entities' booths: "Twinsen also seems unable to get down from the chair", "The second action isn't working"
 // seat_cube=<scene var>: the same with a scene variable, in every scene (the user, 2026-11-16: the kitchen's chairs "useable" -- and no game
 // variable is free: seat_var=247 was the Polar dream's EggSendell too, its 1 turned to 2 by the first key after Sendell's light, so her
@@ -1664,7 +1674,9 @@ static void SeatFrame(void) {
     U8 *seat = s_seatCube >= 0 && s_seatCube < MAX_VARS_CUBE && ListVarCube[s_seatCube] == 1 ? &ListVarCube[s_seatCube] : NULL;
     const int game = !seat && s_seatVar >= 0 && s_seatVar < MAX_VARS_GAME && ListVarGame[s_seatVar] == 1;
     if (!seat && !game) { s_seatFree = 0; return; }
-    const U32 keys = I_UP | I_DOWN | I_LEFT | I_RIGHT | I_ACTION_M | I_ACTION_ALWAYS;
+    // (Action only -- Space or End -- not a way: the user, 2026-11-18, of the Tralu bar's bench, "stays sitting until the user presses action
+    // to get up"; an arrow held as the scene ended stood him straight up)
+    const U32 keys = I_ACTION_M | I_ACTION_ALWAYS;
     if (!(Input & keys)) { s_seatFree = 1; return; }
     if (!s_seatFree) return;
     if (seat) *seat = 2; else ListVarGame[s_seatVar] = 2;
@@ -5359,8 +5371,10 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbHooks < RACE_MAX_HOOKS && sscanf(v, "%d %d", &sc, &ac) == 2 && sc >= 0 && ac > 0) { s_hookScene[s_nbHooks] = sc; s_hookActor[s_nbHooks] = ac; s_nbHooks++; }
         }
         else if (!strcmp(key, "twinsen_body")) {
-            int body = -1, fire = -1, small = -1;
-            const int n = sscanf(v, "%d %d %d", &body, &fire, &small);
+            int body = -1, fire = -1, small = -1, gateVar = -1, gateMin = 0;
+            const int n = sscanf(v, "%d %d %d %d %d", &body, &fire, &small, &gateVar, &gateMin);
+            s_heroBodyVar = n >= 5 && gateVar >= 0 && gateVar < MAX_VARS_GAME ? gateVar : -1;
+            s_heroBodyMin = gateMin;
             s_heroBody = n >= 1 && body > 0 && body < 255 ? body : -1;
             s_heroFire = n >= 2 && fire > 0 && fire < 255 ? fire : -1;
             if (n >= 3 && small > 0 && small < 255) s_heroSmall = small;
@@ -12950,9 +12964,14 @@ static void HeroLook(S32 now, int driving) {
             Log_Info("[racemod] twinsen_body: his buggy's bodies %d (firing %d, shrunk %d)", s_heroBody, s_heroFire, s_heroSmall);
         }
         const S32 g = hero->GenBody;
-        const int firing = g == GEN_BODY_TUNIQUE_TIR || g == GEN_BODY_MAGE_TIR || (s_heroFire >= 0 && g == s_heroFire);
-        const S32 want = firing ? s_heroFire : g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE || g == GEN_BODY_MAGE ? s_heroBody : -1;
-        if (want >= 0 && g != want) InitBody((U8)want, NUM_PERSO);
+        if (s_heroBodyVar >= 0 && ListVarGame[s_heroBodyVar] < s_heroBodyMin) {
+            // (not yet: the buggy's own, as on Citadel Island)
+            if (g == s_heroBody || (s_heroFire >= 0 && g == s_heroFire)) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+        } else {
+            const int firing = g == GEN_BODY_TUNIQUE_TIR || g == GEN_BODY_MAGE_TIR || (s_heroFire >= 0 && g == s_heroFire);
+            const S32 want = firing ? s_heroFire : g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE || g == GEN_BODY_MAGE ? s_heroBody : -1;
+            if (want >= 0 && g != want) InitBody((U8)want, NUM_PERSO);
+        }
     }
     // no suit (no_suit=): a suit's behaviour he came in with -- put on where the file wasn't read (the moon base's airlock, island 3, has
     // no track) -- his own, normal or sporty
@@ -14684,10 +14703,10 @@ U32 RaceMod_FilterInput(U32 input) {
     s_poolInput = input;
     s_bowlInput = input;
     s_dtInput = input;
-    if (s_dtOn && (S32)NumCube == s_dtScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
-    if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
+    if (s_dtOn && (S32)NumCube == s_dtScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
+    if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
     if (s_nbPools && !s_swimming && !s_poolDive && PoolBoardDive(input)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
-    if (s_nbPools && (s_swimming || s_poolDive)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
+    if (s_nbPools && (s_swimming || s_poolDive)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
     // (a lift on the raised road: the action key on its pad takes him down; while it moves, no key does anything -- deck_lift=)
     // (the key's last state is kept in every scene, and a press counts only RACE_LIFT_ARRIVE_MS after a scene starts: out of the museum
     // by its window he lands on the lift's grate, and a key still down from inside -- its last state was the road's, before he went in --
@@ -14697,15 +14716,15 @@ U32 RaceMod_FilterInput(U32 input) {
         static int liftActWas = 0;
         static S32 liftSceneWas = -1, liftSceneAt = 0;
         if ((S32)NumCube != liftSceneWas) { liftSceneWas = NumCube; liftSceneAt = TimerRefHR; }
-        const int act = (input & I_ACTION_M) != 0, pressed = act && !liftActWas && TimerRefHR - liftSceneAt >= RACE_LIFT_ARRIVE_MS;
+        const int act = ActionHeld(input, 0), pressed = act && !liftActWas && TimerRefHR - liftSceneAt >= RACE_LIFT_ARRIVE_MS;
         liftActWas = act;
         if (RaceMod_Active() && s_nbLifts && CubeMode == CUBE_EXTERIEUR) {
-            if (DeckLiftAction(pressed)) input &= ~(U32)I_ACTION_M;
+            if (DeckLiftAction(pressed)) input &= ~(U32)(I_ACTION_M | I_ACTION_ALWAYS);
             if (s_lift >= 0) return 0;
         }
     }
     if (Explore() && CubeMode == CUBE_EXTERIEUR) {
-        const int act = (input & I_ACTION_M) != 0, pressed = act && !s_footActWas;
+        const int act = ActionHeld(input, Comportement == C_BUGGY), pressed = act && !s_footActWas;
         s_footActWas = act;
         const T_OBJET *hero = &ListObjet[NUM_PERSO];
         if (Comportement == C_BUGGY) {
@@ -14720,12 +14739,12 @@ U32 RaceMod_FilterInput(U32 input) {
                 LeaveBuggy(C_SPORTIF);
                 s_footArmed = 1;
             }
-            input &= ~(U32)I_ACTION_M;
+            input &= ~(U32)(I_ACTION_M | I_ACTION_ALWAYS);
         } else if (s_footArmed) {
             if (input & I_COMPORTEMENT) { input &= ~(U32)I_COMPORTEMENT; if (!s_footBack) { s_footBack = "Back in your car"; Log_Info("[racemod] on foot: Ctrl -- back to his car"); } }
             const double reach = CarReach();
             if (act && reach >= 0 && reach < RACE_FOOT_REACH) {
-                input &= ~(U32)I_ACTION_M;
+                input &= ~(U32)(I_ACTION_M | I_ACTION_ALWAYS);
                 if (pressed && !s_footBack && NewCube == -1) IntoCar("Back in your car");
             }
         }
@@ -19978,7 +19997,7 @@ static int FmNear(void) {
 }
 static void FruitFrame(S32 now) {
     if (s_fmN == 0 || CubeMode != CUBE_INTERIEUR || (S32)NumCube != s_blScene) { s_fmOn = 0; return; }
-    const int act = (s_bowlInput & I_ACTION_M) != 0, pressed = act && !s_fmActWas;
+    const int act = ActionHeld(s_bowlInput, 0), pressed = act && !s_fmActWas;
     s_fmActWas = act;
     if (s_fmOn && now - s_fmAt > FM_SPIN_MS + 2 * FM_GAP_MS && !s_fmPaid) {
         s_fmPaid = 1;
@@ -20202,7 +20221,7 @@ static void BowlFrame(S32 now) {
     // (Twinsen's own body away: he is the bowler, the camera on him)
     hero->Flags |= INVISIBLE | NO_SHADOW;
     hero->Obj.Y = s_blFloor; hero->WorkFlags &= ~FALLING;
-    const int act = (s_bowlInput & I_ACTION_M) != 0, pressed = act && !s_bowlActWas;
+    const int act = ActionHeld(s_bowlInput, s_bowlGame >= 0 && s_bowlInit), pressed = act && !s_bowlActWas;
     s_bowlActWas = act;
     const S32 foul = ln->FoulZ + 1000;
     int frame, bl, over, score;
@@ -20715,7 +20734,7 @@ static void DartFrame(S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double dt = fmin(0.1, fmax(0.0, (now - s_dtLast) / 1000.0));
     s_dtLast = now;
-    const int act = (s_dtInput & I_ACTION_M) != 0, pressed = act && !s_dtActWas;
+    const int act = ActionHeld(s_dtInput, s_dtOn), pressed = act && !s_dtActWas;
     s_dtActWas = act;
     if (!s_dtOn) {
         // (the opponent's place empty but in a match)
@@ -21660,10 +21679,17 @@ static void DarkFrame(void) {
 
 static void BackInCar(void);
 // Twinsen's car on the oil_patch= stretch: a skid, as on a slick (Slicks), whenever the last one is over and the car is still on it
+// (a skid on it, then RACE_OIL_GRACE_MS of grip to drive on before the next; and none for a car crawling, slower than RACE_OIL_SLOW: a car
+// stopped on the oil skidded again the moment a skid was over, from no speed, round and round where it was -- the user, 2026-11-18, "The oil
+// slick ... is impossible to drive out of again leaving Twinsen's car stuck")
+#define RACE_OIL_GRACE_MS 2000
+#define RACE_OIL_SLOW (2 * RACE_FOOT_STOPPED)
+static S32 s_patchNext = 0;
 static void OilPatchFrame(void) {
     if (s_patchVar < 0 || ListVarGame[s_patchVar] >= s_patchBelow || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || !RaceMod_Active()) return;
     const S32 now = TimerRefHR;
-    if (now < s_skidUntil || now < s_protectUntil || now < s_jetUntil) return;
+    if (now < s_skidUntil || now < s_protectUntil || now < s_jetUntil || now < s_patchNext) return;
+    if (abs(ListBuggy[0].Speed) < RACE_OIL_SLOW) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
     for (int i = 0; i + 1 < s_nbPatch; i++) {
@@ -21674,6 +21700,7 @@ static void OilPatchFrame(void) {
         if (ex * ex + ez * ez > s_patchHalf * s_patchHalf || fabs(hero->Obj.Y - y) > 900) continue;
         s_skidUntil = now + RACE_SKID_MS; s_skidStart = now; s_skidBeta = hero->Obj.Beta; s_skidSpeed = ListBuggy[0].Speed;
         s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
+        s_patchNext = s_skidUntil + RACE_OIL_GRACE_MS;
         Log_Info("[racemod] Twinsen skids on the oil over the road (oil_patch=, variable %d at %d)", s_patchVar, (int)ListVarGame[s_patchVar]);
         return;
     }
@@ -24399,7 +24426,7 @@ static void ResetTrack(void) {
     // (his painted buggy's bodies off him: the buggy's own again)
     if (s_heroBody >= 0 && Comportement == C_BUGGY && (ListObjet[NUM_PERSO].GenBody == s_heroBody || (s_heroFire >= 0 && ListObjet[NUM_PERSO].GenBody == s_heroFire)))
         InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
-    s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
+    s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0; s_heroBodyVar = -1;
     // (the suit's behaviours his again, and his outside body off him: his own)
     s_noSuit = 0;
     s_brkVar = -1; s_broken = 0;

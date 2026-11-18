@@ -29,7 +29,7 @@ namespace LBAAssembler.Terrain.Citadel;
 //   - each room in the house's own bricks (scene 0's block library, its grid's pieces copied): the house's corner, its north wall, its west
 //     wall with the doorway and the passage behind it, its floor tiles, its front edge and its east edge (the low walls the camera sees
 //     over -- the front edge whole now, no door in it); furnished with the house's own pieces and the new fittings (CitadelProps.HouseRooms):
-//     the bath filled from its taps (Action at them), the kitchen's chairs sat on (Action by one; any key gets up -- RACEMOD.CPP seat_cube=);
+//     the bath filled from its taps (Action at them), the kitchen's chairs sat on (Action by one; Action gets him up -- RACEMOD.CPP seat_cube=);
 //   - made after the house at night (CitadelNightHouse) is made from scene 0's grid: the night's house keeps its window and its armchair
 //     till the day's is liked (the user's wish), and has no door to the rooms.
 // Round 3 (the user, 2026-11-16 evening, pictures): "The doors we've added into Twinsen's house have a darker background than the rest of
@@ -494,7 +494,7 @@ void comportement_4()
             if (scene == Kitchen)
             {
                 // the chairs: Action by one (its zone: the chair and beside it) sits him on it, facing the table (his sitting, the Tralu's
-                // bench's -- in Normal, the only behaviour that has it); any key gets him up (the engine's seat_cube=), beside it
+                // bench's -- in Normal, the only behaviour that has it); Action gets him up (the engine's seat_cube=), beside it
                 var sit = new System.Text.StringBuilder();
                 var stand = new System.Text.StringBuilder();
                 for (var k = 0; k < CitadelProps.KitchenChairs.Length; k++)

@@ -86,6 +86,10 @@ internal static partial class RaceTrackStory
     // (the arch's walkway's scenario zone, the game's 2: where he stands come in from scene 2; how near the table -- the party's helper at
     // the seat -- he comes in from the caves before the cheers)
     private const int ArchZone = 2, NearTable = 3500;
+    // (and a scenario zone over the bar's whole new floor -- TraluBarRoom's x 28-39, z 35-53, clear of the hall's own zones, which are all
+    // east of it: in it, the cheers start, with no one to talk to first -- the user, 2026-11-18, "add a large trigger square to trigger the
+    // cut scene so Twinsen doesn't have to speak to an NPC to trigger it")
+    private const int PartyZone = 9;
     // (north along the arch's walkway (cells x 56-57), down its steps west at z 41 to the hall's floor, round the wall at x 46 and to the
     // table's east side)
     private static readonly (int X, int Z)[] WalkInWay = { (Cell(57.0), Cell(41.8)), (Cell(50.0), Cell(41.6)), (Cell(42.5), Cell(43.0)), (Cell(40.5), Cell(47.5)) };
@@ -262,6 +266,12 @@ void comportement_2()
 }}
 "));
             var party = RaceTrackScenes.InvisibleHelper(SeatAt.X, TraluBarRoom.FloorY, SeatAt.Z);
+            var partyZone = new SceneZoneModel { Type = 2, Num = PartyZone, X0 = TraluBarRoom.West * 512, X1 = (TraluBarRoom.OldWall + 1) * 512 - 1,
+                Z0 = TraluBarRoom.North * 512, Z1 = (TraluBarRoom.South + 1) * 512 - 1, Y0 = TraluBarRoom.FloorY, Y1 = TraluBarRoom.FloorY + 2048, Info = new int[8] };
+            var overlap = model.Zones.FirstOrDefault(z => z.Type == 2 && z.X0 <= partyZone.X1 && partyZone.X0 <= z.X1 && z.Z0 <= partyZone.Z1 && partyZone.Z0 <= z.Z1
+                                                         && z.Y0 <= partyZone.Y1 && partyZone.Y0 <= z.Y1);
+            if (overlap is not null) throw new NotTheGames($"the bar's party zone would lie over the hall's zone {overlap.Num}");
+            model.Zones.Add(partyZone);
             // (which way he came in, once the zones know where he stands: by the caves' arch -- ArchZone, from scene 2 -- the walk to the
             // table; from the caves to the north-east (scene 20) the walk's way isn't his, and walked along it he stood frozen against the
             // wall, the user, 2026-11-15: "Entering the tralu bar area, the script took control, but didn't walk Twinsen over to the bar area
@@ -298,7 +308,7 @@ void comportement_7()
 
 void comportement_6()
 {{
-    if ({NearTable} > distance(0))
+    if ({PartyZone} == zone_obj(0) || {NearTable} > distance(0))
     {{
         set_dir_obj(0, NO_MOVE);
         cinema_mode(1);
