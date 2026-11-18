@@ -106,6 +106,9 @@ internal static class Program
             "colscan" => ColScanCommand.Run(args),
             "storytexts" => StoryTextsCommand.Run(args),
             "newlines" => NewLinesCommand.Run(args),
+            // voices --game <built game> --zip <voices.zip> [--retail <TEXT.HQR as the CD has it>]: the new lines' voices into the game's
+            // VOICES\ (LBRA's setup does it for an install: VoiceClips), for a test build or the editor's story folder
+            "voices" => VoicesCommand(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
@@ -404,6 +407,21 @@ internal static class Program
     {
         Console.WriteLine(line);
         return 0;
+    }
+
+    // voices --game <built game> --zip <voices.zip> [--retail <TEXT.HQR as the CD has it>]: LBRA's packed voice clips into the game's
+    // VOICES\, each under its text's id in that game (LBAAssembler.Terrain.VoiceClips). --retail: by default the copy newlines took
+    // from the disc (E:\dump\TEMP\nov18\newlines_work\retail\TEXT.HQR).
+    private static int VoicesCommand(string[] args)
+    {
+        string Arg(string name, string fallback) { var i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? args[i + 1] : fallback; }
+        var game = Arg("--game", "");
+        var zip = Arg("--zip", @"E:\dump\LittleBigRacingAdventure\out\voices.zip");
+        var retail = Arg("--retail", @"E:\dump\TEMP\nov18\newlines_work\retail\TEXT.HQR");
+        if (game.Length == 0 || !File.Exists(Path.Combine(game, "TEXT.HQR"))) { Console.WriteLine("voices --game <built game folder> --zip <voices.zip> [--retail <TEXT.HQR>]"); return 2; }
+        using var stream = File.OpenRead(zip);
+        var written = LBAAssembler.Terrain.VoiceClips.Install(game, File.ReadAllBytes(retail), stream, Console.WriteLine);
+        return written > 0 ? 0 : 1;
     }
 
     // houseshade <game folder>: the house's west-wall colours as its north wall's (CitadelHouseRooms.WestToNorth), the map and how well it fits
