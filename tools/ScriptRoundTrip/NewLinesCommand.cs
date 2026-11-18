@@ -337,6 +337,11 @@ internal static class NewLinesCommand
         {
             var ours = samplesOnly || File.Exists(Path.Combine(output, "index.tsv")) || !Directory.EnumerateFileSystemEntries(output).Any();
             if (!ours) { Console.WriteLine($"{output} has files this didn't write (no index.tsv): not wiped. Empty it or pick another --out."); return 1; }
+            // the voices made from the lines (Chatterbox: <bank>_<id>.wav beside each .txt, 2026-11-16 on) are hours of GPU each run: a
+            // folder holding any is never wiped -- write the new set to another --out and add its lines' recordings one by one
+            var recordings = samplesOnly ? 0 : Directory.EnumerateFiles(output, "*.wav", SearchOption.AllDirectories)
+                .Count(f => !Path.GetFileName(f).Equals("sample.wav", StringComparison.OrdinalIgnoreCase));
+            if (recordings > 0) { Console.WriteLine($"{output} holds {recordings} voice recordings: not wiped. Pick another --out."); return 1; }
             if (!samplesOnly) Directory.Delete(output, true);
         }
         Directory.CreateDirectory(output);

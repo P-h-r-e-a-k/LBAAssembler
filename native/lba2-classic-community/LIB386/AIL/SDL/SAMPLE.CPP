@@ -11,7 +11,8 @@
 
 /*
  * PlaySample() accepts RIFF WAV with PCM (tag=1) or IMA ADPCM (tag=17),
- * Creative Voice (.voc), or raw 8-bit unsigned PCM.
+ * Creative Voice (.voc), Ogg Vorbis (a whole file, decoded at once: the race
+ * mod's voiced lines, MESSAGE.CPP SpeakClip), or raw 8-bit unsigned PCM.
  */
 #define SAMPLE_RATE 44100
 #define NUM_VOICES 12
@@ -550,6 +551,34 @@ void InverseStereoSample(S32 inverse) {
     inverseStereo = (inverse != 0);
 }
 
+/* An Ogg Vorbis file, whole in memory, as 16-bit mono PCM (malloc'd; NULL when it is not one or does not decode). Stereo is
+   mixed down: the voice lines are mono, and the mixer pans one channel. */
+extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len, int *channels, int *sample_rate, short **output);
+
+static S16 *DecodeOggVorbis(const U8 *buffer, S32 sizeBytes, S32 *outSamples, S32 *outHz) {
+    *outSamples = 0;
+    if (sizeBytes < 4 || memcmp(buffer, "OggS", 4) != 0)
+        return NULL;
+    int channels = 0, rate = 0;
+    short *pcm = NULL;
+    int frames = stb_vorbis_decode_memory(buffer, sizeBytes, &channels, &rate, &pcm);
+    if (frames <= 0 || !pcm || channels <= 0 || rate <= 0) {
+        free(pcm);
+        return NULL;
+    }
+    if (channels > 1) {
+        for (int i = 0; i < frames; i++) {
+            S32 sum = 0;
+            for (int c = 0; c < channels; c++)
+                sum += pcm[i * channels + c];
+            pcm[i] = (S16)(sum / channels);
+        }
+    }
+    *outSamples = frames;
+    *outHz = rate;
+    return (S16 *)pcm;
+}
+
 /* ── PlaySample ──────────────────────────────────────────────────────────── */
 
 U32 PlaySample(void *buffer, S32 sizeBytes, U32 userhandle, S32 pitchbend,
@@ -567,10 +596,17 @@ U32 PlaySample(void *buffer, S32 sizeBytes, U32 userhandle, S32 pitchbend,
     int vocIs8bit = 1;
     int hadWav = 0;
     S32 wavHz = SAMPLE_RATE, wavChannels = 1, wavBits = 16, fmtTag = 1, blkAlign = 0;
-    hadVoc = ParseVocHeader((const U8 *)buffer, sizeBytes, &data, &payloadSize, &vocHz, &vocIs8bit, SAMPLE_RATE);
-    if (!hadVoc)
-        SkipWavHeaderIfPresent((const U8 *)buffer, sizeBytes, &data, &payloadSize,
-                               &hadWav, &wavHz, &wavChannels, &wavBits, &fmtTag, &blkAlign);
+    S32 oggSamples = 0, oggHz = 0;
+    S16 *oggPcm = DecodeOggVorbis((const U8 *)buffer, sizeBytes, &oggSamples, &oggHz);
+    if (oggPcm) {
+        data = (const U8 *)oggPcm;
+        payloadSize = oggSamples * 2;
+    } else {
+        hadVoc = ParseVocHeader((const U8 *)buffer, sizeBytes, &data, &payloadSize, &vocHz, &vocIs8bit, SAMPLE_RATE);
+        if (!hadVoc)
+            SkipWavHeaderIfPresent((const U8 *)buffer, sizeBytes, &data, &payloadSize,
+                                   &hadWav, &wavHz, &wavChannels, &wavBits, &fmtTag, &blkAlign);
+    }
     if (!data || payloadSize <= 0)
         return 0xFFFFFFFF;
     if (pitchbend <= 0)
@@ -609,6 +645,7 @@ U32 PlaySample(void *buffer, S32 sizeBytes, U32 userhandle, S32 pitchbend,
                 SDL_Log("[SFX] DROP user=0x%04X vol=%d: every voice louder | %d/%d active",
                         userhandle & 0xFFFF, volume, activeCount, NUM_VOICES);
             UnlockVoices();
+            free(oggPcm);
             return 0xFFFFFFFF;
         }
         slot = bestSlot;
@@ -626,7 +663,14 @@ U32 PlaySample(void *buffer, S32 sizeBytes, U32 userhandle, S32 pitchbend,
     V->active = false;
     V->simEndMs = 0;
 
-    if (hadWav && fmtTag == 17 && blkAlign > 0) {
+    if (oggPcm) {
+        V->ownedBuf = oggPcm;
+        V->data = (const U8 *)oggPcm;
+        V->sizeBytes = payloadSize;
+        V->is8bit = false;
+        V->sourceRateHz = oggHz;
+        V->sourceChannels = 1;
+    } else if (hadWav && fmtTag == 17 && blkAlign > 0) {
         S32 decodedSamples = 0;
         S16 *pcm = DecodeImaAdpcm(data, payloadSize, blkAlign, &decodedSamples);
         if (!pcm || decodedSamples <= 0) {

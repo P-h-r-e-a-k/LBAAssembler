@@ -250,6 +250,7 @@ S32 FlagVoiceCD = FALSE; //     cf InitLanguage
 
 static S32 FlagKeepVoice = 0;
 static S32 FlagNextVoc = FALSE;
+static S32 FlagClipSpeak = FALSE; // the voice playing is a race mod clip (SpeakClip), not a VOX entry
 static U32 FdNar = 0;
 //static        U32     FdCd=0                  ;
 
@@ -1023,6 +1024,7 @@ void PlaySpeakVoc(S32 fd) {
     }
 
     PlaySample(BufSpeak, size, SPEAK_SAMPLE, 4096, 1, volume, pan);
+    FlagClipSpeak = FALSE;
 
     NumObjSpeak = -1;
 }
@@ -1034,13 +1036,13 @@ S32 TestSpk(S32 fd) {
 #endif
     if (!FlagSpeak)
         return (0); //     Le joueur ne veut pas
-    if (!fd)
+    if (!fd AND !FlagClipSpeak)
         return (0); //     Le programme ne peut pas
 
     if (IsSamplePlaying(SPEAK_SAMPLE))
         return (1); // ça joue...
 
-    if (FlagNextVoc) // Ya une suite...
+    if (FlagNextVoc AND fd) // Ya une suite...
     {
         PlaySpeakVoc(fd); //     Scratch ScreenAux
         return (1);       // Ca continue de jouer...
@@ -1145,13 +1147,132 @@ S32     IsVoiceFileOnHD( S32 island )
 }
 */
 /*-------------------------------------------------------------------------*/
+/* The race mod's voiced lines (LBRA, 2026-11-18): its new texts have no recording in the retail VOX files (they are added past the
+   last one, MaxVoice), so each is a clip of its own, made with Chatterbox from the character's retail voice:
+       VOICES/<EN|FR|DE|SP|IT|PO>_<nnn|GAM>_<text id>.ogg      e.g. VOICES/EN_000_1076.ogg (Citadel's text 1076, English)
+   (the VOX file's name, ListLanguage + ListFileText, and the text's id -- its id, not its place). A clip is played before the VOX
+   entry, so one also speaks a retail text the mod changed (the old recording said the old words). Its language: the voice language
+   (LanguageCD, one of the three LBA2 was voiced in), or the text language when that is one the game never had voices in (Spanish,
+   Italian, Portuguese: their clips were made too); the voice language's clip when the text language's is missing. */
+static U8 *BufClip = NULL;
+static S32 BufClipSize = 0;
+
+static S32 LoadClip(S32 lang, S32 file, S32 text) {
+    char name[64];
+    char path[ADELINE_MAX_PATH];
+    FILE *f;
+    long size;
+
+    if (lang < 0 OR lang >= (S32)(sizeof(ListLanguage) / sizeof(ListLanguage[0])))
+        return (0);
+    if (file < 2 OR file >= (S32)(sizeof(ListFileText) / sizeof(ListFileText[0])))
+        return (0);
+
+    snprintf(name, sizeof(name), "VOICES/%s%s_%d.ogg", ListLanguage[lang], file == 2 ? "GAM" : ListFileText[file], (int)text);
+    GetResPath(path, ADELINE_MAX_PATH, name);
+
+    f = fopen(path, "rb");
+    if (!f)
+        return (0);
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (size <= 0 OR size > 16 * 1024 * 1024) {
+        fclose(f);
+        return (0);
+    }
+    if (size > BufClipSize) {
+        U8 *grown = (U8 *)realloc(BufClip, (size_t)size);
+        if (!grown) {
+            fclose(f);
+            return (0);
+        }
+        BufClip = grown;
+        BufClipSize = (S32)size;
+    }
+    if (fread(BufClip, 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        return (0);
+    }
+    fclose(f);
+    return ((S32)size);
+}
+
+static S32 SpeakClip(S32 text) {
+    S32 size;
+    S32 lang;
+    U32 pan = 64;
+    S32 volume;
+
+    if (LastFileInit < START_FILE_ISLAND - 1) // SYS CRE not spoken
+        return (0);
+
+    lang = (Language >= GetVoiceLanguageCount()) ? Language : LanguageCD;
+    size = LoadClip(lang, LastFileInit, text);
+    if (!size AND lang != LanguageCD) {
+        lang = LanguageCD;
+        size = LoadClip(lang, LastFileInit, text);
+    }
+    if (!size)
+        return (0);
+
+    if (IsSamplePlaying(SPEAK_SAMPLE))
+        StopOneSample(SPEAK_SAMPLE);
+
+    if (!FlagRestoreCD AND !(FlagDial & DIAL_SAY)) {
+        // baisse volume music (as a VOX file on the HD does)
+        SetVolumeCD(CDVolume / 2);
+        SetVolumeJingle(JingleVolume / 2);
+        FlagRestoreCD = 3; // 3 = FadeInVolumeMusic() ;
+    }
+
+    FlagNextVoc = FALSE;
+    NumObjSpeak = NumObjDial;
+    volume = VoiceVolume;
+
+    // panned as PlaySpeakVoc pans a VOX entry
+    if (NumObjSpeak != -1 AND FlagDial & DIAL_SAY) {
+        S32 distance;
+
+        PtrProjectPoint(ListObjet[NumObjSpeak].Obj.X,
+                        ListObjet[NumObjSpeak].Obj.Y,
+                        ListObjet[NumObjSpeak].Obj.Z);
+
+        if (CubeMode == CUBE_INTERIEUR)
+            distance = Distance2D((S32)ModeDesiredX / 2, (S32)ModeDesiredY / 2, Xp, Yp);
+        else {
+            distance = Distance3D(ListObjet[NumObjSpeak].Obj.X,
+                                  ListObjet[NumObjSpeak].Obj.Y,
+                                  ListObjet[NumObjSpeak].Obj.Z,
+                                  CameraX, CameraY, CameraZ);
+        }
+
+        GiveBalance(Xp, Yp, distance, &pan, &volume);
+        volume = RegleTrois(0, VoiceVolume, 127, volume);
+    }
+
+    NumObjSpeak = -1;
+
+    if (PlaySample(BufClip, size, SPEAK_SAMPLE, 4096, 1, volume, pan) == 0xFFFFFFFF) {
+        Log_Warn("voice clip for text %d of file %d did not play", (int)text, (int)LastFileInit);
+        return (0);
+    }
+    FlagClipSpeak = TRUE;
+    Log_Info("[voice] text %d of file %d: the clip in %s", (int)text, (int)LastFileInit, ListLanguage[lang]);
+    return (1);
+}
+/*-------------------------------------------------------------------------*/
 S32 Speak(S32 text) {
     S32 num;
     U32 offset;
 
-    if (!FdNar)
-        return (0L);
     if (MapPack_Text(NumCube, text, NULL, NULL, NULL)) // (a map's own line: shown, not spoken)
+        return (0L);
+
+    if (SpeakClip(text))
+        return (1L);
+
+    if (!FdNar)
         return (0L);
 
     num = FindText(text);
@@ -1194,10 +1315,11 @@ void StopSpeak() {
 #endif
     if (!FlagSpeak)
         return;
-    if (!FdNar)
+    if (!FdNar AND !FlagClipSpeak)
         return;
     if (IsSamplePlaying(SPEAK_SAMPLE))
         StopOneSample(SPEAK_SAMPLE);
+    FlagClipSpeak = FALSE;
 
     /*      if( !FlagRestoreCD )
         {
