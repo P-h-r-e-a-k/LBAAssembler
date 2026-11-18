@@ -128,8 +128,10 @@ internal static partial class CitadelProps
         }
         var low = m.P(0, new Vector3(0, TableTop - 60, 0));
         for (var i = 0; i < N; i++) m.Out(new[] { low, rimLow[i], rimLow[(i + 1) % N] }, Foot, new Vector3(0, TableTop + 200, 0));
-        // (the post and the foot)
-        m.Box(0, new Vector3(0, (TableTop - 60) / 2, 0), new Vector3(180, TableTop - 60, 180), Foot);
+        // (the post and the foot -- the post only as high as the camera can see of it under the rim: from the room's camera everything of it
+        // over about 100 up lies behind the felt, and as a box up to the table's underside its front, sorted by its middle as nearer than the
+        // felt's far side, was drawn over the felt -- a brown slab standing on the green, found 2026-11-18)
+        m.Box(0, new Vector3(0, 100, 0), new Vector3(180, 200, 180), Foot);
         m.Box(0, new Vector3(0, 30, 0), new Vector3(900, 60, 140), Foot);
         m.Box(0, new Vector3(0, 30, 0), new Vector3(140, 60, 900), Foot);
         // (the pot: stacks of chips, red, white and gold)
