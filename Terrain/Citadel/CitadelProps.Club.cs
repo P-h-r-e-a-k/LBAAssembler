@@ -457,9 +457,15 @@ internal static partial class CitadelProps
         const int Steps = 6;
         const float High = 560, Slab = 40, Over = 60;
         var inner = new Vector3(-CounterMiddle * MathF.Cos(middle * MathF.PI / 180), 0, -CounterMiddle * MathF.Sin(middle * MathF.PI / 180));
+        // (the bar's own two ends closed; where it meets the next piece open, each piece reaching JoinOverlap degrees into the next: an end
+        // plate at a join, drawn by whichever piece is drawn later, cut a dark seam down the other's front -- the user, 2026-11-18, "We
+        // need to fix the visible cuts in the bar")
+        const float JoinOverlap = 0.3f;
+        bool first = middle <= CounterAt.Min(c => c.Angle), last = middle >= CounterAt.Max(c => c.Angle);
+        float from = -CounterArc / 2 - (first ? 0 : JoinOverlap), to = CounterArc / 2 + (last ? 0 : JoinOverlap);
         for (var k = 0; k < Steps; k++)
         {
-            float a0 = -CounterArc / 2 + k * CounterArc / Steps, a1 = a0 + CounterArc / Steps;
+            float a0 = from + k * (to - from) / Steps, a1 = a0 + (to - from) / Steps;
             int P(float a, float r, float y) => m.P(0, Piece(a, r, y));
             // the front (to the room), the back (the barman's side), the top slab overhanging both, its brass edge, a brass foot rail
             m.In(new[] { P(a0, CounterIn, 0), P(a1, CounterIn, 0), P(a1, CounterIn, High), P(a0, CounterIn, High) }, ClubWood, inner + new Vector3(0, High / 2, 0));
@@ -468,7 +474,7 @@ internal static partial class CitadelProps
             m.In(new[] { P(a0, CounterIn - Over, High), P(a1, CounterIn - Over, High), P(a1, CounterIn - Over, High + Slab), P(a0, CounterIn - Over, High + Slab) }, ClubBrass, inner + new Vector3(0, High, 0));
             m.In(new[] { P(a0, CounterIn - 70, 110), P(a1, CounterIn - 70, 110), P(a1, CounterIn - 70, 150), P(a0, CounterIn - 70, 150) }, ClubBrass, inner + new Vector3(0, 130, 0));
         }
-        foreach (var a in new[] { -CounterArc / 2, CounterArc / 2 })
+        foreach (var a in new[] { first ? from : float.NaN, last ? to : float.NaN }.Where(a => !float.IsNaN(a)))
             m.Plate(0, ClubWood, Piece(a, CounterIn, 0), Piece(a, CounterOut, 0), Piece(a, CounterOut, High), Piece(a, CounterIn, High));
         return m.ToBody(header);
     }
