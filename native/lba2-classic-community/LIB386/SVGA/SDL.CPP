@@ -2,10 +2,12 @@
 
 #include <SVGA/DIRTYBOX.H>
 #include <SVGA/SCREEN.H>
+#include <SVGA/SDL.H>
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/WINDOW.H>
 
 #include <PLATFORM/PLATFORM.H>
+#include <PLATFORM/STAGING_BUFFER.H>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,11 +30,74 @@ S32 screenLockCount = 0;
 bool frameDirty = false;
 static PrePresentFn s_prePresent = NULL;
 static PrePresentFn s_overlayPrePresent = NULL;
+static PrePresentNeedsArgbFn s_prePresentNeedsArgb = NULL;
+static PrePresentNeedsArgbFn s_overlayPrePresentNeedsArgb = NULL;
 static PresentTimingFn s_presentBegin = NULL;
 static PresentTimingFn s_preFrame = NULL;   // (before each frame is presented: a resolution switch asked mid-frame -- SetPreFrameCallback)
 static PresentTimingFn s_presentEnd = NULL;
 
+/* The palette as 0xAARRGGBB, for the GPU renderer (GL_GetPaletteLUT) and the GPU present's ARGB frame: rebuilt from paletteRgb
+   whenever it is asked for, so it is always the table the platform present converts the frame with. */
+static U32 paletteLUT[PAL_MAX_COLORS];
+
+/* GPU-acceleration seam for the present step. Registered by the GPU renderer
+   when it goes active (see SetGpuPresentHooks below); NULL on the software
+   path. The function-pointer indirection (rather than calling the renderer
+   directly) keeps this library free of GPU dependencies, which the ASM
+   equivalence tests link without. */
+static GpuPresentFn s_gpuPresent = NULL;
+static GpuIsActiveFn s_gpuIsActive = NULL;
+
+/* Persistent staging buffer for GPU-present frames that need the ARGB conversion (the console or an overlay draws into it): a GPU
+   renderer backend owns a window with no streaming texture to lock, so the frame is staged here and handed to the GPU present hook,
+   which composites the Log overlay over its own framebuffer. */
+static StagingBuffer s_gpuPresentStaging = {NULL, 0, 0};
+
 static void PresentFrame();
+
+void SetGpuPresentHooks(GpuPresentFn present, GpuIsActiveFn isActive) {
+    s_gpuPresent = present;
+    s_gpuIsActive = isActive;
+}
+
+S32 GpuPresentIsActive(void) {
+    return (s_gpuIsActive != NULL) ? s_gpuIsActive() : 0;
+}
+
+/* Present pacing seam, same indirection rationale as the present hooks. The
+   wanted value is held here so a choice made before the renderer initialized
+   is replayed the moment its setter registers. */
+static GpuVSyncFn s_gpuVSync = NULL;
+static S32 s_gpuVSyncWanted = 1;
+
+void SetGpuVSyncHook(GpuVSyncFn setVSync) {
+    s_gpuVSync = setVSync;
+    if (s_gpuVSync != NULL) {
+        s_gpuVSync(s_gpuVSyncWanted);
+    }
+}
+
+void GpuPresentSetVSync(S32 enabled) {
+    s_gpuVSyncWanted = enabled ? 1 : 0;
+    if (s_gpuVSync != NULL) {
+        s_gpuVSync(s_gpuVSyncWanted);
+    }
+}
+
+// --- Private functions -------------------------------------------------------
+static void RebuildPaletteLUT() {
+    for (int i = 0; i < PAL_MAX_COLORS; ++i) {
+        paletteLUT[i] = ((U32)0xFF << 24) | ((U32)paletteRgb[i * 3] << 16) | ((U32)paletteRgb[i * 3 + 1] << 8) | paletteRgb[i * 3 + 2];
+    }
+}
+
+/* The GPU renderer (LIB386/GL/RENDER_GL.CPP) converts this palette LUT to an
+   RGBA texture atlas; it must see the same entries the present path uses, or
+   GPU-drawn content would disagree with what Log shows. */
+const U32 *GL_GetPaletteLUT(void) {
+    RebuildPaletteLUT();
+    return paletteLUT;
+}
 
 // --- Initialization ----------------------------------------------------------
 bool InitVideo() {
@@ -47,6 +112,7 @@ bool InitVideo() {
 void EndVideo() { DestroyVideoSurface(); }
 
 void DestroyVideoSurface() {
+    StagingBufferFree(&s_gpuPresentStaging);
     if (Phys) {
         free(Phys);
         Phys = NULL;
@@ -166,6 +232,8 @@ void CopyVideoArea(void *dst, const void *src, const U32 tabOffDst[], const T_BO
 
 void SetPrePresentCallback(PrePresentFn fn) { s_prePresent = fn; }
 void SetOverlayPrePresentCallback(PrePresentFn fn) { s_overlayPrePresent = fn; }
+void SetPrePresentNeedsArgb(PrePresentNeedsArgbFn fn) { s_prePresentNeedsArgb = fn; }
+void SetOverlayPrePresentNeedsArgb(PrePresentNeedsArgbFn fn) { s_overlayPrePresentNeedsArgb = fn; }
 void SetPreFrameCallback(PresentTimingFn fn) { s_preFrame = fn; }
 void SetPresentTimingCallbacks(PresentTimingFn begin, PresentTimingFn end) {
     s_presentBegin = begin;
@@ -179,6 +247,37 @@ static void ApplyOverlays(U32 *pixels, U32 pitch, U32, U32, const U8 *palette) {
         s_overlayPrePresent(pixels, pitch, ModeResX, ModeResY, palette);
 }
 
+/* A GPU backend owns the window: the frame goes to its present hook, which composites Log over the GPU's own 3D frame (palette index
+   0 its transparent colour) and swaps the window itself. With no callback that reads or writes an ARGB frame this time, Log's
+   palette indices go as they are and the present shader looks them up (R8 present); otherwise the frame is converted here, the
+   overlays draw on it, and the ARGB frame goes. */
+static void PresentFrameGpu(const U8 *framePalette) {
+    const S32 needsArgb = (s_prePresentNeedsArgb != NULL && s_prePresentNeedsArgb()) ||
+                          (s_overlayPrePresentNeedsArgb != NULL && s_overlayPrePresentNeedsArgb());
+    if (!needsArgb) {
+        /* (the callbacks still run -- the control socket and the console are served there -- with no frame to draw on: every query said
+           they wouldn't) */
+        ApplyOverlays(NULL, 0, ModeDesiredX, ModeDesiredY, framePalette);
+        s_gpuPresent(Log, ModeDesiredX, ModeDesiredX, ModeDesiredY, FALSE, TRUE);
+        return;
+    }
+    U32 *pixels = (U32 *)StagingBufferEnsure(&s_gpuPresentStaging, ModeDesiredX, ModeDesiredY);
+    if (pixels == NULL)
+        return;
+    const U32 pitch = ModeDesiredX * sizeof(U32);
+    RebuildPaletteLUT();
+    paletteLUT[0] &= 0x00FFFFFF; // (index 0: transparent over the GPU's frame)
+    const U8 *logMem = (const U8 *)Log;
+    for (U32 y = 0; y < ModeDesiredY; ++y) {
+        const U8 *srcRow = logMem + y * ModeDesiredX;
+        U32 *dstRow = (U32 *)((U8 *)pixels + y * pitch);
+        for (U32 x = 0; x < ModeDesiredX; ++x)
+            dstRow[x] = paletteLUT[srcRow[x]];
+    }
+    ApplyOverlays(pixels, pitch, ModeDesiredX, ModeDesiredY, framePalette);
+    s_gpuPresent(pixels, pitch, ModeDesiredX, ModeDesiredY, FALSE, FALSE);
+}
+
 static void PresentFrame() {
     assert(paletteInitialized);
     assert(Log != NULL);
@@ -186,6 +285,10 @@ static void PresentFrame() {
        table must still describe the pixels already converted for this frame. */
     static U8 framePalette[PAL_MAX_COLORS * 3];
     memcpy(framePalette, paletteRgb, sizeof(framePalette));
+    if (s_gpuPresent != NULL && s_gpuIsActive != NULL && s_gpuIsActive()) {
+        PresentFrameGpu(framePalette);
+        return;
+    }
     PlatformFrame frame = {
         (const U8 *)Log, ModeDesiredX, ModeDesiredY, ModeDesiredX, framePalette,
         (s_prePresent || s_overlayPrePresent) ? ApplyOverlays : NULL};

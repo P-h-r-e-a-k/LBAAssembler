@@ -112,6 +112,7 @@ U8 Fill_ClipFlag = FALSE;     ///< Flag telling us what to clip
 U8 Fill_Flag_Fog = FALSE;     // True if FOG active
 U8 Fill_Flag_ZBuffer = FALSE; // True if ZBUFFER is active
 U8 Fill_Flag_NZW = FALSE;     // True if NZW active
+U8 Fill_Flag_3DPass = FALSE;  // True while the engine's 3D pass is open
 
 S32 Fill_Trame_Parity = 0; ///< Parity for trame polygons
 
@@ -144,12 +145,32 @@ S32 Read_Next_Right(Struc_Point *PtA, Struc_Point *PtB);
 // ║ with a correct poly type number                                          ║
 // ║                                                                          ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
+/* GPU-acceleration seam: NULL unless the GPU renderer is active (see
+   POLY.H). When a hook returns non-zero it has consumed the polygon (the
+   GL renderer drew it into its own framebuffer), and the software rasteriser
+   must not run for it. A hook that returns 0 leaves the poly to the software
+   path, which is how the ASM equivalence tests see unchanged behaviour: the
+   hook is only ever set from GpuRenderer_Init (the common layer's init, in
+   LIB386/COMMON), which the tests never reach. */
+static FillPolyHookFn s_fillPolyHook = NULL;
+
+void Fill_Poly_SetHook(FillPolyHookFn hook) {
+    s_fillPolyHook = hook;
+}
+
+void Fill_Poly_Set3DPass(S32 open) {
+    Fill_Flag_3DPass = open ? 1 : 0;
+}
+
 S32 Fill_Poly(S32 Type_Poly, S32 Color_Poly, S32 Nb_Points,
               Struc_Point *Ptr_Points) {
 #ifdef ENABLE_POLY_RECORDING
     if (g_polyrec_recording)
         polyrec_record_fill_poly(Type_Poly, Color_Poly, Nb_Points, Ptr_Points);
 #endif
+    if (s_fillPolyHook != NULL &&
+        s_fillPolyHook(Type_Poly, Color_Poly, Nb_Points, Ptr_Points) != 0)
+        return 1;
     Fill_LeftSlope = 0;
     SetScreenPitch(TabOffLine);
 

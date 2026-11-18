@@ -42,6 +42,30 @@ extern S32 GfxDitherShading;
 #include "CONSOLE_CMD.H" // Console_ApplyPendingResSwitch: res_do_switch's own deferred-apply companion
 #include <SYSTEM/WINDOW.H> // Window_IsRendererTextureLocked: res_do_switch's own safety gate
 #include "../PERFTRACE.H"
+#include "../RENDER_SWITCH.H"   // renderer: Renderer_ApplyChoice
+#include "../CONFIG_FILE.H"     // renderer: WriteConfigFile
+#include <GPU/GPURENDERER.H>    // renderer: GpuRenderer_ActiveBackend
+
+/* renderer [software|opengl]: the renderer now (the race game's Display page's Renderer row does the same), kept in lba2.cfg's Renderer;
+   with no argument, the one in use */
+static void cmd_renderer(int argc, const char *argv[]) {
+    if (argc < 2) {
+        Console_Print("renderer: %s", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()));
+        return;
+    }
+    GpuRendererBackendId want;
+    if (!strcmp(argv[1], "software") || !strcmp(argv[1], "sw"))
+        want = GPU_RENDERER_BACKEND_NONE;
+    else if (!strcmp(argv[1], "opengl") || !strcmp(argv[1], "gl"))
+        want = GPU_RENDERER_BACKEND_OPENGL;
+    else {
+        Console_Print("Usage: renderer [software|opengl]");
+        return;
+    }
+    if (Renderer_ApplyChoice(want))
+        WriteConfigFile();
+    Console_Print("renderer: %s", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()));
+}
 #include "../PERSO.H" /* WriteConfigValue (persist one setting) */
 #include "../MOUSE_CAPTURE.H"
 #include <SYSTEM/CDTRACKS.H>
@@ -588,7 +612,8 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
     if (argc >= 3 && !strcmp(argv[1], "holomap")) {
         /* HoloMap fades to black, opens HoloGlobe (the rotating planet view),
            and runs until FlagHoloEnd.  Holo_RequestCapture arms a one-shot
-           SavePNG inside HoloGlobe's loop after the fade-in + zoom-in settle,
+           frame write (Control_ScreenshotTo) inside HoloGlobe's loop after the
+           fade-in + zoom-in settle,
            then sets FlagHoloEnd so HoloMap exits cleanly. */
         Holo_RequestCapture(argv[2]);
         HoloMap();
@@ -632,9 +657,10 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
     if (argc >= 4 && !strcmp(argv[1], "dialog")) {
         /* Dial(text, drawscene) opens a dialogue bubble + portrait for the
            given text-id in the currently-loaded dialogue bank.  Dial_Request-
-           Capture arms a one-shot SavePNG that fires the first time the
-           typewriter completes a page (ret == 0 or 2), then sets flagabort
-           so Dial exits cleanly without waiting for input. */
+           Capture arms a one-shot Control_ScreenshotTo (Log; under a GPU
+           backend, Log composed over the offscreen target) that fires the
+           first time the typewriter completes a page (ret == 0 or 2), then
+           sets flagabort so Dial exits cleanly without waiting for input. */
         S32 text_id = (S32)atoi(argv[2]);
         Dial_RequestCapture(argv[3]);
         Dial(text_id, TRUE);
@@ -643,8 +669,9 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
     }
     if (argc >= 3 && !strcmp(argv[1], "menu-options")) {
         /* OptionsMenu(FALSE) opens the in-game options/pause menu and drives
-           DoGameMenu.  Menu_RequestCapture arms a one-shot SavePNG inside
-           DoGameMenu's loop; on capture, DoGameMenu returns 1000 (ESC
+           DoGameMenu.  Menu_RequestCapture arms a one-shot Control_ScreenshotTo
+           inside DoGameMenu's loop (composed: Log over the offscreen target
+           under a GPU backend); on capture, DoGameMenu returns 1000 (ESC
            sentinel) and OptionsMenu's case-1000 exits cleanly. */
         Menu_RequestCapture(argv[2]);
         OptionsMenu(FALSE);
@@ -661,6 +688,7 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
         if (Console_GetCaptureBlackBg()) {
             memset(Log, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
             memset(Screen, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+            Control_ClearCaptureTarget();
         }
         Display_MainCapture(argv[2]);
         Console_Print("ui display -> %s", argv[2]);
@@ -674,6 +702,7 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
         if (Console_GetCaptureBlackBg()) {
             memset(Log, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
             memset(Screen, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+            Control_ClearCaptureTarget();
         }
         Resolution_MainCapture(argv[2]);
         Console_Print("ui resolution -> %s", argv[2]);
@@ -697,8 +726,8 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
     if (argc >= 3 && !strcmp(argv[1], "slideshow")) {
         /* End-of-island / end-game still-image montage. SlideShow loads
            pre-rendered screenshots from scrshot.hqr, each shown with a story
-           caption via Dial. SlideShow_RequestCapture arms a one-shot SavePNG
-           inside the first frame's Dial typewriter loop, exits the slideshow
+           caption via Dial. SlideShow_RequestCapture arms a one-shot frame
+           write inside the first frame's Dial typewriter loop, exits the slideshow
            loop cleanly after the capture fires. Centred PCX + letterboxed
            dialog flow — useful for verifying the Dial_Letterbox path.
            NOTE: requires scrshot.hqr in the game data (typically Demo only);
@@ -754,7 +783,7 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
         /* Controls-remapping screen (keyboard). Config_MainCapture loads the
            menu PCX into Screen (the background MenuConfig normally inherits
            from its Main Menu → Options → Controls invocation chain), arms a
-           one-shot SavePNG, and calls MenuConfig directly. */
+           one-shot Control_ScreenshotTo, and calls MenuConfig directly. */
         Config_MainCapture(argv[2]);
         Console_Print("ui config -> %s", argv[2]);
         return;
@@ -821,7 +850,7 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
         /* DoFoundObj(numvar) opens the found-object cinematic: 3D rotation
            of the discovered item alongside a typewriter dialogue.  numvar
            is the TabInv slot index (e.g. FLAG_BALLE_MAGIQUE).
-           DoFoundObj_RequestCapture arms a one-shot SavePNG that fires
+           DoFoundObj_RequestCapture arms a one-shot frame write that fires
            after the countdown elapses; the hook sets flag=2 so the modal's
            while-loop exits cleanly. */
         S32 numvar = (S32)atoi(argv[2]);
@@ -3277,8 +3306,9 @@ void Console_RegisterAll(void) {
                               "ui {inventory|holomap|menu-options|menu-main|config|slideshow} <path> | ui holoplan <island> <path> | ui video <name> <path> | ui {dialog|found-object} <id> <path> | ui pcx-message <pcx-idx> <text-id> [<path>] [big|full|normal] | ui askchoice [--press <key>] <question-id> <choice-id>...",
                               "Composite verb for UI regression fixtures: opens a UI modal "
                               "with a deterministic auto-exit, writes the settled frame to <path> "
-                              "via SavePNG, then closes.  Compose with --load / --exec to drive "
-                              "headless captures of UI state.");
+                              "via Control_ScreenshotTo (Log; under a GPU backend, Log composed "
+                              "over the offscreen target), then closes.  Compose with --load / "
+                              "--exec to drive headless captures of UI state.");
     Console_RegisterCommandEx("savebug", cmd_savebug, "Save current game to bugs dir (optional name)", "savebug [name]",
                               "Requires in-game loaded cube (not during video); writes bugs/<name>.lba.");
     Console_RegisterCommandEx("resolution", cmd_resolution,
@@ -3537,6 +3567,8 @@ void Console_RegisterAll(void) {
                               "Num and Info fields, marking the one the hero is in. The pickup/trigger "
                               "boxes a walkthrough needs; invisible to --dump-state. Optional type filter.");
 
+    Console_RegisterCommandEx("renderer", cmd_renderer, "The renderer: software or OpenGL", "renderer [software|opengl]",
+                              "RENDER_SWITCH.CPP.");
     Console_RegisterCommandEx("perftrace", cmd_perftrace,
                               "Per-frame timing capture (ring buffer, no log spam)",
                               "perftrace [start | stop | reset | status | dump [path] | autodump [path]]",

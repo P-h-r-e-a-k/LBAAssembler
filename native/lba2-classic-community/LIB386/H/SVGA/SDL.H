@@ -6,7 +6,33 @@
 extern "C" {
 #endif
 
-// Nothing so far...
+// GPU present seam. The GPU renderer (GPURenderer_Init in LIB386/COMMON)
+// registers itself here on init; the present path in SDL.CPP then hands its
+// Log overlay to the renderer instead of the software streaming texture.
+// indexed selects the pixel format: FALSE is 0xAARRGGBB staging (console /
+// touch / software callbacks ran and may have drawn into it); TRUE is Log's
+// raw 8-bit palette indices, pitch in bytes = width, with the LUT lookup in
+// the present shader — the CPU conversion is skipped on that path.
+// Both pointers stay NULL on the software path, which the ASM equivalence
+// tests link without any GPU dependency.
+typedef void (*GpuPresentFn)(const void *pixels, U32 pitch, U32 width,
+                             U32 height, S32 filterLinear, S32 indexed);
+typedef S32 (*GpuIsActiveFn)(void);
+typedef void (*GpuVSyncFn)(S32 enabled);
+void SetGpuPresentHooks(GpuPresentFn present, GpuIsActiveFn isActive);
+
+// Present pacing seam. The renderer registers its setter on init and is handed
+// whatever was chosen before it existed, so a config value loaded during boot
+// still reaches the device. Kept apart from the present hooks, which only
+// carry frames and must stay NULL on the software path.
+void SetGpuVSyncHook(GpuVSyncFn setVSync);
+void GpuPresentSetVSync(S32 enabled);
+
+// TRUE while a GPU renderer owns the present path (either OpenGL or SDL3 GPU).
+// The window layer asks this, not the GL backend's global, so both GPU
+// backends get the same letterbox-aware mouse mapping and sys keeps no link
+// dependency on a specific renderer.
+S32 GpuPresentIsActive(void);
 
 #ifdef __cplusplus
 }

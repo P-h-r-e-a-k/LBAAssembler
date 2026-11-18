@@ -25,6 +25,10 @@ extern "C" __declspec(dllimport) unsigned long __stdcall GetFileAttributesA(cons
 #define ACF_NO_FILE 0xFFFFFFFFul           /* INVALID_FILE_ATTRIBUTES */
 #endif
 
+/* TheEndCheckFile is called from PlayAllAcf with the MVIDEO_BACKEND=null builds
+   too, so the exit-path header must not be locked behind the SMACKER guard. */
+#include "BOOT_EXIT.H"
+
 #ifdef USE_MVIDEO_SMACKER
 #include "VIDEO_SOURCE.H"
 #include "INPUT.H"

@@ -76,6 +76,7 @@ typedef struct {
     U16 Pt_Light; ///< intensity (0.8.0)
     U16 Pt_ZO;    ///< normalized Z
     S32 Pt_W;     ///< 2^31 / Z (non normalized)
+    U16 Pt_RepMask; ///< texture repeat mask (GL only; unused by SW rasterizer)
 } Struc_Point;
 #pragma pack(pop)
 
@@ -164,6 +165,7 @@ extern U8 Fill_ClipFlag;     ///< Flag telling us what to clip
 extern U8 Fill_Flag_Fog;     ///< True if FOG is active
 extern U8 Fill_Flag_ZBuffer; ///< True if ZBUFFER is active
 extern U8 Fill_Flag_NZW;     ///< True if NZW is active
+extern U8 Fill_Flag_3DPass;  ///< True while the engine's 3D pass is open
 
 extern S32 Fill_Trame_Parity; ///< Parity for trame polygons
 
@@ -187,6 +189,26 @@ void Switch_Fillers(U32 Bank);
 
 S32 Fill_Poly(S32 Type_Poly, S32 Color_Poly, S32 Nb_Points,
               Struc_Point *Ptr_Points);
+
+/* Optional GPU-acceleration seam. When a hook is set, every Fill_Poly call is
+   handed to it with the raw engine arguments. A non-zero return means the
+   hook consumed the polygon (the GL renderer drew it into its own buffer) and
+   the software rasteriser does not run; zero lets the software path handle it
+   (polys the GL renderer does not cover fall back to SW). NULL (the default)
+   keeps Fill_Poly byte-identical to the ASM original, which the equivalence
+   tests rely on. The GPU renderer registers itself via Fill_Poly_SetHook on
+   init and unregisters on shutdown. */
+typedef S32 (*FillPolyHookFn)(S32 Type_Poly, S32 Color_Poly, S32 Nb_Points,
+                              Struc_Point *Ptr_Points);
+void Fill_Poly_SetHook(FillPolyHookFn hook);
+
+/* Opens/closes the engine's 3D pass (see GPU/GPURENDERER.H
+   GpuRenderer_Begin3DPass). While open, non-Z-buffered body polys are offered
+   to the fill hook for depth-tested drawing into the offscreen target, and
+   GetZO3/GetZO4 fill body clip-Z for that test. Set only by the GPU renderer;
+   it stays 0 wherever the hook is NULL, which is the state the ASM
+   equivalence tests see. */
+void Fill_Poly_Set3DPass(S32 open);
 
 extern void Fill_Sphere(S32 Type_Sphere, S32 Color_Sphere, S32 Centre_X,
                         S32 Centre_Y, S32 Rayon, S32 zBufferValue); ///< Do Not call from C

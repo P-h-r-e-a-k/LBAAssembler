@@ -3,6 +3,9 @@
 #include "RES_SWITCH.H"
 #include <POLYGON/POLYFILT.H>
 
+#include <GPU/GPURENDERER.H> // GpuRenderer_BeginFrame: per-frame filter latch
+#include <GL/RENDER_GL.H>    // GpuScene
+
 #include "DEMO_SEED.H"
 #include "FOLLOWCAM.H" /* FollowCamera: camera zones re-aim the Auto camera */
 #include <math.h> /* sqrt, fabs: DrawTurnedExtra */
@@ -27,6 +30,119 @@
 #include "AMBIANCE.H"
 
 extern S32 FlagAnimWhoSpeak; // MESSAGE.CPP
+
+// Opaque world-sprite GPU attempt (GpuScene). Returns TRUE when the quad
+// landed in the FBO and Log's opaque footprint was punched; FALSE leaves
+// the caller on AffGraph / ScaleSprite. Interior stamps iso brick-grid depth;
+// exterior re-rotates the world point and uses the same GET_ZO the terrain
+// tiles carry. Raw sprites at a scale factor take DrawScaleSprite, whose
+// walk reproduces ScaleSprite's sampling before the quad depth-tests.
+static S32 TryGpuWorldSprite(S32 xp, S32 yp, S32 sprite, S32 xw, S32 yw,
+                             S32 zw) {
+    const void *bank;
+    S32 rawFormat;
+    U16 zo;
+
+    if (!GpuScene || !GpuRenderer_IsActive()) {
+        return 0;
+    }
+    if (sprite >= 100) {
+        bank = HQR_Get(HQRPtrSprite, sprite);
+        rawFormat = 0;
+    } else {
+        bank = HQR_Get(HQRPtrSpriteRaw, sprite);
+        rawFormat = 1;
+    }
+    if (bank == NULL) {
+        return 0;
+    }
+    if (CubeMode == CUBE_INTERIEUR) {
+        zo = GpuRenderer_IsoWorldZO(xw / SIZE_BRICK_XZ, yw / SIZE_BRICK_Y,
+                                    zw / SIZE_BRICK_XZ);
+    } else {
+        LongWorldRotatePoint(xw, yw, zw);
+        zo = GET_ZO(CameraZr - Z0);
+    }
+    if (rawFormat && ScaleFactorSprite != DEF_SCALE_FACTOR) {
+        return GpuRenderer_DrawScaleSprite(xp, yp, ScaleFactorSprite,
+                                           ScaleFactorSprite, zo, bank);
+    }
+    return GpuRenderer_DrawSprite(0, xp, yp, zo, bank, rawFormat);
+}
+
+// Same attempt for an Anim3DS frame: one RLE graph at index 0 of the HQR
+// entry (AffGraph(0, ...) shape), always at DEF_SCALE_FACTOR.
+static S32 TryGpuAnim3DSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
+                              S32 zw) {
+    const void *bank;
+    U16 zo;
+
+    if (!GpuScene || !GpuRenderer_IsActive()) {
+        return 0;
+    }
+    bank = GetPtrAnim3DS(num);
+    if (bank == NULL) {
+        return 0;
+    }
+    if (CubeMode == CUBE_INTERIEUR) {
+        zo = GpuRenderer_IsoWorldZO(xw / SIZE_BRICK_XZ, yw / SIZE_BRICK_Y,
+                                    zw / SIZE_BRICK_XZ);
+    } else {
+        LongWorldRotatePoint(xw, yw, zw);
+        zo = GET_ZO(CameraZr - Z0);
+    }
+    return GpuRenderer_DrawSprite(0, xp, yp, zo, bank, 0);
+}
+
+// TYPE_EXTRA opaque raw sprite: EXTRA_TRANSPARENT (blend table) stays on the
+// software blitter; opaque draws take DrawSprite at 1:1 and DrawScaleSprite
+// under CalculeScaleFactorSprite's factor.
+static S32 TryGpuExtraSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
+                             S32 zw) {
+    const void *bank;
+    U16 zo;
+
+    if (!GpuScene || !GpuRenderer_IsActive()) {
+        return 0;
+    }
+    bank = HQR_Get(HQRPtrSpriteRaw, num);
+    if (bank == NULL) {
+        return 0;
+    }
+    if (CubeMode == CUBE_INTERIEUR) {
+        zo = GpuRenderer_IsoWorldZO(xw / SIZE_BRICK_XZ, yw / SIZE_BRICK_Y,
+                                    zw / SIZE_BRICK_XZ);
+    } else {
+        LongWorldRotatePoint(xw, yw, zw);
+        zo = GET_ZO(CameraZr - Z0);
+    }
+    if (ScaleFactorSprite != DEF_SCALE_FACTOR) {
+        return GpuRenderer_DrawScaleSprite(xp, yp, ScaleFactorSprite,
+                                           ScaleFactorSprite, zo, bank);
+    }
+    return GpuRenderer_DrawSprite(0, xp, yp, zo, bank, 1);
+}
+
+// Blend-sprite GPU attempt (GpuScene phase 3). Returns TRUE when the table
+// compose landed in the FBO (Screen* published) and ScaleSpriteTransp must
+// not run; FALSE leaves the caller on ScaleSpriteTransp. Unlike the opaque
+// path the scaled walk is supported, so no scale gate: CalculeScaleFactorSprite
+// essentially always leaves extras scaled. No world Z: ScaleSpriteTransp
+// composes unconditionally and this hook must match.
+static S32 TryGpuBlendSprite(S32 xp, S32 yp, S32 num, S32 factor,
+                             const void *transPal) {
+    const void *bank;
+
+    if (!GpuScene || !GpuRenderer_IsActive()) {
+        return 0;
+    }
+    bank = HQR_Get(HQRPtrSpriteRaw, num);
+    if (bank == NULL) {
+        return 0;
+    }
+    return GpuRenderer_DrawBlendSprite(xp, yp, factor, factor, bank,
+                                       transPal);
+}
 
 //#########################################################################
 // Memorisation de l'anim et de la frame en cours au moment d'un changement
@@ -5035,7 +5151,18 @@ S32 AffOneObject(T_SORT *pt) {
             SetClip(0, 0, ModeDesiredX - 1, FlagWater);
         }
 
+        /* Exterior bodies open the 3D pass so they batch into the offscreen
+           target at render-scaled resolution; with GpuScene, interior bodies
+           join them (the room already lives in the FBO). Menu/holomap/credits
+           callers of ObjectDisplay never open it and keep the software Log
+           path. */
+        if (GpuRenderer_IsActive() AND(CubeMode == CUBE_EXTERIEUR OR(GpuScene AND CubeMode == CUBE_INTERIEUR))) {
+            GpuRenderer_Begin3DPass();
+        }
         aff = ObjectDisplay(&ptrobj->Obj);
+        if (GpuRenderer_IsActive() AND(CubeMode == CUBE_EXTERIEUR OR(GpuScene AND CubeMode == CUBE_INTERIEUR))) {
+            GpuRenderer_End3DPass();
+        }
 
         if (aff) /* objet pas tout clippé */
         {
@@ -5206,12 +5333,18 @@ S32 AffOneObject(T_SORT *pt) {
             // sprites
             if (ClipXMin <= ClipXMax
                                 AND ClipYMin <= ClipYMax) {
-                PtrAffGraph(SpriteX, SpriteY, num);
+                if (!TryGpuWorldSprite(SpriteX, SpriteY, num, ptrobj->Obj.X,
+                                       ptrobj->Obj.Y, ptrobj->Obj.Z)) {
+                    PtrAffGraph(SpriteX, SpriteY, num);
+                }
                 UnsetClip();
                 SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
             }
         } else {
-            PtrAffGraph(SpriteX, SpriteY, num);
+            if (!TryGpuWorldSprite(SpriteX, SpriteY, num, ptrobj->Obj.X,
+                                   ptrobj->Obj.Y, ptrobj->Obj.Z)) {
+                PtrAffGraph(SpriteX, SpriteY, num);
+            }
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
         }
 
@@ -5303,10 +5436,16 @@ S32 AffOneObject(T_SORT *pt) {
             // sprites
             if (ClipXMin <= ClipXMax
                                 AND ClipYMin <= ClipYMax) {
-                AffGraph(0, SpriteX, SpriteY, GetPtrAnim3DS(num));
+                if (!TryGpuAnim3DSprite(SpriteX, SpriteY, num, ptrobj->Obj.X,
+                                        ptrobj->Obj.Y, ptrobj->Obj.Z)) {
+                    AffGraph(0, SpriteX, SpriteY, GetPtrAnim3DS(num));
+                }
             }
         } else {
-            AffGraph(0, SpriteX, SpriteY, GetPtrAnim3DS(num));
+            if (!TryGpuAnim3DSprite(SpriteX, SpriteY, num, ptrobj->Obj.X,
+                                    ptrobj->Obj.Y, ptrobj->Obj.Z)) {
+                AffGraph(0, SpriteX, SpriteY, GetPtrAnim3DS(num));
+            }
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
         }
 
@@ -5385,11 +5524,19 @@ S32 AffOneObject(T_SORT *pt) {
                 }
             }
             if (ptrextra->Flags & EXTRA_TRANSPARENT) {
-                ScaleSpriteTransp(0, SpriteX, SpriteY,
-                                  ScaleFactorSprite, ScaleFactorSprite,
-                                  bank,
-                                  PtrTransPal);
-            } else {
+                /* (the GPU's sprite path reads the bank by its number: a mirrored sprite is drawn in software) */
+                if (bank != HQR_Get(HQRPtrSpriteRaw, num)
+                    OR !TryGpuBlendSprite(SpriteX, SpriteY, num,
+                                          ScaleFactorSprite, PtrTransPal)) {
+                    ScaleSpriteTransp(0, SpriteX, SpriteY,
+                                      ScaleFactorSprite, ScaleFactorSprite,
+                                      bank,
+                                      PtrTransPal);
+                }
+            } else if (bank != HQR_Get(HQRPtrSpriteRaw, num)
+                       OR !TryGpuExtraSprite(SpriteX, SpriteY, num,
+                                             ptrextra->PosX, ptrextra->PosY,
+                                             ptrextra->PosZ)) {
                 ScaleSprite(0, SpriteX, SpriteY,
                             ScaleFactorSprite, ScaleFactorSprite,
                             bank);
@@ -5454,9 +5601,15 @@ S32 AffOneObject(T_SORT *pt) {
     case TYPE_DART:
         ptrd = &ListDart[numobj];
 
+        if (GpuRenderer_IsActive() AND(CubeMode == CUBE_EXTERIEUR OR(GpuScene AND CubeMode == CUBE_INTERIEUR))) {
+            GpuRenderer_Begin3DPass();
+        }
         aff = BodyDisplay_AlphaBeta(ptrd->PosX, ptrd->PosY, ptrd->PosZ,
                                     ptrd->Alpha, ptrd->Beta, 0,
                                     (U8 *)GivePtrObjFix(ptrd->Body));
+        if (GpuRenderer_IsActive() AND(CubeMode == CUBE_EXTERIEUR OR(GpuScene AND CubeMode == CUBE_INTERIEUR))) {
+            GpuRenderer_End3DPass();
+        }
 
         if (aff) {
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
@@ -5517,6 +5670,18 @@ void AffScene(S32 flagflip) {
        sample tables that were never built. */
     Poly_EnsureBlendLUT();
     { extern void RaceMod_Frame(void); RaceMod_Frame(); }                /* a race-track mod's opponent, put where it has got to (RACEMOD.CPP) */
+
+    /* Frame boundary: latch the texture filter for the batches this frame
+       enqueues (GpuRenderer_ClearFBO is called by RefreshGrille). */
+    GpuRenderer_BeginFrame();
+    /* (the HUD over the GPU renderer's frame -- FLOW_A.CPP: a scene frame again, a menu's plate of the frozen frame given up, and while
+       it is drawn the HUD's shading darkens the GPU's frame) */
+    {
+        extern S32 GpuSceneDrawing;
+        extern void GpuOverlay_Unplate(void);
+        GpuOverlay_Unplate();
+        GpuSceneDrawing = 1;
+    }
 
     S32 n, c, cmpt;
     S32 dx, dy;
@@ -5582,6 +5747,18 @@ startaffscene:
 
     UnsetClip();
 
+    /* BoxClean restores Screen→Log by default. Under GpuScene the interior
+       room lives in the FBO, so Log's dirty regions must clear to 0 for the
+       present to show the room through — and Screen may hold the plate a 2D
+       modal rebuilt on demand, which the default restore would paste over
+       the FBO bodies. Set every AffScene so mid-dialog BoxClean callers
+       inherit the rule; flag off / exterior restore the default and stay
+       byte-identical. */
+    if (GpuRenderer_IsSceneInterior())
+        SetBoxOneClean(DefaultBoxOneClear);
+    else
+        SetBoxOneClean(NULL);
+
     switch (flagflip) {
     case AFF_OBJETS_FLIP:
         //			BoxClean() ;
@@ -5589,8 +5766,24 @@ startaffscene:
         BoxClean(); // ATTENTION: rajouté le 30/05/97
         if (!FlagAnimWhoSpeak) {
             RestoreCinemaMode(); // Scrolle les bandes noires
-            if (CubeMode == CUBE_EXTERIEUR)
+            if (CubeMode == CUBE_EXTERIEUR) {
+                /* Scrub the offscreen target back to the terrain captured at
+                   the end of the terrain pass before the flagged-body pass
+                   draws, erasing the previous frame's shadow spans the paused
+                   target kept (BoxClean only restores Log). This runs before
+                   DrawAnimatedPolys so that frame's NZW polys paint over the
+                   restored terrain, exactly as the software BoxClean +
+                   DrawAnimatedPolys sequence does on Log. */
+                if (GpuRenderer_IsActive())
+                    GpuRenderer_RestoreTerrain();
                 DrawAnimatedPolys();
+            } else if (GpuScene AND GpuRenderer_IsActive()) {
+                /* Interior with GpuScene: bodies batch into the FBO the same
+                   way, so the previous frame's body paint has to be scrubbed
+                   before this frame's flagged-body pass draws. No
+                   DrawAnimatedPolys — that path is exterior terrain NZW. */
+                GpuRenderer_RestoreTerrain();
+            }
         }
         break;
 
@@ -5618,7 +5811,39 @@ startaffscene:
         ChangeIncrustPos(oldxporg, oldyporg, XpOrgw, YpOrgw);
         //			HQ_ChangeBalanceSamples( oldxporg, oldyporg ) ;
 
-        CopyScreen(Log, Screen);
+        /* The front-wall re-blit pastes wall pixels out of Screen (CopyMask),
+           so Screen has to hold the composited room. With the room batched
+           into the FBO, Cls left Log empty and mirroring it would hand
+           DrawOverBrick zeros to paint over the body; the software plate pass
+           rebuilds the same composite the software path would have in Screen.
+           The 2D modals that shade through Screen rebuild it on demand. */
+        if (GpuRenderer_IsSceneInterior())
+            AffGrille_BuildScreenPlate();
+        else
+            CopyScreen(Log, Screen);
+
+        /* The GPU backend draws the exterior terrain into its own target, so
+           its depth is read back for the object pass's ZBufBoxOverWrite2 test;
+           hidden pixels become colour 0, which the present composite blends
+           transparent over the same target's terrain. Interior cubes keep
+           PtrZBuffer's backing store for BufCube/BufferBrick and draw through
+           DrawOverBrick instead — no readback — but with GpuScene the room
+           (and the bodies that follow) live in the FBO, so the room is
+           snapshotted for AFF_OBJETS the same way exterior terrain is. */
+        if (GpuRenderer_IsActive() AND CubeMode == CUBE_EXTERIEUR) {
+            GpuRenderer_ReadbackDepthBuffer();
+            /* Static-camera frames (AFF_OBJETS) redraw the flagged objects but
+               never the terrain, so the offscreen target would keep each
+               frame's shadows and washed animated polys and smear them into
+               trails. Pin the clean terrain here; the AFF_OBJETS head restores
+               it before the flagged-body pass. */
+            GpuRenderer_SnapshotTerrain();
+        } else if (GpuScene AND GpuRenderer_IsActive() AND CubeMode == CUBE_INTERIEUR) {
+            /* Pin the clean room after RefreshGrille painted it and before the
+               object pass draws bodies; AFF_OBJETS restores it so each static
+               frame starts from the room, not the previous frame's bodies. */
+            GpuRenderer_SnapshotTerrain();
+        }
 
         if (flagflip == AFF_ALL_FLIP
                                 AND !CinemaMode AND MemoClipWindowYMin > 0) {
@@ -5668,7 +5893,16 @@ startaffscene:
             if ((Xp > VIEW_X0) AND(Xp < VIEW_X1) AND(Yp > VIEW_Y0) AND(Yp < VIEW_Y1)) {
                 ptrobj->WorkFlags |= WAS_DRAWN;
             }
-            continue;
+
+            /* The bake on the AFF_ALL frame copies this object into Screen, and
+               BoxClean puts Screen back into Log, which is what keeps an object
+               that these frames skip visible afterwards. GpuRenderer_IsSceneInterior
+               is the mark where BoxClean clears Log instead (the room lives in the
+               FBO and Screen may hold a modal plate), so there nothing restores
+               the baked copy and the object has to be drawn like any other. */
+            if (!GpuRenderer_IsSceneInterior()) {
+                continue;
+            }
         }
 
         if ((ptrobj->Obj.Body.Num == -1)
@@ -6080,7 +6314,9 @@ startaffscene:
 
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
             ColorFont(ptrdisp->Info);
-            Font(ScreenXMin, ScreenYMin, string);
+            if (!TryGpuIncrustText(ScreenXMin, ScreenYMin, string)) {
+                Font(ScreenXMin, ScreenYMin, string);
+            }
 
             if (ClipXMin <= ClipXMax
                                 AND ClipYMin <= ClipYMax) {
@@ -6115,9 +6351,13 @@ startaffscene:
                     y = ScreenYMin;
 
                     ColorFont(0);
-                    Font(x + 2, y + 4, string);
+                    if (!TryGpuIncrustText(x + 2, y + 4, string)) {
+                        Font(x + 2, y + 4, string);
+                    }
                     ColorFont(((ptrdisp->Info & 0xFF00) >> 8) * 16 + 14);
-                    Font(x, y, string);
+                    if (!TryGpuIncrustText(x, y, string)) {
+                        Font(x, y, string);
+                    }
                     BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
                 }
             } else {            // Speak Only
@@ -6147,9 +6387,13 @@ startaffscene:
                 y = ScreenYMin;
 
                 ColorFont(BLACK);
-                Font(x + 2, y + 4, string);
+                if (!TryGpuIncrustText(x + 2, y + 4, string)) {
+                    Font(x + 2, y + 4, string);
+                }
                 ColorFont(ptrdisp->Info);
-                Font(x, y, string);
+                if (!TryGpuIncrustText(x, y, string)) {
+                    Font(x, y, string);
+                }
                 BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
             }
             break;
@@ -6168,7 +6412,9 @@ startaffscene:
             }
 
             ScaleFactorSprite = DEF_SCALE_FACTOR;
-            PtrAffGraph(SpriteX, SpriteY, ptrdisp->Num);
+            if (!TryGpuIncrustSprite(SpriteX, SpriteY, ptrdisp->Num)) {
+                PtrAffGraph(SpriteX, SpriteY, ptrdisp->Num);
+            }
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
 
             if (ClipXMin <= ClipXMax
@@ -6206,7 +6452,9 @@ startaffscene:
 
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
             ColorFont(155);
-            Font(ScreenXMin, ScreenYMin, string);
+            if (!TryGpuIncrustText(ScreenXMin, ScreenYMin, string)) {
+                Font(ScreenXMin, ScreenYMin, string);
+            }
 
             if (ClipXMin <= ClipXMax
                                 AND ClipYMin <= ClipYMax) {
@@ -6423,6 +6671,8 @@ startaffscene:
             break;
         }
     }
+
+    { extern S32 GpuSceneDrawing; GpuSceneDrawing = 0; }
 
 #ifdef ENABLE_POLY_RECORDING
     // Polygon call recording — stop recording and write file

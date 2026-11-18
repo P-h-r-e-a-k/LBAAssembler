@@ -305,6 +305,13 @@
 #include "RACEMOD.H"
 #include "RACEGAME.H"
 #include <SYSTEM/HQRLOAD.H>
+/* The HUD over the GPU renderer's frame (FLOW_A.CPP) */
+extern U8 GpuOverlay_Black(void);
+extern S32 GpuOverlay_LiveScene(void);
+extern void GpuOverlay_ShadeBegin(S32 deccoul);
+extern void GpuOverlay_ShadeRun(S32 x0, S32 y, S32 x1);
+extern void GpuOverlay_ShadeEnd(void);
+
 #include <AIL/SAMPLE.H>
 extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
 extern void DoImpact(S32 num, S32 x, S32 y, S32 z, U8 owner);   // IMPACT.CPP
@@ -1632,13 +1639,14 @@ static void LensDraw(void) {
     if (!game && !cube) return;
     const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, cx = w / 2, cy = h / 2 - (game ? h * s_lensRaise / 100 : 0);
     const double r = h * 0.47;
+    const U8 black = GpuOverlay_Black(); // (not index 0: see-through over the GPU renderer's frame)
     for (S32 y = 0; y < h; y++) {
         const double dy = y + 0.5 - cy;
-        if (fabs(dy) >= r) { Box(0, y, w - 1, y, 0); continue; }
+        if (fabs(dy) >= r) { Box(0, y, w - 1, y, black); continue; }
         const S32 half = (S32)sqrt(r * r - dy * dy);
         const S32 left = cx - half, right = cx + half;
-        if (left > 0) Box(0, y, left - 1, y, 0);
-        if (right < w - 1) Box(right + 1, y, w - 1, y, 0);
+        if (left > 0) Box(0, y, left - 1, y, black);
+        if (right < w - 1) Box(right + 1, y, w - 1, y, black);
         // (the rim: the round's edge, thicker where it runs up and down)
         const S32 rimHalf = (S32)sqrt(fmax(0.0, (r - RACE_LENS_RIM) * (r - RACE_LENS_RIM) - dy * dy));
         if (fabs(dy) >= r - RACE_LENS_RIM) Box(left, y, right, y, RACE_LENS_RIM_COLOUR);
@@ -20135,7 +20143,7 @@ static void HalDraw(void) {
     // (the whole box marked to redraw, not only its lines: with the camera still the game redraws only what's marked, and the box stayed on
     // the screen once he'd done -- the user, 2026-11-16, "HAL's text is also staying on screen and not clearing")
     Box(x0 - 4, y0 - 4, x0 + pw + 3, y0 + 36 + n * 26 + 10, 9 * 16 + 4);
-    Box(x0, y0, x0 + pw - 1, y0 + 36 + n * 26 + 6, 0);
+    Box(x0, y0, x0 + pw - 1, y0 + 36 + n * 26 + 6, GpuOverlay_Black());
     BoxMovingAdd(x0 - 4, y0 - 4, x0 + pw + 3, y0 + 36 + n * 26 + 10);
     HudLine(w / 2 - SizeFont("HAL on the radio") / 2, y0 + 4, "HAL on the radio", -1);
     for (int i = 0; i < n; i++) HudLine(x0 + 14, y0 + 36 + i * 26, lines[i], -1);
@@ -23142,7 +23150,7 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int ring, S32 settled, S32
     }
     SetClip(x0, y0, x1, y1);
     BackupAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
-    Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, 0);
+    Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, GpuOverlay_Black());
     const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu] == -3 || s_puModel[pu] == -5 ? -1 : s_puModel[pu] == -4 ? (s_goldIcon >= 0 ? s_goldIcon : s_puModel[PU_FUEL]) : s_puModel[pu];
     U8 *shape = model >= 0 ? (U8 *)GivePtrObjFix(model) : pu >= 0 && s_puModel[pu] == -3 && s_fakeIconBody >= 0 ? (U8 *)GivePtrBody(s_fakeIconBody)
                 : pu >= 0 && s_puModel[pu] == -5 && s_hauntIcon >= 0 ? (U8 *)GivePtrBody(s_hauntIcon) : NULL;
@@ -24000,15 +24008,24 @@ static S32 DrawMinimap(S32 width, S32 height) {
     MapColours();
     // the box: the scene under it kept (RaceMod_MinimapHide), darkened, the road over it
     const U8 *clut = PtrCLUTGouraud + ((15 - RACE_MAP_SHADE) << 8);
+    // (over the GPU renderer's frame the scene isn't in Log: a see-through pixel is left see-through and the GPU's frame darkened under
+    // it, a run at a time -- FLOW_A.CPP)
+    const S32 gpu = GpuOverlay_LiveScene();
+    if (gpu) GpuOverlay_ShadeBegin(RACE_MAP_SHADE);
     for (S32 r = 0; r < s_mapH; r++) {
         U8 *row = (U8 *)Log + TabOffLine[y0 + r] + x0;
         const U8 *m = s_mapMask + r * s_mapW;
         memcpy(s_mapUnder + r * s_mapW, row, (size_t)s_mapW);
-        for (S32 c = 0; c < s_mapW; c++) {
-            if (m[c] == MAP_OUT) continue;
+        S32 run = -1;
+        for (S32 c = 0; c <= s_mapW; c++) {
+            const S32 hole = c < s_mapW && gpu && m[c] == MAP_NONE && row[c] == 0;
+            if (hole) { if (run < 0) run = c; continue; }
+            if (run >= 0) { GpuOverlay_ShadeRun(x0 + run, y0 + r, x0 + c - 1); run = -1; }
+            if (c == s_mapW || m[c] == MAP_OUT) continue;
             row[c] = m[c] == MAP_NONE ? clut[row[c]] : s_mapCol[m[c]];
         }
     }
+    if (gpu) GpuOverlay_ShadeEnd();
     // the cars: the opponents' (as the editor's racecars has them: its car where this scene has it, else where its line has it in the
     // race; one waiting out of sight left out), then Twinsen's over them
     const S32 r = s_mapRoad + 1;

@@ -3,6 +3,7 @@
 #include <stdlib.h> /* getenv: LBA2_TERRAIN_FLOAT */
 
 #include <SVGA/SCREEN.H>
+#include <GPU/GPURENDERER.H> // GpuRenderer_IsActive: exterior Log clear under the GPU hybrid
 
 #define LIMITE_LOIN (60 * 1024)
 #define COLOR_LIMITE 255
@@ -112,9 +113,22 @@ void ClsTerrainZBuf() {
     extern U32 DecorFrame;
     DecorFrame++; // (a new frame: every decor may be drawn once again -- DECORS.CPP DrawnThisFrame)
     if (DecorFrame == 0) DecorFrame = 1;
-    SetClearColor((U8)FogCoul);
-    Cls();
-    SetClearColor(0);
+    /* Software-plate passes force the software fillers while the backend is
+       still active (GpuRenderer_SetSoftwarePolys): the clear must then be
+       the software FogCoul fill, or the plate would start from zeros and
+       ShadeBoxBlk would darken holes instead of scene colours. */
+    if (GpuRenderer_IsActive() && !GpuRenderer_GetSoftwarePolys()) {
+        /* The GPU target already holds this frame's terrain; only palette
+           index 0 is transparent in the present composite, so a FogCoul fill
+           here would park an opaque overlay over that target. Keep Log at
+           index 0 so the offscreen scene shows through. */
+        SetClearColor(0);
+        Cls();
+    } else {
+        SetClearColor((U8)FogCoul);
+        Cls();
+        SetClearColor(0);
+    }
 
     memset(PtrZBuffer, 255, SIZE_Z_BUFFER); // Clear ZBuffer
 }

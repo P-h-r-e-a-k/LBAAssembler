@@ -90,6 +90,7 @@ The engine mapped as a whole: layers, the engine/game membrane, and the on-disk 
 | [WIDESCREEN_PROJECTION_AUDIT.md](WIDESCREEN_PROJECTION_AUDIT.md) | Projection 4:3 audit: where projection hardcodes the screen centre and 640, culling/preclip sites, and what PR #134 did and did not route. |
 | [ABI.md](ABI.md) | Rule for reading 32-bit DOS-era data on 64-bit hosts; catalogue of fat types; compile-time guards. |
 | [PLATFORM.md](PLATFORM.md) | High-level map of host assumptions (pointer ABI, endianness, FP precision, ASM, OS boundary) with status badges and next-step pointers. |
+| [RENDERER.md](RENDERER.md) | Hardware-accelerated render path: the behavior-owning common layer and the GL / SDL3-GPU backends behind a vtable, shared shaders, build flags and status. |
 
 ## Plans & research
 
@@ -125,6 +126,7 @@ doc is now history: where it disagrees with the code, the code wins.
 | [REFACTOR_ROADMAP.md](plan/REFACTOR_ROADMAP.md) | Living | Which areas are worth restructuring and what each one buys, ordered by what tests cover them rather than by how untidy they are. Measures what CI can actually see: 5% of `SOURCES/`, and no 1997 game logic at all. Companion to [FEATURE_WORKFLOW.md](FEATURE_WORKFLOW.md) Example 5. |
 | [ARCH_RULES_PLAN.md](plan/ARCH_RULES_PLAN.md) | Implemented | Checking the boundaries the docs already state: seven rules from CODESTYLE and AGENTS.md, each measured against the tree, plus the four candidates deliberately left out. Companion to [REFACTOR_ROADMAP.md](plan/REFACTOR_ROADMAP.md). |
 | [RENDER_INTERP_PLAN.md](plan/RENDER_INTERP_PLAN.md) | Proposed | Smooth motion above the sim rate (#412), building on the fixed-timestep sim in [MOVEMENT_FRAMERATE.md](MOVEMENT_FRAMERATE.md). Nothing landed. |
+| [GPU_SCENE_PLAN.md](plan/GPU_SCENE_PLAN.md) | Phase 3 In Progress | Moving scene drawing from the software Log path onto the GL / SDL3 GPU backends behind one flag: interior room quads (phase 1), interior bodies (phase 2), then opaque world sprites and the front-wall re-blit + R8 present + exterior inventory plate + behaviour-modal plate + blend sprites + scaled opaque sprites + exterior flow particles + HUD text (phase 3, landed — readback deletion and the staging-upload shrink still open), all batched through GPURENDERER_COMMON. Menus and text are evaluated last and expected to stay software. |
 
 ## Knowledge bundle
 

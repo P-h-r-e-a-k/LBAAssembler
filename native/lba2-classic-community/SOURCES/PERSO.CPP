@@ -1,6 +1,7 @@
 #include "C_EXTERN.H"
 #include "MAPPACK.H"
 #include "FRAMEDUMP.H"
+#include <GPU/GPURENDERER.H> /* GpuRenderer_IsActive: a modal's screenshot composed over the GPU frame */
 
 #include <SYSTEM/INPUT_FLOW.H>
 #include <POLYGON/POLYFILT.H>
@@ -869,12 +870,15 @@ restartloop:
         /* Console screenshot (PNG): performed here where Log + PtrPal are valid.
            Capture Log, the presented buffer (SDL PresentFrame uploads Log); Screen
            is the clean-background secondary and misses the per-frame 3D models and
-           the foreground-brick re-blit. */
+           the foreground-brick re-blit. Under a GPU backend Log is only the
+           palette-index overlay, so the write composes it over the offscreen
+           target (Control_ScreenshotTo) and the capture still shows the frame
+           the player sees. */
         {
             char shotPath[ADELINE_MAX_PATH];
             int is_png = 0;
             if (Console_HasPendingScreenshot(shotPath, sizeof(shotPath), &is_png) && is_png) {
-                SavePNG(shotPath, Log, ModeDesiredX, ModeDesiredY, PtrPal);
+                Control_ScreenshotTo(shotPath);
                 Console_ClearPendingScreenshot();
             }
         }
@@ -2306,13 +2310,26 @@ static void ControlPrePresent(U32 *frameBuffer, U32 pitch, U32 width, U32 height
         char shotPath[ADELINE_MAX_PATH];
         int is_png = 0;
         if (Console_HasPendingScreenshot(shotPath, sizeof(shotPath), &is_png) && is_png && Log && PtrPal) {
-            SavePNG(shotPath, Log, ModeDesiredX, ModeDesiredY, PtrPal);
+            // (under a GPU renderer the picture is its frame with Log over it: Control_ScreenshotTo composes the two)
+            if (GpuRenderer_IsActive())
+                Control_ScreenshotTo(shotPath);
+            else
+                SavePNG(shotPath, Log, ModeDesiredX, ModeDesiredY, PtrPal);
             Console_ClearPendingScreenshot();
         }
     }
     /* Every mode presents, so this is where the mouse's capture is decided. */
     MouseCapture_Update();
     Console_PrePresent(frameBuffer, pitch, width, height, palette_rgb);
+}
+
+/* Whether ControlPrePresent will touch the ARGB buffer this frame. The listen
+   poll ignores it; the console compositor only draws when open (or a PPM
+   screenshot is pending). When this and the overlay query are both FALSE and
+   a GPU backend owns the present, PresentFrame skips the CPU conversion. */
+static S32 ControlPrePresentNeedsArgb(void) {
+    // (a video being recorded takes the frame as the window gets it: FrameDump_Frame)
+    return Console_PrePresentNeedsArgb() || FrameDump_Active();
 }
 
 int Lba2Main(int argc, char *argv[]) {
@@ -2637,6 +2654,7 @@ int Lba2Main(int argc, char *argv[]) {
        CONSOLE_CMD.CPP's own comment. Runs before ControlPrePresent even has a
        chance to lock anything this frame. */
     SetPreFrameCallback(Console_ApplyPendingResSwitch);
+    SetPrePresentNeedsArgb(ControlPrePresentNeedsArgb);
 
     /* Touch virtual gamepad (Android / mobile). Init before Perftrace so
        timing callbacks nest correctly. No-op on non-Android builds.
@@ -2649,6 +2667,7 @@ int Lba2Main(int argc, char *argv[]) {
        nothing to draw. */
     TouchOverlay_Init();
     SetOverlayPrePresentCallback(TouchOverlay_Render);
+    SetOverlayPrePresentNeedsArgb(TouchOverlay_PrePresentNeedsArgb);
 
     /* Perftrace: ring-buffer per-frame timing capture; off by default, opt-in
        via the `perftrace` console verb. See docs/PERFTRACE.md. */

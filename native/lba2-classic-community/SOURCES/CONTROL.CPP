@@ -24,6 +24,7 @@
 #include <AIL/SAMPLE.H> /* Sample_DriverPlaysSound: whether audio actually came up */
 #include <FILEIO/SAVEPNG.H>
 #include <SVGA/CLIP.H>     /* SetClipWindow: clears a loaded CinemaMode's letterbox, see Control_Begin */
+#include <GPU/GPURENDERER.H> /* GpuRenderer_ReadbackPresented: capture the FBO, not only Log */
 #include <SVGA/SCREEN.H>   /* Screen, ModeDesiredX/Y */
 #include <SVGA/VIDEO.H>    /* Palette() */
 #include <SYSTEM/STRING.H> /* EqualsIgnoringCaseAndEncoding for --language */
@@ -232,7 +233,6 @@ static int s_captured_at_stream_end = 0;
 static long s_left_for_menu_tick = -1;
 
 static void control_dump_state(const char *path);
-static void control_screenshot(const char *path);
 static void control_console_echo(const char *line);
 int Control_UnfiredExecAt(void);
 
@@ -1403,11 +1403,63 @@ static void control_dump_state(const char *path) {
     fclose(f);
 }
 
-static void control_screenshot(const char *path) {
-    /* Capture Log, the presented buffer (SDL PresentFrame uploads Log). Screen is
-       a secondary buffer that only holds the clean brick background, so it misses
-       the per-frame 3D models and the foreground-brick re-blit. */
+void Control_ScreenshotTo(const char *path) {
+    /* Capture the frame the player sees. On software that is Log (the
+       presented buffer). Under a GPU backend the 3D lives in the offscreen
+       target and Log is only the palette-index overlay (index 0 transparent),
+       so SavePNG(Log) would miss the sky/terrain; composite Log over a colour
+       readback of the target instead. Screen is a secondary buffer that only
+       holds the clean brick background, so it misses the per-frame 3D models
+       and the foreground-brick re-blit. */
+    const U32 w = (U32)ModeDesiredX;
+    const U32 h = (U32)ModeDesiredY;
+    if (GpuRenderer_IsActive() && w > 0 && h > 0) {
+        U32 *presented = (U32 *)malloc(w * h * sizeof(U32));
+        if (presented && GpuRenderer_ReadbackPresented(presented, w, h)) {
+            U32 *composed = (U32 *)malloc(w * h * sizeof(U32));
+            if (composed) {
+                const U8 *logMem = (const U8 *)Log;
+                const U8 *pal = (const U8 *)PtrPal;
+                for (U32 y = 0; y < h; y++) {
+                    for (U32 x = 0; x < w; x++) {
+                        const U8 idx = logMem[y * w + x];
+                        if (idx == 0) {
+                            /* Transparent overlay: the FBO 3D shows through,
+                               matching PresentFrame's paletteLUT[0] alpha 0. */
+                            composed[y * w + x] = presented[y * w + x];
+                        } else {
+                            composed[y * w + x] =
+                                ((U32)pal[idx * 3 + 0] << 16) |
+                                ((U32)pal[idx * 3 + 1] << 8) |
+                                (U32)pal[idx * 3 + 2];
+                        }
+                    }
+                }
+                SavePNGRGB((char *)path, composed, (S32)w, (S32)h);
+                free(composed);
+                free(presented);
+                return;
+            }
+            free(presented);
+        } else {
+            free(presented);
+        }
+    }
     SavePNG((char *)path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPal);
+}
+
+void Control_ClearCaptureTarget(void) {
+    if (!GpuRenderer_IsActive()) {
+        return;
+    }
+    /* Index 0, not the scene's clear colour: the cleanroom golden is black
+       behind the UI, and an exterior's fog fill would show through wherever
+       Log stays transparent. */
+    GpuRenderer_SetSceneClearIndex(0);
+    /* Deferred by the backend until the frame's first pass or present, so the
+       target goes black on the next present even though a modal menu draws no
+       GPU geometry of its own. */
+    GpuRenderer_ClearFBO();
 }
 
 /* The capture half of finalize: dump/screenshot only, no exit. Shared by the tick-budget
@@ -1420,7 +1472,7 @@ static void control_capture(void) {
     if (s_have_dump)
         control_dump_state(s_dump_path);
     if (s_have_shot)
-        control_screenshot(s_shot_path);
+        Control_ScreenshotTo(s_shot_path);
     /* Flush projection capture last so any final-frame SetProjection from the dump/
        screenshot present path is included. End is idempotent; safe even if never armed,
        and closes both sinks in one call. */

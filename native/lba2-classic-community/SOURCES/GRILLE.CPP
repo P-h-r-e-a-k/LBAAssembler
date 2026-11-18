@@ -3,6 +3,7 @@
 #include "MAPPACK.H"
 
 #include <3D/PROJREC.H>
+#include <GPU/GPURENDERER.H> // GpuRenderer_SetBrickBank / DrawBrick / IsoWorldZO
 #include <SVGA/SCREEN.H>
 
 /*══════════════════════════════════════════════════════════════════════════*
@@ -31,6 +32,12 @@ S32 YpOrgw;
 #define MAX_BRICK 512
 
 S16 NbBrickColon[NB_COLON];
+
+/* When set, AffBrickBlock / AffBrickBlockOnly force the software AffGraph
+   path and skip GpuRenderer_DrawBrick. AffGrille_BuildScreenPlate sets this
+   so the Screen plate (AFF_ALL under GpuScene, and the 2D modals) rasterizes
+   without submitting a second FBO batch. */
+static S32 s_swPlateBricks = 0;
 
 typedef struct
 {
@@ -303,6 +310,9 @@ void InitGrille(U32 numcube) {
         //----------------------------------------------	NEW
         if (!LoadUsedBrick())
             return;
+        /* BufferBrick was rewritten for this cube: hand the bank to the GPU
+           brick path (no-op until GpuScene is on). */
+        GpuRenderer_SetBrickBank(BufferBrick);
         //----------------------------------------------
     }
 
@@ -353,7 +363,9 @@ S32 BkgHeaderIsCurrent() {
 }
 
 /*--------------------------------------------------------------------------*/
-void FreeGrille() {}
+void FreeGrille() {
+    GpuRenderer_SetBrickBank(NULL);
+}
 /*-------------------------------------------------------------------------*/
 /*══════════════════════════════════════════════════════════════════════════*
 		   █▀▀▀▀ ██▄ █ █▀▀▀▄       █   █ █▀▀▀█ █▀▀▀█
@@ -755,6 +767,19 @@ void InitBufferCube() {
  *══════════════════════════════════════════════════════════════════════════*/
 /*──────────────────────────────────────────────────────────────────────────*/
 
+/* Recouvrement: paste one front-wall brick over the actor. The source is the
+   software room plate in Screen — the composited room, which is the pixel the
+   wall must show: where two bricks overlap on screen the plate holds the
+   depth-winning neighbour, not necessarily this brick's own texels. The paste
+   lands in Log, so it sits above Log sprites and FBO bodies alike, which is
+   what puts the wall in front of the actor when the room is batched into the
+   FBO. Screen keeps that plate because AffScene rebuilds it at AFF_ALL under
+   GpuRenderer_IsSceneInterior (Cls leaves Log empty there, and mirroring an
+   empty Log would paste zeros over the actor). */
+static void ReBlitOverActorBrick(const T_COLONB *ptrlbc) {
+    CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+}
+
 void DrawOverBrick(S32 xm, S32 ym, S32 zm) {
     register T_COLONB *ptrlbc;
     S32 col, i;
@@ -817,7 +842,7 @@ void DrawOverBrick(S32 xm, S32 ym, S32 zm) {
                                    1
                                        //				AND WorldColBrick(xw+SIZE_BRICK_XZ,yw,zw)==1 ) )
                                        AND WorldColBrick(xw + SIZE_BRICK_XZ, yw, zw) >= 1)) {
-                        CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+                        ReBlitOverActorBrick(ptrlbc);
                     }
                 }
             }
@@ -852,17 +877,17 @@ void DrawOverBrick3(S32 xm, S32 ym, S32 zm, S32 ymax) {
                 if (ptrlbc->Ym > ymax) {
                     if ((ptrlbc->Zm >= zm)
                             OR(ptrlbc->Xm >= xm)) {
-                        CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+                        ReBlitOverActorBrick(ptrlbc);
                     }
                 } else if (ptrlbc->Ym >= ym) {
                     if ((ptrlbc->Zm == zm)
                             AND(ptrlbc->Xm == xm)) {
-                        CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+                        ReBlitOverActorBrick(ptrlbc);
                     }
 
                     if ((ptrlbc->Zm > zm)
                             OR(ptrlbc->Xm > xm)) {
-                        CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+                        ReBlitOverActorBrick(ptrlbc);
                     }
                 }
             }
@@ -899,12 +924,12 @@ void DrawOverBrickCage(S32 xm, S32 ym, S32 zm) {
                                  AND ptrlbc->Ym >= ym) {
                     if ((ptrlbc->Zm == zm)
                             AND(ptrlbc->Xm == xm)) {
-                        CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+                        ReBlitOverActorBrick(ptrlbc);
                     }
 
                     if ((ptrlbc->Zm > zm)
                             OR(ptrlbc->Xm > xm)) {
-                        CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
+                        ReBlitOverActorBrick(ptrlbc);
                     }
                 }
             }
@@ -983,7 +1008,13 @@ void AffBrickBlock(S32 block, S32 brick, S16 x, S16 y, S16 z) {
         // the iso origin offset slides off that multiple and the rejected bricks
         // start having visible content. See WIDESCREEN_HARDCODED_DIMS_AUDIT.md.
         if (XScreen >= -47 AND XScreen < (S32)ModeDesiredX AND YScreen >= -38 AND YScreen < (S32)ModeDesiredY) {
-            AffGraph(numbrick - 1, XScreen, YScreen, BufferBrick);
+            /* GpuScene: submit as a batched FBO quad; FALSE keeps AffGraph.
+               s_swPlateBricks forces AffGraph for the Screen plate pass. */
+            if (s_swPlateBricks
+                    OR !GpuRenderer_DrawBrick(numbrick - 1, XScreen, YScreen,
+                                              GpuRenderer_IsoWorldZO(x, y, z))) {
+                AffGraph(numbrick - 1, XScreen, YScreen, BufferBrick);
+            }
 
             // For XScreen in [-47,-25], (XScreen+24)/24 truncates to 0, so
             // those bricks share column 0 and DrawOverBrick* can re-mask their
@@ -1162,7 +1193,13 @@ void AffBrickBlockOnly(S32 block, S32 brick, S16 x, S16 y, S16 z) {
         // Same left cull as AffBrickBlock: a brick at -47..-25 still has
         // pixels on screen when the width is off the 24-px grid.
         if (XScreen >= -47 AND XScreen < (S32)ModeDesiredX AND YScreen >= -38 AND YScreen < (S32)ModeDesiredY) {
-            AffGraph(numbrick - 1, XScreen, YScreen, BufferBrick);
+            /* GpuScene: submit as a batched FBO quad; FALSE keeps AffGraph.
+               s_swPlateBricks forces AffGraph for the Screen plate pass. */
+            if (s_swPlateBricks
+                    OR !GpuRenderer_DrawBrick(numbrick - 1, XScreen, YScreen,
+                                              GpuRenderer_IsoWorldZO(x, y, z))) {
+                AffGraph(numbrick - 1, XScreen, YScreen, BufferBrick);
+            }
         }
     }
 }
@@ -1202,6 +1239,27 @@ void AffGrilleLabyrinthe() {
             }
         }
     }
+}
+
+/* Rebuild the software room into Screen — the plate ReBlitOverActorBrick
+   pastes front walls out of, and the buffer the 2D modals that shade through
+   Screen (inventory wheel, behaviour panel) expect to find. Then clear Log so
+   the present shows the FBO room through the overlay. Callers are under
+   GpuRenderer_IsSceneInterior(): AFF_ALL builds it in place of mirroring Log
+   (Cls left Log empty, so a mirror would hand the re-blit zeros), and the
+   modals rebuild it on demand after shading through it. The plate pass forces
+   AffGraph so no second FBO batch is submitted. */
+void AffGrille_BuildScreenPlate(void) {
+    s_swPlateBricks = 1;
+    if (ModeLabyrinthe) {
+        AffGrilleLabyrinthe();
+    } else {
+        AffGrille();
+    }
+    s_swPlateBricks = 0;
+
+    CopyScreen(Log, Screen);
+    memset(Log, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
 }
 
 // Affiche un cube de block (3*3*3) autour du point passe (coordonnees world)

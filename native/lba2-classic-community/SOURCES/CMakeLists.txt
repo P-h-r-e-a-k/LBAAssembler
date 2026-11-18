@@ -21,7 +21,7 @@ set(SOURCES_FILES AMBIANCE.CPP BOOT_EXIT.CPP DISTRIB.CPP AUDIO_BALANCE.CPP AUDIO
         CONFIG_FILE.CPP DART.CPP DEMO_SEED.CPP DIRECTORIES.CPP DISKFUNC.CPP EMBEDDED_CFG_WRITE.CPP EXIT_SCREEN.CPP EXTFUNC.CPP EXTRA.CPP FICHE.CPP FLOW.CPP FOLLOWCAM.CPP GAMEMENU.CPP GAMEMENU_MOUSE.CPP MOUSE_CAPTURE.CPP MENU_INPUT.CPP MENU_KEYNAV.CPP MENU_LABELS.CPP GERELIFE.CPP
         GERETRAK.CPP GLOBAL.CPP GRILLE.CPP HOLOBODY.CPP HOLOGLOB.CPP HOLOPLAN.CPP IMPACT.CPP INCRUST.CPP INITADEL.C
         INPUT.CPP INPUT_BINDINGS.CPP INTEXT.CPP INVENT.CPP JOYSTICK.CPP LZSS.CPP MEM.CPP MESSAGE.CPP MUSIC.CPP OBJECT.CPP EDITOR_OVERLAY.CPP RACEMOD.CPP RACEGAME.CPP RACEUPDATE.CPP NETRACE.CPP NETUPNP.CPP FRAMEDUMP.CPP MAPPACK.CPP PATCH.CPP IMAGE_LOAD.CPP PERFTRACE.CPP PERSO.CPP
-        RES_CATALOG.CPP RES_DISCOVERY.CPP RES_MENU.CPP RES_PICKER.CPP RES_SWITCH.CPP
+        RES_CATALOG.CPP RES_DISCOVERY.CPP RES_MENU.CPP RES_PICKER.CPP RES_SWITCH.CPP RENDER_SWITCH.CPP
         PLAYACF.CPP POF.CPP RAIN.CPP SNOW.CPP RECORD.CPP RECORD_FORMAT.CPP SCRIPT_BREAKPOINT.CPP SETTINGS.CPP SAVEGAME.CPP SAVEGAME_WIRE.CPP SAVEGAME_LOAD_BOUNDS.CPP SAVENAME_VALIDATION.CPP SCAN.CPP SORT.CPP TOUCH_INPUT.CPP VALIDPOS.CPP VERSION.CPP WAGON.CPP ZV.CPP)
 # set(SOURCES_FILES_ASM COMPRESS.ASM FIRE.ASM FLOW_A.ASM FUNC.ASM GRILLE_A.ASM PLASMA.ASM)
 #set(SOURCES_FILES_ASM_EXCLUDED COPY.ASM)
@@ -64,7 +64,7 @@ list(REMOVE_ITEM RENDERER_ENGINE_SOURCES PERSO.CPP)
 add_library(lba2_renderer_engine STATIC ${RENDERER_ENGINE_SOURCES} ${SOURCES_FILES_ASM} ${EMBEDDED_LBA2_CFG_CPP})
 target_include_directories(lba2_renderer_engine PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/CONSOLE ../LIB386/H)
 target_compile_definitions(lba2_renderer_engine PRIVATE ONE_GAME_DIRECTORY LBA_GAME CDROM USE_MVIDEO_NULL USE_SOUND_NULL LBA2_RENDERER_HOST)
-target_link_libraries(lba2_renderer_engine PUBLIC 3dext console 3D ail ani fio obj poly svg sys netkit)
+target_link_libraries(lba2_renderer_engine PUBLIC 3dext console 3D ail ani fio obj poly svg sys gpur gly gs3 netkit)
 if(TARGET lba2_renderer)
     target_link_libraries(lba2_renderer PUBLIC lba2_renderer_engine)
     add_dependencies(lba2_renderer lba2_renderer_engine)
@@ -150,7 +150,15 @@ target_link_libraries(${LBA2_EXECUTABLE_NAME} PRIVATE console)
 target_include_directories(${LBA2_EXECUTABLE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/CONSOLE)
 # Explicit order matters for GNU static linking: poly references RoundType/ROUND in libsys (UTILS.CPP);
 # sys must follow poly. (Transitive deps from 3dext alone order sys before poly and break -m32 links.)
-target_link_libraries(${LBA2_EXECUTABLE_NAME} PRIVATE 3dext 3D ail ani fio obj poly svg sys lba2_platform netkit)
+target_link_libraries(${LBA2_EXECUTABLE_NAME} PRIVATE 3dext 3D ail ani fio obj poly svg sys gpur gly gs3 lba2_platform netkit)
+# The GL renderer core is always built (DEFINES/OFF picks stubs in
+# LIB386/GL/RENDER_GL.CPP), so the engine always links it. USE_GPURENDERER
+# selects the parts of SOURCES that are GPU-specific (boot path, menu rows,
+# terrain hook call sites) — a GPURENDERER=OFF build compiles them out and
+# the runtime renderer state stays 0.
+if(GPURENDERER)
+    target_compile_definitions(${LBA2_EXECUTABLE_NAME} PRIVATE USE_GPURENDERER)
+endif ()
 if (WIN32)
     target_link_libraries(${LBA2_EXECUTABLE_NAME} PRIVATE gdi32 user32 ddraw winmm kernel32)
     if (LBA2_CONTROL_SERVER)

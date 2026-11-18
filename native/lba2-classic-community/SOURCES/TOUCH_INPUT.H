@@ -59,6 +59,11 @@ S32 TouchOverlay_HandleEvent(const PlatformEvent *event);
 void TouchOverlay_Render(U32 *frameBuffer, U32 pitch, U32 width, U32 height,
                          const U8 *palette_rgb);
 
+/* TRUE when TouchOverlay_Render will draw into the ARGB buffer this frame
+ * (overlay level not OVL_OFF). FALSE on desktop / with no active level, so
+ * PresentFrame can take the R8 path without a CPU conversion. */
+S32 TouchOverlay_PrePresentNeedsArgb(void);
+
 /* Whether the backend supports an overlay. SDL3 currently enables it on
    Android; a TV can still wake it with a touch. Distinct from whether the
    visibility policy draws anything this frame. */

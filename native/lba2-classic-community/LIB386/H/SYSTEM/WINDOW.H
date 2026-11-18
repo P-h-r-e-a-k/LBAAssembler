@@ -19,9 +19,14 @@ void EndWindow();
 bool IsWindowInitialized();
 
 // --- Interface ---------------------------------------------------------------
-/** Create the platform presentation surface at resX*resY. Fullscreen is
- *  requested at creation to avoid a windowed-then-flipped frame on boot. */
-bool CreateWindowSurface(U32 resX, U32 resY, bool fullscreen);
+/** Create the SDL window, renderer, and streaming texture at resX*resY. When
+ *  `fullscreen` is true the window is created fullscreen up front (via the
+ *  SDL create-time property), avoiding a windowed-then-flipped frame on boot.
+ *  When `opengl` is true the window is created as an SDL OpenGL window (the
+ *  GL renderer backend's SDL_GL_CreateContext requires that flag at creation
+ *  time); the SDL software renderer keeps working on such a window, picking
+ *  the OpenGL renderer driver, so the flag is harmless on the software path. */
+bool CreateWindowSurface(U32 resX, U32 resY, bool fullscreen, bool opengl);
 void DestroyWindowSurface();
 
 /** Resize the existing presentation surface in place, without
@@ -79,6 +84,34 @@ void Window_SetVSync(int enabled);
 // PLATFORM_FILTER_*. Presentation only. False when this backend cannot do the
 // mode asked for, in which case the one in use stays.
 bool Window_SetPresentFilter(int mode);
+
+// The native SDL window handle. GPU renderer backends (GL, SDL3 GPU) bind to a
+// context/device on this window and never go through the SDL software renderer.
+// Pointer identity only; the type is forward-declared so the header does not
+// pull in SDL3.
+typedef struct SDL_Window SDL_Window;
+SDL_Window *Window_GetSDLWindow(void);
+
+// OpenGL context lifecycle for the GL renderer backend. The context lives with
+// the window (it must be created on the same thread that owns the window);
+// the renderer backend consumes it via Window_GLMakeCurrent. CreateGLContext
+// requires the window to have been created as an OpenGL window (the present
+// mode selection does that when the GL backend is active); it returns FALSE
+// otherwise so a wrongly-ordered boot fails at init, not first draw. The
+// software and GL presenters cannot share one window, so the Display menu's
+// renderer toggles by recreating the window with or without the OpenGL flag.
+S32 Window_CreateGLContext(void);
+S32 Window_GLMakeCurrent(void);
+void Window_GL_SwapWindow(void);
+void Window_DestroyGLContext(void);
+bool Window_RecreateWindowForGL(U32 resX, U32 resY, bool fullscreen);
+bool Window_RecreateWindowForSW(U32 resX, U32 resY, bool fullscreen);
+/* Recreate the window plain — no OpenGL flag, no SDL renderer — for the
+ * SDL3 GPU backend. The GPU device claims a window that has neither; the
+ * software and GL presenters cannot leave their window shape in place, so
+ * the renderer switch recreates for each target (see the two above). */
+bool Window_RecreateWindowForGPU(U32 resX, U32 resY, bool fullscreen);
+void Window_SetWindowSize(U32 w, U32 h);
 
 void SetWindowRelativeMouse(bool enable);
 

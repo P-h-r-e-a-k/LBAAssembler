@@ -170,7 +170,7 @@ int lba2_renderer_initialize(void)
     // AffichageTerrainZBuf() never reaches DrawFeuillePolyZBuf(). This
     // supersedes the separate CreateScreenMemory() call this function used
     // to make (InitGraphics calls it internally).
-    if (!InitGraphics(640, 480, false)) return 0;
+    if (!InitGraphics(640, 480, false, false)) return 0;
 
     // This renderer only ever reads pixels back via lba2_renderer_framebuffer()
     // (the raw Log buffer); it has no use for a visible OS window. Without this,

@@ -9,6 +9,7 @@
 #include "PERSO.H" /* WriteConfigFile (persist on resolution change) */
 #include "RES_MENU.H"
 #include "RES_SWITCH.H" /* Res_Switch (apply on cycle) */
+#include "RENDER_SWITCH.H" /* Renderer_ApplyChoice (Display menu switch) */
 #include "MENU_KEYNAV.H"
 #include "MENU_INPUT.H"
 #include "SAVENAME_VALIDATION.H"
@@ -28,6 +29,9 @@
 #include <SYSTEM/STRING.H>
 #include <SYSTEM/WINDOW.H>
 #include <SYSTEM/MOUSE.H>
+#include <GPU/GPURENDERER.H> /* GpuRenderer_ActiveBackend (Display menu row) */
+#include <GL/RENDER_GL.H>    /* DisplayTexFilter / RenderQuality (Display menu rows) */
+#include <POLYGON/POLYFILT.H> /* PolyTexFilter (software bilinear, Display menu row) */
 
 #include "GAMEMENU_MOUSE.H"
 #include "CONFIG_FILE.H" /* ConfigFile_MarkVSyncSetThisRun */
@@ -94,6 +98,9 @@ S32 FlagShowEndDemo = FALSE;
 #define MENU_ID_DISPLAY 2114
 #define MENU_ID_RESOLUTION 2115
 #define MENU_ID_DISPLAY_VSYNC 2116
+#define MENU_ID_RENDERER 2117
+#define MENU_ID_DISPLAY_BILINEAR 2118
+#define MENU_ID_DISPLAY_QUALITY 2119
 
 // Resolution sub-page rows occupy a reserved id range: row i carries id
 // MENU_ID_RESOLUTION_BASE + i, which BuildCustomMenuText and GereResolutionMenu
@@ -102,6 +109,7 @@ S32 FlagShowEndDemo = FALSE;
 
 #define MENU_TYPE_TEXT_LANGUAGE 8
 #define MENU_TYPE_VOICE_LANGUAGE 9
+#define MENU_TYPE_RENDERER 10
 
 char NewGameTxt[MULTI_TEXT_MAX];
 
@@ -147,27 +155,13 @@ U16 GameOptionMenu[] = {
     MENU_ID_CONTROLLER,
 };
 
-// Display submenu: a "Resolution: <current>" row that opens the resolution
-// sub-page (GereResolutionMenu), plus a "Vsync" toggle and the "Fullscreen"
-// toggle (moved here from Advanced options because it belongs with the other
-// display settings). Plain "Back" returns to Options. Fullscreen stays the
-// last entry so the always-fullscreen-device path in GereDisplayMenu can drop
-// it by count. See GereDisplayMenu + GereResolutionMenu.
-U16 DisplayMenu[] = {
-    0,   // selected
-    4,   // nb entries
-    260, // y center
-    0,   // .dia num
-
-    0,
-    26, // menu precedent
-    0,
-    MENU_ID_RESOLUTION,
-    0,
-    MENU_ID_DISPLAY_VSYNC,
-    0,
-    MENU_ID_DISPLAY_FULLSCREEN,
-};
+// Display submenu. Built at entry by BuildDisplayMenu because two rows are
+// conditional on runtime state: the Quality tier only exists while a GPU
+// backend is live (software has nothing to scale) and Fullscreen only where
+// windowed mode exists. Max rows: Back + Resolution + Renderer + Bilinear +
+// Quality + Vsync + Fullscreen. See GereDisplayMenu + BuildDisplayMenu.
+#define DISPLAY_MENU_MAX_ROWS 7
+U16 DisplayMenu[4 + DISPLAY_MENU_MAX_ROWS * 2];
 
 // Resolution sub-page, opened from the Display submenu's Resolution row.
 // Built at runtime from the shared catalog (like GameAskChoice builds
@@ -178,6 +172,63 @@ U16 DisplayMenu[] = {
 static DisplayEntry s_resMenuEntries[DISPLAY_MENU_MAX_ENTRIES];
 static S32 s_resMenuCount;
 static U16 ResolutionMenu[4 + (1 + DISPLAY_MENU_MAX_ENTRIES) * 2];
+
+// Render backends the Display submenu's Renderer row cycles through, in
+// cfg-id order (Software, OpenGL, SDL3 GPU); the row's value label comes from
+// MENU_LABEL_RENDERER_* via RendererChoiceLabel. See CycleRendererChoice.
+#define RENDERER_CHOICE_COUNT 3
+static const GpuRendererBackendId s_rendererChoices[RENDERER_CHOICE_COUNT] = {
+    GPU_RENDERER_BACKEND_NONE,
+    GPU_RENDERER_BACKEND_OPENGL,
+    GPU_RENDERER_BACKEND_SDL3GPU,
+};
+// Index into s_rendererChoices of the last choice the player stepped to; -1
+// until first use (then resolved from the live backend). A choice that fails
+// to start falls back to software, so re-deriving the step base from the live
+// backend would pin every further step on the failing pair and make the
+// choices past it unreachable by cycling.
+static S32 s_rendererCycleIdx = -1;
+
+// The menu label naming a render backend — the value shown in the Display
+// submenu's "Renderer: <label>" row.
+static MenuLocalizedLabel RendererChoiceLabel(GpuRendererBackendId id) {
+    switch (id) {
+    case GPU_RENDERER_BACKEND_OPENGL:
+        return MENU_LABEL_RENDERER_OPENGL;
+    case GPU_RENDERER_BACKEND_SDL3GPU:
+        return MENU_LABEL_RENDERER_SDL3GPU;
+    case GPU_RENDERER_BACKEND_NONE:
+    default:
+        return MENU_LABEL_RENDERER_SOFTWARE;
+    }
+}
+
+// The menu label naming a render-quality tier (1/2/4x SSAA) — the value in the
+// Display submenu's Quality row. See Renderer_LoadBootQuality: the cfg value 3
+// is folded into 4 before boot applies it, so the tiers are 1x, 2x and 4x and
+// a bare 3 (a hand-edited cfg the boot read already folds) still reads as 4x.
+static MenuLocalizedLabel QualityLabel(S32 quality) {
+    switch (quality) {
+    case 2:
+        return MENU_LABEL_QUALITY_2X;
+    case 3:
+    case 4:
+        return MENU_LABEL_QUALITY_4X;
+    default:
+        return MENU_LABEL_QUALITY_1X;
+    }
+}
+
+// Next render-quality tier in the Display submenu's cycle, 1x -> 2x -> 4x. A
+// cfg/cvar could hold 3 (the settings row allows it); the cycle treats it as
+// the 4x tier, the same fold the boot-time read applies.
+static S32 NextRenderQuality(S32 quality) {
+    if (quality < 2)
+        return 2;
+    if (quality < 4)
+        return 4;
+    return 1;
+}
 
 // Menu row index DrawGameMenu paints with the green "active value" plasma
 // marker (distinct from the blue cursor). -1 = no marker.
@@ -442,6 +493,15 @@ static void BuildCustomMenuText(S32 num, char *string) {
         break;
     }
 
+    case MENU_ID_RENDERER: {
+        char value[64];
+        CopyUtf8ToCp850(value, sizeof value,
+                        GetLocalizedMenuLabel(RendererChoiceLabel(GpuRenderer_ActiveBackend())));
+        FormatUtf8ToCp850(string, 256,
+                          GetLocalizedMenuLabel(MENU_LABEL_RENDERER), value);
+        break;
+    }
+
     case MENU_ID_GAMEPAD_CONFIG:
         CopyUtf8ToCp850(string, 256, GetLocalizedMenuLabel(MENU_LABEL_GAME_CONTROLLER));
         break;
@@ -480,6 +540,24 @@ static void BuildCustomMenuText(S32 num, char *string) {
         CopyUtf8ToCp850(string, 256, GetLocalizedMenuLabel(DisplayVSync ? MENU_LABEL_VSYNC_ON : MENU_LABEL_VSYNC_OFF));
         break;
 
+    case MENU_ID_DISPLAY_BILINEAR: {
+        // The active renderer's smoothing flag: DisplayTexFilter on a GPU
+        // backend, the software fillers' PolyTexFilter otherwise.
+        const S32 on = (GpuRenderer_ActiveBackend() != GPU_RENDERER_BACKEND_NONE)
+                           ? DisplayTexFilter
+                           : (PolyTexFilter != POLY_TEX_FILTER_OFF);
+        CopyUtf8ToCp850(string, 256,
+                        GetLocalizedMenuLabel(on ? MENU_LABEL_BILINEAR_ON : MENU_LABEL_BILINEAR_OFF));
+        break;
+    }
+
+    case MENU_ID_DISPLAY_QUALITY: {
+        char value[64];
+        CopyUtf8ToCp850(value, sizeof value, GetLocalizedMenuLabel(QualityLabel(RenderQuality)));
+        FormatUtf8ToCp850(string, 256, GetLocalizedMenuLabel(MENU_LABEL_QUALITY), value);
+        break;
+    }
+
     case MENU_ID_FOLLOW_CAMERA:
         CopyUtf8ToCp850(string, 256, GetLocalizedMenuLabel(FollowCameraInCar ? MENU_LABEL_AUTO_CAMERA_IN_CAR
                                                            : FollowCamera ? MENU_LABEL_AUTO_CAMERA : MENU_LABEL_CLASSIC_CAMERA));
@@ -513,6 +591,45 @@ static void CycleTextLanguage(S32 step) {
         Language = 0;
 
     ReloadMultiTextFile(0);
+}
+
+// Repaint what sits under the just-redrawn display surface. Switches that
+// rebuilt the framebuffers (Res_Switch: tears down Log/Screen) or the
+// presentation path (the renderer switch: recreates the window) leave the
+// next DoGameMenu redraw without a backdrop — bare black — so the open
+// sub-menu re-draws it before the list. The cube reload inside the former
+// may also have clobbered SkySeaTexture (where the plasma fire bar lives),
+// carrying a stale plasma highlight.
+//
+// Two repaint shapes depending on context:
+//   FlagShadeMenu TRUE  → in-game (player opened Options via ESC). Repaint
+//     the live 3D scene the same way the keep/revert dialog does
+//     (RES_SWITCH.CPP:472-482), then shade so the menu items pop over the
+//     dimmed scene.
+//   FlagShadeMenu FALSE → boot main menu (player is at the Resume / New /
+//     Load screen). The right background is the PCR_MENU stretched PCX
+//     image, not the default cube AffScene would paint (which would be
+//     Twinsen's house — wrong context for the boot menu). Reload the BG
+//     using the same Image_LoadStretched MainGameMenu uses, no shade — the
+//     boot menu doesn't darken its own backdrop.
+static void RepaintMenuBackdrop(void) {
+    BoxReset();
+    BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+    if (FlagShadeMenu) {
+        AffScene(AFF_ALL_FLIP);
+    } else {
+        char tmpFilePathScreen[ADELINE_MAX_PATH];
+        GetResPath(tmpFilePathScreen, ADELINE_MAX_PATH, SCREEN_HQR_NAME);
+        Image_LoadStretched(tmpFilePathScreen, Screen, PCR_MENU);
+        CopyScreen(Screen, Log);
+    }
+    BackupScreen(TRUE);
+    InitPlasmaMenu();
+    if (FlagShadeMenu) {
+        ShadeBoxBlk(0, 0, (S32)ModeDesiredX - 1,
+                    (S32)ModeDesiredY - 1, SCREEN_SHADE_LVL);
+    }
+    BoxStaticFullflip();
 }
 
 // Apply a resolution chosen from the sub-page. Switches live via Res_Switch,
@@ -596,6 +713,48 @@ void Menu_RepaintAfterResolutionSwitch(void) {
         }
         BoxStaticFullflip();
     }
+}
+
+// Apply a render backend chosen from the renderer sub-page. The switch itself
+// (backend teardown, window recreate, re-init, software fallback) lives in
+// RENDER_SWITCH.CPP, kept free of menu state so it could be driven from a
+// console command later; this wrapper persists the choice when the target came
+// up, and repaints the backdrop on the recreated window either way (a fresh GL
+// FBO or SDL3 GPU swapchain stays empty until the next present).
+static void ApplyRendererChoice(GpuRendererBackendId id) {
+    if (Renderer_ApplyChoice(id)) {
+        // Persist immediately so the next launch boots with this renderer.
+        WriteConfigFile();
+    }
+    RepaintMenuBackdrop();
+}
+
+static void BuildDisplayMenu(void);
+
+// Step the Display submenu's Renderer row through s_rendererChoices (Enter and
+// Right step forward, Left steps back). Applies the choice through the shared
+// switch path — a failed start falls back to software — and rebuilds the row
+// list, because the Quality row exists only while a GPU backend is live.
+static void CycleRendererChoice(S32 step) {
+    if (s_rendererCycleIdx < 0) {
+        const GpuRendererBackendId active = GpuRenderer_ActiveBackend();
+        s_rendererCycleIdx = 0;
+        for (S32 i = 0; i < RENDERER_CHOICE_COUNT; i++) {
+            if (s_rendererChoices[i] == active) {
+                s_rendererCycleIdx = i;
+                break;
+            }
+        }
+    }
+
+    s_rendererCycleIdx += step;
+    while (s_rendererCycleIdx >= RENDERER_CHOICE_COUNT)
+        s_rendererCycleIdx -= RENDERER_CHOICE_COUNT;
+    while (s_rendererCycleIdx < 0)
+        s_rendererCycleIdx += RENDERER_CHOICE_COUNT;
+
+    ApplyRendererChoice(s_rendererChoices[s_rendererCycleIdx]);
+    BuildDisplayMenu();
 }
 
 #ifdef CDROM
@@ -2612,6 +2771,17 @@ static void GameMenuApplyMouseWheelDoGameMenu(U16 *ptrmenu, S16 selected, S32 wy
             break;
 #endif
 
+        case MENU_TYPE_RENDERER:
+            if (dir < 0)
+                CycleRendererChoice(-1);
+            else
+                CycleRendererChoice(1);
+            *flag = 1;
+            InitWaitNoInput(dir < 0 ? I_LEFT : I_RIGHT);
+            InitWaitNoKey();
+            applied = 1;
+            break;
+
         default:
             break;
         }
@@ -2663,8 +2833,9 @@ void Menu_MainCapture(const char *path) {
 
 /* Harness capture state — see Menu_RequestCapture() in GAMEMENU.H.  When the
    path is non-empty, DoGameMenu's modal loop counts down per iteration;
-   on reaching zero it SavePNGs and returns 1000 (the "ESC" sentinel) so the
-   wrapping menu loop (OptionsMenu, MainGameMenu, ...) sees a clean exit.
+   on reaching zero it writes the settled frame (Control_ScreenshotTo) and
+   returns 1000 (the "ESC" sentinel) so the wrapping menu loop
+   (OptionsMenu, MainGameMenu, ...) sees a clean exit.
    The countdown gives the menu's fade-in and any per-frame text/sprite
    animations time to settle into a steady visual state. */
 static char s_menu_capture_path[ADELINE_MAX_PATH] = "";
@@ -3007,6 +3178,22 @@ S32 DoGameMenu(U16 *ptrmenu) {
             }
             break;
 #endif
+
+        case MENU_TYPE_RENDERER:
+            if (Input & I_LEFT OR MyKey == K_GRAY_LEFT) {
+                CycleRendererChoice(-1);
+                flag = 1;
+                InitWaitNoInput(I_LEFT);
+                InitWaitNoKey();
+            }
+
+            if (Input & I_RIGHT OR MyKey == K_GRAY_RIGHT) {
+                CycleRendererChoice(1);
+                flag = 1;
+                InitWaitNoInput(I_RIGHT);
+                InitWaitNoKey();
+            }
+            break;
         }
 
         if (FlagMenuMouse && MenuMouse_GetRefCount() > 0) {
@@ -3022,6 +3209,14 @@ S32 DoGameMenu(U16 *ptrmenu) {
             } else if (wy != 0)
                 GameMenuApplyMouseWheelDoGameMenu(ptrmenu, selected, wy, &timerkey, &flag);
         }
+
+        // CycleRendererChoice rebuilds the Display menu in place (the Quality
+        // row appears with a GPU backend and disappears on software): re-read
+        // the count and clamp the cursor so the redraw below and the Enter
+        // return further down see the rebuilt rows, not the ones entry cached.
+        nb = ptrmenu[1];
+        if (nb > 0 && selected >= nb)
+            selected = (S16)(nb - 1);
 
         if (flag == 1) {
             InitShakeChoice(); //     NEW
@@ -3282,6 +3477,7 @@ S32 GereLanguageMenu(void) {
 /*──────────────────────────────────────────────────────────────────────────*/
 
 static void BuildResolutionMenu(void); /* defined below, near GereResolutionMenu */
+static void BuildDisplayMenu(void);    /* defined below, near GereDisplayMenu */
 
 // Harness one-shot capture of the Display submenu. Mirrors
 // Menu_MainCapture's pattern: do the minimal setup the regular
@@ -3290,7 +3486,8 @@ static void BuildResolutionMenu(void); /* defined below, near GereResolutionMenu
 // directly on DisplayMenu so the capture site inside DoGameMenu fires
 // and returns 1000. Background pixels come from whatever the caller
 // (cmd_ui) put in Log/Screen — for `ui --black-bg display` that's a
-// solid clear; otherwise the live scene.
+// solid clear; otherwise the live scene. The rows are assembled first
+// because GereDisplayMenu no longer holds them statically.
 void Display_MainCapture(const char *path) {
     HQ_StopSample();
     InitPlasmaMenu();
@@ -3301,6 +3498,7 @@ void Display_MainCapture(const char *path) {
     PaletteSync(PtrPalNormal);
     InitDial(0);
 
+    BuildDisplayMenu();
     Menu_RequestCapture(path);
     DoGameMenu(DisplayMenu);
     Menu_RequestCapture(NULL); /* disarm if DoGameMenu somehow exited otherwise */
@@ -3420,16 +3618,45 @@ static S32 GereResolutionMenu(void) {
     return FALSE;
 }
 
+// Assemble the Display submenu rows for the current state: Back, Resolution,
+// Renderer, Bilinear, then Quality (only while a GPU backend is live — the
+// software rasterizer has no scale to tier), then Vsync and Fullscreen (only
+// where windowed mode exists). Two rows are conditional, so the array cannot
+// stay static; a fixed order with the two trailing makes the count only ever
+// drop the wrong tail when both conditions flip at once.
+static void BuildDisplayMenu(void) {
+    S32 row = 0;
+    DisplayMenu[2] = 260;
+    DisplayMenu[3] = 0;
+
+    MenuSetEntry(DisplayMenu, row++, 0, 26); /* Back */
+    MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_RESOLUTION);
+    MenuSetEntry(DisplayMenu, row++, MENU_TYPE_RENDERER, MENU_ID_RENDERER);
+    MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_BILINEAR);
+    if (GpuRenderer_ActiveBackend() != GPU_RENDERER_BACKEND_NONE)
+        MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_QUALITY);
+    MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_VSYNC);
+    if (Window_SupportsWindowedMode())
+        MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_FULLSCREEN);
+    DisplayMenu[1] = (U16)row;
+    /* Keep the cursor where the player left it, clamped when a conditional row
+       disappeared (the backend fell back to software mid-session). */
+    if (DisplayMenu[0] >= (U16)row)
+        DisplayMenu[0] = (U16)(row - 1);
+}
+
 // Display submenu: a self-contained submenu of OptionsMenu. The "Resolution:
-// <current>" row opens GereResolutionMenu; Vsync and Fullscreen are toggles.
+// <current>" row opens GereResolutionMenu, the "Renderer: <backend>" row steps
+// the live backend in place (Enter forward, Left/Right both ways from inside
+// DoGameMenu — CycleRendererChoice); Bilinear and Vsync and Fullscreen are
+// toggles/cycles. Rows are assembled at entry (BuildDisplayMenu) because
+// Quality only exists while a GPU backend is live and Fullscreen only where
+// windowed mode exists.
 S32 GereDisplayMenu(void) {
     S32 select;
     S32 flag = 0;
 
-    /* The Fullscreen toggle is the last entry; drop it on always-fullscreen
-       devices (Android phones/TVs) where windowed mode does not exist, leaving
-       Back + Resolution + Vsync. nb_entries 4 = full menu, 3 = hide Fullscreen. */
-    DisplayMenu[1] = Window_SupportsWindowedMode() ? 4 : 3;
+    BuildDisplayMenu();
 
     CopyScreen(Screen, Log);
     BoxStaticAdd(0, 0, ModeDesiredX - 1, ModeDesiredY - 1);
@@ -3450,6 +3677,34 @@ S32 GereDisplayMenu(void) {
         case MENU_ID_RESOLUTION:
             // Open the resolution list sub-page.
             GereResolutionMenu();
+            break;
+
+        case MENU_ID_RENDERER:
+            // Step forward through the backends in place (Right does the same
+            // from inside DoGameMenu). The helper rebuilds the rows because
+            // the Quality row's existence depends on the live backend.
+            CycleRendererChoice(1);
+            break;
+
+        case MENU_ID_DISPLAY_BILINEAR:
+            // The row drives the active renderer's smoothing flag: the GPU
+            // CLUT/overlay sampling on the GL/SDL3 GPU paths, the software
+            // fillers' bilinear 4-tap (the 2-tap intermediate stays reachable
+            // through the gfx_texfilter console verb) otherwise.
+            if (GpuRenderer_ActiveBackend() != GPU_RENDERER_BACKEND_NONE) {
+                DisplayTexFilter ^= 1;
+            } else {
+                PolyTexFilter = (PolyTexFilter == POLY_TEX_FILTER_OFF)
+                                    ? POLY_TEX_FILTER_BILINEAR
+                                    : POLY_TEX_FILTER_OFF;
+            }
+            WriteConfigFile();
+            break;
+
+        case MENU_ID_DISPLAY_QUALITY:
+            RenderQuality = NextRenderQuality(RenderQuality);
+            GpuRenderer_SetRenderQuality((U32)RenderQuality);
+            WriteConfigFile();
             break;
 
         case MENU_ID_DISPLAY_FULLSCREEN:
@@ -3617,6 +3872,7 @@ S32 OptionsMenu(S32 flagflip) {
             /* Cleanroom golden — menu panel composites over solid black. */
             memset(Log, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
             memset(Screen, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+            Control_ClearCaptureTarget();
         } else {
             AffScene(AFF_ALL_NO_FLIP);
         }
@@ -4946,7 +5202,7 @@ void Credits(S32 mode) {
 
 /* Harness capture state — see SlideShow_RequestCapture() in GAMEMENU.H. When
    armed, SlideShow's main loop breaks out after the first frame's Dial returns
-   (Dial itself does the SavePNG via Dial_RequestCapture, which we arm
+   (Dial itself does the frame write via Dial_RequestCapture, which we arm
    alongside this flag). Same compose pattern as Menu_*Capture / Inv_*Capture. */
 static int s_slideshow_capture_active = 0;
 
@@ -4957,7 +5213,7 @@ void SlideShow_RequestCapture(const char *path) {
         return;
     }
     s_slideshow_capture_active = 1;
-    /* The actual SavePNG happens inside Dial's typewriter loop — same hook
+    /* The actual frame write happens inside Dial's typewriter loop — same hook
        used by `ui dialog`. We just need to break out of the slideshow loop
        after that fires so the harness doesn't iterate the remaining shots. */
     Dial_RequestCapture(path);
@@ -5028,8 +5284,8 @@ S32 SlideShow(void) {
 
         Dial(START_SLIDESHOW_TEXT + n, FALSE);
 
-        /* Harness: SlideShow_RequestCapture arms a one-shot SavePNG in Dial
-           above. After it fires, exit cleanly without iterating remaining
+        /* Harness: SlideShow_RequestCapture arms a one-shot frame write in
+           Dial above. After it fires, exit cleanly without iterating remaining
            shots so the harness's --exit can finish promptly. */
         if (s_slideshow_capture_active) {
             s_slideshow_capture_active = 0;

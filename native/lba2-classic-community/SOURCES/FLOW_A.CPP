@@ -3,7 +3,139 @@
 #include <SVGA/CLIP.H>
 #include <SVGA/SCREEN.H>
 #include <POLYGON/POLY.H>
+#include <GPU/GPURENDERER.H>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+extern U8 *PtrPal;
+
+/* ── The HUD over the GPU renderer's frame (LBA Assembler's port of the GPU renderer, 2026-11-18) ─────────────────────────────────
+   With a GPU backend the exterior scene is drawn in its own target, and Log -- the HUD, the menus, the dialogue -- is laid over it with
+   palette index 0 see-through. What darkens the screen in software (ShadeBoxBlk: the race's minimap and pages, the menus' and the
+   dialogue's boxes) darkened Log's own pixels, and over the GPU's frame those are index 0: it came out a black box. So:
+   - in a scene frame (AffScene drawing it, GpuSceneDrawing), the GPU's frame is darkened under the box (flat shadow spans) and only
+     Log's own pixels are darkened (ShadeBoxBlkOverlay);
+   - outside one -- a menu or a dialogue over a frozen scene, which redraws and shades again and again and would darken the GPU's frame
+     again each time -- what is shown is first made Log's own, once (GpuOverlay_Plate: the GPU's frame read back, as the palette's
+     nearest colours, into Log's and Screen's see-through pixels) and Log is shown opaque until the next scene frame
+     (GpuOverlay_Unplate, at AffScene's start), so the menus work on Log as they do in software. */
+S32 GpuSceneDrawing = 0;
+static S32 s_platePinned = 0;
+static U8 *s_plateMask = NULL;       // the Screen pixels the plate filled (to empty again at the next scene frame)
+static size_t s_plateMaskSize = 0;
+static U8 s_lutPal[768];
+static U8 s_lut15[32768];            // RGB555 -> the palette's nearest colour (never index 0: see-through over the GPU)
+static S32 s_lutMade = 0;
+
+static S32 GpuOverlayLive(void) {
+    return GpuRenderer_IsActive() AND !GpuRenderer_GetSoftwarePolys() AND !GpuRenderer_IsOverlayOpaque();
+}
+
+static void PlateLut(void) {
+    if (s_lutMade AND !memcmp(s_lutPal, PtrPal, 768))
+        return;
+    memcpy(s_lutPal, PtrPal, 768);
+    for (S32 c = 0; c < 32768; c++) {
+        const S32 r = ((c >> 10) & 31) * 255 / 31, g = ((c >> 5) & 31) * 255 / 31, b = (c & 31) * 255 / 31;
+        S32 best = 1, bestD = 0x7FFFFFFF;
+        for (S32 i = 1; i < 256; i++) {
+            const S32 dr = r - s_lutPal[i * 3], dg = g - s_lutPal[i * 3 + 1], db = b - s_lutPal[i * 3 + 2];
+            const S32 d = dr * dr * 3 + dg * dg * 4 + db * db * 2;
+            if (d < bestD) {
+                bestD = d;
+                best = i;
+            }
+        }
+        s_lut15[c] = (U8)best;
+    }
+    s_lutMade = 1;
+}
+
+void GpuOverlay_Plate(void) {
+    if (!GpuOverlayLive() OR !Log OR !PtrPal)
+        return;
+    const U32 w = ModeDesiredX, h = ModeDesiredY;
+    static U32 *rgb = NULL;
+    static size_t rgbSize = 0;
+    if (rgbSize < (size_t)w * h) {
+        free(rgb);
+        rgb = (U32 *)malloc((size_t)w * h * sizeof(U32));
+        rgbSize = rgb ? (size_t)w * h : 0;
+    }
+    if (s_plateMaskSize < (size_t)w * h) {
+        free(s_plateMask);
+        s_plateMask = (U8 *)malloc((size_t)w * h);
+        s_plateMaskSize = s_plateMask ? (size_t)w * h : 0;
+    }
+    if (!rgb OR !s_plateMask OR !GpuRenderer_ReadbackPresented(rgb, w, h))
+        return;
+    PlateLut();
+    U8 *log = (U8 *)Log, *screen = (U8 *)Screen;
+    for (size_t i = 0; i < (size_t)w * h; i++) {
+        const U32 c = rgb[i];
+        const U8 index = s_lut15[((c >> 9) & 0x7C00) | ((c >> 6) & 0x03E0) | ((c >> 3) & 0x001F)];
+        if (log[i] == 0)
+            log[i] = index;
+        s_plateMask[i] = 0;
+        if (screen AND screen[i] == 0) {
+            screen[i] = index;
+            s_plateMask[i] = 1;
+        }
+    }
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)w - 1, (S32)h - 1);
+    s_platePinned = 1;
+}
+
+void GpuOverlay_Unplate(void) {
+    if (!s_platePinned)
+        return;
+    s_platePinned = 0;
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
+    U8 *screen = (U8 *)Screen;
+    if (screen AND s_plateMask AND s_plateMaskSize >= (size_t)ModeDesiredX * ModeDesiredY)
+        for (size_t i = 0; i < (size_t)ModeDesiredX * ModeDesiredY; i++)
+            if (s_plateMask[i])
+                screen[i] = 0;
+}
+
+/* (a scene frame: the GPU's frame under the box darkened, Log's own pixels too) */
+static void ShadeBoxGpu(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
+    GpuRenderer_ShadowBeginFlat(deccoul);
+    for (S32 y = y0; y <= y1; y++)
+        GpuRenderer_ShadowSpan(x0, y, x1);
+    GpuRenderer_ShadowEnd();
+    ShadeBoxBlkOverlay(x0, y0, x1, y1, deccoul);
+}
+
+/* A black of the palette's other than index 0 (which shows the GPU's frame through): the race's black boxes */
+U8 GpuOverlay_Black(void) {
+    static U8 *pal = NULL;
+    static U8 black = 0;
+    static U8 seen[768];
+    if (!PtrPal)
+        return 0;
+    if (pal != PtrPal OR memcmp(seen, PtrPal, 768)) {
+        pal = PtrPal;
+        memcpy(seen, PtrPal, 768);
+        S32 best = 0x7FFFFFFF;
+        for (S32 i = 1; i < 256; i++) {
+            const S32 d = PtrPal[i * 3] + PtrPal[i * 3 + 1] + PtrPal[i * 3 + 2];
+            if (d < best) {
+                best = d;
+                black = (U8)i;
+            }
+        }
+    }
+    return black;
+}
+
+/* The race's minimap darkens Log's own pixels under it: over the GPU's frame, in a scene frame, a see-through one is left see-through and
+   given back to be darkened on the GPU's frame instead (GpuOverlay_ShadeRun) */
+S32 GpuOverlay_LiveScene(void) { return GpuSceneDrawing AND GpuOverlayLive(); }
+void GpuOverlay_ShadeBegin(S32 deccoul) { GpuRenderer_ShadowBeginFlat(deccoul); }   // (one batch: each begin flushes the GPU's)
+void GpuOverlay_ShadeRun(S32 x0, S32 y, S32 x1) { GpuRenderer_ShadowSpan(x0, y, x1); }
+void GpuOverlay_ShadeEnd(void) { GpuRenderer_ShadowEnd(); }
 
 void BoxFlow(S32 x, S32 y, S32 coul) {
     if (x >= ClipXMax || x < ClipXMin || y >= ClipYMax || y < ClipYMin) {
@@ -18,7 +150,61 @@ void BoxFlow(S32 x, S32 y, S32 coul) {
     dst[screenWidth + 1] = coul;
 }
 
+void ShadeBoxBlkOverlay(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul);
+
 void ShadeBoxBlk(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
+    if (x0 > ClipXMax || x1 < ClipXMin || y0 > ClipYMax || y1 < ClipYMin) {
+        return;
+    }
+
+    if (x0 < ClipXMin) {
+        x0 = ClipXMin;
+    }
+    if (x1 > ClipXMax) {
+        x1 = ClipXMax;
+    }
+    if (y0 < ClipYMin) {
+        y0 = ClipYMin;
+    }
+    if (y1 > ClipYMax) {
+        y1 = ClipYMax;
+    }
+
+    // (over the GPU renderer's frame: see GpuSceneDrawing above)
+    if (GpuOverlayLive()) {
+        if (GpuSceneDrawing) {
+            ShadeBoxGpu(x0, y0, x1, y1, deccoul);
+            return;
+        }
+        GpuOverlay_Plate();
+    }
+
+    S32 deltaY = y1 - y0 + 1;
+    S32 deltaX = x1 - x0 + 1;
+
+    U8 *dst = (U8 *)Log + TabOffLine[y0] + x0;
+    U32 screenWidth = TabOffLine[1];
+
+    U32 clutOffset = 15 * 256;
+    U8 clutOffsetHighByte = (clutOffset >> 8) & 0xFF;
+    clutOffsetHighByte -= (U8)(deccoul & 0xFF);
+    clutOffset = (clutOffset & 0xFFFF00FF) | (clutOffsetHighByte << 8);
+    U8 *clut = PtrCLUTGouraud + clutOffset;
+
+    for (S32 y = 0; y < deltaY; y++) {
+        for (S32 x = 0; x < deltaX; x++) {
+            dst[x] = clut[dst[x]];
+        }
+        dst += screenWidth;
+    }
+}
+
+/* Dual-path shadow darken (GpuScene interior): same CLUT row as ShadeBoxBlk,
+   but index 0 is the overlay's transparent hole — leave it so the FBO shows
+   through. clut[0] is an opaque shade colour (224 on the retail fog table),
+   so applying it would paint the whole shadow span as a solid hole over the
+   room and body. Non-zero overlay pixels (sprites, HUD, re-blit) still darken. */
+void ShadeBoxBlkOverlay(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
     if (x0 > ClipXMax || x1 < ClipXMin || y0 > ClipYMax || y1 < ClipYMin) {
         return;
     }
@@ -50,7 +236,9 @@ void ShadeBoxBlk(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
 
     for (S32 y = 0; y < deltaY; y++) {
         for (S32 x = 0; x < deltaX; x++) {
-            dst[x] = clut[dst[x]];
+            if (dst[x] != 0) {
+                dst[x] = clut[dst[x]];
+            }
         }
         dst += screenWidth;
     }

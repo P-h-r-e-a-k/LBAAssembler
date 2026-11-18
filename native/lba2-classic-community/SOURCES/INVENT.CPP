@@ -8,6 +8,7 @@
 #include "UI_LAYOUT.H" /* UI_VCENTER_OFS */
 
 #include <FILEIO/SAVEPNG.H>
+#include <GPU/GPURENDERER.H> /* GpuRenderer_SetOverlayOpaqueRect: modal UI region */
 #include <SVGA/SCREEN.H>
 #include <SVGA/VIDEO.H>
 #include <SYSTEM/KEYBOARD.H>
@@ -1149,6 +1150,33 @@ void MenuInventory(U32 tempo) {
         }
     }
 
+    /* The inventory is a full-2D modal: on a GPU backend the present
+       composite would leave Log's palette index 0 transparent and the 3D
+       island would show through the slot squares the original draws as
+       opaque black (the software present always mapped index 0 black). Pin
+       the wheel rectangle as an opaque-overlay region now, so every present
+       from the open animation through the modal loop looks like the software
+       frame; outside the wheel the frozen 3D scene still shows. */
+    GpuRenderer_SetOverlayOpaqueRect(INV_START_X + 1, INV_START_Y + 1,
+                                     INV_END_X - 1, INV_END_Y - 1);
+
+    /* Screen plate under a GPU backend: AFF_ALL ends with CopyScreen(Log,
+       Screen) while Log is cleared for the FBO composite, so Screen holds
+       zeros. OpenInventory's CopyScreen(Screen, Log) would then feed
+       ShadeBoxBlk empty indices and the wheel would darken to a flat shade
+       instead of the scene. Rebuild the plate once here (after any capture
+       pre-arm AffScene, which has the same hole): terrain for the exterior,
+       room for the interior — AFF_ALL no longer builds the interior one,
+       DrawOverBrick's front-wall re-blits being FBO quads now. Skipped for
+       the cleanroom --black-bg golden, which must stay scene-free. Interior
+       with the flag off keeps the plate AFF_ALL copied out of Log. */
+    if (GpuRenderer_IsActive() && !(s_inv_capture_path[0] && Console_GetCaptureBlackBg())) {
+        if (CubeMode == CUBE_EXTERIEUR)
+            AffGrilleExt_BuildScreenPlate();
+        else if (GpuRenderer_IsSceneInterior())
+            AffGrille_BuildScreenPlate();
+    }
+
     OpenInventory(); // draw all
 
     InitDial(2); // game divers txt
@@ -1417,6 +1445,10 @@ void MenuInventory(U32 tempo) {
     InitWaitNoKey();
     /* A held D-pad navigation key must not cast its gameplay spell on return. */
     WaitNoMenuInput();
+
+    /* Back to the gameplay frame: index 0 is a transparent window onto the
+       3D target again once the modal owns nothing. */
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
 }
 
 /*══════════════════════════════════════════════════════════════════════════*
@@ -1453,8 +1485,9 @@ extern S32 Dial_Y0;
 /*──────────────────────────────────────────────────────────────────────────*/
 /* Harness capture state — see DoFoundObj_RequestCapture() in INVENT.H.  When
    the path is non-empty, DoFoundObj's modal loop counts down per iteration;
-   on reaching zero it SavePNGs and sets flag=2 so the loop exits cleanly
-   without waiting for input.  Countdown gives the open-rotation animation
+   on reaching zero it writes the settled frame and sets flag=2 so the loop
+   exits cleanly without waiting for input.  Countdown gives the open-rotation
+   animation
    and the typewriter text time to settle into the steady "item showcase"
    state a player sees mid-cinematic. */
 static char s_found_capture_path[ADELINE_MAX_PATH] = "";
@@ -1775,12 +1808,12 @@ void DoFoundObj(S32 numvar) {
         BoxUpdate();
 
         /* Harness one-shot capture: count down per iteration; on reaching
-           zero SavePNG (read Log -- the cinematic composites the rotating
-           item and dialogue strip there, same pattern as ui dialog and ui
-           holomap) and set flag=2 so the modal loop exits cleanly. */
+           zero write the settled frame (read Log -- the cinematic composites
+           the rotating item and dialogue strip there, same pattern as ui
+           dialog and ui holomap) and set flag=2 so the modal loop exits
+           cleanly. */
         if (s_found_capture_path[0] && --s_found_capture_countdown <= 0) {
-            SavePNG(s_found_capture_path, Log, (S32)ModeDesiredX,
-                    (S32)ModeDesiredY, PtrPal);
+            Control_ScreenshotTo(s_found_capture_path);
             s_found_capture_path[0] = '\0';
             flag = 2;
             break;

@@ -110,6 +110,35 @@ bool PresentTexture(void) {
 bool CoerceFullscreen(bool fullscreen) {
     return g_platform.capabilities.windowed ? fullscreen : true;
 }
+
+/* The GPU renderer (LIB386/GL, LIB386/SDL3GPU): the window the next SDL3_CreateWindow makes is an OpenGL one (SDL3_SetCreateOpenGL,
+   from CreateWindowSurface's `opengl`), and the GL backend's context on it */
+bool s_createOpenGL = false;
+SDL_GLContext s_glContext = NULL;
+
+/* The GL 2.1 / GLES 2.0 attribute set the renderer shaders are written for.
+   SDL reads these when a window flagged SDL_WINDOW_OPENGL is created, so they
+   must be set before every such creation (boot and runtime toggle alike). */
+void SetGLContextAttributes(void) {
+#ifdef USE_GLES2
+    /* The ES profile is the whole request: on Android a desktop compatibility
+       profile has no EGL config behind it, so window creation fails and the
+       engine drops to the software renderer. */
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+#endif
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+}
 } // namespace
 
 extern "C" {
@@ -197,6 +226,12 @@ bool SDL3_CreateWindow(uint32_t width, uint32_t height, bool fullscreen) {
        Window sizes and mouse coordinates stay in points either way. */
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
 #endif
+    /* SDL_GL_CreateContext (SDL3_CreateGLContext) can only attach to a window created with the OpenGL flag, and the attributes must
+       land before the creation (SDL picks the context profile then) */
+    if (s_createOpenGL) {
+        SetGLContextAttributes();
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+    }
     s_window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
     if (s_window == NULL) {
@@ -211,7 +246,9 @@ bool SDL3_CreateWindow(uint32_t width, uint32_t height, bool fullscreen) {
                      SDL_GetError());
         s_fullscreen = false;
     }
-    s_renderer = SDL_CreateRenderer(s_window, NULL);
+    /* An OpenGL window needs SDL's OpenGL renderer: another driver would have SDL recreate the window without the flag, which leaves
+       the GL backend nothing to attach a context to */
+    s_renderer = SDL_CreateRenderer(s_window, s_createOpenGL ? "opengl" : NULL);
     if (s_renderer == NULL) {
         Platform_Log(PLATFORM_LOG_ERROR, "Unable to create SDL renderer.\n"
                                          "\tSDL message: %s",
@@ -279,6 +316,11 @@ bool SDL3_WindowSize(int32_t *width, int32_t *height) {
 }
 
 bool SDL3_ResizeWindow(uint32_t width, uint32_t height, bool keepWindowSize) {
+    if (s_window != NULL && s_renderer == NULL) {
+        /* (a GPU renderer's window, no streaming texture: the renderer makes its own target at the new size) */
+        SDL3_SetGpuSurfaceSize(width, height, !keepWindowSize);
+        return true;
+    }
     if (s_window == NULL || s_renderer == NULL)
         return false;
     /* Window size and framebuffer size are independent. Automatic per-scene
@@ -388,6 +430,11 @@ bool SDL3_IsFullscreen(void) {
 }
 
 void SDL3_SetVSync(bool enabled) {
+    /* (the GL context and the SDL renderer are presenters apart: the swap interval is the context's) */
+    if (s_glContext != NULL) {
+        SDL_GL_SetSwapInterval(enabled ? 1 : 0);
+        return;
+    }
     if (s_renderer)
         SDL_SetRenderVSync(s_renderer, enabled ? 1 : 0);
 }
@@ -546,5 +593,164 @@ void SDL3_SetWindowVisible(bool visible) {
         SDL_ShowWindow(s_window);
     else
         SDL_HideWindow(s_window);
+}
+
+/* ---- The GPU renderer's window (LIB386/GL, LIB386/SDL3GPU; LIB386/SYSTEM/WINDOW.CPP's Window_* forward here) ---------------------- */
+
+void SDL3_SetCreateOpenGL(bool opengl) { s_createOpenGL = opengl; }
+
+SDL_Window *SDL3_GetSDLWindow(void) { return s_window; }
+
+bool SDL3_GLMakeCurrent(void) {
+    if (s_glContext == NULL || s_window == NULL)
+        return false;
+    if (!SDL_GL_MakeCurrent(s_window, s_glContext)) {
+        /* Some SDL3/EGL stacks report a failure with no message while the context still becomes current: judged by the current
+           context, so a spurious error cannot take down a live context */
+        if (SDL_GL_GetCurrentContext() == s_glContext)
+            return true;
+        Platform_Log(PLATFORM_LOG_WARN, "Window_GLMakeCurrent: %s", SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+bool SDL3_CreateGLContext(void) {
+    if (s_glContext != NULL)
+        return true;
+    if (s_window == NULL) {
+        Platform_Log(PLATFORM_LOG_WARN, "Window_CreateGLContext: no window to attach a context to");
+        return false;
+    }
+    if ((SDL_GetWindowFlags(s_window) & SDL_WINDOW_OPENGL) == 0) {
+        Platform_Log(PLATFORM_LOG_WARN, "Window_CreateGLContext: the window is not an OpenGL window "
+                                        "(select the GL renderer before creating the window)");
+        return false;
+    }
+    s_glContext = SDL_GL_CreateContext(s_window);
+    if (s_glContext == NULL) {
+        Platform_Log(PLATFORM_LOG_WARN, "Window_CreateGLContext: SDL_GL_CreateContext failed: %s", SDL_GetError());
+        return false;
+    }
+    if (!SDL3_GLMakeCurrent()) {
+        SDL_GL_DestroyContext(s_glContext);
+        s_glContext = NULL;
+        return false;
+    }
+    return true;
+}
+
+void SDL3_GLSwapWindow(void) {
+    if (s_glContext != NULL && s_window != NULL)
+        SDL_GL_SwapWindow(s_window);
+}
+
+void SDL3_DestroyGLContext(void) {
+    if (s_glContext == NULL)
+        return;
+    if (s_window != NULL)
+        SDL_GL_MakeCurrent(s_window, NULL);
+    SDL_GL_DestroyContext(s_glContext);
+    s_glContext = NULL;
+}
+
+/* The renderer switch: the software presenter (an SDL renderer streamed to), the GL one (a GL context swapped to) and the SDL3 GPU one
+   (a device claiming a window with neither) can't share a window, so it is made again in the shape asked for -- 0 software, 1 OpenGL,
+   2 plain (SDL3 GPU) -- where the old one was and as big, its borders and focus as they were (the second player's window, a test's
+   window put off to one side, stay where they are). */
+bool SDL3_RecreateWindow(uint32_t width, uint32_t height, bool fullscreen, int shape) {
+    fullscreen = CoerceFullscreen(fullscreen);
+    int x = SDL_WINDOWPOS_CENTERED, y = SDL_WINDOWPOS_CENTERED, w = (int)width, h = (int)height;
+    SDL_WindowFlags flags = 0;
+    SDL3_DestroyGLContext();
+#if defined(__ANDROID__) || defined(LBA2_SDL3_TEST_STAGING)
+    StagingBufferFree(&s_staging);
+#endif
+    if (s_texture) {
+        SDL_DestroyTexture(s_texture);
+        s_texture = NULL;
+    }
+    if (s_renderer) {
+        SDL_DestroyRenderer(s_renderer);
+        s_renderer = NULL;
+    }
+    if (s_window) {
+        flags = SDL_GetWindowFlags(s_window);
+        if ((flags & SDL_WINDOW_FULLSCREEN) == 0) {
+            SDL_GetWindowPosition(s_window, &x, &y);
+            SDL_GetWindowSize(s_window, &w, &h);
+        }
+        /* (a fullscreen window left mid-transition leaves its space behind on macOS: settled and left first) */
+        SDL_SyncWindow(s_window);
+        if ((flags & SDL_WINDOW_FULLSCREEN) != 0) {
+            SDL_SetWindowFullscreen(s_window, false);
+            SDL_SyncWindow(s_window);
+        }
+        SDL_DestroyWindow(s_window);
+        s_window = NULL;
+    }
+    s_fullscreen = fullscreen;
+
+    SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, s_title);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, x);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, y);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, w);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, h);
+    if (flags & SDL_WINDOW_BORDERLESS)
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
+    if (flags & SDL_WINDOW_NOT_FOCUSABLE)
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FOCUSABLE_BOOLEAN, false);
+    if (shape == 1) {
+        SetGLContextAttributes();
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+    }
+#ifdef __ANDROID__
+    if (IsAndroidTVDevice())
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, true);
+#else
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
+#endif
+    s_window = SDL_CreateWindowWithProperties(props);
+    SDL_DestroyProperties(props);
+    if (s_window == NULL) {
+        Platform_Log(PLATFORM_LOG_ERROR, "Unable to make the window again (renderer %d).\n"
+                                         "\tResolution: %ux%u.\n\tSDL message: %s",
+                     shape, width, height, SDL_GetError());
+        return false;
+    }
+    if (s_fullscreen && !SDL_SetWindowFullscreen(s_window, true)) {
+        Platform_Log(PLATFORM_LOG_WARN, "Unable to switch the window to fullscreen.\n\tSDL message: %s", SDL_GetError());
+        s_fullscreen = false;
+    }
+    s_width = width;
+    s_height = height;
+    if (shape == 0) {
+        s_renderer = SDL_CreateRenderer(s_window, NULL);
+        if (s_renderer == NULL) {
+            Platform_Log(PLATFORM_LOG_ERROR, "Unable to make the SDL renderer again.\n\tSDL message: %s", SDL_GetError());
+            return false;
+        }
+        SDL_SetRenderVSync(s_renderer, 1);
+        s_texture = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, (int)width, (int)height);
+        if (s_texture == NULL) {
+            Platform_Log(PLATFORM_LOG_ERROR, "Unable to make the streaming texture again.\n\tSDL message: %s", SDL_GetError());
+            return false;
+        }
+        ApplyScaleMode(s_texture);
+        SetLogicalPresentation(width, height);
+    }
+    HideGameCursor();
+    return true;
+}
+
+/* The GL path's picture size: its viewport follows the window's backing size */
+void SDL3_SetGpuSurfaceSize(uint32_t width, uint32_t height, bool resizeWindow) {
+    if (s_window != NULL && resizeWindow)
+        SDL_SetWindowSize(s_window, (int)width, (int)height);
+    s_width = width;
+    s_height = height;
 }
 }

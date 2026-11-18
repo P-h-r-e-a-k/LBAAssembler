@@ -128,6 +128,8 @@
 #include <SYSTEM/STRING.H>
 
 #include <SDL3/SDL.h>
+#include <GPU/GPURENDERER.H> // GpuRenderer_ActiveBackend: the Display page's Renderer row
+#include "RENDER_SWITCH.H"   // Renderer_ApplyChoice
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -212,6 +214,7 @@ extern S32 FollowCamera;                                                        
 // (companion Zoe and player 2 as Zoe OFF since 2026-11-13, the user: "Let's scrap companion Zoe for now, we may bring it back later" --
 // the row hidden; 1 here and RaceTrackStory.CompanionOn bring it back)
 #define RG_STORY_TWO_ON 0
+#define RG_ID_RENDERER 2494                 // the Display page's renderer row: software or OpenGL (RENDER_SWITCH.CPP)
 #define RG_ID_REPLAY_END 2493               // the in-game menu's row in a replay: back to the Achievements page
 #define RG_ID_PLAYER 2472                   // the main menu's Player: <name> (PlayersPage), Achievements (AchievementsPage)
 #define RG_ID_ACHIEVEMENTS 2473
@@ -1352,7 +1355,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
     if (s_on && num == RG_ID_REPLAY_END) { Label(string, "End the replay"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER)) return 0;
     // (a player's row: its name, marked when it is this game's)
     // (an achievement's row, a bowler's, the walk round the alley)
     if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) { char row[160]; AchRowLabel(num - RG_ID_ACH_FIRST, row, sizeof(row)); Label(string, row); return 1; }
@@ -1412,6 +1415,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
     case RG_ID_RACE_SKY: Label(string, s_raceSky ? "Sky in races: On" : "Sky in races: Off"); return 1;
+    case RG_ID_RENDERER: Label(string, GpuRenderer_ActiveBackend() == GPU_RENDERER_BACKEND_OPENGL ? "Renderer: OpenGL" : "Renderer: Software"); return 1;
     case RG_ID_REPORTS: Label(string, "Bug reports"); return 1;
     case RG_ID_REPORT_MODE: Label(string, s_reportLabel[s_reports]); return 1;
     case RG_ID_REPORT_NOW: Label(string, "Send a bug report"); return 1;
@@ -2511,7 +2515,7 @@ void RaceGame_Qualified(S32 lap) {
 // (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
 // window, updates", its six rows a little higher)
 #define RG_UPD_ROWS 4                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
-#define RG_DISPLAY_ROWS 7
+#define RG_DISPLAY_ROWS 8
 #define RG_DISPLAY_Y 278                    // (its rows lower than the updates page's: six under a header at 8 had the header cut off by the window, the user, 2026-11-01)
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
@@ -3404,7 +3408,7 @@ static void ReportsPage(void) {
     }
 }
 
-// Options, "Camera, window, updates": the camera's view, the window, the mini-map, the sky in races, and the updates' page
+// Options, "Camera, window, updates": the camera's view, the window, the mini-map, the sky in races, the renderer, and the updates' page
 static void DisplayPage(void) {
     ReadSettings();
     s_displayMenu[0] = 1;
@@ -3416,8 +3420,9 @@ static void DisplayPage(void) {
     SetRow(s_displayMenu, 2, RG_ID_WINDOW);
     SetRow(s_displayMenu, 3, RG_ID_MINIMAP);
     SetRow(s_displayMenu, 4, RG_ID_RACE_SKY);
-    SetRow(s_displayMenu, 5, RG_ID_UPDATES_PAGE);
-    SetRow(s_displayMenu, 6, RG_ID_REPORTS);
+    SetRow(s_displayMenu, 5, RG_ID_RENDERER);
+    SetRow(s_displayMenu, 6, RG_ID_UPDATES_PAGE);
+    SetRow(s_displayMenu, 7, RG_ID_REPORTS);
     for (;;) {
         Page("Camera, window, updates", RG_DISPLAY_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
         const S32 select = Menu(s_displayMenu);
@@ -3438,6 +3443,15 @@ static void DisplayPage(void) {
             s_raceSky = !s_raceSky;
             WriteSettings();
             Log_Info("[racegame] the sky in races: %s", s_raceSky ? "on" : "off");
+        } else if (select == RG_ID_RENDERER) {
+            // (the picture drawn by the graphics card, OpenGL, or by the game itself as LBA2 was: the window made again, the choice kept in
+            // lba2.cfg's Renderer for the next start -- a card that can't start it leaves the game as it was, RENDER_SWITCH.CPP)
+            const GpuRendererBackendId want = GpuRenderer_ActiveBackend() == GPU_RENDERER_BACKEND_OPENGL ? GPU_RENDERER_BACKEND_NONE
+                                                                                                          : GPU_RENDERER_BACKEND_OPENGL;
+            if (Renderer_ApplyChoice(want))
+                WriteConfigFile();
+            Log_Info("[racegame] the renderer: %s (asked for %s)", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()),
+                     want == GPU_RENDERER_BACKEND_OPENGL ? "OpenGL" : "software");
         } else if (select == RG_ID_UPDATES_PAGE) UpdatesPage();
         else if (select == RG_ID_REPORTS) ReportsPage();
     }

@@ -30,6 +30,7 @@ bool SDL3_IsWindowInitialized(void);
 bool SDL3_CreateWindow(uint32_t width, uint32_t height, bool fullscreen);
 void SDL3_DestroyWindow(void);
 bool SDL3_ResizeWindow(uint32_t width, uint32_t height, bool keepWindowSize);
+void SDL3_SetGpuSurfaceSize(uint32_t width, uint32_t height, bool resizeWindow);
 bool SDL3_WindowSize(int32_t *width, int32_t *height);
 bool SDL3_DisplaySize(uint32_t *width, uint32_t *height);
 bool SDL3_PrimaryDisplaySize(uint32_t *width, uint32_t *height);
