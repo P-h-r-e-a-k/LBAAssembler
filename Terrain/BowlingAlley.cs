@@ -41,6 +41,14 @@ internal static class BowlingAlley
     private const int FootX = 52, FootZ = 43;
     private const int LiftZone = 70, ShaftZone = 77, ArrivalZone = 76, LiftSwitch = 7;
     private const int LiftRide = 1, LiftDown = 2, LiftRise = 3, LiftRisen = 4, LiftSpeed = 600, LiftStart = 506, LiftStop = 510;
+    // (the pool balls: how fast a struck ball crosses the cloth, and how it settles after the contact. ClackSample is a STAND-IN -- the
+    // museum's button, the one short sharp knock the build already uses (RaceTrackStory's MuseumButtonSample); the game has no ball-on-ball
+    // sample of its own and one cannot be picked by eye. Worth the user's ear.)
+    private const int BallSpeed = 2600, BallSlow = 1200, BallBack = 700, ClackSample = 362;
+    // (the cue's three moves, each about as long as the matching part of his animation: drawn back over 0.4 s, through over 0.15 s, eased
+    // back over the beat after)
+    private const int CueDrawSpeed = 600, CueStrikeSpeed = 2400, CueEaseSpeed = 200;
+    private const int EngineMaxActors = 100;   // COMMON.H MAX_OBJETS
     private const int CellDown = 1600, CellUp = 1200, ClubDown = 1200, ClubUp = 1800;
     // the animations: the Franco's standing and its fall (entity 297), the Sphero's rolling, the bowlers' throw and swing
     // (the bowlers the user listed, 2026-11-12, by BODY.HQR entry as LBA Assembler lists them: 388 monkey monster = entity 275, 363 monkey
@@ -218,6 +226,12 @@ void comportement_3()
             return sb.ToString();
         }
         static string Go(int label) => $"set_track(label_{label});";
+        // a player who takes the pot now and then: he plays his hand, throws his arms up as he wins it and gathers it in, then plays on --
+        // his own track, so the two tables' winners are on their own clocks (the user, 2026-11-17: "someone winning the pot ... every so often")
+        static string PotWin(int before, int after) =>
+            $"label(0);\nanim({BowlingAnims.Poker});\nwait_nb_second({before});\n\n" +
+            $"label(1);\nanim({BowlingAnims.PokerWin});\nwait_anim();\n\n" +
+            $"label(2);\nanim({BowlingAnims.Poker});\nwait_nb_second({after});\ngoto(label_0);\n";
         // by how the throw went (var_cube `outcome`: 0 a strike, 1 some pins, 2 the gutter): one of three labels
         static string ByOutcome(int outcome, int strike, int some, int gutter) =>
             $"if (2 == var_cube({outcome})) {{ set_track(label_{gutter}); }} else if (1 == var_cube({outcome})) {{ set_track(label_{some}); }} else {{ set_track(label_{strike}); }}";
@@ -334,7 +348,9 @@ void comportement_3()
         const int poolX = 48 * 512 + 256, poolZ = 21 * 512;
         Decor(CitadelProps.PoolTable, poolX, FloorY, poolZ);
         Decor(CitadelProps.HangingLamp, poolX, FloorY + 2200, poolZ);
-        Decor(CitadelProps.PoolCue, poolX + CitadelProps.PoolLength / 2 + 90, FloorY, poolZ - 300);
+        // (the spare cue leaning at the table's east end is gone: the scene stands at 99 actors of the engine's 100 -- MAX_OBJETS -- and the
+        // player's own cue, which moves with his stroke now, is worth the slot more than a second cue standing still. CitadelProps.PoolCue
+        // is still built, for whenever a slot frees up)
         var (shotX, shotZ) = (poolX - CitadelProps.PoolLength / 2 - CitadelProps.PoolStand, poolZ);
         Decor(CitadelProps.HangingLamp, PokerX, FloorY + 2300, PokerZ);
         // (the six over the lanes one body: the alley's actors near the engine's hundred -- CitadelProps.LaneLamps)
@@ -350,14 +366,18 @@ void comportement_3()
         // at its stools, a brown-faced sailor behind it, the big grey gloom minding the lift, another dissident at the slot machine
         // (2026-11-15, second round: the bar against the north wall -- the gloom and the sailor at its west side, the dissident at its east,
         // the barman in its U; another dissident by the booths; the big grey Franco by the lift)
-        void Regular(int entity, int body, int x, int z, int beta, int anim = 0, string? who = null)
+        // (`track`: a regular who plays his own track -- MOVE_TRACK, so its waits and its anim() run. A track with no goto_point in it does
+        // not move him an inch, and it is the one clock the balls and the sound can be hung off: BowlingAnims' pool shot)
+        int Regular(int entity, int body, int x, int z, int beta, int anim = 0, string? who = null, string? track = null, string? life = null)
         {
             var r = SceneOps.BlankActor(SceneGame.Lba2, x, FloorY, z, entity);
-            r.Body = (sbyte)body; r.Anim = anim; r.Beta = beta; r.Flags = 0x1000; r.CoulObj = 9; r.Armor = 51; r.LifePoints = -1; r.Move = 0;
+            r.Body = (sbyte)body; r.Anim = anim; r.Beta = beta; r.Flags = 0x1000; r.CoulObj = 9; r.Armor = 51; r.LifePoints = -1;
+            r.Move = track is null ? 0 : 3;
             r.Life = new byte[] { 0 }; r.Track = new byte[] { 0 };
             var index = SceneOps.AddActor(model, r);
-            Text(index, Still(), "label(0);\nstop();\n");
+            Text(index, life ?? Still(), track ?? "label(0);\nstop();\n");
             if (who is not null) Talkers.Add((index, who));
+            return index;
         }
         // (each one different -- the user, 2026-11-16, of the poker tables' "two identical NPCs ... they need to add interest and have
         // differences": at the bar a casino gloom and an off-duty Franco guard, the dissident at its east end, the brown sailor behind it;
@@ -366,7 +386,136 @@ void comportement_3()
                                                               (56, 93, barX1 + 420, barWall + 1900, 3072, "BarDissident"), (297, 187, barMiddle, barWall + 1500, 0, "Barman"),
                                                               (274, 177, poolX + 500, poolZ + CitadelProps.PoolWidth / 2 + 380, 2048, "PoolWannie"), (294, 184, 25856, 22272, 2048, "LiftGloom") })
             Regular(entity, body, x, z, beta, 0, who);
-        Regular(297, 0, shotX, shotZ, 1024, BowlingAnims.Pool, "PoolSailor");
+        // ---- the pool players actually playing (the user, 2026-11-17: "Our pool players in the bowling alley don't appear to actually be
+        // playing"): the sailor stood over the table swinging at nothing, on one looping animation, and every ball was part of the table's
+        // own body, so nothing on the cloth ever moved.
+        // His TRACK is the clock now: his stance, his stroke (which ends on the contact), the knock, his follow-through, then a beat before
+        // the next shot. The white and the red are actors of their own and their Lives watch his track's labels, so the roll begins on the
+        // frame the cue reaches the ball -- a track or an animation looping on its own would have drifted out of step within a few shots.
+        // Both are put back while he straightens up between shots (hidden first: nothing is ever seen sliding backwards).
+        const int WhiteRolls = 1, WhiteHits = 2, RedRolls = 1;
+        var cloth = FloorY + CitadelProps.PoolTop;
+        var whiteHome = SceneOps.AddTrackPoint(model, new SceneTrackPoint(poolX - 850, cloth, poolZ));
+        var whiteHit = SceneOps.AddTrackPoint(model, new SceneTrackPoint(poolX + 40, cloth, poolZ - 60));
+        var whiteRest = SceneOps.AddTrackPoint(model, new SceneTrackPoint(poolX + CitadelProps.PoolLength / 2 - 180, cloth, poolZ - 20));
+        var redHome = SceneOps.AddTrackPoint(model, new SceneTrackPoint(poolX + 100, cloth, poolZ - 80));
+        var redPocket = SceneOps.AddTrackPoint(model, new SceneTrackPoint(poolX + CitadelProps.PoolLength / 2 - 60, cloth, poolZ - CitadelProps.PoolWidth / 2 + 60));
+        var sailor = Regular(297, 0, shotX, shotZ, 1024, BowlingAnims.Pool, "PoolSailor",
+            track: $"label(0);\nanim({BowlingAnims.Pool});\nwait_nb_dizieme(18);\n\n" +
+                   $"label(1);\nanim({BowlingAnims.PoolStroke});\nwait_anim();\n\n" +
+                   $"label(2);\nsample({ClackSample});\nanim({BowlingAnims.PoolFollow});\nwait_anim();\n\n" +
+                   $"label(3);\nanim({BowlingAnims.Pool});\nwait_nb_dizieme(30);\ngoto(label_0);\n");
+        // (a ball is an ordinary prop -- the same flags as the cue beside it, which works -- moved in 3d, so a roll keeps to the cloth
+        // instead of being put down on the floor)
+        int Ball(int generic, int x, int z) => Prop(generic, x, cloth, z);
+        // (watching another actor's track: it waits for his stroke to begin before it starts watching for the strike, rather than watching
+        // for the strike from the first frame -- a ball that watched for the strike alone never saw it, though the cue beside it, which
+        // steps through his labels one at a time, sees every one. So each ball walks the same four states as the cue does: his stroke
+        // begins, the ball is struck and rolls, he straightens up and it is taken off and put back, and it is on the cloth again.)
+        // (`potted`: the red drops into a pocket, so it is taken off and is back on its spot for the next shot -- a ball cannot climb out of
+        // a pocket. The white is never taken off: it comes off the far cushion and runs back down the table to where he plays from, which
+        // is both what a white does and the one way to get it home without the player seeing it vanish or slide backwards.)
+        static string BallLife(int on, int label, int sailor, int rolls, bool potted) => $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if (1 == l_track_obj({sailor}))
+    {{
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({label} == l_track_obj({on}))
+    {{
+        set_track(label_{rolls});
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if (3 == l_track_obj({sailor}))
+    {{
+        {(potted ? "invisible(1);\n        set_track(label_0);" : "")}
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if (0 == l_track_obj({sailor}))
+    {{
+        {(potted ? "invisible(0);" : "")}
+        set_comportement(comportement_1);
+    }}
+}}
+";
+        // his cue, slid with the stroke: back as he draws back, through as he strikes, eased forward again as he straightens up. Its track
+        // is driven off his labels like the balls, so it keeps with his hands; the travel of each move is set to about the length of the
+        // animation's own (the draw-back 0.4 s, the strike 0.15 s), so it neither races ahead of his arms nor lags behind them.
+        var cueReady = SceneOps.AddTrackPoint(model, new SceneTrackPoint(shotX, FloorY, shotZ));
+        var cueBack = SceneOps.AddTrackPoint(model, new SceneTrackPoint(shotX - 240, FloorY, shotZ));
+        var cueThrough = SceneOps.AddTrackPoint(model, new SceneTrackPoint(shotX + 120, FloorY, shotZ));
+        var cue = Prop(CitadelProps.PoolCueLaid, shotX, FloorY, shotZ, 1024);
+        Text(cue, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if (1 == l_track_obj({sailor}))
+    {{
+        set_track(label_1);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if (2 == l_track_obj({sailor}))
+    {{
+        set_track(label_2);
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if (3 == l_track_obj({sailor}))
+    {{
+        set_track(label_3);
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if (0 == l_track_obj({sailor}))
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+",
+            $"label(0);\npos_point({cueReady});\nstop();\n\n" +
+            $"label(1);\nspeed({CueDrawSpeed});\ngoto_point_3d({cueBack});\nstop();\n\n" +
+            $"label(2);\nspeed({CueStrikeSpeed});\ngoto_point_3d({cueThrough});\nstop();\n\n" +
+            $"label(3);\nspeed({CueEaseSpeed});\ngoto_point_3d({cueReady});\nstop();\n");
+        var white = Ball(CitadelProps.PoolWhite, poolX - 850, poolZ);
+        Text(white, BallLife(sailor, 2, sailor, WhiteRolls, potted: false),
+            $"label(0);\npos_point({whiteHome});\nstop();\n\n" +
+            $"label({WhiteRolls});\nspeed({BallSpeed});\ngoto_point_3d({whiteHit});\n\n" +
+            $"label({WhiteHits});\nsample({ClackSample});\nspeed({BallSlow});\ngoto_point_3d({whiteRest});\n" +
+            $"speed({BallBack});\ngoto_point_3d({whiteHome});\nstop();\n");
+        var red = Ball(CitadelProps.PoolRed, poolX + 100, poolZ - 80);
+        Text(red, BallLife(white, WhiteHits, sailor, RedRolls, potted: true),
+            $"label(0);\npos_point({redHome});\nstop();\n\n" +
+            $"label({RedRolls});\nspeed({BallSpeed});\ngoto_point_3d({redPocket});\nstop();\n");
         // ---- more tables (the user, 2026-11-16: "We should add more tables"): a second big round table east of the booths, a sailor and a
         // dissident at a hand of cards there, two chairs free; and one of Rick's card tables between the lanes' end and the booths, empty
         // (Rick's is too small for the sailors to sit at: the poker table's size, the user's same day)
@@ -384,7 +533,8 @@ void comportement_3()
         {
             var (sx, sz) = (cardsX + dx * PokerSeat, cardsZ + dz * PokerSeat);
             Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
-            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who);
+            // (the blue sailor takes this table's pots: the two tables' winners on different clocks, so the room never cheers twice at once)
+            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who, track: entity == 295 ? PotWin(23, 17) : null);
         }
         // ---- the poker table (the user, 2026-11-15: "add a round table with people sitting playing poker"): round, among the booths and the
         // fruit machines, a sailor, a blue sailor and a Franco dissident sat at it (BowlingAnims.Poker, each at his own pace), the fourth chair
@@ -396,7 +546,8 @@ void comportement_3()
         {
             var (sx, sz) = (PokerX + dx * PokerSeat, PokerZ + dz * PokerSeat);
             Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
-            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who);
+            // (the dissident takes this table's pots)
+            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who, track: entity == 56 ? PotWin(16, 26) : null);
         }
         // the fruit machines (BowlingRoom.FruitMachines: CitadelProps.BowlSlot, its reels turned by the engine), for the engine: where
         // Twinsen stands to play each, and its actor
@@ -421,6 +572,10 @@ void comportement_3()
         { var size = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(size, result.Record.Length); scenes.SetStored(0, size); }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"The bowling alley: scene {Scene} (grid {gridNumber}, library {grid[0]}, Rick's bricks painted dark): {model.Actors.Count} actors, two lanes of six Franco pins on chains, a Sphero for each ball, a giant lever each; its lift's foot at cells ({FootX}-{FootX + 1}, {FootZ}-{FootZ + 1})");
+        // (the room is one actor short of the engine's own limit -- COMMON.H MAX_OBJETS, 100 -- and has been for three rounds of dressing.
+        // Say so in the build's log rather than leaving the next prop to be dropped silently by the engine: the build log is read for WARNING)
+        if (model.Actors.Count >= EngineMaxActors)
+            log.Add($"WARNING: the bowling alley has {model.Actors.Count} actors and the engine takes {EngineMaxActors} (MAX_OBJETS): take one out before adding another");
         return log;
     }
 

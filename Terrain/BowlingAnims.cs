@@ -20,6 +20,12 @@ internal static class BowlingAnims
     // still missing to bowl with" -- the ball swung in the hand on the bowler's world east as he faces the pins, his body's left (-x: he faces
     // north, turned half round), let go at 1.0 s as RACEMOD.CPP BOWL_RELEASE_MS has it; and the poker players' sitting at the table)
     public const int Bowl = 643, Poker = 644, Pool = 645;   // (Pool: the sailor's shot at the pool table, 2026-11-16)
+    // (2026-11-18, the user: "Our pool players in the bowling alley don't appear to actually be playing" -- the shot was one looping
+    // animation of him swinging at nothing, and nothing on the cloth ever moved. It is three now, and his TRACK plays them in turn, so the
+    // strike falls on the frame the ball is struck: PoolStroke drawn back and through to the contact, then PoolFollow the follow-through
+    // back to his stance, with Pool itself his stance between shots. A track can set an animation and wait_anim() for it -- that is what
+    // keeps the balls, the sound and his arms in step, where a separate looping track would have drifted apart from the animation.)
+    public const int PoolStroke = 646, PoolFollow = 647, PokerWin = 648;
     // the swordsman monkey without his sword (the user: "The NPC that bowls whilst holding a sword let's add a new model without the sword"):
     // his entity's body of this number -- his own, the sword's faces in his left hand (bone 14: the blade 52, the hilt 100) left out
     public const int Swordless = 1, SwordEntity = 252, SwordBone = 14;
@@ -143,14 +149,53 @@ internal static class BowlingAnims
         var rest = Pose(N(0.2f, -0.7f, 0.68f), N(-0.35f, 0.1f, 0.93f), N(-0.2f, -0.7f, 0.68f), N(0.35f, 0.1f, 0.93f));
         var cards = Pose(N(0.2f, -0.6f, 0.75f), N(-0.3f, 0.45f, 0.84f), N(-0.2f, -0.6f, 0.75f), N(0.3f, 0.45f, 0.84f));
         var chips = Pose(N(0.12f, -0.4f, 0.9f), N(-0.05f, -0.3f, 0.95f), N(-0.2f, -0.7f, 0.68f), N(0.35f, 0.1f, 0.93f));
+        // (2026-11-18, the user: "Our poker players are very static also". They had three poses and barely moved out of one of them. These
+        // are bigger and there are more of them: his cards up to his face to study them, sitting back from the table with his hands off it,
+        // a finger tapping the felt, a card laid down -- and the loop is rotated by player, so no two are doing the same thing at once.)
+        var look = Pose(N(0.3f, -0.3f, 0.6f), N(-0.25f, 0.82f, 0.5f), N(-0.3f, -0.3f, 0.6f), N(0.25f, 0.82f, 0.5f));
+        var sitBack = Pose(N(0.42f, -0.78f, 0.3f), N(-0.45f, -0.15f, 0.78f), N(-0.42f, -0.78f, 0.3f), N(0.45f, -0.15f, 0.78f));
+        var tap = Pose(N(0.18f, -0.5f, 0.82f), N(-0.22f, 0.5f, 0.84f), N(-0.2f, -0.7f, 0.68f), N(0.35f, 0.1f, 0.93f));
+        var lay = Pose(N(0.1f, -0.52f, 0.85f), N(-0.08f, -0.1f, 0.99f), N(-0.2f, -0.7f, 0.68f), N(0.35f, 0.1f, 0.93f));
         var a = new Anim { Game = 2, LoopFrame = 0 };
         AnimFrame F(int ms, Dictionary<int, Vector3> aims) => Citadel.CitadelSpanking.Frame(body, ms, basis, aims, -p.Drop, -1);
-        a.Frames.Add(F(900 + 170 * k, rest));
-        a.Frames.Add(F(700 + 90 * k, cards));
-        a.Frames.Add(F(1300 + 210 * k, cards));
-        a.Frames.Add(F(600, rest));
-        a.Frames.Add(F(500 + 120 * k, chips));
-        a.Frames.Add(F(700, rest));
+        var beats = new (Dictionary<int, Vector3> Pose, int Ms)[]
+        {
+            (rest, 900), (look, 650), (look, 1400), (rest, 600), (chips, 500), (rest, 800),
+            (sitBack, 700), (sitBack, 1500), (rest, 650), (tap, 260), (rest, 240), (tap, 260), (rest, 700),
+            (lay, 450), (rest, 900), (look, 700), (rest, 1100),
+        };
+        // (each man's own pace, and his own place in the round: the pot is not studied, pushed and tapped by three men in step)
+        for (var i = 0; i < beats.Length; i++)
+        {
+            var (pose, ms) = beats[(i + 5 * k) % beats.Length];
+            a.Frames.Add(F(ms + 40 * k, pose));
+        }
+        return a;
+    }
+
+    // Winning the pot, sitting (the user, same evening: "someone winning the pot (a cheer/groan) every so often"). NOT the bowlers'
+    // Celebrate: that one is built from a standing pose, so a seated player would have straightened his legs and risen through the table.
+    // This keeps the poker thighs exactly as they are and throws only the arms up, twice, then gathers the pot in.
+    public static Anim MakePokerWin(Sitter p, Body body, (int Type, double A, double B, double C)[] basis, int k)
+    {
+        static Vector3 N(float x, float y, float z) => Vector3.Normalize(new Vector3(x, y, z));
+        Dictionary<int, Vector3> Pose(Vector3 rUp, Vector3 rFore, Vector3 lUp, Vector3 lFore) => new()
+        {
+            [p.RThigh] = N(0.12f, -0.05f, 1), [p.RThigh + 1] = N(0.03f, -1, 0.12f),
+            [p.LThigh] = N(-0.12f, -0.05f, 1), [p.LThigh + 1] = N(-0.03f, -1, 0.12f),
+            [p.RUpper] = rUp, [p.RFore] = rFore, [p.LUpper] = lUp, [p.LFore] = lFore,
+        };
+        var rest = Pose(N(0.2f, -0.7f, 0.68f), N(-0.35f, 0.1f, 0.93f), N(-0.2f, -0.7f, 0.68f), N(0.35f, 0.1f, 0.93f));
+        var up = Pose(N(0.45f, 0.86f, 0.25f), N(0.1f, 0.99f, 0.05f), N(-0.45f, 0.86f, 0.25f), N(-0.1f, 0.99f, 0.05f));
+        var half = Pose(N(0.4f, 0.4f, 0.5f), N(0, 0.9f, 0.4f), N(-0.4f, 0.4f, 0.5f), N(0, 0.9f, 0.4f));
+        // (and gathering it in: both arms out to the pot and back to him)
+        var gather = Pose(N(0.2f, -0.45f, 0.87f), N(-0.1f, -0.25f, 0.96f), N(-0.2f, -0.45f, 0.87f), N(0.1f, -0.25f, 0.96f));
+        var a = new Anim { Game = 2 };
+        AnimFrame F(int ms, Dictionary<int, Vector3> aims) => Citadel.CitadelSpanking.Frame(body, ms, basis, aims, -p.Drop, -1);
+        foreach (var (ms, pose) in new[] { (260, up), (240, half), (220, up), (320, half), (420, gather), (520, gather), (480, rest) })
+            a.Frames.Add(F(ms + 20 * k, pose));
+        // (played once by his track, which wait_anim()s for it: it holds him at rest at the end rather than throwing his arms up again)
+        a.LoopFrame = a.Frames.Count - 1;
         return a;
     }
 
@@ -201,7 +246,7 @@ internal static class BowlingAnims
         {
             var p = Sitters[k];
             if (entities.FirstOrDefault(e => e.Id == p.Entity) is not { } ent) { log.Add($"the bowling alley's poker: no entity {p.Entity} ({p.Name})"); continue; }
-            if (ent.Anims.Any(a => a.Generic == Poker)) continue;
+            if (ent.Anims.Any(a => a.Generic == PokerWin)) continue;
             if (RaceTrackGuards.BodyOf(table, p.Entity, p.Generic) is not { } bodyIndex || !ent.Anims.Any(a => a.Generic == 0))
             { log.Add($"the bowling alley's poker: {p.Name} (entity {p.Entity}) has no body {p.Generic} or no standing"); continue; }
             var body = Body.Read(HqrArchive.Open(bodyPath).Read(bodyIndex), 2);
@@ -210,20 +255,46 @@ internal static class BowlingAnims
             HqrWriter.AppendToFile(animPath, MakePoker(p, body, basis, k).Write());
             table = RaceTrackJumpAnim.WithAnim(table, p.Entity, Poker, at);
             log.Add($"the bowling alley's poker: {p.Name} (entity {p.Entity}) sits and plays as ANIM.HQR {at} (animation {Poker})");
+            // (and his cheer when the pot is his: seated, so he does not rise through the table -- MakePokerWin)
+            var won = HqrArchive.CountEntries(animPath);
+            HqrWriter.AppendToFile(animPath, MakePokerWin(p, body, basis, k).Write());
+            table = RaceTrackJumpAnim.WithAnim(table, p.Entity, PokerWin, won);
+            log.Add($"the bowling alley's poker: {p.Name} (entity {p.Entity}) wins the pot as ANIM.HQR {won} (animation {PokerWin})");
         }
-        // the sailor's pool shot (CitadelProps.PoolAims: bent over the table, the cue drawn back twice, through, held)
-        if (entities.FirstOrDefault(e => e.Id == 297) is { } sailor && !sailor.Anims.Any(a => a.Generic == Pool) && RaceTrackGuards.BodyOf(table, 297, 0) is { } sailorBody
+        // the sailor's pool shot (CitadelProps.PoolAims: bent over the table, the cue drawn back, through, held) -- his stance, his stroke to
+        // the contact and his follow-through, three animations his track plays in turn (BowlingAlley: the white rolls on the stroke's end)
+        if (entities.FirstOrDefault(e => e.Id == 297) is { } sailor && !sailor.Anims.Any(a => a.Generic == PoolFollow) && RaceTrackGuards.BodyOf(table, 297, 0) is { } sailorBody
             && sailor.Anims.FirstOrDefault(a => a.Generic == 0).Anim is var sailorStand)
         {
             var body = Body.Read(HqrArchive.Open(bodyPath).Read(sailorBody), 2);
             var basis = Palace.PalaceTorturers.ReadFrames(HqrArchive.Open(animPath).Read(sailorStand), body.Bones.Count)[0].Bones;
-            var pool = new Anim { Game = 2, LoopFrame = 0 };
-            foreach (var (ms, stroke) in new[] { (1400, 1), (500, 0), (400, 1), (600, 0), (250, 2), (1800, 2), (3000, 1) })
-                pool.Frames.Add(Citadel.CitadelSpanking.Frame(body, ms, basis, Citadel.CitadelProps.PoolAims(stroke), -Citadel.CitadelProps.PoolDrop, -1));
-            var at = HqrArchive.CountEntries(animPath);
-            HqrWriter.AppendToFile(animPath, pool.Write());
-            table = RaceTrackJumpAnim.WithAnim(table, 297, Pool, at);
-            log.Add($"the bowling alley's pool: the sailor (entity 297) plays a shot as ANIM.HQR {at} (animation {Pool})");
+            // (`once`: the clip holds its last pose instead of looping -- LoopFrame on the final keyframe, the way AnimGenerator's landings
+            // do it. The stroke and the follow-through are played once each by his track, which wait_anim()s for them; a clip that looped
+            // round to its first pose would snap him from the contact back to drawn-back, and wait_anim() has no end to wait for.)
+            Anim Shot(bool once, params (int Ms, int Stroke)[] frames)
+            {
+                var a = new Anim { Game = 2 };
+                foreach (var (ms, stroke) in frames)
+                    a.Frames.Add(Citadel.CitadelSpanking.Frame(body, ms, basis, Citadel.CitadelProps.PoolAims(stroke), -Citadel.CitadelProps.PoolDrop, -1));
+                a.LoopFrame = once ? a.Frames.Count - 1 : 0;
+                return a;
+            }
+            // his stance over the table, sighting the shot (stroke 3 is at the ball a touch back); the stroke drawn back and through to the
+            // contact, which is where it ends -- the track strikes the ball there; then the follow-through and back to his stance
+            var shots = new (int Generic, Anim Anim, string What)[]
+            {
+                (Pool, Shot(false, (900, 1), (700, 3), (900, 1)), "stands over the table"),
+                (PoolStroke, Shot(true, (400, 0), (150, 1)), "draws back and strikes"),
+                (PoolFollow, Shot(true, (200, 2), (900, 2), (800, 1)), "follows through"),
+            };
+            foreach (var (generic, anim, what) in shots)
+            {
+                if (sailor.Anims.Any(a => a.Generic == generic) && generic != Pool) continue;
+                var at = HqrArchive.CountEntries(animPath);
+                HqrWriter.AppendToFile(animPath, anim.Write());
+                table = RaceTrackJumpAnim.WithAnim(table, 297, generic, at);
+                log.Add($"the bowling alley's pool: the sailor (entity 297) {what} as ANIM.HQR {at} (animation {generic})");
+            }
         }
         // the swordsman without his sword
         if (entities.FirstOrDefault(e => e.Id == SwordEntity) is { } sword && !sword.Bodies.Any(b => b.Generic == Swordless) && RaceTrackGuards.BodyOf(table, SwordEntity, 0) is { } own)

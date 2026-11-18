@@ -15,6 +15,13 @@ internal static partial class CitadelProps
 {
     public const int BarFront = 135, BarWest = 136, BarEast = 137, BarShelf = 138, PoolTable = 139;
     public const int PoolCueLaid = 76, PoolCue = 79;
+    // (the two balls in play, actors of their own so they can roll: the white the sailor strikes and the red it sends into a pocket --
+    // the user, 2026-11-17, "Our pool players in the bowling alley don't appear to actually be playing". The rest of the balls stay part
+    // of the table, racked at its far end)
+    // (193 and 194, not 189 and 190: those are the office's beast-hide tiles -- BeastFirst. The props' generic numbers are one space for
+    // every family in CitadelProps, and the build log's "(body N)" lines are the list of what is taken)
+    public const int PoolWhite = 193, PoolRed = 194;
+    public const int PoolBallR = 26;
     public const int BarFrontLength = 4096, BarArmLength = 3164, BarDepth = 420, BarHigh = 600, ShelfLength = 3000;
     public const int PoolLength = 2000, PoolWidth = 1100, PoolTop = 520;
     // (the pool table's box the table alone: its cue reaches out over where the player stands)
@@ -26,6 +33,9 @@ internal static partial class CitadelProps
     public static short[]? BarBox(int generic) => generic switch
     {
         PoolTable => new short[] { -PoolLength / 2, 0, -PoolWidth / 2, PoolLength / 2, PoolTop + 80, PoolWidth / 2 },
+        // (a ball's box stands up out of the table's: the table's box top is PoolTop + 80, and a box inside another leaves the sort free to
+        // draw the ball behind the table -- see BuildPoolBall)
+        PoolWhite or PoolRed => new short[] { -PoolBallR - 10, 0, -PoolBallR - 10, PoolBallR + 10, PoolTop + 200, PoolBallR + 10 },
         BarFront => new short[] { -BarFrontLength / 2, 0, -BarHalfDeep, BarFrontLength / 2, BarBoxTop, BarHalfDeep },
         BarWest or BarEast => new short[] { -BarHalfDeep, 0, -BarArmLength / 2, BarHalfDeep, BarBoxTop, BarArmLength / 2 },
         _ => null,
@@ -122,11 +132,21 @@ internal static partial class CitadelProps
         for (var row = 0; row < 4; row++)
             for (var k = 0; k <= row; k++)
                 m.Ball(0, new Vector3(L - 420 + row * 52, PoolTop + 26, (k - row / 2f) * 60), 26, balls[n++ % balls.Length]);
-        m.Ball(0, new Vector3(-L + 150, PoolTop + 26, 0), 26, 3 * 16 + 14);   // (the white, at the player's end: his cue's tip at it)
-        // (the player's cue, part of the table -- a cue of its own was drawn under the table and the player, their boxes overlapping it: here
-        // the table's box, PoolTableBox, is the table's alone): along the table's middle from his hip, PoolStand back from its end, to the white
-        m.Strut(0, new Vector3(-L - PoolStand - 380, PoolTop + 250, 0), new Vector3(-L + 100, PoolTop + 60, 0), 30, 2 * 16 + 9);
-        m.Strut(0, new Vector3(-L + 100, PoolTop + 60, 0), new Vector3(-L + 118, PoolTop + 56, 0), 18, 3 * 16 + 13);
+        // (the white is an actor now -- PoolWhite, struck up the table -- so it is not part of the table any more)
+        // (the cue is an actor now -- PoolCueLaid, slid back and through with his stroke on the same clock as his animation. Baked into the
+        // table it stood still while his hands drew back and struck, so his hands passed straight through it: the user, 2026-11-17, "Our
+        // pool players in the bowling alley don't appear to actually be playing")
+        return m.ToBody(header);
+    }
+
+    // A ball in play on the cloth, an actor of its own so it can roll (PoolWhite, PoolRed): its own box, taller than the table's box top,
+    // so the engine's sort has the two apart -- a box wholly inside the table's left the ball drawn behind the table it sits on
+    // (reference: the catwalk and the bar's counter, where the same sort put an actor on the wrong side of a prop)
+    public static Body BuildPoolBall(byte[] header, int colour)
+    {
+        var m = new CarMesh("a pool ball", new[] { -1 });
+        m.Light = 0.75f;
+        m.Ball(0, new Vector3(0, PoolBallR, 0), PoolBallR, colour);
         return m.ToBody(header);
     }
 
@@ -147,7 +167,8 @@ internal static partial class CitadelProps
     public static Dictionary<int, Vector3> PoolAims(int stroke)
     {
         static Vector3 N(float x, float y, float z) => Vector3.Normalize(new Vector3(x, y, z));
-        var fore = stroke switch { 0 => N(0.05f, -0.75f, -0.66f), 1 => N(0, -1, 0.05f), _ => N(0, -0.55f, 0.84f) };
+        // (3: at the ball but a touch back -- the sighting waggle of his stance between shots, so he is not frozen over the table)
+        var fore = stroke switch { 0 => N(0.05f, -0.75f, -0.66f), 1 => N(0, -1, 0.05f), 3 => N(0.02f, -0.95f, -0.2f), _ => N(0, -0.55f, 0.84f) };
         return new Dictionary<int, Vector3>
         {
             [2] = N(0, 0.5f, 0.87f),
