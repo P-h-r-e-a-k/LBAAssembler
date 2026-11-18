@@ -878,6 +878,7 @@ void comportement_3()
         });
     }
 
+    private const uint PushableFlag = 1u << 4, CheckObjColFlag = 1u; // (COMMON.H PUSHABLE, CHECK_OBJ_COL)
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
     {
         var log = new List<string>();
@@ -1117,6 +1118,21 @@ void comportement_1()
         // Stella Entities' people: Rick's bouncers, his guard and his barman (RaceTrackStory.StellaEntities.cs)
         StellaPeople(b, Say);
         StellaLounge(b, Say);
+        // (and nobody in the club pushed about -- the user, 2026-11-18, "Twinsen seems to be able to push a lot of the NPCs around in the strip
+        // club, we should fix the actor settings so they can't be pushed": none of them is PUSHABLE, but a person checking his own collisions,
+        // CHECK_OBJ_COL, is put out of Twinsen's box whenever an animation or a track step moves him -- shoved along as Twinsen walks into
+        // him. So the club's people check none -- as the lounge's hostess, waitresses and dancer already didn't: Twinsen is stopped by them,
+        // and they stay where they are. Props are left as they are.)
+        foreach (var scene in new[] { StellaEntities.Scene, StellaRooms.Backstage, StellaRooms.Office, StellaRooms.Private })
+            if (b.Store.SceneExists(scene))
+                b.Edit(scene, "nobody in Stella Entities pushed about: no person checks his own collisions (CHECK_OBJ_COL), none PUSHABLE", model =>
+                {
+                    var cleared = 0;
+                    foreach (var a in model.Actors.Skip(1).Where(a => a.Entity >= 0 && a.Entity != Citadel.CitadelProps.Prop))
+                        if ((a.Flags & (PushableFlag | CheckObjColFlag)) != 0) { a.Flags &= ~(PushableFlag | CheckObjColFlag); cleared++; }
+                    log.Add($"scene {scene}: {cleared} people no longer shoved about");
+                    return _ => { };
+                });
 
         b.Save();
         log.Add($"the Emerald Moon's race file: gate={QHal} {HalMended} (HAL mended), win={QHal} {HalWon}");
