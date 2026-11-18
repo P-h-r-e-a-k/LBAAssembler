@@ -244,6 +244,9 @@ internal static class RaceCarEngineFile
                 {
                     text.Append($"wake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
                     foreach (var p in info.StoryPeople ?? new()) text.Append($"hide_actor={p[0]} {p[1]}\n");
+                    // (no grobo to give the digger's key: held from the start, or out of the car Twinsen couldn't get back in -- "asks for
+                    // the ignition key", LBRA issue 22, 2026-11-16)
+                    text.Append($"key_var={LBAAssembler.Terrain.Polar.PolarGrobo.KeyVar}\n");
                 }
             }
             else text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");

@@ -51,6 +51,9 @@
  *     won_set=<var> <value>...   as win=, but only when the player really beat the one to beat (a dream_any_end= dream applies win= either way)
  *     clovers_fill=<var>         whenever the game variable <var> is 2, Twinsen's clovers are filled to his clover boxes and <var> back to 0
  *                                (a script can't read how many boxes he has: the lava lake's dive, Zoe's word on the way back, 2026-11-04)
+ *     key_var=<var>              the game variable a car's script wants before it lets Twinsen in, held at 1 through the race: Polar
+ *                                Island's digger, whose key the dream's grobo gives -- in Track select's race and a time trial there is
+ *                                no grobo, and out of the car Twinsen couldn't get back in ("asks for the ignition key", 2026-11-16)
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
  *     grid_back=1                with qualifying=0: the player at the back of the grid instead, the opponents before him in their
  *                                qualifying times' order (the race game's "skip qualifying", RACEGAME.CPP)
@@ -714,6 +717,8 @@ static int s_onceWon = 0;                  // once_won=: a race won stays won (I
 static int s_wonSet[2 * RACE_MAX_SETS], s_nbWonSet = 0;
 // clovers_fill=: the game variable that, at 2, fills Twinsen's clovers to his boxes (and goes back to 0); -1 none
 static int s_cloversFill = -1;
+// key_var=: the game variable held at 1 while the race file is on (the car's key); -1 none
+static int s_keyVar = -1;
 static int s_place = 0, s_racers = 0;      // the player's place when he finished the race (0: not finished)
 // once_won= (the user, 2026-11-07: "in Story Mode a won race must not start again when Twinsen drives back near the start line"): the
 // race's win= variables all hold (each at least its value), and it isn't the race just finished -- its start line inert: no qualifying
@@ -5428,6 +5433,7 @@ static void Load(const char *path, int carOnly = 0) {
             else s_tortoiseOpp = -1;
         }
         else if (!strcmp(key, "clovers_fill")) { int var; if (sscanf(v, "%d", &var) == 1 && var >= 0 && var < MAX_FLAGS) s_cloversFill = var; }
+        else if (!strcmp(key, "key_var")) { int var; if (sscanf(v, "%d", &var) == 1 && var >= 0 && var < MAX_VARS_GAME) s_keyVar = var; }
         else if (!strcmp(key, "unlock_win")) sscanf(v, "%23s", s_unlockWin);
         else if (!strcmp(key, "unlock_beat")) sscanf(v, "%23s", s_unlockBeat);
         else if (!strcmp(key, "sprint")) s_sprint = atoi(v);
@@ -6711,6 +6717,8 @@ void RaceMod_Story(void) {
         ListVarGame[FLAG_CLOVER] = NbCloverBox;
         Log_Info("[racemod] clovers_fill: Twinsen's clovers filled to his %d boxes", (int)NbCloverBox);
     }
+    // (key_var=: the car's key held -- a new game or a load in between can't take it away)
+    if (s_keyVar >= 0) SetAtLeast(s_keyVar, 1, "key_var: the car's key");
     // (the parade car pulled up beside a walker on the track: its driver's yell at him -- parade_walker=; said from the car, a text box
     // only for Twinsen on foot near enough to hear it)
     if (s_pullSay && NewCube == -1 && s_walker >= 0) {
@@ -24337,7 +24345,7 @@ static void ResetTrack(void) {
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_safeAt = 0; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0;
-    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_cloversFill = -1; s_place = s_racers = 0;
+    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_cloversFill = -1; s_keyVar = -1; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0; s_pullQuiet = 0; s_pullAway = 0;
     s_nbWalkers = 0; s_walkerText = s_walker = -1; s_walkerRest = 0;
