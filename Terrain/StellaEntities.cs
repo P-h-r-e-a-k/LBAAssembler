@@ -91,7 +91,11 @@ internal static class StellaEntities
     private static readonly (int X, int Z, int Beta)[] CellFires = { (16300, 11000, 0), (17800, 12100, 900), (15700, 12900, 2300), (17200, 10200, 3300) };
     // (and two big ones just inside the door -- its sprite at x 18,448 in the cell's south wall, z 18,144 -- either side of the way in, seen
     // through it from the corridor; walked through, harmless: no fire zone, the armour walked over)
-    private static readonly (int X, int Z, int Beta)[] DoorFires = { (17550, 17350, 400), (19350, 17350, 3600) };
+    // (five since 2026-11-18, bigger, and flickering -- the user, "Are we able to add more and bigger flames by Baldino's cell door ... having
+    // the flames flicker like a normal flame would do": spread over the doorway's width as the corridor sees it, between the pillars --
+    // x - z 1000 to 1800, at four depths, the further back the higher they show over the wall -- and the way in from the door to the lift's
+    // corner, south-west, left clear; one more inside the west pillar, seen once in)
+    private static readonly (int X, int Z, int Beta)[] DoorFires = { (18450, 17150, 400), (18950, 17250, 3600), (18600, 16750, 1700), (18150, 16900, 2600), (18250, 16450, 1000) };
     // (the spot reaching a cell further east, towards the door: walked into the corner from the doorway he comes to rest against the
     // pillar about 250 short of its edge, hidden behind it -- the user, 2026-11-14, "still having trouble walking into the corner")
     private const int SpotEast = 1023;
@@ -395,11 +399,19 @@ internal static class StellaEntities
         // the lifts' actors: the cell's helper (Action on the spot); the club's platform, four plates two by two
         var cellHelper = SceneOps.AddActor(cell, RaceTrackScenes.InvisibleHelper(CellFoot.X, CellFloor, CellFoot.Z));
         // (the cell alight: a few fires about its floor, each flickering at its own pace -- CellFires)
-        var fires = CellFires.Select(f => SceneOps.AddActor(cell, Citadel.CitadelProps.Actor(Citadel.CitadelProps.Fire, f.X, CellFloor, f.Z, f.Beta))).ToList();
+        // (each on its track, Move 3, which swaps its two flames: a prop actor stands still, and a track not followed never ran -- the fires
+        // showed one flame, still, the user, 2026-11-18)
+        var fires = CellFires.Select(f =>
+        {
+            var a = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Fire, f.X, CellFloor, f.Z, f.Beta);
+            a.Move = 3;
+            return SceneOps.AddActor(cell, a);
+        }).ToList();
         var bigFires = DoorFires.Select(f =>
         {
             var a = Citadel.CitadelProps.Actor(Citadel.CitadelProps.FireBig, f.X, CellFloor, f.Z, f.Beta);
             a.Armor = RaceTrackStory.WalkOverArmour;
+            a.Move = 3;
             return SceneOps.AddActor(cell, a);
         }).ToList();
         // (walked onto, as well as Action on it: the user, 2026-11-14, "I'm also still having trouble walking into the corner to the left of

@@ -158,8 +158,8 @@ internal static partial class CitadelProps
     private const int FireOuter = 4 * 16 + 9, FireMid = 6 * 16 + 9, FireCore = 6 * 16 + 13;
     public static Body BuildFire(byte[] header) => FireBody(header, 0);
     public static Body BuildFire2(byte[] header) => FireBody(header, 1);
-    public static Body BuildFireBig(byte[] header) => FireBody(header, 0, 2.2f);
-    public static Body BuildFireBig2(byte[] header) => FireBody(header, 1, 2.2f);
+    public static Body BuildFireBig(byte[] header) => FireBody(header, 0, 3.0f);   // (2.2 till 2026-11-18: "more and bigger flames")
+    public static Body BuildFireBig2(byte[] header) => FireBody(header, 1, 3.0f);
     private static Body FireBody(byte[] header, int phase, float scale = 1f)
     {
         var m = new CarMesh("a fire", new[] { -1 });

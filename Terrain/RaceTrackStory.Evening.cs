@@ -903,6 +903,7 @@ void comportement_1()
             var backCandle = Copy(p.Originals, BackRoom, BackRoomCandle);
             var flame = backCandle ?? Citadel.CitadelProps.Actor(Citadel.CitadelProps.Flame, Wick.X, Wick.Y, Wick.Z);
             if (backCandle is not null) (flame.X, flame.Y, flame.Z) = BackFlameAt;
+            else flame.Move = 3; // (a track runs only for an actor whose move is "follow its track")
             var flameIndex = model.Actors.Count;
             var flameLife = p.Add(model, flame, $@"void comportement_0()
 {{
