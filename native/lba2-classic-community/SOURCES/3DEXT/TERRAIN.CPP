@@ -143,7 +143,9 @@ static inline S32 HalfPolyShown(const T_HALF_POLY *h) {
     return (h->PolyFlag + h->TexFlag) AND(RendererDrawSeaPolys OR(h->CodeJeu & 12) != 12);
 }
 
-static inline void DrawFeuillePolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs) {
+// A cell of the ground, or (s > 1, the ground further off: TileStepFitted) the s x s cells from it as one, all of one look: their
+// outer corners, and the first cell's texture, colour and cut
+static inline void DrawFeuillePolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs, S32 s = 1) {
     S32 color;
     T_HALF_POLY *ptrh;
     S32 f0, f1, f2, f3;
@@ -165,12 +167,12 @@ static inline void DrawFeuillePolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs) {
 
     x0 = ptrs[0].X2D;
     z0 = ptrs[0].Y2D;
-    x1 = ptrs[65].X2D;
-    z1 = ptrs[65].Y2D;
-    x3 = ptrs[1].X2D;
-    z3 = ptrs[1].Y2D;
-    x2 = ptrs[66].X2D;
-    z2 = ptrs[66].Y2D;
+    x1 = ptrs[65 * s].X2D;
+    z1 = ptrs[65 * s].Y2D;
+    x3 = ptrs[s].X2D;
+    z3 = ptrs[s].Y2D;
+    x2 = ptrs[65 * s + s].X2D;
+    z2 = ptrs[65 * s + s].Y2D;
 
     f0 = ptrs[0].Zrot;
 
@@ -185,17 +187,17 @@ static inline void DrawFeuillePolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs) {
     SetCLUT(fog);
 
     f0 = GET_ZO(f0);
-    f1 = GET_ZO(ptrs[65].Zrot);
-    f3 = GET_ZO(ptrs[1].Zrot);
-    f2 = GET_ZO(ptrs[66].Zrot);
+    f1 = GET_ZO(ptrs[65 * s].Zrot);
+    f3 = GET_ZO(ptrs[s].Zrot);
+    f2 = GET_ZO(ptrs[65 * s + s].Zrot);
 
     {
         U8 *i = &MapIntensity[zi * 65 + xi];
 
         i0 = (i[0] & 15) * 256 - 255;
-        i1 = (i[65] & 15) * 256 - 255;
-        i3 = (i[1] & 15) * 256 - 255;
-        i2 = (i[65 + 1] & 15) * 256 - 255;
+        i1 = (i[65 * s] & 15) * 256 - 255;
+        i3 = (i[s] & 15) * 256 - 255;
+        i2 = (i[65 * s + s] & 15) * 256 - 255;
 
         if (i0 < 0)
             i0 = 0; // groumpf
@@ -943,6 +945,207 @@ static void DrawFeuillePolyClipped(S32 xi, S32 zi) {
 }
 
 /*──────────────────────────────────────────────────────────────────────────*/
+// MaskVisible's for a block of s x s cells: its four outer corners
+static inline U32 MaskVisibleStep(const U8 *p, S32 s) {
+    const U8 a = p[0], b = p[s], c = p[65 * s], d = p[65 * s + s];
+    const U8 maskH = (U8)(a | b | c | d), maskL = (U8)(a & b & c & d);
+    return (((U32)maskH << 8) | maskL) & 0x20FF;
+}
+
+/*──────────────────────────────────────────────────────────────────────────*/
+// The ground's detail by distance (2026-11-18, LBRA's players: "complaints of frame rate being bad on Polar Island especially"). A
+// cube's 64 x 64 cells cost the same drawn under the camera or six cubes off, and on an island whose land fills the view to a far clip
+// of 200,000 -- Polar Island's thirty-odd land cubes past the first ring -- the ground's triangles were four fifths of the frame. A cube
+// is drawn in tiles of 8 x 8 cells, each in blocks of TileStep x TileStep cells (1, 2, 4 or 8): the largest whose block, at the tile's
+// nearest point, is no wider than TerrainLodPixels on the screen -- by the projection's own scale, so a larger window keeps more of the
+// detail -- and only where its blocks would look as their cells do: every cell of a block the same ground (a road's kerb, a path, a
+// shore keep their cells), and its points within TerrainLodPixels / 8 pixels on the screen of the block's flat corners (a cliff, a
+// bank, a hump keep their shape). Where a tile meets a coarser one, the finer tile's points along their edge are put on the coarser
+// one's straight edge (TerrainVertex), so no crack opens between them; along a cube's side by the steps the distance alone gives, which
+// the cube beside works out the same. TerrainLodPixels 0 (console terrain_lod 0): every cell, as the game was.
+#define TERRAIN_TILE 8
+#define TERRAIN_TILES (NB_COTE / TERRAIN_TILE)
+S32 TerrainLodPixels = 32;
+static S32 DistSteps[TERRAIN_TILES + 2][TERRAIN_TILES + 2]; // [tz + 1][tx + 1]: the cube's tiles and the ring round it, by distance
+static S32 TileSteps[TERRAIN_TILES + 2][TERRAIN_TILES + 2]; // ... and the steps drawn (the cube's own tiles: as far as they fit)
+static U32 VertexStamp[(NB_COTE + 1) * (NB_COTE + 1)];     // a point worked out for this cube already (== VertexFrame)
+static U32 VertexFrame = 0;
+
+// Each tile of each cube of the island, worked out once: Look bit k, its blocks of 2 << k cells each one ground; Bend[k], the most a
+// point of such a block is off its corners' surface (height units)
+typedef struct {
+    U8 Made;
+    U8 Look;
+    U16 Bend[3];
+} T_TILE_FIT;
+static T_TILE_FIT TileFit[16 * 16][TERRAIN_TILES * TERRAIN_TILES];
+static U32 TileFitIsland = 0;
+extern U32 IslandLoads;                // LOADISLE.CPP LoadIsland
+extern S32 DecorCubeX, DecorCubeZ;     // the cube LoadCube loaded last (DECORS.CPP)
+
+// (a half cell's look: all but the step's sample and the collision bit; the way the cell is cut in two left out too -- a block is cut
+// as its first cell is)
+static inline U32 HalfLook(const T_HALF_POLY *h) {
+    U32 v;
+    memcpy(&v, h, sizeof(v));
+    return v & 0xFFFCF0FFu;
+}
+
+static const T_TILE_FIT *TileFitOf(S32 tx, S32 tz) {
+    if (TileFitIsland != IslandLoads) {
+        memset(TileFit, 0, sizeof(TileFit));
+        TileFitIsland = IslandLoads;
+    }
+    const S32 cube = (DecorCubeZ & 15) * 16 + (DecorCubeX & 15);
+    T_TILE_FIT *fit = &TileFit[cube][tz * TERRAIN_TILES + tx];
+    if (fit->Made)
+        return fit;
+    fit->Made = 1;
+    for (S32 k = 0; k < 3; k++) {
+        const S32 s = 2 << k;
+        S32 same = 1, bend = 0;
+        for (S32 bz = tz * TERRAIN_TILE; bz < (tz + 1) * TERRAIN_TILE; bz += s) {
+            for (S32 bx = tx * TERRAIN_TILE; bx < (tx + 1) * TERRAIN_TILE; bx += s) {
+                const T_HALF_POLY *first = &MapPolyGround[bz * (64 * 2) + bx * 2];
+                const U32 l0 = HalfLook(first), l1 = HalfLook(first + 1);
+                const S32 h00 = MapSommetY[bz * (NB_COTE + 1) + bx], h10 = MapSommetY[bz * (NB_COTE + 1) + bx + s];
+                const S32 h01 = MapSommetY[(bz + s) * (NB_COTE + 1) + bx], h11 = MapSommetY[(bz + s) * (NB_COTE + 1) + bx + s];
+                for (S32 j = 0; j <= s; j++) {
+                    for (S32 i = 0; i <= s; i++) {
+                        if (i < s AND j < s) {
+                            const T_HALF_POLY *h = &MapPolyGround[(bz + j) * (64 * 2) + (bx + i) * 2];
+                            if (HalfLook(h) != l0 OR HalfLook(h + 1) != l1)
+                                same = 0;
+                        }
+                        const double u = (double)i / s, v = (double)j / s;
+                        const double flat = h00 * (1 - u) * (1 - v) + h10 * u * (1 - v) + h01 * (1 - u) * v + h11 * u * v;
+                        const S32 off = (S32)fabs(MapSommetY[(bz + j) * (NB_COTE + 1) + bx + i] - flat);
+                        if (off > bend)
+                            bend = off;
+                    }
+                }
+            }
+        }
+        if (same)
+            fit->Look |= (U8)(1 << k);
+        fit->Bend[k] = (U16)(bend > 65535 ? 65535 : bend);
+    }
+    return fit;
+}
+
+// The step of tile (tx, tz) of the cube being drawn by its distance alone -- any integers: one past its side is the neighbour cube's
+// tile, the same answer as that cube's own (the camera, CameraX/CameraZ, is where it is from the cube being drawn: DrawHorizon2ZBuf's
+// SetPosCamera). *dist: the tile's nearest point's distance.
+static S32 TileStepByDistance(S32 tx, S32 tz, double *dist) {
+    *dist = 0;
+    if (TerrainLodPixels <= 0 OR FRatioX <= 0)
+        return 1;
+    const double size = TERRAIN_TILE * 512.0;
+    const double x0 = tx * size, z0 = tz * size, cx = CameraX, cz = CameraZ;
+    const double dx = cx < x0 ? x0 - cx : (cx > x0 + size ? cx - x0 - size : 0);
+    const double dz = cz < z0 ? z0 - cz : (cz > z0 + size ? cz - z0 - size : 0);
+    const double d = sqrt(dx * dx + dz * dz);
+    *dist = d;
+    if (d <= 0)
+        return 1;
+    const double cell = 512.0 * FRatioX / d; // a cell's width on the screen there, in pixels
+    S32 step = 1;
+    while (step < TERRAIN_TILE AND cell * step * 2 <= TerrainLodPixels)
+        step *= 2;
+    return step;
+}
+
+// ... and as drawn, a tile of the cube's own: no coarser than its blocks still look as their cells do
+static S32 TileStepFitted(S32 tx, S32 tz, S32 step, double d) {
+    if (step <= 1)
+        return 1;
+    const T_TILE_FIT *fit = TileFitOf(tx, tz);
+    const double most = TerrainLodPixels / 8.0; // pixels a point may move on the screen
+    while (step > 1) {
+        const S32 k = step == 2 ? 0 : (step == 4 ? 1 : 2);
+        if ((fit->Look & (1 << k)) AND fit->Bend[k] * FRatioX / d <= most)
+            break;
+        step >>= 1;
+    }
+    return step;
+}
+
+// A point of the cube's ground, rotated and projected into SommetRot / SommetAffichable (once a cube). On the edge between two tiles
+// whose coarser step it is not on, it is put on that tile's straight edge: its height the line's between the coarser step's points.
+static void TerrainVertex(S32 vx, S32 vz) {
+    const S32 at = vz * (NB_COTE + 1) + vx;
+    if (VertexStamp[at] == VertexFrame)
+        return;
+    VertexStamp[at] = VertexFrame;
+
+    S32 y = MapSommetY[at];
+    const S32 onX = (vx % TERRAIN_TILE) == 0, onZ = (vz % TERRAIN_TILE) == 0;
+    if (onX != onZ) {
+        // (on a tile's side, not at its corner: the coarser of the two tiles' steps along it -- on the cube's own side, the steps by
+        // distance, which the cube beside works out the same)
+        if (onX) {
+            const S32 row = vz / TERRAIN_TILE, col = vx / TERRAIN_TILE;
+            S32(*steps)[TERRAIN_TILES + 2] = (col == 0 OR col == TERRAIN_TILES) ? DistSteps : TileSteps;
+            const S32 a = steps[row + 1][col], b = steps[row + 1][col + 1];
+            const S32 step = a > b ? a : b;
+            const S32 off = vz % step;
+            if (off) {
+                const S32 y0 = MapSommetY[(vz - off) * (NB_COTE + 1) + vx], y1 = MapSommetY[(vz - off + step) * (NB_COTE + 1) + vx];
+                y = y0 + (y1 - y0) * off / step;
+            }
+        } else {
+            const S32 row = vz / TERRAIN_TILE, col = vx / TERRAIN_TILE;
+            S32(*steps)[TERRAIN_TILES + 2] = (row == 0 OR row == TERRAIN_TILES) ? DistSteps : TileSteps;
+            const S32 a = steps[row][col + 1], b = steps[row + 1][col + 1];
+            const S32 step = a > b ? a : b;
+            const S32 off = vx % step;
+            if (off) {
+                const S32 y0 = MapSommetY[vz * (NB_COTE + 1) + vx - off], y1 = MapSommetY[vz * (NB_COTE + 1) + vx - off + step];
+                y = y0 + (y1 - y0) * off / step;
+            }
+        }
+    }
+
+    U8 *ptra = &SommetAffichable[0][0] + at;
+    T_SOMMET_ROT *ptrs = &SommetRot[0][0] + at;
+    S32 zr;
+
+    TerrPath->WorldRotate(vx * 512, y, vz * 512);
+
+    zr = *TerrPath->Zr - Z0;
+
+    // cone clipping
+
+    if (zr <= NearClip) {
+        *ptra = 32;
+    } else if ((zr < ClipZFar)
+                   AND TerrPath->Project(X0, Y0, Z0)) {
+        U8 flag;
+
+        flag = 16;
+
+        if (Xp < ClipXMin)
+            flag |= 1;
+        if (Xp > ClipXMax)
+            flag |= 2;
+        if (Yp < ClipYMin)
+            flag |= 4;
+        if (Yp > ClipYMax)
+            flag |= 8;
+
+        *ptra = flag;
+
+        ptrs->Zrot = zr;
+
+        ptrs->X2D = (S16)Xp;
+        ptrs->Y2D = (S16)Yp;
+
+    } else {
+        *ptra = 0;
+    }
+}
+
+/*──────────────────────────────────────────────────────────────────────────*/
 void AffichageTerrainZBuf(void) {
     S16 *ptrm;
     U8 *ptra;
@@ -952,88 +1155,67 @@ void AffichageTerrainZBuf(void) {
     AffichageObjetDecorsZBuf();
 
     // calcul les coordonnées 2D de chaque points
+    // (the cube in tiles of 8 x 8 cells, each drawn in blocks of its own step's cells and only its blocks' corners worked out:
+    // TerrainLodPixels)
     PickTerrainPath();
-    ptra = &SommetAffichable[0][0];
-    ptrm = MapSommetY;
-    ptrs = &SommetRot[0][0];
-
-    for (S32 z = 0; z <= NB_COTE * 512; z += 512) {
-        for (S32 x = 0; x <= NB_COTE * 512; x += 512) {
-            S32 zr;
-
-            TerrPath->WorldRotate(x, *ptrm, z);
-
-            zr = *TerrPath->Zr - Z0;
-
-            // cone clipping
-
-            if (zr <= NearClip) {
-                *ptra = 32;
-            } else if ((zr < ClipZFar)
-                           AND TerrPath->Project(X0, Y0, Z0)) {
-                U8 flag;
-
-                flag = 16;
-
-                if (Xp < ClipXMin)
-                    flag |= 1;
-                if (Xp > ClipXMax)
-                    flag |= 2;
-                if (Yp < ClipYMin)
-                    flag |= 4;
-                if (Yp > ClipYMax)
-                    flag |= 8;
-
-                *ptra = flag;
-
-                ptrs->Zrot = zr;
-
-                ptrs->X2D = (S16)Xp;
-                ptrs->Y2D = (S16)Yp;
-
-            } else {
-                *ptra = 0;
-            }
-
-            ptra++;
-            ptrm++;
-            ptrs++;
+    for (S32 tz = -1; tz <= TERRAIN_TILES; tz++) {
+        for (S32 tx = -1; tx <= TERRAIN_TILES; tx++) {
+            double d;
+            const S32 step = TileStepByDistance(tx, tz, &d);
+            const S32 own = tx >= 0 AND tx < TERRAIN_TILES AND tz >= 0 AND tz < TERRAIN_TILES;
+            DistSteps[tz + 1][tx + 1] = step;
+            TileSteps[tz + 1][tx + 1] = own ? TileStepFitted(tx, tz, step, d) : step;
+        }
+    }
+    if (++VertexFrame == 0) {
+        memset(VertexStamp, 0, sizeof(VertexStamp));
+        VertexFrame = 1;
+    }
+    for (S32 tz = 0; tz < TERRAIN_TILES; tz++) {
+        for (S32 tx = 0; tx < TERRAIN_TILES; tx++) {
+            const S32 s = TileSteps[tz + 1][tx + 1];
+            for (S32 vz = tz * TERRAIN_TILE; vz <= (tz + 1) * TERRAIN_TILE; vz += s)
+                for (S32 vx = tx * TERRAIN_TILE; vx <= (tx + 1) * TERRAIN_TILE; vx += s)
+                    TerrainVertex(vx, vz);
         }
     }
 
     PtrMap = GroundTexture;
     RepMask = 0xFFFF;
 
-    ptra = &SommetAffichable[0][0];
-    ptrs = &SommetRot[0][0];
+    for (S32 tz = 0; tz < TERRAIN_TILES; tz++) {
+        for (S32 tx = 0; tx < TERRAIN_TILES; tx++) {
+            const S32 s = TileSteps[tz + 1][tx + 1];
+            for (S32 z = tz * TERRAIN_TILE; z < (tz + 1) * TERRAIN_TILE; z += s) {
+                for (S32 x = tx * TERRAIN_TILE; x < (tx + 1) * TERRAIN_TILE; x += s) {
+                    const S32 at = z * (NB_COTE + 1) + x;
+                    S32 mask;
 
-    for (S32 z = 0; z < NB_COTE; z++) {
-        for (S32 x = 0; x < NB_COTE; x++) {
-            S32 mask;
+                    ptra = &SommetAffichable[0][0] + at;
+                    ptrs = &SommetRot[0][0] + at;
 
-            mask = MaskVisible(ptra);
+                    mask = s == 1 ? MaskVisible(ptra) : MaskVisibleStep(ptra, s);
 
-            switch (mask & 0xFF) {
-            case 32:
-                break;
-            case 16:
-                DrawFeuillePolyZBuf(x, z, ptrs);
-                break;
-            case 0:
-                // some corners in front of the camera, some behind it or inside its near plane: drawn clipped against the plane
-                // (it was painted black from its visible edge to the bottom of the screen: DrawFeuillePolyClipped)
-                if (mask) {
-                    DrawFeuillePolyClipped(x, z);
+                    switch (mask & 0xFF) {
+                    case 32:
+                        break;
+                    case 16:
+                        DrawFeuillePolyZBuf(x, z, ptrs, s);
+                        break;
+                    case 0:
+                        // some corners in front of the camera, some behind it or inside its near plane: drawn clipped against the plane
+                        // (it was painted black from its visible edge to the bottom of the screen: DrawFeuillePolyClipped) -- a block's
+                        // cells one by one, each clipped on its own
+                        if (mask) {
+                            for (S32 dz = 0; dz < s; dz++)
+                                for (S32 dx = 0; dx < s; dx++)
+                                    DrawFeuillePolyClipped(x + dx, z + dz);
+                        }
+                        break;
+                    }
                 }
-                break;
             }
-
-            ptra++;
-            ptrs++;
         }
-
-        ptra++;
-        ptrs++;
     }
 
     if (RendererDrawSea)

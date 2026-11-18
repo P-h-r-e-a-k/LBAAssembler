@@ -3548,6 +3548,11 @@ void Console_RegisterAll(void) {
 
     Console_RegisterCvar("fps", &DebugFps, CONSOLE_CVAR_BOOL, "Frame rate display");
     Console_RegisterCvar("horizon", (void *)&FlagDrawHorizon, CONSOLE_CVAR_BOOL_U8, "Draw horizon/cubes around");
+    {
+        extern S32 TerrainLodPixels; // 3DEXT/TERRAIN.CPP
+        Console_RegisterCvar("terrain_lod", &TerrainLodPixels, CONSOLE_CVAR_INT,
+                             "Far ground in blocks no wider than this many pixels (0: every cell, as the game was)");
+    }
     Console_RegisterCvar("zv", &DrawZVObjets, CONSOLE_CVAR_BOOL, "Draw ZV boxes");
 
     /* The cheat code's toggle, reachable without typing the cheat. A fixture that

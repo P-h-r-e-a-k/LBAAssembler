@@ -143,9 +143,14 @@ void ClearExternalView() {
 
 /*──────────────────────────────────────────────────────────────────────────*/
 
+// (an island loaded: the ground's cached look of its cubes is another island's -- TERRAIN.CPP TileFit)
+U32 IslandLoads = 0;
+
 void LoadIsland() {
     char islandFilename[ADELINE_MAX_PATH];
     char islandFilePath[ADELINE_MAX_PATH];
+
+    IslandLoads++;
 
     // reinit ressources HQR
 
