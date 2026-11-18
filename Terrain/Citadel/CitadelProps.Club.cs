@@ -124,6 +124,9 @@ internal static partial class CitadelProps
     // (the bar round the hall's north-west, its far end just short of the catwalk -- the user, 2026-11-16, "Let's reposition the bar area by
     // sliding it around the room to the left of the catwalk, as a consequence we'll slide the chairs around"; it was 105-165, the south-west)
     public static readonly (int Generic, float Angle)[] CounterAt = { (ClubCounter, 205), (ClubCounter2, 225), (ClubCounter3, 245) };
+    // (where the barman stands behind the counter, its last third -- clear of the reactor's column from the camera: RaceTrackStory
+    // .StellaEntities; his piece's sort speck is in front of him, CounterBox)
+    public const float BarmanAngle = 237, BarmanCells = 16.6f;
     // (StageHigh: about Twinsen's chest -- three layers, 768; it was one, 256: the user, 2026-11-13, "The stage area needs raising to about
     // the height of Twinsen's chest")
     // (the catwalk right up to the wall, under the backstage door: the user, 2026-11-13, "This stage should also go right to the edge of the room")
@@ -668,6 +671,15 @@ internal static partial class CitadelProps
                 xs.Add(r * MathF.Cos(a * MathF.PI / 180) - mx);
                 zs.Add(r * MathF.Sin(a * MathF.PI / 180) - mz);
             }
+        // (the piece the barman stands behind: its speck in the counter right in front of him -- at the far corner he was on the camera's
+        // side of it and drawn over the bar, the user, 2026-11-17: "he should be behind the bar". The room side, anywhere along the piece
+        // and past its end, is still well on the camera's side of that point)
+        if (MathF.Abs(BarmanAngle - middle) <= CounterArc / 2)
+        {
+            var bx = (short)Math.Round(CounterMiddle * MathF.Cos(BarmanAngle * MathF.PI / 180) - mx);
+            var bz = (short)Math.Round(CounterMiddle * MathF.Sin(BarmanAngle * MathF.PI / 180) - mz);
+            return new short[] { (short)(bx - 1), 0, (short)(bz - 1), (short)(bx + 1), 1, (short)(bz + 1) };
+        }
         // (the room side, towards the room's middle, -(cos, sin): facing the camera (+x +z) when cos + sin is under 0)
         var roomAway = MathF.Cos(middle * MathF.PI / 180) + MathF.Sin(middle * MathF.PI / 180) > 0.1f;
         var x = (short)Math.Round(roomAway ? xs.Max() : xs.Min());

@@ -719,11 +719,20 @@ static int s_place = 0, s_racers = 0;      // the player's place when he finishe
 // race's win= variables all hold (each at least its value), and it isn't the race just finished -- its start line inert: no qualifying
 // lap, no grid, the flag marshal on her plinth. A lost race sets none of them and runs again as before (the final's "another race"
 // takes its win back: raced again too).
-static int Inert(void) {
-    if (!s_onceWon || s_nbWinSet <= 0 || s_place) return 0;
-    for (int i = 0; i + 1 < s_nbWinSet; i += 2)
-        if (s_winSet[i] < 0 || s_winSet[i] >= MAX_VARS_GAME || ListVarGame[s_winSet[i]] < s_winSet[i + 1]) return 0;
+// (its result's variables all at their values, or past them: the story moves them on as the race is talked about afterwards)
+static int SetsHold(const int *sets, int n) {
+    if (n <= 0) return 0;
+    for (int i = 0; i + 1 < n; i += 2)
+        if (sets[i] < 0 || sets[i] >= MAX_VARS_GAME || ListVarGame[sets[i]] < sets[i + 1]) return 0;
     return 1;
+}
+static int Inert(void) {
+    if (!s_onceWon || s_place) return 0;
+    // A race: its win= variables. A TIME TRIAL has no win= at all -- its result is beat='s variables (the storm track is Raph's lap time,
+    // lapped until it is beaten), so its start line stayed live for ever: driving over it again began another qualifying lap and started
+    // the lap counter and the timer, though there was nothing left to beat -- the user, 2026-11-17, "In Citadel 1, after beating Raph's
+    // time, driving over the start line again shouldn't trigger the lap counter". win= wins where a track has both.
+    return SetsHold(s_winSet, s_nbWinSet) || (s_nbWinSet <= 0 && SetsHold(s_beatSet, s_nbBeatSet));
 }
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
@@ -21188,17 +21197,27 @@ static void LiftDecors(T_DECORS *list, S32 count) {
 }
 
 // (follow_decor=: a decor going down and up with an actor -- its height the actor's plus dy, its box with it)
+// (the actor: one of that body standing by the decor itself, within 900 x and z -- not the scene's first of that body number: body numbers
+// are each entity's own, and another actor of the harbour's with a body 20 of its own entity, earlier in the list, held the quay's grate
+// down after the thief's ride though the plate was back up -- the user, 2026-11-17, "The elevator at the quay needs to come up again
+// after the thief takes it down")
 static void FollowDecors(T_DECORS *list, S32 count) {
+    static int s_followWas = -2, s_followCube = -1;
     for (int f = 0; f < s_nbFollow; f++) {
         if (s_follow[f].Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || (s_follow[f].File[0] && strcmp(s_follow[f].File, "*") && strcasecmp(s_follow[f].File, IslandName))) continue;
-        const T_OBJET *a = NULL;
-        for (int i = 1; i < (int)NbObjets && !a; i++)
-            if ((int)ListObjet[i].GenBody == s_follow[f].Generic) a = &ListObjet[i];
-        if (!a) continue;
-        const S32 y = a->Obj.Y + s_follow[f].Dy;
         for (S32 k = 0; k < count; k++) {
             T_DECORS *d = &list[k];
-            if ((d->Body & 0xFFFF) != s_follow[f].Body || abs(d->Xworld - a->Obj.X) > 900 || abs(d->Zworld - a->Obj.Z) > 900) continue;
+            if ((d->Body & 0xFFFF) != s_follow[f].Body) continue;
+            int which = -1;
+            for (int i = 1; i < (int)NbObjets && which < 0; i++)
+                if ((int)ListObjet[i].GenBody == s_follow[f].Generic && abs(d->Xworld - ListObjet[i].Obj.X) <= 900 && abs(d->Zworld - ListObjet[i].Obj.Z) <= 900) which = i;
+            if (which < 0) continue;
+            if (which != s_followWas || s_followCube != (int)NumCube) {
+                Log_Info("[racemod] follow_decor: scene %d, the decor body %d at (%d,%d) goes with actor %d (body %d), at %d", (int)NumCube, s_follow[f].Body,
+                         (int)d->Xworld, (int)d->Zworld, which, s_follow[f].Generic, (int)ListObjet[which].Obj.Y);
+                s_followWas = which; s_followCube = (int)NumCube;
+            }
+            const S32 y = ListObjet[which].Obj.Y + s_follow[f].Dy;
             d->YMin += y - d->Yworld; d->YMax += y - d->Yworld;
             d->Yworld = y;
         }

@@ -20,7 +20,7 @@ internal static partial class CitadelProps
     public const float DeskHalf = 750, DeskDepth = 320, DeskTop = 740;
     public const float BedHalf = 800, BedLength = 1100, BedTop = 540;
     private const int DeskWood = 1 * 16 + 4, DeskWoodDark = 1 * 16 + 2, DeskLeather = 8 * 16 + 3, DeskBrass = 6 * 16 + 9, DeskGlobe = 3 * 16 + 15, DeskPaper = 3 * 16 + 14,
-        SilkBlack = 13 * 16 + 0, SilkShade = 3 * 16 + 0, SilkSheen = 13 * 16 + 2, MoonGold = 6 * 16 + 12, StarPale = 6 * 16 + 15, BedWood = 1 * 16 + 2;
+        SilkBlack = 13 * 16 + 0, SilkShade = 3 * 16 + 0, SilkSheen = 13 * 16 + 2, HeadVelvet = 13 * 16 + 3, HeadButton = 13 * 16 + 1, MoonGold = 6 * 16 + 12, StarPale = 6 * 16 + 15, BedWood = 1 * 16 + 2;
 
     public static Body BuildOfficeDesk(byte[] header)
     {
@@ -62,16 +62,45 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("the office's bed", new[] { -1 });
         m.Light = 0.8f;
-        const float W = BedHalf, L = BedLength, Top = BedTop, Hang = 300;
-        // the frame: four posts, the rails, the headboard (taller) and the footboard
+        // (the silk hangs only a little over the bed's wooden sides: hanging to the floor it read as a grey side to a brown bed -- the user,
+        // 2026-11-17, "the side of the bed is grey but the rest of it is brown, let's make it all brown")
+        const float W = BedHalf, L = BedLength, Top = BedTop, Hang = 70;
+        // the frame: four posts, the side boards and the footboard, all wood
         foreach (var sx in new[] { -1, 1 })
             foreach (var sz in new[] { -1, 1 })
-                m.Box(0, new Vector3(sx * (W - 30), (sz < 0 ? 1250 : 650) / 2f, sz * (L - 30)), new Vector3(70, sz < 0 ? 1250 : 650, 70), BedWood, BedWood + 2);
-        m.Box(0, new Vector3(0, 780, -L + 30), new Vector3(2 * W - 60, 900, 40), BedWood, BedWood + 2);
+                m.Box(0, new Vector3(sx * (W - 30), (sz < 0 ? 1290 : 650) / 2f, sz * (L - 30)), new Vector3(70, sz < 0 ? 1290 : 650, 70), BedWood, BedWood + 2);
+        // (each side board only its outer face and its top edge, in pieces along it: as a box, the left board's inner face -- a long panel the
+        // engine's sort gave the depth of its middle -- was drawn over the cover, a brown triangle across it; nothing inside the bed shows)
+        const int BoardPieces = 4;
+        foreach (var sx in new[] { -1, 1 })
+            for (var j = 0; j < BoardPieces; j++)
+            {
+                float z0 = -L + 60 + (2 * L - 120) * j / BoardPieces, z1 = -L + 60 + (2 * L - 120) * (j + 1) / BoardPieces, xo = sx * (W - 7), xi = sx * (W - 53);
+                m.Out(new[] { m.P(0, new Vector3(xo, 150, z0)), m.P(0, new Vector3(xo, 150, z1)), m.P(0, new Vector3(xo, Top - 50, z1)), m.P(0, new Vector3(xo, Top - 50, z0)) },
+                      BedWood, new Vector3(0, (150 + Top - 50) / 2f, (z0 + z1) / 2));
+                m.Up(new[] { m.P(0, new Vector3(xi, Top - 50, z0)), m.P(0, new Vector3(xo, Top - 50, z0)), m.P(0, new Vector3(xo, Top - 50, z1)), m.P(0, new Vector3(xi, Top - 50, z1)) }, BedWood + 2);
+            }
         m.Box(0, new Vector3(0, 420, L - 30), new Vector3(2 * W - 60, 300, 40), BedWood, BedWood + 2);
-        // (a gold crescent moon set in the headboard, facing the bed)
-        Crescent(m, new Vector3(0, 900, -L + 52), 230, false, MoonGold);
-        // the cover: black silk over the mattress, hanging down its sides and its foot
+        // the headboard upholstered (the user, same evening: "Let's make the headboard uppolstered"): plum velvet deep-buttoned in diamonds,
+        // in a wooden frame -- its bottom rail at the mattress, its top rail over the padding -- the gold crescent moon on the top rail
+        const float PadLow = Top - 20, PadHigh = 1170, PadFront = -L + 30 + 34;
+        m.Box(0, new Vector3(0, (PadLow + PadHigh) / 2, -L + 30), new Vector3(2 * W - 60, PadHigh - PadLow, 68), HeadVelvet, HeadVelvet + 1);
+        m.Box(0, new Vector3(0, PadHigh + 35, -L + 30), new Vector3(2 * W - 40, 70, 80), BedWood, BedWood + 2);
+        m.Box(0, new Vector3(0, PadLow - 30, -L + 30), new Vector3(2 * W - 40, 60, 80), BedWood, BedWood + 2);
+        var buttons = new List<(float X, float Y)>();
+        for (var row = 0; row < 3; row++)
+            for (var x = -W + 160 + (row % 2) * 140f; x <= W - 150; x += 280)
+                buttons.Add((x, PadLow + 130 + row * 190));
+        foreach (var (x, y) in buttons)
+        {
+            m.Ball(0, new Vector3(x, y, PadFront + 6), 16, HeadButton);
+            // (the creases to the buttons diagonally above it: the diamonds)
+            foreach (var (ox, oy) in buttons.Where(o => MathF.Abs(o.Y - y - 190) < 1 && MathF.Abs(MathF.Abs(o.X - x) - 140) < 1))
+                m.Rod(0, new Vector3(x, y, PadFront + 3), new Vector3(ox, oy, PadFront + 3), HeadButton);
+        }
+        // (small, set into the top rail's front: higher up, it stood against the poster's frame on the wall behind)
+        Crescent(m, new Vector3(0, PadHigh + 35, -L + 30 + 42), 32, false, MoonGold);
+        // the cover: black silk over the mattress, a little over its sides and its foot
         float y0 = Top - Hang;
         var c = new[] { new Vector3(-W + 40, Top, -L + 60), new Vector3(W - 40, Top, -L + 60), new Vector3(W - 40, Top, L - 60), new Vector3(-W + 40, Top, L - 60) };
         m.Up(c.Select(v => m.P(0, v)).ToArray(), SilkBlack);

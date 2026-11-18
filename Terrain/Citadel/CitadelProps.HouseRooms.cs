@@ -313,18 +313,30 @@ internal static partial class CitadelProps
             m.Out(new[] { m.P(0, Side(60, j)), m.P(0, Side(60, j + 1)), m.P(0, Side(BathRim, j + 1)), m.P(0, Side(BathRim, j)) }, HrWoodDark, c + new Vector3(-400, BathRim / 2, BathOuter * (j + 0.5f) / SidePieces));
             m.Out(new[] { m.P(0, Side(0, j)), m.P(0, Side(0, j + 1)), m.P(0, Side(60, j + 1)), m.P(0, Side(60, j)) }, HrWoodDark - 1, c + new Vector3(-400, 30, BathOuter * (j + 0.5f) / SidePieces));
         }
-        // (the rim: the north strip, the curve's band, the east strip -- one brass top)
-        m.Up(new[] { m.P(0, c + new Vector3(0, BathRim, 0)), m.P(0, Outer(BathRim, 0)), m.P(0, Inner(BathRim, 0)), m.P(0, inset + new Vector3(0, BathRim, 0)) }, HrBrass);
+        // (the rim: the north strip, the curve's band, the east strip -- one brass top. The two straight strips in short pieces, as the side's
+        // panels: each one long piece from the corner to its end, the engine's sort gave it the depth of its middle, and the basin's floor
+        // by its far end -- nearer than that -- was drawn over it: the east strip ate away to a wedge pointing into the basin, the user,
+        // 2026-11-17, "The gold around the edge of the bath still isn't correct")
+        const int StripPieces = 6;
+        void Strip(Vector3 outerEnd, Vector3 innerEnd)
+        {
+            var o = Enumerable.Range(0, StripPieces + 1).Select(j => m.P(0, c + (outerEnd - c) * j / StripPieces + new Vector3(0, BathRim, 0))).ToArray();
+            var i = Enumerable.Range(0, StripPieces + 1).Select(j => m.P(0, inset + (innerEnd - inset) * j / StripPieces + new Vector3(0, BathRim, 0))).ToArray();
+            for (var j = 0; j < StripPieces; j++)
+                m.Up(new[] { o[j], o[j + 1], i[j + 1], i[j] }, HrBrass);
+        }
+        Strip(Outer(0, 0), Inner(0, 0));
         for (var k = 0; k < N; k++)
             m.Up(new[] { m.P(0, Outer(BathRim, k)), m.P(0, Outer(BathRim, k + 1)), m.P(0, Inner(BathRim, k + 1)), m.P(0, Inner(BathRim, k)) }, HrBrass);
-        m.Up(new[] { m.P(0, Outer(BathRim, N)), m.P(0, c + new Vector3(0, BathRim, 0)), m.P(0, inset + new Vector3(0, BathRim, 0)), m.P(0, Inner(BathRim, N)) }, HrBrass);
-        // (the basin: its walls inward, porcelain; its floor)
+        Strip(Outer(0, N), Inner(0, N));
+        // (the basin: its walls inward, porcelain; its floor -- the straight walls in short pieces too)
         var middle = c + new Vector3(-700, 0, 700);
         void Wall(Vector3 a, Vector3 b) => m.In(new[] { m.P(0, a + new Vector3(0, BathRim, 0)), m.P(0, b + new Vector3(0, BathRim, 0)), m.P(0, b + new Vector3(0, BathBottom, 0)), m.P(0, a + new Vector3(0, BathBottom, 0)) },
             HrPorcelain, new Vector3(middle.X, (BathRim + BathBottom) / 2, middle.Z));
-        Wall(inset, Inner(0, 0));
+        void Walls(Vector3 a, Vector3 b) { for (var j = 0; j < StripPieces / 2; j++) Wall(a + (b - a) * j / (StripPieces / 2), a + (b - a) * (j + 1) / (StripPieces / 2)); }
+        Walls(inset, Inner(0, 0));
         for (var k = 0; k < N; k++) Wall(Inner(0, k), Inner(0, k + 1));
-        Wall(Inner(0, N), inset);
+        Walls(Inner(0, N), inset);
         // (in rings from the basin's corner out to its curve, short pieces: as one fan of long triangles from the corner, the engine's sort
         // of the body's faces put one over the wooden front at the bath's south end -- a grey triangle across it, the user's 2026-11-16 and
         // 2026-11-17 pictures, "This grey triangle on the bath in Twinsen's house still needs correcting")

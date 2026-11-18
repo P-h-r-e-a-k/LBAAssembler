@@ -118,6 +118,33 @@ internal static class GridGirl
         // (and its top, facing up: the hair's shell is open behind there too, and showed the core's dark inside)
         var above = e.Add(Head, new[] { new Vector3(0, 1300, -30) })[0];
         for (var k = 0; k < Around; k++) e.Tri(core[1][k], core[1][(k + 1) % Around], above, hair | 1 << 20, outward: false);
+        // ---- the back of her torso, the same: its polygons all face forward or to her sides (37 and 14 -- not one behind: her reflection
+        // in the bathroom's mirror was her back), so from behind the eye went straight through her chest's shell -- the user, 2026-11-17,
+        // of Stella Entities' performer from this body, "From the front I think she's fine, from the back you can see through her" (the flag
+        // marshal and the other Sup performer the same). A core inside her torso, on its bone, from her waist up under her shoulders: its
+        // back at her back's line (the side polygons end 68 behind), its front well inside her front's shell, a band of the bikini's top
+        // across its back (the performers' rules make it skin)
+        var torsoRings = new (float Y, float Across, float Front, float Back, bool Strap)[]
+        {
+            (780, 112, 70, -60, false),
+            (820, 122, 80, -64, true),
+            (880, 132, 82, -66, false),
+            (960, 146, 78, -66, false),
+            (1020, 150, 55, -58, false),
+        };
+        var torsoCore = torsoRings.Select(r => e.Add(Torso, Enumerable.Range(0, Around).Select(k =>
+        {
+            var a = k * 2 * Math.PI / Around;
+            float zc = (r.Front + r.Back) / 2, rz = (r.Front - r.Back) / 2;
+            return new Vector3((float)(r.Across * Math.Sin(a)), r.Y, (float)(zc + rz * Math.Cos(a)));
+        }).ToArray())).ToArray();
+        for (var r = 0; r + 1 < torsoRings.Length; r++)
+            for (var k = 0; k < Around; k++)
+                e.Quad(torsoCore[r][k], torsoCore[r][(k + 1) % Around], torsoCore[r + 1][(k + 1) % Around], torsoCore[r + 1][k],
+                       Shade | (torsoRings[r].Strap ? Red : Skin), outward: true);
+        // (its top under her shoulders and neck, facing up)
+        var shoulders = e.Add(Torso, new[] { new Vector3(0, 1020, -2) })[0];
+        for (var k = 0; k < Around; k++) e.Tri(torsoCore[^1][k], torsoCore[^1][(k + 1) % Around], shoulders, Shade | Skin | 1 << 20, outward: false);
         return e.Finish();
     }
 

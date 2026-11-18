@@ -989,6 +989,10 @@ goto(label_0);
     {{
         set_var_game({PyjamaVar}, {PyjamasOn});
         body({Citadel.CitadelPyjamas.PyjamaBody});
+        // (out of the bathroom mid-stride, the bathroom's track walking him through its way out: the walk came with him and, the player's
+        // again with no key pressed, never stopped -- he strode on into the wall opposite, the user, 2026-11-17. Stood still, his)
+        anim(0);
+        set_dir(MOVE_MANUAL);
     }}
     if ({Scolded} == var_game({Drunk}) && 0 == var_game({PyjamaVar}) && {LiftShaftZone} == zone())
     {{

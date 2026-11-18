@@ -330,7 +330,10 @@ stop();
             CatwalkBouncer(model, bouncer, say(MoonLine.ClubStaffOnly), adds);
             // (the guard beside the office's door, not in front of it: the door lets Twinsen in -- the user, 2026-11-13, "Did we add in an
             // office area?")
-            Place(guard, StellaEntities.At(Citadel.CitadelProps.OfficeAt + 6, 16.8f), say(MoonLine.ClubNoBoss), 1300);   // (on the bar's side: the private rooms' doorway on the other, since 2026-11-17)
+            // (on the bar's side: the private rooms' doorway on the other, since 2026-11-17 -- in the one free row of floor between the door
+            // and the bar's west end: at 6 degrees round, 16.8 cells out, he stood in the bar's solid cells, x 5-9 z 27-28, and the engine
+            // lifted him onto their top, high in the air -- the user, 2026-11-17, "appears to start at ground level then shoot up into the air")
+            Place(guard, StellaEntities.At(Citadel.CitadelProps.OfficeAt + 2.8f, 16.4f), say(MoonLine.ClubNoBoss), 1300);
             // the office's door and the backstage door (the catwalk's end, the stage's height): walked into, into the rooms (StellaRooms) --
             // each zone's corner to the room's place just inside its own door, Twinsen as far into it as into the zone (the engine keeps
             // where in a door's zone he is)
@@ -346,7 +349,7 @@ stop();
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Backstage, X0 = StellaEntities.CatwalkX0World, X1 = StellaEntities.CatwalkX0World + 1023, Z0 = StellaEntities.CatwalkEndZ, Z1 = backZ1, Y0 = stageTop, Y1 = stageTop + 1800,
                 Info = new[] { StellaRooms.InsideX - 512, StellaRooms.InsideY, StellaRooms.InsideZ - 270 - (BackDeep - BackDeepWas), 0, BackstageSwitch, 0, 0, 1 } });
             // (behind the counter's last third, clear of the reactor's column in front of its middle from the camera)
-            Place(barman, StellaEntities.At(237, 16.6f), say(MoonLine.ClubBarman), 1700, onAction: true);
+            Place(barman, StellaEntities.At(Citadel.CitadelProps.BarmanAngle, Citadel.CitadelProps.BarmanCells), say(MoonLine.ClubBarman), 1700, onAction: true);
             // the seven performers (StellaPerformers: the game's own bodies recoloured, bodies of the hero's entity, each her own dance): three
             // on the poles (10, 60 and 110 degrees -- the actor on the pole's spot: her body stands beside it, her dance takes her round,
             // up and over it), four on the stage's other sides, strutting along its edge; no one's blows stopped by them (CHECK_OBJ_COL off).

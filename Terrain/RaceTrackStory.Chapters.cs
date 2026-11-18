@@ -1615,7 +1615,7 @@ void comportement_3()
     if ({OffQuayLift} < distance(0))
     {{
         set_dir_obj(0, MOVE_MANUAL);
-        set_comportement(comportement_5);
+        set_comportement(comportement_6);
     }}
     if (2 == l_track_obj({plateIndex}))
     {{
@@ -1626,6 +1626,25 @@ void comportement_3()
 
 void comportement_5()
 {{
+}}
+
+// (gone down without him -- he stepped off as it started: back up to the quay once it's at the bottom, and Action on it again; it stayed
+// down, the shaft open -- the user, 2026-11-17)
+void comportement_6()
+{{
+    if (2 == l_track_obj({plateIndex}))
+    {{
+        set_track_obj({plateIndex}, label_3);
+        set_comportement(comportement_7);
+    }}
+}}
+
+void comportement_7()
+{{
+    if (4 == l_track_obj({plateIndex}))
+    {{
+        set_comportement(comportement_1);
+    }}
 }}
 ");
             var life = p.Add(model, thief, $@"void comportement_0()

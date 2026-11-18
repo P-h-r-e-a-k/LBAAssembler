@@ -167,7 +167,8 @@ internal static class StellaRooms
                 // (the office's over the vent walled up, as it was before the dressing room's moved north of its mirrors: there it hid
                 // behind the basin's curtain, the vent's grille bare -- 2026-11-17)
                 SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterSide, SidePosterX, PosterY, number == Office ? (VentZ + 1) * 512 : SidePosterZ, 1024));
-                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterBack, BackPosterX, PosterY, BackPosterZ, 0));
+                // (the office's higher: the bed's headboard stands under it now, and at the same height the poster was drawn over its top)
+                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterBack, BackPosterX, number == Office ? PosterY + 350 : PosterY, BackPosterZ, 0));
             }
             if (number == Private && StellaEntities.WingGrid >= 0)
             {
@@ -358,6 +359,10 @@ internal static class StellaRooms
             if (Furniture.Contains(Lba1GridEdit.Get(shape, x, y, z).Block)) { office[(x, y, z)] = (0, 0); deskGone.Add((x, z)); }
         for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
         { var c = Lba1GridEdit.Get(shape, x, y, z); if (c.Block == 0 && c.Pos != 0 && deskGone.Contains((x, z))) office[(x, y, z)] = (0, 0); }
+        // (his wall lamp on the east wall by the bed's foot gone, the wall's own block there -- as in the dressing room; the user, 2026-11-17,
+        // "let's remove this wall light")
+        for (var z = 0; z < Size; z++) for (var y = 0; y < Height; y++) for (var x = 0; x < Size; x++)
+            if (Lba1GridEdit.Get(shape, x, y, z).Block == WallLamp) office[(x, y, z)] = (B(EastWallBlock), 0);
         // (and the floor's shadows his desk and armchairs cast, darker tiles: the plain floor's tile there, its four by four pattern)
         for (var x = DeskShadowX0; x <= DeskShadowX1; x++) for (var z = DeskShadowZ0; z <= DeskShadowZ1; z++)
             if (Lba1GridEdit.Get(shape, x, 0, z).Block is FloorShadow or FloorShadow2) office[(x, 0, z)] = (B(FloorTile), x % 4 + 4 * (z % 4));

@@ -3,13 +3,16 @@ using LBAAssembler.Scenes;
 
 namespace LBAAssembler.Terrain;
 
-// The darts sums carved into the Tralu caves' stone (scene 20, the upper walkway's back wall, between its two barred windows -- cells x 45,
-// z 8-9 and 12-13; the carving on the wall's face, x 46 cells, over z 10-11): Action by it and Twinsen reads them out, then wonders -- the
+// The darts sums carved into the Tralu caves' stone (scene 20; since 2026-11-18 the lower floor's west wall by the ladder's doorway, between
+// its two barred windows -- cells x 43, z 51-52 and 57-58, the barrels under the second; the carving on the wall's face, x 44 cells, over
+// z 53-56, 500 up from the floor as its windows are three layers up: the user, 2026-11-17, "it's not where I thought it was ... I was
+// expecting it here. I think it's a little more obvious in this location" -- it was on the upper walkway's back wall, x 46, z 10-11):
+// Action by it and Twinsen reads them out, then wonders -- the
 // user, 2026-11-17: "Let's have Twinsen read this out and exclaim to himself "I wonder if this is some kind of clue"" (CitadelProps
 // .TraluEtching, the carving's body). The sums are a darts player's checkouts -- the Tavern's game (RaceTrackStory.DartsTavern).
 internal static partial class RaceTrackStory
 {
-    private const int TraluEtchScene = 20, TraluEtchX = 46 * 512 + 2, TraluEtchZ = 11 * 512, TraluEtchFloor = 4096, TraluEtchReach = 1100;
+    private const int TraluEtchScene = 20, TraluEtchX = 44 * 512 + 2, TraluEtchZ = 55 * 512, TraluEtchFloor = 1536 + 500, TraluEtchReach = 1300;
     private enum TraluEtchLine { Read, Wonder }
     private static readonly string[][] TraluEtchLines =
     {
