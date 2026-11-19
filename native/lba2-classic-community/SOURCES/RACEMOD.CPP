@@ -206,6 +206,14 @@
  *     start_scene=<scene>        a new game starts in <scene>, the start line's, with no introduction (RaceMod_NewGameScene)
  *     start_in_car=1             Twinsen is in his car as the scene opens, not on foot beside it (FaceTheCar)
  *     ball_through=<scene> <actor>   (2026-11-17) Twinsen's magic ball flies through that actor of that scene (the museum's door)
+ *     car_ferry=<scene> <ferry actor> <deck entity> <deck body> <x0> <z0> <x1> <z1> <deck y> <hold var> <aboard var>
+ *                                (2026-11-19) a car ferry (FerryFrame): the ferry actor -- the game's, moved by its own track -- hidden, the
+ *                                scene's actor of that entity and generic body (the car ferry's body) kept where it is and turned as it is; its deck a floor for the car (the box
+ *                                x0..x1, z0..z1 in the ferry's own frame, turned with it, deck y over its origin), the car on it carried as
+ *                                it moves and turns; the hold variable not 0: the car held (RaceMod_Held); the aboard variable 1 while the
+ *                                car has stood on the deck a second, 0 off it; [<in car var>]: at 1 as the scene starts (the crossing's
+ *                                next scene), Twinsen put in his car on the deck's middle, across it, and the variable 2 (FerryFrame);
+ *                                [<arrive z>]: that far along the deck from its middle instead (clear of what stands on the quay before it)
  *     in_car=<var> <beta> [<x> <y> <z>]   (2026-11-17) Twinsen put in his car as he arrives in an outside scene while the game variable is
  *                                1 -- at <x y z> (cube-local) if given, turned to <beta> -- and the variable 2 (InCarFrame: the Emerald
  *                                Moon's arrival, the car driven out of the saucer)
@@ -1067,6 +1075,19 @@ static int s_dreamScene = -1;              // dream=: the scene a new game start
 // the race game's keys (RACEGAME.CPP)
 static int s_startScene = -1;              // start_scene=
 static int s_startInCar = 0;               // start_in_car=
+// car_ferry= (FerryFrame): the user, 2026-11-18, "We need to redesign the ferry between Citadel and Desert Island into one that Twinsen can
+// drive onto and off again, after Twinsen shows his ferry ticket and drives on, we need to assign NoMove whilst the ferry pulls out of the
+// harbour, then back in on the other side until it's successfully docked again"
+#define RACE_MAX_FERRIES 4
+typedef struct { int Scene, Ferry, DeckEntity, DeckBody, Box[4], DeckY, HoldVar, AboardVar, InCarVar, ArriveZ; } T_RACE_FERRY;
+static T_RACE_FERRY s_ferries[RACE_MAX_FERRIES];
+static int s_nbFerries = 0, s_ferryWasSet = 0, s_ferryWasScene = -1;
+static double s_ferryWas[4];                  // (the ferry's x, y, z and beta last frame)
+static S32 s_ferryStillSince = 0;
+static int s_ferryArriveFrames = 0;
+static int s_ferryArrived = 0, s_ferryHoldWas = 0;   // (come in on its deck in this scene; the hold last frame: arrive z at its release)
+static void FerryFrame(S32 now);
+static int FerryHolding(void);
 // (on_foot=: out of the car to explore -- the Temple of Bú's secret party; OnFoot, RaceMod_FilterInput)
 static int s_onFoot = 0;                   // on_foot=
 static int s_footArmed = 0;                // he has driven since the race file was read (a start on foot beside the car isn't "out")
@@ -3336,8 +3357,11 @@ static S32 RaisedUnderHere(S32 x, S32 y, S32 z) {
     return UnderAtWorld(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, y);
 }
 
+static S32 FerryDeckAt(S32 x, S32 z, S32 ref, S32 *deck);
 static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
     if (s_floorRef == RAISED_NOREF || CubeMode != CUBE_EXTERIEUR) return y;
+    // (a car ferry's deck, car_ferry=: the floor of what stands near its height over it -- the sea under it)
+    { S32 deck; if (FerryDeckAt(x, z, s_floorRef, &deck) && deck > y) return deck; }
     // (the roulette wheel's bowl, for something about its floor's height there)
     if (s_wheel.On) {
         const double wx = x + CurrentCubeX * 32768.0, wz = z + CurrentCubeY * 32768.0, r = WheelR(wx, wz);
@@ -3365,6 +3389,7 @@ static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
 
 static S32 RaisedCol(S32 x, S32 z, S32 col) {
     if (!col || s_floorRef == RAISED_NOREF || CubeMode != CUBE_EXTERIEUR) return col;
+    { S32 deck; if (FerryDeckAt(x, z, s_floorRef, &deck)) return 0; }
     if (OnWheel(x + CurrentCubeX * 32768.0, s_floorRef, z + CurrentCubeY * 32768.0)) return 0;
     S32 f;
     int seg;
@@ -3822,7 +3847,7 @@ static int InTunnel(int seg) {
 }
 
 extern S32 TerrainFootOpen;                 // 3DEXT/MAPTOOLS.CPP: the cars' walls open to Twinsen on foot
-void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; s_raisedStep = RAISED_STEP; TerrainFootOpen = 0; }
+void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised || s_nbFerries ? y : RAISED_NOREF; s_raisedStep = RAISED_STEP; TerrainFootOpen = 0; }
 void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; s_raisedStep = RAISED_STEP; TerrainFootOpen = 0; }
 // (EXTFUNC.CPP DoAnimExt, the hero moved: on foot the road is his floor only a step up, RAISED_FOOT_STEP; and the banks walled for the cars
 // only, game code 10, are ground he walks on -- GiveTerrainCol)
@@ -4857,6 +4882,12 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d", &b->PracticeEntity, &b->PracticeAnim) != 2) b->PracticeEntity = b->PracticeAnim = -1;
         }
         else if (!strcmp(key, "dart_ask")) s_dtAskVar = atoi(v);
+        else if (!strcmp(key, "car_ferry") && s_nbFerries < RACE_MAX_FERRIES) {
+            T_RACE_FERRY *f = &s_ferries[s_nbFerries];
+            f->InCarVar = -1; f->ArriveZ = 0;
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d", &f->Scene, &f->Ferry, &f->DeckEntity, &f->DeckBody, &f->Box[0], &f->Box[1], &f->Box[2], &f->Box[3],
+                       &f->DeckY, &f->HoldVar, &f->AboardVar, &f->InCarVar, &f->ArriveZ) >= 11) s_nbFerries++;
+        }
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
             memset(&f, 0, sizeof(f));
@@ -14886,6 +14917,8 @@ U32 RaceMod_FilterInput(U32 input) {
 // opens (start_in_car=). A scene of LBA2's that a track's island is made on can start one in its scripts -- Wannies Island's start scene
 // Twinsen's arrival, its destination the hall -- and the menu key skips a cinema into its destination.
 S32 RaceMod_NoCinema(void) {
+    // (a car ferry's crossing, car_ferry='s hold: its bars and films, as on foot)
+    if (FerryHolding()) return 0;
     return RaceMod_Active() && s_car.HasLine && (Comportement == C_BUGGY || s_startInCar) ? 1 : 0;
 }
 
@@ -14908,7 +14941,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -21530,6 +21563,8 @@ S32 RaceMod_DriveIn(S32 scene) {
 
 S32 RaceMod_CarKeptOut(S32 scene, const char *how) {
     if (!RaceMod_Active() || !CarRacing()) return 0;
+    // (a car ferry's crossing: on to its next scene, the car with it -- car_ferry= in_car)
+    if (FerryHolding()) return 0;
     if (RaceMod_DriveIn(scene)) return 0;
     int own = 0;
     // (an inside scene says it is cube (0,0))
@@ -21914,6 +21949,7 @@ void RaceMod_Frame(void) {
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
+    FerryFrame(TimerRefHR);
     Hover();
     // (Twinsen on foot in a room of foot_room=: its camera -- FootRoomCamera)
     {
@@ -22326,9 +22362,134 @@ void RaceMod_Frame(void) {
     EnginesHeard(now);
 }
 
+// ---- the car ferry (car_ferry=) ----
+static const T_RACE_FERRY *FerryHere(void) {
+    if (CubeMode != CUBE_EXTERIEUR || NewCube != -1) return NULL;
+    for (int i = 0; i < s_nbFerries; i++)
+        if (s_ferries[i].Scene == (S32)NumCube && s_ferries[i].Ferry > 0 && s_ferries[i].Ferry < NbObjets) return &s_ferries[i];
+    return NULL;
+}
+// (a point in a frame turned by beta from (ox, oz): x across, z along -- an actor's body's own x and z: its facing (sin, cos) is its +z)
+static void FerryLocal(double ox, double oz, double beta, double x, double z, double *lx, double *lz) {
+    const double a = beta * 2 * 3.14159265358979 / 4096, dx = x - ox, dz = z - oz;
+    *lx = dx * cos(a) - dz * sin(a);
+    *lz = dx * sin(a) + dz * cos(a);
+}
+static int FerryOnDeck(const T_RACE_FERRY *f, double ox, double oz, double beta, double x, double z) {
+    double lx, lz;
+    FerryLocal(ox, oz, beta, x, z, &lx, &lz);
+    return lx >= f->Box[0] && lx <= f->Box[2] && lz >= f->Box[1] && lz <= f->Box[3];
+}
+// (the deck's height at a point of the scene, for what stands near it: from 700 under it -- fallen a frame through -- to 300 over it)
+static S32 FerryDeckAt(S32 x, S32 z, S32 ref, S32 *deck) {
+    const T_RACE_FERRY *f = FerryHere();
+    if (!f) return 0;
+    const T_OBJ_3D *o = &ListObjet[f->Ferry].Obj;
+    *deck = o->Y + f->DeckY;
+    return ref > *deck - 700 && ref < *deck + 300 && FerryOnDeck(f, o->X, o->Z, o->Beta, x, z);
+}
+// The deck a floor for the car (BUGGY.CPP BuggyFloorY): a point of the car over it, the deck not over the car's own top
+S32 RaceMod_FerryFloor(S32 x, S32 z, S32 top, S32 *y) {
+    const T_RACE_FERRY *f = FerryHere();
+    if (!f) return 0;
+    const T_OBJ_3D *o = &ListObjet[f->Ferry].Obj;
+    const S32 deck = o->Y + f->DeckY;
+    if (deck > top || deck <= *y || !FerryOnDeck(f, o->X, o->Z, o->Beta, x, z)) return 0;
+    *y = deck;
+    return 1;
+}
+static int FerryHolding(void) {
+    // (the scene's ferry whatever the scene change under way: the change a crossing makes is let through by it)
+    const T_RACE_FERRY *f = NULL;
+    for (int i = 0; i < s_nbFerries && !f; i++) if (s_ferries[i].Scene == (S32)NumCube) f = &s_ferries[i];
+    return f && f->HoldVar >= 0 && f->HoldVar < MAX_VARS_GAME && ListVarGame[f->HoldVar] != 0;
+}
+static void FerryFrame(S32 now) {
+    const T_RACE_FERRY *f = FerryHere();
+    if (!f) { s_ferryWasSet = 0; s_ferryArriveFrames = 0; s_ferryArrived = 0; s_ferryHoldWas = 0; return; }
+    T_OBJET *ferry = &ListObjet[f->Ferry];
+    // (the game's ferry hidden, the car ferry's body where it is)
+    int deckActor = -1;
+    for (int i = 1; i < NbObjets && deckActor < 0; i++)
+        if (ListObjet[i].IndexFile3D == f->DeckEntity && ListObjet[i].GenBody == f->DeckBody) deckActor = i;
+    if (deckActor > 0) {
+        T_OBJET *deck = &ListObjet[deckActor];
+        // (the game's ferry gone -- its script's suicide: the Desert's after chapter 3 in the game -- and its deck with it)
+        if ((ferry->WorkFlags & OBJ_DEAD) && !(deck->Flags & INVISIBLE)) deck->Flags |= INVISIBLE;
+        deck->Obj.X = ferry->Obj.X; deck->Obj.Y = ferry->Obj.Y; deck->Obj.Z = ferry->Obj.Z;
+        if (deck->Obj.Beta != ferry->Obj.Beta) { deck->Obj.Beta = ferry->Obj.Beta; ClearRealAngle(deck); }
+    }
+    if (!(ferry->Flags & INVISIBLE)) ferry->Flags |= INVISIBLE;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    // (the crossing's next scene: Twinsen in his car on the deck -- kept on its middle while the scene's car actor makes the car, then in it)
+    if (f->InCarVar >= 0 && f->InCarVar < MAX_VARS_GAME && ListVarGame[f->InCarVar] == 1) {
+        // (on the deck's middle, across it, whether he came in on foot or in the car -- the car's own record with him)
+        hero->Obj.X = ferry->Obj.X; hero->Obj.Z = ferry->Obj.Z; hero->Obj.Y = ferry->Obj.Y + f->DeckY;
+        hero->Obj.Beta = (ferry->Obj.Beta + 1024) & 4095; ClearRealAngle(hero);
+        hero->Flags &= ~INVISIBLE; hero->WorkFlags &= ~FALLING;
+        if (Comportement == C_BUGGY) {
+            S_BUGGY *ptb = &ListBuggy[0];
+            ptb->Cube = NumCube; ptb->X = hero->Obj.X; ptb->Y = hero->Obj.Y; ptb->Z = hero->Obj.Z; ptb->Beta = hero->Obj.Beta; ptb->Speed = 0; ptb->SpeedInc = 0;
+        }
+        if (++s_ferryArriveFrames >= 3 && (NumBuggy || Comportement == C_BUGGY)) {
+            BackInCar();
+            ListVarGame[f->InCarVar] = 2;
+            s_ferryWasSet = 0;
+            s_ferryArrived = 1;
+            Log_Info("[racemod] car ferry (scene %d, actor %d): Twinsen in his car on its deck at (%d,%d,%d)", (int)NumCube, f->Ferry, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+        }
+    }
+    const double fx = ferry->Obj.X, fy = ferry->Obj.Y, fz = ferry->Obj.Z, fb = ferry->Obj.Beta;
+    if (!s_ferryWasSet || s_ferryWasScene != (S32)NumCube) { s_ferryWas[0] = fx; s_ferryWas[1] = fy; s_ferryWas[2] = fz; s_ferryWas[3] = fb; s_ferryWasSet = 1; s_ferryWasScene = (S32)NumCube; }
+    // (the car on the deck as the ferry was: carried by its move and turn since)
+    const int inCar = Comportement == C_BUGGY;
+    const S32 deckWas = (S32)s_ferryWas[1] + f->DeckY;
+    const int aboard = inCar && abs(hero->Obj.Y - deckWas) < 160 && FerryOnDeck(f, s_ferryWas[0], s_ferryWas[2], s_ferryWas[3], hero->Obj.X, hero->Obj.Z);
+    if (aboard && (fx != s_ferryWas[0] || fy != s_ferryWas[1] || fz != s_ferryWas[2] || fb != s_ferryWas[3])) {
+        S32 db = ((S32)fb - (S32)s_ferryWas[3]) & 4095;
+        if (db >= 2048) db -= 4096;
+        const double a = db * 2 * 3.14159265358979 / 4096, rx = hero->Obj.X - s_ferryWas[0], rz = hero->Obj.Z - s_ferryWas[2];
+        hero->Obj.X = (S32)lround(fx + rx * cos(a) + rz * sin(a));
+        hero->Obj.Z = (S32)lround(fz - rx * sin(a) + rz * cos(a));
+        hero->Obj.Y += (S32)(fy - s_ferryWas[1]);
+        if (db) { hero->Obj.Beta = (hero->Obj.Beta + db) & 4095; ClearRealAngle(hero); }
+    }
+    s_ferryWas[0] = fx; s_ferryWas[1] = fy; s_ferryWas[2] = fz; s_ferryWas[3] = fb;
+    // (docked after coming in on it, the hold let go: the car moved along the deck by arrive z -- clear of what stands on the quay before
+    // the deck's middle; not as it is put on the deck at the scene's start, where the ferry is still out at the scene's edge)
+    {
+        const int hold = f->HoldVar >= 0 && f->HoldVar < MAX_VARS_GAME && ListVarGame[f->HoldVar] != 0;
+        if (s_ferryHoldWas && !hold && s_ferryArrived && f->ArriveZ && inCar && aboard) {
+            const double a = fb * 2 * 3.14159265358979 / 4096;
+            hero->Obj.X += (S32)lround(sin(a) * f->ArriveZ); hero->Obj.Z += (S32)lround(cos(a) * f->ArriveZ);
+            Log_Info("[racemod] car ferry (scene %d): docked, the car %d along its deck, at (%d,%d,%d)", (int)NumCube, f->ArriveZ, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+        }
+        if (s_ferryHoldWas && !hold) s_ferryArrived = 0;
+        s_ferryHoldWas = hold;
+    }
+    // (the deck the car's floor: the game's physics knows the island's ground and decors, not an actor's deck -- the car over it, at its
+    // height or fallen a little through it, put back on it and not falling)
+    if (inCar && FerryOnDeck(f, fx, fz, fb, hero->Obj.X, hero->Obj.Z)) {
+        const S32 deck = (S32)fy + f->DeckY;
+        if (hero->Obj.Y < deck && hero->Obj.Y > deck - 700) { hero->Obj.Y = deck; hero->WorkFlags &= ~FALLING; }
+    }
+    // (aboard and still a second: the scripts' word for it)
+    if (f->AboardVar >= 0 && f->AboardVar < MAX_VARS_GAME) {
+        const int still = aboard && abs(ListBuggy[0].Speed) < 40;
+        if (!still) s_ferryStillSince = 0;
+        else if (!s_ferryStillSince) s_ferryStillSince = now ? now : 1;
+        const S16 want = (S16)(still && now - s_ferryStillSince >= 1000 ? 1 : aboard ? ListVarGame[f->AboardVar] : 0);
+        if (ListVarGame[f->AboardVar] != want) {
+            ListVarGame[f->AboardVar] = want;
+            Log_Info("[racemod] car ferry (scene %d, actor %d): the car %s", (int)NumCube, f->Ferry, want ? "aboard, standing on its deck" : "off its deck");
+        }
+    }
+}
+
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
-    // (not a won dream's car over its jump: wake_flight=)
+    // (not a won dream's car over its jump: wake_flight=; a car ferry's crossing: car_ferry='s hold)
+    if (RaceMod_Active() && FerryHolding()) return 1;
     return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
 }
 
@@ -24682,6 +24843,8 @@ void RaceMod_Island(S32 island) {
 // Platform's lift spoke to every car that came by and held it there, the user saw it in a test, 2026-10-31.
 S32 RaceMod_Hush(S32 num) {
     if (!CarRacing()) return 0;
+    // (the car held by a car ferry, car_ferry='s hold: its people's lines said -- the ticket shown at the gangway from the car)
+    if (FerryHolding()) return 0;
     static int saidScene = -1, saidActor = -1, saidText = -1;
     if (saidScene != NumCube || saidActor != NumObjDial || saidText != num) {
         saidScene = NumCube; saidActor = NumObjDial; saidText = num;

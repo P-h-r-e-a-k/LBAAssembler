@@ -709,6 +709,9 @@ static S32 BuggyFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
         found = TRUE;
     }
 
+    // (a car ferry's deck, car_ferry=: RACEMOD.CPP)
+    if (RaceMod_FerryFloor(x, z, top, &y)) found = TRUE;
+
     // Carried by a decor, the engine holds the car level on its top for as long
     // as its ZV touches it (CheckCarryBy), so a point hanging over the edge must
     // not drop to the ground far below.

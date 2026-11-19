@@ -325,6 +325,8 @@ void comportement_1()
         RacerTalk, BobTalk, GrapTalk, RabbibunnyTalk, HipsterTalk, PainterTalk,
         // (Kash's tomb in the sea cave, his helmet on it -- the user, 2026-11-18: KashTomb)
         KashReads, KashTakes, KashRests,
+        // (Mr. Paul at the Desert quay's car ferry: the ticket shown from the car -- RaceTrackStory.Ferry, 2026-11-19)
+        FerryTicketOk, FerryNoTicket,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -902,6 +904,25 @@ void comportement_1()
             "Riposa in pace, Kash. Correrò come correvi tu.",
             "Descansa em paz, Kash. Vou correr como tu corrias.",
         },
+        // (Mr. Paul at the Desert quay's car ferry: the ticket shown from the car -- RaceTrackStory.Ferry)
+        new[]
+        {
+            "Ticket? ... Right you are, Twinsen. Drive her aboard, nice and slow, and stop in the middle of the deck.",
+            "Ton billet ? ... Parfait, Twinsen. Monte à bord en voiture, tout doucement, et arrête-toi au milieu du pont.",
+            "Fahrkarte? ... In Ordnung, Twinsen. Fahr ihn an Bord, ganz langsam, und halt mitten auf dem Deck.",
+            "¿El billete? ... Perfecto, Twinsen. Sube el coche a bordo, despacito, y para en medio de la cubierta.",
+            "Il biglietto? ... Perfetto, Twinsen. Porta l'auto a bordo, piano piano, e fermati in mezzo al ponte.",
+            "O bilhete? ... Muito bem, Twinsen. Entra a bordo com o carro, devagarinho, e para no meio do convés.",
+        },
+        new[]
+        {
+            "No ticket, no crossing, Twinsen. The ferry office in Port-Ludo sells them.",
+            "Pas de billet, pas de traversée, Twinsen. Le bureau du ferry de Port-Ludo en vend.",
+            "Ohne Fahrkarte keine Überfahrt, Twinsen. Das Fährbüro in Port-Ludo verkauft welche.",
+            "Sin billete no hay travesía, Twinsen. La oficina del ferry de Port-Ludo los vende.",
+            "Niente biglietto, niente traversata, Twinsen. L'ufficio del traghetto di Port-Ludo li vende.",
+            "Sem bilhete, sem travessia, Twinsen. O escritório do ferry de Port-Ludo vende-os.",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -1237,6 +1258,7 @@ void comportement_2()
         // (Citadel/CitadelProps.KashTomb), his helmet on the lid, a candlestick either end. Action by it: Twinsen reads it out; the helmet
         // still there, he takes it -- the racing gear's second kind, as the clam gave it -- and after, a word to Kash. The hints: Flick's,
         // Zoe's, the gate's, the helmet's own texts, and a Desert islander's (IslandRetell.Desert, the game's 627 -- the clam's -- retold).
+        CarFerryDesertQuay(b.Edit, IslandBeatsA.Add, l => Say(l));
         b.Edit(PearlCave, "Kash's tomb in the sea cave, in the giant clam's place: the inscription, his helmet on it (Action takes it: the racing gear), a candlestick either end; Twinsen's look round a text of the game's (337, not 327)", model =>
         {
             var clamAt = model.Actors.ElementAtOrDefault(PearlClam) ?? throw new NotTheGames($"no clam (actor {PearlClam})");

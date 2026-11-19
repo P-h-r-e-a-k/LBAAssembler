@@ -984,7 +984,7 @@ internal static partial class RaceTrackStory
     };
 
     // Citadel Island's lines added later (after the darts players': CitadelLaterId), so that none before them move
-    internal enum CitadelLater { PaulBackToPort }
+    internal enum CitadelLater { PaulBackToPort, FerryTicketOk, FerryNoTicket }
     private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
     internal static readonly string[][] CitadelLaterLines =
     {
@@ -996,6 +996,25 @@ internal static partial class RaceTrackStory
             "¡Bien conducido, Twinsen! Ahora me vuelvo al puerto: los transbordadores no se cargan solos.",
             "Ben guidato, Twinsen! Ora torno al porto: i traghetti non si caricano da soli.",
             "Bem conduzido, Twinsen! Agora volto para o porto -- os ferries não se carregam sozinhos.",
+        },
+        // (Mr. Paul at the car ferry's gangway: the ticket shown from the car, or none -- RaceTrackStory.Ferry)
+        new[]
+        {
+            "Ticket? ... Right you are, Twinsen. Drive her aboard, nice and slow, and stop in the middle of the deck.",
+            "Ton billet ? ... Parfait, Twinsen. Monte à bord en voiture, tout doucement, et arrête-toi au milieu du pont.",
+            "Fahrkarte? ... In Ordnung, Twinsen. Fahr ihn an Bord, ganz langsam, und halt mitten auf dem Deck.",
+            "¿El billete? ... Perfecto, Twinsen. Sube el coche a bordo, despacito, y para en medio de la cubierta.",
+            "Il biglietto? ... Perfetto, Twinsen. Porta l'auto a bordo, piano piano, e fermati in mezzo al ponte.",
+            "O bilhete? ... Muito bem, Twinsen. Entra a bordo com o carro, devagarinho, e para no meio do convés.",
+        },
+        new[]
+        {
+            "No ticket, no crossing, Twinsen. The ferry office by the harbour sells them.",
+            "Pas de billet, pas de traversée, Twinsen. Le bureau du ferry, près du port, en vend.",
+            "Ohne Fahrkarte keine Überfahrt, Twinsen. Das Fährbüro am Hafen verkauft welche.",
+            "Sin billete no hay travesía, Twinsen. La oficina del ferry, junto al puerto, los vende.",
+            "Niente biglietto, niente traversata, Twinsen. L'ufficio del traghetto, vicino al porto, li vende.",
+            "Sem bilhete, sem travessia, Twinsen. O escritório do ferry, junto ao porto, vende-os.",
         },
     };
 

@@ -28,6 +28,7 @@ typedef struct {
 
 // TRUE when the engine was started for a race-track mod.
 S32 RaceMod_Active(void);
+S32 RaceMod_FerryFloor(S32 x, S32 z, S32 top, S32 *y);   // a car ferry's deck under the car's point: its height into *y (car_ferry=)
 S32 RaceMod_StoryAccel(void);
 S32 RaceMod_DrivenBody(S32 *anim);   // with no race on: the share (%) of the buggy's acceleration an island's own car has (ISLANDCARS.TXT)
 const T_RACE_CAR *RaceMod_Car(void);

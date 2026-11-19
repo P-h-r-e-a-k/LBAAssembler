@@ -778,6 +778,8 @@ internal static class RaceCarEngineFile
                 // (the achievements: RaceTrackStory.Achievements -- a game variable at a value, or a scene entered)
                 // (the Tavern's darts: RaceTrackStory.Darts)
                 foreach (var line in RaceTrackStory.DartsLines()) text.Append(line + "\n");
+                // (the car ferry: RaceTrackStory.Ferry)
+                foreach (var line in RaceTrackStory.FerryLines()) text.Append(line + "\n");
                 foreach (var line in RaceTrackStory.Achievements) text.Append(line + "\n");
                 // (HAL on the radio: his number Twinsen's once he has beaten him on the Emerald Moon -- Q_HAL at HalWon -- and before then no
                 // one to call: HalHints)
