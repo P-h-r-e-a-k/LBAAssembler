@@ -989,6 +989,8 @@ internal static partial class RaceTrackStory
         AddTexts(bank, first, attribute, ChapterLines, words);
         // (chapter 1's evening's after them: RaceTrackStory.Evening.cs)
         AddTexts(bank, first + ChapterLines.Length, attribute, EveningLines, words);
+        // (the darts players' after those: Citadel/RaceTrackStory.Darts.cs)
+        AddTexts(bank, first + ChapterLines.Length + EveningLines.Length, attribute, DartsTalkLines, words);
         if (Lba2TextBank.Load(text, lang, DesertTexts).Find(DesertGallicPrice) is { } own && bank.Find(first + (int)ChapterLine.GallicPrice) is { } price)
             price.Bytes = own.Bytes;
     }

@@ -962,7 +962,16 @@ static int s_nbDtFoe = 0, s_dtHasZoe = 0, s_dtScene = -1, s_dtSpot[3], s_dtBoard
 // make the opponent one of the people sat at the table": each darts= line a board of its own, its dart_board= and dart_foe= lines after it
 // its own; the one in the scene Twinsen is in the board played, DartBoardPick, its foes from s_dtFoeFirst, from its chapter on)
 #define RACE_MAX_DART_BOARDS 4
-typedef struct { int Scene, Spot[3], Board[3], Face[6], HasFace, FoeFirst, NbFoe, MinChapter; } T_DART_BOARD;
+typedef struct { int Scene, Spot[3], Board[3], Face[6], HasFace, FoeFirst, NbFoe, MinChapter, PracticeEntity, PracticeAnim; } T_DART_BOARD;
+// dart_practice=<entity> <anim> (after its board's darts= line): the one playing darts at the board on his own -- the user, 2026-11-18, "Let's
+// add a character playing darts in both the tavern and the tralu bar area, when Twinsen walks up to him he asks Twinsen if he wants a game, if
+// Twinsen says yes then they discuss stakes before playing": the nearest actor of that entity to the oche, while no match is on, plays that
+// animation (ANIM.HQR, his throw: given him here, as the opponent's stand-in is given his -- an entity's own generics needn't have it). His
+// own script asks (the story's dialogue: yes or no, then the stakes) and sets dart_ask='s variable; with him by the board, Action by it
+// starts no match of itself (but for Zoe's, with two players).
+// dart_ask=<game var>: the match the dialogue agreed -- 1 a friendly game, 2 to 4 for 25, 50, 100 (s_dtStakes) -- against the board's
+// practising player (his foe: the one of his entity), the stakes already said; set back to 0 as it starts.
+static int s_dtAskVar = -1, s_dtPracticeEntity = -1, s_dtPracticeAnim = -1, s_dtPracticeActor = -1;
 static T_DART_BOARD s_dtBoards[RACE_MAX_DART_BOARDS];
 static int s_nbDtBoards = 0, s_dtFoeFirst = 0, s_dtFoeCount = 0, s_dtMinChapter = 2;
 static int s_dtOn = 0, s_dtState = 0, s_dtTurn = 0, s_dtLeft = 3, s_dtScore[2], s_dtStartScore[2], s_dtFoe = -1, s_dtN = 0, s_dtActWas = 0, s_dtZoePress = 0, s_dtThrown = 0;
@@ -4839,10 +4848,15 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "darts") && s_nbDtBoards < RACE_MAX_DART_BOARDS) {
             T_DART_BOARD *b = &s_dtBoards[s_nbDtBoards];
             memset(b, 0, sizeof(*b));
-            b->MinChapter = 2;
+            b->MinChapter = 2; b->PracticeEntity = -1; b->PracticeAnim = -1;
             const int n = sscanf(v, "%d %d %d %d %d %d %d %d", &b->Scene, &b->Spot[0], &b->Spot[1], &b->Spot[2], &b->Board[0], &b->Board[1], &b->Board[2], &b->MinChapter);
             if (n >= 7) { b->FoeFirst = s_nbDtFoe; s_nbDtBoards++; }
         }
+        else if (!strcmp(key, "dart_practice") && s_nbDtBoards) {
+            T_DART_BOARD *b = &s_dtBoards[s_nbDtBoards - 1];
+            if (sscanf(v, "%d %d", &b->PracticeEntity, &b->PracticeAnim) != 2) b->PracticeEntity = b->PracticeAnim = -1;
+        }
+        else if (!strcmp(key, "dart_ask")) s_dtAskVar = atoi(v);
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
             memset(&f, 0, sizeof(f));
@@ -14890,7 +14904,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
+    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -20723,6 +20737,21 @@ static void DartEnd(void) {
     s_dtHeroWalk = -1;
 }
 // The board of the scene Twinsen is in, made the one played (not in a match: a match keeps its board)
+// (the board's practising player: the nearest live actor of dart_practice='s entity to the oche, within eight cells; -1: none)
+static int DartPracticeActor(void) {
+    if (s_dtPracticeEntity < 0 || s_dtPracticeAnim < 0) return -1;
+    if (s_dtPracticeActor > 0 && s_dtPracticeActor < NbObjets && ListObjet[s_dtPracticeActor].IndexFile3D == s_dtPracticeEntity
+        && !(ListObjet[s_dtPracticeActor].WorkFlags & OBJ_DEAD)) return s_dtPracticeActor;
+    double best = 4096.0 * 4096.0;
+    s_dtPracticeActor = -1;
+    for (int i = 1; i < NbObjets; i++) {
+        if (ListObjet[i].IndexFile3D != s_dtPracticeEntity || (ListObjet[i].WorkFlags & OBJ_DEAD) || i == s_dtStand) continue;
+        const double dx = ListObjet[i].Obj.X - s_dtSpot[0], dz = ListObjet[i].Obj.Z - s_dtSpot[1];
+        if (dx * dx + dz * dz < best) { best = dx * dx + dz * dz; s_dtPracticeActor = i; }
+    }
+    if (s_dtPracticeActor > 0) Log_Info("[racemod] darts: actor %d plays darts on his own at the board (anim %d)", s_dtPracticeActor, s_dtPracticeAnim);
+    return s_dtPracticeActor;
+}
 static void DartBoardPick(void) {
     if (s_dtOn) return;
     s_dtScene = -1;
@@ -20732,6 +20761,8 @@ static void DartBoardPick(void) {
         s_dtScene = b->Scene;
         memcpy(s_dtSpot, b->Spot, sizeof(s_dtSpot)); memcpy(s_dtBoard, b->Board, sizeof(s_dtBoard)); memcpy(s_dtFace, b->Face, sizeof(s_dtFace));
         s_dtHasFace = b->HasFace; s_dtFoeFirst = b->FoeFirst; s_dtFoeCount = b->NbFoe; s_dtMinChapter = b->MinChapter;
+        if (s_dtPracticeEntity != b->PracticeEntity) s_dtPracticeActor = -1;
+        s_dtPracticeEntity = b->PracticeEntity; s_dtPracticeAnim = b->PracticeAnim;
         return;
     }
 }
@@ -20851,14 +20882,29 @@ static void DartFrame(S32 now) {
     if (!s_dtOn) {
         // (the opponent's place empty but in a match)
         { T_OBJET *st = DartStand(); if (st && !(st->Flags & INVISIBLE)) DartStandShow(0); }
+        // (the one playing darts on his own: his throw, over and over -- dart_practice=)
+        const int practice = DartPracticeActor();
+        if (practice > 0 && ListObjet[practice].Obj.Anim.Num != s_dtPracticeAnim && GivePtrAnim(s_dtPracticeAnim)) {
+            ListObjet[practice].Obj.Anim.Num = -1; ObjectInitAnim(&ListObjet[practice].Obj, (void *)(uintptr_t)(U32)s_dtPracticeAnim);
+        }
         const double dx = hero->Obj.X - s_dtSpot[0], dz = hero->Obj.Z - s_dtSpot[1];
-        if (pressed && ListVarGame[FLAG_CHAPTER] >= s_dtMinChapter && Comportement != C_BUGGY && !(hero->WorkFlags & FALLING) && dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2]) {
-            // a match: against Zoe (player 2) when the game has two players, else one of the foes at random
+        const int two = RaceGame_StoryTwo() && s_dtHasZoe;
+        // (the match his dialogue agreed: dart_ask=)
+        const int asked = s_dtAskVar >= 0 && s_dtAskVar < MAX_VARS_GAME ? ListVarGame[s_dtAskVar] : 0;
+        // (0 again once no match is on: -1 is a match's -- the player's script asks only at 0, not at each dart's Action)
+        if (asked != 0) ListVarGame[s_dtAskVar] = 0;
+        int foeAsked = -1;
+        if (asked > 0 && practice > 0)
+            for (int k = 0; k < s_dtFoeCount; k++) if (s_dtFoes[s_dtFoeFirst + k].Entity == ListObjet[practice].IndexFile3D) { foeAsked = s_dtFoeFirst + k; break; }
+        if (asked > 0 && foeAsked < 0) Log_Warn("[racemod] darts: a match asked (%d) but no foe of the practising player's (actor %d)", asked, practice);
+        if ((foeAsked >= 0 || (pressed && (practice <= 0 || two))) && ListVarGame[FLAG_CHAPTER] >= s_dtMinChapter && Comportement != C_BUGGY && !(hero->WorkFlags & FALLING)
+            && (foeAsked >= 0 || dx * dx + dz * dz < (double)s_dtSpot[2] * s_dtSpot[2])) {
+            // a match: the one his dialogue agreed; against Zoe (player 2) when the game has two players, else one of the foes at random
             s_dtSeed ^= (U32)now * 2654435761u;
-            const int two = RaceGame_StoryTwo() && s_dtHasZoe;
-            s_dtFoe = two ? -1 : s_dtFoeCount ? s_dtFoeFirst + (int)(DartRnd() * s_dtFoeCount) % s_dtFoeCount : -1;
-            if (!two && s_dtFoe < 0) return;
+            s_dtFoe = foeAsked >= 0 ? foeAsked : two ? -1 : s_dtFoeCount ? s_dtFoeFirst + (int)(DartRnd() * s_dtFoeCount) % s_dtFoeCount : -1;
+            if (foeAsked < 0 && !two && s_dtFoe < 0) return;
             s_dtOn = 1; s_dtState = 0; s_dtTurn = 0; s_dtLeft = 3; s_dtN = 0;
+            if (s_dtAskVar >= 0 && s_dtAskVar < MAX_VARS_GAME) ListVarGame[s_dtAskVar] = -1;
             s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = DART_START;
             s_dtDarts[0] = s_dtDarts[1] = 0;
             s_dtNHist[0] = s_dtNHist[1] = 0;
@@ -20870,12 +20916,27 @@ static void DartFrame(S32 now) {
             ClearRealAngle(hero);
             DartStandShow(1);
             s_dtStake = 0; s_dtStakePick = 0; s_dtSideWas = 1;
-            if (s_dtFoe >= 0) s_dtState = 6;   // (the wager first, against a regular)
+            if (s_dtFoe >= 0 && foeAsked < 0) s_dtState = 6;   // (the wager first, against a regular)
             // (the regular sat in the scene who is the foe -- the nearest actor of his entity -- gets up: his seated actor hidden, the stand-in
             // at his seat walking over to stand before Twinsen and ask the wager; the user, 2026-11-16, "If Twinsen triggers a dart game, one
             // of the NPCs at the table stands up, walks over to him, and asks the question")
             s_dtSeat = -1;
-            if (s_dtFoe >= 0 && s_dtFoes[s_dtFoe].Entity >= 0 && s_dtFoes[s_dtFoe].Walk >= 0 && DartStand()) {
+            if (foeAsked >= 0 && DartStand()) {
+                // (he asked: the stakes said in his words -- 1 a friendly game, 2 to 4 the stakes; one Twinsen hasn't the money for, a friendly
+                // game, as the wager's own; his place at the board left to the stand-in, which walks to the waiting place behind Twinsen)
+                const S32 purse = MONEY_ZLITOS ? NbZlitosPieces : NbGoldPieces;
+                s_dtStake = s_dtStakes[asked >= 1 && asked <= 4 ? asked - 1 : 0];
+                if (s_dtStake > purse) { s_dtStake = 0; DartSay(now, "You seem a bit low on money, let's just have a friendly game", 4500); }
+                else { if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake; DartSay(now, s_dtStake ? "Arrows aim, Action throws" : "A friendly game: arrows aim, Action throws", 3000); }
+                T_OBJET *seat = &ListObjet[practice], *foe = DartStand();
+                s_dtSeat = practice;
+                s_dtSeatFlags = seat->Flags; seat->Flags |= INVISIBLE;
+                foe->Obj.X = seat->Obj.X; foe->Obj.Z = seat->Obj.Z;
+                s_dtState = 8;
+                if (s_dtFoes[s_dtFoe].Walk >= 0) DartStandAnim(s_dtFoes[s_dtFoe].Walk);
+                Log_Info("[racemod] darts: %s agreed a match (%d), a wager of %d -- from the board (actor %d) to the waiting place", DartOpponent()->Name, asked, s_dtStake, practice);
+            }
+            else if (s_dtFoe >= 0 && s_dtFoes[s_dtFoe].Entity >= 0 && s_dtFoes[s_dtFoe].Walk >= 0 && DartStand()) {
                 double best = 1e18;
                 for (int i = 1; i < NbObjets; i++) {
                     if (i == s_dtStand || ListObjet[i].IndexFile3D != s_dtFoes[s_dtFoe].Entity || (ListObjet[i].WorkFlags & OBJ_DEAD)) continue;
@@ -20893,7 +20954,7 @@ static void DartFrame(S32 now) {
                     Log_Info("[racemod] darts: %s gets up (actor %d) and comes over", DartOpponent()->Name, s_dtSeat);
                 }
             }
-            else DartSay(now, "Arrows aim, Action throws", 3000);
+            else if (foeAsked < 0) DartSay(now, "Arrows aim, Action throws", 3000);
             Log_Info("[racemod] darts: a match of %d against %s (opponent's actor %d)", DART_START, DartOpponent()->Name, s_dtStand);
         }
         return;
