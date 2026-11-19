@@ -169,6 +169,7 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
     CrashBlock_Build();
     CrashOs_WriteRegisters(context);
     CrashBlock_State();
+    CrashBlock_Trails();
     CrashBlock_EngineModule();
     CrashOs_WriteFrames(context);
     CrashBlock_EndFrames();

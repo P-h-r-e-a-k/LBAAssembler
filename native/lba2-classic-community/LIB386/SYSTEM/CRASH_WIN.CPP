@@ -318,6 +318,7 @@ static void write_rest_of_block(const CONTEXT *context, const char *chain) {
     CrashBlock_Build();
     write_registers(context);
     CrashBlock_State();
+    CrashBlock_Trails();
     CrashBlock_EngineModule();
     write_frames(context);
     CrashBlock_EndFrames();

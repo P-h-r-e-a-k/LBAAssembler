@@ -39,6 +39,17 @@ void Crash_PrepareThread(void);
  * that installed, before a crash can matter; there is no removal. */
 void Crash_AddState(const char *name, const void *address, U32 size, S32 isSigned);
 
+/* Adds a trail to the block: a ring of `slots` texts of slotSize bytes each, in
+ * buffer, whose writer counts every text it starts in *head (the next goes to
+ * slot *head % slots). The block prints the filled slots oldest first, one
+ * "CRASH trail <name> <n> <text>" line each, n counting from the first text ever
+ * written. Each text is read up to its NUL or slotSize bytes, whichever comes
+ * first, and no pointer in it is followed, so a half-written text prints as
+ * whatever bytes are there. A trail whose *head is 0 prints nothing. Like a state
+ * field, buffer and head must stay valid for the whole run. (The OpenGL
+ * renderer's last operations and its driver: GL/RENDER_GL.CPP.) */
+void Crash_AddTrail(const char *name, const char *buffer, U32 slotSize, U32 slots, const volatile U32 *head);
+
 #ifdef __cplusplus
 }
 #endif

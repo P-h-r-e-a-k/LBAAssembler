@@ -35,7 +35,9 @@ enum {
        be reached for the tail: an 8 MB stack of small frames is a few hundred
        thousand. */
     CRASH_MAX_WALK_FRAMES = 1 << 20,
-    CRASH_MAX_STATE = 32
+    CRASH_MAX_STATE = 48,
+    /* Trails (Crash_AddTrail): the OpenGL renderer's operations, its driver, its messages. */
+    CRASH_MAX_TRAILS = 8
 };
 
 /* Supplied by the backend, or by a test: writes the bytes of one finished line. */
@@ -87,6 +89,8 @@ void CrashCore_SetBuild(const char *version, const char *commit);
 void CrashBlock_Begin(void);
 void CrashBlock_Build(void);
 void CrashBlock_State(void);
+/* Each registered trail's texts, oldest first (Crash_AddTrail), after the state. */
+void CrashBlock_Trails(void);
 /* The module this code is linked into, the one a player's report is about. */
 void CrashBlock_EngineModule(void);
 /* Frame 0 is the faulting pc, the rest return addresses, innermost first. */

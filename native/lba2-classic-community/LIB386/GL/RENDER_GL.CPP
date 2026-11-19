@@ -14,8 +14,10 @@
 
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/WINDOW.H>
+#include <SYSTEM/CRASH.H>
 #include <GPU/GPURENDERER_BACKEND.H>
 
+#include <stdarg.h>
 #include <stdio.h>
 
 /* ── Renderer state shared with the engine (C linkage) ─────────────────────
@@ -907,9 +909,9 @@ static void GL_CreateFBO(U32 width, U32 height) {
 
 /* ── Context lifecycle ──────────────────────────────────────────────────── */
 
-#ifdef USE_GLES2
 /* Whole-token search of the context's extension string: a bare strstr would
-   report GL_FOO_bar when asked for GL_FOO. */
+   report GL_FOO_bar when asked for GL_FOO. (Both dialects: the GLES probes
+   below, and the driver's debug output in the diagnostics at the end.) */
 static S32 GL_ExtensionPresent(const char *name) {
     const char *exts = (const char *)glGetString(GL_EXTENSIONS);
     const size_t len = strlen(name);
@@ -931,7 +933,6 @@ static S32 GL_ExtensionPresent(const char *name) {
     }
     return 0;
 }
-#endif
 
 static S32 GL_CreateContext(U32 resX, U32 resY) {
     if (s_initialized) {
@@ -1164,6 +1165,11 @@ static void GL_DestroyContext(void) {
     if (!s_initialized) {
         return;
     }
+    /* (the deletes below in the renderer's own context: with SDL's renderer context current they would free its objects of the
+       same names instead) */
+    if (!Window_GLMakeCurrent()) {
+        Log_Warn("[GL] shutting down without the renderer's context current");
+    }
 
     if (s_overlayTex) {
         glDeleteTextures(1, &s_overlayTex);
@@ -1251,12 +1257,21 @@ static void GL_DestroyContext(void) {
 
 /* ── Offscreen target (FBO) ─────────────────────────────────────────────── */
 
+/* (each of these with the renderer's own context current, as every other operation: called after a software frame, SDL's renderer
+   context was the current one, and the first palette upload went into it -- texture 3 there, GL_INVALID_VALUE, 2026-11-19, found by
+   the diagnostics below; into a texture of SDL's own of that name with room, it would have overwritten it) */
 static S32 GL_TargetCreate(U32 width, U32 height) {
+    if (!Window_GLMakeCurrent()) {
+        return FALSE;
+    }
     GL_CreateFBO(width, height);
     return (s_fbo != 0) ? TRUE : FALSE;
 }
 
 static void GL_TargetDestroy(void) {
+    if (!Window_GLMakeCurrent()) {
+        return;
+    }
     GL_DestroyFBO();
 }
 
@@ -1455,7 +1470,7 @@ static void GL_SetVSync(S32 enabled) {
    the fog table and palette in place. */
 
 static void GL_TexUpdateAtlasSlot(const void *lum, U32 slot) {
-    if (lum == NULL || slot >= s_atlasSlots) {
+    if (lum == NULL || slot >= s_atlasSlots || !Window_GLMakeCurrent()) {
         return;
     }
     /* An object polygon's PtrMap is its page plus the polygon's texture offset: 256x256 from there runs past the page by the
@@ -1485,7 +1500,7 @@ static void GL_TexUpdateAtlas(const void *lum) {
 }
 
 static void GL_TexUpdateCLUT(const void *lum) {
-    if (lum == NULL) {
+    if (lum == NULL || !Window_GLMakeCurrent()) {
         return;
     }
     /* Upload the full 64 KB fog table (256×256) once. SetCLUT selects a
@@ -1503,7 +1518,7 @@ static void GL_TexUpdatePalette(const void *argb) {
     U32 sceneCopy[256];
     S32 i;
 
-    if (argb == NULL) {
+    if (argb == NULL || !Window_GLMakeCurrent()) {
         return;
     }
     /* Present copy: alpha 0xFF everywhere except palette index 0 (the
@@ -2275,37 +2290,462 @@ static void GL_DrawPresentQuad(S32 which, S32 linear, S32 opaqueX0,
     }
 }
 
+/* ── Diagnostics: what a crash report needs to pinpoint a GL fault ─────────
+   (2026-11-18: "make sure we've got extensive logging code that would pinpoint any crash that's OpenGL related")
+   Every backend operation goes through a wrapper below (the vtable names the wrappers), which
+   - puts the operation, its frame, its time and its sizes on a trail of the last GL_TRAIL_SLOTS operations -- the crash block
+     (SYSTEM/CRASH.H, Crash_AddTrail) prints it oldest first, so its last line is the operation the fault came in or after, and
+     the state's gl_in_op says which (1: inside it);
+   - checks glGetError once a frame (at the composite's clear), after each upload, readback and target change (rare, or already
+     a sync point), and after every operation with LBA2_GL_DEBUG=1 -- each error logged with the operation it followed;
+   - logs the driver at each context start (vendor, renderer, version, GLSL, limits, the context, the window) and keeps it for
+     the crash block (trail gl_info);
+   - takes the driver's own messages (KHR_debug / ARB_debug_output, where the driver has it): errors and warnings logged once a
+     frame from the main thread and put on the trail as they come (a driver may call from its own thread: the trails' slots are
+     claimed atomically); with LBA2_GL_DEBUG=1 also its low-severity ones, delivered synchronously;
+   - LBA2_GL_TEST_CRASH=<frame>: a deliberate fault inside the draw wrapper at that GL frame, to check what a report shows;
+     LBA2_GL_TEST_ERROR=<frame>: a deliberate GL error (an enum no GL has) at that frame, to check the driver's messages and the
+     error checks reach the log. */
+enum { GL_TRAIL_SLOTS = 256, GL_TRAIL_SIZE = 128, GL_DRIVER_SLOTS = 32, GL_DRIVER_SIZE = 256, GL_INFO_SIZE = 480 };
+static char s_trail[GL_TRAIL_SLOTS][GL_TRAIL_SIZE];
+static SDL_AtomicInt s_trailHead;
+static char s_driverTrail[GL_DRIVER_SLOTS][GL_DRIVER_SIZE];
+static SDL_AtomicInt s_driverHead;
+static S32 s_driverLogged = 0;
+static U32 s_driverMessages = 0;
+static char s_glInfo[GL_INFO_SIZE];
+static const U32 s_glInfoCount = 1;
+static U32 s_glActive = 0;   /* a context is up */
+static U32 s_glFrame = 0;    /* composites since the first context */
+static U32 s_glInOp = 0;     /* inside a backend operation */
+static U32 s_glErrors = 0;   /* glGetError results so far */
+static U32 s_glLastError = 0;
+static U32 s_glContexts = 0; /* contexts started */
+static S32 s_glDebug = 0;
+static U32 s_glTestCrash = 0;
+static U32 s_glTestError = 0; /* LBA2_GL_TEST_ERROR */
+static SDL_GLContext s_ourContext = NULL; /* the renderer's context, as it started */
+static U32 s_glWrongContext = 0;          /* operations that ended with another context current */
+
+static void GL_Trail(const char *format, ...) {
+    const U32 n = (U32)SDL_AddAtomicInt(&s_trailHead, 1);
+    char *slot = s_trail[n % GL_TRAIL_SLOTS];
+    int at = snprintf(slot, GL_TRAIL_SIZE, "f%u t%u ", s_glFrame, (U32)SDL_GetTicks());
+    va_list args;
+    if (at < 0 || at >= GL_TRAIL_SIZE) {
+        at = 0;
+    }
+    va_start(args, format);
+    vsnprintf(slot + at, (size_t)(GL_TRAIL_SIZE - at), format, args);
+    va_end(args);
+}
+
+static const char *GL_ErrorName(GLenum error) {
+    switch (error) {
+    case GL_INVALID_ENUM:
+        return "GL_INVALID_ENUM";
+    case GL_INVALID_VALUE:
+        return "GL_INVALID_VALUE";
+    case GL_INVALID_OPERATION:
+        return "GL_INVALID_OPERATION";
+    case GL_OUT_OF_MEMORY:
+        return "GL_OUT_OF_MEMORY";
+    case 0x0506:
+        return "GL_INVALID_FRAMEBUFFER_OPERATION";
+    case 0x0503:
+        return "GL_STACK_OVERFLOW";
+    case 0x0504:
+        return "GL_STACK_UNDERFLOW";
+    default:
+        return "unknown";
+    }
+}
+
+/* glGetError until clear (8 at most: a context lost keeps answering), each logged -- the first 50, then one in 1000 */
+static void GL_CheckErrors(const char *after) {
+    S32 i;
+    if (!s_initialized) {
+        return;
+    }
+    for (i = 0; i < 8; i++) {
+        const GLenum error = glGetError();
+        if (error == GL_NO_ERROR) {
+            return;
+        }
+        s_glErrors++;
+        s_glLastError = (U32)error;
+        GL_Trail("ERROR 0x%04x %s after %s", (U32)error, GL_ErrorName(error), after);
+        if (s_glErrors <= 50 || s_glErrors % 1000 == 0) {
+            Log_Warn("[GL] error 0x%04x %s after %s (frame %u, %u errors so far)", (U32)error, GL_ErrorName(error), after,
+                     s_glFrame, s_glErrors);
+        }
+    }
+}
+
+/* An operation that ends with another context current did (or would have done) its GL work in that one -- SDL's renderer's,
+   after a software frame: the first palette upload did, 2026-11-19. Logged, the first 20, then one in 1000. */
+static void GL_CheckContext(const char *after) {
+    if (s_ourContext == NULL || SDL_GL_GetCurrentContext() == s_ourContext) {
+        return;
+    }
+    s_glWrongContext++;
+    GL_Trail("WRONG CONTEXT current after %s", after);
+    if (s_glWrongContext <= 20 || s_glWrongContext % 1000 == 0) {
+        Log_Warn("[GL] another GL context was current after %s (frame %u, %u times so far)", after, s_glFrame, s_glWrongContext);
+    }
+}
+
+/* The driver's debug output (KHR_debug, GL 4.3, or ARB_debug_output): its own types and values, so this builds against any
+   header set */
+#if defined(_WIN32)
+#define LBA2_GL_CALLBACK __stdcall
+#else
+#define LBA2_GL_CALLBACK
+#endif
+typedef void(LBA2_GL_CALLBACK *Lba2GlDebugProc)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
+                                                 const GLchar *message, const void *user);
+typedef void(LBA2_GL_CALLBACK *Lba2GlDebugMessageCallback)(Lba2GlDebugProc callback, const void *user);
+enum {
+    LBA2_GL_DEBUG_OUTPUT = 0x92E0,
+    LBA2_GL_DEBUG_OUTPUT_SYNCHRONOUS = 0x8242,
+    LBA2_GL_DEBUG_SEVERITY_HIGH = 0x9146,
+    LBA2_GL_DEBUG_SEVERITY_MEDIUM = 0x9147,
+    LBA2_GL_DEBUG_SEVERITY_LOW = 0x9148,
+    LBA2_GL_DEBUG_TYPE_ERROR = 0x824C,
+    LBA2_GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR = 0x824E,
+    LBA2_GL_DEBUG_TYPE_PERFORMANCE = 0x8250
+};
+
+static const char *GL_SeverityName(GLenum severity) {
+    return severity == LBA2_GL_DEBUG_SEVERITY_HIGH ? "high" : severity == LBA2_GL_DEBUG_SEVERITY_MEDIUM ? "medium" : severity == LBA2_GL_DEBUG_SEVERITY_LOW ? "low" : "note";
+}
+
+static const char *GL_MessageTypeName(GLenum type) {
+    return type == LBA2_GL_DEBUG_TYPE_ERROR ? "error" : type == LBA2_GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR ? "undefined behaviour" : type == LBA2_GL_DEBUG_TYPE_PERFORMANCE ? "performance" : "other";
+}
+
+static void LBA2_GL_CALLBACK GL_DriverMessage(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
+                                              const GLchar *message, const void *user) {
+    U32 n;
+    (void)source;
+    (void)length;
+    (void)user;
+    if (severity != LBA2_GL_DEBUG_SEVERITY_HIGH && severity != LBA2_GL_DEBUG_SEVERITY_MEDIUM &&
+        !(s_glDebug && severity == LBA2_GL_DEBUG_SEVERITY_LOW)) {
+        return;
+    }
+    /* (performance notes only with LBA2_GL_DEBUG: NVIDIA's "pixel transfer is synchronized with 3D rendering", 131154, comes
+       every frame from the depth readback the common layer asks for -- known, and it would push the operations off the trail) */
+    if (type == LBA2_GL_DEBUG_TYPE_PERFORMANCE && !s_glDebug) {
+        return;
+    }
+    n = (U32)SDL_AddAtomicInt(&s_driverHead, 1);
+    snprintf(s_driverTrail[n % GL_DRIVER_SLOTS], GL_DRIVER_SIZE, "f%u %s %s id %u: %s", s_glFrame, GL_SeverityName(severity),
+             GL_MessageTypeName(type), (U32)id, message ? message : "");
+    GL_Trail("DRIVER %s %s id %u: %.56s", GL_SeverityName(severity), GL_MessageTypeName(type), (U32)id, message ? message : "");
+}
+
+/* The driver's messages since the last time, into the log (main thread; the first 100, then one in 1000) */
+static void GL_LogDriverMessages(void) {
+    const S32 head = SDL_GetAtomicInt(&s_driverHead);
+    if (head - s_driverLogged > GL_DRIVER_SLOTS) {
+        Log_Warn("[GL] %d driver messages came too fast to log", head - s_driverLogged - GL_DRIVER_SLOTS);
+        s_driverLogged = head - GL_DRIVER_SLOTS;
+    }
+    for (; s_driverLogged < head; s_driverLogged++) {
+        s_driverMessages++;
+        if (s_driverMessages <= 100 || s_driverMessages % 1000 == 0) {
+            Log_Warn("[GL] driver: %s", s_driverTrail[(U32)s_driverLogged % GL_DRIVER_SLOTS]);
+        }
+    }
+}
+
+static void GL_StartDebugOutput(char *said, size_t size) {
+    static const char *const names[] = {"glDebugMessageCallback", "glDebugMessageCallbackKHR", "glDebugMessageCallbackARB"};
+    const S32 khr = GL_ExtensionPresent("GL_KHR_debug");
+    const S32 arb = GL_ExtensionPresent("GL_ARB_debug_output");
+    size_t i;
+    snprintf(said, size, "none (the driver has neither KHR_debug nor ARB_debug_output)");
+    for (i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        Lba2GlDebugMessageCallback install = (Lba2GlDebugMessageCallback)SDL_GL_GetProcAddress(names[i]);
+        if (install == NULL || (i < 2 && !khr && !arb) || (i == 2 && !arb)) {
+            continue;
+        }
+        install(GL_DriverMessage, NULL);
+        if (i < 2) {
+            glEnable(LBA2_GL_DEBUG_OUTPUT); /* (KHR: off by default in a context that isn't a debug one) */
+        }
+        if (s_glDebug) {
+            glEnable(LBA2_GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        }
+        snprintf(said, size, "%s%s", names[i], s_glDebug ? ", synchronous, low severity too" : "");
+        break;
+    }
+    while (glGetError() != GL_NO_ERROR) {
+    }
+}
+
+static void GL_DiagStart(U32 resX, U32 resY) {
+    const char *vendor = (const char *)glGetString(GL_VENDOR);
+    const char *renderer = (const char *)glGetString(GL_RENDERER);
+    const char *version = (const char *)glGetString(GL_VERSION);
+    const char *glsl = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    const char *debugEnv = SDL_getenv("LBA2_GL_DEBUG");
+    const char *crashEnv = SDL_getenv("LBA2_GL_TEST_CRASH");
+    const char *errorEnv = SDL_getenv("LBA2_GL_TEST_ERROR");
+    GLint maxTexture = 0, viewport[2] = {0, 0};
+    int major = 0, minor = 0, profile = 0, flags = 0, pixelW = 0, pixelH = 0;
+    char debugOutput[96];
+    SDL_Window *win = Window_GetSDLWindow();
+    s_glDebug = debugEnv != NULL && debugEnv[0] != '\0' && debugEnv[0] != '0';
+    s_glTestCrash = crashEnv != NULL ? (U32)strtoul(crashEnv, NULL, 10) : 0;
+    s_glTestError = errorEnv != NULL ? (U32)strtoul(errorEnv, NULL, 10) : 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexture);
+    glGetIntegerv(GL_MAX_VIEWPORT_DIMS, viewport);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minor);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &profile);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_FLAGS, &flags);
+    if (win) {
+        SDL_GetWindowSizeInPixels(win, &pixelW, &pixelH);
+    }
+    GL_StartDebugOutput(debugOutput, sizeof(debugOutput));
+    s_ourContext = SDL_GL_GetCurrentContext();
+    s_glContexts++;
+    Log_Info("[GL] driver: %s | %s | OpenGL %s | GLSL %s", vendor ? vendor : "?", renderer ? renderer : "?",
+             version ? version : "?", glsl ? glsl : "?");
+    Log_Info("[GL] context %u: asked %d.%d, profile mask %d, flags 0x%x; max texture %d, max viewport %dx%d; window %dx%d px, "
+             "engine %ux%u, %u atlas slots",
+             s_glContexts, major, minor, profile, flags, (int)maxTexture, (int)viewport[0], (int)viewport[1], pixelW, pixelH,
+             resX, resY, s_atlasSlots);
+    Log_Info("[GL] diagnostics: trail of the last %d operations kept for a crash report; driver messages: %s; glGetError %s%s",
+             GL_TRAIL_SLOTS, debugOutput, s_glDebug ? "after every operation (LBA2_GL_DEBUG)" : "once a frame and after uploads",
+             s_glTestCrash ? " -- LBA2_GL_TEST_CRASH set: a deliberate fault at that frame" : "");
+    snprintf(s_glInfo, sizeof(s_glInfo), "%s | %s | OpenGL %s | GLSL %s | max texture %d | window %dx%d px | engine %ux%u | context %u",
+             vendor ? vendor : "?", renderer ? renderer : "?", version ? version : "?", glsl ? glsl : "?", (int)maxTexture,
+             pixelW, pixelH, resX, resY, s_glContexts);
+    if (s_glContexts == 1) {
+        Crash_AddState("gl_active", &s_glActive, sizeof(s_glActive), 0);
+        Crash_AddState("gl_frame", &s_glFrame, sizeof(s_glFrame), 0);
+        Crash_AddState("gl_in_op", &s_glInOp, sizeof(s_glInOp), 0);
+        Crash_AddState("gl_errors", &s_glErrors, sizeof(s_glErrors), 0);
+        Crash_AddState("gl_last_error", &s_glLastError, sizeof(s_glLastError), 0);
+        Crash_AddState("gl_wrong_context", &s_glWrongContext, sizeof(s_glWrongContext), 0);
+        Crash_AddTrail("gl_info", s_glInfo, GL_INFO_SIZE, 1, &s_glInfoCount);
+        Crash_AddTrail("gl_driver", &s_driverTrail[0][0], GL_DRIVER_SIZE, GL_DRIVER_SLOTS, (const volatile U32 *)&s_driverHead.value);
+        Crash_AddTrail("gl", &s_trail[0][0], GL_TRAIL_SIZE, GL_TRAIL_SLOTS, (const volatile U32 *)&s_trailHead.value);
+    }
+}
+
+/* The wrappers: the trail before, the check after (always: `check`; with LBA2_GL_DEBUG: every one) */
+#define GL_OP_BEGIN(...)    \
+    do {                    \
+        GL_Trail(__VA_ARGS__); \
+        s_glInOp = 1;       \
+    } while (0)
+#define GL_OP_END(name, check)              \
+    do {                                    \
+        s_glInOp = 0;                       \
+        GL_CheckContext(name);              \
+        if ((check) || s_glDebug) {         \
+            GL_CheckErrors(name);           \
+        }                                   \
+    } while (0)
+
+static S32 D_CreateContext(U32 resX, U32 resY) {
+    const S32 was = s_initialized;
+    S32 ok;
+    GL_OP_BEGIN("CreateContext %ux%u", resX, resY);
+    ok = GL_CreateContext(resX, resY);
+    s_glInOp = 0;
+    if (ok && !was) {
+        s_glActive = 1;
+        GL_DiagStart(resX, resY);
+        GL_CheckErrors("CreateContext");
+    } else if (!ok) {
+        GL_Trail("CreateContext failed");
+        Log_Warn("[GL] the context could not be created (%ux%u): see the [GL] lines above", resX, resY);
+    }
+    return ok;
+}
+static void D_DestroyContext(void) {
+    GL_OP_BEGIN("DestroyContext");
+    GL_LogDriverMessages();
+    GL_DestroyContext();
+    s_glActive = 0;
+    s_glInOp = 0;
+    s_ourContext = NULL;
+}
+static S32 D_TargetCreate(U32 width, U32 height) {
+    S32 ok;
+    GL_OP_BEGIN("TargetCreate %ux%u", width, height);
+    ok = GL_TargetCreate(width, height);
+    GL_OP_END("TargetCreate", 1);
+    if (!ok) {
+        Log_Warn("[GL] the offscreen target (%ux%u) could not be created", width, height);
+    }
+    return ok;
+}
+static void D_TargetDestroy(void) {
+    GL_OP_BEGIN("TargetDestroy");
+    GL_TargetDestroy();
+    GL_OP_END("TargetDestroy", 1);
+}
+static void D_TargetBindClear(U32 rgb) {
+    GL_OP_BEGIN("TargetBindClear 0x%06x", rgb);
+    GL_TargetBindClear(rgb);
+    GL_OP_END("TargetBindClear", 0);
+}
+static S32 D_TargetReadDepth(void *dst, U32 width, U32 height) {
+    S32 ok;
+    GL_OP_BEGIN("TargetReadDepth %ux%u", width, height);
+    ok = GL_TargetReadDepth(dst, width, height);
+    GL_OP_END("TargetReadDepth", 1); /* (glReadPixels has waited for the GPU already) */
+    return ok;
+}
+static S32 D_TargetReadColor(void *dst, U32 width, U32 height) {
+    S32 ok;
+    GL_OP_BEGIN("TargetReadColor %ux%u", width, height);
+    ok = GL_TargetReadColor(dst, width, height);
+    GL_OP_END("TargetReadColor", 1);
+    return ok;
+}
+static S32 D_TargetSnapshotTerrain(void) {
+    S32 ok;
+    GL_OP_BEGIN("TargetSnapshotTerrain");
+    ok = GL_TargetSnapshotTerrain();
+    GL_OP_END("TargetSnapshotTerrain", 0);
+    return ok;
+}
+static void D_TargetRestoreTerrain(void) {
+    GL_OP_BEGIN("TargetRestoreTerrain");
+    GL_TargetRestoreTerrain();
+    GL_OP_END("TargetRestoreTerrain", 0);
+}
+static void D_SetVSync(S32 enabled) {
+    GL_OP_BEGIN("SetVSync %d", enabled);
+    GL_SetVSync(enabled);
+    GL_OP_END("SetVSync", 1);
+}
+static void D_TexUpdatePresent(const void *pixels, U32 pitch, U32 width, U32 height, S32 rectX, S32 rectY, S32 rectW, S32 rectH,
+                               S32 linear, S32 indexed) {
+    GL_OP_BEGIN("TexUpdatePresent %ux%u pitch %u rect %d,%d %dx%d%s%s", width, height, pitch, rectX, rectY, rectW, rectH,
+                linear ? " linear" : "", indexed ? " indexed" : "");
+    GL_TexUpdatePresent(pixels, pitch, width, height, rectX, rectY, rectW, rectH, linear, indexed);
+    GL_OP_END("TexUpdatePresent", 0);
+}
+static void D_TexUpdateAtlas(const void *lum) {
+    GL_OP_BEGIN("TexUpdateAtlas");
+    GL_TexUpdateAtlas(lum);
+    GL_OP_END("TexUpdateAtlas", 1);
+}
+static void D_TexUpdateCLUT(const void *lum) {
+    GL_OP_BEGIN("TexUpdateCLUT");
+    GL_TexUpdateCLUT(lum);
+    GL_OP_END("TexUpdateCLUT", 1);
+}
+static void D_TexUpdatePalette(const void *argb) {
+    GL_OP_BEGIN("TexUpdatePalette");
+    GL_TexUpdatePalette(argb);
+    GL_OP_END("TexUpdatePalette", 1);
+}
+static void D_TexUpdateBricks(const void *rg, U32 width, U32 height) {
+    GL_OP_BEGIN("TexUpdateBricks %ux%u", width, height);
+    GL_TexUpdateBricks(rg, width, height);
+    GL_OP_END("TexUpdateBricks", 1);
+}
+static void D_TexUpdateSprites(const void *rg, U32 width, U32 height) {
+    GL_OP_BEGIN("TexUpdateSprites %ux%u", width, height);
+    GL_TexUpdateSprites(rg, width, height);
+    GL_OP_END("TexUpdateSprites", 1);
+}
+static void D_TexUpdateTransPal(const void *lum) {
+    GL_OP_BEGIN("TexUpdateTransPal");
+    GL_TexUpdateTransPal(lum);
+    GL_OP_END("TexUpdateTransPal", 1);
+}
+static void D_TexUpdateBlendLog(const void *rg, U32 width, U32 height) {
+    GL_OP_BEGIN("TexUpdateBlendLog %ux%u", width, height);
+    GL_TexUpdateBlendLog(rg, width, height);
+    GL_OP_END("TexUpdateBlendLog", 0);
+}
+static S32 D_TargetCopyColorRect(U32 x, U32 y, U32 width, U32 height) {
+    S32 ok;
+    GL_OP_BEGIN("TargetCopyColorRect %u,%u %ux%u", x, y, width, height);
+    ok = GL_TargetCopyColorRect(x, y, width, height);
+    GL_OP_END("TargetCopyColorRect", 0);
+    return ok;
+}
+static void D_DrawTriangles(const GpuVertex *verts, U32 vertexCount, const GpuDrawParams *params) {
+    GL_OP_BEGIN("DrawTriangles %u verts, mode %d alpha %d blend %d depth %d/%d sprites %d clip %d,%d-%d,%d", vertexCount,
+                params ? params->polyMode : -1, params ? params->alphaMode : -1, params ? params->blend : -1,
+                params ? params->depthTest : -1, params ? params->depthWrite : -1, params ? params->spriteAtlas : -1,
+                params ? params->clipX0 : 0, params ? params->clipY0 : 0, params ? params->clipX1 : 0, params ? params->clipY1 : 0);
+    if (s_glTestCrash != 0 && s_glFrame >= s_glTestCrash) {
+        volatile U32 *nowhere = NULL;
+        GL_Trail("DrawTriangles (TEST CRASH: LBA2_GL_TEST_CRASH=%u, a deliberate fault)", s_glTestCrash);
+        Log_Warn("[GL] LBA2_GL_TEST_CRASH=%u: a deliberate fault in DrawTriangles now (frame %u)", s_glTestCrash, s_glFrame);
+        *nowhere = 0xDEAD;
+    }
+    GL_DrawTriangles(verts, vertexCount, params);
+    GL_OP_END("DrawTriangles", 0);
+}
+/* (a frame's composite starts here: the frame's count, its errors and the driver's messages) */
+static void D_ClearBackbuffer(void) {
+    s_glFrame++;
+    GL_CheckErrors("the frame's drawing");
+    GL_LogDriverMessages();
+    GL_OP_BEGIN("ClearBackbuffer");
+    GL_ClearBackbuffer();
+    if (s_glTestError != 0 && s_glFrame == s_glTestError) {
+        Log_Warn("[GL] LBA2_GL_TEST_ERROR=%u: a deliberate GL error now (glEnable of an enum no GL has)", s_glTestError);
+        glEnable((GLenum)0xBAD1);
+    }
+    GL_OP_END("ClearBackbuffer", s_glTestError != 0 && s_glFrame == s_glTestError);
+}
+static void D_DrawPresentQuad(S32 which, S32 linear, S32 opaqueX0, S32 opaqueY0, S32 opaqueX1, S32 opaqueY1) {
+    GL_OP_BEGIN("DrawPresentQuad %s%s", which == 0 ? "scene" : "overlay", linear ? " linear" : "");
+    GL_DrawPresentQuad(which, linear, opaqueX0, opaqueY0, opaqueX1, opaqueY1);
+    GL_OP_END("DrawPresentQuad", 0);
+}
+static void D_TexUpdateAtlasSlot(const void *lum, U32 slot) {
+    GL_OP_BEGIN("TexUpdateAtlasSlot %u", slot);
+    GL_TexUpdateAtlasSlot(lum, slot);
+    GL_OP_END("TexUpdateAtlasSlot", 1);
+}
+
 /* ── Backend vtable ─────────────────────────────────────────────────────── */
+/* (the operations through the diagnostics' wrappers above; the queries straight) */
 
 const GpuRendererBackend GpuRendererBackendGL = {
     "opengl",
-    GL_CreateContext,
-    GL_DestroyContext,
-    GL_TargetCreate,
-    GL_TargetDestroy,
+    D_CreateContext,
+    D_DestroyContext,
+    D_TargetCreate,
+    D_TargetDestroy,
     GL_TargetIsValid,
-    GL_TargetBindClear,
+    D_TargetBindClear,
     GL_TargetWidth,
     GL_TargetHeight,
-    GL_TargetReadDepth,
-    GL_TargetReadColor,
-    GL_TargetSnapshotTerrain,
-    GL_TargetRestoreTerrain,
-    GL_SetVSync,
-    GL_TexUpdatePresent,
-    GL_TexUpdateAtlas,
-    GL_TexUpdateCLUT,
-    GL_TexUpdatePalette,
-    GL_TexUpdateBricks,
-    GL_TexUpdateSprites,
-    GL_TexUpdateTransPal,
-    GL_TexUpdateBlendLog,
-    GL_TargetCopyColorRect,
-    GL_DrawTriangles,
-    GL_ClearBackbuffer,
-    GL_DrawPresentQuad,
+    D_TargetReadDepth,
+    D_TargetReadColor,
+    D_TargetSnapshotTerrain,
+    D_TargetRestoreTerrain,
+    D_SetVSync,
+    D_TexUpdatePresent,
+    D_TexUpdateAtlas,
+    D_TexUpdateCLUT,
+    D_TexUpdatePalette,
+    D_TexUpdateBricks,
+    D_TexUpdateSprites,
+    D_TexUpdateTransPal,
+    D_TexUpdateBlendLog,
+    D_TargetCopyColorRect,
+    D_DrawTriangles,
+    D_ClearBackbuffer,
+    D_DrawPresentQuad,
     GL_AtlasSlots,
-    GL_TexUpdateAtlasSlot,
+    D_TexUpdateAtlasSlot,
 };
 
 #endif /* USE_GPURENDERER */

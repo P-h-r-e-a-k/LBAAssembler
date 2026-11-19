@@ -317,6 +317,61 @@ void CrashBlock_State(void) {
     CrashLine_Write(&line);
 }
 
+struct CrashTrail {
+    const char *name;
+    const char *buffer;
+    U32 slotSize;
+    U32 slots;
+    const volatile U32 *head;
+};
+
+static CrashTrail s_trails[CRASH_MAX_TRAILS];
+static int s_trailCount = 0;
+
+void Crash_AddTrail(const char *name, const char *buffer, U32 slotSize, U32 slots, const volatile U32 *head) {
+    CrashTrail *trail;
+    if (s_trailCount >= CRASH_MAX_TRAILS || !name || !buffer || !head || slotSize == 0 || slots == 0)
+        return;
+    trail = &s_trails[s_trailCount];
+    trail->name = name;
+    trail->buffer = buffer;
+    trail->slotSize = slotSize;
+    trail->slots = slots;
+    trail->head = head;
+    s_trailCount++;
+}
+
+/* A text of the trail, up to its NUL or its slot's end; a byte that isn't
+   printable becomes '?' so one half-written text can't break the block's lines. */
+static void line_bounded(CrashLine *line, const char *text, U32 size) {
+    U32 i;
+    for (i = 0; i < size && text[i] && line->length < CRASH_LINE_SIZE - 1; i++) {
+        const unsigned char c = (unsigned char)text[i];
+        line->text[line->length++] = (c < 0x20 || c == 0x7f) ? '?' : (char)c;
+    }
+}
+
+void CrashBlock_Trails(void) {
+    int t;
+    for (t = 0; t < s_trailCount; t++) {
+        const CrashTrail *trail = &s_trails[t];
+        const U32 head = *trail->head;
+        const U32 count = head < trail->slots ? head : trail->slots;
+        U32 k;
+        for (k = 0; k < count; k++) {
+            const U32 n = head - count + k;
+            CrashLine line;
+            CrashLine_Begin(&line, "trail ");
+            CrashLine_Str(&line, trail->name);
+            CrashLine_Str(&line, " ");
+            CrashLine_Dec(&line, n);
+            CrashLine_Str(&line, " ");
+            line_bounded(&line, trail->buffer + (size_t)(n % trail->slots) * trail->slotSize, trail->slotSize);
+            CrashLine_Write(&line);
+        }
+    }
+}
+
 void CrashBlock_EngineModule(void) {
     CrashLine line;
     int engine = CrashModule_Find((uintptr_t)&CrashBlock_EngineModule);
