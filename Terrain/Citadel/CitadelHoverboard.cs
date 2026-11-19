@@ -14,12 +14,18 @@ namespace LBAAssembler.Terrain.Citadel;
 //   - Twinsen with the protopack and with the super jet-pack (BODY.HQR 16, entity 4's body; 21, entity 8's): the pack gone from his back
 //     -- its box, its straps, its handlebars round to his front: every polygon of its colours on his chest bone (its points stay, unused)
 //     -- and a board under his feet on his hip bone (bone 1: the one the protopack's animations lift as he hovers, which turns with him
-//     and never tilts, so the board rises and falls with him and stays level). The jet-pack's board gold-railed, its glow orange;
+//     and never tilts, so the board rises and falls with him and stays level). The same board in both: one Hoverboard, never a super one
+//     (the user, 2026-11-19: "We should call the Hoverboard hoverboard everywhere and never super hoverboard. Less gravity will be our
+//     explanation for its additional power") -- it flies off Twinsun because the gravity's lighter there, not for a tune-up of Baldino's
+//     (he stays on Twinsun: RaceTrackStory.Otringal.cs);
 //   - the packs' own animations (ANIM.HQR 104-110, 112, 113, 160-162, 164-166: entities 4's and 8's alone use them, every other entity's
 //     checked): his legs under him, the knees a little bent, his feet flat on the board -- the lean his hips had moved up to his chest,
 //     so he leans as before -- and his hips lifted: the board hovering over the ground even as he stands still, higher as he goes;
-//   - the inventory's models (OBJFIX.HQR 12, the protopack's; 48, the super jet-pack's): the board on its tail, its deck to the front;
-//   - the item's texts (file 2's 12, 112, 212 and the super one's 48, 148, 248).
+//   - the inventory's model (OBJFIX.HQR 12, the protopack's): the board on its tail, its deck to the front. Not 48, the super jet-pack's:
+//     with Baldino's upgrade gone the item never shows it, and the races' super jet-pack power-up is a copy of it (RaceTrackSuperJet: from
+//     LBRA 2026.11.19.1723 to 1757 the car turned into a gold board, not the jet-pack);
+//   - the texts that named the packs: the item's (file 2's 12, 112, 212, and the upgrade's 48, 148, 248 the same words), the behaviours'
+//     names (file 0's 84 and 88), the J key's (file 0's 133), the gazogem can's (file 2's 15 and 215: "your new super jet-pack").
 // A second pass leaves a body with its board as it is (its hip bone has more than its one point) and the animations as they are (the
 // standing one's hips already lifted).
 internal static class CitadelHoverboard
@@ -57,12 +63,11 @@ internal static class CitadelHoverboard
     private static readonly (float From, float To)[] Pads = { (-250, -100), (100, 240) };
 
     // its colours (the islands' palettes' rows -- Citadel's, RESS.HQR 27 -- each lit polygon its colour and as many steps more as its light
-    // gives, about five): the deck the pack's metal (208, the blue-greys), the rails red (69) or gold (100), the underside dark (224), a
-    // grey stripe down the deck (50: facing the light, a colour high in its row runs past it in OpenGL -- the ferry's roof); the glow
-    // under it unlit, as it is (a light cyan, 174; an orange, 242)
+    // gives, about five): the deck the pack's metal (208, the blue-greys), the rails red (69), the underside dark (224), a grey stripe
+    // down the deck (50: facing the light, a colour high in its row runs past it in OpenGL -- the ferry's roof); the glow under it unlit,
+    // as it is (a light cyan, 174)
     internal readonly record struct Look(int Deck, int Rail, int Under, int Stripe, int Glow);
     internal static readonly Look Plain = new(208, 69, 224, 50, 174);
-    internal static readonly Look Super = new(208, 100, 224, 50, 242);
 
     // Its polygons: each quad's corners (wound to face out: the side it faces given -- its middle's way from the board's middle won't do
     // at the kicked ends), its colour, lit or not.
@@ -103,9 +108,9 @@ internal static class CitadelHoverboard
         // ---- his bodies
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var bodies = HqrArchive.Open(bodyPath);
-        foreach (var (entry, look) in new[] { (ProtoBody, Plain), (JetBody, Super) })
+        foreach (var entry in new[] { ProtoBody, JetBody })
         {
-            var made = Rider(bodies.Read(entry), look, out var note);
+            var made = Rider(bodies.Read(entry), Plain, out var note);
             if (made is not null) HqrWriter.ReplaceInFile(bodyPath, entry, made);
             log.Add($"the hoverboard: BODY.HQR {entry} ({(entry == ProtoBody ? "the protopack's" : "the super jet-pack's")}) {note}");
         }
@@ -125,12 +130,11 @@ internal static class CitadelHoverboard
             }
             log.Add($"the hoverboard: ANIM.HQR {string.Join(", ", changed)} the rider's (his legs under him, his lean in his chest, his hips {Lift} up)");
         }
-        // ---- the inventory's models
+        // ---- the inventory's model (the protopack's; the super jet-pack's, 48, left the game's: the race's power-up copies it)
         var objfixPath = Path.Combine(gameDirectory, "OBJFIX.HQR");
         var header = Body.Read(bodies.Read(30), 2, allowStatic: true).Header;
         HqrWriter.ReplaceInFile(objfixPath, ProtoSlot, CitadelOveralls.InventorySized(Model(header, Plain)).Write());
-        HqrWriter.ReplaceInFile(objfixPath, SuperSlot, CitadelOveralls.InventorySized(Model(header, Super)).Write());
-        log.Add($"the hoverboard: OBJFIX.HQR {ProtoSlot} (the protopack's model) and {SuperSlot} (the super jet-pack's) the board");
+        log.Add($"the hoverboard: OBJFIX.HQR {ProtoSlot} (the protopack's model) the board");
         // ---- the texts
         log.Add(InstallTexts(gameDirectory));
         return log;
@@ -330,46 +334,59 @@ internal static class CitadelHoverboard
 
     // ---- the texts
 
-    private const int InventoryTexts = 2;
-    private static readonly (int Id, string[] Words)[] Texts =
+    private const int SystemTexts = 0, InventoryTexts = 2;
+    // (the behaviours' names, 80 + the behaviour: the protopack's 4, the super jet-pack's 8; the J key's, in the keys' list)
+    private const int ProtoName = 84, JetName = 88, JetKey = 133, GazogemCan = 15;
+    private static readonly string[] Name = { "Hoverboard", "Hoverboard", "Hoverboard", "Hoverboard", "Hoverboard", "Hoverboard" };
+    private static readonly string[] Found =
     {
-        (ProtoSlot, new[]
+        "You just found the Hoverboard! Step on it and you'll glide a few inches above the ground.",
+        "Tu viens de trouver l'Hoverboard ! Monte dessus et tu glisseras à quelques centimètres du sol.",
+        "Du hast das Hoverboard gefunden! Stell dich drauf, und du gleitest ein paar Zentimeter über dem Boden.",
+        "¡Acabas de encontrar el Hoverboard! Súbete y te deslizarás a unos centímetros del suelo.",
+        "Hai appena trovato l'Hoverboard! Salici sopra e scivolerai a pochi centimetri da terra.",
+        "Acabaste de encontrar o Hoverboard! Sobe para ele e vais deslizar a uns centímetros do chão.",
+    };
+    private static readonly string[] About =
+    {
+        "Designed by Jerome Baldino. On Twinsun it glides just above the ground: to cross water, ride onto it low and level, or you'll sink with your board. Anywhere else the gravity is lighter, and it flies.",
+        "Conçu par Jérôme Baldino. Sur Twinsun, il glisse juste au-dessus du sol : pour passer sur l'eau, abordes-la bas et à plat, sinon tu couleras avec ta planche. Partout ailleurs, la gravité est plus faible, et il vole.",
+        "Von Jerome Baldino entworfen. Auf Twinsun gleitet es knapp über dem Boden: um über Wasser zu kommen, fahr flach und tief darauf zu, sonst gehst du mit deinem Brett unter. Überall sonst ist die Schwerkraft geringer, und es fliegt.",
+        "Diseñado por Jerome Baldino. En Twinsun se desliza justo por encima del suelo: para cruzar el agua, entra en ella bajo y en horizontal, o te hundirás con tu tabla. En cualquier otro sitio la gravedad es menor, y vuela.",
+        "Progettato da Jerome Baldino. Su Twinsun scivola appena sopra il suolo: per passare sull'acqua, entraci basso e in piano, o affonderai con la tua tavola. Ovunque altro la gravità è più debole, e vola.",
+        "Desenhado por Jerome Baldino. Em Twinsun desliza mesmo rente ao chão: para atravessar a água, entra nela baixo e a direito, ou afundas com a tua prancha. Em qualquer outro lado a gravidade é mais fraca, e voa.",
+    };
+    private static readonly (int File, int Id, string[] Words)[] Texts =
+    {
+        (InventoryTexts, ProtoSlot, Found),
+        (InventoryTexts, ProtoSlot + 100, Name),
+        (InventoryTexts, ProtoSlot + 200, About),
+        // (the game's upgrade's -- Baldino's, gone: the same board, the same words)
+        (InventoryTexts, SuperSlot, Found),
+        (InventoryTexts, SuperSlot + 100, Name),
+        (InventoryTexts, SuperSlot + 200, About),
+        (SystemTexts, ProtoName, Name),
+        (SystemTexts, JetName, Name),
+        (SystemTexts, JetKey, new[] { "Hoverboard On/Off", "Hoverboard On/Off", "Hoverboard Ein/Aus", "Hoverboard Encendido/Apagado", "Hoverboard On/Off", "Hoverboard ATIVADO/DESATIVADO" }),
+        // (the can of gazogem: the Island of the Francos' slick gives it -- RaceTrackStory.Francos.cs -- and nobody turns the pack into
+        // anything with it now)
+        (InventoryTexts, GazogemCan, new[]
         {
-            "You just found the Hoverboard! Step on it and you'll glide a few inches above the ground.",
-            "Tu viens de trouver l'Hoverboard ! Monte dessus et tu glisseras à quelques centimètres du sol.",
-            "Du hast das Hoverboard gefunden! Stell dich drauf, und du gleitest ein paar Zentimeter über dem Boden.",
-            "¡Acabas de encontrar el Hoverboard! Súbete y te deslizarás a unos centímetros del suelo.",
-            "Hai appena trovato l'Hoverboard! Salici sopra e scivolerai a pochi centimetri da terra.",
-            "Acabaste de encontrar o Hoverboard! Sobe para ele e vais deslizar a uns centímetros do chão.",
+            "You just found a can of Gazogem, the most powerful fuel on Zeelich.",
+            "Tu viens de trouver un bidon de Gazogem, le carburant le plus puissant de Zeelich.",
+            "Du hast einen Behälter mit GazoGem gefunden, dem stärksten Treibstoff auf Zeelich.",
+            "Acabas de encontrar un bidón de Gazogem, el carburante más potente de Zeelich.",
+            "Hai trovato un bidone di gazogem, il carburante più potente di Zeelich.",
+            "Você encontrou um galão de gasógeno, o combustível mais potente de Zeelich.",
         }),
-        (ProtoSlot + 100, new[] { "Hoverboard", "Hoverboard", "Hoverboard", "Hoverboard", "Hoverboard", "Hoverboard" }),
-        (ProtoSlot + 200, new[]
+        (InventoryTexts, GazogemCan + 200, new[]
         {
-            "Designed by Jerome Baldino. On Twinsun it glides just above the ground: to cross water, ride onto it low and level, or you'll sink with your board. Anywhere else, it flies.",
-            "Conçu par Jérôme Baldino. Sur Twinsun, il glisse juste au-dessus du sol : pour passer sur l'eau, abordes-la bas et à plat, sinon tu couleras avec ta planche. Partout ailleurs, il vole.",
-            "Von Jerome Baldino entworfen. Auf Twinsun gleitet es knapp über dem Boden: um über Wasser zu kommen, fahr flach und tief darauf zu, sonst gehst du mit deinem Brett unter. Überall sonst fliegt es.",
-            "Diseñado por Jerome Baldino. En Twinsun se desliza justo por encima del suelo: para cruzar el agua, entra en ella bajo y en horizontal, o te hundirás con tu tabla. En cualquier otro sitio, vuela.",
-            "Progettato da Jerome Baldino. Su Twinsun scivola appena sopra il suolo: per passare sull'acqua, entraci basso e in piano, o affonderai con la tua tavola. Ovunque altro, vola.",
-            "Desenhado por Jerome Baldino. Em Twinsun desliza mesmo rente ao chão: para atravessar a água, entra nela baixo e a direito, ou afundas com a tua prancha. Em qualquer outro lado, voa.",
-        }),
-        (SuperSlot, new[]
-        {
-            "Jerome just tuned up your Hoverboard. Now it flies higher, to places you couldn't reach before.",
-            "Jérôme vient de régler ton Hoverboard. Maintenant il vole plus haut, vers des endroits que tu ne pouvais pas atteindre.",
-            "Jerome hat gerade dein Hoverboard getunt. Jetzt fliegt es höher, an Orte, die du vorher nicht erreichen konntest.",
-            "Jerome acaba de ajustar tu Hoverboard. Ahora vuela más alto, a sitios a los que antes no podías llegar.",
-            "Jerome ha appena messo a punto il tuo Hoverboard. Ora vola più in alto, verso posti che prima non potevi raggiungere.",
-            "O Jerome acabou de afinar o teu Hoverboard. Agora voa mais alto, até sítios onde antes não conseguias chegar.",
-        }),
-        (SuperSlot + 100, new[] { "Super Hoverboard", "Super Hoverboard", "Super-Hoverboard", "Súper Hoverboard", "Super Hoverboard", "Super Hoverboard" }),
-        (SuperSlot + 200, new[]
-        {
-            "Tuned up by Jerome Baldino. It reaches new places now, and climbs slopes the plain Hoverboard couldn't.",
-            "Réglé par Jérôme Baldino. Il atteint maintenant de nouveaux endroits, et grimpe des pentes que l'Hoverboard ordinaire ne pouvait pas monter.",
-            "Von Jerome Baldino getunt. Es erreicht jetzt neue Orte und schafft Steigungen, die das einfache Hoverboard nicht schaffte.",
-            "Ajustado por Jerome Baldino. Ahora llega a sitios nuevos y sube pendientes que el Hoverboard normal no podía.",
-            "Messo a punto da Jerome Baldino. Ora raggiunge posti nuovi e sale pendii che l'Hoverboard normale non poteva.",
-            "Afinado por Jerome Baldino. Agora chega a sítios novos e sobe encostas que o Hoverboard normal não conseguia.",
+            "A can of gazogem, the most powerful fuel on Zeelich. It's refined from the gems of the Wannies' mine.",
+            "Un bidon de gazogem, le carburant le plus puissant de Zeelich. On le raffine à partir des gemmes de la mine des Wannies.",
+            "Ein Behälter mit GazoGem, dem stärksten Treibstoff auf Zeelich. Er wird aus den Edelsteinen der Mine der Wannies raffiniert.",
+            "Un bidón de gazogem, el carburante más potente de Zeelich. Se refina a partir de las gemas de la mina de los Wannies.",
+            "Un bidone di gazogem, il carburante più potente di Zeelich. Viene raffinato dalle gemme della miniera dei Wannies.",
+            "Um galão de gasógeno, o combustível mais potente de Zeelich. Ele é refinado a partir das gemas da mina dos Wannies.",
         }),
     };
 
@@ -383,20 +400,21 @@ internal static class CitadelHoverboard
         var hqr = File.ReadAllBytes(textPath);
         var written = 0;
         for (var lang = 0; lang < languages; lang++)
-        {
-            var bank = Lba2TextBank.Load(text, lang, InventoryTexts);
-            foreach (var (id, words) in Texts)
+            foreach (var file in Texts.Select(t => t.File).Distinct())
             {
-                var wanted = dos.GetBytes(words[lang < words.Length ? lang : 0]);
-                var have = bank.Find(id);
-                if (have is null) bank.Texts.Add(new Lba2TextBank.Text { Id = id, Attribute = Lba2TextBank.NormalAttribute, Bytes = wanted });
-                else if (!have.Bytes.AsSpan().SequenceEqual(wanted)) have.Bytes = wanted;
-                else continue;
-                written++;
+                var bank = Lba2TextBank.Load(text, lang, file);
+                foreach (var (_, id, words) in Texts.Where(t => t.File == file))
+                {
+                    var wanted = dos.GetBytes(words[lang < words.Length ? lang : 0]);
+                    var have = bank.Find(id);
+                    if (have is null) bank.Texts.Add(new Lba2TextBank.Text { Id = id, Attribute = Lba2TextBank.NormalAttribute, Bytes = wanted });
+                    else if (!have.Bytes.AsSpan().SequenceEqual(wanted)) have.Bytes = wanted;
+                    else continue;
+                    written++;
+                }
+                hqr = bank.WriteInto(hqr);
             }
-            hqr = bank.WriteInto(hqr);
-        }
         if (written > 0) File.WriteAllBytes(textPath, hqr);
-        return $"the hoverboard's texts: {written} written ({ProtoSlot}, {SuperSlot} and +100, +200, in all {languages} languages)";
+        return $"the hoverboard's texts: {written} written (file {InventoryTexts}'s {ProtoSlot}, {SuperSlot} and +100, +200, {GazogemCan} and +200; file {SystemTexts}'s {ProtoName}, {JetName}, {JetKey}; in all {languages} languages)";
     }
 }

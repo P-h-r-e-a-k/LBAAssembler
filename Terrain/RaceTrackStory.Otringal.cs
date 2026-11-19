@@ -31,6 +31,10 @@ internal static partial class RaceTrackStory
                       JohnnyActor = 3, SpacePort = 92, SellerStall = 95;
     // the translator (the game's item), and the Lower City's gazogem seller (scene 89's actor 3)
     private const int Translator = 29, LowerCity = 89, GazogemSeller = 3;
+    // the game's Baldino on Otringal: by his crashed lander (scene 138's actor 2), and his radio calls at the harbour (the test that keeps
+    // them, scenes 87's and 209's actor 6) -- he stays on Twinsun
+    private const int BaldinoLanding = 138, LandedBaldino = 2;
+    private const string BaldinoCalls = "0 == var_game(117) && 2 < var_game(124)";
     // the space port's pad (scene 92's own spaceship, actor 2, at its pos_point: RaceTrackIsland.Otringal's Shuttles)
     private static readonly (int X, int Z) Pad = (19200, 9472);
 
@@ -624,6 +628,35 @@ void comportement_1()
         b.Edit(LowerCity, "the gazogem seller: no arrow to the Francos' refinery, no taxi there", _ => scripts =>
             scripts.SetText(GazogemSeller, ScriptKind.Life, Loose(scripts.GetText(GazogemSeller, ScriptKind.Life),
                 "message(245);\nset_holo_pos(140);\nset_var_cube(0, 0);\nset_var_game(123, 1);", "message(245);\nset_var_cube(0, 0);")));
+
+        // Baldino stays on Twinsun (the user, 2026-11-19: "we're leaving Baldino behind on Twinsun"): not the game's Baldino by his crashed
+        // lander (scene 138's actor 2, from chapter 6: the gazogem errand, the protopack made the jet-pack), nor Twinsen's walk to him as he
+        // lands (its hero, from chapter 4: a cut-scene that would wait on him for ever), nor his radio calls at the harbour that he has tuned
+        // the car on Otringal (scenes 87's and 209's actor 6). The hoverboard flies here with no help of his -- the gravity's lighter off
+        // Twinsun (Citadel/CitadelHoverboard). (His own calls from home, the radio's on arriving, stay.)
+        if (b.Store.SceneExists(BaldinoLanding))
+            b.Edit(BaldinoLanding, "Baldino stays on Twinsun: not by his lander, nor Twinsen's walk to him", _ => scripts =>
+            {
+                scripts.SetText(LandedBaldino, ScriptKind.Life, Loose(scripts.GetText(LandedBaldino, ScriptKind.Life),
+                    "if (6 > chapter())\n{\nsuicide();", "if (0 <= chapter())\n{\nsuicide();"));
+                var hero = Loose(scripts.GetText(0, ScriptKind.Life), "if (3 < chapter() && 11 > var_game(85))", "if (0 > chapter())");
+                hero = Loose(hero, "if (0 == var_cube(0) && 1300 > distance_message(2))", "if (0 > chapter())");
+                scripts.SetText(0, ScriptKind.Life, hero);
+            });
+        foreach (var harbour in new[] { 87, 209 })
+            if (b.Store.SceneExists(harbour))
+                b.Edit(harbour, "Baldino stays on Twinsun: no radio call that he has tuned the car on Otringal", _ => scripts =>
+                {
+                    var calls = 0;
+                    for (var a = 1; a < scripts.ActorCount; a++)
+                    {
+                        var life = scripts.GetText(a, ScriptKind.Life);
+                        if (!life.Contains(BaldinoCalls, StringComparison.Ordinal)) continue;
+                        scripts.SetText(a, ScriptKind.Life, life.Replace(BaldinoCalls, "0 > chapter()", StringComparison.Ordinal));
+                        calls++;
+                    }
+                    if (calls != 1) throw new NotTheGames($"Baldino's radio calls in scene {harbour}: {calls} actors, not 1");
+                });
 
         // the eggs: Rick in the Casino, Lyra by the hotel's pool (RaceTrackStory.Eggs.Otringal.cs)
         RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid), Say(OtringalLine.RickLyra), Say(OtringalLine.RickBlackCar));

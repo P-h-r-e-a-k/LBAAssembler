@@ -198,79 +198,8 @@ internal static partial class IslandRetell
             "\"Ore 14,55, navetta 65 38, destinazione pianeta Zirla per safari-mosca... ore 15,20, navetta 007, destinazione Twinsun, tifosi della Coppa dei Due Mondi...\"",
             "\"14 h 55, nave 65 38, destino planeta Zirla para safári... 15 h 20, nave 007, destino Twinsun, torcedores da Taça dos Dois Mundos...\"",
         }),
-        (190, new[]
-        {
-            "Twinsen, I bent the lander's legs landing here. I need some time for repairs. The Zeelichian fuel is called gazogem, it's very powerful. You should go get some: your car would love it.",
-            "Twinsen, j'ai tordu les pieds du vaisseau en atterrissant ici, il va me falloir quelque temps pour le réparer. Le carburant des zeelichiens s'appelle gazogem, il est très puissant. Tu devrais aller en chercher : ta voiture va adorer.",
-            "Twinsen, ich habe beim Landen die Beine der Landefähre verbogen. Ich brauche etwas Zeit für die Reparatur. Der Treibstoff der Zeelicher heißt GazoGem, er ist sehr stark. Du solltest welchen besorgen: dein Wagen wäre begeistert.",
-            "Twinsen, he doblado las patas de la nave al aterrizar aquí. Voy a necesitar algún tiempo para repararla. El carburante de los zeelichianos se llama gazogem y es muy potente. Deberías ir a buscar un poco: a tu coche le encantaría.",
-            "Twinsen, ho piegato le zampe del vascello atterrando qui. Mi serve un po' di tempo per ripararlo. Il carburante dei Zeelichiani si chiama gazogem, ed è molto potente. Dovresti andare a prenderne un po': la tua macchina ne andrebbe matta.",
-            "Twinsen, eu entortei as pernas da nave ao pousar aqui. Vou precisar de algum tempo para os consertos. O combustível dos zeelichianos se chama gasógeno, e é muito potente. Você devia ir buscar um pouco: o seu carro ia adorar.",
-        }),
-        (191, new[]
-        {
-            "Of course, but I will need this gazogem sooner or later. Besides, it will let me tune your car and give it a lot more power for the race.",
-            "Bien sûr, mais tôt ou tard j'aurai besoin de ce gazogem. En plus, avec lui, je pourrai régler ta voiture et lui donner beaucoup plus de puissance pour la course.",
-            "Sicher, aber früher oder später brauche ich GazoGem. Außerdem kann ich damit deinen Wagen tunen und ihm für das Rennen viel mehr Leistung geben.",
-            "Claro que sí, pero tarde o temprano necesitaré ese gazogem. Además, con él podré poner a punto tu coche y darle mucha más potencia para la carrera.",
-            "Certo, ma presto o tardi avrò bisogno di questo gazogem. E poi, mi permetterà di mettere a punto la tua macchina e di darle molta più potenza per la corsa.",
-            "Claro, mas mais cedo ou mais tarde vou precisar desse gasógeno. Além do que, com ele poderei regular o seu carro e dar a ele muito mais potência para a corrida.",
-        }),
-        (192, new[]
-        {
-            "You must go get me some gazogem, so that I can finish repairing my lander and make your car more powerful!!",
-            "Tu dois aller me chercher du gazogem, afin que je puisse finir de réparer notre vaisseau et rendre ta voiture plus puissante !!",
-            "Du mußt mir etwas GazoGem besorgen, damit ich die Landefähre fertig reparieren und deinen Wagen stärker machen kann!!",
-            "¡¡Tienes que ir a buscarme el gazogem para que pueda acabar de reparar la nave y hacer tu coche más potente!!",
-            "Devi andare a prendermi del gazogem, così posso finire di riparare il vascello e rendere più potente la tua macchina!!",
-            "Você precisa ir buscar gasógeno para que eu acabe de consertar a nave e deixe o seu carro mais potente!!",
-        }),
-        (193, new[]
-        {
-            "Thanks, Twinsen. Now I can finish up on the lander. I'll buzz you on the radio as soon as your car's tuned.",
-            "Merci Twinsen, je vais pouvoir terminer le vaisseau. Je t'appellerai à la radio dès que ta voiture sera réglée.",
-            "Danke, Twinsen. Jetzt kann ich die Landefähre fertigmachen. Ich rufe dich über Funk, sobald dein Wagen getunt ist.",
-            "Gracias, Twinsen. Ahora podré terminar la nave. Te llamaré por radio en cuanto tenga tu coche a punto.",
-            "Grazie Twinsen. Ora posso finire il vascello. Ti chiamo alla radio appena la tua macchina sarà a punto.",
-            "Obrigado, Twinsen. Agora posso terminar a nave. Aviso pelo rádio assim que o seu carro estiver regulado.",
-        }),
-        (194, new[]
-        {
-            "Twinsen? Baldino. Short gears and a louder horn, as promised: people walk in the road here. And don't go in the Casino. I lost a lander in that Casino.",
-            "Twinsen ? C'est Baldino. Des rapports courts et un klaxon plus fort, comme promis : ici, les gens marchent sur la route. Et ne va pas au Casino. J'ai perdu un vaisseau dans ce Casino.",
-            "Twinsen? Hier Baldino. Kurze Übersetzung und eine lautere Hupe, wie versprochen: hier laufen die Leute auf der Straße herum. Und geh nicht ins Kasino. Ich habe in diesem Kasino eine Landefähre verloren.",
-            "¿Twinsen? Soy Baldino. Marchas cortas y una bocina más fuerte, como te prometí: aquí la gente camina por la carretera. Y no entres en el Casino. Yo perdí una nave en ese Casino.",
-            "Twinsen? Sono Baldino. Marce corte e un clacson più forte, come promesso: qui la gente cammina in mezzo alla strada. E non entrare nel casinò. Io in quel casinò ci ho perso un vascello.",
-            "Twinsen? Baldino. Marchas curtas e uma buzina mais alta, como prometido: aqui as pessoas andam no meio da rua. E não entre no Cassino. Eu perdi uma nave naquele Cassino.",
-        }),
-        (195, new[]
-        {
-            // (the hoverboard in the protopack's place -- Citadel/CitadelHoverboard, 2026-11-19)
-            "Thank you, Twinsen. Now I can make us a lander that can race the comets! Anyway, let me tune up your hoverboard. From now on, it flies higher! Handy for spotting the short cuts.",
-            "Ah merci Twinsen, je vais pouvoir nous faire un vaisseau capable de faire la course avec les comètes ! Tiens, laisse-moi régler ton hoverboard. Désormais il vole plus haut ! Pratique pour repérer les raccourcis.",
-            "Danke, Twinsen. Jetzt kann ich uns eine Landefähre bauen, die mit den Kometen um die Wette fliegt! Gib mal her, ich tune dein Hoverboard. Ab jetzt fliegt es höher! Praktisch, um die Abkürzungen zu entdecken.",
-            "Gracias, Twinsen. ¡Ahora podré construirnos una nave capaz de echar carreras a los cometas! Por cierto, déjame ajustar tu hoverboard. ¡A partir de ahora volará más alto! Muy útil para descubrir los atajos.",
-            "Grazie Twinsen. Ora posso costruirci un vascello capace di gareggiare con le comete! Comunque, dammi qua, ti metto a punto l'hoverboard. D'ora in poi vola più in alto! Comodo per scovare le scorciatoie.",
-            "Obrigado, Twinsen. Agora vou poder fazer uma nave capaz de apostar corrida com os cometas! Enfim, deixe-me afinar o seu hoverboard. De agora em diante ele voa mais alto! Útil para encontrar os atalhos.",
-        }),
-        (196, new[]
-        {
-            "It's going to take me quite a while longer to finish up on the lander here.",
-            "Il va me falloir encore un bon bout de temps pour terminer le vaisseau.",
-            "Ich brauche noch eine ganze Weile, bis ich die Landefähre hier fertig habe.",
-            "Todavía voy a necesitar un buen rato para terminar la nave.",
-            "Avrò bisogno ancora di un bel po' di tempo per finire il vascello.",
-            "Vou precisar ainda de um bom tempo para terminar a nave aqui.",
-        }),
-        (197, new[]
-        {
-            "Come in! Twinsen? It's me, Baldino! I've tuned your car for the tunnels, you can take it out now!",
-            "Allô ! Twinsen ? C'est moi Baldino ! J'ai réglé ta voiture pour les tunnels, tu peux la sortir maintenant !",
-            "Bitte melden! Twinsen? Ich bin's, Baldino! Ich habe deinen Wagen für die Tunnel getunt, du kannst ihn jetzt abholen!",
-            "¡Oye! ¿Twinsen? ¡Soy yo, Baldino! He puesto a punto tu coche para los túneles, ¡ya puedes sacarlo!",
-            "Pronto! Twinsen? Sono io, Baldino! Ho messo a punto la tua macchina per i tunnel, puoi portarla fuori adesso!",
-            "Alô! Twinsen? Sou eu, Baldino! Regulei o seu carro para os túneis, você já pode levá-lo!",
-        }),
+        // (190-197, the game's Baldino on Otringal -- by his crashed lander, and his radio calls at the harbour: not retold, never said --
+        // he stays on Twinsun, the user, 2026-11-19; RaceTrackStory.Otringal.cs)
         (201, new[]
         {
             "Cool down, Mr. Racer sir! Please, walk this way...",
