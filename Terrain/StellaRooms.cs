@@ -33,6 +33,9 @@ internal static class StellaRooms
     // (since 2026-11-15 the back rooms' own grid, StellaEntities.BuildWing: Twinsen in at the corridor's south end, EntryZ; the chair in the
     // room at its far end, SofaX/SofaZ, the dancer before it at ShowZ -- he faces her, south)
     public const int SofaX = 16384, SofaZ = 7680, ShowZ = 9216, EntryZ = 23040;
+    // (the doorway from the hall since 2026-11-19, CitadelProps.WingDoorway: on the corridor's west wall's face, between its cells z 45 and
+    // 46 -- south of the first booth; Twinsen in from the hall just inside it, facing east)
+    public const int WingDoorX = StellaEntities.WingCorrX0 * 512, WingDoorZ = 46 * 512, InFromHallX = WingDoorX + 700;
     // (where Twinsen comes in from the club, either room: just inside the door of Rick's office's that leads out, x 5120-6144 at z 9216)
     public const int InsideX = 5632, InsideY = 256, InsideZ = 8500;
     // (the booths since 2026-11-17, StellaEntities.WingRooms: the chair half a cell off the back wall, the curtain across the way in, the
@@ -172,12 +175,14 @@ internal static class StellaRooms
             }
             if (number == Private && StellaEntities.WingGrid >= 0)
             {
-                // the back rooms: the door back to the hall across the corridor's south end; Twinsen in just inside it, facing up it
+                // the back rooms: the doorway back to the hall on the corridor's west wall at its south end (since 2026-11-19, WingDoorway --
+                // before, an unseen zone across the corridor's end: "there's currently no doorway into the scene"); Twinsen in just inside it,
+                // facing into the corridor
                 model.Zones.Clear();
-                model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaEntities.Scene, X0 = StellaEntities.WingCorrX0 * 512, X1 = (StellaEntities.WingCorrX1 + 1) * 512 - 1,
-                    Z0 = StellaEntities.WingCorrZ1 * 512, Z1 = (StellaEntities.WingCorrZ1 + 1) * 512 - 1, Y0 = 0, Y1 = 2000,
+                model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaEntities.Scene, X0 = WingDoorX, X1 = WingDoorX + 300, Z0 = WingDoorZ - 420, Z1 = WingDoorZ + 420, Y0 = 0, Y1 = 2000,
                     Info = new[] { privX - 512, StellaEntities.FloorY, privZ - 256, 0, 0, 0, 1, 1 } });
-                (model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z, model.Actors[0].Beta) = (SofaX, 256, EntryZ, 2048);
+                (model.Actors[0].X, model.Actors[0].Y, model.Actors[0].Z, model.Actors[0].Beta) = (InFromHallX, 256, WingDoorZ, 1024);
+                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.WingDoorway, WingDoorX, 256, WingDoorZ, 0));
                 // the booths, all on the corridor's west side (the user, 2026-11-17: "Some smaller booths, perhaps just one side, with curtains
                 // drawn that we can't see into" + "a small waste paper bin that's overflowing with tissue to each booth"): in each a chair against
                 // its back wall facing out (east), a tissue bin in its corner, and its curtain drawn across its way in -- the one Twinsen is

@@ -107,7 +107,7 @@ internal static partial class RaceTrackStory
             // the angle going up (the hostesses' own way back home, on past their homes); the bouncer in it
             var (dx, dz) = StellaEntities.At(Citadel.CitadelProps.PrivateAt, 18.1f);
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = StellaRooms.Private, X0 = dx - 450, X1 = dx + 450, Z0 = dz - 450, Z1 = dz + 450, Y0 = StellaEntities.FloorY - 100, Y1 = StellaEntities.FloorY + 1800,
-                Info = new[] { StellaRooms.SofaX - 300, 256 - 100, StellaRooms.EntryZ - 300, 0, PrivateSwitch, 0, 0, 0 } });
+                Info = new[] { StellaRooms.InFromHallX - 200, 256 - 100, StellaRooms.WingDoorZ - 600, 0, PrivateSwitch, 0, 0, 0 } }); // (where he lands: this plus where he stood in the zone, 0 to 900 -- east of the corridor's way back out, north of its end)
             var doorNear = Point(Citadel.CitadelProps.PrivateAt, 16.3f, StellaEntities.FloorY);
             var doorIn = Point(Citadel.CitadelProps.PrivateAt, 18.3f, StellaEntities.FloorY);
             // (out of sight once through the doorway: under the floor, as the race's actors put away -- back at home as the hall next loads)

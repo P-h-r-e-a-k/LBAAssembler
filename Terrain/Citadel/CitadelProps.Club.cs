@@ -139,6 +139,33 @@ internal static partial class CitadelProps
     public const int PoleHigh = 3900, ColumnHigh = 5200;
     private const int ClubWood = 22, ClubWoodLight = 25, ClubVelvet = 68, ClubReactor = 158, ClubSteel = 56, ClubFelt = 133, ClubLeather = 69;
 
+    // The back rooms' doorway (body 201, scene 395 -- the user, 2026-11-18: "Tomorrow we need to update scene 395 where Twinsen gets the
+    // private dance on Emerald moon, there's currently no doorway into the scene"): the hall's private doorway again (BuildClubFront's: a
+    // dark way in, red curtains drawn back either side, a brass frame), flat on the corridor's west wall at its south end -- the near walls,
+    // south and east, are low for the camera, and a door in them would be seen from behind. Faces +x (into the corridor) from x 0, the
+    // wall's face; its middle at z 0.
+    public const int WingDoorway = 201;
+    public static Body BuildWingDoorway(byte[] header)
+    {
+        var m = new CarMesh("the back rooms' doorway", new[] { -1 });
+        m.Light = 0.85f;
+        const float Half = 420, Top = 1900, Rim = 70, Curtain = 260;
+        void Face(float z0, float z1, float y0, float y1, float off, int colour, bool unlit = false) =>
+            m.In(new[] { m.P(0, new Vector3(off, y0, z0)), m.P(0, new Vector3(off, y0, z1)), m.P(0, new Vector3(off, y1, z1)), m.P(0, new Vector3(off, y1, z0)) },
+                 colour, new Vector3(off + 500, (y0 + y1) / 2, (z0 + z1) / 2), unlit);
+        Face(-Half, Half, 0, Top, 20, ClubDoorway, true);
+        for (var k = 0; k < 3; k++)
+        {
+            Face(-Half + k * Curtain / 3, -Half + (k + 1) * Curtain / 3, 0, Top, 30 + 25 * (k % 2), ClubVelvet + (k % 2));
+            Face(Half - (k + 1) * Curtain / 3, Half - k * Curtain / 3, 0, Top, 30 + 25 * (k % 2), ClubVelvet + (k % 2));
+        }
+        // (the frame unlit: facing east, lit it came out black -- the hall's catches the light round the wall)
+        Face(-Half - Rim, Half + Rim, Top, Top + 90, 60, ClubBrass, true);
+        Face(-Half - Rim, -Half, 0, Top, 60, ClubBrass, true);
+        Face(Half, Half + Rim, 0, Top, 60, ClubBrass, true);
+        return m.ToBody(header);
+    }
+
     // The stage's brass rail (body 89, into the backdrop with it): round the stage's edge just outside its skirt, StageRailHigh up, on posts --
     // open where the catwalk leaves it (north, 270) -- for the patrons to lean on (the user, 2026-11-13: "perhaps a gold pole running around
     // the edge of the stage for people to lean against")
