@@ -20,8 +20,8 @@ internal static partial class CitadelProps
     public const int FerryDeck = 746, FerryHalfWide = 1300, FerryHalfLong = 2400, FerryHouseFrom = 1300, FerryRamp = 700;
     // (the rails and the wheelhouse light greys, 54 and 55 -- the greys' row, 48-63, of Citadel's palette (RESS.HQR 27), with room for the
     // light's steps: 14 and 15, the palette's first row, aren't a ramp -- lit, Software drew the wheelhouse pink and OpenGL purple; at 48
-    // both drew it black, 2026-11-19; the roof unlit, 58)
-    private const int FerryHull = 4 * 16 + 9, FerryHullDark = 4 * 16 + 12, FerryDeckColour = 52, FerryRail = 54, FerryHouse = 55, FerryRoof = 58, FerryGlass = 158, FerryRampColour = 50;
+    // both drew it black, 2026-11-19)
+    private const int FerryHull = 4 * 16 + 9, FerryHullDark = 4 * 16 + 12, FerryDeckColour = 52, FerryRail = 54, FerryHouse = 55, FerryGlass = 158, FerryRampColour = 50;
 
     // (no box: the car drives onto its deck -- the deck is the car's floor, RACEMOD.CPP car_ferry= -- not into an actor's box)
     public static short[]? FerryBox(int generic) => generic is CarFerry or CarFerryTall ? new short[] { -1, 0, -1, 1, 1, 1 } : null;
@@ -49,9 +49,8 @@ internal static partial class CitadelProps
             m.Box(0, new Vector3(x, FerryDeck + 80, -FerryHalfLong + 40), new Vector3(40, 160, 40), FerryRail);
         // the wheelhouse over the bow: walls, windows all round, a flat roof
         float h0 = FerryDeck, h1 = FerryDeck + 900, zc = (FerryHouseFrom + FerryHalfLong) / 2f, zl = FerryHalfLong - FerryHouseFrom;
-        // (its walls lit, its roof a light grey as it is, unlit: lit, the light the roof takes ran any grey of the row past its end -- dark
-        // red in OpenGL, at 48 nearly black in both -- and a lit top under an unlit one still showed in OpenGL, which draws a body's lit
-        // polygons after its unlit ones)
+        // (its four walls -- no top: the dark red cap over them, below, is its roof; a top under it the painter's sort now and then drew
+        // over the cap)
         {
             float hx = FerryHalfWide - 150, z0 = zc - zl / 2f, z1 = zc + zl / 2f;
             int C(float x, float y, float z) => m.P(0, new Vector3(x, y, z));
@@ -60,7 +59,6 @@ internal static partial class CitadelProps
             m.Out(new[] { C(-hx, h0, z1), C(hx, h0, z1), C(hx, h1, z1), C(-hx, h1, z1) }, FerryHouse, middle);
             m.Out(new[] { C(-hx, h0, z0), C(-hx, h0, z1), C(-hx, h1, z1), C(-hx, h1, z0) }, FerryHouse, middle);
             m.Out(new[] { C(hx, h0, z0), C(hx, h0, z1), C(hx, h1, z1), C(hx, h1, z0) }, FerryHouse, middle);
-            m.Up(new[] { C(-hx, h1, z0), C(hx, h1, z0), C(hx, h1, z1), C(-hx, h1, z1) }, FerryRoof, unlit: true);
         }
         m.Box(0, new Vector3(0, h0 + 620, FerryHouseFrom - 2), new Vector3(2 * FerryHalfWide - 500, 220, 6), FerryGlass);
         foreach (var side in new[] { 1, -1 })
