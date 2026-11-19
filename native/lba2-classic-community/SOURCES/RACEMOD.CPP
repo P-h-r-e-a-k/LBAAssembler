@@ -8421,6 +8421,10 @@ static void QualifyingArrival(int wrongWay, S32 now) {
 static int s_gridForming = 0;
 static int OpponentAway(const T_RACE_OPPONENT *o) {
     if (s_pitHidden && !s_gridForming && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
+    // (a race won already, once_won=: its racers gone home -- the user, 2026-11-18, "After Twinsen wins the race on Citadel island the other
+    // racers should go back to their other locations. The Tralu his cave, Luc his bar, Mr. Paul the Port etc." Not the race just finished:
+    // its cars stay parked where they stopped until Twinsen leaves the scene -- the track read again then (RaceMod_Island), Inert from there)
+    if (Inert()) return 1;
     if (o->WhenVar < 0) return 0;
     const S32 v = ListVarGame[o->WhenVar];
     return v < o->WhenLeast || (o->WhenBelow > 0 && v >= o->WhenBelow);

@@ -983,14 +983,31 @@ internal static partial class RaceTrackStory
         },
     };
 
+    // Citadel Island's lines added later (after the darts players': CitadelLaterId), so that none before them move
+    internal enum CitadelLater { PaulBackToPort }
+    private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
+    internal static readonly string[][] CitadelLaterLines =
+    {
+        new[]
+        {
+            "Well driven, Twinsen! Now I'm off back to the port -- the ferries won't load themselves.",
+            "Bien conduit, Twinsen ! Je retourne au port -- les ferries ne se chargeront pas tout seuls.",
+            "Gut gefahren, Twinsen! Jetzt geht's zurück zum Hafen -- die Fähren beladen sich nicht von selbst.",
+            "¡Bien conducido, Twinsen! Ahora me vuelvo al puerto: los transbordadores no se cargan solos.",
+            "Ben guidato, Twinsen! Ora torno al porto: i traghetti non si caricano da soli.",
+            "Bem conduzido, Twinsen! Agora volto para o porto -- os ferries não se carregam sozinhos.",
+        },
+    };
+
     // The new lines into a language's bank from `first` on (`words`: their column), the pharmacist's price in the game's own words there.
     private static void AddChapterTexts(HqrArchive text, int lang, Lba2TextBank bank, int first, byte attribute, int words)
     {
         AddTexts(bank, first, attribute, ChapterLines, words);
         // (chapter 1's evening's after them: RaceTrackStory.Evening.cs)
         AddTexts(bank, first + ChapterLines.Length, attribute, EveningLines, words);
-        // (the darts players' after those: Citadel/RaceTrackStory.Darts.cs)
+        // (the darts players' after those: Citadel/RaceTrackStory.Darts.cs; then CitadelLaterLines)
         AddTexts(bank, first + ChapterLines.Length + EveningLines.Length, attribute, DartsTalkLines, words);
+        AddTexts(bank, first + ChapterLines.Length + EveningLines.Length + DartsTalkLines.Length, attribute, CitadelLaterLines, words);
         if (Lba2TextBank.Load(text, lang, DesertTexts).Find(DesertGallicPrice) is { } own && bank.Find(first + (int)ChapterLine.GallicPrice) is { } price)
             price.Bytes = own.Bytes;
     }
@@ -3438,7 +3455,14 @@ stop();
                 p.Log.Add($"Mr. Paul at cell ({pa.X:0.#}, {pa.Z:0.#}), {pa.Y:0}");
                 // (the entry, twenty kashes, paid to him: asked when Twinsen has them, else to come back with them; paid, he's on the grid --
                 // the start line's gate, ENTRY_PAID, open; a lost race runs again without paying twice -- the user, 2026-11-16)
-                edits.Add(p.Add(model, paul, Talker("2 == chapter()", $@"            if (0 == var_game({WonVar}) && 0 < var_game({EntryPaid}))
+                // (there till the race is won: then back at the port, the game's own Mr. Paul on the quay -- the user, 2026-11-18, "After Twinsen
+                // wins the race on Citadel island the other racers should go back to their other locations ... Mr. Paul the Port"; their cars
+                // gone from the grid too, RACEMOD.CPP OpponentAway. Right after the win, still here: off back to the port, he says)
+                edits.Add(p.Add(model, paul, Talker($"2 == chapter() && 0 == var_game({WonVar})", $@"            if (0 != var_game({WonVar}))
+            {{
+                message({CitadelLaterId(p.Say, CitadelLater.PaulBackToPort)});
+            }}
+            else if (0 == var_game({WonVar}) && 0 < var_game({EntryPaid}))
             {{
                 message({p.Say(ChapterLine.PaulOnGrid)});
             }}

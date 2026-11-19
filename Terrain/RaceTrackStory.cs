@@ -660,7 +660,7 @@ void comportement_1()
             hqr = labels.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
-        log.Add($"the story's {Lines.Length + ChapterLines.Length + EveningLines.Length + DartsTalkLines.Length} lines are texts {first}-{first + Lines.Length + ChapterLines.Length + EveningLines.Length + DartsTalkLines.Length - 1} of Citadel Island's, the start lines' holomap labels texts {labelFirst}-{labelFirst + 1}, in all {languages} languages (shown, not spoken)");
+        log.Add($"the story's {Lines.Length + ChapterLines.Length + EveningLines.Length + DartsTalkLines.Length + CitadelLaterLines.Length} lines are texts {first}-{first + Lines.Length + ChapterLines.Length + EveningLines.Length + DartsTalkLines.Length + CitadelLaterLines.Length - 1} of Citadel Island's, the start lines' holomap labels texts {labelFirst}-{labelFirst + 1}, in all {languages} languages (shown, not spoken)");
 
         // the arrows: the storm track's start line, the town circuit's
         var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
