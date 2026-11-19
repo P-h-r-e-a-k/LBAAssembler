@@ -22486,6 +22486,15 @@ static void FerryFrame(S32 now) {
     }
 }
 
+// LBRA's hoverboard (the user, 2026-11-18: "Let's redesign the protopack and jetpack as a hoverboard. On Twinsun the hoverboard should have
+// the power of the protopack and everywhere else it should have the power of the jetpack"): with a race file on -- the story, LBRA --
+// the protopack item hovers as the protopack on Twinsun (Planet 0) and flies as the super jet-pack everywhere else, upgraded or not
+// (PERSO.CPP, the item and its key). The game's own rule (the jet-pack once its model is the upgrade's) without one.
+S32 RaceMod_HoverPack(S32 comp) {
+    if (!RaceMod_Active()) return comp;
+    return Planet != 0 ? C_JETPACK : C_PROTOPACK;
+}
+
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
     // (not a won dream's car over its jump: wake_flight=; a car ferry's crossing: car_ferry='s hold)

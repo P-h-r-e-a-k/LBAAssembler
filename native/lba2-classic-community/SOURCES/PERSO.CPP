@@ -1236,6 +1236,8 @@ restartloop:
                         comp = C_JETPACK;
                     else
                         comp = C_PROTOPACK;
+                    // (LBRA's hoverboard: the protopack's on Twinsun, the jet-pack's everywhere else -- RACEMOD.CPP RaceMod_HoverPack)
+                    { extern S32 RaceMod_HoverPack(S32 comp); comp = (U8)RaceMod_HoverPack(comp); }
 
                     if (Comportement == comp)
                         SetComportement(C_NORMAL);
@@ -1421,6 +1423,7 @@ restartloop:
                             comp = C_JETPACK;
                         else
                             comp = C_PROTOPACK;
+                        { extern S32 RaceMod_HoverPack(S32 comp); comp = (U8)RaceMod_HoverPack(comp); }
 
                         if (Comportement == comp)
                             SetComportement(C_NORMAL);
