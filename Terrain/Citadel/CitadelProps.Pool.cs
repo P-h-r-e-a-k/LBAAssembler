@@ -40,6 +40,34 @@ internal static partial class CitadelProps
     private const int PoolWaterColour = 192, BoardStand = 50, BoardPlank = 63, BoardGrip = 196;
 
     public const int PoolMiddleX = 21000, PoolMiddleZ = 13500;
+    // Sun loungers on the deck south of the basin (body 202 -- the user, 2026-11-18, "reposition her to one of the loungers by the pool
+    // instead"; the hotel had none): a white frame on short legs, a striped mattress LoungerTop over the deck, LoungerLong along its own z,
+    // LoungerWide across; Lyra lies on the middle one (RaceTrackStory.Eggs.Otringal: LyraPoolScore), the others empty beside it.
+    public const int SunLounger = 202, LoungerTop = 380, LoungerLong = 1900, LoungerWide = 620;
+    public static readonly (int X, int Z)[] Loungers = { (18944, 20736), (20480, 20736), (22016, 20736) };
+    public static Body BuildSunLounger(byte[] header)
+    {
+        var m = new CarMesh("a sun lounger", new[] { -1 });
+        m.Light = 0.9f;
+        const int Frame = 36, Leg = 56, StripeA = 164, StripeB = 37;
+        const float Half = LoungerLong / 2f, Side = LoungerWide / 2f, Rail = 60, Mattress = 70;
+        // the frame's rails along both sides and its ends, on legs at the corners
+        foreach (var x in new[] { -Side + Rail / 2, Side - Rail / 2 })
+            m.Box(0, new Vector3(x, LoungerTop - Mattress - Rail / 2, 0), new Vector3(Rail, Rail, LoungerLong), Frame);
+        foreach (var z in new[] { -Half + Rail / 2, Half - Rail / 2 })
+            m.Box(0, new Vector3(0, LoungerTop - Mattress - Rail / 2, z), new Vector3(LoungerWide, Rail, Rail), Frame);
+        foreach (var x in new[] { -Side + Rail / 2, Side - Rail / 2 })
+            foreach (var z in new[] { -Half + Rail / 2, Half - Rail / 2 })
+                m.Box(0, new Vector3(x, (LoungerTop - Mattress - Rail) / 2f, z), new Vector3(Rail * 0.7f, LoungerTop - Mattress - Rail, Rail * 0.7f), Leg);
+        // the mattress: stripes across it
+        const int Stripes = 8;
+        for (var k = 0; k < Stripes; k++)
+        {
+            float z0 = -Half + Rail + k * (LoungerLong - 2 * Rail) / Stripes, z1 = z0 + (LoungerLong - 2 * Rail) / Stripes;
+            m.Box(0, new Vector3(0, LoungerTop - Mattress / 2f, (z0 + z1) / 2), new Vector3(LoungerWide - 2 * Rail + 20, Mattress, z1 - z0), k % 2 == 0 ? StripeA : StripeB);
+        }
+        return m.ToBody(header);
+    }
     public static short[]? PoolBox(int generic) => generic switch
     {
         BowlingLanes => new short[] { -1, 0, -1, 1, 1, 1 },   // (the bowling lanes' boards: no box to be walked round)

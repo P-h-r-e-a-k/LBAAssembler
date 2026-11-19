@@ -21,6 +21,10 @@ internal static partial class RaceTrackStory
     // Q_FEE: 1 Lyra has told (the 10 zlitos given), 2 the Travel Token bought, 3 the race won, 4 Lyra and the priest have spoken, 5 Johnny
     // has flown them on
     public const int QFee = 217, FeePaid = 2, FeeWon = 3, FeeTold = 4, FeeDone = 5;
+    // (the two days, 2026-11-19 -- RaceTrackStory.OtringalDays.cs: Q_FEE 1 told the race is full, 2 Lyra bribed (on the list: qualifying);
+    // and the days' own variable (a wide one: Q_FEE's 3 on are the win's, and the race goes quiet once its win= holds -- once_won), 0 day
+    // one, 1 qualified -- the cars in the stewards' garage overnight, 2 race day -- the car's ignition coil gone, 3 the coil found)
+    public const int FeeFull = 1, OtringalDay = 266, DayQualified = 1, DayRaceDay = 2, DayCoil = 3;
     // (the Imperial Hotel's scene, for the race file's pool=)
     internal const int HotelSceneNumber = 81;
     private const int TravelToken = 24, FragmentSups = 32, Fee = 30, StarterZlitos = 10, CasinoScene = 135, Doorman = 8, HotelScene = 81,
@@ -38,6 +42,9 @@ internal static partial class RaceTrackStory
         RickCup, RickTracks, RickKid, LyraNine, LyraEight,
         // (the sweep of 2026-11-05)
         LyraTranslator,
+        // (the two days, 2026-11-19: RaceTrackStory.OtringalDays.cs)
+        MarshalFull, EsmerMoney, MarshalStillFull, RickLyra, RickBlackCar, LyraOffDuty, LyraBribe, LyraShort, LyraAsk, LyraIn, LyraBlackCar,
+        MarshalSetTime, MarshalQualified, NightPasses, MarshalCoil, MarshalNoCoil, SellerMask, CoilFound, MarshalReady,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -252,6 +259,179 @@ internal static partial class RaceTrackStory
             "E questo, sempre da parte degli Esmers: un traduttore. Qui non tutti parlano il twinsuniano.",
             "E isto, também da parte dos Esmers: um tradutor. Aqui nem toda a gente fala twinsuniano.",
         },
+        // (the two days, 2026-11-19 -- RaceTrackStory.OtringalDays.cs: the race full, Lyra's bribe, qualifying, the garage overnight, the
+        // coil gone, the black car's details)
+        new[]
+        {
+            "Twinsen of Citadel Island? You're too late -- the grid filled up while you were off on the Emerald Moon. The race runs tomorrow. The last place went to a black car: no name on its entry, just a mask.",
+            "Twinsen, de l'île de la Citadelle ? Trop tard -- la grille s'est remplie pendant que tu étais sur la Lune d'Émeraude. La course a lieu demain. La dernière place est allée à une voiture noire : pas de nom sur l'inscription, juste un masque.",
+            "Twinsen von der Zitadelleninsel? Zu spät -- das Starterfeld wurde voll, während du auf dem Smaragdmond warst. Das Rennen ist morgen. Den letzten Platz hat ein schwarzes Auto bekommen: kein Name auf der Meldung, nur eine Maske.",
+            "¿Twinsen, de la isla de la Ciudadela? Llegas tarde: la parrilla se llenó mientras estabas en la Luna Esmeralda. La carrera es mañana. La última plaza fue para un coche negro: ningún nombre en la inscripción, solo una máscara.",
+            "Twinsen dell'isola della Cittadella? Troppo tardi: la griglia si è riempita mentre eri sulla Luna di Smeraldo. La gara è domani. L'ultimo posto è andato a un'auto nera: nessun nome sull'iscrizione, solo una maschera.",
+            "Twinsen, da ilha da Cidadela? Chegaste tarde: a grelha encheu-se enquanto estavas na Lua Esmeralda. A corrida é amanhã. O último lugar foi para um carro preto: nenhum nome na inscrição, só uma máscara.",
+        },
+        new[]
+        {
+            "The Esmers left a little Zeelich money for you: 10 zlitos.",
+            "Les Esmers t'ont laissé un peu d'argent de Zeelich : 10 zlitos.",
+            "Die Esmerier haben dir ein bisschen Zeelich-Geld dagelassen: 10 Zlitos.",
+            "Los Esmers te han dejado algo de dinero de Zeelich: 10 zlitos.",
+            "Gli Esmers ti hanno lasciato un po' di denaro di Zeelich: 10 zlitos.",
+            "Os Esmers deixaram-te algum dinheiro de Zeelich: 10 zlitos.",
+        },
+        new[]
+        {
+            "Still full, I'm afraid. Ask around town -- somebody always knows somebody.",
+            "Toujours complet, désolée. Renseigne-toi en ville -- il y a toujours quelqu'un qui connaît quelqu'un.",
+            "Immer noch voll, tut mir leid. Hör dich in der Stadt um -- irgendwer kennt immer irgendwen.",
+            "Sigue llena, lo siento. Pregunta por la ciudad: siempre hay alguien que conoce a alguien.",
+            "Ancora al completo, mi spiace. Chiedi in giro per la città: c'è sempre qualcuno che conosce qualcuno.",
+            "Continua cheia, lamento. Pergunta pela cidade -- há sempre alguém que conhece alguém.",
+        },
+        new[]
+        {
+            "A place on the grid? Talk to Lyra, she runs the Cup's paperwork. It's her day off, so try the Imperial Hotel's pool. And bring zlitos -- Lyra likes zlitos.",
+            "Une place sur la grille ? Va voir Lyra, c'est elle qui s'occupe des papiers de la Coupe. C'est son jour de repos, essaie la piscine de l'Hôtel Impérial. Et prends des zlitos -- Lyra aime les zlitos.",
+            "Ein Startplatz? Sprich mit Lyra, sie macht den Papierkram für den Pokal. Heute hat sie frei, versuch es am Pool des Kaiserlichen Hotels. Und bring Zlitos mit -- Lyra mag Zlitos.",
+            "¿Una plaza en la parrilla? Habla con Lyra, ella lleva el papeleo de la Copa. Hoy libra, prueba en la piscina del Hotel Imperial. Y lleva zlitos: a Lyra le gustan los zlitos.",
+            "Un posto in griglia? Parla con Lyra, è lei che si occupa delle carte della Coppa. Oggi è il suo giorno libero, prova alla piscina dell'Hotel Imperiale. E porta degli zlitos: a Lyra piacciono gli zlitos.",
+            "Um lugar na grelha? Fala com a Lyra, é ela que trata da papelada da Taça. Hoje está de folga, experimenta a piscina do Hotel Imperial. E leva zlitos -- a Lyra gosta de zlitos.",
+        },
+        new[]
+        {
+            "That black car's driver was in here last night. Emptied one of my machines, never said a word, never took the mask off.",
+            "Le pilote de la voiture noire est passé ici hier soir. Il a vidé une de mes machines sans dire un mot, sans jamais ôter son masque.",
+            "Der Fahrer des schwarzen Autos war gestern Abend hier. Hat einen meiner Automaten geleert, kein Wort gesagt und die Maske nie abgenommen.",
+            "El piloto del coche negro estuvo aquí anoche. Vació una de mis máquinas sin decir palabra y sin quitarse la máscara.",
+            "Il pilota dell'auto nera è stato qui ieri sera. Ha svuotato una delle mie macchinette senza dire una parola, senza mai togliersi la maschera.",
+            "O piloto do carro preto esteve cá ontem à noite. Esvaziou uma das minhas máquinas sem dizer uma palavra, sem nunca tirar a máscara.",
+        },
+        new[]
+        {
+            "The Cup? I'm off duty, Twinsen. Ask the marshal at the start line.",
+            "La Coupe ? Je ne suis pas de service, Twinsen. Demande à la commissaire sur la ligne de départ.",
+            "Der Pokal? Ich habe heute frei, Twinsen. Frag die Rennkommissarin an der Startlinie.",
+            "¿La Copa? Hoy no estoy de servicio, Twinsen. Pregunta a la comisaria de la línea de salida.",
+            "La Coppa? Oggi non sono in servizio, Twinsen. Chiedi alla commissaria sulla linea di partenza.",
+            "A Taça? Estou de folga, Twinsen. Pergunta à comissária na linha de partida.",
+        },
+        new[]
+        {
+            "Full? Well... a grid has a way of growing a place. Thirty zlitos and I'll find you one.",
+            "Complet ? Eh bien... une grille, ça se trouve toujours une place. Trente zlitos et je t'en trouve une.",
+            "Voll? Na ja ... in so einem Starterfeld findet sich immer ein Platz. Dreißig Zlitos, und ich finde dir einen.",
+            "¿Llena? Bueno... en una parrilla siempre aparece un hueco. Treinta zlitos y te lo encuentro.",
+            "Al completo? Be'... in una griglia un posto si trova sempre. Trenta zlitos e te lo trovo io.",
+            "Cheia? Bem... numa grelha arranja-se sempre um lugar. Trinta zlitos e eu encontro-te um.",
+        },
+        new[]
+        {
+            "Thirty zlitos, Twinsen, not a zlito less. The Casino's round the corner.",
+            "Trente zlitos, Twinsen, pas un de moins. Le Casino est au coin de la rue.",
+            "Dreißig Zlitos, Twinsen, keinen weniger. Das Casino ist gleich um die Ecke.",
+            "Treinta zlitos, Twinsen, ni uno menos. El Casino está a la vuelta de la esquina.",
+            "Trenta zlitos, Twinsen, non uno di meno. Il Casinò è dietro l'angolo.",
+            "Trinta zlitos, Twinsen, nem um a menos. O Casino é logo ali à esquina.",
+        },
+        new[]
+        {
+            "Give Lyra 30 zlitos?",
+            "Donner 30 zlitos à Lyra ?",
+            "Lyra 30 Zlitos geben?",
+            "¿Dar 30 zlitos a Lyra?",
+            "Dare 30 zlitos a Lyra?",
+            "Dar 30 zlitos à Lyra?",
+        },
+        new[]
+        {
+            "There -- you're on the list. Qualifying is today: set your time at the start line. Then the cars go into the stewards' garage overnight, for inspection.",
+            "Voilà, tu es sur la liste. Les qualifications, c'est aujourd'hui : va faire ton temps sur la ligne de départ. Ensuite les voitures passent la nuit au garage des commissaires, pour l'inspection.",
+            "So -- du stehst auf der Liste. Das Qualifying ist heute: Fahr deine Zeit an der Startlinie. Danach kommen die Autos über Nacht zur Inspektion in die Garage der Kommissare.",
+            "Listo, estás en la lista. La clasificación es hoy: haz tu tiempo en la línea de salida. Después los coches pasan la noche en el garaje de los comisarios, para la inspección.",
+            "Ecco, sei in lista. Le qualifiche sono oggi: fai il tuo tempo sulla linea di partenza. Poi le auto passano la notte nel garage dei commissari, per l'ispezione.",
+            "Pronto, estás na lista. A qualificação é hoje: faz o teu tempo na linha de partida. Depois os carros passam a noite na garagem dos comissários, para a inspeção.",
+        },
+        new[]
+        {
+            "The black car? Paid its entry in old Sup coins. Nobody's seen its driver's face -- not even me.",
+            "La voiture noire ? Payée en vieilles pièces des Sups. Personne n'a vu le visage de son pilote -- pas même moi.",
+            "Das schwarze Auto? Hat die Startgebühr in alten Sup-Münzen bezahlt. Niemand hat das Gesicht des Fahrers gesehen -- nicht einmal ich.",
+            "¿El coche negro? Pagó la inscripción con viejas monedas de los Sups. Nadie le ha visto la cara al piloto, ni siquiera yo.",
+            "L'auto nera? Ha pagato l'iscrizione in vecchie monete dei Sup. Nessuno ha visto la faccia del pilota, nemmeno io.",
+            "O carro preto? Pagou a inscrição com moedas antigas dos Sups. Ninguém viu a cara do piloto -- nem eu.",
+        },
+        new[]
+        {
+            "Lyra's put you on the list, I see. Set your qualifying time whenever you're ready.",
+            "Lyra t'a inscrit, à ce que je vois. Fais ton temps de qualification quand tu veux.",
+            "Lyra hat dich auf die Liste gesetzt, wie ich sehe. Fahr deine Qualifikationszeit, wann immer du so weit bist.",
+            "Ya veo que Lyra te ha apuntado. Haz tu tiempo de clasificación cuando quieras.",
+            "Vedo che Lyra ti ha messo in lista. Fai il tuo tempo di qualifica quando vuoi.",
+            "Vejo que a Lyra te pôs na lista. Faz o teu tempo de qualificação quando quiseres.",
+        },
+        new[]
+        {
+            "A good lap. Your car stays with us tonight -- the stewards' garage, under lock and key. Get some rest: the race starts in the morning.",
+            "Joli tour. Ta voiture reste avec nous cette nuit -- au garage des commissaires, sous clé. Repose-toi : la course part demain matin.",
+            "Gute Runde. Dein Auto bleibt heute Nacht bei uns -- in der Garage der Kommissare, hinter Schloss und Riegel. Ruh dich aus: Das Rennen startet morgen früh.",
+            "Buena vuelta. Tu coche se queda con nosotros esta noche, en el garaje de los comisarios, bajo llave. Descansa: la carrera empieza por la mañana.",
+            "Bel giro. La tua auto resta con noi stanotte, nel garage dei commissari, sotto chiave. Riposati: la gara parte domattina.",
+            "Boa volta. O teu carro fica connosco esta noite -- na garagem dos comissários, fechada à chave. Descansa: a corrida começa de manhã.",
+        },
+        new[]
+        {
+            "The cars are wheeled into the stewards' garage... The night passes. Morning on Otringal.",
+            "Les voitures sont poussées dans le garage des commissaires... La nuit passe. Le matin se lève sur Otringal.",
+            "Die Autos werden in die Garage der Kommissare geschoben ... Die Nacht vergeht. Morgen auf Otringal.",
+            "Los coches entran en el garaje de los comisarios... Pasa la noche. Amanece en Otringal.",
+            "Le auto vengono spinte nel garage dei commissari... La notte passa. È mattina su Otringal.",
+            "Os carros são levados para a garagem dos comissários... A noite passa. Amanhece em Otringal.",
+        },
+        new[]
+        {
+            "Your car's back from inspection, Twinsen -- but its ignition coil isn't. Somebody had the garage open in the night. No coil, no race.",
+            "Ta voiture est revenue de l'inspection, Twinsen -- mais pas sa bobine d'allumage. Quelqu'un a ouvert le garage cette nuit. Pas de bobine, pas de course.",
+            "Dein Auto ist von der Inspektion zurück, Twinsen -- aber seine Zündspule nicht. Jemand war heute Nacht in der Garage. Keine Zündspule, kein Rennen.",
+            "Tu coche ha vuelto de la inspección, Twinsen, pero su bobina de encendido no. Alguien abrió el garaje por la noche. Sin bobina, no hay carrera.",
+            "La tua auto è tornata dall'ispezione, Twinsen, ma la bobina d'accensione no. Qualcuno ha aperto il garage stanotte. Niente bobina, niente gara.",
+            "O teu carro voltou da inspeção, Twinsen -- mas a bobina de ignição não. Alguém abriu a garagem durante a noite. Sem bobina, não há corrida.",
+        },
+        new[]
+        {
+            "No ignition coil, no race, Twinsen. Ask around -- somebody must have seen something last night.",
+            "Pas de bobine, pas de course, Twinsen. Renseigne-toi -- quelqu'un a bien dû voir quelque chose cette nuit.",
+            "Keine Zündspule, kein Rennen, Twinsen. Hör dich um -- irgendwer muss heute Nacht etwas gesehen haben.",
+            "Sin bobina no hay carrera, Twinsen. Pregunta por ahí: alguien tuvo que ver algo anoche.",
+            "Niente bobina, niente gara, Twinsen. Chiedi in giro: qualcuno deve aver visto qualcosa stanotte.",
+            "Sem bobina não há corrida, Twinsen. Pergunta por aí -- alguém deve ter visto alguma coisa esta noite.",
+        },
+        new[]
+        {
+            "Last night? Someone in a mask came out of the stewards' garage with something under his arm. He went down to the west pier and threw it in a crate.",
+            "Cette nuit ? Quelqu'un de masqué est sorti du garage des commissaires avec quelque chose sous le bras. Il est descendu jusqu'à la jetée ouest et l'a jeté dans une caisse.",
+            "Heute Nacht? Jemand mit Maske kam mit etwas unter dem Arm aus der Garage der Kommissare. Er ging zum Westpier hinunter und warf es in eine Kiste.",
+            "¿Anoche? Alguien con máscara salió del garaje de los comisarios con algo bajo el brazo. Bajó al muelle oeste y lo tiró en una caja.",
+            "Stanotte? Uno con la maschera è uscito dal garage dei commissari con qualcosa sotto il braccio. È sceso al molo ovest e l'ha buttato in una cassa.",
+            "Esta noite? Alguém de máscara saiu da garagem dos comissários com uma coisa debaixo do braço. Desceu até ao cais oeste e atirou-a para dentro de um caixote.",
+        },
+        new[]
+        {
+            "Twinsen finds his car's ignition coil in the crate!",
+            "Twinsen retrouve la bobine d'allumage de sa voiture dans la caisse !",
+            "Twinsen findet die Zündspule seines Autos in der Kiste!",
+            "¡Twinsen encuentra la bobina de encendido de su coche en la caja!",
+            "Twinsen trova la bobina d'accensione della sua auto nella cassa!",
+            "O Twinsen encontra a bobina de ignição do carro dentro do caixote!",
+        },
+        new[]
+        {
+            "The coil's back where it belongs. To the grid, Twinsen -- and watch that black car.",
+            "La bobine est de retour à sa place. En grille, Twinsen -- et méfie-toi de cette voiture noire.",
+            "Die Zündspule ist wieder, wo sie hingehört. Ab in die Startaufstellung, Twinsen -- und pass auf das schwarze Auto auf.",
+            "La bobina vuelve a estar en su sitio. A la parrilla, Twinsen, y ojo con ese coche negro.",
+            "La bobina è tornata al suo posto. In griglia, Twinsen, e occhio a quell'auto nera.",
+            "A bobina voltou ao seu lugar. Para a grelha, Twinsen -- e cuidado com aquele carro preto.",
+        },
     };
 
     // The nearest place to an island cell clear of every road of a track by `clear` cells, on its ground: searched outward ring by ring
@@ -309,7 +489,15 @@ void comportement_1()
         found_object({FragmentSups});
         set_var_game({FragmentSups}, 1);
         message_obj({priest}, {Say(OtringalLine.Priest)});
-        message_zoe({Say(OtringalLine.ZoeCharming)});
+    }}
+    if ({DayQualified} == var_game({OtringalDay}) && {Driving} != comportement_hero())
+    {{
+        cinema_mode(1);
+        message({Say(OtringalLine.MarshalQualified)});
+        message({Say(OtringalLine.NightPasses)});
+        set_var_game({OtringalDay}, {DayRaceDay});
+        message({Say(OtringalLine.MarshalCoil)});
+        cinema_mode(0);
     }}
 }}
 "),
@@ -324,68 +512,18 @@ void comportement_1()
         // otringal, so we don't need it given to him".) The translator (item 29), which the control tower's staff and the space port's
         // mechanic answer only to, is the Desert race's prize now, with the licence (RaceTrackStory.Desert: "The translator let's have this
         // given to Twinsen when he wins the race on Desert Island as this makes most sense")
-        var lyraTalk = $@"            if (0 == var_game({QFee}))
-            {{
-                message({Say(OtringalLine.LyraZeelich)});
-                add_gold_pieces({StarterZlitos});
-                set_var_game({QFee}, 1);
-            }}
-            else if ({FeePaid} > var_game({QFee}))
-            {{
-                if ({Fee} > nb_gold_pieces())
-                {{
-                    message({Say(OtringalLine.LyraFee)});
-                    message({Say(OtringalLine.StewardShort)});
-                }}
-                else
-                {{
-                    message({Say(OtringalLine.LyraFee)});
-                    add_choice({Say(OtringalLine.Yes)});
-                    add_choice({Say(OtringalLine.No)});
-                    ask_choice({Say(OtringalLine.StewardAsk)});
-                    if ({Say(OtringalLine.Yes)} == choice())
-                    {{
-                        give_gold_pieces({Fee});
-                        message({Say(OtringalLine.StewardToken)});
-                        set_var_game({QFee}, {FeePaid});
-                    }}
-                }}
-            }}
-            else if ({FeeWon} > var_game({QFee}))
-            {{
-                message({Say(OtringalLine.LyraOpen)});
-            }}";
-        MarshalA(b, report, otringal, lyraTalk, "Lyra");
-
-        // the Casino: Zoe and Twinsen at the door, the first time a visit (the slot machines are the game's own)
-        b.Edit(CasinoScene, "in the Casino, Zoe: \"Baldino said don't\"", model => IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 4), $@"void comportement_0()
-{{
-    if ({otringal} && {FeePaid} > var_game({QFee}))
-    {{
-        set_comportement(comportement_1);
-    }}
-    else
-    {{
-        suicide();
-    }}
-}}
-
-void comportement_1()
-{{
-    if (0 == var_cube({Once1}))
-    {{
-        set_var_cube({Once1}, 1);
-        message_zoe({Say(OtringalLine.ZoeDont)});
-        message_obj(0, {Say(OtringalLine.TwinsenLittle)});
-    }}
-}}
-"));
-
+        // (since 2026-11-19 the start line's is the race marshal's -- the user, "when Twinsen arrives at the start line and tries to speak to
+        // the race marshall she tells him that he's too late and the race is full, and it's due to run 'Tomorrow'" -- and Lyra, by the
+        // hotel's pool, takes a bribe for a place: RaceTrackStory.OtringalDays.cs)
+        var marshalTalk = MarshalTalk(Say);
+        MarshalA(b, report, otringal, marshalTalk, "the race marshal");
+        // (Zoe stays on Twinsun now -- the user, 2026-11-19, "she's no longer coming with us": her "Baldino said don't" at the Casino's door
+        // gone, and her word after the win)
         // ... and its slot machines never leave Twinsen too broke for the fee: the pull that spends his last zlito, the Travel Token not yet
         // bought, stops every reel on Money (25 zlitos). The game's odds (a win about one pull in eight, from the Esmers' 10) left one player
         // in four with nothing and the Cup closed to him (the scripted playthrough, 2026-11-05: 35 pulls, one win, 0 zlitos). Each reel's
         // pick is its own scene variable, set after the game's forced key (a pull is paid before the reels spin: hero comportements 10-12).
-        b.Edit(CasinoScene, "the Casino's slot machines: the last zlito's pull pays, while the Travel Token is still to buy", _ => scripts =>
+        b.Edit(CasinoScene, "the Casino's slot machines: the last zlito's pull pays, while Lyra is still to be paid", _ => scripts =>
         {
             var reel = new System.Text.RegularExpressions.Regex(@"if \(0 == var_cube\(37\) && \(20 < var_cube\(38\) \|\| 4 <= var_cube\(13\)\)\)\s*\{\s*set_var_cube\((\d+), 3\);\s*\}");
             var reels = 0;
@@ -480,11 +618,13 @@ void comportement_1()
                 "message(245);\nset_holo_pos(140);\nset_var_cube(0, 0);\nset_var_game(123, 1);", "message(245);\nset_var_cube(0, 0);")));
 
         // the eggs: Rick in the Casino, Lyra by the hotel's pool (RaceTrackStory.Eggs.Otringal.cs)
-        RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid));
-        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight), lyraTalk);
+        RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid), Say(OtringalLine.RickLyra), Say(OtringalLine.RickBlackCar));
+        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight), LyraTalk(Say));
+        // (the two days: the witness and the coil -- RaceTrackStory.OtringalDays.cs)
+        OtringalDays(b, report, Say, otringal);
 
         b.Save();
-        log.Add($"Otringal's race file: gate={QFee} {FeePaid} (the Travel Token), win={QFee} {FeeWon}");
+        log.Add($"Otringal's race file: gate={QFee} {FeePaid} (Lyra paid), qualifying the first day (qualify_stop={OtringalDay} 0 {DayQualified}), the race the next once the coil is found (gate_not={OtringalDay} {DayRaceDay}), win={QFee} {FeeWon}");
         return log;
     }
 }

@@ -118,6 +118,10 @@
  *                                ahead of him (not first)
  *     finish=<var> <value>...    what the race's end sets, won or not
  *     qualifying_always=1        (2026-11-07) a qualifying lap before every race, never skipped (the race game asks nothing)
+ *     qualify_stop=<var> <value> <set>  (2026-11-19, the story's) while the variable holds the value, the qualifying lap ends the day: the
+ *                                variable set, no grid, the car stopped and Twinsen out (win_stop='s) till the story moves it on
+ *     no_qualify=<var> <least>   (2026-11-19) while the variable is at least <least>, no qualifying lap (over qualifying_always=)
+ *     gate_not=<var> <value> <text>  (2026-11-19) as gate=, but closed while the variable IS the value (Otringal: the night, the coil)
  *     once_won=1                 (2026-11-07, the story's) a race won stays won: with its win= variables holding (each at least its
  *                                value) as the track loads, its start line is inert -- no qualifying lap, no grid, the flag marshal on
  *                                her plinth (Inert). A race lost runs again as before; Track select's files have no once_won=
@@ -611,6 +615,13 @@ static int s_qualifying = 1;
 // qualifying_always= (the user, 2026-11-06: "force a qualifying lap on Citadel 2 and the Desert tracks ... make those two always run one
 // before the race"): the race game's "skip qualifying" doesn't skip it there (RACEGAME.CPP QualifyingPage, and Load)
 static int s_qualifyAlways = 0;
+// qualify_stop=<var> <value> <set>: the qualifying lap ends the day while the variable holds the value -- it set to <set>, no grid formed,
+// the car braked to a stop past the line and Twinsen out of it (win_stop='s), the controls his again once the story moves the variable on:
+// Otringal's qualifying on day one, the cars in the stewards' garage overnight, the race the next day (the user, 2026-11-19, "Qualifying
+// is day one, cars are held and inspected in a secure garage over night"). no_qualify=<var> <least>: while the variable is at least
+// <least>, no qualifying lap (over qualifying_always=) -- the race day's grid formed as soon as he is in his car at the line.
+static int s_qStopVar = -1, s_qStopValue = 0, s_qStopSet = 0, s_noQualVar = -1, s_noQualLeast = 0;
+static int NoQualify(void) { return s_noQualVar >= 0 && s_noQualVar < MAX_VARS_GAME && ListVarGame[s_noQualVar] >= s_noQualLeast; }
 static int s_gridBack = 0;                 // grid_back=: no qualifying, the player at the back of the grid (not on pole)
 static int s_fineWeather = 0;
 // set_weather=fine (a set's key): the story played in the weather once the storm is over, whatever the game's chapter -- Play from the
@@ -649,7 +660,8 @@ static int s_wantFlip = 0;
 #define RACE_MAX_GATES 4
 #define RACE_MAX_SETS 4
 #define RACE_MAX_TRACKS 16
-typedef struct { int Var, Least; char Text[128]; } T_RACE_GATE;
+// (gate_not=<var> <value> <text>: Not -- closed while the variable IS the value: Otringal's race day, the car missing a part, 2026-11-19)
+typedef struct { int Var, Least, Not; char Text[128]; } T_RACE_GATE;
 static T_RACE_GATE s_gates[RACE_MAX_GATES];
 static int s_nbGates = 0;
 // Game variables held while the race-track mode runs (vargame=<n> <value>): an island's travel cutscenes kept from playing in a race --
@@ -5350,9 +5362,21 @@ static void Load(const char *path, int carOnly = 0) {
             int used = 0;
             if (s_nbGates < RACE_MAX_GATES && sscanf(v, "%d %d %n", &g->Var, &g->Least, &used) == 2 && used > 0) {
                 snprintf(g->Text, sizeof(g->Text), "%s", v + used);
+                g->Not = 0;
                 s_nbGates++;
             }
         }
+        else if (!strcmp(key, "gate_not")) {
+            T_RACE_GATE *g = &s_gates[s_nbGates];
+            int used = 0;
+            if (s_nbGates < RACE_MAX_GATES && sscanf(v, "%d %d %n", &g->Var, &g->Least, &used) == 2 && used > 0) {
+                snprintf(g->Text, sizeof(g->Text), "%s", v + used);
+                g->Not = 1;
+                s_nbGates++;
+            }
+        }
+        else if (!strcmp(key, "qualify_stop")) { if (sscanf(v, "%d %d %d", &s_qStopVar, &s_qStopValue, &s_qStopSet) != 3) s_qStopVar = -1; }
+        else if (!strcmp(key, "no_qualify")) { if (sscanf(v, "%d %d", &s_noQualVar, &s_noQualLeast) != 2) s_noQualVar = -1; }
         else if (!strcmp(key, "beat")) {
             int n, used = 0;
             if (sscanf(v, "%d%n", &n, &used) == 1 && n >= 1 && n <= RACE_MAX_OPPONENTS) { s_beatOpp = n - 1; s_nbBeatSet = ReadSets(v + used, s_beatSet); }
@@ -5794,6 +5818,8 @@ static void Load(const char *path, int carOnly = 0) {
     // (no qualifying lap in a time trial -- the Citadel storm's trial file doesn't say qualifying=0, and the game's own default, a qualifying lap
     // first, left it with no count-down)
     if (s_trial) s_qualifying = 0;
+    // (no_qualify=: the story's race day -- qualified the day before)
+    if (NoQualify() && s_qualifying) { s_qualifying = 0; s_gridBack = 0; Log_Info("[racemod] no_qualify: variable %d at %d -- no qualifying lap, the grid as soon as he is in his car", s_noQualVar, (int)ListVarGame[s_noQualVar]); }
     if (s_online && !s_netQual) NetHiddenItems();
     if (s_trial && s_car.HasLine && !s_ghostWatch && !NetGridSpot()) { TrialStartSpot(); NetSpread(); }
     if (s_nbSpots && s_car.HasLine) {
@@ -6019,7 +6045,8 @@ static int NextCrossed(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1) {
 // The story's results: a gate not yet open (gate=), a result's variables set (beat=, win=), and whether they are all set already.
 static const T_RACE_GATE *ClosedGate(void) {
     for (int i = 0; i < s_nbGates; i++)
-        if (s_gates[i].Var >= 0 && s_gates[i].Var < MAX_VARS_GAME && ListVarGame[s_gates[i].Var] < s_gates[i].Least) return &s_gates[i];
+        if (s_gates[i].Var >= 0 && s_gates[i].Var < MAX_VARS_GAME &&
+            (s_gates[i].Not ? ListVarGame[s_gates[i].Var] == s_gates[i].Least : ListVarGame[s_gates[i].Var] < s_gates[i].Least)) return &s_gates[i];
     return NULL;
 }
 
@@ -6348,6 +6375,20 @@ void RaceMod_Lap(S32 x, S32 z) {
             // the car -- the user, 2026-11-07, after the town race)
             ForgetPowerUps("the race is over");
             if (s_beatMain) WinStopStart(now);
+        }
+        if (s_phase == PHASE_QUALIFYING && s_qStopVar >= 0 && s_qStopVar < MAX_VARS_GAME && ListVarGame[s_qStopVar] == s_qStopValue) {
+            // (qualify_stop=: the day's qualifying done -- no grid; the car stopped and Twinsen out, held till the story moves on)
+            s_qualifyTime = s_lastLap;
+            ListVarGame[s_qStopVar] = (S16)s_qStopSet;
+            s_phase = PHASE_WAIT;
+            s_qualifying = 0;
+            RaceGame_Qualified(s_lastLap);
+            ForgetPowerUps("qualifying is over for the day");
+            Log_Info("[racemod] qualify_stop: qualified in %.2f s -- variable %d = %d, no race today", s_lastLap / 1000.0, s_qStopVar, s_qStopSet);
+            WinStopStart(now);
+            // (held till the story moves the day on -- the qualify_stop variable from the value it was given, not win_stop='s own)
+            if (s_winStop) { s_winStopWatch = s_qStopVar; s_winStopHeld = s_qStopSet; }
+            return;
         }
         if (s_phase == PHASE_QUALIFYING) {
             // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene) -- and the race
@@ -21905,6 +21946,8 @@ void RaceMod_Frame(void) {
         }
     }
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
+    // (no_qualify=: the race day come while the track is loaded -- the qualifying lap not begun: none, the grid formed as he drives up)
+    if (s_phase == PHASE_QUALIFYING && s_laps == 0 && NoQualify()) { s_qualifying = 0; s_phase = PHASE_WAIT; Log_Info("[racemod] no_qualify: variable %d at %d -- no qualifying lap today", s_noQualVar, (int)ListVarGame[s_noQualVar]); }
     if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && !Inert() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     RaceHideActors();
     RoadKeep();
@@ -24460,7 +24503,7 @@ static void ResetTrack(void) {
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_safeAt = 0; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0;
-    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_cloversFill = -1; s_keyVar = -1; s_place = s_racers = 0;
+    s_nbGates = 0; s_qStopVar = -1; s_noQualVar = -1; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_cloversFill = -1; s_keyVar = -1; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0; s_pullQuiet = 0; s_pullAway = 0;
     s_nbWalkers = 0; s_walkerText = s_walker = -1; s_walkerRest = 0;

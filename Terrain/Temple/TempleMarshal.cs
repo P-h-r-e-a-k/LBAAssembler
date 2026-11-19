@@ -141,6 +141,33 @@ internal static class TempleMarshal
         };
     }
 
+    // Lyra on a sun lounger by the Imperial Hotel's pool (the user, 2026-11-18: "Lyra by the pool in the Imperial hotel seems to have a
+    // massive shadow ... reposition her to one of the loungers by the pool instead"): the grid girl laid on her back -- bone 1, her hips'
+    // pivot, from which all the rest of her hangs, a quarter turn back; the rest as she stands upright, her arms by her sides. The grid
+    // girl's entity's animation Lie (RaceTrackStory.Eggs.Otringal: LyraPoolScore).
+    public const int Lie = 664;
+    public const float LiePitch = -0.25f;
+    public static List<string> InstallLying(string gameDirectory)
+    {
+        var r = GridGirlRig;
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var entity = Lba2EntityTable.Parse(table).Entities.FirstOrDefault(e => e.Id == r.Entity);
+        if (entity is null || !entity.Bodies.Any(b => b.Generic == r.Body)) return new() { $"WARNING: Lyra lying: entity {r.Entity} has no grid girl (body {r.Body}) -- none made" };
+        if (entity.Anims.Any(a => a.Generic == Lie)) return new() { $"Lyra lying: entity {r.Entity}'s animation {Lie} there already" };
+        Make(HqrArchive.Open(bodyPath).Read(r.Retail), out var standing, r);
+        var anim = new Anim { Game = 2, LoopFrame = 0 };
+        anim.Frames.Add(new AnimFrame(1000, 0, 0, 0, Enumerable.Range(0, standing.Bones.Count)
+            .Select(i => i == 0 ? AnimBone.Neutral : new AnimBone(0, i == 1 ? LiePitch : 0f, 0f, 0f)).ToArray()));
+        var animIndex = HqrArchive.CountEntries(animPath);
+        File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(anim.Write())));
+        table = RaceTrackJumpAnim.WithAnim(table, r.Entity, Lie, animIndex);
+        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        return new() { $"Lyra lying on her back (bone 1 a quarter turn): ANIM.HQR {animIndex}, entity {r.Entity}'s animation {Lie}" };
+    }
+
     // ---- where she stands -------------------------------------------------------------------------------------------------------
 
     // Where the cars see her (the camera that follows the car rides the road's middle behind it, 9 cells back and 2,100 up in the Temple:

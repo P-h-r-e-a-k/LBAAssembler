@@ -665,7 +665,7 @@ internal static class RaceTrackService
             // (and the Temple of Bú's secret party's disco ball and bubbles after even those: no body moves -- TempleParty)
             if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
             // (and every other track's flag marshal, the Sup in her bikini, after everything else's: no body moves -- TempleMarshal.GridGirlRig)
-            if (session.GridGirl) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig));
+            if (session.GridGirl) { log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig)); log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.InstallLying(gameDirectory)); }
             // (and the story's racing overalls in the tunic's place and racing helmet in the pearl's -- Twinsen's bodies, the inventory's
             // models and texts -- after every body is made: none moves, the cars' drivers are their own -- Citadel/CitadelOveralls)
             if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelOveralls.Install(gameDirectory));
@@ -1166,7 +1166,7 @@ internal static class RaceTrackService
             var girl = rig == LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig;
             if (girl ? session.GridGirl : session.Marshal) continue;
             if (girl) session.GridGirl = true; else session.Marshal = true;
-            if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, rig));
+            if (!session.Together) { log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, rig)); if (girl) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.InstallLying(gameDirectory)); }
         }
         // ... and the Temple of Bú's risers' body (the race file names it by its entity), at the end of a build of several tracks, or here
         if (report.Spooks.Any(s => s.Kind == "riser" && s.Entity >= 0) && !session.Risers)

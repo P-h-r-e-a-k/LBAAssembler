@@ -17,7 +17,9 @@ internal static partial class RaceTrackStory
     // (where he stands: at the Casino's bar, between two of its stools, facing the room)
     private static readonly (int X, int Y, int Z, int Beta) RickAt = (22600, 512, 12100, 3072);
 
-    private static void RickAtTheCasino(IslandBeatsA b, string when, int cup, int joint, int kid)
+    // (lyra, black: while the race is full -- Q_FEE 1, RaceTrackStory.OtringalDays -- where to find Lyra, and what he saw of the black
+    // car's driver, 2026-11-19, the user: "somebody who knows somebody")
+    private static void RickAtTheCasino(IslandBeatsA b, string when, int cup, int joint, int kid, int lyra = -1, int black = -1)
     {
         if (Copy(b.Originals, RickScene, RickActor) is not { Entity: >= 0 } rick || !b.Store.SceneExists(CasinoScene))
         {
@@ -27,7 +29,15 @@ internal static partial class RaceTrackStory
         b.Edit(CasinoScene, "Rick by the Casino's bar: the Cup, then Casablanca (var_cube " + RickTalks + ")", model =>
         {
             rick.X = RickAt.X; rick.Y = RickAt.Y; rick.Z = RickAt.Z; rick.Beta = RickAt.Beta; rick.Move = 0;
-            return IslandBeatsA.Add(model, rick, Talker(when, $@"            add_var_cube({RickTalks}, 1);
+            var full = lyra < 0 ? "" : $@"            if ({FeeFull} == var_game({QFee}))
+            {{
+                message({lyra});
+                message({black});
+            }}
+            else
+            {{
+";
+            return IslandBeatsA.Add(model, rick, Talker(when, full + $@"            add_var_cube({RickTalks}, 1);
             if (1 == var_cube({RickTalks}))
             {{
                 message({cup});
@@ -39,7 +49,8 @@ internal static partial class RaceTrackStory
             else
             {{
                 message({kid});
-            }}"));
+            }}" + (lyra < 0 ? "" : $@"
+            }}")));
         });
     }
 
@@ -79,7 +90,14 @@ internal static partial class RaceTrackStory
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)
     private const int Clovers = 251, MostClovers = 10;
     // (on the deck at the pool's south side, a few cells from where the dive lands -- (18278, 1536, 18432) -- facing the water)
-    private static readonly (int X, int Y, int Z, int Beta) LyraAt = (20480, 2048, 20736, 2048);
+    // (since 2026-11-19 lying on the middle sun lounger there, on her back -- the user, "Lyra by the pool in the Imperial hotel seems to have
+    // a massive shadow and this is the closest Twinsen can get to her. Let's reposition her to one of the loungers by the pool instead": her
+    // feet to +x, her head to -x (TempleMarshal.Lie: the turned bone's pivot 468 up, her back 400 over her origin, her head 1,054 along from
+    // it and her feet 468), the lounger's middle 293 head-ward of her origin; no shadow -- hers was the massive one)
+    private const int LyraLyingBack = 400, LyraLyingMiddle = 293;
+    private static readonly (int X, int Y, int Z, int Beta) LyraAt = (Citadel.CitadelProps.Loungers[1].X + LyraLyingMiddle,
+        Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.LoungerTop - LyraLyingBack, Citadel.CitadelProps.Loungers[1].Z, 1024);
+    private const uint LyraNoShadow = 1u << 12;
 
     // (`talk`: Lyra's at the start line, the same by the pool: Twinsen who met her there first couldn't reach her to talk -- the user,
     // 2026-11-09/11: "the only thing to work on for Otringal is being able to talk to Lyra so we don't have a softlock": the steward sells
@@ -104,8 +122,10 @@ internal static partial class RaceTrackStory
 ";
         b.Edit(HotelScene, $"Lyra by the hotel's pool: her score for the dive, a clover after it (var_cube {LyraClovers}, {LyraDives})", model =>
         {
+            foreach (var (lx, lz) in Citadel.CitadelProps.Loungers)
+                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.SunLounger, lx, Citadel.CitadelProps.PoolDeck, lz, 1024));
             var lyra = SceneOps.BlankActor(SceneGame.Lba2, LyraAt.X, LyraAt.Y, LyraAt.Z, LyraEntity);
-            lyra.Body = LyraBody; lyra.Anim = LyraReady; lyra.Beta = LyraAt.Beta; lyra.Flags = 0x0803; lyra.CoulObj = 9; lyra.Armor = 51;
+            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Lie; lyra.Beta = LyraAt.Beta; lyra.Flags = (0x0803 & ~1u) | LyraNoShadow; // (not shoved by the lounger she lies on: CHECK_OBJ_COL off -- with it the engine pushed her out of its box and along the deck to the ladder) lyra.CoulObj = 9; lyra.Armor = 51;
             var index = model.Actors.Count;
             var add = IslandBeatsA.Add(model, lyra, $@"void comportement_0()
 {{
@@ -154,14 +174,14 @@ void comportement_3()
             {
                 add(scripts);
                 scripts.SetText(index, ScriptKind.Track, $@"label(0);
-anim({LyraReady});
+anim({Temple.TempleMarshal.Lie});
 stop();
 
 label(1);
 anim({LyraRaise});
 wait_anim();
 wait_nb_second(3);
-anim({LyraReady});
+anim({Temple.TempleMarshal.Lie});
 
 label(2);
 stop();
