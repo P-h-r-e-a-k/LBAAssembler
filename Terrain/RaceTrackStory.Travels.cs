@@ -26,8 +26,10 @@ internal static partial class RaceTrackStory
     // `Door` makes it from the scene as it is once every track is built (its start may have moved since: the statue track's grid is scene
     // 95's start, where the lava lake's ship waits): the zone's box and, from the target's start, how far Twinsen comes out from it (the
     // zone's corner is that far before the place round which it was put: he comes out where he stood in it, from its corner). `What`: for
-    // the log.
-    public sealed record PendingTravel(int Scene, int Target, int Switch, string What, Func<SceneModel, (SceneZoneModel Zone, (int X, int Y, int Z) Offset)> Door);
+    // the log. `Stand`: people put in the scene first, who switch the door on (the taxi at Celebration Island's dock: put in once every
+    // track is built, as the door is -- the statue track, built after the lava lake, takes anyone standing on its road out of scene 95)
+    public sealed record PendingTravel(int Scene, int Target, int Switch, string What, Func<SceneModel, (SceneZoneModel Zone, (int X, int Y, int Z) Offset)> Door,
+        Func<SceneModel, Action<SceneScripts>>? Stand = null);
 
     // A door round a place in a scene (cube-local), `reach` either way, from height `y0` to `y1`, into `target`, Twinsen coming out at
     // the target's start raised by `dy`: the zone (its landing still to add the target's start to) and that offset
@@ -50,6 +52,9 @@ internal static partial class RaceTrackStory
         if (story.Count == 0 && pending.Count == 0) return log;
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         var changes = new Dictionary<int, SceneModel>();
+        // (the people a door's story puts in first, saved before any scene here is read)
+        foreach (var p in pending)
+            if (p.Stand is not null) GroupB.EditScene(store, p.Scene, log, $"{p.What}: its people", p.Stand);
         RetailTravels(gameDirectory, store, changes, story, log);
         SceneModel Model(int scene) => changes.TryGetValue(scene, out var m) ? m : changes[scene] = store.Load(scene);
         foreach (var p in pending)

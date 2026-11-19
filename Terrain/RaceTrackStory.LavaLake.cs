@@ -26,7 +26,9 @@ internal static partial class RaceTrackStory
     private const int StatuetteTake = 1600;
 
     // The lava lake's new lines, after the seller's own (SellerLines) at the end of Celebration Island's texts (file 8)
-    internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo, LavaNever, Statuette5, SellerFive, ZoeLooking }
+    internal enum LavaLine { LyraArrival, Ring, Baldino, Stall, Statuette, ZoeFour, AllFour, ZoeGlasses, TwinsenDream, LyraShip, Kangaroo, LavaNever, Statuette5, SellerFive, ZoeLooking,
+        // (the harbour taxi's driver at the dock, chapters 6 and 7 -- 2026-11-19)
+        TaxiWaits, TaxiFrancos }
     internal static readonly string[][] LavaLines =
     {
         new[]
@@ -104,12 +106,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "The Francos' refinery? That's our next stop anyway. The ship leaves now.",
-            "La raffinerie des knartas ? C'est notre prochaine étape, de toute façon. Le bateau part maintenant.",
-            "Die Raffinerie der Bifiden? Das ist sowieso unser nächster Halt. Das Schiff legt jetzt ab.",
-            "¿La refinería de los purlones? Es nuestra próxima parada de todos modos. El barco sale ahora.",
-            "La raffineria dei Knartas? È comunque la nostra prossima tappa. La nave parte adesso.",
-            "A refinaria dos knartas? É a nossa próxima paragem de qualquer forma. O barco parte agora.",
+            "The Francos' refinery? That's our next stop anyway. Your taxi's waiting at the dock -- I've paid the driver.",
+            "La raffinerie des knartas ? C'est notre prochaine étape, de toute façon. Ton taxi t'attend au quai -- j'ai payé le chauffeur.",
+            "Die Raffinerie der Bifiden? Das ist sowieso unser nächster Halt. Dein Taxi wartet am Kai -- ich habe den Fahrer bezahlt.",
+            "¿La refinería de los purlones? Es nuestra próxima parada de todos modos. Tu taxi te espera en el muelle: ya le he pagado al conductor.",
+            "La raffineria dei Knartas? È comunque la nostra prossima tappa. Il tuo taxi ti aspetta al molo: ho già pagato l'autista.",
+            "A refinaria dos knartas? É a nossa próxima paragem de qualquer forma. O teu táxi espera-te no cais -- já paguei ao condutor.",
         },
         new[]
         {
@@ -158,6 +160,27 @@ internal static partial class RaceTrackStory
             "Twinsen, mettila giù. Mi sta guardando.",
             "Twinsen, pousa isso. Está a olhar para mim.",
         },
+        // (the harbour taxi's driver, who flew Twinsen in from Otringal, at the dock: Lyra's booked him for the Francos -- the user,
+        // 2026-11-19, "we'll redesign one of the Taxi's that already take Twinsen from Otringal to Celebration Island and then on to the
+        // island of the francos")
+        new[]
+        {
+            "Lyra's booked me for your next hop, champ -- the Francos, once your race here is run. I'll wait.",
+            "Lyra m'a réservé pour ton prochain saut, champion -- chez les knartas, une fois ta course d'ici courue. J'attends.",
+            "Lyra hat mich für deinen nächsten Sprung gebucht, Champion -- zu den Bifiden, sobald dein Rennen hier gefahren ist. Ich warte.",
+            "Lyra me ha reservado para tu próximo salto, campeón: a los purlones, en cuanto hayas corrido tu carrera aquí. Te espero.",
+            "Lyra mi ha prenotato per il tuo prossimo salto, campione: dai Knartas, appena avrai corso la tua gara qui. Ti aspetto.",
+            "A Lyra reservou-me para o teu próximo salto, campeão -- os knartas, assim que a tua corrida aqui estiver corrida. Eu espero.",
+        },
+        new[]
+        {
+            "The Francos it is, champ. Lyra's paid -- hop in.",
+            "Direction les knartas, champion. Lyra a payé -- monte.",
+            "Auf zu den Bifiden, Champion. Lyra hat bezahlt -- steig ein.",
+            "A los purlones, campeón. Lyra ya ha pagado: sube.",
+            "Si va dai Knartas, campione. Lyra ha pagato: sali.",
+            "Os knartas, então, campeão. A Lyra já pagou -- entra.",
+        },
     };
     // the tourist kangaroo of scene 95 (BODY.HQR 308: entity 214), whose own line (185, retold by IslandRetell) waits for after the race
     private const int KangarooEntity = 214, KangarooText = 185;
@@ -189,9 +212,9 @@ internal static partial class RaceTrackStory
                 }}";
 
     // ... and after the race won, once the seller has told (ApplyCelebration's after-race controller): Zoe, Twinsen, Lyra, the next chapter
-    // and the ship to the Francos -- back to scene 95's start, where a door into the Francos' start (scene 257: past what a change_cube
-    // can name) opens (LavaLakeBeats); or, with no scene 257 in the folder when this is built (the Island of the Francos built after the
-    // lava lake, or not at all), to the Francos' dock where the game's own taxi from Celebration lands (scene 109)
+    // -- back to scene 95's start, the taxi waiting at the dock (LavaLakeBeats: its driver flies Twinsen to the Francos' start, scene 257,
+    // past what a change_cube can name, by a door round him); or, with no scene 257 in the folder when this is built (the Island of the
+    // Francos built after the lava lake, or not at all), to the Francos' dock where the game's own taxi from Celebration lands (scene 109)
     internal static string LavaWon(int lava, SceneStore store) => $@"message_zoe({lava + (int)LavaLine.ZoeGlasses});
             message_obj(0, {lava + (int)LavaLine.TwinsenDream});
             message({lava + (int)LavaLine.LyraShip});
@@ -230,43 +253,13 @@ internal static partial class RaceTrackStory
             }}"));
             };
         });
-        // the ship to the Francos: a change_cube names a scene up to 255 only, so the won race brings Twinsen back to scene 95's start, where
-        // a change-cube zone round it into the Francos' start (scene 257, the Island of the Francos' build) is switched on in chapter 7. The
-        // zone itself is put in once every track is built (`travels`: RaceTrackStory.Travels.cs) -- the statue track, built after this one,
-        // clears scene 95's doors off its road, and took this one for a door under it (allstory14, 2026-11-05: Twinsen stuck on Celebration
-        // Island in chapter 7)
-        if (store.SceneExists(FrancosStart))
-        {
-            var to = store.Load(FrancosStart).Hero;
-            // (round the scene's start as it is once every track is built: the statue track, built after this one, puts its grid there)
-            // (from the ground there all the way up: the scene's start is in the air over the dock, Twinsen comes down onto it; he comes
-            // out as high over the Francos' start as he stood over the zone's floor)
-            (SceneZoneModel Zone, (int X, int Y, int Z) Offset) Door(SceneModel model)
-            {
-                int x = model.Hero.X, z = model.Hero.Z;
-                var floor = report?.GroundAfter is { } g ? (int)Math.Round(g(model.CubeX * 64 + x / 512.0, model.CubeY * 64 + z / 512.0)) - 300 : 0;
-                return DoorRound(x, z, 1536, floor, 25000, FrancosStart, ShipSwitch, 0);
-            }
-            GroupB.EditScene(store, CelebrationScene, log, $"the ship to the Francos: a door round the scene's start into scene {FrancosStart}, open in chapter 7 once the seller has told", model =>
-            {
-                if (travels is not null) travels.Add(new(CelebrationScene, FrancosStart, ShipSwitch, "the lava lake's ship to the Francos (chapter 7)", Door));
-                else
-                {
-                    var (door, offset) = Door(model);
-                    door.Info[0] = to.X + offset.X; door.Info[1] = to.Y + offset.Y; door.Info[2] = to.Z + offset.Z;
-                    model.Zones.Add(door);
-                }
-                return GroupB.Add(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, 9), $@"void comportement_0()
-{{
-    if ({LavaChapter + 1} == chapter() && 2 == var_game({SellerBeaten}))
-    {{
-        set_change_cube({ShipSwitch}, 1);
-    }}
-}}
-");
-            });
-        }
-        else log.Add($"the ship to the Francos: no scene {FrancosStart} yet (the Island of the Francos isn't built before the lava lake): the won race takes Twinsen to the Francos' dock, scene {FrancosDock}");
+        // the taxi to the Francos (the user, 2026-11-19: "we'll redesign one of the Taxi's that already take Twinsen from Otringal to
+        // Celebration Island and then on to the island of the francos"): the harbour taxi's driver, who flew Twinsen in, waits at the dock
+        // with his taxi in chapters 6 and 7; once the race is won (chapter 7) he flies him on -- the taxi's flight, then a door round him
+        // into the Francos' start switched on (scene 257: a change_cube names a scene up to 255 only). (Till 2026-11-19 a ship: a door
+        // round the scene's start, switched on as chapter 7 began.)
+        if (store.SceneExists(FrancosStart)) TaxiStand(gameDirectory, store, report, lava, travels, log);
+        else log.Add($"the taxi to the Francos: no scene {FrancosStart} yet (the Island of the Francos isn't built before the lava lake): the won race takes Twinsen to the Francos' dock, scene {FrancosDock}");
         // the statuettes: on the ground by the lap at a fifth, two fifths... of the way round (invisible: Twinsen on foot within reach
         // picks it up), each only once the one before is found -- in the order he walks to them from the dock. Scene 95 is played with
         // no track in chapter 6 (the lava lake races in scene 223 only), so its raised road isn't a floor there: each is on the ground
@@ -333,6 +326,91 @@ void comportement_1()
             return scripts => { foreach (var e in edits) e(scripts); };
         });
         return log;
+    }
+
+    // The taxi stand at Celebration Island's dock (LavaLakeBeats): Otringal's harbour taxi (scene 87: its driver, actor 3, and the taxi,
+    // actor 2, copied) by the lava lake's start line, where Twinsen lands -- the driver TaxiSide cells to the side of the lap, on ground
+    // Twinsen walks to, the taxi parked as far again beyond him. In chapter 6 he waits (Lyra's booked him); in chapter 7 (the race won)
+    // his ride: the taxi's flight (play_acf "taxi", the harbour's own), then the door round him switched on (set_change_cube(ShipSwitch,
+    // 1)) -- TaxiReach either way of him, more than Action's 1500, so Twinsen talking to him is in it and goes through at once, out at the
+    // Francos' start as far from it as he stood from the driver. The stand and its door are put in once every track is built (`travels`:
+    // RaceTrackStory.Travels.cs) -- the statue track, built after this one, clears scene 95's doors off its road (allstory14, 2026-11-05)
+    // and takes out anyone standing on it (the taxi, 2026-11-19, and the driver made the stand-in for those it took out). They stand on
+    // that road (the dock is its start too) only in chapters 6 and 7: the statue's race is chapter 8's.
+    private const int TaxiDriverOf87 = 3, TaxiOf87 = 2, TaxiReach = 1536;
+    private const double TaxiSide = 3;
+    private static void TaxiStand(string gameDirectory, SceneStore store, RaceTrackReport? report, int lava, List<PendingTravel>? travels, List<string> log)
+    {
+        var driver = Copy(store, OtringalHarbour, TaxiDriverOf87);
+        var taxi = Copy(store, OtringalHarbour, TaxiOf87);
+        if (driver is null || taxi is null) { log.Add($"the taxi to the Francos left out: no harbour taxi in scene {OtringalHarbour}"); return; }
+        if (report is null || report.StartLine.Count == 0 || report.LapX.Length < 10) { log.Add("the taxi to the Francos left out: no lap by the dock"); return; }
+        IslandFile ile;
+        try { ile = IslandFile.Load(Path.Combine(gameDirectory, RaceTrackIsland.CelebrationLava.IleFile)); }
+        catch (Exception e) when (e is IOException or InvalidDataException) { log.Add($"the taxi to the Francos left out: {e.Message}"); return; }
+        var to = store.Load(FrancosStart).Hero;
+        // (the door round the driver, once he's placed)
+        int x = 0, z = 0, floor = 0;
+        (SceneZoneModel Zone, (int X, int Y, int Z) Offset) Door(SceneModel _) => DoorRound(x, z, TaxiReach, floor, 25000, FrancosStart, ShipSwitch, 0);
+        Action<SceneScripts> Stand(SceneModel model)
+        {
+            var dock = (X: report.StartLine[0].X, Z: report.StartLine[0].Z);
+            // (the lap's way from the dock: from its point nearest the start line to the one after)
+            var i = Enumerable.Range(0, report.LapX.Length).OrderBy(k => (report.LapX[k] - dock.X) * (report.LapX[k] - dock.X) + (report.LapZ[k] - dock.Z) * (report.LapZ[k] - dock.Z)).First();
+            var j = (i + 1) % report.LapX.Length;
+            double ax = report.LapX[j] - report.LapX[i], az = report.LapZ[j] - report.LapZ[i], len = Math.Max(1e-6, Math.Sqrt(ax * ax + az * az));
+            (ax, az) = (ax / len, az / len);
+            var walk = new StatuetteGround(ile, model, dock.X, dock.Z);
+            // (to whichever side of the lap there's ground nearer the wanted place)
+            (double X, double Z, double Y)? best = null; var bestD = double.MaxValue; var side = 1;
+            foreach (var sgn in new[] { 1, -1 })
+            {
+                double wx = dock.X - az * TaxiSide * sgn, wz = dock.Z + ax * TaxiSide * sgn;
+                if (walk.Nearest(wx, wz, new()) is not { } c) continue;
+                var d = (c.X - wx) * (c.X - wx) + (c.Z - wz) * (c.Z - wz);
+                if (d < bestD) (bestD, best, side) = (d, c, sgn);
+            }
+            if (best is not { } at) throw new NotTheGames("no ground by the dock for the taxi's driver");
+            double tx = at.X - az * TaxiSide * side, tz = at.Z + ax * TaxiSide * side;
+            var ty = IslandOps.Altitude(ile, tx * 512, tz * 512) ?? at.Y;
+            Place(driver, model, Facing(at, dock.X, dock.Z));
+            Place(taxi, model, (tx, tz, ty, RaceTrackMath.Turn(Math.Atan2(ax, az))));
+            (x, z, floor) = (RaceTrackScenes.CubeLocal(at.X, model.CubeX), RaceTrackScenes.CubeLocal(at.Z, model.CubeY), (int)Math.Round(at.Y) - 300);
+            log.Add($"the taxi's driver at cell ({at.X:0.#}, {at.Z:0.#}) ({x}, {(int)Math.Round(at.Y)}, {z}), the taxi at cell ({tx:0.#}, {tz:0.#}); the dock (the lava lake's start line) at ({dock.X:0.#}, {dock.Z:0.#})");
+            if (travels is null)
+            {
+                var (door, offset) = Door(model);
+                door.Info[0] = to.X + offset.X; door.Info[1] = to.Y + offset.Y; door.Info[2] = to.Z + offset.Z;
+                model.Zones.Add(door);
+            }
+            var when = $"{LavaChapter} <= chapter() && {LavaChapter + 1} >= chapter()";
+            var driverEdit = GroupB.Add(model, driver, Talker(when, $@"            if ({LavaChapter + 1} == chapter())
+            {{
+                message({lava + (int)LavaLine.TaxiFrancos});
+                play_acf(""taxi"");
+                set_change_cube({ShipSwitch}, 1);
+            }}
+            else
+            {{
+                message({lava + (int)LavaLine.TaxiWaits});
+            }}"));
+            var taxiEdit = GroupB.Add(model, taxi, $@"void comportement_0()
+{{
+    if ({when})
+    {{
+        end_life();
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+");
+            return scripts => { driverEdit(scripts); taxiEdit(scripts); };
+        }
+        const string what = "the harbour taxi to the Francos (chapter 7)";
+        if (travels is not null) travels.Add(new(CelebrationScene, FrancosStart, ShipSwitch, what, Door, Stand));
+        else GroupB.EditScene(store, CelebrationScene, log, $"{what}: the driver waits at the dock (chapter 6), then flies Twinsen on (a door into scene {FrancosStart})", Stand);
     }
 
     // The ground of a scene's cube Twinsen can walk to from a place, cell by cell (island cells): a cell is ground to walk on if it is
