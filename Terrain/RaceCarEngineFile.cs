@@ -744,9 +744,13 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 })
             {
                 var (sx, sz) = StellaEntities.At(0, 0);
-                // (to the brass rail's outer edge and top, a little outside the stage and over it: the rail was drawn behind Twinsen at the
-                // stage's back, the user, 2026-11-17)
-                text.Append($"occluder={StellaEntities.Scene} {sx} {sz} {(int)Citadel.CitadelProps.RailRadius + 40} {StellaEntities.FloorY} {StellaEntities.FloorY + (int)Math.Max(Citadel.CitadelProps.StageHigh, Citadel.CitadelProps.StageRailHigh) + 40}\n");
+                // (the stage itself solid, to its own edge and top; its brass rail -- see-through between its bar and posts -- drawn back over
+                // an actor beyond it only: one between the stage and the rail has it behind him. To the rail's top as solid, 2026-11-17 --
+                // "the rail was drawn behind Twinsen at the stage's back" -- hid his chest between the stage's top and the bar, and one
+                // closer than the rail was let off altogether, his legs over the stage: the user, 2026-11-18)
+                const int RailFrom = 270 + (int)Citadel.CitadelProps.RailGap, RailTo = 270 + 360 - (int)Citadel.CitadelProps.RailGap;
+                text.Append($"occluder={StellaEntities.Scene} {sx} {sz} {(int)Citadel.CitadelProps.StageRadius + 20} {StellaEntities.FloorY} {StellaEntities.FloorY + (int)Citadel.CitadelProps.StageHigh + 8} " +
+                            $"{(int)Citadel.CitadelProps.RailRadius} {StellaEntities.FloorY + (int)Citadel.CitadelProps.StageRailHigh} {Citadel.CitadelProps.RailTube} {RailFrom} {RailTo} {Citadel.CitadelProps.RailPosts}\n");
             }
             // (and Twinsen carried off the stage by the catwalk's bouncer: RaceTrackStory.StellaEntities, CatwalkBouncer)
             if (t.Story is { TiredText: >= 0 }) text.Append($"carry_hero={StellaEntities.Scene} {RaceTrackStory.CarryCube} {RaceTrackStory.CarryUp} {RaceTrackStory.CarryAhead}\n");

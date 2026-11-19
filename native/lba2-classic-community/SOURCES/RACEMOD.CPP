@@ -1733,28 +1733,82 @@ static void CarryFrame(void) {
         Log_Info("[racemod] carry_hero: Twinsen let go at (%d,%d,%d)", (int)h->Obj.X, (int)h->Obj.Y, (int)h->Obj.Z);
     }
 }
-// occluder=<scene> <x> <z> <radius> <bottom> <top>: in that interior scene, a round prop drawn into the background (OBJ_BACKGROUND) --
+// occluder=<scene> <x> <z> <radius> <bottom> <top> [<rail radius> <rail height> <tube> <from> <to> <posts>]: in that interior scene, a round prop drawn into the background (OBJ_BACKGROUND) --
 // Stella Entities' stage -- hides an actor on the floor behind it as a brick would: its outline on the screen (its bottom and top rims
-// projected, a convex shape) and, for an actor under its top, outside its round and further from the camera than its middle, the
+// projected, a convex shape) and, for an actor on the floor (not up on it) further from the camera than its middle, the
 // background's pixels copied back over the actor where the two overlap (RaceMod_Occlude, after the bricks' own recover). Its cells
 // are invisible ones -- their squares reach past the round's edge -- so no brick shape hid anyone behind it: Twinsen on the floor
 // beyond the stage looked to stand on it (the user, 2026-11-16, "Twinsen is both behind the catwalk but looks like he's on the stage").
 static int s_occScene = -1, s_occX = 0, s_occZ = 0, s_occR = 0, s_occY0 = 0, s_occY1 = 0;
+// (its rail: radius, the bar's height, its tube, the arc it runs (degrees), its posts -- 0 posts: none)
+static int s_occRailR = 0, s_occRailY = 0, s_occRailTube = 0, s_occRailFrom = 0, s_occRailTo = 0, s_occRailPosts = 0;
 // ball_through=<scene> <actor>: in that scene, Twinsen's magic ball (anything he throws) flies through that actor as if it weren't there
 // (EXTRA.CPP ExtraCheckObjCol): the museum security room's door with panes of its glass out (the user, 2026-11-17, "The user needs to throw
 // their magic ball through the missing glass in the door, to hit the broom") -- the door still a door to him on foot
 static int s_ballScene = -1, s_ballActor = -1;
 S32 RaceMod_BallThrough(S32 numobj) { return s_ballScene >= 0 && (int)NumCube == s_ballScene && numobj == s_ballActor; }
 #define RACE_OCC_STEPS 32
+// (occluder='s rail: a point of it on the screen -- its angle (degrees, x = cos, z = sin, as the club's props), its height, out from its
+// radius -- and a column of the actor's picture given the background's pixels back)
+static int OccRailAt(double deg, int y, int out, int *sx, int *sy) {
+    const double rad = 3.14159265358979 / 180;
+    LongWorldRotatePoint(s_occX + (S32)((s_occRailR + out) * cos(deg * rad)), y, s_occZ + (S32)((s_occRailR + out) * sin(deg * rad)));
+    if (!LongProjectPoint(X0, Y0, Z0)) return 0;
+    *sx = Xp; *sy = Yp;
+    return 1;
+}
+static void OccCopyColumn(int x, int ya, int yb) {
+    if (x < ClipXMin || x > ClipXMax) return;
+    if (ya > yb) { const int t = ya; ya = yb; yb = t; }
+    if (ya < ClipYMin) ya = ClipYMin;
+    if (yb > ClipYMax) yb = ClipYMax;
+    for (int row = ya; row <= yb; row++) ((U8 *)Log)[TabOffLine[row] + x] = ((U8 *)Screen)[TabOffLine[row] + x];
+}
 void RaceMod_Occlude(S32 numobj) {
     if (s_occScene < 0 || (int)NumCube != s_occScene || CubeMode != CUBE_INTERIEUR || numobj < 0 || numobj >= (S32)NbObjets) return;
     const T_OBJET *o = &ListObjet[numobj];
     if (o->Flags & OBJ_BACKGROUND) return;
-    if (o->Obj.Y >= s_occY1 - 100) return;
-    const double dx = o->Obj.X - s_occX, dz = o->Obj.Z - s_occZ;
-    if (dx * dx + dz * dz < (double)s_occR * s_occR) return;
+    // (up on it -- the stage's dancers, anyone raised off the floor -- it never hides: told by height, not by distance. The stage's
+    // collision cells are squares, and Twinsen on the floor at its back could stand inside the round the outline is drawn to -- that
+    // test let him off, his legs drawn over the stage's top, the rail behind him: the user, 2026-11-18, "Twinsen appears on the stage in
+    // this picture but he's actually behind it")
+    if (o->Obj.Y >= s_occY0 + 384) return;
     if (o->Obj.X + o->Obj.Z >= s_occX + s_occZ) return;
     if (ClipXMin > ClipXMax || ClipYMin > ClipYMax) return;
+    // the rail round it (its bar and posts, see-through between: occluder='s last six), copied back over an actor outside it only --
+    // one between the stage's edge and the rail has it behind him (2026-11-19: up to the rail's top as solid, the stage hid his chest
+    // between its top and the bar; the rail had been drawn behind Twinsen standing beyond it, 2026-11-17)
+    const double odx = o->Obj.X - s_occX, odz = o->Obj.Z - s_occZ;
+    if (s_occRailPosts > 0 && odx * odx + odz * odz > (double)(s_occRailR + s_occRailTube) * (s_occRailR + s_occRailTube)) {
+        // the bar: a band from its tube's top to its bottom, every 2 degrees
+        int lx = 0, lt = 0, lb = 0, have = 0;
+        for (double deg = s_occRailFrom; deg <= s_occRailTo + 0.001; deg += 2) {
+            int x, yt, yb, xx;
+            if (!OccRailAt(deg, s_occRailY + s_occRailTube, 0, &x, &yt) || !OccRailAt(deg, s_occRailY - s_occRailTube / 2, 0, &xx, &yb)) { have = 0; continue; }
+            if (have && x != lx) {
+                const int xa = lx < x ? lx : x, xb = lx < x ? x : lx;
+                for (int c = xa; c <= xb; c++) {
+                    const double f = (double)(c - lx) / (x - lx);
+                    OccCopyColumn(c, (int)floor(lt + (yt - lt) * f) - 1, (int)ceil(lb + (yb - lb) * f) + 1);
+                }
+            } else if (have) OccCopyColumn(x, (lt < yt ? lt : yt) - 1, (lb > yb ? lb : yb) + 1);
+            lx = x; lt = yt; lb = yb; have = 1;
+        }
+        // the posts: from the floor to the bar, as wide as they show
+        for (int k = 0; k < s_occRailPosts; k++) {
+            const double deg = s_occRailFrom + (s_occRailTo - s_occRailFrom) * k / (s_occRailPosts > 1 ? s_occRailPosts - 1 : 1);
+            int xb, yb, xt, yt;
+            if (!OccRailAt(deg, s_occY0, 0, &xb, &yb) || !OccRailAt(deg, s_occRailY, 0, &xt, &yt)) continue;
+            // (its half width, 18, at the screen's scale: the post's own height against its height on the screen)
+            int half = (int)floor(18.0 * abs(yb - yt) / (s_occRailY - s_occY0 > 0 ? s_occRailY - s_occY0 : 1) + 0.5);
+            if (half < 1) half = 1;
+            for (int row = (yt < yb ? yt : yb); row <= (yt < yb ? yb : yt); row++) {
+                const double f = yb == yt ? 0 : (double)(row - yt) / (yb - yt);
+                const int cx = (int)floor(xt + (xb - xt) * f + 0.5);
+                for (int c = cx - half; c <= cx + half; c++) OccCopyColumn(c, row, row);
+            }
+        }
+    }
     // the outline: both rims projected, and their convex hull (monotone chain)
     int px[2 * RACE_OCC_STEPS], py[2 * RACE_OCC_STEPS], n = 0;
     for (int r = 0; r < 2; r++)
@@ -5503,7 +5557,7 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
-        else if (!strcmp(key, "occluder")) { if (!setRead && sscanf(v, "%d %d %d %d %d %d", &s_occScene, &s_occX, &s_occZ, &s_occR, &s_occY0, &s_occY1) != 6) s_occScene = -1; }
+        else if (!strcmp(key, "occluder")) { if (!setRead) { s_occRailPosts = 0; const int n = sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &s_occScene, &s_occX, &s_occZ, &s_occR, &s_occY0, &s_occY1, &s_occRailR, &s_occRailY, &s_occRailTube, &s_occRailFrom, &s_occRailTo, &s_occRailPosts); if (n < 6) s_occScene = -1; if (n < 12) s_occRailPosts = 0; } }
         else if (!strcmp(key, "carry_hero")) { if (!setRead && sscanf(v, "%d %d %d %d", &s_carryScene, &s_carryVar, &s_carryUp, &s_carryAhead) != 4) s_carryVar = -1; }
         else if (!strcmp(key, "ball_through")) { if (!setRead && sscanf(v, "%d %d", &s_ballScene, &s_ballActor) != 2) s_ballScene = -1; }
         else if (!strcmp(key, "in_car")) {

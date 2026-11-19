@@ -171,12 +171,14 @@ internal static partial class CitadelProps
     // the edge of the stage for people to lean against")
     public const int ClubRail = 89;
     public const float RailRadius = StageRadius + 90, StageRailHigh = 900, RailGap = 11;
+    // (its tube, its steps round, a post every RailPostEvery steps: RACEMOD.CPP occluder= draws them back over an actor beyond it)
+    public const int RailTube = 32, RailSteps = 44, RailPostEvery = 4, RailPosts = RailSteps / RailPostEvery + 1;
     public static Body BuildClubRail(byte[] header)
     {
         var m = new CarMesh("Stella Entities' stage rail", new[] { -1 });
         m.Light = 0.9f;
-        const int Steps = 44;
-        const float Tube = 32;
+        const int Steps = RailSteps;
+        const float Tube = RailTube;
         float from = 270 + RailGap, to = 270 + 360 - RailGap;
         var rings = new int[Steps + 1][];
         var middles = new Vector3[Steps + 1];
@@ -195,7 +197,7 @@ internal static partial class CitadelProps
                 m.Out(new[] { rings[k][s], rings[k][(s + 1) % 3], rings[k + 1][(s + 1) % 3], rings[k + 1][s] }, ClubBrass, inside);
         }
         // its posts, down to the floor, and a knob at either end
-        for (var k = 0; k <= Steps; k += 4) m.Box(0, middles[k] - new Vector3(0, StageRailHigh / 2, 0), new Vector3(36, StageRailHigh, 36), ClubBrass);
+        for (var k = 0; k <= Steps; k += RailPostEvery) m.Box(0, middles[k] - new Vector3(0, StageRailHigh / 2, 0), new Vector3(36, StageRailHigh, 36), ClubBrass);
         m.Ball(0, middles[0], 48, ClubBrass); m.Ball(0, middles[Steps], 48, ClubBrass);
         return m.ToBody(header);
     }
