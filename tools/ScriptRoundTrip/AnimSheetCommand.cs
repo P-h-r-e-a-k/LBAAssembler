@@ -34,11 +34,17 @@ internal static class AnimSheetCommand
     public static void Render(LbaBodyStudio.Body body, List<byte[]> datas, string output)
     {
         var anims = datas;
-        const int W = 140, H = 180, Most = 12;
+        // (ANIMSHEET_ZOOM=<n>: cells n times as big; ANIMSHEET_YAW / ANIMSHEET_PITCH=<degrees>: the camera round him and above him -- 35, 0
+        // by default; ANIMSHEET_GROUND=1: the ground's line, y 0, in each cell)
+        static float Env(string name, float or) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : or;
+        var zoom = Math.Max(1, (int)Env("ANIMSHEET_ZOOM", 1));
+        int W = 140 * zoom, H = 180 * zoom; const int Most = 12;
+        var pitch = Env("ANIMSHEET_PITCH", 0) * Math.PI / 180;
+        var ground = Env("ANIMSHEET_GROUND", 0) != 0;
         var sheet = new byte[W * Most * H * anims.Count * 4];
         int sw = W * Most, sh = H * anims.Count;
         for (var i = 0; i < sheet.Length; i += 4) { sheet[i] = 40; sheet[i + 1] = 40; sheet[i + 2] = 48; sheet[i + 3] = 255; }
-        var yaw = 35 * Math.PI / 180;
+        var yaw = Env("ANIMSHEET_YAW", 35) * Math.PI / 180;
         var light = Vector3.Normalize(new Vector3(-0.4f, -0.7f, -0.6f));
         for (var r = 0; r < anims.Count; r++)
         {
@@ -51,9 +57,14 @@ internal static class AnimSheetCommand
             for (var c = 0; c < pick.Count; c++)
             {
                 var pts = PalaceTorturers.Posed(body, frames[pick[c]].Bones).Points;
-                var proj = pts.Select(p => (X: (float)(p.X * Math.Cos(yaw) - p.Z * Math.Sin(yaw)), Y: p.Y, D: (float)(p.X * Math.Sin(yaw) + p.Z * Math.Cos(yaw)))).ToArray();
+                var proj = pts.Select(p =>
+                {
+                    var d = p.X * Math.Sin(yaw) + p.Z * Math.Cos(yaw);
+                    return (X: (float)(p.X * Math.Cos(yaw) - p.Z * Math.Sin(yaw)), Y: (float)(p.Y * Math.Cos(pitch) + d * Math.Sin(pitch)), D: (float)(d * Math.Cos(pitch) - p.Y * Math.Sin(pitch)));
+                }).ToArray();
                 var faces = body.Faces.Where(f => f.Points.Length >= 3).Select(f => (F: f, D: f.Points.Average(i => proj[i].D))).OrderByDescending(f => f.D).ToList();
-                int ox = c * W + W / 2, oy = r * H + H - 20;
+                int ox = c * W + W / 2, oy = r * H + H - 20 * zoom;
+                if (ground) for (var x = c * W + 4; x < (c + 1) * W - 4; x++) { var o = (oy * sw + x) * 4; sheet[o] = 90; sheet[o + 1] = 160; sheet[o + 2] = 90; }
                 foreach (var (f, _) in faces)
                 {
                     var a = pts[f.Points[0]]; var b = pts[f.Points[1]]; var cc = pts[f.Points[2]];

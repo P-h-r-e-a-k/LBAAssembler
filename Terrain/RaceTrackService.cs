@@ -668,6 +668,8 @@ internal static class RaceTrackService
             if (session.GridGirl) { log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig)); log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.InstallLying(gameDirectory)); }
             // (and the story's racing overalls in the tunic's place and racing helmet in the pearl's -- Twinsen's bodies, the inventory's
             // models and texts -- after every body is made: none moves, the cars' drivers are their own -- Citadel/CitadelOveralls)
+            // (the hoverboard in the protopack's place, before them: his bodies with it the overalls recolour too -- Citadel/CitadelHoverboard)
+            if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelHoverboard.Install(gameDirectory));
             if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelOveralls.Install(gameDirectory));
             // (and his pyjamas, from his everyday body as the overalls are -- Citadel/CitadelPyjamas, RaceTrackStory.Pyjamas)
             if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelPyjamas.Install(gameDirectory));

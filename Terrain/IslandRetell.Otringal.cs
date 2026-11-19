@@ -245,12 +245,13 @@ internal static partial class IslandRetell
         }),
         (195, new[]
         {
-            "Thank you, Twinsen. Now I can make us a lander that can race the comets! Anyway, here's something to turn your protopack into a superjetpack. From now on, you can fly higher! Handy for spotting the short cuts.",
-            "Ah merci Twinsen, je vais pouvoir nous faire un vaisseau capable de faire la course avec les comètes ! Tiens, voilà de quoi transformer ton protopack en superjetpack. Désormais tu peux voler plus haut ! Pratique pour repérer les raccourcis.",
-            "Danke, Twinsen. Jetzt kann ich uns eine Landefähre bauen, die mit den Kometen um die Wette fliegt! Guck mal, hiermit kann ich dein ProtoPack in ein SuperJetPack umbauen. Ab jetzt kannst du höher fliegen! Praktisch, um die Abkürzungen zu entdecken.",
-            "Gracias, Twinsen. ¡Ahora podré construirnos una nave capaz de echar carreras a los cometas! Por cierto, con esto tu protopack se puede convertir en un superjetpack. ¡A partir de ahora podrás volar más alto! Muy útil para descubrir los atajos.",
-            "Grazie Twinsen. Ora posso costruirci un vascello capace di gareggiare con le comete! Comunque, tieni, avrai di cosa trasformare il tuo Proto-Pack in superjetpack. D'ora in poi puoi volare più in alto! Comodo per scovare le scorciatoie.",
-            "Obrigado, Twinsen. Agora vou poder fazer uma nave capaz de apostar corrida com os cometas! Enfim, olhe, é assim que se transforma o seu protopack em superjetpack. De agora em diante você poderá voar mais alto! Útil para encontrar os atalhos.",
+            // (the hoverboard in the protopack's place -- Citadel/CitadelHoverboard, 2026-11-19)
+            "Thank you, Twinsen. Now I can make us a lander that can race the comets! Anyway, let me tune up your hoverboard. From now on, it flies higher! Handy for spotting the short cuts.",
+            "Ah merci Twinsen, je vais pouvoir nous faire un vaisseau capable de faire la course avec les comètes ! Tiens, laisse-moi régler ton hoverboard. Désormais il vole plus haut ! Pratique pour repérer les raccourcis.",
+            "Danke, Twinsen. Jetzt kann ich uns eine Landefähre bauen, die mit den Kometen um die Wette fliegt! Gib mal her, ich tune dein Hoverboard. Ab jetzt fliegt es höher! Praktisch, um die Abkürzungen zu entdecken.",
+            "Gracias, Twinsen. ¡Ahora podré construirnos una nave capaz de echar carreras a los cometas! Por cierto, déjame ajustar tu hoverboard. ¡A partir de ahora volará más alto! Muy útil para descubrir los atajos.",
+            "Grazie Twinsen. Ora posso costruirci un vascello capace di gareggiare con le comete! Comunque, dammi qua, ti metto a punto l'hoverboard. D'ora in poi vola più in alto! Comodo per scovare le scorciatoie.",
+            "Obrigado, Twinsen. Agora vou poder fazer uma nave capaz de apostar corrida com os cometas! Enfim, deixe-me afinar o seu hoverboard. De agora em diante ele voa mais alto! Útil para encontrar os atalhos.",
         }),
         (196, new[]
         {

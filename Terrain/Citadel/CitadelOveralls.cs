@@ -853,7 +853,7 @@ internal static class CitadelOveralls
     // the gloves' slot and its value with the helmet too
     public const int GlovesSlot = 7, GearBoth = 2;
 
-    private static Body InventorySized(Body body)
+    internal static Body InventorySized(Body body)
     {
         var v = body.Vertices;
         if (v.Count == 0) return body;

@@ -9,6 +9,7 @@ internal static class Program
     // propsinstall <scratch game folder>: the build's props (Citadel/CitadelProps.Install) into it alone, their BODY.HQR numbers printed
     static int PropsInstallTry(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelProps.Install(args[1])) Console.WriteLine(l); return 0; }
     static int HouseRoomsTry(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelHouseRooms.Install(args[1])) Console.WriteLine(l); return 0; }
+    static int HoverboardRun(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelHoverboard.Install(args[1])) Console.WriteLine(l); return 0; }
 
     private const string DefaultSceneHqr = @"E:\GOG Games\Little Big Adventure 2 - Level viewer\SCENE.HQR";
 
@@ -111,6 +112,9 @@ internal static class Program
             "voices" => VoicesCommand(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),
+            "bodyparts" => BodyPartsCommand.Run(args),
+            // hoverboard <game folder>: the story's hoverboard into a folder (Citadel/CitadelHoverboard) -- its bodies, animations, models, texts
+            "hoverboard" => HoverboardRun(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
             "gridtop" => RaceTrackCommand.GridTop(args),
             "gridblocks" => RaceTrackCommand.GridBlocks(args),
