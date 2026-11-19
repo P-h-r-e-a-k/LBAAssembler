@@ -234,6 +234,13 @@ void LoadIsland() {
         }
     }
 
+    // (the GPU renderer's atlas keeps each page by its address: the island's pages just read into the same buffers as the last
+    // island's, so it is told they changed -- each slot compared again and the changed ones uploaded. Without it OpenGL drew the
+    // island it first uploaded on every island after: Citadel's pier and the Desert's quay in another island's textures, 2026-11-19)
+    {
+        extern S32 AtlasTextureDirty;
+        AtlasTextureDirty = 1;
+    }
 }
 
 /*──────────────────────────────────────────────────────────────────────────*/
