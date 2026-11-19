@@ -126,6 +126,8 @@ internal static class NewLinesCommand
         ("OldWannie", "Old wannie", false), ("Miner", "Wannie miner", false), ("Vent", "Mosquibee ventilation guy", false), ("Pat", "Pat", false),
         ("Fab", "Fab", false), ("Kangaroo", "Kangaroo #1", false), ("Priest", "Priest", false), ("Customer", "Customer", false),
         ("Racer", "Desert champion", true), ("Sister", "Brune sisters", true), ("Hide", "Mosquibee dissident", false),
+        // (Otringal's race marshal at the start line, the race mode's flag marshal -- an unseen talker stands for her: RaceTrackStory.OtringalDays)
+        ("Marshal", "Race marshal", true),
     };
     // ... and lines whose name says nothing of who, said by an unseen talker that stands for a character (LateStory's Talker for Lyra, the
     // flag marshal the race mode draws)
@@ -138,12 +140,13 @@ internal static class NewLinesCommand
     // a character the retail game never voiced, sampled from the retail character whose body they wear in the game
     private static readonly Dictionary<string, string> VoiceOf = new()
     {
-        ["Lyra"] = "Female sup in the flying saucer", ["Priest"] = "Sup priest", ["Brune sisters"] = "Mrs Brune", ["Moon bowler"] = "Quetch bowl player", ["Mechanic"] = "Mechanic owl",
+        ["Lyra"] = "Female sup in the flying saucer", ["Race marshal"] = "Female sup in the flying saucer", ["Priest"] = "Sup priest", ["Brune sisters"] = "Mrs Brune", ["Moon bowler"] = "Quetch bowl player", ["Mechanic"] = "Mechanic owl",
     };
     // ... and why that one
     private static readonly Dictionary<string, string> VoiceWhy = new()
     {
         ["Lyra"] = "a Sup woman, as Lyra is (the Imperial Hotel's Sup girl, whose body the flag marshal is made from, has one short line in the retail game)",
+        ["Race marshal"] = "the race mode's flag marshal is the grid girl, in Lyra's body: Lyra's Sup woman's sample",
         ["Priest"] = "the Dark Monk's priests are Sups",
         ["Brune sisters"] = "their sister's voice, Mrs. Brune of the Citadel ferry",
         ["Moon bowler"] = "one of the Desert's bowlers, as the moon's bowler is one (in a space suit)",
@@ -159,6 +162,7 @@ internal static class NewLinesCommand
         (new(@"^(A fifth Dark Monk|Twinsen picked|Twinsen can't read|Here raced the chariot|\.\.\.except Twinsen\.|The machine rattles|WANTED\. )"), null, "a thing described"),
         (new("^\"[^\"]*\"$"), null, "a sign or a notice"),
         (new(@"^The radio is ringing\.|^The hatch closes\. The freighter shudders|^Twinsen sings |^The Emperor's bedroom\. Locked"), null, "narration"),
+        (new(@"^The Esmers wave the car through the Temple|^The cars are wheeled into the stewards' garage"), null, "narration"),
         (new("^\"[A-Z][A-Z' ]{3,}[:.!]|^OFFICIAL NOTICE|\\bSigned: "), null, "a sign or a notice"),
         (new(@"^Twinsen, the car's ready\. All it needs now is a driver with gloves"), "Zoe", null),
         // the race mode's own lines (race files: RACEMOD.CPP gate=, hints, chases, the walker's yell) and the voices off
