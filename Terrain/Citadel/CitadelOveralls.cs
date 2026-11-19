@@ -109,22 +109,22 @@ internal static class CitadelOveralls
         }),
         (HelmetSlot, new[]
         {
-            "Inside the giant clam: a racing helmet! Some racer must have lost it diving. Now you can race in the desert.",
-            "Dans le coquillage géant : un casque de course ! Un pilote a dû le perdre en plongeant. Maintenant, tu peux courir dans le désert.",
-            "In der Riesenmuschel: ein Rennhelm! Irgendein Rennfahrer muß ihn beim Tauchen verloren haben. Jetzt kannst du in der Wüste fahren.",
-            "Dentro del molusco gigante: ¡un casco de carreras! Algún piloto debió de perderlo buceando. Ahora puedes correr en el desierto.",
-            "Dentro la conchiglia gigante: un casco da corsa! Qualche pilota deve averlo perso facendo immersioni. Ora puoi correre nel deserto.",
-            "Dentro da concha gigante: um capacete de corrida! Algum piloto deve tê-lo perdido mergulhando. Agora você pode correr no deserto.",
+            "Kash's helmet, from his tomb! Left there for the next racer worthy of it. Now you can race in the desert.",
+            "Le casque de Kash, sur sa tombe ! Laissé là pour le prochain pilote qui en sera digne. Maintenant, tu peux courir dans le désert.",
+            "Kashs Helm, von seinem Grab! Dort zurückgelassen für den nächsten Fahrer, der seiner würdig ist. Jetzt kannst du in der Wüste fahren.",
+            "¡El casco de Kash, de su tumba! Dejado allí para el próximo piloto digno de él. Ahora puedes correr en el desierto.",
+            "Il casco di Kash, dalla sua tomba! Lasciato lì per il prossimo pilota che ne sarà degno. Ora puoi correre nel deserto.",
+            "O capacete do Kash, do seu túmulo! Deixado lá para o próximo piloto digno dele. Agora você pode correr no deserto.",
         }),
         (HelmetSlot + 100, new[] { "Racing gloves and helmet", "Gants et casque de course", "Rennhandschuhe und Rennhelm", "Guantes y casco de carreras", "Guanti e casco da corsa", "Luvas e capacete de corrida" }),
         (HelmetSlot + 200, new[]
         {
-            "Your driving gloves, and a racing helmet from the giant clam's sea cave. No helmet, no race: Flick lets nobody onto the Desert track without one.",
-            "Tes gants de pilote, et un casque de course trouvé dans la grotte marine du coquillage géant. Pas de casque, pas de course : Flick ne laisse personne sur la piste du Désert sans casque.",
-            "Deine Fahrhandschuhe und ein Rennhelm aus der Meeresgrotte der Riesenmuschel. Ohne Helm kein Rennen: Flick läßt niemanden ohne Helm auf die Wüstenstrecke.",
-            "Tus guantes de conducir, y un casco de carreras de la gruta marina del molusco gigante. Sin casco no hay carrera: Flick no deja a nadie entrar en la pista del Desierto sin él.",
-            "I tuoi guanti da guida, e un casco da corsa dalla grotta marina della conchiglia gigante. Niente casco, niente corsa: Flick non lascia nessuno sulla pista del Deserto senza.",
-            "As tuas luvas de condução, e um capacete de corrida da gruta marinha da concha gigante. Sem capacete, sem corrida: o Flick não deixa ninguém entrar na pista do Deserto sem um.",
+            "Your driving gloves, and Kash's helmet from his tomb in the sea cave. No helmet, no race: Flick lets nobody onto the Desert track without one.",
+            "Tes gants de pilote, et le casque de Kash, pris sur sa tombe dans la grotte marine. Pas de casque, pas de course : Flick ne laisse personne sur la piste du Désert sans casque.",
+            "Deine Fahrhandschuhe und Kashs Helm von seinem Grab in der Meeresgrotte. Ohne Helm kein Rennen: Flick läßt niemanden ohne Helm auf die Wüstenstrecke.",
+            "Tus guantes de conducir, y el casco de Kash, de su tumba en la gruta marina. Sin casco no hay carrera: Flick no deja a nadie entrar en la pista del Desierto sin él.",
+            "I tuoi guanti da guida, e il casco di Kash, dalla sua tomba nella grotta marina. Niente casco, niente corsa: Flick non lascia nessuno sulla pista del Deserto senza.",
+            "As tuas luvas de condução, e o capacete do Kash, do seu túmulo na gruta marinha. Sem capacete, sem corrida: o Flick não deixa ninguém entrar na pista do Deserto sem um.",
         }),
     };
 

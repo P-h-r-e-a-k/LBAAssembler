@@ -41,6 +41,9 @@ internal static partial class RaceTrackStory
     // the game's own: the variable of its Dino-Fly's cure (1 sent to Ker'aooc, 2 his assistant has answered, 3 the School's hall seen)
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113, PearlClam = 5;
+    // Kash's tomb in the clam's place: its facing, how near Action reads it (it is long: from its side, its middle is that far), how far
+    // past its ends the candlesticks stand
+    private const int KashTombBeta = 0, KashTombReach = 1700, KashCandleOut = 350;
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
     // The exam pages as Twinsen carries them (the user, 2026-11-06: "Add the pages to the inventory as one item with a count, 1/2/3 for how
@@ -97,7 +100,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {HangarScene}\n" + GarageRaceLines()
+        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! Kash's tomb in the sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {HangarScene}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\nwin_pull=1 {HalPullVar} 1 {HalPullDelay}\n" + MoonHelmetHooks()
         : island == RaceTrackIsland.Otringal ? OtringalRaceKeys
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -320,6 +323,8 @@ void comportement_1()
         // (the racers in their cars in the garage tent, each a word of their own and where they're from -- the user, 2026-11-17: the Desert
         // track's racer, then the LBA1 entrants by their Generic order: RaceTrackStory.Garage, RacerLines)
         RacerTalk, BobTalk, GrapTalk, RabbibunnyTalk, HipsterTalk, PainterTalk,
+        // (Kash's tomb in the sea cave, his helmet on it -- the user, 2026-11-18: KashTomb)
+        KashReads, KashTakes, KashRests,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -604,12 +609,12 @@ void comportement_1()
         },
         new[]
         {
-            "And no helmet, no race! There's a giant clam in a sea cave in the cliffs that's been sitting on a racing helmet since some racer went diving. I've marked it on your holomap.",
-            "Et pas de casque, pas de course ! Il y a un coquillage géant dans une grotte marine au pied des falaises qui couve un casque de course depuis qu'un pilote est allé plonger. Je te l'ai marqué sur ton holomap.",
-            "Und ohne Helm kein Rennen! In einer Meeresgrotte in den Klippen sitzt eine Riesenmuschel auf einem Rennhelm, seit irgendein Rennfahrer dort tauchen war. Ich habe sie dir auf dem Holomap markiert.",
-            "¡Y sin casco no hay carrera! Hay un molusco gigante en una gruta marina de los acantilados que guarda un casco de carreras desde que un piloto fue a bucear. Te lo he marcado en el holomapa.",
-            "E niente casco, niente corsa! C'è una conchiglia gigante in una grotta marina tra le scogliere che cova un casco da corsa da quando un pilota ci è andato a fare immersioni. Te l'ho segnata sull'olomappa.",
-            "E sem capacete não há corrida! Há uma concha gigante numa gruta marinha nas falésias que guarda um capacete de corrida desde que um piloto foi lá mergulhar. Marquei-a no teu holomapa.",
+            "And no helmet, no race! Kash, the greatest racer Twinsun ever had, was laid to rest in a sea cave in the cliffs, his helmet on his tomb for the next racer worthy of it. I've marked it on your holomap.",
+            "Et pas de casque, pas de course ! Kash, le plus grand pilote que Twinsun ait jamais eu, repose dans une grotte marine au pied des falaises, son casque sur sa tombe pour le prochain pilote qui en sera digne. Je te l'ai marquée sur ton holomap.",
+            "Und ohne Helm kein Rennen! Kash, der größte Rennfahrer, den Twinsun je hatte, ruht in einer Meeresgrotte in den Klippen, sein Helm auf seinem Grab für den nächsten Fahrer, der seiner würdig ist. Ich habe sie dir auf dem Holomap markiert.",
+            "¡Y sin casco no hay carrera! Kash, el mejor piloto que ha tenido Twinsun, descansa en una gruta marina de los acantilados, con su casco sobre la tumba para el próximo piloto digno de él. Te la he marcado en el holomapa.",
+            "E niente casco, niente corsa! Kash, il più grande pilota che Twinsun abbia mai avuto, riposa in una grotta marina tra le scogliere, il suo casco sulla tomba per il prossimo pilota che ne sarà degno. Te l'ho segnata sull'olomappa.",
+            "E sem capacete não há corrida! O Kash, o maior piloto que Twinsun alguma vez teve, repousa numa gruta marinha nas falésias, com o capacete sobre o túmulo para o próximo piloto digno dele. Marquei-a no teu holomapa.",
         },
         new[]
         {
@@ -676,12 +681,12 @@ void comportement_1()
         },
         new[]
         {
-            "No helmet, no race. The giant clam's sea cave in the cliffs is the place to look.",
-            "Pas de casque, pas de course. La grotte marine du coquillage géant, dans les falaises, voilà où chercher.",
-            "Kein Helm, kein Rennen. Die Meeresgrotte der Riesenmuschel in den Klippen, da müssen wir suchen.",
-            "Sin casco no hay carrera. La gruta marina del molusco gigante, en los acantilados, es donde hay que buscar.",
-            "Niente casco, niente corsa. La grotta marina della conchiglia gigante, nelle scogliere, è il posto dove cercare.",
-            "Sem capacete, sem corrida. A gruta marinha da concha gigante, nas falésias, é onde procurar.",
+            "No helmet, no race. Kash's tomb, in the sea cave in the cliffs, is the place to look.",
+            "Pas de casque, pas de course. La tombe de Kash, dans la grotte marine des falaises, voilà où chercher.",
+            "Kein Helm, kein Rennen. Kashs Grab, in der Meeresgrotte in den Klippen, da müssen wir suchen.",
+            "Sin casco no hay carrera. La tumba de Kash, en la gruta marina de los acantilados, es donde hay que buscar.",
+            "Niente casco, niente corsa. La tomba di Kash, nella grotta marina tra le scogliere, è il posto dove cercare.",
+            "Sem capacete, sem corrida. O túmulo do Kash, na gruta marinha das falésias, é onde procurar.",
         },
         new[]
         {
@@ -868,6 +873,34 @@ void comportement_1()
             "¡De la isla Brundle! Iba a pintar mi coche de verde, pero se me acabó el verde. Así que lo pinté de todos los demás colores. Cuidado, que está fresco.",
             "Dall'isola Brundle! Volevo dipingere la macchina di verde, ma il verde era finito. Così l'ho dipinta di tutti gli altri colori. Attento, è ancora fresca.",
             "Da ilha Brundle! Ia pintar o carro de verde, mas acabou-se o verde. Então pintei-o de todas as outras cores. Cuidado, que ainda está fresco.",
+        },
+        // Kash's tomb: Twinsen reads it; takes the helmet; after
+        new[]
+        {
+            "\"Here lies Kash, champion of Twinsun. He raced as the sea runs: never once looking back.\"",
+            "« Ici repose Kash, champion de Twinsun. Il courait comme court la mer : sans jamais regarder en arrière. »",
+            "„Hier ruht Kash, Champion von Twinsun. Er fuhr, wie das Meer läuft: ohne je zurückzuschauen.“",
+            "«Aquí yace Kash, campeón de Twinsun. Corría como corre el mar: sin mirar nunca atrás.»",
+            "«Qui riposa Kash, campione di Twinsun. Correva come corre il mare: senza mai voltarsi indietro.»",
+            "«Aqui jaz Kash, campeão de Twinsun. Corria como corre o mar: sem nunca olhar para trás.»",
+        },
+        new[]
+        {
+            "His helmet, left here for the next racer worthy of it. I'll wear it well, Kash. I promise.",
+            "Son casque, laissé ici pour le prochain pilote qui en sera digne. Je le porterai dignement, Kash. Promis.",
+            "Sein Helm, hier zurückgelassen für den nächsten Fahrer, der seiner würdig ist. Ich werde ihn in Ehren tragen, Kash. Versprochen.",
+            "Su casco, dejado aquí para el próximo piloto digno de él. Lo llevaré con honor, Kash. Te lo prometo.",
+            "Il suo casco, lasciato qui per il prossimo pilota che ne sarà degno. Lo porterò con onore, Kash. Te lo prometto.",
+            "O capacete dele, deixado aqui para o próximo piloto digno dele. Vou usá-lo com honra, Kash. Prometo.",
+        },
+        new[]
+        {
+            "Rest well, Kash. I'll race the way you did.",
+            "Repose en paix, Kash. Je courrai comme tu courais.",
+            "Ruhe in Frieden, Kash. Ich fahre so, wie du gefahren bist.",
+            "Descansa en paz, Kash. Correré como tú corrías.",
+            "Riposa in pace, Kash. Correrò come correvi tu.",
+            "Descansa em paz, Kash. Vou correr como tu corrias.",
         },
     };
 
@@ -1197,17 +1230,82 @@ void comportement_2()
         // wants it): opened as the game opens it, Action by it and it's Twinsen's. Not shut for good by what the story has no use for --
         // the Ball of Sendell (variable 3) or the Ring of Lightning (19, the story's errands' slot now: the tin of bait would have shut
         // it) -- and no word to the game's quest after it (83).
-        b.Edit(PearlCave, "the Pearl of Incandescence's cave: Twinsen's look round is a text of the game's (337, not 327); the clam gives the racing helmet, whatever the errands", _ => scripts =>
+        // Kash's tomb in its place (the user, 2026-11-18: "The place Twinsen currently discovers the helmet we need to redesign, let's redesign
+        // it as a tomb of a famous Twinsun racer Kash. Let's make this place sombre and respectful to the dead. Let's have a tomb with Kash's
+        // helmet placed on top that Twinsen can find. We should give Twinsen some hints about the famous racer Kash and that his body was laid
+        // to rest in a cave that looks out upon the sea"): the clam gone; on its raised floor between the statues the tomb
+        // (Citadel/CitadelProps.KashTomb), his helmet on the lid, a candlestick either end. Action by it: Twinsen reads it out; the helmet
+        // still there, he takes it -- the racing gear's second kind, as the clam gave it -- and after, a word to Kash. The hints: Flick's,
+        // Zoe's, the gate's, the helmet's own texts, and a Desert islander's (IslandRetell.Desert, the game's 627 -- the clam's -- retold).
+        b.Edit(PearlCave, "Kash's tomb in the sea cave, in the giant clam's place: the inscription, his helmet on it (Action takes it: the racing gear), a candlestick either end; Twinsen's look round a text of the game's (337, not 327)", model =>
         {
-            var hero = Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);");
-            hero = Loose(hero, "if (21 == l_track_obj(5) && 0 == var_game(169) && 0 == var_game(19) && 0 == var_game(3) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\nset_var_game(83, 11);\n}",
-                "if (21 == l_track_obj(5) && 0 == var_game(169) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\n}");
-            scripts.SetText(0, ScriptKind.Life, hero);
-            // (and the helmet into the gloves' slot, its second kind -- Citadel/CitadelOveralls.GearModel: one slot for the racing gear)
-            var clam = Loose(scripts.GetText(PearlClam, ScriptKind.Life), "if (1 == var_game(3) || 1 == var_game(19) || 1 == var_game(169))", "if (1 == var_game(169))");
-            clam = Loose(clam, "set_var_game(5, 1);\nstate_inventory(5, 0);\nfound_object(5);",
-                $"set_var_game({Citadel.CitadelOveralls.GlovesSlot}, {Citadel.CitadelOveralls.GearBoth});\nfound_object({Citadel.CitadelOveralls.GlovesSlot});");
-            scripts.SetText(PearlClam, ScriptKind.Life, clam);
+            var clamAt = model.Actors.ElementAtOrDefault(PearlClam) ?? throw new NotTheGames($"no clam (actor {PearlClam})");
+            int x = clamAt.X, y = clamAt.Y, z = clamAt.Z;
+            var gear = $"{Citadel.CitadelOveralls.GearBoth} > var_game({Citadel.CitadelOveralls.GlovesSlot})";
+            var tomb = Citadel.CitadelProps.Actor(Citadel.CitadelProps.KashTomb, x, y, z, KashTombBeta);
+            var tombEdit = IslandBeatsA.Add(model, tomb, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if ({KashTombReach} > distance(0) && {Driving} != comportement_hero())
+        {{
+            message_obj(0, {Say(DesertLine.KashReads)});
+            if ({gear})
+            {{
+                message_obj(0, {Say(DesertLine.KashTakes)});
+                set_var_game({Citadel.CitadelOveralls.GlovesSlot}, {Citadel.CitadelOveralls.GearBoth});
+                found_object({Citadel.CitadelOveralls.GlovesSlot});
+            }}
+            else
+            {{
+                message_obj(0, {Say(DesertLine.KashRests)});
+            }}
+        }}
+    }}
+}}
+");
+            var helmet = Citadel.CitadelProps.Actor(Citadel.CitadelProps.KashHelmet, x, y, z, KashTombBeta);
+            var helmetEdit = IslandBeatsA.Add(model, helmet, $@"void comportement_0()
+{{
+    if ({gear})
+    {{
+        set_comportement(comportement_1);
+    }}
+    else
+    {{
+        suicide();
+    }}
+}}
+
+void comportement_1()
+{{
+    if ({Citadel.CitadelOveralls.GearBoth} <= var_game({Citadel.CitadelOveralls.GlovesSlot}))
+    {{
+        suicide();
+    }}
+}}
+");
+            var a = KashTombBeta * 2 * Math.PI / 4096;
+            var candleEdits = new[] { 1, -1 }.Select(side =>
+            {
+                var d = side * (Citadel.CitadelProps.TombLong / 2 + KashCandleOut);
+                var candle = Citadel.CitadelProps.Actor(Citadel.CitadelProps.TombCandle, x + (int)Math.Round(Math.Cos(a) * d), y, z - (int)Math.Round(Math.Sin(a) * d));
+                return IslandBeatsA.Add(model, candle, "void comportement_0()\n{\n}\n");
+            }).ToList();
+            return scripts =>
+            {
+                var hero = Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);");
+                hero = Loose(hero, "if (21 == l_track_obj(5) && 0 == var_game(169) && 0 == var_game(19) && 0 == var_game(3) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\nset_var_game(83, 11);\n}", "");
+                scripts.SetText(0, ScriptKind.Life, hero);
+                scripts.SetText(PearlClam, ScriptKind.Life, "void comportement_0()\n{\n    suicide();\n}\n");
+                tombEdit(scripts); helmetEdit(scripts);
+                foreach (var e in candleEdits) e(scripts);
+            };
         });
 
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in any order (the user, 2026-11-08: "can we

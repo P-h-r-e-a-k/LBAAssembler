@@ -723,12 +723,12 @@ internal static partial class IslandRetell
         }),
         (627, new[]
         {
-            "There's a giant clam that lives in a sea cave in the cliffs, near Port-Ludo. It keeps the pearl of incandescence.",
-            "Il existe un coquillage géant qui vit dans une grotte marine au pied des falaises, près de Port-Ludo. C'est lui qui garde la perle d'incandescence.",
-            "In einer Meeresgrotte in den Klippen bei Port-Ludo lebt eine Riesenmuschel. Sie hütet die Leuchtperle.",
-            "Existe un molusco gigante que vive en una gruta marina de los acantilados, cerca de Port-Ludo. Es el que guarda la perla de incandescencia.",
-            "Esiste una conchiglia gigantesca che vive in una grotta marina, tra le scogliere, vicino al Port-Ludo. Custodisce la perla d'incandescenza.",
-            "Existe uma concha gigante que vive numa gruta marinha nos rochedos, perto do Porto Ludo. É ela que guarda a pérola incandescente.",
+            "Kash, the greatest racer Twinsun ever had, lies in a sea cave in the cliffs near Port-Ludo. A cave that looks out on the sea: he always said he wanted to watch the waves race.",
+            "Kash, le plus grand pilote que Twinsun ait jamais eu, repose dans une grotte marine au pied des falaises, près de Port-Ludo. Une grotte qui donne sur la mer : il disait toujours qu'il voulait regarder les vagues faire la course.",
+            "Kash, der größte Rennfahrer, den Twinsun je hatte, ruht in einer Meeresgrotte in den Klippen bei Port-Ludo. Eine Grotte mit Blick aufs Meer: Er sagte immer, er wolle den Wellen beim Wettrennen zusehen.",
+            "Kash, el mejor piloto que ha tenido Twinsun, descansa en una gruta marina de los acantilados, cerca de Port-Ludo. Una gruta que mira al mar: siempre decía que quería ver a las olas echar carreras.",
+            "Kash, il più grande pilota che Twinsun abbia mai avuto, riposa in una grotta marina tra le scogliere, vicino al Port-Ludo. Una grotta che guarda il mare: diceva sempre che voleva guardare le onde fare a gara.",
+            "O Kash, o maior piloto que Twinsun alguma vez teve, repousa numa gruta marinha nos rochedos, perto do Porto Ludo. Uma gruta virada para o mar: dizia sempre que queria ver as ondas a correr.",
         }),
         (628, new[]
         {
