@@ -6759,6 +6759,7 @@ static int PovShowing(void) {
            && ListVarCube[s_povVar] == s_povValue;
 }
 static int s_povWas = 0;
+S32 RaceMod_DriveIn(S32 scene);
 
 void RaceMod_Story(void) {
     // (Twinsen's own view just ended: the whole picture drawn again -- with only what moved drawn over the picture kept, the room came back
@@ -6776,6 +6777,22 @@ void RaceMod_Story(void) {
     // (and in the bowling alley: its chains are drawn over the picture, not as actors -- drawn only where things moved, the room left each
     // chain's last places on it, the user, 2026-11-15: "as the chains move their previous position is still visible")
     else if (s_blScene >= 0 && CubeMode == CUBE_INTERIEUR && (S32)NumCube == s_blScene && NewCube == -1) FirstTime = AFF_ALL_FLIP;
+    // (Twinsen's car driven in a room, drive_in=: the room's camera put over the car as it nears the picture's edge, as the game's own does
+    // for him on foot -- in the car it never did, and the car drove on out of the picture, the camera left at the door it came in by:
+    // the Temple of Bú driven through, 2026-11-19)
+    if (Comportement == C_BUGGY && CubeMode == CUBE_INTERIEUR && NewCube == -1 && !CameraZone && !CinemaMode && RaceMod_DriveIn((S32)NumCube)) {
+        const T_OBJET *car = &ListObjet[NUM_PERSO];
+        PtrProjectPoint(car->Obj.X, car->Obj.Y, car->Obj.Z);
+        if (Xp < ClipWindowXMin + 120 || Xp > ClipWindowXMax - 140 || Yp < ClipWindowYMin + 100 || Yp > ClipWindowYMax - 80) {
+            StartXCube = car->Obj.X / SIZE_BRICK_XZ;
+            StartYCube = car->Obj.Y / SIZE_BRICK_Y;
+            StartZCube = car->Obj.Z / SIZE_BRICK_XZ;
+            if (StartXCube >= SIZE_CUBE_X) StartXCube = SIZE_CUBE_X - 1;
+            if (StartZCube >= SIZE_CUBE_Z) StartZCube = SIZE_CUBE_Z - 1;
+            CameraCenter(0);
+            FirstTime = AFF_ALL_FLIP;
+        }
+    }
     // (the waking scene held white: now it fades in)
     if (s_whiteUntil && TimerRefHR >= s_whiteUntil && NewCube == -1) {
         s_whiteUntil = 0;

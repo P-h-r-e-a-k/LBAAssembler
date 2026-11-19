@@ -97,7 +97,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\n" + GarageRaceLines()
+        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! The giant clam's sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {HangarScene}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\nwin_pull=1 {HalPullVar} 1 {HalPullDelay}\n" + MoonHelmetHooks()
         : island == RaceTrackIsland.Otringal ? $"gate={QFee} {FeePaid} The steward: a Travel Token first, 30 zlitos!\nwin={QFee} {FeeWon}\n"
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -757,12 +757,12 @@ void comportement_1()
         },
         new[]
         {
-            "Racing licence? ... All in order. Your car goes down through the Temple of Bú to the freighter -- we'll take it from here.",
-            "Licence de course ? ... Tout est en ordre. Ta voiture descend par le Temple de Bù jusqu'au cargo -- on s'en occupe.",
-            "Rennlizenz? ... Alles in Ordnung. Dein Auto fährt durch den Tempel von Bù hinunter zum Frachter -- wir übernehmen.",
-            "¿Licencia de carreras? ... Todo en orden. Tu coche baja por el Templo de Bú hasta el carguero: nosotros nos encargamos.",
-            "Licenza di corsa? ... Tutto in ordine. La tua auto scende per il Tempio di Bù fino al cargo: ci pensiamo noi.",
-            "Licença de corrida? ... Está tudo em ordem. O teu carro desce pelo Templo de Bú até ao cargueiro -- nós tratamos disso.",
+            "Racing licence? ... All in order. Drive on in through the Temple of Bú -- our hangar's at the bottom of its halls.",
+            "Licence de course ? ... Tout est en ordre. Entre en voiture dans le Temple de Bù -- notre hangar est au fond de ses salles.",
+            "Rennlizenz? ... Alles in Ordnung. Fahr nur hinein in den Tempel von Bù -- unser Hangar liegt am Ende seiner Hallen.",
+            "¿Licencia de carreras? ... Todo en orden. Entra con el coche en el Templo de Bú: nuestro hangar está al fondo de sus salas.",
+            "Licenza di corsa? ... Tutto in ordine. Entra pure in auto nel Tempio di Bù: il nostro hangar è in fondo alle sue sale.",
+            "Licença de corrida? ... Está tudo em ordem. Entra de carro no Templo de Bú -- o nosso hangar fica no fundo das suas salas.",
         },
         new[]
         {
@@ -974,6 +974,7 @@ void comportement_1()
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
+        TempleDrive(b);
         // (the cave on the islet across from the Hacienda shut by a rock fall: nothing of the story's in it -- HaciendaIsletCave)
         HaciendaIsletCave(b);
         Hangar(b, HangarScene, 4, MoonStart, new HangarLines(Say(DesertLine.HangarOffer), Say(DesertLine.HangarYes), Say(DesertLine.HangarNo),

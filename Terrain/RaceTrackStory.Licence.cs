@@ -23,7 +23,7 @@ internal static partial class RaceTrackStory
     // drive_marks='s variable: the first marker's index while the drive is asked for, 250 under way, 251 Twinsen out at the temple, 252 done
     public const int DriveMarksVar = 248, DriveMarks = 8, MarksDriving = 250, MarksArrived = 251, MarksDone = 252;
     // the gate's cube variables: what the guard has said (a car wanted, no licence) so he says it once a visit
-    private const int GateSaidCar = 43, GateSaidNoLicence = 44;
+    private const int GateSaidCar = 43, GateSaidNoLicence = 44, GateSaidLicence = 45;
     // the door down into the temple in the Desert's start scene (its zone's scene), and how far before it along the road the guard and
     // the markers are (cells)
     private const int TempleScene = 10, TempleDoorSwitch = 3;
@@ -93,19 +93,14 @@ internal static partial class RaceTrackStory
         if (officer is null) { b.Log.Add("the Temple of Bú's gate left out: no Esmer mechanic in the moon base (scene 23) to copy"); return; }
         var y = (int)Math.Round(report.StartLine[0].Y);
         int Local(double cells, int cube) => Math.Clamp(RaceTrackScenes.CubeLocal(cells, cube), 0, IslandFile.CubeSize - 1);
-        b.Edit(startScene, $"the Temple of Bú's gate: an Esmer checks the racing licence, the car driven to the temple (cells {guardAt.X:0.#}, {guardAt.Z:0.#}), down to the hangar (chapter 4)", model =>
+        b.Edit(startScene, $"the Temple of Bú's gate: an Esmer checks the racing licence (cells {guardAt.X:0.#}, {guardAt.Z:0.#}), and Twinsen drives on in through the temple to the hangar (chapter 4)", model =>
         {
             var adds = new List<Action<LbaScript.SceneScripts>>();
-            var firstMark = model.Actors.Count;
-            foreach (var m in marks)
-                adds.Add(IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(Local(m.X, model.CubeX), y, Local(m.Z, model.CubeY)), "void comportement_0()\n{\n}\n"));
-            // (and on off the road, down to the temple's doorway -- widened for the car, TempleDoorway -- and into it: the user, 2026-11-17,
-            // "Can we remodel the entrance to the temple of bu so it's big enough to accept a car, and does so")
-            foreach (var (mx, mz) in TempleDoorway.DoorwayMarks)
-                adds.Add(IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(mx, 500, mz), "void comportement_0()\n{\n}\n"));
-            // (the door into the temple, scene 10, switched off while the car is driven in: it stops in the door's zone, and Twinsen got out
-            // into it -- the hangar is the way on. On again as the scene loads next time)
-            foreach (var z in model.Zones.Where(z => z.Type == 0 && z.Num == TempleScene)) z.Info[4] = TempleDoorSwitch;
+            // (no more the car driven there for him -- the user, 2026-11-18: "In my test earlier Twinsen had control taken from him and the
+            // game tried and failed to drive into the temple of Bu ... let's allow Twinsen to drive inside": he drives in himself, the temple
+            // made drivable, TempleOfBuDrive; the doorway widened for the car, TempleDoorway. The door into the temple, scene 10: on foot
+            // always, in the car only with the licence; its arrival a layer up, as the temple's door's hall is now)
+            foreach (var z in model.Zones.Where(z => z.Type == 0 && z.Num == TempleScene)) { z.Info[4] = TempleDoorSwitch; z.Info[1] += TempleOfBuDrive.Raise; }
             var guard = officer.Clone();
             (guard.X, guard.Y, guard.Z) = (Local(guardAt.X, model.CubeX), y, Local(guardAt.Z, model.CubeY));
             guard.Beta = RaceTrackMath.Turn(Math.Atan2(-nx, -nz));
@@ -126,27 +121,29 @@ internal static partial class RaceTrackStory
     {{
         set_magic_level({MagicDiploma});
     }}
-    if ({MarksArrived} == var_game({DriveMarksVar}) && {Driving} != comportement_hero())
-    {{
-        set_var_game({DriveMarksVar}, {MarksDone});
-        message({say(DesertLine.TempleThrough)});
-        change_cube({HangarScene});
-        set_comportement(comportement_2);
-    }}
-    else if ({MarksDriving} == var_game({DriveMarksVar}) && {Driving} != comportement_hero())
+    if (0 != var_game({DriveMarksVar}))
     {{
         set_var_game({DriveMarksVar}, 0);
     }}
-    if (4 == chapter() && {PagesDone} == var_game({QPages}) && 0 == var_game({DriveMarksVar}) && 2600 > distance(0))
+    if ({Driving} == comportement_hero() && 0 == var_game({LicenceSlot}))
+    {{
+        set_change_cube({TempleDoorSwitch}, 0);
+    }}
+    else
+    {{
+        set_change_cube({TempleDoorSwitch}, 1);
+    }}
+    if (4 == chapter() && {PagesDone} == var_game({QPages}) && 2600 > distance(0))
     {{
         if ({Driving} == comportement_hero())
         {{
             if (0 < var_game({LicenceSlot}))
             {{
-                message_obj({gi}, {say(DesertLine.GateLicence)});
-                set_var_game({DriveMarksVar}, {firstMark});
-                set_change_cube({TempleDoorSwitch}, 0);
-                set_comportement(comportement_1);
+                if (0 == var_cube({GateSaidLicence}))
+                {{
+                    message_obj({gi}, {say(DesertLine.GateLicence)});
+                    set_var_cube({GateSaidLicence}, 1);
+                }}
             }}
             else
             {{
@@ -167,23 +164,63 @@ internal static partial class RaceTrackStory
         }}
     }}
 }}
-
-void comportement_1()
-{{
-    if ({MarksArrived} == var_game({DriveMarksVar}) && {Driving} != comportement_hero())
-    {{
-        set_var_game({DriveMarksVar}, {MarksDone});
-        message({say(DesertLine.TempleThrough)});
-        change_cube({HangarScene});
-        set_comportement(comportement_2);
-    }}
-}}
-
-void comportement_2()
-{{
-}}
 "));
             return scripts => { foreach (var add in adds) add(scripts); };
+        });
+    }
+
+    // The Temple of Bú driven through (TempleOfBuDrive made its way): in scene 10, the actors and the points stood on the floor raised a
+    // layer raised with it; the stairs down to scene 11 shut to the car, and in their place, in front of them, the car's own door to the
+    // Esmers' hangar (scene 12 -- scene 11 is all stairs) -- each on by whether Twinsen drives (a helper's life every frame). He arrives in
+    // the hangar's hall where he would on foot, a little to its side, still facing as he drove.
+    private const int TempleToLower = 5, TempleCarDoor = 6;
+    private static void TempleDrive(IslandBeatsA b)
+    {
+        if (!b.Store.SceneExists(TempleScene) || !b.Store.SceneExists(HangarScene)) { b.Log.Add("the Temple of Bú's drive left out: no scene 10 or no hangar"); return; }
+        b.Edit(TempleScene, "the Temple of Bú driven through: the raised floor's actors and points raised, the car's door to the hangar by the stairs down", model =>
+        {
+            int Up(int x, int y, int z) => TempleOfBuDrive.Raised(x / 512, z / 512) && y == (TempleOfBuDrive.OldFloor + 1) * 256 ? y + TempleOfBuDrive.Raise : y;
+            var raised = 0;
+            foreach (var a in model.Actors)
+            {
+                var y = Up(a.X, a.Y, a.Z);
+                if (y != a.Y) { a.Y = y; raised++; }
+            }
+            for (var i = 0; i < model.TrackPoints.Count; i++)
+            {
+                var p = model.TrackPoints[i];
+                var y = Up(p.X, p.Y, p.Z);
+                if (y != p.Y) { model.TrackPoints[i] = p with { Y = y }; raised++; }
+            }
+            // (the two figures before the hall's north wall -- cells x 12-13, z 54 -- three cells west: the car's way north to the new
+            // doorway runs between x 12 and 14, and stopped at them)
+            var moved = 0;
+            foreach (var a in model.Actors.Skip(1))
+                if (a.X / 512 is >= 12 and <= 13 && a.Z / 512 == 54 && a.Y == (TempleOfBuDrive.NewFloor + 1) * 256) { a.X -= 3 * 512; moved++; }
+            var down = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == 11);
+            if (down is null) { b.Log.Add("the Temple of Bú's car door left out: no stairs down to scene 11 in scene 10"); return _ => { }; }
+            down.Info[4] = TempleToLower;
+            // (in front of the stairs, the way the car comes to them -- cells x 18-19, z 19-21, the halls' floor; where he lands: this plus
+            // where he was in it, x 0-1023 and z 0-1535 -- the hangar's hall round his arrival on foot)
+            model.Zones.Add(new SceneZoneModel { Type = 0, Num = HangarScene, X0 = 18 * 512, X1 = 20 * 512 - 1, Y0 = (TempleOfBuDrive.NewFloor + 1) * 256, Y1 = (TempleOfBuDrive.NewFloor + 5) * 256,
+                Z0 = 19 * 512, Z1 = 22 * 512 - 1, Info = new[] { ArriveAt.X - 512, ArriveAt.Y, ArriveAt.Z - 768, 0, TempleCarDoor, 0, 0, 0 } });
+            b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor, {moved} figures moved out of the way north");
+            var helper = RaceTrackScenes.InvisibleHelper(2 * 512, (TempleOfBuDrive.NewFloor + 1) * 256, 56 * 512);
+            var add = IslandBeatsA.Add(model, helper, $@"void comportement_0()
+{{
+    if ({Driving} == comportement_hero())
+    {{
+        set_change_cube({TempleToLower}, 0);
+        set_change_cube({TempleCarDoor}, 1);
+    }}
+    else
+    {{
+        set_change_cube({TempleToLower}, 1);
+        set_change_cube({TempleCarDoor}, 0);
+    }}
+}}
+");
+            return scripts => add(scripts);
         });
     }
 }
