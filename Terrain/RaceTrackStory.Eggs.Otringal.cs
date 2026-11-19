@@ -90,13 +90,14 @@ internal static partial class RaceTrackStory
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)
     private const int Clovers = 251, MostClovers = 10;
     // (on the deck at the pool's south side, a few cells from where the dive lands -- (18278, 1536, 18432) -- facing the water)
-    // (since 2026-11-19 lying on the middle sun lounger there, on her back -- the user, "Lyra by the pool in the Imperial hotel seems to have
-    // a massive shadow and this is the closest Twinsen can get to her. Let's reposition her to one of the loungers by the pool instead": her
-    // feet to +x, her head to -x (TempleMarshal.Lie: the turned bone's pivot 468 up, her back 400 over her origin, her head 1,054 along from
-    // it and her feet 468), the lounger's middle 293 head-ward of her origin; no shadow -- hers was the massive one)
+    // (since 2026-11-19 lying on one of the loungers by the pool, on her back -- the user, "Lyra by the pool in the Imperial hotel seems to
+    // have a massive shadow and this is the closest Twinsen can get to her. Let's reposition her to one of the loungers by the pool
+    // instead": the game's own second deck chair (Citadel/CitadelProps.Pool: DeckChairs -- the first is Johnny Rocket's), her head to its
+    // backrest, -z, her feet to +z, facing +z (TempleMarshal.Lie: the turned bone's pivot 468 up, her back 400 over her origin, her head
+    // 1,054 along from it and her feet 468), the chair's middle 293 head-ward of her origin; no shadow -- hers was the massive one)
     private const int LyraLyingBack = 400, LyraLyingMiddle = 293;
-    private static readonly (int X, int Y, int Z, int Beta) LyraAt = (Citadel.CitadelProps.Loungers[1].X + LyraLyingMiddle,
-        Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.LoungerTop - LyraLyingBack, Citadel.CitadelProps.Loungers[1].Z, 1024);
+    private static readonly (int X, int Y, int Z, int Beta) LyraAt = (Citadel.CitadelProps.DeckChairs[1].X,
+        Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.DeckChairSeat - LyraLyingBack, Citadel.CitadelProps.DeckChairs[1].Z + LyraLyingMiddle, 0);
     private const uint LyraNoShadow = 1u << 12;
 
     // (`talk`: Lyra's at the start line, the same by the pool: Twinsen who met her there first couldn't reach her to talk -- the user,
@@ -122,10 +123,8 @@ internal static partial class RaceTrackStory
 ";
         b.Edit(HotelScene, $"Lyra by the hotel's pool: her score for the dive, a clover after it (var_cube {LyraClovers}, {LyraDives})", model =>
         {
-            foreach (var (lx, lz) in Citadel.CitadelProps.Loungers)
-                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.SunLounger, lx, Citadel.CitadelProps.PoolDeck, lz, 1024));
             var lyra = SceneOps.BlankActor(SceneGame.Lba2, LyraAt.X, LyraAt.Y, LyraAt.Z, LyraEntity);
-            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Lie; lyra.Beta = LyraAt.Beta; lyra.Flags = (0x0803 & ~1u) | LyraNoShadow; // (not shoved by the lounger she lies on: CHECK_OBJ_COL off -- with it the engine pushed her out of its box and along the deck to the ladder) lyra.CoulObj = 9; lyra.Armor = 51;
+            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Lie; lyra.Beta = LyraAt.Beta; lyra.Flags = LyraNoShadow; // (not shoved by what she lies on: CHECK_OBJ_COL off -- with it the engine pushed her out of the lounger's box and along the deck to the ladder; and no brick collision nor falling -- on the game's deck chair, its bricks, the engine lifted her onto their top and stood her up) lyra.CoulObj = 9; lyra.Armor = 51;
             var index = model.Actors.Count;
             var add = IslandBeatsA.Add(model, lyra, $@"void comportement_0()
 {{

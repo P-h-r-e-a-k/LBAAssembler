@@ -40,34 +40,15 @@ internal static partial class CitadelProps
     private const int PoolWaterColour = 192, BoardStand = 50, BoardPlank = 63, BoardGrip = 196;
 
     public const int PoolMiddleX = 21000, PoolMiddleZ = 13500;
-    // Sun loungers on the deck south of the basin (body 202 -- the user, 2026-11-18, "reposition her to one of the loungers by the pool
-    // instead"; the hotel had none): a white frame on short legs, a striped mattress LoungerTop over the deck, LoungerLong along its own z,
-    // LoungerWide across; Lyra lies on the middle one (RaceTrackStory.Eggs.Otringal: LyraPoolScore), the others empty beside it.
-    public const int SunLounger = 202, LoungerTop = 380, LoungerLong = 1900, LoungerWide = 620;
-    public static readonly (int X, int Z)[] Loungers = { (18944, 20736), (20480, 20736), (22016, 20736) };
-    public static Body BuildSunLounger(byte[] header)
-    {
-        var m = new CarMesh("a sun lounger", new[] { -1 });
-        m.Light = 0.9f;
-        const int Frame = 36, Leg = 56, StripeA = 164, StripeB = 37;
-        const float Half = LoungerLong / 2f, Side = LoungerWide / 2f, Rail = 60, Mattress = 70;
-        // the frame's rails along both sides and its ends, on legs at the corners
-        foreach (var x in new[] { -Side + Rail / 2, Side - Rail / 2 })
-            m.Box(0, new Vector3(x, LoungerTop - Mattress - Rail / 2, 0), new Vector3(Rail, Rail, LoungerLong), Frame);
-        foreach (var z in new[] { -Half + Rail / 2, Half - Rail / 2 })
-            m.Box(0, new Vector3(0, LoungerTop - Mattress - Rail / 2, z), new Vector3(LoungerWide, Rail, Rail), Frame);
-        foreach (var x in new[] { -Side + Rail / 2, Side - Rail / 2 })
-            foreach (var z in new[] { -Half + Rail / 2, Half - Rail / 2 })
-                m.Box(0, new Vector3(x, (LoungerTop - Mattress - Rail) / 2f, z), new Vector3(Rail * 0.7f, LoungerTop - Mattress - Rail, Rail * 0.7f), Leg);
-        // the mattress: stripes across it
-        const int Stripes = 8;
-        for (var k = 0; k < Stripes; k++)
-        {
-            float z0 = -Half + Rail + k * (LoungerLong - 2 * Rail) / Stripes, z1 = z0 + (LoungerLong - 2 * Rail) / Stripes;
-            m.Box(0, new Vector3(0, LoungerTop - Mattress / 2f, (z0 + z1) / 2), new Vector3(LoungerWide - 2 * Rail + 20, Mattress, z1 - z0), k % 2 == 0 ? StripeA : StripeB);
-        }
-        return m.ToBody(header);
-    }
+    // The game's own deck chairs (the room's bricks, not actors -- the user, 2026-11-19: "by the pool in the imperial hotel there is [loungers].
+    // They're used by Johnny rocket in the retail game"): two striped deck chairs on the deck's east side by the steps, cells x 38-39 and
+    // 42-43, z 10-12 (bricks 64 and 65 on layers 8-9, 64 the backrest at z 10 up to layer 11), each two cells across and three long along z,
+    // the backrest at the low-z end. Johnny Rocket lies on the first in the game (scene 81's actor 3, entity 103, its track point 12, while
+    // the game's variable 124 is 3); Lyra lies on the second (RaceTrackStory.Eggs.Otringal: LyraPoolScore). (2026-11-18/19 three loungers
+    // of the build's own, body 202, stood on the south deck: "the hotel had none" was a guess, and wrong.)
+    public static readonly (int X, int Z)[] DeckChairs = { (39 * 512, 5888), (43 * 512, 5888) };
+    // (the seat's sling over the deck, under someone lying on it, and the backrest's end of the chair: z 10's cell)
+    public const int DeckChairSeat = 330, DeckChairBackZ = 10 * 512;
     public static short[]? PoolBox(int generic) => generic switch
     {
         BowlingLanes => new short[] { -1, 0, -1, 1, 1, 1 },   // (the bowling lanes' boards: no box to be walked round)
