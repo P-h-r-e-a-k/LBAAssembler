@@ -105,6 +105,18 @@ internal static partial class RaceTrackStory
             "La Celebrazione? Oggi no, amico: con la Coppa, tutti i taxi restano fermi finché la corsa non è corsa.",
             "A Celebração? Hoje não, amigo: com a Taça, os táxis ficam todos parados até a corrida estar corrida.",
         },
+        // (the Cup's winner flown to Celebration Island by it -- the user, 2026-11-19: "Getting to Celebration Island, we'll redesign one of
+        // the Taxi's that already take Twinsen from Otringal to Celebration Island and then on to the island of the francos" -- in Johnny
+        // Rocket's place: there's no landing for his spaceship there)
+        new[]
+        {
+            "The Cup's winner? The Cup pays your fare, champ. Celebration Island it is -- hop in.",
+            "Le vainqueur de la Coupe ? C'est la Coupe qui paie ta course, champion. Direction l'île de la Célébration -- monte.",
+            "Der Sieger des Pokals? Der Pokal zahlt deine Fahrt, Champion. Auf zur Insel der Feierlichkeiten -- steig ein.",
+            "¿El ganador de la Copa? La Copa paga tu carrera, campeón. A la isla de la Celebración: sube.",
+            "Il vincitore della Coppa? La corsa la paga la Coppa, campione. Si va all'isola della Celebrazione: sali.",
+            "O vencedor da Taça? A Taça paga a tua viagem, campeão. Ilha da Celebração, então -- entra.",
+        },
     };
     private static readonly string[][] DesertFerryLines =
     {
@@ -197,11 +209,22 @@ internal static partial class RaceTrackStory
             });
             var taxi = AddIslandTexts(gameDirectory, RaceTrackIsland.Otringal.IslandByte, OtringalTaxiLines, log, "Otringal's harbour taxi");
             if (taxi >= 0)
-                Edit(OtringalHarbour, "the harbour taxi won't fly to Celebration Island in chapter 5 (or before): the Cup's cabs stay parked till the race is run", _ => scripts =>
+                Edit(OtringalHarbour, "the harbour taxi: the Cup's winner flown to Celebration Island free, inc_chapter (in Johnny Rocket's place); before that the Cup's cabs stay parked", _ => scripts =>
                 {
                     var driver = ActorWith(scripts, "set_var_cube(2, 95)");
                     var life = scripts.GetText(driver, ScriptKind.Life);
-                    scripts.SetText(driver, ScriptKind.Life, AtStart(life, "comportement_3", $@"    if (21 == l_track() && 6 > chapter())
+                    scripts.SetText(driver, ScriptKind.Life, AtStart(life, "comportement_3", $@"    if (21 == l_track() && 5 == chapter() && {FeeTold} <= var_game({QFee}) && {FeeDone} > var_game({QFee}))
+    {{
+        message({taxi + 1});
+        set_var_game({QFee}, {FeeDone});
+        inc_chapter();
+        set_var_cube(0, 0);
+        set_var_cube(2, 95);
+        set_track(label_30);
+        set_comportement(comportement_4);
+        return;
+    }}
+    if (21 == l_track() && 6 > chapter())
     {{
         message({taxi});
         restore_l_track();

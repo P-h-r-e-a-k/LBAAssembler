@@ -45,6 +45,8 @@ internal static partial class RaceTrackStory
         // (the two days, 2026-11-19: RaceTrackStory.OtringalDays.cs)
         MarshalFull, EsmerMoney, MarshalStillFull, RickLyra, RickBlackCar, LyraOffDuty, LyraBribe, LyraShort, LyraAsk, LyraIn, LyraBlackCar,
         MarshalSetTime, MarshalQualified, NightPasses, MarshalCoil, MarshalNoCoil, SellerMask, CoilFound, MarshalReady,
+        // (Johnny's pointer to the harbour taxi, his flight's place -- 2026-11-19)
+        JohnnyTaxi,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -432,6 +434,15 @@ internal static partial class RaceTrackStory
             "La bobina è tornata al suo posto. In griglia, Twinsen, e occhio a quell'auto nera.",
             "A bobina voltou ao seu lugar. Para a grelha, Twinsen -- e cuidado com aquele carro preto.",
         },
+        new[]
+        {
+            "My rocket's got nowhere to land on Celebration, kid. Take a taxi from the harbour -- tell the driver you won the Cup.",
+            "Ma fusée n'a nulle part où se poser sur la Célébration, petit. Prends un taxi au port -- dis au chauffeur que tu as gagné la Coupe.",
+            "Meine Rakete kann auf der Insel der Feierlichkeiten nirgends landen, Kleiner. Nimm ein Taxi am Hafen -- sag dem Fahrer, dass du den Pokal gewonnen hast.",
+            "Mi cohete no tiene dónde aterrizar en la Celebración, chico. Coge un taxi en el puerto y dile al conductor que ganaste la Copa.",
+            "Il mio razzo non ha dove atterrare sulla Celebrazione, ragazzo. Prendi un taxi al porto: di' all'autista che hai vinto la Coppa.",
+            "O meu foguetão não tem onde aterrar na Celebração, miúdo. Apanha um táxi no porto -- diz ao condutor que ganhaste a Taça.",
+        },
     };
 
     // The nearest place to an island cell clear of every road of a track by `clear` cells, on its ground: searched outward ring by ring
@@ -547,19 +558,16 @@ void comportement_1()
         {
             var port = b.Store.Load(SpacePort);
             if (OffRoadA(report, port.CubeX * 64 + Pad.X / 512.0, port.CubeY * 64 + Pad.Z / 512.0, 1.5) is { } spot && b.SceneAt(spot.X, spot.Z) is var johnnyScene and >= 0)
-                b.Edit(johnnyScene, $"Johnny Rocket by the space port at cell ({spot.X:0.#}, {spot.Z:0.#}): the black car's shuttle, and his flight to Celebration Island (inc_chapter, scene {SellerStall})", model =>
+                // (no longer his flight -- his spaceship has nowhere to land on Celebration Island: the harbour taxi takes the Cup's winner,
+                // RaceTrackStory.Travels -- the user, 2026-11-19, "we'll redesign one of the Taxi's that already take Twinsen from Otringal to
+                // Celebration Island". He tells where the black car went, and points him to the taxi)
+                b.Edit(johnnyScene, $"Johnny Rocket by the space port at cell ({spot.X:0.#}, {spot.Z:0.#}): the black car's shuttle, and the harbour taxi to Celebration Island", model =>
                 {
                     Place(johnny, model, Facing(spot, port.CubeX * 64 + Pad.X / 512.0, port.CubeY * 64 + Pad.Z / 512.0));
                     return IslandBeatsA.Add(model, johnny, Talker(otringal, $@"            if ({FeeTold} == var_game({QFee}))
             {{
                 message({Say(OtringalLine.JohnnyCar)});
-                message({Say(OtringalLine.JohnnyFly)});
-                set_var_game({QFee}, {FeeDone});
-                if (6 > chapter())
-                {{
-                    inc_chapter();
-                }}
-                change_cube({SellerStall});
+                message({Say(OtringalLine.JohnnyTaxi)});
             }}
             else
             {{
