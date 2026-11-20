@@ -29,7 +29,7 @@ internal static partial class RaceTrackStory
     private const int SeaScene = 59, SeaFerry = 2, DesertQuay = 65, DesertFerry = 3, DesertGangway = 0, SeaBack = 60, SeaBackFerry = 13;
     // the scene variables: Mr. Paul has spoken at the gangway this time; the car has just come off the ferry (no ticket asked on the way
     // off -- again once it's FerryAway from the ferry)
-    private const int GangwayAsked = 76, JustArrived = 77, FerryAway = 5000, CitadelArrive = -900;
+    private const int GangwayAsked = 76, JustArrived = 77, FerryAway = 5000, CitadelArrive = -900, FerryHull = Citadel.CitadelProps.FerryHalfWide;
     // the deck the car stands on (the ferry's own frame: x across, z along; the ramps either side, not the wheelhouse)
     private static readonly int[] FerryDeckBox = { -(Citadel.CitadelProps.FerryHalfWide + Citadel.CitadelProps.FerryRamp), -Citadel.CitadelProps.FerryHalfLong + 200,
         Citadel.CitadelProps.FerryHalfWide + Citadel.CitadelProps.FerryRamp, Citadel.CitadelProps.FerryHouseFrom - 100 };
@@ -38,12 +38,42 @@ internal static partial class RaceTrackStory
     internal static IEnumerable<string> FerryLines()
     {
         string Line(int scene, int ferry, int body, int deck, int plus = 0, int arrive = 0) =>
-            $"car_ferry={scene} {ferry} {Citadel.CitadelProps.Prop} {body} {FerryDeckBox[0]} {FerryDeckBox[1]} {FerryDeckBox[2] + plus} {FerryDeckBox[3]} {deck} {FerryHold} {FerryAboard} {FerryInCar} {arrive}";
+            $"car_ferry={scene} {ferry} {Citadel.CitadelProps.Prop} {body} {FerryDeckBox[0]} {FerryDeckBox[1]} {FerryDeckBox[2] + plus} {FerryDeckBox[3]} {deck} {FerryHold} {FerryAboard} {FerryInCar} {arrive} {FerryHull}";
+        // (the hull's own deck, for "aboard": not its ramps, nor -- at the Desert's quay, the deck at the quay's height -- the quay beside the
+        // bow, which the floor's box takes in with the ramps: there the car counted as aboard, the departure began and Mr. Paul, walking to his
+        // post past it, never got there, so the ferry never sailed -- found driving it, 2026-11-20)
         // (back at Citadel's quay the car comes off at x 8,140, the ferry's middle at 9,040: clear of Mr. Paul at his post, x 9,175)
         yield return Line(FerryScene, CitadelFerry, Citadel.CitadelProps.CarFerry, Citadel.CitadelProps.FerryDeck, arrive: CitadelArrive);
         yield return Line(SeaScene, SeaFerry, Citadel.CitadelProps.CarFerry, Citadel.CitadelProps.FerryDeck);
         yield return Line(SeaBack, SeaBackFerry, Citadel.CitadelProps.CarFerry, Citadel.CitadelProps.FerryDeck);
         yield return Line(DesertQuay, DesertFerry, Citadel.CitadelProps.CarFerryTall, Citadel.CitadelProps.FerryDeckTall, Citadel.CitadelProps.FerryRampTall - Citadel.CitadelProps.FerryRamp);
+        // (and the game's other scenes of the same four cubes, 197-200 -- reached by its own way, 195 and 196 into 197 -- each with the
+        // hovercraft at the same index: the car ferry's look and deck there too, the user, 2026-11-19, "We need to make sure the ferrry on
+        // Citadel and Desert island is the correct body when viewed from all cubes nearby")
+        yield return Line(AltQuay, CitadelFerry, Citadel.CitadelProps.CarFerry, Citadel.CitadelProps.FerryDeck);
+        yield return Line(AltSea, SeaFerry, Citadel.CitadelProps.CarFerry, Citadel.CitadelProps.FerryDeck);
+        yield return Line(AltDesertQuay, DesertFerry, Citadel.CitadelProps.CarFerryTall, Citadel.CitadelProps.FerryDeckTall, Citadel.CitadelProps.FerryRampTall - Citadel.CitadelProps.FerryRamp);
+        yield return Line(AltSeaBack, SeaBackFerry, Citadel.CitadelProps.CarFerry, Citadel.CitadelProps.FerryDeck);
+    }
+
+    private const int AltQuay = 197, AltSea = 198, AltDesertQuay = 199, AltSeaBack = 200;
+    // The hovercraft the island itself draws at Citadel's mooring -- CITADEL.OBL body 56 and CITABAU.OBL 86, a decor shown while game
+    // variable 166 is on (the game's scenes 197-200 set it) -- seen from every cube about: the car ferry's body in its place, as the
+    // crossing's scenes show it (same place, same facing as the ferry actor at rest there).
+    internal static List<string> FerryDecor(string gameDirectory)
+    {
+        var log = new List<string>();
+        var bodies = Path.Combine(gameDirectory, "BODY.HQR");
+        if (!File.Exists(bodies)) return log;
+        var header = LbaBodyStudio.Body.Read(HqrArchive.Open(bodies).Read(30), 2, allowStatic: true).Header;
+        foreach (var (file, entry) in new[] { ("CITADEL.OBL", 56), ("CITABAU.OBL", 86) })
+        {
+            var path = Path.Combine(gameDirectory, file);
+            if (!File.Exists(path) || HqrArchive.CountEntries(path) <= entry) { log.Add($"the car ferry at Citadel's mooring left out of {file}: no body {entry}"); continue; }
+            HqrWriter.ReplaceInFile(path, entry, Citadel.CitadelProps.BuildCarFerry(header).Write());
+            log.Add($"the car ferry at Citadel's mooring: {file} body {entry} (the hovercraft's decor) the car ferry");
+        }
+        return log;
     }
 
     // A quay's ticket check and departure in the car, at the start of the hero's comportement_1: the ticket asked over the gangway (held

@@ -1078,8 +1078,10 @@ static int s_startInCar = 0;               // start_in_car=
 // car_ferry= (FerryFrame): the user, 2026-11-18, "We need to redesign the ferry between Citadel and Desert Island into one that Twinsen can
 // drive onto and off again, after Twinsen shows his ferry ticket and drives on, we need to assign NoMove whilst the ferry pulls out of the
 // harbour, then back in on the other side until it's successfully docked again"
-#define RACE_MAX_FERRIES 4
-typedef struct { int Scene, Ferry, DeckEntity, DeckBody, Box[4], DeckY, HoldVar, AboardVar, InCarVar, ArriveZ; } T_RACE_FERRY;
+#define RACE_MAX_FERRIES 8                 // (the crossing's four scenes, and the game's other four of the same cubes: 197-200)
+// (HullHalf: the hull's half width across, the deck's own: "aboard" is within it, as the floor's Box takes the ramps either side too --
+// at the Desert's quay, its deck at the quay's height, the quay beside the bow inside the box counted as the deck; 0 the whole box)
+typedef struct { int Scene, Ferry, DeckEntity, DeckBody, Box[4], DeckY, HoldVar, AboardVar, InCarVar, ArriveZ, HullHalf; } T_RACE_FERRY;
 static T_RACE_FERRY s_ferries[RACE_MAX_FERRIES];
 static int s_nbFerries = 0, s_ferryWasSet = 0, s_ferryWasScene = -1;
 static double s_ferryWas[4];                  // (the ferry's x, y, z and beta last frame)
@@ -4892,9 +4894,9 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "dart_ask")) s_dtAskVar = atoi(v);
         else if (!strcmp(key, "car_ferry") && s_nbFerries < RACE_MAX_FERRIES) {
             T_RACE_FERRY *f = &s_ferries[s_nbFerries];
-            f->InCarVar = -1; f->ArriveZ = 0;
-            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d", &f->Scene, &f->Ferry, &f->DeckEntity, &f->DeckBody, &f->Box[0], &f->Box[1], &f->Box[2], &f->Box[3],
-                       &f->DeckY, &f->HoldVar, &f->AboardVar, &f->InCarVar, &f->ArriveZ) >= 11) s_nbFerries++;
+            f->InCarVar = -1; f->ArriveZ = 0; f->HullHalf = 0;
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d", &f->Scene, &f->Ferry, &f->DeckEntity, &f->DeckBody, &f->Box[0], &f->Box[1], &f->Box[2], &f->Box[3],
+                       &f->DeckY, &f->HoldVar, &f->AboardVar, &f->InCarVar, &f->ArriveZ, &f->HullHalf) >= 11) s_nbFerries++;
         }
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
@@ -22482,6 +22484,13 @@ static void FerryFrame(S32 now) {
     const int inCar = Comportement == C_BUGGY;
     const S32 deckWas = (S32)s_ferryWas[1] + f->DeckY;
     const int aboard = inCar && abs(hero->Obj.Y - deckWas) < 160 && FerryOnDeck(f, s_ferryWas[0], s_ferryWas[2], s_ferryWas[3], hero->Obj.X, hero->Obj.Z);
+    // (on the hull's own deck, not a ramp nor beside the ferry: the scripts' "aboard", which sails it)
+    int onHull = aboard;
+    if (aboard && f->HullHalf > 0) {
+        double lx, lz;
+        FerryLocal(s_ferryWas[0], s_ferryWas[2], s_ferryWas[3], hero->Obj.X, hero->Obj.Z, &lx, &lz);
+        onHull = lx >= -f->HullHalf && lx <= f->HullHalf;
+    }
     if (aboard && (fx != s_ferryWas[0] || fy != s_ferryWas[1] || fz != s_ferryWas[2] || fb != s_ferryWas[3])) {
         S32 db = ((S32)fb - (S32)s_ferryWas[3]) & 4095;
         if (db >= 2048) db -= 4096;
@@ -22512,10 +22521,10 @@ static void FerryFrame(S32 now) {
     }
     // (aboard and still a second: the scripts' word for it)
     if (f->AboardVar >= 0 && f->AboardVar < MAX_VARS_GAME) {
-        const int still = aboard && abs(ListBuggy[0].Speed) < 40;
+        const int still = onHull && abs(ListBuggy[0].Speed) < 40;
         if (!still) s_ferryStillSince = 0;
         else if (!s_ferryStillSince) s_ferryStillSince = now ? now : 1;
-        const S16 want = (S16)(still && now - s_ferryStillSince >= 1000 ? 1 : aboard ? ListVarGame[f->AboardVar] : 0);
+        const S16 want = (S16)(still && now - s_ferryStillSince >= 1000 ? 1 : onHull ? ListVarGame[f->AboardVar] : 0);
         if (ListVarGame[f->AboardVar] != want) {
             ListVarGame[f->AboardVar] = want;
             Log_Info("[racemod] car ferry (scene %d, actor %d): the car %s", (int)NumCube, f->Ferry, want ? "aboard, standing on its deck" : "off its deck");

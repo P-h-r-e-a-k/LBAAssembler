@@ -172,7 +172,7 @@ internal static class DecorList
             if (r is not null && (x1 < r[0] || x0 > r[1] || z1 < r[2] || z0 > r[3])) continue;
             int y0 = g.Min(t => t.D.YMin), y1 = g.Max(t => t.D.YMax);
             var d = g.First().D;
-            Console.WriteLine(FormattableString.Invariant($"cube ({g.Key.Cx},{g.Key.Cz}) origin ({d.X},{d.Y},{d.Z}) turn {d.Beta & 4095} bodies {string.Join(",", g.Select(t => t.D.Body & 0xFFFF))}: cells x {x0:0.0}..{x1:0.0} z {z0:0.0}..{z1:0.0} y {y0}..{y1}"));
+            Console.WriteLine(FormattableString.Invariant($"cube ({g.Key.Cx},{g.Key.Cz}) origin ({d.X},{d.Y},{d.Z}) turn {d.Beta & 4095}{((short)(d.Beta >> 16) != 0 ? $" var {(short)(d.Beta >> 16)}" : "")} bodies {string.Join(",", g.Select(t => t.D.Body & 0xFFFF))}: cells x {x0:0.0}..{x1:0.0} z {z0:0.0}..{z1:0.0} y {y0}..{y1}"));
         }
         return 0;
     }
