@@ -1940,34 +1940,33 @@ void comportement_5()
             });
         }
 
-        // the sewers: the painter (scene 17's actor 12, the game's sewer worker) says his own line first, then -- asked again in the same
-        // visit, while the thief is somewhere ahead -- that he went through to the far tunnel (the game's 237, retold so); and the far
-        // tunnel's door (actor 17, a key's in the game) opens for the chase
+        // the sewers: the painter (scene 17's actor 12, the game's sewer worker), asked by Twinsen after the thief with his gloves while the
+        // thief is somewhere ahead, answers it -- he went through to the far tunnel and trod on the wet paint: follow the footprints (the
+        // game's 237, retold so); else his own line. (Till 2026-11-20 his own line first and the hint only asked again -- the user: "When
+        // Twinsen asks the NPC about his gloves in the sewers the painter should give a hint about the footprints".) And the far tunnel's
+        // door (actor 17, a key's in the game) opens for the chase
         if (demoSewers)
-            p.Edit(Sewers, "the demo's sewers' painter: his own line, then -- asked again while the thief is ahead -- the thief gone through to the far halls", _ => scripts =>
+            p.Edit(Sewers, "the demo's sewers' painter: asked after the gloves while the thief is ahead, the thief gone through to the far halls -- follow the footprints; else his own line", _ => scripts =>
             {
-                // the demo's: `if (1 == chapter()) { message(thief); } message(own);` -- both at once, the thief's first. The walkthrough
-                // (and the game's own painter below): his own line first, the thief's when Twinsen asks again (var_cube Once1).
+                // the demo's: `if (1 == chapter()) { message(thief); } message(own);` -- both at once, the thief's first. Now one or the other
                 var painter = scripts.GetText(DemoPainterActor, ScriptKind.Life);
                 var m = Regex.Match(painter, @"if\s*\(1 == chapter\(\)\)\s*\{\s*(message\(\d+\);)\s*\}\s*(message\(\d+\);)");
                 if (!m.Success) throw new NotTheGames("the demo painter's two lines");
-                painter = painter[..m.Index] + $@"if (1 == var_cube({Once1}) && {ThiefDown} == var_game({QThief}))
+                painter = painter[..m.Index] + $@"if ({ThiefDown} == var_game({QThief}))
             {{
                 {m.Groups[1].Value}
             }}
             else
             {{
                 {m.Groups[2].Value}
-                set_var_cube({Once1}, 1);
             }}" + painter[(m.Index + m.Length)..];
                 scripts.SetText(DemoPainterActor, ScriptKind.Life, painter);
             });
         else
-        p.Edit(Sewers, "the sewers' painter: his own line, then the thief gone through to the far tunnel; the far tunnel's door opens once the thief is down", _ => scripts =>
+        p.Edit(Sewers, "the sewers' painter: asked after the gloves while the thief is ahead, the thief gone through to the far tunnel; the far tunnel's door opens once the thief is down", _ => scripts =>
         {
             var painter = scripts.GetText(12, ScriptKind.Life);
-            painter = Loose(painter, "if (1 == var_game(51))", $"if (1 == var_cube({Once1}) && {ThiefDown} == var_game({QThief}))");
-            painter = Loose(painter, "set_var_cube(1, 0);", $"set_var_cube({Once1}, 1);\n        set_var_cube(1, 0);");
+            painter = Loose(painter, "if (1 == var_game(51))", $"if ({ThiefDown} == var_game({QThief}))");
             scripts.SetText(12, ScriptKind.Life, painter);
             var door = scripts.GetText(17, ScriptKind.Life);
             if (!door.Contains("use_one_little_key();")) throw new NotTheGames("the far tunnel's door");
