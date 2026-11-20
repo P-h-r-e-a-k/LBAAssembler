@@ -298,7 +298,7 @@ internal static class TempleMarshal
         // (facing the cars coming -- back along the lap -- turned to the road: on its left, round to her left)
         var beta = (int)Math.Round((Math.Atan2(-dx, -dz) - spot.Side * TurnToRoad) * 4096 / (2 * Math.PI)) & 4095;
         if (plinth)
-            report.Notes.Add($"the flag marshal: on her plinth {spot.Out:0.##} cells to the {(spot.Side < 0 ? "left" : "right")} of the lap (its edge {spot.Out - PlinthHalf - half:0.##} " +
+            report.Notes.Add($"the flag marshal: on the ground, no plinth, {spot.Out:0.##} cells to the {(spot.Side < 0 ? "left" : "right")} of the lap (her room's edge {spot.Out - PlinthHalf - half:0.##} " +
                              $"off the road), {-spot.Along:0.##} short of the start line, at cell ({mx:0.##}, {mz:0.##}), the floor {spot.Floor:0}" + (temple ? "" : $" ({r.Who})"));
         else
             report.Notes.Add($"the flag marshal ({r.Who}): no floor beside the start line (a raised road) -- on the road's edge {spot.Out:0.##} cells to the " +
@@ -320,7 +320,9 @@ internal static class TempleMarshal
             report.Notes.Add($"the flag marshal: for the start in the road's middle {startBack:0.##} cells short of the line, {gridFirst - startBack:0.##} ahead of pole's middle, " +
                              $"the grid's columns {gridSide:0.##} either side of her ({gap:0.##} cells between her and a car's box), at cell ({sx:0.##}, {sz:0.##}), the road {sy:0}");
         }
-        return Line(mx, mz, spot.Floor, beta, start, r, plinth);
+        // (on the ground there, no plinth under her, on every track -- the user, 2026-11-19: "The race marshall, can you get rid of the block you
+        // gave her to stand on from ALL tracks please". Her place beside the road is still found for a plinth's room: clear of the road)
+        return Line(mx, mz, spot.Floor, beta, start, r, plinth: false);
     }
 
     // The race file's numbers: marshal='s -- the entity, its body and animations (ready, raise, drop, wave), where she stands for the race

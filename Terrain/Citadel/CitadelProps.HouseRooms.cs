@@ -39,7 +39,7 @@ namespace LBAAssembler.Terrain.Citadel;
 //     its mirror; the toilet a cell west along the north wall (cell 9); the bath's taps in the side's dark wood.
 internal static partial class CitadelProps
 {
-    public const int Shower = 140, BathSink = 141, Toilet = 142, CornerBath = 143, TowelRail = 144, BathMat = 145;
+    public const int Shower = 140, BathSink = 141, Toilet = 142, CornerBath = 143, TowelRail = 144, BathMat = 145, ToiletRoll = 206;
     public const int KitchenCounter = 146, KitchenRange = 147, Dresser = 148, KitchenTable = 149, PlateShelf = 150;
     public const int KitchenChair = 151, BathWaterLow = 152, BathWaterMid = 153, BathWaterFull = 154, ShowerDoor = 155;
     // (each colour this far or more from its ramp's top: the light runs a colour up to 0.8 x 9 steps)
@@ -69,7 +69,11 @@ internal static partial class CitadelProps
         (BathSink, HrWestFace + 230, 4 * 512 + 256, 1024),     // against the west wall south of the shower, cell 5,4, facing the room (+x)
         (Toilet, 9 * 512 + 256, HrNorthFace + 310, 0),         // against the north wall, cell 9
         (CornerBath, 13 * 512 + 256, 2 * 512 + 256, 0),       // the north-east corner: cells 12-14, 1-3
-        (TowelRail, HrWestFace + 30, 3400, 1024),             // on the west wall past the sink, toward the front, facing the room (+x)
+        // (the towel rail on the north wall right of the toilet, between it and the bath, and a toilet roll holder left of it -- the user,
+        // 2026-11-19: "let's move the towel rail to the right of the toilet, from the wall by the sink as we look at it, and let's add a
+        // toilet roll holder on the left side of the toilet": right as the game shows the room is +x, toward the bath)
+        (TowelRail, 9 * 512 + 256 + 800, HrNorthFace + 30, 0),
+        (ToiletRoll, 9 * 512 + 256 - 520, HrNorthFace + 12, 0),
         (BathMat, 5120, 2800, 0),                             // most of the floor's middle
     };
     // the kitchen's chairs either side of its table (its middle 5,888 / 3,072), facing it: each one's place behind its seat (ChairAhead)
@@ -103,6 +107,7 @@ internal static partial class CitadelProps
         // corner 1,090; its two ends along the walls past the box are solid cells of the room's grid, CitadelHouseRooms)
         CornerBath or BathWaterLow or BathWaterMid or BathWaterFull => new short[] { (short)(BathCorner.X - 1090), 0, (short)BathCorner.Z, (short)BathCorner.X, 620, (short)(BathCorner.Z + 1090) },
         TowelRail => new short[] { -400, -16, -40, 400, 0, 140 },
+        ToiletRoll => new short[] { -90, -16, -20, 90, 0, 170 },
         PlateShelf => new short[] { -520, -16, -20, 520, 0, 200 },
         KitchenCounter => new short[] { -1556, 0, -300, 1556, 1200, 360 },
         KitchenRange => new short[] { -480, 0, -320, 480, 1100, 330 },
@@ -396,6 +401,20 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
+    // The toilet roll holder: a brass plate on the wall (-z) at the seat's height and over, two brass arms out from it, a white roll between
+    // them across the wall (walked by: under the floor's box, BathMatBox)
+    public static Body BuildToiletRoll(byte[] header)
+    {
+        var m = new CarMesh("the toilet roll holder", new[] { -1 });
+        m.Light = 0.8f;
+        const float Y = 720, Out = 100, Roll = 58;
+        m.Box(0, new Vector3(0, Y, 6), new Vector3(180, 90, 12), HrBrass);
+        foreach (var x in new[] { -75f, 75f }) m.Strut(0, new Vector3(x, Y, 6), new Vector3(x, Y, Out), 9, HrBrass);
+        m.Strut(0, new Vector3(-66, Y, Out), new Vector3(66, Y, Out), Roll, HrPorcelain);
+        m.Strut(0, new Vector3(-67, Y, Out), new Vector3(67, Y, Out), 14, HrPorcelainShade);
+        return m.ToBody(header);
+    }
+
     // The bath mat: a wide teal rug with a darker border and two stripes, flat on the floor (walked over: BathMatBox)
     public static Body BuildBathMat(byte[] header)
     {
@@ -471,7 +490,9 @@ internal static partial class CitadelProps
             for (var k = -3; k <= 3; k += 2) m.Box(0, new Vector3(k * 110, y + 110, 10), new Vector3(180, 200, 16), y < 1400 ? 12 * 16 + 7 : HrPorcelain);
         }
         m.Pane(0, HrTeal + 8, new Vector3(-W + 40, 900, D - 60), new Vector3(W - 40, 900, D - 60), new Vector3(W - 40, 2100, D - 60), new Vector3(-W + 40, 2100, D - 60));
-        m.Box(0, new Vector3(0, 2190, 0), new Vector3(2 * W + 40, 100, 2 * D), HrWood, top: HrBrass);
+        // (its crown all wood, no brass on its top: the user, 2026-11-19, "The gold on the top of the large cupboard in Twinsen's kitchen
+        // let's get rid of it please")
+        m.Box(0, new Vector3(0, 2190, 0), new Vector3(2 * W + 40, 100, 2 * D), HrWood, top: HrWoodDark);
         return m.ToBody(header);
     }
 

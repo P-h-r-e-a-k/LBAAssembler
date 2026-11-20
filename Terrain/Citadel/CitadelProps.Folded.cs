@@ -11,9 +11,10 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static partial class CitadelProps
 {
     public const int FoldedSuit = 187, FoldedPyjamas = 188;
-    // (each body drawn this far back from its actor's place, -x and -z: the actor stands a cell out from the chair, whose bricks -- in the
-    // actor's own cell, the engine redraws them over it -- hid the clothes on its seat)
-    public const int FoldedShiftX = 280, FoldedShiftZ = 300;
+    // (each body drawn this far back from its actor's place, -x and -z: none -- the actor on the seat, in the chair's own cell, so that
+    // Twinsen standing in front of the chair is drawn over the clothes (the user, 2026-11-19); the chair's bricks are kept from being
+    // redrawn over them by the race file's no_recover=, RaceCarEngineFile. It stood a cell out, 280 and 300, before: drawn over him)
+    public const int FoldedShiftX = 0, FoldedShiftZ = 0;
     private static readonly Vector3 Shift = new(-FoldedShiftX, 0, -FoldedShiftZ);
 
     private static void FoldedStack(CarMesh m, int cloth, int edge)

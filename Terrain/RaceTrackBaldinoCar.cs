@@ -263,6 +263,32 @@ internal static class RaceTrackBaldinoCar
     // The entity table with a body record -- 1, generic number (1 byte), size 4, BODY.HQR index (S16), 0 (no collision box of its own) -- added
     // to one entity just before its end mark (255), or its index changed when the entity already has that body number. The entities after it
     // move, so their offsets do too (as RaceTrackJumpAnim.WithAnim).
+    // An entity's body `generic` as BODY.HQR `bodyIndex`, its record a copy of the entity's own body `like`'s -- its collision box (ZV)
+    // with it: a body added with WithBody has none, and the engine then takes the body's own bounds (Twinsen's pyjamas' nightcap made him
+    // too tall for the house's storeroom doorway). Like WithBody when the entity has no body `like`.
+    public static byte[] WithBodyLike(byte[] table, int entity, int generic, int bodyIndex, int like)
+    {
+        var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;
+        if (entity < 0 || entity >= count) throw new InvalidDataException($"RESS.HQR has no entity {entity}.");
+        var start = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
+        var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
+        byte[]? model = null;
+        int at = -1, atLength = 0, p = start;
+        while (p < end && table[p] != 255)
+        {
+            var command = table[p];
+            var length = command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
+            if (command == 1 && table[p + 1] == like && model is null) model = table.AsSpan(p, length).ToArray();
+            if (command == 1 && table[p + 1] == generic && at < 0) { at = p; atLength = length; }
+            p += length;
+        }
+        if (p >= end) throw new InvalidDataException($"Entity {entity}'s records have no end mark.");
+        if (model is null) return WithBody(table, entity, generic, bodyIndex);
+        model[1] = (byte)generic;
+        BinaryPrimitives.WriteInt16LittleEndian(model.AsSpan(3), (short)bodyIndex);
+        return at >= 0 ? Lba2EntityTable.Splice(table, entity, at, atLength, model) : Lba2EntityTable.Splice(table, entity, p, 0, model);
+    }
+
     public static byte[] WithBody(byte[] table, int entity, int generic, int bodyIndex)
     {
         var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;

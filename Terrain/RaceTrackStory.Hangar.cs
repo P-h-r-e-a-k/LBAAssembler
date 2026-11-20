@@ -10,8 +10,7 @@ namespace LBAAssembler.Terrain;
 //     the long hall south of the pad.
 //   - The freighter on the raised pad (HangarProps.Freighter: the game's Esmer saucer, its cargo hatch east, a ramp down to the pad, the
 //     pad's own ramp down to the hall); the base's people and its small saucer gone.
-//   - Alien cars (the moon rover, Baldino's lander, the guard's saucer: the racers' bodies) driven up the ramps into the hold and out again
-//     down to the hall's far end, over and over.
+//   - (No alien cars loading on and off: the hangar isn't the giant cargo port they suggested -- HangarCars, empty till it is.)
 //   - The masked driver's black car (body 95) parked by the ramp's foot: Twinsen comes near and it drives up and into the hold -- off to the
 //     moon ahead of him (the Moon's chapter has it past the finish there).
 //   - The Esmer dock officer by the ramp's foot (the moon base's mechanic): a word as Twinsen comes near, and on Action: the freighter to the
@@ -34,7 +33,10 @@ internal static partial class RaceTrackStory
         OfficerAt = (12544, HallY, 10752), ArriveAt = (12032, HallY, 24064), BlackAt = (12032, HallY, 12800), BuggyAt = (11400, HallY, 11776),
         LiftUp = (ShipX, PadY + 2000, ShipZ), LiftTop = (ShipX, PadY + 3900, ShipZ);
     // the alien cars (the racers' entity's bodies), each its own start in the loop and speed
-    private static readonly (int Body, int Wait, int Speed)[] HangarCars = { (8, 0, 1800), (14, 90, 1600), (15, 180, 2000) };
+    // (none now: the user, 2026-11-19, "it's not actually a giant spaceship, it appears just regular sized, and no other part of the Esmer
+    // base has been altered to accomodate the idea. Leave it for now, we'll come back to it, let's just remove the loading animation of the
+    // other cars for now" -- the moon rover, Baldino's lander and the guard's saucer were (8, 0, 1800), (14, 90, 1600), (15, 180, 2000))
+    private static readonly (int Body, int Wait, int Speed)[] HangarCars = { };
 
     // the hangar's lines (text ids of its island's file): the officer's offer, the answers, go aboard, later, the lift-off, no flights
     internal sealed record HangarLines(int Offer, int Yes, int No, int Board, int Later, int Lift, int Closed);

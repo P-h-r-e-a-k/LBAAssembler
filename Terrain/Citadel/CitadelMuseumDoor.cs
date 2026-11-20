@@ -98,4 +98,56 @@ internal static class CitadelMuseumDoor
         GapSprite = number;
         return $"The museum's security room door with its lower two panes of glass out: sprite {DoorSprite} copied as sprite {number} ({cleared} pixels of glass, colour {glass}, see-through)";
     }
+
+    // The security room's window shut (the user, 2026-11-19: "The elevator into the museum, let's remove this for both Citadel islands
+    // citadel.ile and citabau.ile, let's also remove the window from the room it connects to" -- Twinsen gets into the room from inside the
+    // museum, the door released by the broom): in scene 15's grid the window (block WindowBlock, two cells wide and six layers high in the
+    // room's north wall, z WallZ) laid over with the wall's own pattern beside it (WallBlock, three cells wide, a row of three positions a
+    // layer), and its way out (the zone into scene 48 in front of it, the game's window exit) taken away.
+    private const int WallZ = 24, WindowX0 = 24, WindowX1 = 25, WindowY0 = 12, WindowY1 = 17, WindowBlock = 123, WallBlock = 2, WallBase = 10,
+                      WallFirstX = 24, Outside = 48, GridSize = 64, GridHeight = 25;
+    public static List<string> ShutWindow(string gameDirectory)
+    {
+        var log = new List<string>();
+        var bkgPath = Path.Combine(gameDirectory, "LBA_BKG.HQR");
+        if (!File.Exists(bkgPath)) return log;
+        var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
+        var header = new Maps.MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        if (Scene * 2 + 1 >= table.Length) { log.Add($"The museum's window left: no scene {Scene}"); return log; }
+        var gridNumber = table[Scene * 2 + 1];
+        var gridEntry = header.Gri + gridNumber;
+        var raw = bkg.Read(gridEntry);
+        var shape = Grids.Lba2GridBackend.ToLba1Shape(raw);
+        var cells = Lba1.Lba1GridCodec.Decode(shape);
+        int BlockAt(int x, int y, int z) => cells[((z * GridSize + x) * GridHeight + y) * 2];
+        var edits = new List<Lba1.Lba1GridCell>();
+        if (BlockAt(WindowX0, WindowY0, WallZ) == WindowBlock)
+        {
+            // (the wall's pattern: its column by x, three cells to a repeat starting at WallFirstX, three positions to a layer from WallBase)
+            for (var x = WindowX0; x <= WindowX1; x++)
+                for (var y = WindowY0; y <= WindowY1; y++)
+                    edits.Add(new Lba1.Lba1GridCell(x, y, WallZ, WallBlock, (y - WallBase) * 3 + ((x - WallFirstX) % 3 + 3) % 3));
+            shape = Lba1.Lba1GridEdit.SetCells(shape, edits);
+            raw = Grids.Lba2GridBackend.FromLba1Shape(raw, shape);
+            bkg.SetStored(gridEntry, raw);
+            if (header.MaxGri < (uint)raw.Length) header.MaxGri = (uint)raw.Length;
+            bkg.SetStored(0, header.Bytes);
+            File.WriteAllBytes(bkgPath, bkg.ToBytes());
+            log.Add($"The museum's security room (scene {Scene}, grid {gridNumber}): its window (block {WindowBlock}) laid over with its wall ({edits.Count} cells)");
+        }
+        else log.Add($"The museum's security room (scene {Scene}): its window shut already, or not where it was (block {BlockAt(WindowX0, WindowY0, WallZ)})");
+        // (its way out: the zone into scene 48 in front of it -- not the museum's front door, whose zone into 48 stands at the floor's edge)
+        var store = new Scenes.SceneStore(Scenes.SceneGame.Lba2, gameDirectory);
+        if (!store.SceneExists(Scene)) return log;
+        var model = store.Load(Scene);
+        var gone = model.Zones.RemoveAll(z => z.Type == 0 && z.Num == Outside && z.X0 <= WindowX1 * 512 + 511 && z.X1 >= WindowX0 * 512
+                                              && z.Y0 >= WindowY0 * 256 - 1024 && z.Z0 <= (WallZ + 2) * 512 && z.Z1 >= WallZ * 512);
+        if (gone > 0)
+        {
+            store.Save(Scene, model, allowErrors: true);
+            log.Add($"The museum's security room (scene {Scene}): its window's way out into scene {Outside} taken away");
+        }
+        return log;
+    }
 }

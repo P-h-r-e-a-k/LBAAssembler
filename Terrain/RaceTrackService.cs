@@ -539,6 +539,9 @@ internal static class RaceTrackService
                 // (and the Tavern's plant out of its corner at the end of the bar, for the dartboard: Citadel/TavernPlant)
                 made.Add(LBAAssembler.Terrain.Citadel.TavernPlant.Remove(gameDirectory));
             }
+            // (the museum's security room's window shut, in every build of Citadel Island: no lift goes down to it any more -- after the
+            // museum's displays, CitadelMuseum, as its grid is theirs too)
+            if (tracks.Any(t => t.Options.Island.IleFile == RaceTrackIsland.Citadel.IleFile)) made.AddRange(LBAAssembler.Terrain.Citadel.CitadelMuseumDoor.ShutWindow(gameDirectory));
             // (the Temple of Bù on the Desert made drivable from its door to its stairs down: TempleOfBuDrive -- the story's door and its car's
             // own way to the hangar, RaceTrackStory.TempleDrive)
             if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Desert.IleFile)) made.AddRange(TempleOfBuDrive.Install(gameDirectory));

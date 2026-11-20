@@ -1740,9 +1740,12 @@ void RaceMod_Walk(int n, const double *xz, int car, int more);
 // adult_var=<game var>: 1 while the race game's player is 18 or more (RaceGame_PlayerAdult: their date of birth), 0 else -- a story's
 // script keeps a way shut to a younger player by it (Stella Entities' lift)
 static int s_adultVar = -1;
-// (no_recover=: RaceMod_NoRecover)
+// (no_recover=: RaceMod_NoRecover -- a line a scene)
 #define RACE_MAX_NO_RECOVER 8
-static int s_noRecoverScene = -1, s_noRecoverBody[RACE_MAX_NO_RECOVER], s_nbNoRecover = 0;
+#define RACE_MAX_NO_RECOVER_SCENES 4
+typedef struct { int Scene, Body[RACE_MAX_NO_RECOVER], Nb; } T_RACE_NO_RECOVER;
+static T_RACE_NO_RECOVER s_noRecover[RACE_MAX_NO_RECOVER_SCENES];
+static int s_nbNoRecoverScenes = 0;
 // carry_hero=<scene> <cube var> <up> <ahead>: in that scene, while the scene variable holds an actor's index (1-254), Twinsen is held up in
 // front of that actor -- <ahead> along its facing, <up> over its feet, turned to face it, and not falling -- whatever it does (CarryFrame):
 // Stella Entities' bouncer carrying him off the stage to the club's lift (the user, 2026-11-16, "If Twinsen manages to get onto the stage,
@@ -5626,8 +5629,14 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "no_recover")) {
             int scene, body, used = 0;
             if (!setRead && sscanf(v, "%d%n", &scene, &used) == 1) {
-                s_noRecoverScene = scene; s_nbNoRecover = 0;
-                for (const char *q = v + used; s_nbNoRecover < RACE_MAX_NO_RECOVER && sscanf(q, "%d%n", &body, &used) == 1; q += used) s_noRecoverBody[s_nbNoRecover++] = body;
+                int k = 0;
+                while (k < s_nbNoRecoverScenes && s_noRecover[k].Scene != scene) k++;
+                if (k < RACE_MAX_NO_RECOVER_SCENES) {
+                    T_RACE_NO_RECOVER *nr = &s_noRecover[k];
+                    if (k == s_nbNoRecoverScenes) s_nbNoRecoverScenes++;
+                    nr->Scene = scene; nr->Nb = 0;
+                    for (const char *q = v + used; nr->Nb < RACE_MAX_NO_RECOVER && sscanf(q, "%d%n", &body, &used) == 1; q += used) nr->Body[nr->Nb++] = body;
+                }
             }
         }
         else if (!strcmp(key, "drive_marks")) { s_markVar = -1; s_markCount = 0; sscanf(v, "%d %d", &s_markVar, &s_markCount); }
@@ -13757,17 +13766,20 @@ S32 RaceMod_CarThrough(S32 num) {
 
 // (and not stood on, nor bumped by anything moving: OBJECT.CPP's other collision loops -- the footprints' box is the props' entity's)
 S32 RaceMod_WalkOver(S32 numobj) { return numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER; }
-// no_recover=<scene> <generic body> ...: that inside scene's props drawn into the background (OBJ_BACKGROUND) of those bodies have no brick
-// redrawn over them (OBJECT.CPP: DrawRecover left out). Stella Entities' stage and catwalk (the user, 2026-11-16): the catwalk's cells are
-// real bricks so that Twinsen on the floor behind it is hidden by it (the bricks' shapes copy the background, the catwalk's pixels, back
-// over him) -- but the prop's actor stands far back in the room's corner, so every brick was in front of it, and the catwalk's bricks
-// were redrawn over the catwalk itself.
+// no_recover=<scene> <generic body> ... (a line a scene, up to RACE_MAX_NO_RECOVER_SCENES): that inside scene's props of those bodies have no
+// brick redrawn over them (OBJECT.CPP: DrawRecover left out). Stella Entities' stage and catwalk (the user, 2026-11-16): the catwalk's cells
+// are real bricks so that Twinsen on the floor behind it is hidden by it (the bricks' shapes copy the background, the catwalk's pixels,
+// back over him) -- but the prop's actor stands far back in the room's corner, so every brick was in front of it, and the catwalk's
+// bricks were redrawn over the catwalk itself. And a prop lying on furniture of bricks -- the clothes folded on the chair by Twinsen's
+// bed: in the chair's cell, so that he is drawn over them when he stands in front of it, the chair's bricks are not redrawn over them.
 S32 RaceMod_NoRecover(S32 numobj) {
-    if (s_noRecoverScene < 0 || (S32)NumCube != s_noRecoverScene || CubeMode != CUBE_INTERIEUR || numobj <= 0 || numobj >= (S32)NbObjets) return 0;
+    if (s_nbNoRecoverScenes <= 0 || CubeMode != CUBE_INTERIEUR || numobj <= 0 || numobj >= (S32)NbObjets) return 0;
     const T_OBJET *o = &ListObjet[numobj];
-    if (!(o->Flags & OBJ_BACKGROUND)) return 0;
-    for (int i = 0; i < s_nbNoRecover; i++)
-        if ((int)o->GenBody == s_noRecoverBody[i]) return 1;
+    for (int k = 0; k < s_nbNoRecoverScenes; k++) {
+        if ((S32)NumCube != s_noRecover[k].Scene) continue;
+        for (int i = 0; i < s_noRecover[k].Nb; i++)
+            if ((int)o->GenBody == s_noRecover[k].Body[i]) return 1;
+    }
     return 0;
 }
 

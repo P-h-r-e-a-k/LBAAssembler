@@ -331,7 +331,9 @@ internal static partial class CitadelProps
         var m = new CarMesh("the harbour's sewer lift", new[] { -1 });
         m.Light = 0.6f;
         const float H = LiftSize / 2f, Rim = 40;
-        const int Floor = 10 * 16 + 1, Bar = 10 * 16 + 6, Frame = 11 * 16 + 4;
+        // (the dark grey grating the quay shows -- the game's own grate decor rides its plate there: the user, 2026-11-19, "We've changed the
+        // colour of the elevator at the quay, but it's still it's old blue colour when viewed in the sewers": the bars teal before, 10 * 16 + 6)
+        const int Floor = 3 * 16 + 0, Bar = 3 * 16 + 1, Frame = 3 * 16 + 2;
         m.Box(0, new Vector3(0, LiftTop - 30, 0), new Vector3(LiftSize - 2 * Rim, 20, LiftSize - 2 * Rim), Floor, Floor);
         const int Bars = 9;
         for (var k = 0; k < Bars; k++)

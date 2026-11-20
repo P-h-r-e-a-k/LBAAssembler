@@ -35,6 +35,10 @@ internal sealed record RaceTrackIsland(
         KeepOffRoadActors = true,
         // (the Temple of Bu's doorway big enough for a car, which drives into it: TempleDoorway, the user 2026-11-17)
         WideTempleDoor = true,
+        // (the two posts at the foot of the slope up to the ferry's quay, body 18, gone: the car drives up it onto the car ferry -- the user,
+        // 2026-11-19, "There's two blue posts at the bottom of the slope near the ferry, we'll have to remove these two posts as they prevent
+        // the car driving up the slope", "Those posts are on the desert quay")
+        DropDecors = new[] { (9, 8, 17664, 15168), (9, 8, 17664, 16576) },
         // (the racers' garage, a big tent on the sand after the start line: the user, 2026-11-07)
         GarageTent = true,
         // (... where the user chose it, 2026-11-11 -- "Let's make the tent area bigger and slightly to the left ... so it doesn't go over the
@@ -107,10 +111,13 @@ internal sealed record RaceTrackIsland(
         CarHome = (544.125, 654.75, 1024),
         // (its steep banks beside the road its own ground, walked on by Twinsen, walls to the cars only: RaceTrackBuilder.WallSteepBanks)
         SoftBanks = true,
-        DeckLifts = new[] { (520.8, 568.1, 15, 12288, 3000, 13312) },
+        // (no lift down into the museum from the storm track's deck, nor from the town circuit's road -- the user, 2026-11-19: "The elevator
+        // into the museum, let's remove this for both Citadel islands citadel.ile and citabau.ile, let's also remove the window from the room
+        // it connects to"; Twinsen gets into that room from inside the museum, its door released by the broom: CitadelMuseumDoor.ShutWindow.
+        // The deck's lift was (520.8, 568.1) down into scene 15 at (12288, 3000, 13312); the road's TwinMuseum's last pair, below)
         // (and in the town circuit's file, where the road took the museum: its front against the road's bank, the retail front (body 38)
-        // moved there, and a lift on the road above -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently
-        // facing": scene 48 at (10966, 31375), facing west)
+        // moved there -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently facing": scene 48 at (10966,
+        // 31375), facing west. Its lift on the road above needs DeckLifts, so it is gone with the deck's)
         TwinMuseum = (38, 520.5, 570.5, 525.5, 572.4, 521.5, 573.3),
         // (and the paved path along the bank south of the museum's door level at 250 again: a fin of the bank's ground crossed it, points x
         // 529-532 at z 577-578 rising to 2,000 towards the bank, and a bump at (529, 580) -- the user, 2026-11-17, "Part of the path near

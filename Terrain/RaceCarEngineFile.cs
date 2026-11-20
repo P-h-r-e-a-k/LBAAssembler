@@ -740,6 +740,10 @@ internal static class RaceCarEngineFile
             // catwalk by then, over their parts in front of it -- the steps' top step cut off, the user, 2026-11-16: "We also need to change
             // the stairs onto the catwalk, they now appear too low")
             if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={StellaEntities.Scene} {Citadel.CitadelProps.ClubStage} {Citadel.CitadelProps.ClubRail} {Citadel.CitadelProps.ClubSteps} {Citadel.CitadelProps.ClubShelf}\n");
+            // (and the clothes folded on the chair by Twinsen's bed, in the chair's own cell: Twinsen in front of the chair drawn over them, the
+            // chair's bricks not over them -- the user, 2026-11-19, "We need to have Twinsen drawing over the clothes that are on the chair not
+            // the other way around"; RaceTrackStory.Pyjamas)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"no_recover={RaceTrackStory.HouseScene} {Citadel.CitadelProps.FoldedSuit} {Citadel.CitadelProps.FoldedPyjamas} {Citadel.CitadelProps.FoldedCasual}\n");
             // (and the round stage hiding whoever stands on the floor behind it: RACEMOD.CPP occluder= -- its cells are invisible ones)
             if (t.Story is { TiredText: >= 0 })
             {

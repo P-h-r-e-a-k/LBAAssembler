@@ -185,10 +185,12 @@ internal static class CitadelPyjamas
         int entry;
         if (RaceTrackGuards.BodyOf(table, HeroEntity, PyjamaBody) is { } had) { HqrWriter.ReplaceInFile(bodyPath, had, bytes); entry = had; }
         else { entry = HqrArchive.CountEntries(bodyPath); HqrWriter.AppendToFile(bodyPath, bytes); }
+        // (each with his everyday body's collision box -- 1,240 tall -- not the pyjamas' own bounds: the nightcap made him too tall for the
+        // storeroom's doorway, the user, 2026-11-19, "Twinsen is unable to enter the back room of his house when wearing pyjamas")
         foreach (var e in BehaviourEntities.Prepend(HeroEntity))
-            if (RaceTrackGuards.BodyOf(table, e, PyjamaBody) is null) table = RaceTrackBaldinoCar.WithBody(table, e, PyjamaBody, entry);
-        if (RaceTrackGuards.BodyOf(table, CitadelOveralls.CoupleEntity, 0) is { } pair && RaceTrackGuards.BodyOf(table, CitadelOveralls.CoupleEntity, PyjamaBody) is null)
-            table = RaceTrackBaldinoCar.WithBody(table, CitadelOveralls.CoupleEntity, PyjamaBody, pair);
+            table = RaceTrackBaldinoCar.WithBodyLike(table, e, PyjamaBody, entry, 0);
+        if (RaceTrackGuards.BodyOf(table, CitadelOveralls.CoupleEntity, 0) is { } pair)
+            table = RaceTrackBaldinoCar.WithBodyLike(table, CitadelOveralls.CoupleEntity, PyjamaBody, pair, 0);
         HqrWriter.ReplaceInFile(ressPath, 44, table);
         return new() { $"Twinsen's pyjamas: the hero's body {PyjamaBody} (BODY.HQR {entry}: {body.Vertices.Count} points, {body.Faces.Count} polygons, {body.Spheres.Count} spheres) -- a striped light-blue nightgown and nightcap, barefoot" };
     }

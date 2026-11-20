@@ -81,6 +81,8 @@ internal static partial class RaceTrackStory
     // (56: 3 back at the lighthouse), the aliens' landing (70) and the behaviour Twinsen drives in (12)
     private const int StormPlot = 51, KeeperPlot = 56, AliensLanded = 70, Driving = 12;
     private const int OpeningScene = 0, Zoe = 4, BedZone = 5;
+    // (Twinsen's house by day, for the race file's lines: RaceCarEngineFile)
+    internal const int HouseScene = OpeningScene;
     private const int WizardTent = 21, Wizard = 2, TraluCave = 2, CaveRaph = 2, CaveZoe = 9, PaulHouse = 7, PaulActor = 2;
     // (the game's landing speech, 384, and greeting, 388: their words are IslandRetell's, the Cup's)
     private const int AliensScene = 42, Alien = 6, AlienGreeting = 388, EsmerGreeting = 384, ArrivalPoint = 20;
