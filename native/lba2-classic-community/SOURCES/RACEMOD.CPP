@@ -1178,6 +1178,11 @@ static int s_winStopVar = -1, s_winStop = 0, s_winStopWatch = -1, s_winStopHeld 
 #define RACE_PULL_SIDE 1100.0
 static int s_winPullOpp = -1, s_winPullVar = -1, s_winPullValue = 1, s_winPullDelay = 0, s_winPulled = 0;
 static S32 s_winStopSince = 0;
+// The race just won: its cars stay where they are (OpponentAway) through the win's own scene -- however often the track is read again
+// meanwhile, as when the car brakes over a cube's edge past the line -- until a scene loads after that scene is over (RaceMod_Island).
+static int s_justWon = 0;
+// (a pull-up given this long past its own time without the car's frame reporting it stopped: its cue given all the same)
+#define RACE_PULL_LATE_MS 2500
 #define RACE_WINSTOP_MS 20000              // (the game's clock, which a dialogue stops: this long out of the car with nothing said)
 S32 RaceMod_OnFoot(void);
 static int FootRescue(const char *where);
@@ -7694,6 +7699,7 @@ static const T_RACE_OPPONENT *AutoGuide(void) { return (s_autoShort || s_autoSmo
 static void WinStopStart(S32 now) {
     if (s_winStopVar < 0 || s_winStop) return;
     s_winStop = 1; s_winStopSince = now; s_winStopWatch = s_winStopVar; s_winStopHeld = ListVarGame[s_winStopVar];
+    s_justWon = 1;
     s_winPulled = 0; for (int i = 0; i < RACE_MAX_OPPONENTS; i++) s_opp[i].Pull = 0;
     s_auto = 0; s_stopReach = 0; s_stopping = 0; s_walkN = 0; s_walkCar = 0;
     Log_Info("[racemod] win_stop: the race won -- the car braked to a stop past the line, Twinsen out of it, the controls his again once variable %d moves on from %d",
@@ -7729,6 +7735,14 @@ static void WinPullFrame(S32 now) {
 // Every frame (RaceMod_Frame): the controls back once the story's scene has played
 static void WinStopFrame(S32 now) {
     if (s_winStop != 2 || s_winStopWatch < 0) return;
+    // (the story's words after the win wait on win_pull='s cue: a pull-up that never reports its stop gives it late, so they can't stall)
+    if (s_winPulled && s_winPullOpp >= 0 && s_winPullVar >= 0 && ListVarGame[s_winPullVar] != (S16)s_winPullValue
+        && s_opp[s_winPullOpp].Pull != 2 && now - s_opp[s_winPullOpp].PullAt > (S32)RACE_PULL_MS + RACE_PULL_LATE_MS) {
+        ListVarGame[s_winPullVar] = (S16)s_winPullValue;
+        s_opp[s_winPullOpp].Pull = 2;
+        Log_Warn("[racemod] win_pull: %s's car never reported its stop -- variable %d at %d all the same", s_opp[s_winPullOpp].Name, s_winPullVar,
+                 s_winPullValue);
+    }
     if (ListVarGame[s_winStopWatch] != s_winStopHeld) {
         s_winStop = 0;
         Log_Info("[racemod] win_stop: variable %d %d -> %d -- the controls back to the player", s_winStopWatch, s_winStopHeld, (int)ListVarGame[s_winStopWatch]);
@@ -7736,6 +7750,11 @@ static void WinStopFrame(S32 now) {
         s_winStop = 0;
         Log_Info("[racemod] win_stop: WARNING -- variable %d still %d after %d s out of the car: the controls back to the player all the same",
                  s_winStopWatch, s_winStopHeld, RACE_WINSTOP_MS / 1000);
+        // (and win_pull='s cue, if it was never given: the story's words after the win wait on it)
+        if (s_winPullVar >= 0 && ListVarGame[s_winPullVar] == 0) {
+            ListVarGame[s_winPullVar] = (S16)s_winPullValue;
+            Log_Warn("[racemod] win_pull: no pull-up seen -- variable %d at %d all the same", s_winPullVar, s_winPullValue);
+        }
     }
 }
 // (RaceMod_AutoInput: the brake, then out once it stands -- as the action key lets him out, not in the air, over a jump or round a loop)
@@ -8454,8 +8473,8 @@ static int OpponentAway(const T_RACE_OPPONENT *o) {
     if (s_pitHidden && !s_gridForming && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
     // (a race won already, once_won=: its racers gone home -- the user, 2026-11-18, "After Twinsen wins the race on Citadel island the other
     // racers should go back to their other locations. The Tralu his cave, Luc his bar, Mr. Paul the Port etc." Not the race just finished:
-    // its cars stay parked where they stopped until Twinsen leaves the scene -- the track read again then (RaceMod_Island), Inert from there)
-    if (Inert()) return 1;
+    // its cars stay parked where they stopped, and the one pulling up beside him (win_pull=) drives on, through the win's scene: s_justWon)
+    if (Inert() && !s_justWon) return 1;
     if (o->WhenVar < 0) return 0;
     const S32 v = ListVarGame[o->WhenVar];
     return v < o->WhenLeast || (o->WhenBelow > 0 && v >= o->WhenBelow);
@@ -11623,7 +11642,13 @@ static void ForgetPowerUps(const char *why) {
 // SAVEGAME.CPP, once a saved game is loaded (its clock set).
 void RaceMod_GameLoaded(void) {
     if (RaceMod_Active()) ForgetPowerUps("a saved game loaded");
-    s_winStop = 0;
+    s_winStop = 0; s_justWon = 0;
+    // (a game saved past a won race whose win_pull= cue was never given: given now. Here, not as the island loads -- the save's wide game
+    // variables, the cue's among them, are read after its island)
+    if (RaceMod_Active() && Inert() && s_winPullVar >= 0 && ListVarGame[s_winPullVar] == 0) {
+        ListVarGame[s_winPullVar] = (S16)s_winPullValue;
+        Log_Warn("[racemod] win_pull: a game saved after its race was won, before the pull-up -- variable %d at %d", s_winPullVar, s_winPullValue);
+    }
 }
 
 // A jet-pack's factor now (`until`: when it ends, `full`: its factor): full, then over its last RACE_JET_EASE_MS back down to 1 -- the car
@@ -24810,6 +24835,8 @@ static void HoldVars(void) {
 
 void RaceMod_Island(S32 island) {
     if (!RaceMod_Active()) return;
+    // (the win's scene over, the next scene loaded: the race just won is a race won already from here)
+    if (s_justWon && !s_winStop) s_justWon = 0;
     if (!s_nbTracks) { HoldVars(); return; }
     const int fine = ListVarGame[FLAG_CHAPTER] >= 2 || s_setFine, risen = ListVarGame[FLAG_CELEBRATION] != 0;
     const char *want = NULL;
@@ -24841,6 +24868,12 @@ void RaceMod_Island(S32 island) {
     HoldVars();
     if (want) Log_Info("[racemod] island %d%s: its track, %s", (int)island, island == 0 ? (fine ? " (fine weather)" : " (storm)") : "", path);
     if (want && Inert()) Log_Info("[racemod] this race is won already (once_won=): its start line inert -- no qualifying lap, no grid");
+    // (a race won already whose win_pull= cue was never given -- a game saved past the win before the pull-up could run: the story's words
+    // after the win wait on it, so it is given now)
+    if (want && Inert() && !s_winStop && s_winPullVar >= 0 && ListVarGame[s_winPullVar] == 0) {
+        ListVarGame[s_winPullVar] = (S16)s_winPullValue;
+        Log_Warn("[racemod] win_pull: the race won before its pull-up -- variable %d at %d", s_winPullVar, s_winPullValue);
+    }
     else if (!want) Log_Info("[racemod] island %d: no track -- the car alone", (int)island);
 }
 
