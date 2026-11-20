@@ -4944,7 +4944,25 @@ void ResetCinemaMode(void) {
 /*──────────────────────────────────────────────────────────────────────────*/
 static U8 PrevCinemaMode = FALSE; // #354: previous-frame CinemaMode, to detect the retract start
 
+/* The bars' colour. Under the GPU renderer palette index 0 in the 2D layer is the
+   present's see-through hole onto the 3D picture, so COUL_CINEMA's bars showed the
+   scene through them wherever the 3D is the GPU's (outside); there the darkest other
+   entry of the palette in use stands in for it (the game's palettes have a second
+   black). The software path keeps COUL_CINEMA. */
+static S32 CinemaColour(void) {
+    if (!GpuRenderer_IsActive()) return COUL_CINEMA;
+    const U8 *pal = PtrPalCurrent ? PtrPalCurrent : PtrPal;
+    if (!pal) return COUL_CINEMA;
+    S32 best = COUL_CINEMA, bestSum = 0x7FFFFFFF;
+    for (S32 i = 1; i < 256; i++) {
+        const S32 s = pal[i * 3] + pal[i * 3 + 1] + pal[i * 3 + 2];
+        if (s < bestSum) { bestSum = s; best = i; }
+    }
+    return best;
+}
+
 void FixeCinemaMode(S32 flagflip) {
+    const S32 coulCinema = CinemaColour();
     // #354: re-arm the letterbox out-ramp whenever the cutscene ends. LM_CINEMA_MODE 0
     // re-arms it (DebCycleCinema/LastYCinema/TimerCinema/DureeCycleCinema), but
     // ResetCinemaMode and the abrupt clears do not, leaving TimerCinema stale so the
@@ -4975,8 +4993,8 @@ void FixeCinemaMode(S32 flagflip) {
                 MemoClipWindow();
                 UnsetClipWindow();
 
-                Box(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1, COUL_CINEMA);
-                Box(0, MemoClipWindowYMax + 1, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, COUL_CINEMA);
+                Box(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1, coulCinema);
+                Box(0, MemoClipWindowYMax + 1, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, coulCinema);
 
                 if (flagflip) {
                     BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1);
@@ -4990,8 +5008,8 @@ void FixeCinemaMode(S32 flagflip) {
             MemoClipWindow();
             UnsetClipWindow();
 
-            Box(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1, COUL_CINEMA);
-            Box(0, MemoClipWindowYMax + 1, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, COUL_CINEMA);
+            Box(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1, coulCinema);
+            Box(0, MemoClipWindowYMax + 1, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, coulCinema);
 
             RestoreClipWindow();
         }
@@ -5013,8 +5031,8 @@ void FixeCinemaMode(S32 flagflip) {
             UnsetClipWindow();
 
             if (MemoClipWindowYMin > 0) {
-                Box(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1, COUL_CINEMA);
-                Box(0, MemoClipWindowYMax + 1, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, COUL_CINEMA);
+                Box(0, 0, (S32)ModeDesiredX - 1, MemoClipWindowYMin - 1, coulCinema);
+                Box(0, MemoClipWindowYMax + 1, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, coulCinema);
             }
 
             if (flagflip) {
@@ -6600,7 +6618,10 @@ startaffscene:
         // in AFF_OBJETS_FLIP, so the bars stick until the camera settles then snap.
         // Restricted to the retract so the active-cutscene redraw (FALSE, the
         // "changement de caméra" branch) is untouched.
-        if (!CinemaMode AND ClipWindowYMin > 0)
+        // The slide-in the same way: outside, a camera that keeps moving -- the auto camera
+        // following the hero -- makes every frame AFF_ALL_FLIP, and the bars, only ever
+        // redrawn here at their current size, never came in at all.
+        if ((!CinemaMode AND ClipWindowYMin > 0) OR (CinemaMode AND ClipWindowYMin < 40))
             FixeCinemaMode(TRUE); // Scrolle les bandes noires
         else
             FixeCinemaMode(FALSE); // Scrolle les bandes noires
