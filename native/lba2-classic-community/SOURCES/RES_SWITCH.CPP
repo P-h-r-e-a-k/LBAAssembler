@@ -23,6 +23,7 @@
 #include "RACEGAME.H" /* RaceGame_On: the window fit is the race game's (Res_ApplyWindowFit) */
 
 #include <3D/CAMERA.H>
+#include <GPU/GPURENDERER.H> /* GpuRenderer_Resize: the GPU renderer told of the new size */
 #include <SVGA/CLIP.H>
 #include <SVGA/DIRTYBOX.H>
 #include <SVGA/SCREEN.H>
@@ -251,6 +252,7 @@ static bool Res_SwitchEx(U32 newW, U32 newH, bool playerChoice) {
             TheEnd(NOT_ENOUGH_MEM, "Res_Switch revert");
             return false;
         }
+        GpuRenderer_Resize(oldW, oldH);
         /* Cube reload at the old W,H — the per-cube buffers in MainBuffer
            were zeroed by the teardown and need their contents back before
            the next AffScene() runs. */
@@ -258,6 +260,21 @@ static bool Res_SwitchEx(U32 newW, U32 newH, bool playerChoice) {
             PtrInitGrille((U32)NumCube);
         return false;
     }
+
+    /* The GPU renderer (OpenGL) told of the new size: its screen scale, its
+       render target and its depth readback into the software Z-buffer all go
+       by the size it was last given. Nothing told it before (upstream's own
+       GpuRenderer_Resize was never called), so after a switch on OpenGL --
+       the race game's window fit (Res_ApplyWindowFit) at every resize of its
+       window -- it drew the 3D at the old size, and its depth readback wrote
+       the old size's rows into the new Z-buffer: the spheres and lines drawn
+       in software over the GL picture (Twinsen's hair) scattered or hidden,
+       and past the buffer's end when the picture had shrunk. The user,
+       2026-11-20, LBRA on OpenGL, the picture 848x480 -> 840x480 -> 912x480
+       by the window's resizes: "There's lots of yellow spots by Twinsen,
+       Twinsen seems to be missing his hair, the text looks like it's being
+       drawn with a shadow". (A no-op on software.) */
+    GpuRenderer_Resize(newW, newH);
 
     /* Repopulate the per-cube buffers in the freshly-allocated MainBuffer.
        InitGrille reloads the cube's grille header into BufMap, the block

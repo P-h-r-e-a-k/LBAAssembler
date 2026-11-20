@@ -1552,6 +1552,10 @@ static bool res_parse_wxh(const char *s, U32 *outW, U32 *outH) {
    unapplied older one is the sensible behaviour anyway. */
 static bool s_resSwitchPending = false;
 static U32 s_resSwitchPendingW = 0, s_resSwitchPendingH = 0;
+/* `resolution WxH keep`: the switch kept without the keep/revert dialog -- for a scripted run, whose dialog
+   can't be answered (under --fixed-dt its countdown runs out at once and reverts): the OpenGL renderer's
+   following a size change checked by the harness (2026-11-20). Carried with a deferred switch. */
+static bool s_resNoRevert = false, s_resSwitchPendingNoRevert = false;
 
 /* Shared "fire the orchestrator, then arm the keep/revert dialog" path. Pulls
    the safety gate, captures the previous (W, H), closes the console so the
@@ -1597,6 +1601,7 @@ static void res_do_switch(U32 newW, U32 newH) {
         s_resSwitchPending = true;
         s_resSwitchPendingW = newW;
         s_resSwitchPendingH = newH;
+        s_resSwitchPendingNoRevert = s_resNoRevert;
         Console_Print("Resolution: %ux%u", newW, newH);
         if (newW < UI_CANVAS_W || newH < UI_CANVAS_H)
             Console_Print("  note: below %ux%u the UI is clipped; world render is unaffected.",
@@ -1613,7 +1618,7 @@ static void res_do_switch(U32 newW, U32 newH) {
         Console_Print("resolution: switch to %ux%u failed (see log).", newW, newH);
         return;
     }
-    if (prevW != newW || prevH != newH) {
+    if ((prevW != newW || prevH != newH) && !s_resNoRevert) {
         Res_BeginRevertCountdown(prevW, prevH);
         Console_Close();
     }
@@ -1632,7 +1637,9 @@ void Console_ApplyPendingResSwitch(void) {
     if (!s_resSwitchPending)
         return;
     s_resSwitchPending = false;
+    s_resNoRevert = s_resSwitchPendingNoRevert;
     res_do_switch(s_resSwitchPendingW, s_resSwitchPendingH);
+    s_resNoRevert = false;
 }
 
 static void cmd_perftrace_print_sink(const char *line) {
@@ -1755,7 +1762,9 @@ static void cmd_resolution(int argc, const char *argv[]) {
                           arg, RES_MIN_W, RES_MIN_H, RES_MAX_W, RES_MAX_H);
             return;
         }
+        s_resNoRevert = argc >= 3 && !strcmp(argv[2], "keep");
         res_do_switch(w, h);
+        s_resNoRevert = false;
     }
 }
 
@@ -3324,7 +3333,7 @@ void Console_RegisterAll(void) {
                               "Requires in-game loaded cube (not during video); writes bugs/<name>.lba.");
     Console_RegisterCommandEx("resolution", cmd_resolution,
                               "Switch render resolution at runtime (no args = list)",
-                              "resolution [<n> | WxH | native | --all]",
+                              "resolution [<n> | WxH [keep] | native | --all]",
                               "No args lists recommended modes; <n> picks by index; WxH is arbitrary "
                               "(W%8==0, range 320x200..1920x1024); native snaps to the current display; "
                               "--all expands the list with advanced modes. The switch applies to this "
