@@ -1154,7 +1154,19 @@ void comportement_1()
         hero = Regex.Replace(hero, @"if \(3 > var_game\(57\)\)", $"if (3 > var_game(57) && {still})");
         hero = Loose(hero, "if (20 == l_track_obj(6) || 102 == l_track_obj(6))", $"if ((20 == l_track_obj(6) || 102 == l_track_obj(6)) && {still})");
         scripts.SetText(0, ScriptKind.Life, hero);
+        // (and the thief caught before the theft has played here -- var 57 still 0 -- the story's theft has happened all the same, Tim told
+        // of it: the umbrella gone from its stand by the door (the sprite, actor 2), the game's customer and the thief not here -- her copy,
+        // PharmacyCustomer, in her place to take it back. The user, 2026-11-20: "if twinsen gets the umbrella from the thief and returns to
+        // the sphero in the pharmacy and attempts to give her the umbrella she has no reaction. The umbrella also shows in the stand")
+        var caught = $"{GlovesBack} <= var_game({QThief})";
+        scripts.SetText(UmbrellaStand, ScriptKind.Life, Loose(scripts.GetText(UmbrellaStand, ScriptKind.Life),
+            "if (0 != var_game(57))", $"if (0 != var_game(57) || {caught})"));
+        scripts.SetText(PharmacyCustomerActor, ScriptKind.Life, Loose(scripts.GetText(PharmacyCustomerActor, ScriptKind.Life),
+            "if (3 > var_game(51) && 0 == var_game(57))", $"if (3 > var_game(51) && 0 == var_game(57) && {still})"));
+        scripts.SetText(PharmacyThief, ScriptKind.Life, Loose(scripts.GetText(PharmacyThief, ScriptKind.Life),
+            "if (3 < var_game(51) || 0 < var_game(57))", $"if (3 < var_game(51) || 0 < var_game(57) || {caught})"));
     });
+    private const int UmbrellaStand = 2, PharmacyThief = 7;
 
     // The pharmacy's customer back in out of the rain after chasing the thief (the user, 2026-11-10: "Let's have her coming back into the
     // pharmacy after chasing the thief so she can stay dry"; "The umbrella can go back to the pharmacy customer. Let's have her offer this
@@ -1168,13 +1180,17 @@ void comportement_1()
     {
         var customer = Copy(p.Originals, Pharmacy, PharmacyCustomerActor);
         if (customer is null) { p.Log.Add("the pharmacy's customer back in left out: no customer (scene 22's actor 6)"); return; }
-        p.Edit(Pharmacy, "the pharmacy's customer back in out of the rain once the umbrella's taken: it given back, her thanks and her tip", model =>
-            p.Add(model, customer, Talker("0 != var_game(57) && 3 > chapter()", $@"            if (0 < var_game({Umbrella}) && {UmbrellaBack} > var_game({QThief}))
-            {{
-                message({EveningId(p.Say, EveningLine.CustomerThanks)});
+        // (here once the umbrella's taken: the theft played here, or the thief caught before it did -- PharmacyAfterThief; the umbrella
+        // given back by Action or by using it from the inventory on her, the user, 2026-11-20: "attempts to give her the umbrella she has
+        // no reaction")
+        var thanks = $@"                message({EveningId(p.Say, EveningLine.CustomerThanks)});
                 message({EveningId(p.Say, EveningLine.CustomerTip)});
                 set_var_game({Umbrella}, 0);
-                set_var_game({QThief}, {UmbrellaBack});
+                set_var_game({QThief}, {UmbrellaBack});";
+        p.Edit(Pharmacy, "the pharmacy's customer back in out of the rain once the umbrella's taken: it given back, her thanks and her tip", model =>
+            p.Add(model, customer, Talker($"(0 != var_game(57) || {GlovesBack} <= var_game({QThief})) && 3 > chapter()", $@"            if (0 < var_game({Umbrella}) && {UmbrellaBack} > var_game({QThief}))
+            {{
+{thanks}
             }}
             else if ({UmbrellaBack} == var_game({QThief}))
             {{
@@ -1183,7 +1199,14 @@ void comportement_1()
             else
             {{
                 message(254);
-            }}", 1500)));
+            }}", 1500, $@"    swif (1 == use_inventory({Umbrella}))
+    {{
+        if (1500 > distance(0) && 0 < var_game({Umbrella}) && {UmbrellaBack} > var_game({QThief}))
+        {{
+{thanks}
+        }}
+    }}
+")));
     }
 
     // The thief's footprints in the painter's wet paint (the user, 2026-11-10: "the story outline mentions Twinsen following the thief's paint
