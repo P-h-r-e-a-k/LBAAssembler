@@ -42,16 +42,18 @@ internal static partial class RaceTrackStory
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113, PearlClam = 5;
     // Kash's tomb on the clam's raised floor: its facing, its middle (x, z; the floor's height the clam's), how near Action reads it (it is
-    // long: from its side, its middle is that far), where the candlesticks stand in the tomb's own frame (along it from its middle towards
-    // the helmet's end, and either side of it). A quarter turn from the clam's own facing (the user, 2026-11-19, "spin the tomb around",
+    // long: from its side, its middle is that far). A quarter turn from the clam's own facing (the user, 2026-11-19, "spin the tomb around",
     // then 2026-11-20, "Fully turn the Tomb 90 degrees from it's original position please"): along the floor's depth, its head to the back
     // wall between the two slates, its foot -- the helmet's end -- towards the stairs up from the cave, the name on its lid read from the
-    // camera. The floor is 2,048 deep (z 1,024-3,072): the tomb shortened to 1,760 with its plinth (CitadelProps.TombLong), its head 380
-    // into the wall (the half-turned tomb's back was 336 in, unseen), 668 left between its foot and the stairs' head -- Twinsen's box is
-    // 250 either way, so some 370 to walk across its foot in (at 1,960 and 336 in, 174: he stuck at its corner); the candlesticks either
-    // side of its foot, in sight.
+    // camera. The floor is 2,048 deep (z 1,024-3,072) to the tomb's 1,910 with its plinth (CitadelProps.TombLong; "slightly longer", the
+    // user, 2026-11-20, than the 1,760 it was first turned at): its head 455 into the wall (the half-turned tomb's back was 336 in, unseen),
+    // 593 left between its foot and the stairs' head -- Twinsen's box is 250 either way, so some 340 to walk across its foot in (at 1,960
+    // and 336 in, 174: he stuck at its corner).
     private const int KashTombBeta = 3072, KashTombX = 5732, KashTombZ = 1524, KashTombReach = 1700;
-    private const float KashCandleAlong = Citadel.CitadelProps.TombLong / 2 - 150, KashCandleAcross = Citadel.CitadelProps.TombDeep / 2 + 330;
+    // The candlesticks either side, level with the tomb's foot end (the user, 2026-11-20: "move the candles to either side, so the left one
+    // is flush with the wall, and the right one where the right wall would be"): the left one's foot against the left wall (x 3,584), the
+    // right one's at the raised floor's right-hand edge (x 7,680), where a wall would stand -- their feet 150 round
+    private static readonly (int X, int Z)[] KashCandleAt = { (3584 + 150, 2174), (7680 - 150, 2174) };
     // The speedrun records' slates on the cave's back wall either side of the tomb, where its stone divers stood (KashTombCave): LBA1's on
     // the left, LBA2's on the right (x, z of each, the floor's height the tomb's); how near Action reads one; the cube variables each keeps
     // while Twinsen is that near it (the tomb's Action not answered then: the right one is within its reach); the game variable the plaque
@@ -1361,13 +1363,9 @@ void comportement_1()
     }}
 }}
 ");
-            var a = KashTombBeta * 2 * Math.PI / 4096;
-            var candleEdits = new[] { 1, -1 }.Select(side =>
+            var candleEdits = KashCandleAt.Select(at =>
             {
-                // (the tomb's own frame turned to the world's as the engine turns a body: x cos + z sin, -x sin + z cos)
-                float along = KashCandleAlong, across = side * KashCandleAcross;
-                var candle = Citadel.CitadelProps.Actor(Citadel.CitadelProps.TombCandle, x + (int)Math.Round(along * Math.Cos(a) + across * Math.Sin(a)), y,
-                    z + (int)Math.Round(-along * Math.Sin(a) + across * Math.Cos(a)));
+                var candle = Citadel.CitadelProps.Actor(Citadel.CitadelProps.TombCandle, at.X, y, at.Z);
                 return IslandBeatsA.Add(model, candle, "void comportement_0()\n{\n}\n");
             }).ToList();
             var slateEdits = SlateAt.Select((at, k) =>
