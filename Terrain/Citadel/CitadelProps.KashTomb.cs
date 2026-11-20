@@ -12,7 +12,8 @@ namespace LBAAssembler.Terrain.Citadel;
 internal static partial class CitadelProps
 {
     public const int KashTomb = 203, KashHelmet = 204, TombCandle = 205, RecordSlate = 207;
-    public const float TombLong = 1800, TombDeep = 800, TombPlinth = 110, TombTop = 820, LidOver = 50, LidThick = 110;
+    // (1,600 long, 1,800 till it stood a quarter turn round along the cave's raised floor, 2,048 deep: RaceTrackStory.Desert, KashTombBeta)
+    public const float TombLong = 1600, TombDeep = 800, TombPlinth = 110, TombTop = 820, LidOver = 50, LidThick = 110;
     private const int TombStone = 52, TombLidStone = 50, TombPlinthStone = 49, TombGilt = 106;
     private const float KashDot = 34, KashFoot = 260;
     // (the name's middle along the lid, and the helmet's place past it at the other end)
@@ -34,8 +35,9 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, (TombPlinth + TombTop - LidThick) / 2, 0), new Vector3(TombLong, TombTop - LidThick - TombPlinth, TombDeep), TombStone);
         m.Box(0, new Vector3(0, TombTop - LidThick / 2, 0), new Vector3(TombLong + 2 * LidOver, LidThick, TombDeep + 2 * LidOver), TombLidStone);
         // KASH in gilt on the lid's top (the user, 2026-11-19: "Let's put the name Kash on the top of the tomb instead of the side"): the
-        // letters along the tomb, +x to -x in the tomb's own frame, their tops towards +z -- turned half round as it stands (KashTombBeta),
-        // read left to right from the cave's camera; the helmet lies past them at the +x end (BuildKashHelmet)
+        // letters along the tomb, +x to -x in the tomb's own frame, their tops towards +z -- turned a quarter round as it stands
+        // (RaceTrackStory.Desert's KashTombBeta, 3072: +x to the world's +z, +z to its -x), read left to right from the cave's camera, up the
+        // screen towards the tomb's head; the helmet lies past them at the +x end, its foot (BuildKashHelmet)
         {
             const string text = "KASH";
             var wide = (text.Length * 6 - 1) * KashDot;
@@ -53,8 +55,8 @@ internal static partial class CitadelProps
                         var bottom = r;
                         while (bottom + 1 < 7 && Enumerable.Range(col, end2 - col + 1).All(i => rows[bottom + 1][i] == '#' && !done[bottom + 1, i])) bottom++;
                         for (var rr = r; rr <= bottom; rr++) for (var i = col; i <= end2; i++) done[rr, i] = true;
-                        // (the first letter at +x, row 0 -- the letter's top -- furthest towards +z: the tomb stands a half turn round, so this
-                        // is the way up the cave's camera reads)
+                        // (the first letter at +x, row 0 -- the letter's top -- furthest towards +z: the way up the cave's camera reads it as
+                        // the tomb stands)
                         float x1 = KashTextAt + wide / 2 - (c * 6 + col) * KashDot, x0 = KashTextAt + wide / 2 - (c * 6 + end2 + 1) * KashDot;
                         float z1 = 7 * KashDot / 2f - r * KashDot, z0 = 7 * KashDot / 2f - (bottom + 1) * KashDot;
                         m.Out(new[] { m.P(0, new(x0, top, z0)), m.P(0, new(x1, top, z0)), m.P(0, new(x1, top, z1)), m.P(0, new(x0, top, z1)) }, TombGilt, new Vector3((x0 + x1) / 2, top - 50, (z0 + z1) / 2));
@@ -97,7 +99,15 @@ internal static partial class CitadelProps
         }
         return m.ToBody(header);
     }
-    private static short[]? KashBox(int generic) => generic == RecordSlate ? new short[] { -300, -16, -20, 300, 0, 80 } : null;
+    // (and the tomb's: the engine's box doesn't turn with an actor, and the box its body would make is the square of its mean size, 730
+    // either way -- Twinsen walked 250 into its ends and was held 250 off its sides. Its plinth's, in the world's frame as it stands a
+    // quarter turn round: 960 across x, 1,960 along z)
+    private static short[]? KashBox(int generic) => generic switch
+    {
+        RecordSlate => new short[] { -300, -16, -20, 300, 0, 80 },
+        KashTomb => new short[] { (short)-(TombDeep / 2 + 80), 0, (short)-(TombLong / 2 + 80), (short)(TombDeep / 2 + 80), (short)TombTop, (short)(TombLong / 2 + 80) },
+        _ => null,
+    };
 
     // A tall iron candlestick: a round foot, a stem, a dish, a church candle and its flame
     public const float CandleStem = 900, CandleWax = 260;

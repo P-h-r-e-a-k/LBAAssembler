@@ -41,10 +41,17 @@ internal static partial class RaceTrackStory
     // the game's own: the variable of its Dino-Fly's cure (1 sent to Ker'aooc, 2 his assistant has answered, 3 the School's hall seen)
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113, PearlClam = 5;
-    // Kash's tomb in the clam's place: its facing, how near Action reads it (it is long: from its side, its middle is that far), how far
-    // past its ends the candlesticks stand. Turned half round (the user, 2026-11-19, "spin the tomb around"; a quarter turn won't fit the
-    // raised floor, 1,536 deep to the tomb's 1,960): the name on its lid reads from the camera, the helmet at its far end
-    private const int KashTombBeta = 2048, KashTombReach = 1700, KashCandleOut = 200;
+    // Kash's tomb on the clam's raised floor: its facing, its middle (x, z; the floor's height the clam's), how near Action reads it (it is
+    // long: from its side, its middle is that far), where the candlesticks stand in the tomb's own frame (along it from its middle towards
+    // the helmet's end, and either side of it). A quarter turn from the clam's own facing (the user, 2026-11-19, "spin the tomb around",
+    // then 2026-11-20, "Fully turn the Tomb 90 degrees from it's original position please"): along the floor's depth, its head to the back
+    // wall between the two slates, its foot -- the helmet's end -- towards the stairs up from the cave, the name on its lid read from the
+    // camera. The floor is 2,048 deep (z 1,024-3,072): the tomb shortened to 1,760 with its plinth (CitadelProps.TombLong), its head 380
+    // into the wall (the half-turned tomb's back was 336 in, unseen), 668 left between its foot and the stairs' head -- Twinsen's box is
+    // 250 either way, so some 370 to walk across its foot in (at 1,960 and 336 in, 174: he stuck at its corner); the candlesticks either
+    // side of its foot, in sight.
+    private const int KashTombBeta = 3072, KashTombX = 5732, KashTombZ = 1524, KashTombReach = 1700;
+    private const float KashCandleAlong = Citadel.CitadelProps.TombLong / 2 - 150, KashCandleAcross = Citadel.CitadelProps.TombDeep / 2 + 330;
     // The speedrun records' slates on the cave's back wall either side of the tomb, where its stone divers stood (KashTombCave): LBA1's on
     // the left, LBA2's on the right (x, z of each, the floor's height the tomb's); how near Action reads one; the cube variables each keeps
     // while Twinsen is that near it (the tomb's Action not answered then: the right one is within its reach); the game variable the plaque
@@ -1304,7 +1311,7 @@ void comportement_2()
         b.Edit(PearlCave, "Kash's tomb in the sea cave, in the giant clam's place: the inscription, his helmet on it (Action takes it: the racing gear), a candlestick either end; Twinsen's look round a text of the game's (337, not 327)", model =>
         {
             var clamAt = model.Actors.ElementAtOrDefault(PearlClam) ?? throw new NotTheGames($"no clam (actor {PearlClam})");
-            int x = clamAt.X, y = clamAt.Y, z = clamAt.Z;
+            int x = KashTombX, y = clamAt.Y, z = KashTombZ;
             var gear = $"{Citadel.CitadelOveralls.GearBoth} > var_game({Citadel.CitadelOveralls.GlovesSlot})";
             var tomb = Citadel.CitadelProps.Actor(Citadel.CitadelProps.KashTomb, x, y, z, KashTombBeta);
             var tombEdit = IslandBeatsA.Add(model, tomb, $@"void comportement_0()
@@ -1357,8 +1364,10 @@ void comportement_1()
             var a = KashTombBeta * 2 * Math.PI / 4096;
             var candleEdits = new[] { 1, -1 }.Select(side =>
             {
-                var d = side * (Citadel.CitadelProps.TombLong / 2 + KashCandleOut);
-                var candle = Citadel.CitadelProps.Actor(Citadel.CitadelProps.TombCandle, x + (int)Math.Round(Math.Cos(a) * d), y, z - (int)Math.Round(Math.Sin(a) * d));
+                // (the tomb's own frame turned to the world's as the engine turns a body: x cos + z sin, -x sin + z cos)
+                float along = KashCandleAlong, across = side * KashCandleAcross;
+                var candle = Citadel.CitadelProps.Actor(Citadel.CitadelProps.TombCandle, x + (int)Math.Round(along * Math.Cos(a) + across * Math.Sin(a)), y,
+                    z + (int)Math.Round(-along * Math.Sin(a) + across * Math.Cos(a)));
                 return IslandBeatsA.Add(model, candle, "void comportement_0()\n{\n}\n");
             }).ToList();
             var slateEdits = SlateAt.Select((at, k) =>
