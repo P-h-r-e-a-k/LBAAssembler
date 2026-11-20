@@ -29,6 +29,11 @@ S32 RaceGame_RowDisabled(S32 num);          // a row greyed and passed over (Sto
 // controls, power-ups; Updates); and a row picked there that isn't the game's: its page shown (non-zero), or 0 (not the race game's)
 U16 *RaceGame_OptionsMenu(U16 *menu);
 S32 RaceGame_OptionsRow(S32 num);
+// GereAdvancedOptionsMenu: the menu to show -- `menu`, or in the race game a copy with the renderer's row (Software / OpenGL) last; and a
+// row picked there that is the race game's: done (non-zero), or 0. BuildDisplayMenu: the engine's own renderer row left out of the Display
+// submenu while the race game is on (its renderer is chosen under Advanced options)
+U16 *RaceGame_AdvancedMenu(U16 *menu);
+S32 RaceGame_AdvancedRow(S32 num);
 // RACEMOD.CPP: the player changed the race camera's view during a race (V): kept for the next race (RACEGAME_SETTINGS.TXT camera=)
 void RaceGame_CameraChosen(S32 view);
 

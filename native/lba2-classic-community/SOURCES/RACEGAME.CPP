@@ -2515,7 +2515,7 @@ void RaceGame_Qualified(S32 lap) {
 // (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
 // window, updates", its six rows a little higher)
 #define RG_UPD_ROWS 4                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
-#define RG_DISPLAY_ROWS 8
+#define RG_DISPLAY_ROWS 7
 #define RG_DISPLAY_Y 278                    // (its rows lower than the updates page's: six under a header at 8 had the header cut off by the window, the user, 2026-11-01)
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
@@ -3420,9 +3420,10 @@ static void DisplayPage(void) {
     SetRow(s_displayMenu, 2, RG_ID_WINDOW);
     SetRow(s_displayMenu, 3, RG_ID_MINIMAP);
     SetRow(s_displayMenu, 4, RG_ID_RACE_SKY);
-    SetRow(s_displayMenu, 5, RG_ID_RENDERER);
-    SetRow(s_displayMenu, 6, RG_ID_UPDATES_PAGE);
-    SetRow(s_displayMenu, 7, RG_ID_REPORTS);
+    // (the renderer's row under the game's Advanced options -- RaceGame_AdvancedMenu: the user, 2026-11-19, "Can we move the rendering
+    // option to under Advanced options please")
+    SetRow(s_displayMenu, 5, RG_ID_UPDATES_PAGE);
+    SetRow(s_displayMenu, 6, RG_ID_REPORTS);
     for (;;) {
         Page("Camera, window, updates", RG_DISPLAY_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
         const S32 select = Menu(s_displayMenu);
@@ -3443,18 +3444,38 @@ static void DisplayPage(void) {
             s_raceSky = !s_raceSky;
             WriteSettings();
             Log_Info("[racegame] the sky in races: %s", s_raceSky ? "on" : "off");
-        } else if (select == RG_ID_RENDERER) {
-            // (the picture drawn by the graphics card, OpenGL, or by the game itself as LBA2 was: the window made again, the choice kept in
-            // lba2.cfg's Renderer for the next start -- a card that can't start it leaves the game as it was, RENDER_SWITCH.CPP)
-            const GpuRendererBackendId want = GpuRenderer_ActiveBackend() == GPU_RENDERER_BACKEND_OPENGL ? GPU_RENDERER_BACKEND_NONE
-                                                                                                          : GPU_RENDERER_BACKEND_OPENGL;
-            if (Renderer_ApplyChoice(want))
-                WriteConfigFile();
-            Log_Info("[racegame] the renderer: %s (asked for %s)", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()),
-                     want == GPU_RENDERER_BACKEND_OPENGL ? "OpenGL" : "software");
         } else if (select == RG_ID_UPDATES_PAGE) UpdatesPage();
         else if (select == RG_ID_REPORTS) ReportsPage();
     }
+}
+
+// GAMEMENU.CPP GereAdvancedOptionsMenu: the game's Advanced options with the renderer's row last (Software / OpenGL: the picture drawn by
+// the graphics card, OpenGL, or by the game itself as LBA2 was) -- the user, 2026-11-19, "Can we move the rendering option to under
+// Advanced options please"; the game's own menu when the race game isn't on. The engine's own Display submenu shows no renderer row
+// meanwhile (BuildDisplayMenu), so there is the one.
+static U16 s_advMenu[4 + 2 * 12];
+U16 *RaceGame_AdvancedMenu(U16 *menu) {
+    if (!RaceGame_On() || !menu || menu[1] + 1 > 12) return menu;
+    const int nb = menu[1];
+    // (the cursor where DoGameMenu left it in the copy, the copy being made again for each pick)
+    const U16 at = s_advMenu[1] == nb + 1 ? s_advMenu[0] : menu[0];
+    memcpy(s_advMenu, menu, (4 + 2 * nb) * sizeof(U16));
+    SetRow(s_advMenu, nb, RG_ID_RENDERER);
+    s_advMenu[1] = (U16)(nb + 1);
+    s_advMenu[0] = at;
+    return s_advMenu;
+}
+S32 RaceGame_AdvancedRow(S32 num) {
+    if (!RaceGame_On() || num != RG_ID_RENDERER) return 0;
+    // (the window made again, the choice kept in lba2.cfg's Renderer for the next start -- a card that can't start it leaves the game as
+    // it was, RENDER_SWITCH.CPP)
+    const GpuRendererBackendId want = GpuRenderer_ActiveBackend() == GPU_RENDERER_BACKEND_OPENGL ? GPU_RENDERER_BACKEND_NONE
+                                                                                                  : GPU_RENDERER_BACKEND_OPENGL;
+    if (Renderer_ApplyChoice(want))
+        WriteConfigFile();
+    Log_Info("[racegame] the renderer: %s (asked for %s)", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()),
+             want == GPU_RENDERER_BACKEND_OPENGL ? "OpenGL" : "software");
+    return 1;
 }
 
 // GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then the race's controls and power-ups (one row: the menu has

@@ -3631,7 +3631,9 @@ static void BuildDisplayMenu(void) {
 
     MenuSetEntry(DisplayMenu, row++, 0, 26); /* Back */
     MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_RESOLUTION);
-    MenuSetEntry(DisplayMenu, row++, MENU_TYPE_RENDERER, MENU_ID_RENDERER);
+    // (the race game chooses its renderer under Advanced options: RaceGame_AdvancedMenu)
+    if (!RaceGame_On())
+        MenuSetEntry(DisplayMenu, row++, MENU_TYPE_RENDERER, MENU_ID_RENDERER);
     MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_BILINEAR);
     if (GpuRenderer_ActiveBackend() != GPU_RENDERER_BACKEND_NONE)
         MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_QUALITY);
@@ -3744,12 +3746,17 @@ S32 GereAdvancedOptionsMenu(void) {
     }
 
     while (!flag) {
-        select = DoGameMenu(AdvancedOptionMenu);
+        // (the race game's copy, its renderer row last: RACEGAME.CPP RaceGame_AdvancedMenu)
+        select = DoGameMenu(RaceGame_AdvancedMenu(AdvancedOptionMenu));
 
         switch (select) {
         case 26:
         case 1000:
             flag = 1;
+            break;
+
+        default:
+            RaceGame_AdvancedRow(select);
             break;
 
         case MENU_ID_STEREO_CHANNELS:
