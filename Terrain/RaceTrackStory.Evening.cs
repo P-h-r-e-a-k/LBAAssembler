@@ -68,6 +68,9 @@ internal static partial class RaceTrackStory
         // (up from the chamber, sent to wash and to bed; and the next morning in his pyjamas at the front door -- RaceTrackStory.Pyjamas,
         // 2026-11-17)
         ZoeTeeth, TwinsenDressFirst,
+        // (Flick at the storm track's start line after the lighthouse: a lap session started and stopped -- RaceTrackStory.Chapters' storm
+        // marshal, RACEMOD.CPP lap_session=, 2026-11-20)
+        FlickSessionOn, FlickSessionOff,
     }
     private static readonly string[][] EveningLines =
     {
@@ -440,12 +443,30 @@ internal static partial class RaceTrackStory
             "Non posso uscire in pigiama! La mia tuta da corsa è piegata sulla sedia accanto al letto.",
             "Não posso sair de pijama! O meu fato de corrida está dobrado na cadeira ao lado da cama.",
         },
+        new[]
+        {
+            "Some practice laps? Off you go, I'll time every lap from the line. Come and tell me when you've had enough.",
+            "Quelques tours d'entraînement ? Vas-y, je chronomètre chaque tour depuis la ligne. Viens me dire quand tu en as assez.",
+            "Ein paar Trainingsrunden? Los geht's, ich stoppe jede Runde ab der Linie. Sag mir Bescheid, wenn du genug hast.",
+            "¿Unas vueltas de práctica? Adelante, cronometraré cada vuelta desde la línea. Avísame cuando hayas tenido bastante.",
+            "Qualche giro di prova? Vai pure, cronometro ogni giro dalla linea. Vieni a dirmelo quando ne hai abbastanza.",
+            "Umas voltas de treino? Vai lá, eu cronometro cada volta a partir da linha. Vem dizer-me quando tiveres tido o suficiente.",
+        },
+        new[]
+        {
+            "That's the session over. Come back any time you want a few more laps timed.",
+            "La séance est terminée. Reviens quand tu veux pour faire chronométrer quelques tours de plus.",
+            "Die Sitzung ist vorbei. Komm jederzeit wieder, wenn du noch ein paar Runden gestoppt haben willst.",
+            "Se acabó la sesión. Vuelve cuando quieras que te cronometre unas cuantas vueltas más.",
+            "La sessione è finita. Torna quando vuoi per farti cronometrare qualche altro giro.",
+            "A sessão terminou. Volta quando quiseres que te cronometre mais umas voltas.",
+        },
     };
     // (after the chapters' lines in Citadel Island's texts)
     private static int EveningId(Func<ChapterLine, int> say, EveningLine line) => say(ChapterLine.ZoeSmiling) + ChapterLines.Length + (int)line;
     // (the lines the race-track mode's tired= says as they are while Twinsen is tired, not as the go-home line: RACEMOD.CPP)
     private static int[] TiredKeep(Func<ChapterLine, int> say) => new[] { EveningLine.TraluEvening, EveningLine.PatCheer, EveningLine.FabCheer, EveningLine.BunnyCheer,
-        EveningLine.LucServes }.Select(l => EveningId(say, l)).ToArray();
+        EveningLine.LucServes, EveningLine.FlickSessionOn, EveningLine.FlickSessionOff }.Select(l => EveningId(say, l)).ToArray();
 
     // A line said as the one saying it would, while Twinsen is tired (not the tired line in its place)
     private static string Aside(string said) => $@"set_var_game({DayVar}, {TiredAside});

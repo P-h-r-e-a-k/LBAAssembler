@@ -352,6 +352,8 @@ internal static class RaceCarEngineFile
             if (laps is not null)
             {
                 text.Append($"parade={ghost + 1} {RaceTrackStory.RaphHere} 1\n");
+                // (after the lighthouse: Raph back at the track lapping, and its laps timed only in Flick's lap session)
+                text.Append(RaceTrackStory.StormAfterSpell);
                 foreach (var (scene, actor) in laps.Actors) text.Append($"parade_actor={scene} {actor}\n");
                 if (st.RaphPark is [var ps, var px, var py, var pz, var pb]) text.Append($"parade_park={ps} {px} {py} {pz} {pb}\n");
                 // (his time beaten: a lap of honour, the pilot at the wheel, and up by him and Zoe -- the user, 2026-11-10)

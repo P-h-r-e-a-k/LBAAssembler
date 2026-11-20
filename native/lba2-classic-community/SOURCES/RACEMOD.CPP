@@ -110,6 +110,11 @@
  *                                car (parade_actor=<scene> <actor>, each scene's) while game variable <var> is below <value>, then its
  *                                car stands parked (parade_park=<scene> <x> <y> <z> <turn>) or out of sight (ParadeStep): Raph on
  *                                Citadel Island's storm track, until Twinsen comes to talk to him
+ *     parade_again=<var> <value> (2026-11-20) and once game variable <var> is at least <value>, laps again for good -- no stop for
+ *                                Twinsen, no yell, no park: Raph back at the storm track for a few more laps after the lighthouse
+ *     lap_session=<var>          (2026-11-20) a race won already (once_won=, its start line inert) times laps again while game variable
+ *                                <var> is 1 -- the session its flag marshal starts and stops when talked to -- and ends it (0) when
+ *                                Twinsen, having driven in it, is out of his car or off the track (LapSessionFrame)
  *     race_laps=<n>              the race (after the grid's GO) is n laps long: the player's place is shown when he finishes ...
  *     win=<var> <value> [<var> <value>]...   ... and a win sets these variables
  *     tired=<var> <value> <text> while game variable <var> is <value>, on Citadel Island everyone Twinsen talks to says <text> (of the
@@ -686,6 +691,12 @@ static int s_beatText = -1;
 // sight. Citadel Island's storm track: Raph laps until Twinsen comes to the start line on foot to talk to him (RaceTrackStory).
 #define RACE_MAX_PARADE 16
 static int s_paradeOpp = -1, s_paradeVar = -1, s_paradeValue = 0;
+// parade_again=: the variable at least the value -- lapping again for good, nothing to stop for (ParadeStep)
+static int s_paradeAgainVar = -1, s_paradeAgainValue = 0;
+// lap_session=: the variable a won race's lap session is on at (1), -1 none; and whether Twinsen has driven in it, when it was last off the
+// track, what it was last frame (LapSessionFrame)
+static int s_sessionVar = -1, s_sessionDriven = 0, s_sessionWas = 0;
+static S32 s_sessionOffSince = 0, s_sessionCheckAt = 0;
 static int s_paradeScene[RACE_MAX_PARADE], s_paradeActor[RACE_MAX_PARADE], s_nbParade = 0;
 static int s_paradeParkScene = -1;
 // parade_empty=<generic>: the parade car's own body with no one in it (its entity's), shown while its driver -- parade_stop='s entity -- stands
@@ -5735,6 +5746,8 @@ static void Load(const char *path, int carOnly = 0) {
             int n, var, value;
             if (sscanf(v, "%d %d %d", &n, &var, &value) == 3 && n >= 1 && n <= RACE_MAX_OPPONENTS) { s_paradeOpp = n - 1; s_paradeVar = var; s_paradeValue = value; }
         }
+        else if (!strcmp(key, "parade_again")) { if (sscanf(v, "%d %d", &s_paradeAgainVar, &s_paradeAgainValue) != 2) s_paradeAgainVar = -1; }
+        else if (!strcmp(key, "lap_session")) s_sessionVar = atoi(v);
         else if (!strcmp(key, "parade_stop")) {
             s_paradeTalker = s_paradeGoVar = -1;
             if (sscanf(v, "%d %d %d", &s_paradeStopText, &s_paradeTalker, &s_paradeGoVar) < 1) s_paradeStopText = -1;
@@ -5998,6 +6011,47 @@ void RaceMod_UpdateGear(S32 speed) {
 static void Message(const char *text) {
     snprintf(s_message, sizeof(s_message), "%s", text);
     s_messageUntil = TimerRefHR + 2500;
+}
+
+// lap_session=: a won race's laps timed again while its variable is 1 (the user, 2026-11-19, of the storm track after the lighthouse:
+// "Let's not start the lap timer again for this track, unless Twinsen first speaks to the race marshall. Twinsen should talk to her to start
+// and stop the lap session. If Twinsen gets out of the car or drives off the track at any point let's have the session automatically stop
+// unless he restarts it"). Started on foot by her, it waits for the car; once he has driven in it, out of the car or further than
+// RACE_SESSION_OFF from the lap's line for RACE_SESSION_OFF_MS ends it -- the variable 0, the laps forgotten, the line inert again.
+#define RACE_SESSION_OFF 3000.0
+#define RACE_SESSION_OFF_MS 1500
+static int SessionOn(void) { return s_sessionVar >= 0 && s_sessionVar < MAX_VARS_GAME && ListVarGame[s_sessionVar] == 1; }
+static void LapSessionEnd(const char *why) {
+    if (SessionOn()) ListVarGame[s_sessionVar] = 0;
+    if (why) Message(why);
+    Log_Info("[racemod] lap session over: %s", why ? why : "the marshal");
+}
+static void LapSessionFrame(S32 now) {
+    if (s_sessionVar < 0) return;
+    const int on = SessionOn();
+    if (on && !s_sessionWas) { s_sessionDriven = 0; s_sessionOffSince = 0; Log_Info("[racemod] lap session on (variable %d)", s_sessionVar); }
+    if (!on && s_sessionWas) {
+        // (its laps forgotten: the won race's line inert again, the display back to none)
+        if (Inert()) { s_laps = 0; s_lapStart = 0; s_halfway = 0; s_next = 0; }
+        Log_Info("[racemod] lap session off");
+    }
+    s_sessionWas = on;
+    if (!on) return;
+    if (Comportement == C_BUGGY) s_sessionDriven = 1;
+    else if (s_sessionDriven) { LapSessionEnd("Out of the car: the lap session is over"); return; }
+    if (!s_sessionDriven || now < s_sessionCheckAt) return;
+    s_sessionCheckAt = now + 250;
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || !o->Count) return;
+    const double wx = ListObjet[NUM_PERSO].Obj.X + CurrentCubeX * 32768.0, wz = ListObjet[NUM_PERSO].Obj.Z + CurrentCubeY * 32768.0;
+    double best = 1e30;
+    for (int i = 0; i < o->Count; i++) {
+        const double dx = o->X[i] - wx, dz = o->Z[i] - wz;
+        if (dx * dx + dz * dz < best) best = dx * dx + dz * dz;
+    }
+    if (best <= RACE_SESSION_OFF * RACE_SESSION_OFF) { s_sessionOffSince = 0; return; }
+    if (!s_sessionOffSince) s_sessionOffSince = now;
+    else if (now - s_sessionOffSince > RACE_SESSION_OFF_MS) LapSessionEnd("Off the track: the lap session is over");
 }
 
 // The story's cars of `id` unlocked (RaceGame_StoryUnlock: the first time only), and said once the race's own word is over
@@ -6331,8 +6385,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     const S32 now = TimerRefHR;
     // (the story's gate: the race isn't open yet -- no lap begins)
     if (s_laps == 0) {
-        // (a race won already, once_won=: no lap begins -- Inert)
-        if (Inert()) {
+        // (a race won already, once_won=: no lap begins -- Inert -- but in a lap session, lap_session=)
+        if (Inert() && !SessionOn()) {
             static S32 said = -100000;
             if (now - said > 30000 || now < said) Log_Info("[racemod] start line crossed: this race is won already -- no race (once_won=)");
             said = now;
@@ -6389,8 +6443,8 @@ void RaceMod_Lap(S32 x, S32 z) {
         // and a player who left a trial of laps before its end lost the lap -- a player's report, 2026-10-26: "my best lap time doesn't get
         // recorded unless I finish all the remaining laps". The trial's end puts its own entry in its place, RaceGame_Finished)
         if (s_trial && !s_online && s_phase == PHASE_RACE && !s_ghostWatch && s_bestLap == s_lastLap) RaceGame_TrialBest(s_lastLap);
-        // the time to beat: under it, the story moves on (once)
-        if (const S32 target = BeatTime()) {
+        // the time to beat: under it, the story moves on (once) -- nothing to beat in a won race's lap session
+        if (const S32 target = Inert() ? 0 : BeatTime()) {
             char text[64];
             if (s_lastLap < target && !SetsDone(s_beatSet, s_nbBeatSet)) {
                 ApplySets(s_beatSet, s_nbBeatSet);
@@ -8034,6 +8088,11 @@ static void ParadeStep(S32 now, S32 dt) {
     const T_RACE_OPPONENT *o = &s_opp[s_paradeOpp];
     if (!o->Count || o->Length <= 0) return;
     int wanted = ListVarGame[s_paradeVar] < s_paradeValue;
+    // (parade_again=: lapping again for good -- after the lighthouse, Raph back at the storm track for a few more laps, the user,
+    // 2026-11-19: "have Raph tell us that he's going back to the track to do a few more laps, and have him go back to racing" -- nothing
+    // parks the car or pulls it up to yell; it still stops for a walker on the road ahead)
+    const int again = s_paradeAgainVar >= 0 && s_paradeAgainVar < MAX_VARS_GAME && ListVarGame[s_paradeAgainVar] >= s_paradeAgainValue;
+    if (again) wanted = 1;
     // (stopping for a walker when the scene changed -- Twinsen gone, the walker with it: on, lapping)
     if (s_walker >= 0 && s_walkerScene != (int)NumCube) { s_walker = -1; s_pull = 0; s_pullSay = 0; s_walkerRest = now + RACE_WALKER_REST_MS; }
     double x, z, y, v, dx, dz;
@@ -8045,7 +8104,7 @@ static void ParadeStep(S32 now, S32 dt) {
     // the track is his to beat its driver's time on, and it laps on to its park and stands there, the variable set as if he had come to
     // talk -- his script, waiting for the time beaten, is at that step (RaceTrackStory, Raph's comportement_2). Lapping on through his
     // timed laps it was a car in his way, and his time beaten was heard by no one until he walked onto the start line)
-    if (s_paradeStopText >= 0 && gloves && Comportement == C_BUGGY && ((wanted && s_pull == 0) || s_pull == 1 || s_pull == 6)) {
+    if (!again && s_paradeStopText >= 0 && gloves && Comportement == C_BUGGY && ((wanted && s_pull == 0) || s_pull == 1 || s_pull == 6)) {
         ListVarGame[s_paradeVar] = (S16)s_paradeValue;
         wanted = 0;
         s_pull = here ? 7 : 5;
@@ -8063,6 +8122,7 @@ static void ParadeStep(S32 now, S32 dt) {
     int beaten = s_nbBeatSet > 0;
     for (int i = 0; i + 1 < s_nbBeatSet; i += 2)
         if (s_beatSet[i] >= 0 && s_beatSet[i] < MAX_VARS_GAME && ListVarGame[s_beatSet[i]] < s_beatSet[i + 1]) beaten = 0;
+    if (again && s_walker < 0 && s_pull != 0) { s_pull = 0; s_pullSay = 0; Log_Info("[racemod] parade: lapping again (parade_again=)"); }
     if (beaten && !wanted && s_pull != 5) {
         if (s_pull != 0) Log_Info("[racemod] parade: its driver's time beaten -- the car is parked");
         s_pull = 5; s_pullSay = 0; s_walker = -1;
@@ -10867,7 +10927,7 @@ static int RunUp(const T_RACE_OPPONENT *o, int i) {
 static void RescueAt(const T_RACE_OPPONENT *o) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     // (SafeLine, finding no ground behind a place, looks ahead of it: 37 cells past Polar's checkpoint 3, missed again, put back again, for ever)
-    const int i = s_missExact ? s_safeIndex : RunUp(o, SafeLine(o));
+    const int i = s_missExact ? s_safeIndex : RunUp(o, SafeLine(o)), missed = s_missExact;
     if (s_missExact) { s_missIndex = -1; s_missAt = i; }   // (there: missed again, said and put back again)
     s_missExact = 0;
     const double age = (TimerRefHR - s_safeAt) / 1000.0;
@@ -10878,6 +10938,8 @@ static void RescueAt(const T_RACE_OPPONENT *o) {
     RescuePlace(o, i >= 0 ? i : s_safeIndex);
     Log_Info("[racemod] back on the road in scene %d: line point %d (%d,%d,%d), its place last on the road %.1f s ago", (int)NumCube, s_safeIndex, (int)hero->Obj.X,
              (int)hero->Obj.Y, (int)hero->Obj.Z, age);
+    // (driven off the track -- put back on the road, not for a checkpoint missed: a lap session over, lap_session=)
+    if (!missed && SessionOn()) LapSessionEnd("Off the track: the lap session is over");
 }
 
 // Checkpoint s_next missed: the car put back on the road just before it, in that checkpoint's scene.
@@ -22156,6 +22218,7 @@ void RaceMod_Frame(void) {
     FruitReels(TimerRefHR);
     HalFrame(TimerRefHR);
     PlaqueFrame();
+    LapSessionFrame(TimerRefHR);
     if (!DartShowFrame(TimerRefHR)) DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -24776,7 +24839,7 @@ void RaceMod_Draw(void) {
                     else snprintf(text, sizeof(text), "Run %d  %s", s_runs + 1, a);
                 } else if (s_sprint) snprintf(text, sizeof(text), "Race  %s", a);
                 else if (s_raceLaps > 0 && s_nbOrder > 0 && lap <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)lap, s_raceLaps, a);
-                else if (const S32 target = BeatTime()) {
+                else if (const S32 target = Inert() ? s_bestLap : BeatTime()) {
                     // (a time to beat: Raph's -- on a line of its own over the lap's: on one line, "Lap 3  0:20.04  to beat 0:12.86", the
                     // font's digits of different widths slid the time to beat to and fro as the lap's clock ticked, a flicker -- the user,
                     // 2026-11-06. The lap's clock stays where it starts, after its lap number)
@@ -24785,9 +24848,11 @@ void RaceMod_Draw(void) {
                     char label[24];
                     Time(b, sizeof(b), target);
                     snprintf(label, sizeof(label), "Lap %d", (int)lap);
+                    // (a won race's lap session, lap_session=: nothing to beat -- the best lap so far in its place)
+                    const char *over = Inert() ? "Best" : "To beat";
                     const S32 wBeat = SizeFont((char *)"To beat  "), wLap = SizeFont((char *)"Lap 99  ");
                     const S32 col = 16 + (wBeat > wLap ? wBeat : wLap) * RACE_SMALL_NUM / RACE_SMALL_DEN;
-                    HudSmall(16, bottom - RACE_SMALL_STEP, "To beat", -1);
+                    HudSmall(16, bottom - RACE_SMALL_STEP, over, -1);
                     HudSmall(col, bottom - RACE_SMALL_STEP, b, -1);
                     HudSmallIn(16, bottom, label, -1, colour);
                     HudSmallIn(col, bottom, a, -1, colour);
@@ -24925,6 +24990,7 @@ static void ResetTrack(void) {
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0; s_pullQuiet = 0; s_pullAway = 0;
     s_nbWalkers = 0; s_walkerText = s_walker = -1; s_walkerRest = 0;
+    s_paradeAgainVar = -1; s_sessionVar = -1; s_sessionDriven = 0; s_sessionWas = 0; s_sessionOffSince = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeEmpty = -1; s_paradeFullGen = -1; s_paradeEmptyOn = 0; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_nbFootRooms = 0; s_footRoom = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;

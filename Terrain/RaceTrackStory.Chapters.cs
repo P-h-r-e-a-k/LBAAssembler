@@ -314,12 +314,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Back to my car, then, and off to bed. Best race I've lost in years.",
-            "Je retourne à ma voiture, alors, et au lit. La plus belle course que j'aie perdue depuis des années.",
-            "Dann zurück zu meinem Auto, und ab ins Bett. Das beste Rennen, das ich seit Jahren verloren habe.",
-            "Entonces vuelvo a mi coche, y a la cama. La mejor carrera que he perdido en años.",
-            "Allora torno alla mia macchina, e poi a letto. La gara più bella che abbia perso da anni.",
-            "Então volto para o meu carro, e depois para a cama. A melhor corrida que perdi em anos.",
+            "Back to the track, then, for a few more laps. Best race I've lost in years.",
+            "Je retourne sur le circuit, alors, pour quelques tours de plus. La plus belle course que j'aie perdue depuis des années.",
+            "Dann zurück auf die Strecke, für ein paar Runden mehr. Das beste Rennen, das ich seit Jahren verloren habe.",
+            "Entonces vuelvo a la pista, a dar unas cuantas vueltas más. La mejor carrera que he perdido en años.",
+            "Allora torno in pista, per qualche altro giro. La gara più bella che abbia perso da anni.",
+            "Então volto para a pista, para mais umas voltas. A melhor corrida que perdi em anos.",
         },
         new[]
         {
@@ -2107,9 +2107,19 @@ void comportement_2()
             {{
                 message({EveningId(p.Say, EveningLine.FlickReady)});
             }}
-            else
+            else if ({KeeperSpell} > var_game({KeeperPlot}))
             {{
                 message({EveningId(p.Say, EveningLine.FlickWon)});
+            }}
+            else if (0 == var_game({LapSession}))
+            {{
+                message({EveningId(p.Say, EveningLine.FlickSessionOn)});
+                set_var_game({LapSession}, 1);
+            }}
+            else
+            {{
+                message({EveningId(p.Say, EveningLine.FlickSessionOff)});
+                set_var_game({LapSession}, 0);
             }}", "the storm track's");
     }
 

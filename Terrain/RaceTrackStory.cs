@@ -80,6 +80,11 @@ internal static partial class RaceTrackStory
     // the game's storm plot (51: 1 the wizard spoken to, 2 Raph spoken to, 3 Raph freed, 4 the storm over), the lighthouse keeper's
     // (56: 3 back at the lighthouse), the aliens' landing (70) and the behaviour Twinsen drives in (12)
     private const int StormPlot = 51, KeeperPlot = 56, AliensLanded = 70, Driving = 12;
+    // (KeeperPlot at the spell, the Wizard's on the lighthouse's top; the storm track's lap session after it, Flick's to start and stop --
+    // RACEMOD.CPP lap_session=, its variable the story's next free one: reference 2026-11-20 -- and Raph lapping the track again from the
+    // spell on, parade_again=)
+    internal const int KeeperSpell = 5, LapSession = 273;
+    internal static string StormAfterSpell => $"parade_again={KeeperPlot} {KeeperSpell}\nlap_session={LapSession}\n";
     private const int OpeningScene = 0, Zoe = 4, BedZone = 5;
     // (Twinsen's house by day, for the race file's lines: RaceCarEngineFile)
     internal const int HouseScene = OpeningScene;
