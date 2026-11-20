@@ -64,7 +64,11 @@ internal static partial class RaceTrackCharacterCars
                 // (a polygon of more corners: a fan of triangles)
                 for (var k = 1; k + 1 < hs.Length; k++) m.Raw(new[] { hs[0], hs[k], hs[k + 1] }, colours[f.Colour & 255], material);
         }
-        foreach (var l in lba1.Lines) m.Line(handle[l.A], handle[l.B], colours[l.Colour & 255]);
+        // (its lines made polygons: with OpenGL the game draws lines and spheres in software over its picture, seen through the body -- the
+        // user, 2026-11-20, a picture from behind: "Twinsen's hair and medallion are visible from the back of the digger", and its seams
+        // showed across the cab's back too; CarMesh.SolidLine. Its spheres, its tracks' great round wheels outside it, stay spheres: nothing
+        // of it is ever in front of them, and as balls of faces they were lit diamonds)
+        foreach (var l in lba1.Lines) m.SolidLine(handle[l.A], handle[l.B], CarDriver.SolidLineThickness, colours[l.Colour & 255]);
         foreach (var s in lba1.Spheres) m.Sphere(handle[s.Point], s.Radius, colours[s.Colour & 255]);
         // ---- the wheels' bones: a point each, where the racer's wheels would be (nothing of the digger's turns)
         var parents = new[] { 0, 0, 0, 2, 3, 4, 2, 6, 7, 2, 9, 2, 11 };
@@ -84,7 +88,7 @@ internal static partial class RaceTrackCharacterCars
             var origin = new Vector3(0, 600, 33);
             Vector3 Place(Vector3 p) => (p - origin) * Scale + seat;
             var d = new CarDriver(twinsen);
-            var point = d.Seat(m, d.AllBut(new[] { 4, 6, 8, 11 }), Place, seat.Y + 120, Scale, cut: true);
+            var point = d.Seat(m, d.AllBut(new[] { 4, 6, 8, 11 }), Place, seat.Y + 120, Scale, cut: true, solid: true);
             Arms(m, point(twinsen.Bones[4].Pivot), point(twinsen.Bones[6].Pivot));
         }
         else

@@ -67,6 +67,27 @@ internal sealed class CarMesh(string name, int[]? parents = null)
     public int[] Flat(int bone, int colour, params Vector3[] at) { var hs = at.Select(v => P(bone, v)).ToArray(); Both(hs, colour, 0); return hs; }
     public int[] Pane(int bone, int colour, params Vector3[] at) { var hs = at.Select(v => P(bone, v)).ToArray(); Both(hs, colour, SeeThrough); return hs; }
     public int Ball(int bone, Vector3 at, int radius, int colour) { var h = P(bone, at); Sphere(h, radius, colour); return h; }
+
+    // A sphere and a line as polygons, where `point`'s (and `b`'s) are: a little ball of faces (its poles and a ring of six), a thin bar.
+    // With OpenGL the engine draws a body's spheres and lines in software over the GL picture, tested against a depth read back before the
+    // body's own polygons were drawn into it -- so they show through the body: the digger's driver's hair and medallion through its cab's
+    // back, its own seams across it (the user, 2026-11-20). Drawn as polygons, GL hides them as it hides any.
+    public void SolidSphere(int point, float radius, int colour)
+    {
+        var bone = handles[point].Bone;
+        var c = At(point);
+        var top = P(bone, c + new Vector3(0, radius, 0));
+        var bottom = P(bone, c - new Vector3(0, radius, 0));
+        var ring = Loop(bone, c, new Vector3(radius, 0, 0), new Vector3(0, 0, radius), 6);
+        Cap(ring, top, colour, c);
+        Cap(ring, bottom, colour, c);
+    }
+    public void SolidLine(int a, int b, float thickness, int colour)
+    {
+        var (pa, pb) = (At(a), At(b));
+        if (Vector3.DistanceSquared(pa, pb) < 1) return;
+        Strut(handles[a].Bone, pa, pb, thickness, colour);
+    }
     public void Rod(int bone, Vector3 a, Vector3 b, int colour) => Line(P(bone, a), P(bone, b), colour);
     public int[] Box(int bone, Vector3 centre, Vector3 size, int colour, int top = -1)
     {
@@ -253,12 +274,15 @@ internal sealed class CarDriver
     // whatever the colour -- unless its material is Flat: then it is that colour, lit, its texture left off (Twinsen's tunic in his laser cars).
     public const int Flat = -2;
     public const float Own = -1;
+    // (a line made a bar, as thick as the game draws a line near by: a pixel or two)
+    public const float SolidLineThickness = 14;
     public delegate (int Colour, float Light, int Material)? Painter(Face face, int[] bones);
 
     // The posed driver's kept bones added to the car's bone 13, through `place` (the body's coordinates to the car's); polygons wholly below
     // `rim` (inside the car) are left out, and with `cut` lines and spheres below it too. Returns the car's point for any of the body's
-    // points (made when the car has none yet).
-    public Func<int, int> Seat(CarMesh m, HashSet<int> keep, Func<Vector3, Vector3> place, float rim, float scale, Painter? paint = null, bool cut = false)
+    // points (made when the car has none yet). `solid`: the lines and spheres made polygons (CarMesh.SolidLine, SolidSphere -- a driver
+    // sat inside a cab, seen through it on OpenGL otherwise).
+    public Func<int, int> Seat(CarMesh m, HashSet<int> keep, Func<Vector3, Vector3> place, float rim, float scale, Painter? paint = null, bool cut = false, bool solid = false)
     {
         bool Inside(int p) => cut && place(posed[p]).Y < rim - 20;
         if (body.Faces.Any(f => f.Texture is not null)) m.Textures = body.Textures;
@@ -281,8 +305,16 @@ internal sealed class CarDriver
             if (colour < 0) continue;
             m.Raw(f.Points.Select(p => Point(p, light)).ToArray(), colour, material == Flat ? -1 : material, material == Flat ? null : f.Texture);
         }
-        foreach (var l in body.Lines) if (keep.Contains(BoneOf(l.A)) && keep.Contains(BoneOf(l.B)) && !(Inside(l.A) && Inside(l.B))) m.Line(Point(l.A, Own), Point(l.B, Own), l.Colour);
-        foreach (var s in body.Spheres) if (keep.Contains(BoneOf(s.Point)) && !Inside(s.Point)) m.Sphere(Point(s.Point, Own), (int)(s.Radius * scale), s.Colour);
+        foreach (var l in body.Lines) if (keep.Contains(BoneOf(l.A)) && keep.Contains(BoneOf(l.B)) && !(Inside(l.A) && Inside(l.B)))
+        {
+            if (solid) m.SolidLine(Point(l.A, Own), Point(l.B, Own), SolidLineThickness * scale, l.Colour);
+            else m.Line(Point(l.A, Own), Point(l.B, Own), l.Colour);
+        }
+        foreach (var s in body.Spheres) if (keep.Contains(BoneOf(s.Point)) && !Inside(s.Point))
+        {
+            if (solid) m.SolidSphere(Point(s.Point, Own), s.Radius * scale, s.Colour);
+            else m.Sphere(Point(s.Point, Own), (int)(s.Radius * scale), s.Colour);
+        }
         return i => Point(i, Own);
     }
 
