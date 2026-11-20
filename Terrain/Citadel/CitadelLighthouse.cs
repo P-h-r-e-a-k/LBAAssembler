@@ -41,6 +41,7 @@ internal static class CitadelLighthouse
     public static List<string> Install(string gameDirectory)
     {
         var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
         var entities = Lba2EntityTable.Parse(table).Entities;
@@ -54,8 +55,134 @@ internal static class CitadelLighthouse
         var hop = WizardHop(anims.Read(AnimOf(twinsen, TwinsenHop)), anims.Read(AnimOf(twinsen, 0)), anims.Read(AnimOf(wizard, 0)));
         var animIndex = HqrArchive.CountEntries(animPath);
         File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(hop.Write())));
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(RaceTrackJumpAnim.WithAnim(table, Wizard, Hop, animIndex))));
-        return new() { $"the Wizard's hop: ANIM.HQR {animIndex} ({hop.Frames.Count} keyframes, Twinsen's hop forward, ANIM.HQR {AnimOf(twinsen, TwinsenHop)}), entity {Wizard}'s animation {Hop}" };
+        table = RaceTrackJumpAnim.WithAnim(table, Wizard, Hop, animIndex);
+        var log = new List<string> { $"the Wizard's hop: ANIM.HQR {animIndex} ({hop.Frames.Count} keyframes, Twinsen's hop forward, ANIM.HQR {AnimOf(twinsen, TwinsenHop)}), entity {Wizard}'s animation {Hop}" };
+
+        // the Wizard and Rosa as one body, standing and hopping (the telescope's shot: RaceTrackStory.Chapters' LighthouseClimb)
+        var rosaBody = RaceTrackGuards.BodyOf(table, RosaEntity, 0);
+        if (rosaBody is null || wizard.Bodies.Any(b => b.Generic == CowPair) || wizard.Anims.Any(a => a.Generic is PairStand or PairHop))
+            log.Add($"WARNING: the Wizard and Rosa as one: Rosa (entity {RosaEntity}) has no body, or entity {Wizard} has body {CowPair} or animation {PairStand}/{PairHop} already -- not made");
+        else
+        {
+            var bodies = HqrArchive.Open(bodyPath);
+            byte[] pair;
+            int rosaPoints;
+            try { pair = PairBody(bodies.Read(WizardBody), bodies.Read(rosaBody.Value), RosaInPair, out rosaPoints); }
+            catch (InvalidDataException e)
+            {
+                log.Add($"WARNING: the Wizard and Rosa as one: {e.Message}");
+                File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+                return log;
+            }
+            var bodyIndex = HqrArchive.CountEntries(bodyPath);
+            File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(pair)));
+            var stand = PairAnim(anims.Read(AnimOf(wizard, 0)));
+            var pairHop = PairAnim(hop.Write());
+            var pairIndex = HqrArchive.CountEntries(animPath);
+            var bytes = HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(stand.Write()));
+            File.WriteAllBytes(animPath, HqrWriter.AppendEntry(bytes, HqrWriter.StoredEntry(pairHop.Write())));
+            table = RaceTrackBaldinoCar.WithBodyLike(table, Wizard, CowPair, bodyIndex, 0);
+            table = RaceTrackJumpAnim.WithAnim(table, Wizard, PairStand, pairIndex);
+            table = RaceTrackJumpAnim.WithAnim(table, Wizard, PairHop, pairIndex + 1);
+            log.Add($"the Wizard and Rosa as one: BODY.HQR {bodyIndex} (his {WizardBody} and her {rosaBody} -- {rosaPoints} points -- her {RosaInPair} from him), " +
+                    $"entity {Wizard}'s body {CowPair}; standing and hopping ANIM.HQR {pairIndex} and {pairIndex + 1}, its animations {PairStand} and {PairHop}");
+        }
+        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        return log;
+    }
+
+    // ---- the Wizard and Rosa as one -------------------------------------------------------------------------------------------------
+    // The telescope's shot of the Wizard hopping behind Rosa is one actor whose body is the two of them (the user, 2026-11-20: "This is a
+    // scripted scene that we view through a telescope, wouldn't it be easier to just create a single actor for us to watch that's the
+    // combination of the wizard and rosa?"): two actors pressed together are sorted whole, one drawn over the other -- his fur painted on her
+    // flank as he hopped ("Get the wizard closer, fix the spot issue at the source please") -- where one body's polygons are sorted together.
+    // His bones, and one more on his root holding her as she stands (she doesn't move in the shot); his standing and his hop with that bone
+    // held still. The pair faces as Rosa does; he stands PairBack times the game's own distance behind her (WizardAtCow, 626 from her).
+    public const int CowPair = 30, PairStand = 644, PairHop = 645, RosaEntity = 119;
+    public static readonly (int X, int Y, int Z) RosaAt = (21984, 8750, 23440), WizardAtCow = (22600, 8750, 23552);
+    public const int RosaBeta = 3000;
+    public const double PairBack = 1.0;
+    // (the Wizard's place from Rosa's, in the world; and Rosa's from his in the pair's own frame -- world to body: the engine's Rotate
+    // turned back, x = X cos - Z sin, z = X sin + Z cos)
+    public static (int X, int Y, int Z) WizardFromRosa => ((int)Math.Round((WizardAtCow.X - RosaAt.X) * PairBack), WizardAtCow.Y - RosaAt.Y, (int)Math.Round((WizardAtCow.Z - RosaAt.Z) * PairBack));
+    public static System.Numerics.Vector3 RosaInPair
+    {
+        get
+        {
+            var (x, y, z) = WizardFromRosa;
+            var a = RosaBeta * 2 * Math.PI / 4096;
+            return new System.Numerics.Vector3((float)Math.Round(-x * Math.Cos(a) + z * Math.Sin(a)), -y, (float)Math.Round(-x * Math.Sin(a) - z * Math.Cos(a)));
+        }
+    }
+
+    // His body with hers on one more bone (child of his root, pivoted on his root's first point): her points where she stands, `rosaAt` from
+    // his origin; her polygons' points and lights moved past his (the points' lights first, then the faces': his faces' after her points).
+    internal static byte[] PairBody(byte[] wizard, byte[] rosa, System.Numerics.Vector3 rosaAt, out int rosaPoints)
+    {
+        var w = Palace.PalaceTorturers.Parts.Read(wizard);
+        var r = Palace.PalaceTorturers.Parts.Read(rosa);
+        if (w.Bones[0].Count < 1) throw new InvalidDataException("the Wizard's root bone has no point to pivot Rosa on");
+        if (r.Blocks.Any(k => (k.Type & 0x4000) != 0)) throw new InvalidDataException("Rosa's body has environment-mapped polygons: not merged");
+        if (w.Points.Count != w.Normals.Count || r.Points.Count != r.Normals.Count) throw new InvalidDataException("a normal a point, in both bodies");
+        static int U(byte[] b, int at) => BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(at));
+        static void W(byte[] b, int at, int v) => BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(at), checked((ushort)v));
+        int nW = w.Points.Count, fW = w.FaceNormalCount, nR = r.Points.Count, bone = w.Bones.Count;
+        var origin = w.World()[0];
+        var her = r.World();
+        foreach (var (_, records) in w.Blocks)
+            foreach (var rec in records)
+                if (U(rec, 10) >= nW) W(rec, 10, U(rec, 10) + nR);
+        foreach (var (type, records) in r.Blocks)
+        {
+            var corners = (type & 0x8000) != 0 ? 4 : 3;
+            foreach (var rec in records)
+            {
+                for (var c = 0; c < corners; c++) W(rec, c * 2, U(rec, c * 2) + nW);
+                W(rec, 10, U(rec, 10) < nR ? U(rec, 10) + nW : U(rec, 10) + nW + fW);
+                // (a textured one's texture: hers after his in the body's list -- STRUC_POLY3_TEXTURE's HandleText at 6, the quad's at 28)
+                if ((type & 0xFF) > 7) W(rec, corners == 4 ? 28 : 6, U(rec, corners == 4 ? 28 : 6) + w.TextureCount);
+            }
+            w.Blocks.Add((type, records));
+        }
+        static short S(float v) => checked((short)Math.Round(v));
+        for (var i = 0; i < nR; i++)
+        {
+            var q = her[i] + rosaAt - origin;
+            w.Points.Add((S(q.X), S(q.Y), S(q.Z), bone));
+            var n = r.Normals[i];
+            w.Normals.Add((n.X, n.Y, n.Z, bone));
+        }
+        w.Bones.Add((0, 0, nR, r.FaceNormalCount));
+        w.FaceNormals = w.FaceNormals.Concat(r.FaceNormals).ToArray();
+        w.FaceNormalCount = fW + r.FaceNormalCount;
+        byte[] Shifted(byte[] list, int count, params int[] fields)
+        {
+            var copy = (byte[])list.Clone();
+            for (var i = 0; i < count; i++) foreach (var f in fields) W(copy, i * 8 + f, U(copy, i * 8 + f) + nW);
+            return copy;
+        }
+        w.Textures = w.Textures.Concat(r.Textures).ToArray(); w.TextureCount += r.TextureCount;
+        w.Lines = w.Lines.Concat(Shifted(r.Lines, r.LineCount, 4, 6)).ToArray(); w.LineCount += r.LineCount;
+        w.Spheres = w.Spheres.Concat(Shifted(r.Spheres, r.SphereCount, 4)).ToArray(); w.SphereCount += r.SphereCount;
+        var all = w.World();
+        int[] box = { (int)Math.Floor(all.Min(v => v.X)), (int)Math.Ceiling(all.Max(v => v.X)), (int)Math.Floor(all.Min(v => v.Y)), (int)Math.Ceiling(all.Max(v => v.Y)),
+                      (int)Math.Floor(all.Min(v => v.Z)), (int)Math.Ceiling(all.Max(v => v.Z)) };
+        for (var b = 0; b < 6; b++) BinaryPrimitives.WriteInt32LittleEndian(w.Header.AsSpan(8 + b * 4), box[b]);
+        rosaPoints = nR;
+        return w.Write();
+    }
+
+    // One of his animations for the pair: his bone slots as they are, steps none, and her bone's slot held still
+    internal static Anim PairAnim(byte[] his)
+    {
+        var anim = new Anim { Game = 2, LoopFrame = BinaryPrimitives.ReadUInt16LittleEndian(his.AsSpan(4)) };
+        foreach (var (time, bones) in Raw(his))
+        {
+            var slots = bones.Select((v, b) => b == 0 ? AnimBone.Neutral : v.Type == 1 ? new AnimBone(1, v.X, v.Y, v.Z) : new AnimBone(0, v.X / 4096f, v.Y / 4096f, v.Z / 4096f)).ToList();
+            slots.Add(AnimBone.Neutral);
+            anim.Frames.Add(new AnimFrame(time, 0, 0, 0, slots.ToArray()));
+        }
+        return anim;
     }
 
     public static Anim WizardHop(byte[] hop, byte[] twinsenStand, byte[] wizardStand)

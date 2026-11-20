@@ -2206,7 +2206,7 @@ void comportement_2()
     private const int CowScene = 47, LighthouseTop = 60, ScopeSide = 61, ScopeAsk = 396, ScopeNo = 17, ScopeYes = 397, NoKashes = 115;
     private const int TopPoint = 5, DoorPoint = 6, Up = 160, UpDone = 161, Down = 162, DownDone = 163;
     private const int Hops = 40, HopLabel = 10, Hopped = 11, Watch = 12, Watched = 13, HeroWatching = 20;
-    private static readonly (int X, int Y, int Z) WizardAtCow = (22600, 8700, 23552), DoorStep = (16600, 3300, 11152);
+    private static readonly (int X, int Y, int Z) DoorStep = (16600, 3300, 11152);
     private const int TopClear = 80, CowCamera = 70, RosaEntity = 119;
     // (walked into the door at the foot only once he has been out of its zone since he last came through it: come down, he stands in it,
     // and turning round there -- or the way on west, round the tower -- took him straight back up)
@@ -2224,10 +2224,7 @@ void comportement_2()
     // (a game variable since 2026-11-14 -- the user: "we should only see the alien ship once, any subsequent usage should show us the
     // wizard/cow scene"; a scene variable, the ship came back each visit. 255: no script of the build nor the engine uses it)
     private const int ShipSeen = 255;
-    // (where the game has Rosa, and so the Wizard's place behind her, WizardAtCow, wherever she is)
-    private static readonly (int X, int Y, int Z) RosaAt = (21984, 8700, 23440);
-    // (how much further than WizardAtCow: his place 626 from hers -- about 1,000 now, clear of her flank as he hops)
-    private const double WizardBack = 1.6;
+    // (the Wizard behind Rosa: the two one actor, one body -- Citadel/CitadelLighthouse's pair -- his place from hers as its body has it)
     // (the shot of them: a camera zone round the Wizard, off until his scene -- on the two of them, nearer than the island's 10500; 3100,
     // not 3800, and aimed a little nearer him than her: the user, 2026-11-18, "are we able to get [it] slightly closer to the wizard")
     private static readonly int[] CowShot = { 44, 34, 46, 300, 2048, 0, 3100, 8 };
@@ -2421,11 +2418,13 @@ stop();
             var cow = model.Actors.FindIndex(a => a.Entity == RosaEntity);
             if (cow < 1) throw new NotTheGames("Rosa the cow");
             var rosa = model.Actors[cow];
-            // (and further behind her than the game's place for him, WizardBack: pressed against her, the engine -- which sorts whole actors,
-            // not their pixels -- drew his red-brown fur over her flank, a brown patch that moved as he hopped; it was never a shadow: the
-            // user, 2026-11-16, "It looks like you've turned the cows shadow off, but the brown was never the cows shadow. The brownness on
-            // the cow moves as the wizard moves")
-            (int X, int Y, int Z) behind = ((int)Math.Round((WizardAtCow.X - RosaAt.X) * WizardBack), WizardAtCow.Y - RosaAt.Y, (int)Math.Round((WizardAtCow.Z - RosaAt.Z) * WizardBack));
+            // (the two of them one actor, its body his and hers -- Citadel/CitadelLighthouse's pair: as two actors pressed together the engine,
+            // which sorts whole actors, not their pixels, drew his red-brown fur over her flank, a brown patch that moved as he hopped (the
+            // user, 2026-11-16, "The brownness on the cow moves as the wizard moves"; 2026-11-20, "wouldn't it be easier to just create a
+            // single actor for us to watch that's the combination of the wizard and rosa?"). It stands where he does, facing as she does;
+            // she is hidden while it's watched. Her place in its body is from her heading in the game's scene.)
+            if (rosa.Beta != Citadel.CitadelLighthouse.RosaBeta) throw new NotTheGames($"Rosa facing {rosa.Beta}, not {Citadel.CitadelLighthouse.RosaBeta}");
+            var behind = Citadel.CitadelLighthouse.WizardFromRosa;
             (int X, int Y, int Z) here = (rosa.X + behind.X, rosa.Y + behind.Y, rosa.Z + behind.Z);
             var aside = (p.Scenes.ActorsAt ?? p.TownScenes.ActorsAt ?? new List<string>())
                 .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -2447,8 +2446,9 @@ stop();
                 therePoint = model.TrackPoints.Count;
                 model.TrackPoints.Add(new SceneTrackPoint(t.X, t.Y, t.Z));
             }
-            wizard.X = here.X; wizard.Y = here.Y; wizard.Z = here.Z; wizard.Beta = rosa.Beta + 72;
-            wizard.Anim = 0;
+            wizard.X = here.X; wizard.Y = here.Y; wizard.Z = here.Z; wizard.Beta = rosa.Beta;
+            wizard.Body = Citadel.CitadelLighthouse.CowPair;
+            wizard.Anim = Citadel.CitadelLighthouse.PairStand;
             // (no shadow: the engine laid his on Rosa's back as he hopped behind her, a brown blot on the cow -- the user, 2026-11-14,
             // "the wizard casting a brown shadow onto the cow, let's remove this"; NO_SHADOW)
             wizard.Flags |= 1u << 12;
@@ -2528,25 +2528,32 @@ void comportement_2()
             {
                 life(scripts);
                 scripts.SetText(w, ScriptKind.Track, $@"label(0);
-anim(0);
+anim({Citadel.CitadelLighthouse.PairStand});
 stop();
 
 label({HopLabel});
-anim({Citadel.CitadelLighthouse.Hop});
+anim({Citadel.CitadelLighthouse.PairHop});
 wait_anim();
-anim(0);
+anim({Citadel.CitadelLighthouse.PairStand});
 wait_nb_dizieme(4);
 
 label({Hopped});
 stop();
 
 label({Watch});
-anim(0);
+anim({Citadel.CitadelLighthouse.PairStand});
 wait_nb_second(4);
 
 label({Watched});
 stop();
 ");
+                // (Rosa herself hidden while the pair stands in her place: her own script still gives the clover, var_cube 11 past 3)
+                scripts.SetText(cow, ScriptKind.Life, Loose(scripts.GetText(cow, ScriptKind.Life), "void comportement_0()\n{", $@"void comportement_0()
+{{
+    if (1 == var_game({ScopeVar}))
+    {{
+        invisible(1);
+    }}"));
                 var hero = scripts.GetText(0, ScriptKind.Life);
                 if (asideZone >= 0)
                     hero = Loose(hero, $"{GameCowZone} == zone() && 2500 < beta()",
