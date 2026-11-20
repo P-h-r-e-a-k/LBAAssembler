@@ -349,6 +349,7 @@ extern void AdjustDirObject(T_OBJET *ptrobj, S32 oldmove);       // GERELIFE.CPP
 
 #include <POLYGON/POLY.H>
 #include <3D/CAMERA.H>
+#include <GPU/GPURENDERER.H> /* GpuRenderer_IsActive: the waking scene drawn whole after its fade from white on OpenGL */
 #include <3D/DATAMAT.H>
 #include <3D/LIGHT.H>
 #include <3D/LPROJ.H>
@@ -6989,6 +6990,12 @@ void RaceMod_Story(void) {
     if (s_whiteUntil && TimerRefHR >= s_whiteUntil && NewCube == -1) {
         s_whiteUntil = 0;
         FadeWhiteToPalAndSamples(PtrPal);
+        // (OpenGL: its target's background is cleared, by the colour the palette gives it then, only when the scene is drawn whole --
+        // RefreshGrille's GpuRenderer_ClearFBO -- and the waking scene was drawn whole while the palette was held white: the room faded
+        // in, round it the white stayed, and every text's shadow, palette 0 and see-through to the scene, showed it as a white copy of
+        // the text. The user's LBRA on OpenGL, 2026-11-20, FunFrock's voice fading with the white. The scene drawn whole now, this frame
+        // -- AffScene(FirstTime) comes next -- before any line is said over it.)
+        if (GpuRenderer_IsActive()) FirstTime = AFF_ALL_FLIP;
     }
     if (!RaceMod_Active()) return;
     ReplayEndFrame();

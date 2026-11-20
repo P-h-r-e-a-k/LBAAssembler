@@ -46,8 +46,9 @@ extern S32 GfxDitherShading;
 #include "../CONFIG_FILE.H"     // renderer: WriteConfigFile
 #include <GPU/GPURENDERER.H>    // renderer: GpuRenderer_ActiveBackend
 
-/* renderer [software|opengl]: the renderer now (the race game's Display page's Renderer row does the same), kept in lba2.cfg's Renderer;
-   with no argument, the one in use */
+static int s_rendererPending = -1;   // (cmd_renderer's switch, made before the next frame: Console_ApplyPendingResSwitch; -1 none)
+/* renderer [software|opengl]: the renderer from the next frame (the race game's Display page's Renderer row does the same), kept in
+   lba2.cfg's Renderer; with no argument, the one in use */
 static void cmd_renderer(int argc, const char *argv[]) {
     if (argc < 2) {
         Console_Print("renderer: %s", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()));
@@ -62,6 +63,17 @@ static void cmd_renderer(int argc, const char *argv[]) {
         Console_Print("Usage: renderer [software|opengl]");
         return;
     }
+    // (not now: the next frame, before it is presented -- Console_ApplyPendingResSwitch. A command off the control socket runs inside
+    // the present, PresentFrame's own pre-present hook: switched there, OpenGL was torn down under the present that had called it, and
+    // the present went on into its hook, now nothing -- the user's LBRA, 2026-11-20, `renderer software` sent while a line was on
+    // screen: Dial > SpeakAnimation > BoxBlit > a call to address 0)
+    s_rendererPending = (int)want;
+    Console_Print("renderer: %s from the next frame", GpuRenderer_BackendName(want));
+}
+static void ApplyPendingRenderer(void) {
+    if (s_rendererPending < 0) return;
+    const GpuRendererBackendId want = (GpuRendererBackendId)s_rendererPending;
+    s_rendererPending = -1;
     if (Renderer_ApplyChoice(want))
         WriteConfigFile();
     Console_Print("renderer: %s", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()));
@@ -1634,6 +1646,7 @@ static void res_do_switch(U32 newW, U32 newH) {
 }
 
 void Console_ApplyPendingResSwitch(void) {
+    ApplyPendingRenderer();
     if (!s_resSwitchPending)
         return;
     s_resSwitchPending = false;
