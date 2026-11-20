@@ -991,8 +991,13 @@ static char s_dtMsg[64] = "";
 // a wager on the match (the user, 2026-11-14: "the option to wager money on the darts in the Citadel Tavern, if Twinsen wins he doubles any
 // money he wagers. Let's have fixed wager options, 25, 50, and 100"): before the first dart against one of the regulars (not Zoe), state 6 --
 // Left and Right pick none or a stake Twinsen has, Action takes it from his purse; a win gives it back twice over
-static const int s_dtStakes[4] = {0, 25, 50, 100};
+// (and the match's legs -- the user, 2026-11-19: "one leg, twinsen starts and the wager is 25, 3 legs, alternate start wager is 100, 5 legs,
+// wager is 200, alternate legs"; "the first thrower swaps every leg for both 3 and 5. Let's keep the friendly game, the friendly game can be a
+// random person to start": each format a stake and its legs -- a friendly game one leg, its first thrower drawn; the others Twinsen first in
+// the first leg, the first thrower swapping leg by leg; the match to whoever wins more than half its legs)
+static const int s_dtStakes[4] = {0, 25, 100, 200}, s_dtFormatLegs[4] = {1, 1, 3, 5};
 static int s_dtStakePick = 0, s_dtStake = 0, s_dtSideWas = 0;
+static int s_dtLegs = 1, s_dtLegsWon[2] = {0, 0}, s_dtLegFirst = 0, s_dtLegNo = 1;
 static U32 s_dtInput = 0;
 // Action as the player means it: End (I_ACTION_ALWAYS) in any behaviour, Space (I_ACTION_M) in Normal -- or in any once a game of ours has
 // the keys (`playing`: a darts match, a bowling frame). The user, 2026-11-13: "Twinsen can use 'action' in any behaviour mode by using the
@@ -20826,25 +20831,40 @@ static void DartLand(S32 now, double x, double y) {
     DartSay(now, said, 2200);
     s_dtThrown = 1; s_dtThrowAt = now;
     if (rest == 0 && s_dtDouble) {
-        s_dtState = 4; s_dtAt = now;
         if (s_dtNHist[who] < 40) s_dtHist[who][s_dtNHist[who]++] = 0;
-        snprintf(said, sizeof(said), who == 0 ? "You win!" : "%s wins", DartOpponent()->Name);
-        if (who) snprintf(said, sizeof(said), "%s wins", DartOpponent()->Name);
+        // (the darts achievement, Deadly Darts, the player's: a leg won in nine darts, the fewest 501 can be, its last visit the 170
+        // checkout, the biggest -- treble 20, treble 20, the bull: say 180, 151, 170. One achievement, not two halves -- the user,
+        // 2026-11-16, "let's just have it activate if the user completes a game of darts in 9 darts and finishes with a throw of 170")
+        if (who == 0 && s_dtDarts[0] <= 9 && s_dtStartScore[0] == 170) DartAchieve(now, "darts");
+        // (a leg of a longer match: its score, and the next leg after a moment -- state 9)
+        s_dtLegsWon[who]++;
+        if (s_dtLegs > 1 && s_dtLegsWon[who] <= s_dtLegs / 2) {
+            if (who == 0) snprintf(said, sizeof(said), "Leg to you! %d-%d", s_dtLegsWon[0], s_dtLegsWon[1]);
+            else snprintf(said, sizeof(said), "Leg to %s, %d-%d", DartOpponent()->Name, s_dtLegsWon[1], s_dtLegsWon[0]);
+            DartSay(now, said, 3500);
+            Log_Info("[racemod] darts: leg %d to %s (%d darts), legs %d-%d", s_dtLegNo, who == 0 ? "Twinsen" : DartOpponent()->Name, s_dtDarts[who], s_dtLegsWon[0], s_dtLegsWon[1]);
+            s_dtState = 9; s_dtAt = now;
+            return;
+        }
+        s_dtState = 4; s_dtAt = now;
+        // (the match's score, when it had more than one leg)
+        char legs[16] = "";
+        if (s_dtLegs > 1) snprintf(legs, sizeof(legs), " %d-%d", s_dtLegsWon[who], s_dtLegsWon[1 - who]);
+        if (who == 0 && s_dtLegs > 1) snprintf(said, sizeof(said), "You win the match%s!", legs);
+        else if (who == 0) snprintf(said, sizeof(said), "You win!");
+        else if (s_dtLegs > 1) snprintf(said, sizeof(said), "%s wins the match%s", DartOpponent()->Name, legs);
+        else snprintf(said, sizeof(said), "%s wins", DartOpponent()->Name);
         // (the wager: won, twice the stake back; lost, it stays the opponent's)
         if (s_dtStake > 0) {
             if (who == 0) {
                 if (MONEY_ZLITOS) NbZlitosPieces += s_dtStake * 2; else NbGoldPieces += s_dtStake * 2;
-                snprintf(said, sizeof(said), "You win %d %s!", s_dtStake * 2, MONEY_ZLITOS ? "zlitos" : "kashes");
-            } else snprintf(said, sizeof(said), "%s wins your %d %s", DartOpponent()->Name, s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes");
+                snprintf(said, sizeof(said), "You win%s: %d %s!", legs, s_dtStake * 2, MONEY_ZLITOS ? "zlitos" : "kashes");
+            } else snprintf(said, sizeof(said), "%s wins%s: your %d %s", DartOpponent()->Name, legs, s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes");
             Log_Info("[racemod] darts: the wager of %d %s", s_dtStake, who == 0 ? "won, twice over" : "lost");
             s_dtStake = 0;
         }
         DartSay(now, said, 6000);
         Log_Info("[racemod] darts: %s (%d darts, the turn from %d)", said, s_dtDarts[who], s_dtStartScore[who]);
-        // (the darts achievement, Deadly Darts, the player's: a game won in nine darts, the fewest 501 can be, its last visit the 170
-        // checkout, the biggest -- treble 20, treble 20, the bull: say 180, 151, 170. One achievement, not two halves -- the user,
-        // 2026-11-16, "let's just have it activate if the user completes a game of darts in 9 darts and finishes with a throw of 170")
-        if (who == 0 && s_dtDarts[0] <= 9 && s_dtStartScore[0] == 170) DartAchieve(now, "darts");
         return;
     }
     s_dtState = 2; s_dtAt = now;   // the dart's moment over, then the next
@@ -20878,6 +20898,22 @@ static void DartFoeThrow(S32 now) {
     const double ex = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma, ey = (DartRnd() + DartRnd() + DartRnd() - 1.5) * 2 * sigma;
     s_dtFx = ax + ex; s_dtFy = ay + ey;
     DartLand(now, s_dtFx, s_dtFy);
+}
+// The match's format taken (s_dtStakes' place: 0 a friendly game): its stake and legs; a friendly game's first thrower drawn, said with
+// the throw's keys -- the others Twinsen first, the keys said
+static void DartFormat(S32 now, int format) {
+    s_dtStake = s_dtStakes[format];
+    s_dtLegs = s_dtFormatLegs[format];
+    s_dtLegsWon[0] = s_dtLegsWon[1] = 0; s_dtLegNo = 1;
+    s_dtLegFirst = format == 0 && s_dtFoe >= 0 && DartRnd() < 0.5 ? 1 : 0;
+    s_dtTurn = s_dtLegFirst;
+    char said[64];
+    if (format != 0 && s_dtLegs > 1) snprintf(said, sizeof(said), "Best of %d legs: arrows aim, Action throws", s_dtLegs);
+    else if (format != 0) snprintf(said, sizeof(said), "One leg: arrows aim, Action throws");
+    else if (s_dtTurn == 0) snprintf(said, sizeof(said), "A friendly game: you throw first");
+    else snprintf(said, sizeof(said), "A friendly game: %s throws first", DartOpponent()->Name);
+    DartSay(now, said, 3000);
+    Log_Info("[racemod] darts: format %d -- a wager of %d, %d leg%s, %s first", format, s_dtStake, s_dtLegs, s_dtLegs == 1 ? "" : "s", s_dtTurn == 0 ? "Twinsen" : DartOpponent()->Name);
 }
 // (the match over or left: the opponent hidden, Twinsen's own darts given back)
 static void DartEnd(void) {
@@ -21055,6 +21091,7 @@ static void DartFrame(S32 now) {
             s_dtFoe = foeAsked >= 0 ? foeAsked : two ? -1 : s_dtFoeCount ? s_dtFoeFirst + (int)(DartRnd() * s_dtFoeCount) % s_dtFoeCount : -1;
             if (foeAsked < 0 && !two && s_dtFoe < 0) return;
             s_dtOn = 1; s_dtState = 0; s_dtTurn = 0; s_dtLeft = 3; s_dtN = 0;
+            s_dtLegs = 1; s_dtLegsWon[0] = s_dtLegsWon[1] = 0; s_dtLegFirst = 0; s_dtLegNo = 1;
             if (s_dtAskVar >= 0 && s_dtAskVar < MAX_VARS_GAME) ListVarGame[s_dtAskVar] = -1;
             s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = DART_START;
             s_dtDarts[0] = s_dtDarts[1] = 0;
@@ -21076,9 +21113,9 @@ static void DartFrame(S32 now) {
                 // (he asked: the stakes said in his words -- 1 a friendly game, 2 to 4 the stakes; one Twinsen hasn't the money for, a friendly
                 // game, as the wager's own; his place at the board left to the stand-in, which walks to the waiting place behind Twinsen)
                 const S32 purse = MONEY_ZLITOS ? NbZlitosPieces : NbGoldPieces;
-                s_dtStake = s_dtStakes[asked >= 1 && asked <= 4 ? asked - 1 : 0];
-                if (s_dtStake > purse) { s_dtStake = 0; DartSay(now, "You seem a bit low on money, let's just have a friendly game", 4500); }
-                else { if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake; DartSay(now, s_dtStake ? "Arrows aim, Action throws" : "A friendly game: arrows aim, Action throws", 3000); }
+                const int format = asked >= 1 && asked <= 4 ? asked - 1 : 0;
+                if (s_dtStakes[format] > purse) { DartFormat(now, 0); DartSay(now, "You seem a bit low on money, let's just have a friendly game", 4500); }
+                else { DartFormat(now, format); if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake; }
                 T_OBJET *seat = &ListObjet[practice], *foe = DartStand();
                 s_dtSeat = practice;
                 s_dtSeatFlags = seat->Flags; seat->Flags |= INVISIBLE;
@@ -21128,7 +21165,7 @@ static void DartFrame(S32 now) {
         // the wager made: to the waiting place behind Twinsen, then the match
         if (DartStandWalk(s_dtFace[4], s_dtFace[5], dt)) {
             DartStandAnim(DartOpponent()->Anim);
-            s_dtState = 0; s_dtAt = now;
+            s_dtState = s_dtTurn == 0 ? 0 : 1; s_dtAt = now;
         }
         return;
     }
@@ -21142,19 +21179,19 @@ static void DartFrame(S32 now) {
         if (side && !s_dtSideWas) s_dtStakePick = (s_dtStakePick + side + 4) % 4;
         s_dtSideWas = side != 0;
         if (pressed) {
-            s_dtStake = s_dtStakes[s_dtStakePick];
-            s_dtState = 0; s_dtAt = now;
-            if (s_dtSeat > 0) { s_dtState = 8; DartStandAnim(DartOpponent()->Walk); }
-            if (s_dtStake > purse) {
+            if (s_dtStakes[s_dtStakePick] > purse) {
                 // (the opponent's words alone: with his name before them the line ran off the screen's sides)
-                Log_Info("[racemod] darts: %d %s asked, %d in the purse -- a friendly game", s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes", (int)purse);
-                s_dtStake = 0; s_dtStakePick = 0;
+                Log_Info("[racemod] darts: %d %s asked, %d in the purse -- a friendly game", s_dtStakes[s_dtStakePick], MONEY_ZLITOS ? "zlitos" : "kashes", (int)purse);
+                s_dtStakePick = 0;
+                DartFormat(now, 0);
                 DartSay(now, "You seem a bit low on money, let's just have a friendly game", 4500);
             } else {
+                DartFormat(now, s_dtStakePick);
                 if (MONEY_ZLITOS) NbZlitosPieces -= s_dtStake; else NbGoldPieces -= s_dtStake;
-                DartSay(now, s_dtStake ? "Arrows aim, Action throws" : "A friendly game: arrows aim, Action throws", 3000);
                 Log_Info("[racemod] darts: a wager of %d against %s", s_dtStake, DartOpponent()->Name);
             }
+            s_dtState = s_dtTurn == 0 ? 0 : 1; s_dtAt = now;
+            if (s_dtSeat > 0) { s_dtState = 8; DartStandAnim(DartOpponent()->Walk); }
         }
     } else if (s_dtState == 0) {
         // the player's aim: the arrows, and the sway over it
@@ -21189,6 +21226,23 @@ static void DartFrame(S32 now) {
                 DartSay(now, s_dtTurn == 0 ? "Your turn" : "Their turn", 1500);
             }
             s_dtAt = now;
+        }
+    } else if (s_dtState == 9) {
+        // a leg won, the match on: after a moment the next leg -- both back to the start, its first thrower the other one this time
+        if (now - s_dtAt > 3500) {
+            s_dtLegNo++;
+            s_dtLegFirst = 1 - s_dtLegFirst;
+            s_dtTurn = s_dtLegFirst; s_dtLeft = 3; s_dtN = 0;
+            s_dtScore[0] = s_dtScore[1] = s_dtStartScore[0] = s_dtStartScore[1] = DART_START;
+            s_dtDarts[0] = s_dtDarts[1] = 0; s_dtNHist[0] = s_dtNHist[1] = 0;
+            DartsPulled();
+            s_dtNextState = s_dtTurn == 0 ? 0 : 1;
+            s_dtState = 5; s_dtSwapAt = now; s_dtAt = now;
+            char said[64];
+            if (s_dtTurn == 0) snprintf(said, sizeof(said), "Leg %d: you throw first", s_dtLegNo);
+            else snprintf(said, sizeof(said), "Leg %d: %s throws first", s_dtLegNo, DartOpponent()->Name);
+            DartSay(now, said, 2500);
+            Log_Info("[racemod] darts: leg %d of %d, %s first", s_dtLegNo, s_dtLegs, s_dtTurn == 0 ? "Twinsen" : DartOpponent()->Name);
         }
     } else if (s_dtState == 5) {
         // (changing places)
@@ -21351,12 +21405,18 @@ static void DartDraw(void) {
     char line[96];
     snprintf(line, sizeof(line), "%s: %d dart%s left", s_dtTurn == 0 ? "You" : f->Name, s_dtLeft, s_dtLeft == 1 ? "" : "s");
     HudLine(16, 12, line, -1);
+    // (a match of legs: which leg, and the legs won so far)
+    if (s_dtLegs > 1) {
+        snprintf(line, sizeof(line), "Leg %d of %d -- legs: you %d, %s %d", s_dtLegNo, s_dtLegs, s_dtLegsWon[0], f->Name, s_dtLegsWon[1]);
+        HudLine(16, 40, line, -1);
+    }
     if (s_dtState == 1 && s_dtFoe < 0) HudLine(16, 40, "Zoe: press Action!", -1);
     if (s_dtState == 6) {
         char wager[64];
         const char *money = MONEY_ZLITOS ? "zlitos" : "kashes";
         // (no < > round it: the font has neither, they came out as stars -- the user's picture of the Tralu bar's board, 2026-11-15)
-        if (s_dtStakes[s_dtStakePick]) snprintf(wager, sizeof(wager), "Wager: %d %s", s_dtStakes[s_dtStakePick], money);
+        if (s_dtFormatLegs[s_dtStakePick] > 1) snprintf(wager, sizeof(wager), "Best of %d legs: %d %s", s_dtFormatLegs[s_dtStakePick], s_dtStakes[s_dtStakePick], money);
+        else if (s_dtStakes[s_dtStakePick]) snprintf(wager, sizeof(wager), "One leg: %d %s", s_dtStakes[s_dtStakePick], money);
         else snprintf(wager, sizeof(wager), "Wager: none, a friendly game");
         char ask[96];
         snprintf(ask, sizeof(ask), "%s: How much is the wager?", f->Name);

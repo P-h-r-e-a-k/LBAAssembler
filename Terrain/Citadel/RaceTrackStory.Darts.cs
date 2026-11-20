@@ -28,7 +28,8 @@ internal static partial class RaceTrackStory
     // (ANIM.HQR 228: Raph's own gesture, the arm up and forward and back -- his entity's generic 131 -- drawn right on the rabbibunnies' bodies
     // only, the drunk rabbibunny's and the blue-and-white one's among them: the throw)
     private const int RaphEntity = 19, DartThrow = 228, BennyEntity = 45, BennyBody = 43;
-    // the game variable the dialogue sets (RACEMOD.CPP dart_ask=): 1 a friendly game, 2-4 the stakes (25, 50, 100); -1 while a match is on
+    // the game variable the dialogue sets (RACEMOD.CPP dart_ask=): 1 a friendly game, 2-4 the formats -- one leg for 25, best of three legs
+    // for 100, best of five for 200 (the user, 2026-11-19); -1 while a match is on
     internal const int DartsAsk = 267;
     private const int DartsAskNear = 1800, DartsAskAgain = 3000;
 
@@ -55,18 +56,19 @@ internal static partial class RaceTrackStory
     private const int TraluBarHall = 19;
     internal const int DartsReach = 1500;
     // The darts players' lines (Citadel Island's texts, after the evening's: DartsTalkId): Twinsen's answers, then each player's own --
-    // Ask, Stakes, Low, Deal, Later in that order (DartPlayer.Lines: the first of his). (A question -- Ask, Stakes -- fits the choice box's
+    // Ask, Stakes, Low, Deal, Later, Fun in that order (DartPlayer.Lines: the first of his; Fun: a friendly game agreed, its first thrower
+    // drawn -- Deal has Twinsen throw first, as he does in the first leg of a match for kashes). (A question -- Ask, Stakes -- fits the choice box's
     // one page: Benny's first, 108 letters, wanted a second and the question waited there for a key, 2026-11-19.)
-    internal enum DartsTalk { Yes, No, Fun, K25, K50, K100, RaphAsk, RaphStakes, RaphLow, RaphDeal, RaphLater, BennyAsk, BennyStakes, BennyLow, BennyDeal, BennyLater }
+    internal enum DartsTalk { Yes, No, Fun, Leg1, Legs3, Legs5, RaphAsk, RaphStakes, RaphLow, RaphDeal, RaphLater, RaphFun, BennyAsk, BennyStakes, BennyLow, BennyDeal, BennyLater, BennyFun }
     private static int DartsTalkId(Func<ChapterLine, int> say, DartsTalk line) => say(ChapterLine.ZoeSmiling) + ChapterLines.Length + EveningLines.Length + (int)line;
     internal static readonly string[][] DartsTalkLines =
     {
         new[] { "You're on!", "Je relève le défi !", "Na klar!", "¡Hecho!", "Ci sto!", "Alinho!" },
         new[] { "Not right now.", "Pas maintenant.", "Gerade nicht.", "Ahora no.", "Non adesso.", "Agora não." },
         new[] { "Just for fun.", "Juste pour le plaisir.", "Nur zum Spaß.", "Solo por diversión.", "Solo per divertirci.", "Só por diversão." },
-        new[] { "25 kashes.", "25 kashes.", "25 Kashes.", "25 kashes.", "25 kash.", "25 kashes." },
-        new[] { "50 kashes.", "50 kashes.", "50 Kashes.", "50 kashes.", "50 kash.", "50 kashes." },
-        new[] { "100 kashes.", "100 kashes.", "100 Kashes.", "100 kashes.", "100 kash.", "100 kashes." },
+        new[] { "One leg, 25 kashes.", "Une manche, 25 kashes.", "Ein Leg, 25 Kashes.", "Una manga, 25 kashes.", "Un leg, 25 kash.", "Uma partida, 25 kashes." },
+        new[] { "Best of three legs, 100 kashes.", "Au meilleur des trois manches, 100 kashes.", "Best of three Legs, 100 Kashes.", "Al mejor de tres mangas, 100 kashes.", "Al meglio dei tre leg, 100 kash.", "À melhor de três partidas, 100 kashes." },
+        new[] { "Best of five legs, 200 kashes.", "Au meilleur des cinq manches, 200 kashes.", "Best of five Legs, 200 Kashes.", "Al mejor de cinco mangas, 200 kashes.", "Al meglio dei cinque leg, 200 kash.", "À melhor de cinco partidas, 200 kashes." },
         // Raph, in the Tavern
         new[]
         {
@@ -113,6 +115,15 @@ internal static partial class RaceTrackStory
             "Come vuoi. Io sono qui ad allenarmi.",
             "Como queiras. Eu fico aqui a treinar.",
         },
+        new[]
+        {
+            "Just for fun, then. Let's see who throws first.",
+            "Juste pour le plaisir, alors. Voyons qui lance en premier.",
+            "Nur zum Spaß also. Mal sehen, wer zuerst wirft.",
+            "Solo por diversión, entonces. A ver quién lanza primero.",
+            "Solo per divertirci, allora. Vediamo chi tira per primo.",
+            "Só por diversão, então. Vamos ver quem lança primeiro.",
+        },
         // Benny, in the Tralu's bar
         new[]
         {
@@ -158,6 +169,15 @@ internal static partial class RaceTrackStory
             "Tú te lo pierdes. Más diana para mí.",
             "Peggio per te. Più bersaglio per me.",
             "Azar o teu. Mais alvo para mim.",
+        },
+        new[]
+        {
+            "A friendly one, then. Let's see who goes first.",
+            "Une partie amicale, alors. Voyons qui commence.",
+            "Eine Freundschaftsrunde also. Mal sehen, wer anfängt.",
+            "Una amistosa, entonces. A ver quién empieza.",
+            "Un'amichevole, allora. Vediamo chi comincia.",
+            "Uma amigável, então. Vamos ver quem começa.",
         },
     };
 
@@ -229,43 +249,44 @@ internal static partial class RaceTrackStory
             if ({Id(DartsTalk.Yes)} == choice())
             {{
                 add_choice({Id(DartsTalk.Fun)});
-                add_choice({Id(DartsTalk.K25)});
-                add_choice({Id(DartsTalk.K50)});
-                add_choice({Id(DartsTalk.K100)});
+                add_choice({Id(DartsTalk.Leg1)});
+                add_choice({Id(DartsTalk.Legs3)});
+                add_choice({Id(DartsTalk.Legs5)});
                 ask_choice({Said(1)});
-                if ({Id(DartsTalk.K100)} == choice() && 100 > nb_gold_pieces())
+                if ({Id(DartsTalk.Legs5)} == choice() && 200 > nb_gold_pieces())
                 {{
                     message({Said(2)});
                     set_var_game({DartsAsk}, 1);
                 }}
-                else if ({Id(DartsTalk.K50)} == choice() && 50 > nb_gold_pieces())
+                else if ({Id(DartsTalk.Legs3)} == choice() && 100 > nb_gold_pieces())
                 {{
                     message({Said(2)});
                     set_var_game({DartsAsk}, 1);
                 }}
-                else if ({Id(DartsTalk.K25)} == choice() && 25 > nb_gold_pieces())
+                else if ({Id(DartsTalk.Leg1)} == choice() && 25 > nb_gold_pieces())
                 {{
                     message({Said(2)});
+                    set_var_game({DartsAsk}, 1);
+                }}
+                else if ({Id(DartsTalk.Fun)} == choice())
+                {{
+                    message({Said(5)});
                     set_var_game({DartsAsk}, 1);
                 }}
                 else
                 {{
                     message({Said(3)});
-                    if ({Id(DartsTalk.K100)} == choice())
+                    if ({Id(DartsTalk.Legs5)} == choice())
                     {{
                         set_var_game({DartsAsk}, 4);
                     }}
-                    else if ({Id(DartsTalk.K50)} == choice())
+                    else if ({Id(DartsTalk.Legs3)} == choice())
                     {{
                         set_var_game({DartsAsk}, 3);
                     }}
-                    else if ({Id(DartsTalk.K25)} == choice())
-                    {{
-                        set_var_game({DartsAsk}, 2);
-                    }}
                     else
                     {{
-                        set_var_game({DartsAsk}, 1);
+                        set_var_game({DartsAsk}, 2);
                     }}
                 }}
             }}
