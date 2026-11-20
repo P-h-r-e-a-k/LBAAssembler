@@ -209,15 +209,7 @@ internal sealed class EmbeddedGameHost : HwndHost
                 var window = FindEngineWindow(engine.Id);
                 if (window != IntPtr.Zero)
                 {
-                    ShowWindow(window, SW_HIDE);
-                    var style = GetWindowLongPtr(window, GWL_STYLE).ToInt64();
-                    style &= ~(long)(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_BORDER | WS_DLGFRAME);
-                    style |= WS_CHILD | WS_CLIPSIBLINGS;
-                    SetWindowLongPtr(window, GWL_STYLE, new IntPtr(style));
-                    var ex = GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64();
-                    ex &= ~(long)(WS_EX_APPWINDOW | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_DLGMODALFRAME | WS_EX_TOOLWINDOW);
-                    SetWindowLongPtr(window, GWL_EXSTYLE, new IntPtr(ex));
-                    SetParent(window, parent);
+                    TakeIn(window, parent);
                     return window;
                 }
                 Thread.Sleep(2);
@@ -237,8 +229,53 @@ internal sealed class EmbeddedGameHost : HwndHost
         focusTimer.Tick -= FocusTick;
         focusTimer.Tick += FocusTick;
         focusTimer.Start();
+        WatchForWindowMadeAgain(engine);
         return true;
     }
+
+    // A window of the engine's made a bare child of `parent`: hidden, its frame and its own-window styles stripped, then re-parented
+    private static void TakeIn(IntPtr window, IntPtr parent)
+    {
+        ShowWindow(window, SW_HIDE);
+        var style = GetWindowLongPtr(window, GWL_STYLE).ToInt64();
+        style &= ~(long)(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_BORDER | WS_DLGFRAME);
+        style |= WS_CHILD | WS_CLIPSIBLINGS;
+        SetWindowLongPtr(window, GWL_STYLE, new IntPtr(style));
+        var ex = GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64();
+        ex &= ~(long)(WS_EX_APPWINDOW | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_DLGMODALFRAME | WS_EX_TOOLWINDOW);
+        SetWindowLongPtr(window, GWL_EXSTYLE, new IntPtr(ex));
+        SetParent(window, parent);
+    }
+
+    // ---- the engine's window made again. SDL makes the game a new window whenever its renderer changes: at its start when it draws
+    // with OpenGL (RENDER_SWITCH.CPP: the window it opened is destroyed and one made for the GL context, a moment after it was taken
+    // in here) and at a switch of the game's Display menu's Renderer row. The window taken in is gone then and the new one a window of
+    // its own -- full screen on one monitor or other, the editor's view black, and KeepInside "putting back" a window that no longer
+    // was, eight times a second (the user, 2026-11-20, the release editor's Play set to OpenGL: "Attempting to play test in
+    // LBAAssembler is just giving a black screen in the viewport"). The new one is taken in as the first was: in the first seconds by
+    // a tight watch on its own thread -- hidden the moment it exists, as at the start, so it is never seen on its own -- and at any
+    // time after by KeepInside on the focus timer's tick.
+    private const int MadeAgainWatchMilliseconds = 20000;
+
+    private void WatchForWindowMadeAgain(Process engine)
+    {
+        var first = game;
+        _ = Task.Run(() =>
+        {
+            var clock = Stopwatch.StartNew();
+            while (clock.ElapsedMilliseconds < MadeAgainWatchMilliseconds && !engine.HasExited)
+            {
+                if (!IsWindow(first) && FindEngineWindow(engine.Id) is var again && again != IntPtr.Zero)
+                {
+                    ShowWindow(again, SW_HIDE);
+                    Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(process, engine)) KeepInside(); }));
+                    return;
+                }
+                Thread.Sleep(2);
+            }
+        });
+    }
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
 
     private static IntPtr FindEngineWindow(int processId)
     {
@@ -292,6 +329,20 @@ internal sealed class EmbeddedGameHost : HwndHost
     {
         if (game == IntPtr.Zero) return;
         var container = fullScreenHwnd != IntPtr.Zero ? fullScreenHwnd : host;
+        if (!IsWindow(game))
+        {
+            // (the engine made its window again -- WatchForWindowMadeAgain: the new one taken in, or, not made yet, on the next tick)
+            var again = process is { HasExited: false } engine ? FindEngineWindow(engine.Id) : IntPtr.Zero;
+            if (again == IntPtr.Zero) return;
+            DebugLog.Log($"EmbeddedGameHost: the game made its window again ({game:X} gone, {again:X} new: a renderer's start or switch): taken in");
+            TakeIn(again, container);
+            game = again;
+            SetWindowPos(game, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+            Fit();
+            ShowWindow(game, SW_SHOW);
+            if (wantsKeyboard && EditorInFront()) SetFocus(game);
+            return;
+        }
         var parent = GetAncestor(game, GA_PARENT);
         if (parent == container) return;
         DebugLog.Log($"EmbeddedGameHost: the game's window left the editor's (its parent {parent:X}): put back");
