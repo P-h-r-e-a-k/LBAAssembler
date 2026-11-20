@@ -108,12 +108,32 @@ internal static class CitadelHoverboard
         // ---- his bodies
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var bodies = HqrArchive.Open(bodyPath);
+        // (the rider in his racing suit, whatever he wears off the board -- the user, 2026-11-20: "Twinsen on the snowboard appears to be
+        // Twinsen in his tunic, Twinsen should always be in his racing suit when he's on the hoverboard" -- the suit's shape, not the tunic's
+        // recoloured: CitadelOveralls' own body of his, its back patch, made the rider's; and with the helmet on, one more body)
+        CitadelOveralls.Colour = CitadelOveralls.Chosen();
+        Body Suit() => CitadelOveralls.WithBackPatch(CitadelOveralls.Overalls(Body.Read(bodies.Read(SuitFrom), 2)));
+        var bare = SuitRider(Suit().Write(), Plain, out var bareNote);
+        var helmeted = SuitRider(CitadelOveralls.WithBackPatch(CitadelOveralls.WithHelmet(CitadelOveralls.Overalls(Body.Read(bodies.Read(SuitFrom), 2)))).Write(), Plain, out _);
         foreach (var entry in new[] { ProtoBody, JetBody })
         {
-            var made = Rider(bodies.Read(entry), Plain, out var note);
-            if (made is not null) HqrWriter.ReplaceInFile(bodyPath, entry, made);
-            log.Add($"the hoverboard: BODY.HQR {entry} ({(entry == ProtoBody ? "the protopack's" : "the super jet-pack's")}) {note}");
+            HqrWriter.ReplaceInFile(bodyPath, entry, bare);
+            log.Add($"the hoverboard: BODY.HQR {entry} ({(entry == ProtoBody ? "the protopack's" : "the super jet-pack's")}) the rider in his racing suit, {bareNote}");
         }
+        // (the helmeted rider: the hoverboard's entities' body HelmetRider -- the race file's hover_helmet= puts it on him while he has the
+        // helmet, and the Moon's foot_body= outside -- RACEMOD.CPP)
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var helmetIndex = RaceTrackGuards.BodyOf(table, PackEntities[0], HelmetRider) is { } had && had > JetBody ? had : -1;
+        if (helmetIndex >= 0) HqrWriter.ReplaceInFile(bodyPath, helmetIndex, helmeted);
+        else
+        {
+            helmetIndex = HqrArchive.CountEntries(bodyPath);
+            HqrWriter.AppendToFile(bodyPath, helmeted);
+            foreach (var e in PackEntities) table = RaceTrackBaldinoCar.WithBodyLike(table, e, HelmetRider, helmetIndex, 0);
+            HqrWriter.ReplaceInFile(ressPath, 44, table);
+        }
+        log.Add($"the hoverboard: the rider with the helmet on, BODY.HQR {helmetIndex}: entities {string.Join(" and ", PackEntities)}'s body {HelmetRider}");
         // ---- the packs' animations
         var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
         var anims = HqrArchive.Open(animPath);
@@ -142,8 +162,46 @@ internal static class CitadelHoverboard
 
     // ---- his bodies
 
+    // (the racing suit made from his everyday body, BODY.HQR 0 -- as CitadelOveralls makes it; the hoverboard's entities, the protopack's
+    // and the jet-pack's behaviours; the helmeted rider's body number, the helmet's own on the hero -- CitadelOveralls.HelmetBody)
+    private const int SuitFrom = 0, HelmetRider = CitadelOveralls.HelmetBody;
+    internal static readonly int[] PackEntities = { 4, 8 };
+    // (sideways on the board, as a skater rides -- the user, 2026-11-20: "We need to change Twinsen's stance on his hoverboard, so he's
+    // sideways on like a skateboarder": regular, his left foot to the nose -- he faces the board's right, its nose over his left shoulder.
+    // His body a quarter turn about the upright, the board not: his front, +z, to +x; his left, -x, to the nose)
+    internal static Vector3 Sideways(Vector3 v) => new(v.Z, v.Y, -v.X);
+
+    // The racing suit's body (its bytes) made the rider's: turned sideways on the board -- every point, its normal and the faces' normals a
+    // quarter turn about the upright -- and the board on his hip bone, its deck under his soles as he stands astride it
+    internal static byte[] SuitRider(byte[] suit, Look look, out string note)
+    {
+        var p = PalaceTorturers.Parts.Read(suit);
+        if (p.Bones.Count != 19 || p.Points.Count != p.Normals.Count) throw new InvalidDataException("not Twinsen's racing suit: 19 bones, a normal a point");
+        static short S(float v) => checked((short)Math.Round(v));
+        for (var i = 0; i < p.Points.Count; i++)
+        {
+            var (x, y, z, b) = p.Points[i];
+            var q = Sideways(new Vector3(x, y, z));
+            p.Points[i] = (S(q.X), S(q.Y), S(q.Z), b);
+            var (nx, ny, nz, nb) = p.Normals[i];
+            var n = Sideways(new Vector3(nx, ny, nz));
+            p.Normals[i] = (S(n.X), S(n.Y), S(n.Z), nb);
+        }
+        for (var i = 0; i < p.FaceNormalCount; i++)
+        {
+            var at = i * 8;
+            var n = Sideways(new Vector3(BinaryPrimitives.ReadInt16LittleEndian(p.FaceNormals.AsSpan(at)), BinaryPrimitives.ReadInt16LittleEndian(p.FaceNormals.AsSpan(at + 2)),
+                BinaryPrimitives.ReadInt16LittleEndian(p.FaceNormals.AsSpan(at + 4))));
+            BinaryPrimitives.WriteInt16LittleEndian(p.FaceNormals.AsSpan(at), S(n.X));
+            BinaryPrimitives.WriteInt16LittleEndian(p.FaceNormals.AsSpan(at + 2), S(n.Y));
+            BinaryPrimitives.WriteInt16LittleEndian(p.FaceNormals.AsSpan(at + 4), S(n.Z));
+        }
+        note = BoardOn(p, look, DeckY + StanceRise);
+        return p.Write();
+    }
+
     // The game's body with the pack (its bytes) made the rider's: the pack's polygons gone, the board's on his hip bone, its deck under his
-    // soles. Null (and why) if the board is on it already.
+    // soles. Null (and why) if the board is on it already. (Not used since 2026-11-20: the rider is the racing suit's body, SuitRider)
     internal static byte[]? Rider(byte[] game, Look look, out string note)
     {
         var p = PalaceTorturers.Parts.Read(game);
@@ -190,14 +248,24 @@ internal static class CitadelHoverboard
             p.Blocks.Add(((size == 4 ? 0x8000 : 0) | 4, records));
         }
 
+        note = $"the pack off ({gone} polygons), " + BoardOn(p, look, DeckY);
+        return p.Write();
+    }
+
+    // The board on a body's hip bone (bone 1: the one the hoverboard's animations lift as he hovers, which turns with him and never tilts),
+    // its deck's top `deckY` under his origin; its box as it stands. What was done, for the log.
+    private static string BoardOn(PalaceTorturers.Parts p, Look look, float deckY)
+    {
+        static int U(byte[] r, int at) => BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(at));
+        static void W(byte[] r, int at, int v) => BinaryPrimitives.WriteUInt16LittleEndian(r.AsSpan(at), (ushort)v);
         // the board's points after the hip's own -- each polygon its own corners, so its light is its face's, its edges sharp -- every later
         // point's index (and every light's: the points' and then the faces', ListLights) moved along by as many
         var faces = Faces(look);
         var at = p.StartOf(Hip) + p.Bones[Hip].Count;
         var k = faces.Sum(f => f.Corners.Length);
         int Moved(int i) => i >= at ? i + k : i;
-        var origin = world[p.Bones[Hip].Pivot];
-        var under = new Vector3(0, DeckY, 0);
+        var origin = p.World()[p.Bones[Hip].Pivot];
+        var under = new Vector3(0, deckY, 0);
         static short S(float v) => checked((short)Math.Round(v));
         var points = new List<(short, short, short, int)>();
         var normals = new List<(short, short, short, int)>();
@@ -243,8 +311,7 @@ internal static class CitadelHoverboard
         int[] box = { (int)Math.Floor(all.Min(v => v.X)), (int)Math.Ceiling(all.Max(v => v.X)), (int)Math.Floor(all.Min(v => v.Y)), (int)Math.Ceiling(all.Max(v => v.Y)),
                       (int)Math.Floor(all.Min(v => v.Z)), (int)Math.Ceiling(all.Max(v => v.Z)) };
         for (var b = 0; b < 6; b++) BinaryPrimitives.WriteInt32LittleEndian(p.Header.AsSpan(8 + b * 4), box[b]);
-        note = $"the pack off ({gone} polygons), the board on his hip bone ({faces.Count} polygons, {k} points)";
-        return p.Write();
+        return $"the board on his hip bone ({faces.Count} polygons, {k} points)";
     }
 
     // ---- the animations
@@ -260,6 +327,12 @@ internal static class CitadelHoverboard
     // (a rider's legs: the thighs a little forward, the knees as much back, the feet flat; and how far his lean goes to his chest -- the
     // landings fold him at the hips past a right angle)
     private static readonly int StanceThigh = Angle(-14), StanceKnee = Angle(28), StanceFoot = Angle(-14), MostLean = Angle(50);
+    // (astride the board, sideways: his legs apart to either side of him -- along the board once he's turned on it -- the front one, his
+    // left, the thigh FrontThigh; his feet flat again; his head turned to look over his left shoulder, the way he goes; and the deck as
+    // much higher as his feet rise with his legs apart: about a leg's length less its height at that spread)
+    private const int FrontThigh = OtherThigh, Head = 14;
+    private static readonly int Spread = Angle(26), HeadLook = Angle(-70);
+    private const float StanceRise = 50;
 
     private static int Hips(byte[] anim)
     {
@@ -297,16 +370,29 @@ internal static class CitadelHoverboard
                 Set(pelvis + 4, Wrap(Get(pelvis + 4) + turn));
                 Set(pelvis + 6, 0);
             }
-            // the legs: a rider's stance
+            // the legs: a rider's stance, astride the board -- each thigh out to its side, its foot back flat
             foreach (var top in new[] { Thigh, OtherThigh })
                 for (var j = 0; j < 3; j++)
                 {
                     var leg = Bone(top + j);
+                    var side = top == FrontThigh ? 1 : -1;
                     Set(leg, 0);
                     Set(leg + 2, j == 0 ? StanceThigh : j == 1 ? StanceKnee : StanceFoot);
                     Set(leg + 4, 0);
-                    Set(leg + 6, 0);
+                    Set(leg + 6, j == 0 ? side * Spread : j == 2 ? -side * Spread : 0);
                 }
+            // his head over his left shoulder, the way he goes
+            if (bones > Head && (Get(Bone(Head)) & 1) == 0) Set(Bone(Head) + 4, Wrap(Get(Bone(Head) + 4) + HeadLook));
+            // and the whole of him a quarter turn about the upright, as his body is on the board (Sideways): a turn about his left-right
+            // axis is one about the board's length now, about his front-back one one about its width (a turn by an angle about an axis is
+            // the same turn about the axis turned); a lift, turned as a place is
+            for (var b = 1; b < bones; b++)
+            {
+                var at = Bone(b);
+                int x = Get(at + 2), y = Get(at + 4), z = Get(at + 6);
+                if ((Get(at) & 1) == 1) { var q = Sideways(new Vector3(x, y, z)); Set(at + 2, (int)q.X); Set(at + 4, (int)q.Y); Set(at + 6, (int)q.Z); }
+                else { Set(at + 2, Wrap(z)); Set(at + 6, Wrap(-x)); }
+            }
         }
         return a;
     }

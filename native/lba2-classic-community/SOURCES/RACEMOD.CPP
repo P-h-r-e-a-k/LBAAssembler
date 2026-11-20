@@ -256,6 +256,9 @@
  *     no_suit=1                  (2026-11-08) the game's spacesuit never put on: a script's comportement_hero() of a suit's behaviour is
  *                                Twinsen's normal one (the sporty suit's his sporty one) -- the Emerald Moon's, where the story has him
  *                                in his racing overalls and helmet instead, ladders and all (RaceMod_SuitFor, OBJECT.CPP SetComportement)
+ *     hover_helmet=<var> <generic> (2026-11-20) on the hoverboard (the protopack's and the jet-pack's behaviours) with game variable <var>
+ *                                above 0 -- the racing helmet his -- Twinsen's body <generic>, the rider with the helmet on; off the
+ *                                board, or without it, his own again (the Moon's foot_body= gives that body outside whatever he has)
  *     foot_body=<generic>        (2026-11-08) on foot outside, Twinsen's body that one in place of his tunic's or his everyday clothes'
  *                                (the Emerald Moon's racing overalls with his racing helmet on); back in his own indoors (HeroLook)
  *     pyjamas=<var> <value> <body> (2026-11-17) while game variable <var> is <value>, on foot, Twinsen's body <body> (his pyjamas) in
@@ -1610,6 +1613,8 @@ static int s_heroBodyVar = -1, s_heroBodyMin = 0;
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
 static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 static int s_pyjVar = -1, s_pyjValue = 0, s_pyjBody = -1, s_pyjSaid = 0;
+// hover_helmet=: the helmet's variable and the helmeted rider's body (-1 none)
+static int s_hoverHelmetVar = -1, s_hoverHelmetBody = -1;
 // helmet_hook=<scene> <actor> (2026-11-16, the moon's airlocks -- the user: "let's have him enter wearing his helmet, go into the airlock,
 // and emerge not wearing his helmet, this mirrors behaviour in the retail game"; "We should show Twinsen's helmet left in the airlocks
 // instead of the spacesuit"): indoors in that scene the foot_body= helmet stays on him while the actor -- the airlock's hook, where the game
@@ -5533,6 +5538,7 @@ static void Load(const char *path, int carOnly = 0) {
             s_broken = 0;
         }
         else if (!strcmp(key, "foot_body")) { const int g = atoi(v); s_footBody = g > 0 && g < 255 ? g : -1; s_footChecked = 0; }
+        else if (!strcmp(key, "hover_helmet")) { if (sscanf(v, "%d %d", &s_hoverHelmetVar, &s_hoverHelmetBody) != 2) s_hoverHelmetVar = s_hoverHelmetBody = -1; }
         else if (!strcmp(key, "pyjamas")) {
             int var = -1, value = 0, body = -1;
             if (sscanf(v, "%d %d %d", &var, &value, &body) == 3 && var >= 0 && var < MAX_VARS_GAME && body > 0 && body < 255) { s_pyjVar = var; s_pyjValue = value; s_pyjBody = body; s_pyjSaid = 0; }
@@ -13241,6 +13247,24 @@ static void HeroLook(S32 now, int driving) {
             Log_Info("[racemod] pyjamas: variable %d at %d -- Twinsen dressed again", s_pyjVar, (int)ListVarGame[s_pyjVar]);
         }
     }
+    // on the hoverboard (hover_helmet=): the racing helmet on him while he has it -- the user, 2026-11-20, "We need to be selective with when
+    // we show the helmet on the hoverboard on Citadel, as Twinsen may have the hoverboard but no helmet" -- the rider's own body with it on
+    // (the hoverboard behaviours' entities have it under that number too); off the board, or without it, his own again. Outside on the
+    // Moon foot_body= gives that body whatever he has: no helmet, no air.
+    if (s_hoverHelmetVar >= 0 && s_hoverHelmetVar < MAX_VARS_GAME && s_hoverHelmetBody >= 0 && NewCube == -1 && !driving) {
+        const S32 g = hero->GenBody;
+        const int riding = Comportement == C_PROTOPACK || Comportement == C_JETPACK;
+        const int footHelmet = s_footBody == s_hoverHelmetBody && CubeMode == CUBE_EXTERIEUR;
+        if (riding && ListVarGame[s_hoverHelmetVar] > 0 && (g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE) && SearchBody((U8)s_hoverHelmetBody, NUM_PERSO) >= 0) {
+            InitBody((U8)s_hoverHelmetBody, NUM_PERSO);
+            Log_Info("[racemod] hover_helmet: on the hoverboard with his helmet -- body %d", s_hoverHelmetBody);
+        }
+        else if (g == s_hoverHelmetBody && !footHelmet && (!riding || ListVarGame[s_hoverHelmetVar] <= 0)) {
+            // (his own: the racing suit once he has it -- the tunic's item -- else his everyday clothes)
+            InitBody(ListVarGame[FLAG_TUNIQUE] ? GEN_BODY_TUNIQUE : GEN_BODY_NORMAL, NUM_PERSO);
+            Log_Info("[racemod] hover_helmet: %s -- his own body again", riding ? "no helmet" : "off the hoverboard");
+        }
+    }
     // his own car painted (twinsen_body=): its bodies on him in place of the buggy's own -- every frame, as the game puts the buggy's back
     // whenever he gets in, stops firing or is grown back after the lightning (GEN_BODY_TUNIQUE: the buggy's, or GEN_BODY_NORMAL / _MAGE as
     // ChoiceHeroBody makes it); this runs before the frame is drawn (AffScene), so the buggy's own is never seen. A folder without them
@@ -15073,7 +15097,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_pyjVar = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_nbInCar = 0; s_ballScene = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
+    s_nbTracks = 0; s_tiredVar = -1; s_nbTiredKeep = 0; s_nbTiredSkip = 0; s_nbZlitoScenes = 0; s_exchangeVar = -1; s_nbEscLast = 0; s_lensVar = -1; s_lensCubeScene = -1; s_povScene = -1; s_nbDriveIn = 0; s_driveInAll = 0; s_nbLateFade = 0; s_lateFadeScene = -1; s_frogVar = -1; s_halMendVar = -1; s_seatVar = -1; s_seatCube = -1; s_pyjVar = -1; s_hoverHelmetVar = s_hoverHelmetBody = -1; s_markVar = -1; s_markCount = 0; s_markBrake = 0; s_carryScene = -1; s_carryVar = -1; s_nbInCar = 0; s_ballScene = -1; s_occScene = -1; s_adultVar = -1; s_darkScene = -1; s_dreamScene = -1; s_setFine = 0;
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)

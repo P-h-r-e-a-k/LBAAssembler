@@ -727,6 +727,9 @@ internal static class RaceCarEngineFile
             if (!onceWritten)
             {
                 text.Append($"seat_cube={RaceTrackStory.SeatCube}\n");
+                // (the hoverboard's rider in his racing helmet once he has it -- the helmet's slot, the helmeted rider's body: RACEMOD.CPP
+                // hover_helmet=, Citadel/CitadelHoverboard)
+                text.Append($"hover_helmet={Citadel.CitadelOveralls.HelmetSlot} {Citadel.CitadelOveralls.HelmetBody}\n");
                 foreach (var (file, grate) in RaceTrackBuilder.GameShaftGrates)
                     text.Append($"follow_decor={RaceTrackStory.QuayLiftScene} {Citadel.CitadelProps.QuayLift} {grate} {Citadel.CitadelProps.LiftTop} {file}\n");
                 onceWritten = true;
