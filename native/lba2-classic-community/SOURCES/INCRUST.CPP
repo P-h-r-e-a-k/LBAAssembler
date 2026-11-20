@@ -169,9 +169,14 @@ S32 SpriteBulle = SPRITE_BULLE_RIGHT;
 #define DX_BULLE 45 // Valeur saisie dans Volgraf
 
 void DrawBulle(S32 numobj) {
-    PtrProjectPoint(ListObjet[numobj].Obj.X,
-                    ListObjet[numobj].Obj.Y + ListObjet[numobj].YMax,
-                    ListObjet[numobj].Obj.Z);
+    // (a race-track mod's unseen speaker: the bubble at the head of the one seen speaking, or none -- RACEMOD.CPP RaceMod_BulleAt)
+    S32 bx = ListObjet[numobj].Obj.X, by = ListObjet[numobj].Obj.Y + ListObjet[numobj].YMax, bz = ListObjet[numobj].Obj.Z;
+    {
+        extern S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z);
+        if (RaceMod_BulleAt(numobj, &bx, &by, &bz) == 0)
+            return;
+    }
+    PtrProjectPoint(bx, by, bz);
 
     if (LastNumBulle != numobj) {
         SpriteBulle ^= 1;

@@ -9567,6 +9567,55 @@ static void Marshal(S32 now) {
 // The flag marshal where the camera is, as the spooks are drawn -- her fog by her distance, her depth written -- where she is now (on the
 // road, hopping off it, on her plinth), her animation stepped every frame (seen or not: the keyframes follow the clock), changed to the
 // one the moment wants (ObjectInitAnim blends into it); and her plinth beside the road, all the while.
+// Where a speech bubble goes (INCRUST.CPP DrawBulle): 1 at (x, y, z), 0 none, -1 the game's own place (the speaker's head). The story's
+// talkers are often unseen actors standing for someone -- the flag marshal the race mode draws, Raph in his car -- or for no one (a plate,
+// a voice off), and the bubble came from the unseen actor's feet, on the ground beside the one talking (the user, 2026-11-20: "Speech
+// bubbles need to come from an actor, and be shown by their head, not just randomly"). An unseen speaker: on the marshal's plinth's place,
+// at her head where she is drawn; beside someone seen, at that one's head; else no bubble -- no one seen is speaking.
+#define RACE_BUBBLE_NEAR 900.0             // (someone seen this near an unseen speaker is the one speaking)
+#define RACE_BUBBLE_MARSHAL 600.0          // (an unseen speaker this near her plinth's place -- where the story puts her talker -- speaks for her)
+#define RACE_MARSHAL_HEAD 1150             // (her head over her feet)
+S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
+    if (!RaceMod_Active() || numobj <= NUM_PERSO || numobj >= (S32)NbObjets) return -1;
+    const T_OBJET *o = &ListObjet[numobj];
+    if (!(o->Flags & INVISIBLE)) return -1;
+    static S32 saidScene = -1, saidActor = -1;
+    const int say = saidScene != (S32)NumCube || saidActor != numobj;
+    saidScene = (S32)NumCube; saidActor = numobj;
+    // (the story's controllers -- at the scene's middle on its floor, or hidden far below it -- speak the radio, the narrator, signs read:
+    // no one is seen saying those)
+    if ((o->Obj.X == 16384 && o->Obj.Z == 16384) || o->Obj.Y < -5000) {
+        if (say) Log_Info("[racemod] bubble: scene %d actor %d a controller -- no bubble", (int)NumCube, (int)numobj);
+        return 0;
+    }
+    const double wx = o->Obj.X + CurrentCubeX * 32768.0, wz = o->Obj.Z + CurrentCubeY * 32768.0;
+    const T_RACE_MARSHAL *m = &s_marshal;
+    if (m->On) {
+        const double r2 = RACE_BUBBLE_MARSHAL * RACE_BUBBLE_MARSHAL;
+        const double dp = (wx - m->X) * (wx - m->X) + (wz - m->Z) * (wz - m->Z);
+        if (dp < r2) {
+            *x = (S32)floor(m->CX - CurrentCubeX * 32768.0 + 0.5); *y = (S32)floor(m->CY + 0.5) + RACE_MARSHAL_HEAD; *z = (S32)floor(m->CZ - CurrentCubeY * 32768.0 + 0.5);
+            if (say) Log_Info("[racemod] bubble: scene %d actor %d unseen -- at the flag marshal's head (%d,%d,%d)", (int)NumCube, (int)numobj, (int)*x, (int)*y, (int)*z);
+            return 1;
+        }
+    }
+    int best = -1;
+    double bd = RACE_BUBBLE_NEAR * RACE_BUBBLE_NEAR;
+    for (int i = 1; i < (int)NbObjets; i++) {
+        const T_OBJET *s = &ListObjet[i];
+        if (i == numobj || (s->Flags & INVISIBLE) || (s->WorkFlags & OBJ_DEAD) || (s->GenBody == NO_BODY && !(s->Flags & SPRITE_3D))) continue;
+        const double d = (double)(s->Obj.X - o->Obj.X) * (s->Obj.X - o->Obj.X) + (double)(s->Obj.Z - o->Obj.Z) * (s->Obj.Z - o->Obj.Z);
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best > 0) {
+        *x = ListObjet[best].Obj.X; *y = ListObjet[best].Obj.Y + ListObjet[best].YMax; *z = ListObjet[best].Obj.Z;
+        if (say) Log_Info("[racemod] bubble: scene %d actor %d unseen -- at actor %d's head (%d,%d,%d)", (int)NumCube, (int)numobj, best, (int)*x, (int)*y, (int)*z);
+        return 1;
+    }
+    if (say) Log_Info("[racemod] bubble: scene %d actor %d unseen, no one seen by it -- no bubble", (int)NumCube, (int)numobj);
+    return 0;
+}
+
 static void DrawMarshal(void) {
     T_RACE_MARSHAL *m = &s_marshal;
     if (!m->On) return;
