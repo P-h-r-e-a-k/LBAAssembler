@@ -2051,6 +2051,17 @@ static void cmd_behaviour(int argc, const char *argv[]) {
 /* weapon [n]: read or set the hero's active weapon global (FLAG_BALLE_MAGIQUE=1, FLAG_SABRE, FLAG_DART,
    FLAG_SARBACANE, ...). Sets Weapon only; a weapon that is ammo- or inventory-gated may also need its
    ListVarGame flag (use `vargame`). For reaching the various fire paths in a headless test. */
+/* magiclevel <level> [points]: the hero's magic level (0-4) and points (default level * 20, full). The ball's throw depends on
+   both: no points throws the direct ball that stops at the first thing it meets. */
+static void cmd_magic(int argc, const char *argv[]) {
+    if (argc >= 2) {
+        const int level = atoi(argv[1]);
+        MagicLevel = (U8)(level < 0 ? 0 : level > 4 ? 4 : level);
+        MagicPoint = (U8)(argc >= 3 ? atoi(argv[2]) : MagicLevel * 20);
+    }
+    Console_Print("magic: level %d, points %d", (int)MagicLevel, (int)MagicPoint);
+}
+
 static void cmd_weapon(int argc, const char *argv[]) {
     if (argc >= 2)
         Weapon = (U8)atoi(argv[1]);
@@ -3343,6 +3354,8 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("newgame", cmd_newgame, "Start a new game, as the main menu's New Game", "newgame", "InitGame(1).");
     Console_RegisterCommandEx("behaviour", cmd_behaviour, "Read/set hero behaviour (comportement)",
                               "behaviour [0..13]", "0=Normal 1=Sportif 2=Aggressive 3=Discreet 4=Protopack. Routes through SetComportement.");
+    Console_RegisterCommandEx("magiclevel", cmd_magic, "Read/set the hero's magic level and points", "magiclevel [level 0-4] [points]",
+                              "MagicLevel, and MagicPoint (default level * 20).");
     Console_RegisterCommandEx("weapon", cmd_weapon, "Read/set hero active weapon",
                               "weapon [n]", "Sets the Weapon global (1=magic ball). Ammo/inventory may need vargame.");
     Console_RegisterCommandEx("varcube", cmd_varcube, "Read/set a scene (cube) Life variable",

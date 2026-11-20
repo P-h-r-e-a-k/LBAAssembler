@@ -113,7 +113,7 @@ internal sealed record RaceTrackIsland(
         SoftBanks = true,
         // (no lift down into the museum from the storm track's deck, nor from the town circuit's road -- the user, 2026-11-19: "The elevator
         // into the museum, let's remove this for both Citadel islands citadel.ile and citabau.ile, let's also remove the window from the room
-        // it connects to"; Twinsen gets into that room from inside the museum, its door released by the broom: CitadelMuseumDoor.ShutWindow.
+        // it connects to"; Twinsen gets into that room from inside the museum, its door released by the mop and bucket: CitadelMuseumDoor.ShutWindow.
         // The deck's lift was (520.8, 568.1) down into scene 15 at (12288, 3000, 13312); the road's TwinMuseum's last pair, below)
         // (and in the town circuit's file, where the road took the museum: its front against the road's bank, the retail front (body 38)
         // moved there -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently facing": scene 48 at (10966,

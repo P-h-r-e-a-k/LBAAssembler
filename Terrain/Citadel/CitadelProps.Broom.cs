@@ -3,57 +3,85 @@ using LbaBodyStudio;
 
 namespace LBAAssembler.Terrain.Citadel;
 
-// The museum security room's broom (the user, 2026-11-17: "Let's take out some panes of glass in the door in the museum, let's add a broom
-// between the cupboard and the blue security machine. The user needs to throw their magic ball through the missing glass in the door, to hit
-// the broom, the broom then falls in a short cut scene and activates the red button which causes the door to open"): leaning against the
-// room's west wall, its bristles on the floor; hit, it tips over onto the desk's red button. An actor turns only about the upright, so the
-// fall is five bodies, the broom at each tilt, swapped one after another (RaceTrackStory.Chapters, MuseumBroom): each with its origin at the
-// broom's foot, the handle along a direction from Lean (against the wall, -x) to Fall (onto the button: its place less the foot's, scene 15).
+// The museum security room's mop and bucket (the user, 2026-11-17: "Let's take out some panes of glass in the door in the museum, let's add a
+// broom ... The user needs to throw their magic ball through the missing glass in the door, to hit the broom, the broom then falls in a short
+// cut scene and activates the red button which causes the door to open"; 2026-11-19: "Let's replace the broom with a mop and bucket, and
+// position the mop and bucket in the middle of the room between the door and the button to make it more obvious. Where it currently is the ball
+// doesn't actually reach it unless Twinsen has the suit"): a mop standing in a bucket out on the floor, on the line from the room's door to the
+// desk's red button. Hit, the two tip over together about the bucket's foot on the button's side until the handle's end lies on the button.
+// An actor turns only about the upright, so the fall is five bodies, the pair at each tilt, swapped one after another (RaceTrackStory.Chapters,
+// MuseumMop): each with its origin at the bucket's foot (its middle, on the floor). MopButton is the button's place less that foot's (scene 15):
+// as far from the button as a mop's length lets the handle still reach it.
 internal static partial class CitadelProps
 {
-    public const int BroomUp = 166;
-    public static readonly int[] BroomFrames = { 166, 167, 168, 169, 170 };
-    // (how far through its fall each body is: slow off the wall, quick at the end)
-    private static readonly float[] BroomTilt = { 0f, 0.25f, 0.5f, 0.78f, 1f };
-    private const float BroomLength = 1160, BroomHead = 260;
-    private const int Bristle = 6 * 16 + 9, BroomBand = 3 * 16 + 4, Handle = 1 * 16 + 7;
-    public static readonly Vector3 BroomLean = Vector3.Normalize(new Vector3(-270, 1170, 0)), BroomFall = Vector3.Normalize(new Vector3(168, 784, -801));
+    public const int MopUp = 166;
+    public static readonly int[] MopFrames = { 166, 167, 168, 169, 170 };
+    // (how far through its fall each body is: slow off the upright, quick at the end)
+    private static readonly float[] MopTilt = { 0f, 0.25f, 0.5f, 0.78f, 1f };
+    public static readonly Vector3 MopButton = new(-1460, 784, -523);
+    private const float BucketLow = 190, BucketTop = 235, BucketHigh = 330, WaterAt = 230, MopFoot = 60, MopLean = 8;
+    // (greys in the middle of their ramp, lit only a little: the light runs a colour up and down its ramp, and past either end into the
+    // reds either side)
+    private const int BucketSide = 3 * 16 + 7, BucketInside = 3 * 16 + 5, BucketRim = 3 * 16 + 10, Water = 3 * 16 + 4, MopStrand = 3 * 16 + 11, MopHandle = 1 * 16 + 7;
+    private const float BucketLight = 0.45f, StrandLight = 0.3f, HandleLight = 0.8f;
 
-    // the standing broom's box (x, y, z min, then max): round it and the floor before it, towards the room's door (see BuildBroom)
-    private static short[]? BroomBox(int generic) => generic == BroomUp ? new short[] { -350, 0, -400, 1700, 1250, 400 } : null;
+    // the standing pair's box (x, y, z min, then max): round it and the floor before it, towards the room's door -- the side away from the
+    // button (see BuildMop)
+    private static short[]? MopBox(int generic) => generic == MopUp ? new short[] { -450, 0, -450, 1300, 1600, 750 } : null;
 
-    public static Body BuildBroom(byte[] header, int frame)
+    public static Body BuildMop(byte[] header, int frame)
     {
-        var m = new CarMesh("a broom", new[] { -1 });
-        m.Light = 0.8f;
-        var t = BroomTilt[frame];
-        // (the handle's way: turned from Lean towards Fall about the axis between them, the head's breadth along that axis throughout)
-        var axis = Vector3.Normalize(Vector3.Cross(BroomLean, BroomFall));
-        var angle = MathF.Acos(Math.Clamp(Vector3.Dot(BroomLean, BroomFall), -1, 1)) * t;
-        var d = Vector3.Transform(BroomLean, Quaternion.CreateFromAxisAngle(axis, angle));
-        var thick = Vector3.Normalize(Vector3.Cross(axis, d));
-        // the head: a block of bristles from the floor up, broad along the axis, a band round its top
-        void Block(float s0, float s1, float broad, float deep, int colour)
-        {
-            var c = new[] { s0, s1 }.SelectMany(s => new[] { -1, 1 }.SelectMany(a => new[] { -1, 1 }.Select(b => d * s + axis * (a * broad) + thick * (b * deep)))).ToArray();
-            var mid = d * ((s0 + s1) / 2);
-            int[] H(params int[] k) => k.Select(i => m.P(0, c[i])).ToArray();
-            // (corners: [s][a][b] = s*4 + a*2 + b)
-            m.Out(H(0, 1, 3, 2), colour, mid); m.Out(H(4, 5, 7, 6), colour, mid);
-            m.Out(H(0, 1, 5, 4), colour, mid); m.Out(H(2, 3, 7, 6), colour, mid);
-            m.Out(H(0, 2, 6, 4), colour, mid); m.Out(H(1, 3, 7, 5), colour, mid);
-        }
-        Block(0, BroomHead - 50, 170, 55, Bristle);
-        Block(BroomHead - 50, BroomHead, 150, 45, BroomBand);
+        var m = new CarMesh("a mop in a bucket", new[] { -1 });
+        m.Light = BucketLight;
+        // the plane of the fall: `u` along the floor towards the button, the tip about the bucket's foot on that side (`edge`)
+        var u = Vector3.Normalize(new Vector3(MopButton.X, 0, MopButton.Z));
+        var edge = u * BucketLow;
+        var axis = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, u));
+        // the handle: from the mop's head on the bucket's floor, leaning a little towards the button, as long as takes its end -- turned
+        // about the edge -- onto the button
+        var lean = MopLean * MathF.PI / 180;
+        var d0 = Vector3.Normalize(u * MathF.Sin(lean) + Vector3.UnitY * MathF.Cos(lean));
+        var foot0 = new Vector3(0, MopFoot, 0);
+        float b = Vector3.Dot(d0, foot0 - edge), c = (foot0 - edge).LengthSquared() - (MopButton - edge).LengthSquared();
+        var length = -b + MathF.Sqrt(b * b - c);
+        var top0 = foot0 + d0 * length;
+        float Angle(Vector3 v) => MathF.Atan2(v.Y, Vector3.Dot(v, u));
+        var fall = Angle(top0 - edge) - Angle(MopButton - edge);
+        var turn = Quaternion.CreateFromAxisAngle(axis, fall * MopTilt[frame]);
+        Vector3 At(Vector3 v) => edge + Vector3.Transform(v - edge, turn);
+        Vector3 Dir(Vector3 v) => Vector3.Transform(v, turn);
+        // (the rings across the bucket's own upright)
+        var across1 = Dir(u);
+        var across2 = Dir(Vector3.Normalize(Vector3.Cross(u, Vector3.UnitY)));
+        int[] Ring(float y, float r) => m.Loop(0, At(new Vector3(0, y, 0)), across1 * r, across2 * r, 10);
+        var mid = At(new Vector3(0, BucketHigh / 2, 0));
+        // the bucket: its tapered side, out and in (seen into from above), a rim, its floor; the water in it
+        var low = Ring(0, BucketLow);
+        var high = Ring(BucketHigh, BucketTop);
+        m.Skin(low, high, _ => BucketSide, mid);
+        var lowIn = Ring(4, BucketLow - 4);
+        var highIn = Ring(BucketHigh, BucketTop - 6);
+        for (var k = 0; k < 10; k++)
+            m.In(new[] { lowIn[k], lowIn[(k + 1) % 10], highIn[(k + 1) % 10], highIn[k] }, BucketInside, mid);
+        var rimHigh = Ring(BucketHigh + 22, BucketTop + 10);
+        m.Skin(high, rimHigh, _ => BucketRim, mid);
+        m.Cap(low, m.P(0, At(Vector3.Zero)), BucketSide, mid);
+        m.Cap(Ring(WaterAt, BucketLow + (BucketTop - BucketLow) * WaterAt / BucketHigh - 6), m.P(0, At(new Vector3(0, WaterAt, 0))), Water, At(new Vector3(0, -100, 0)));
+        // the mop's strands: a skirt from the handle out to the water, a little above the rim
+        m.Light = StrandLight;
+        var strandsTop = foot0 + d0 * (BucketHigh + 90);
+        var skirtTop = m.Loop(0, At(strandsTop), across1 * 45, across2 * 45, 8);
+        var skirtLow = m.Loop(0, At(foot0 + d0 * (WaterAt - MopFoot)), across1 * 170, across2 * 170, 8);
+        m.Skin(skirtTop, skirtLow, _ => MopStrand, At(foot0 + d0 * (WaterAt - MopFoot)));
         // the handle
-        m.Strut(0, d * BroomHead, d * BroomLength, 34, Handle);
+        m.Light = HandleLight;
+        m.Strut(0, At(strandsTop - d0 * 30), At(top0), 36, MopHandle);
         // (standing: two points no face uses, at the corners of a box round it and the floor before it, towards the room's door -- its box,
-        // what a magic ball hits. A ball of the lowest magic level, thrown from the doorway, goes straight, drops to the floor two cells short
-        // of the wall and comes back (the higher levels' bounce on to it): it still knocks the broom over, 2026-11-17's test. Down, its own box)
+        // what a magic ball hits. Down, its own box)
         if (frame == 0)
         {
-            m.P(0, new Vector3(-350, 0, -400));
-            m.P(0, new Vector3(1700, 1250, 400));
+            m.P(0, new Vector3(-450, 0, -450));
+            m.P(0, new Vector3(1300, 1600, 750));
         }
         return m.ToBody(header);
     }

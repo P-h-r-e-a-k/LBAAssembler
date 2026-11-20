@@ -11,10 +11,12 @@ namespace LBAAssembler.Terrain.Citadel;
 // The body's own x along the tomb, z across it.
 internal static partial class CitadelProps
 {
-    public const int KashTomb = 203, KashHelmet = 204, TombCandle = 205;
+    public const int KashTomb = 203, KashHelmet = 204, TombCandle = 205, RecordSlate = 207;
     public const float TombLong = 1800, TombDeep = 800, TombPlinth = 110, TombTop = 820, LidOver = 50, LidThick = 110;
     private const int TombStone = 52, TombLidStone = 50, TombPlinthStone = 49, TombGilt = 106;
     private const float KashDot = 34, KashFoot = 260;
+    // (the name's middle along the lid, and the helmet's place past it at the other end)
+    private const float KashTextAt = -180, KashHelmetAt = 560;
     private static readonly Dictionary<char, string[]> KashFont = new()
     {
         ['K'] = new[] { "#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#" },
@@ -31,12 +33,13 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, TombPlinth / 2, 0), new Vector3(TombLong + 160, TombPlinth, TombDeep + 160), TombPlinthStone);
         m.Box(0, new Vector3(0, (TombPlinth + TombTop - LidThick) / 2, 0), new Vector3(TombLong, TombTop - LidThick - TombPlinth, TombDeep), TombStone);
         m.Box(0, new Vector3(0, TombTop - LidThick / 2, 0), new Vector3(TombLong + 2 * LidOver, LidThick, TombDeep + 2 * LidOver), TombLidStone);
-        // KASH in gilt, along both long sides (each side read left to right from in front of it)
-        foreach (var side in new[] { 1, -1 })
+        // KASH in gilt on the lid's top (the user, 2026-11-19: "Let's put the name Kash on the top of the tomb instead of the side"): the
+        // letters along the tomb, +x to -x in the tomb's own frame, their tops towards +z -- turned half round as it stands (KashTombBeta),
+        // read left to right from the cave's camera; the helmet lies past them at the +x end (BuildKashHelmet)
         {
             const string text = "KASH";
             var wide = (text.Length * 6 - 1) * KashDot;
-            var face = side * (TombDeep / 2 + 4);
+            var top = TombTop + 3;
             for (var c = 0; c < text.Length; c++)
             {
                 var rows = KashFont[text[c]];
@@ -45,17 +48,16 @@ internal static partial class CitadelProps
                     for (var col = 0; col < 5; col++)
                     {
                         if (rows[r][col] != '#' || done[r, col]) continue;
-                        var end = col;
-                        while (end + 1 < 5 && rows[r][end + 1] == '#' && !done[r, end + 1]) end++;
+                        var end2 = col;
+                        while (end2 + 1 < 5 && rows[r][end2 + 1] == '#' && !done[r, end2 + 1]) end2++;
                         var bottom = r;
-                        while (bottom + 1 < 7 && Enumerable.Range(col, end - col + 1).All(i => rows[bottom + 1][i] == '#' && !done[bottom + 1, i])) bottom++;
-                        for (var rr = r; rr <= bottom; rr++) for (var i = col; i <= end; i++) done[rr, i] = true;
-                        // (from in front of the +z side +x runs left to right; from in front of the -z side, -x does)
-                        float a0 = -wide / 2 + (c * 6 + col) * KashDot, a1 = -wide / 2 + (c * 6 + end + 1) * KashDot;
-                        float x0 = side * a0, x1 = side * a1;
-                        float y1 = KashFoot + 7 * KashDot - r * KashDot, y0 = KashFoot + 7 * KashDot - (bottom + 1) * KashDot;
-                        // (one-sided, facing out of the tomb: the far side's letters, double-sided, showed through its lid)
-                        m.Out(new[] { m.P(0, new(x0, y0, face)), m.P(0, new(x1, y0, face)), m.P(0, new(x1, y1, face)), m.P(0, new(x0, y1, face)) }, TombGilt, new Vector3((x0 + x1) / 2, (y0 + y1) / 2, 0));
+                        while (bottom + 1 < 7 && Enumerable.Range(col, end2 - col + 1).All(i => rows[bottom + 1][i] == '#' && !done[bottom + 1, i])) bottom++;
+                        for (var rr = r; rr <= bottom; rr++) for (var i = col; i <= end2; i++) done[rr, i] = true;
+                        // (the first letter at +x, row 0 -- the letter's top -- furthest towards +z: the tomb stands a half turn round, so this
+                        // is the way up the cave's camera reads)
+                        float x1 = KashTextAt + wide / 2 - (c * 6 + col) * KashDot, x0 = KashTextAt + wide / 2 - (c * 6 + end2 + 1) * KashDot;
+                        float z1 = 7 * KashDot / 2f - r * KashDot, z0 = 7 * KashDot / 2f - (bottom + 1) * KashDot;
+                        m.Out(new[] { m.P(0, new(x0, top, z0)), m.P(0, new(x1, top, z0)), m.P(0, new(x1, top, z1)), m.P(0, new(x0, top, z1)) }, TombGilt, new Vector3((x0 + x1) / 2, top - 50, (z0 + z1) / 2));
                     }
             }
         }
@@ -68,9 +70,34 @@ internal static partial class CitadelProps
     {
         var m = new CarMesh("Kash's helmet, on his tomb", new[] { -1 });
         m.Light = 0.6f;
-        CitadelOveralls.HelmetInto(m, new Vector3(0, TombTop + KashHelmetSize * 0.5f, 0), KashHelmetSize);
+        CitadelOveralls.HelmetInto(m, new Vector3(KashHelmetAt, TombTop + KashHelmetSize * 0.5f, 0), KashHelmetSize);
         return m.ToBody(header);
     }
+
+    // A slate of the speedrun records, on the cave's wall either side of the tomb (the user, 2026-11-19: "On the wall either side of the tomb
+    // let's add a slate showing best times for runners from LBA1 ... The other side will be for LBA2"): a dark slate board in a wooden frame,
+    // its face to +z, chalk rows on it -- its list shown on the screen when Twinsen reads it (RACEMOD.CPP plaque=). Hung on the wall: its
+    // box under the floor (KashBox), walked by.
+    public const float SlateWide = 520, SlateHigh = 400, SlateLow = 1050;
+    private const int SlateStone = 3 * 16 + 1, SlateFrame = 1 * 16 + 5, SlateChalk = 3 * 16 + 11;
+    public static Body BuildRecordSlate(byte[] header)
+    {
+        var m = new CarMesh("a slate of the speedrun records", new[] { -1 });
+        m.Light = 0.7f;
+        const float Mid = SlateLow + SlateHigh / 2;
+        m.Box(0, new Vector3(0, Mid, 18), new Vector3(SlateWide + 60, SlateHigh + 60, 24), SlateFrame);
+        m.Box(0, new Vector3(0, Mid, 32), new Vector3(SlateWide, SlateHigh, 6), SlateStone);
+        // (the chalk: a title row and the list's rows, a name and a time each)
+        m.Box(0, new Vector3(0, SlateLow + SlateHigh - 50, 36), new Vector3(SlateWide * 0.6f, 14, 2), SlateChalk);
+        for (var r = 0; r < 6; r++)
+        {
+            var y = SlateLow + SlateHigh - 105 - r * 44;
+            m.Box(0, new Vector3(-SlateWide * 0.17f, y, 36), new Vector3(SlateWide * 0.45f, 9, 2), SlateChalk);
+            m.Box(0, new Vector3(SlateWide * 0.3f, y, 36), new Vector3(SlateWide * 0.2f, 9, 2), SlateChalk);
+        }
+        return m.ToBody(header);
+    }
+    private static short[]? KashBox(int generic) => generic == RecordSlate ? new short[] { -300, -16, -20, 300, 0, 80 } : null;
 
     // A tall iron candlestick: a round foot, a stem, a dish, a church candle and its flame
     public const float CandleStem = 900, CandleWax = 260;

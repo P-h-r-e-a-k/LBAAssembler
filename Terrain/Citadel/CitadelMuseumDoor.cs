@@ -8,7 +8,7 @@ namespace LBAAssembler.Terrain.Citadel;
 // museum ... The user needs to throw their magic ball through the missing glass in the door, to hit the broom"): the room's door (scene 15's
 // actor 5, sprite 120 -- a wooden door, four panes of glass over its panel, the glass a checker of one colour and see-through pixels) copied
 // as a new sprite after SPRITES.HQR's last with its two lower panes' glass pixels see-through too, its box (RESS.HQR's sprites' table) the
-// same. RaceTrackStory.Chapters' MuseumBroom puts it on the door; the race file's ball_through= lets Twinsen's magic ball pass the door.
+// same. RaceTrackStory.Chapters' security-room edit puts it on the door; the race file's ball_through= lets Twinsen's magic ball pass the door.
 internal static class CitadelMuseumDoor
 {
     public const int Scene = 15, DoorActor = 5, DoorSprite = 120;
@@ -101,7 +101,7 @@ internal static class CitadelMuseumDoor
 
     // The security room's window shut (the user, 2026-11-19: "The elevator into the museum, let's remove this for both Citadel islands
     // citadel.ile and citabau.ile, let's also remove the window from the room it connects to" -- Twinsen gets into the room from inside the
-    // museum, the door released by the broom): in scene 15's grid the window (block WindowBlock, two cells wide and six layers high in the
+    // museum, the door released by the mop and bucket): in scene 15's grid the window (block WindowBlock, two cells wide and six layers high in the
     // room's north wall, z WallZ) laid over with the wall's own pattern beside it (WallBlock, three cells wide, a row of three positions a
     // layer), and its way out (the zone into scene 48 in front of it, the game's window exit) taken away.
     private const int WallZ = 24, WindowX0 = 24, WindowX1 = 25, WindowY0 = 12, WindowY1 = 17, WindowBlock = 123, WallBlock = 2, WallBase = 10,

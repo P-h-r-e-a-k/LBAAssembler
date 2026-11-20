@@ -1088,6 +1088,16 @@ static double s_ferryWas[4];                  // (the ferry's x, y, z and beta l
 static S32 s_ferryStillSince = 0;
 static int s_ferryArriveFrames = 0;
 static int s_ferryArrived = 0, s_ferryHoldWas = 0;   // (come in on its deck in this scene; the hold last frame: arrive z at its release)
+// plaque=<var> <value> <title> and its plaque_row=<name> <time> lines (the story's file): a list on a panel in the screen's middle while
+// game variable <var> is <value>, Twinsen held -- Action or Esc closes it and sets <var> back to 0. The speedrun records' slates by Kash's
+// tomb (the user, 2026-11-19: "perhaps we just show a plaque on screen "Name - time" - let's have names left aligned, and times aligned
+// also"): the names down the left, the times lined up on the right, the title over them.
+#define RACE_MAX_PLAQUES 4
+#define RACE_PLAQUE_ROWS 12
+typedef struct { int Var, Value, NbRows; char Title[96], Name[RACE_PLAQUE_ROWS][32], Time[RACE_PLAQUE_ROWS][16]; } T_RACE_PLAQUE;
+static T_RACE_PLAQUE s_plaques[RACE_MAX_PLAQUES];
+static int s_nbPlaques = 0, s_plaqueOn = -1, s_plaqueKeysWere = 1, s_plaqueEat = 0;
+static U32 s_plaqueInput = 0;
 static void FerryFrame(S32 now);
 static int FerryHolding(void);
 // (on_foot=: out of the car to explore -- the Temple of Bú's secret party; OnFoot, RaceMod_FilterInput)
@@ -4897,6 +4907,21 @@ static void Load(const char *path, int carOnly = 0) {
             f->InCarVar = -1; f->ArriveZ = 0; f->HullHalf = 0;
             if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d", &f->Scene, &f->Ferry, &f->DeckEntity, &f->DeckBody, &f->Box[0], &f->Box[1], &f->Box[2], &f->Box[3],
                        &f->DeckY, &f->HoldVar, &f->AboardVar, &f->InCarVar, &f->ArriveZ, &f->HullHalf) >= 11) s_nbFerries++;
+        }
+        else if (!strcmp(key, "plaque")) {
+            int var, value, used = 0;
+            if (!setRead && s_nbPlaques < RACE_MAX_PLAQUES && sscanf(v, "%d %d %n", &var, &value, &used) >= 2) {
+                T_RACE_PLAQUE *pq = &s_plaques[s_nbPlaques++];
+                memset(pq, 0, sizeof(*pq));
+                pq->Var = var; pq->Value = value;
+                snprintf(pq->Title, sizeof(pq->Title), "%s", v + used);
+            }
+        }
+        else if (!strcmp(key, "plaque_row")) {
+            if (!setRead && s_nbPlaques > 0) {
+                T_RACE_PLAQUE *pq = &s_plaques[s_nbPlaques - 1];
+                if (pq->NbRows < RACE_PLAQUE_ROWS && sscanf(v, "%31s %15s", pq->Name[pq->NbRows], pq->Time[pq->NbRows]) == 2) pq->NbRows++;
+            }
         }
         else if (!strcmp(key, "dart_foe") || !strcmp(key, "dart_zoe")) {
             T_DART_FOE f;
@@ -14903,6 +14928,11 @@ U32 RaceMod_FilterInput(U32 input) {
     s_poolInput = input;
     s_bowlInput = input;
     s_dtInput = input;
+    // (a plaque on the screen: its keys -- Action, Esc -- close it; nothing else moves Twinsen or opens a menu meanwhile: PlaqueFrame)
+    // (and the key that closed it, still down, reaches nothing either -- the slate's Action would open it again, Esc the menu -- until let go)
+    s_plaqueInput = input;
+    if (s_plaqueEat && !(input & (I_ACTION_M | I_ACTION_ALWAYS | I_MENUS))) s_plaqueEat = 0;
+    if (s_plaqueOn >= 0 || s_plaqueEat) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS | I_MENUS | I_COMPORTEMENT | I_INVENTORY | I_HOLOMAP);
     if (s_dtOn && (S32)NumCube == s_dtScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
     if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
     if (s_nbPools && !s_swimming && !s_poolDive && PoolBoardDive(input)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
@@ -14980,6 +15010,7 @@ void RaceMod_LoadFile(const char *path) {
     s_carHome = -1; s_carSeenAt = -2;   // (car_home=: the story file's, as tired= is -- not a track file's)
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
+    s_nbPlaques = 0; s_plaqueOn = -1;   // (plaque=: the story file's too)
     s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
@@ -20339,6 +20370,50 @@ static void HalFrame(S32 now) {
     }
     if (s_halUntil && now > s_halUntil) s_halUntil = 0;
 }
+// The plaque shown (plaque=): the first whose variable holds its value; Action or Esc -- pressed afresh, not still down from the word that
+// opened it -- closes it, its variable back to 0
+static void PlaqueFrame(void) {
+    s_plaqueOn = -1;
+    for (int i = 0; i < s_nbPlaques; i++) {
+        const T_RACE_PLAQUE *pq = &s_plaques[i];
+        if (pq->Var >= 0 && pq->Var < MAX_VARS_GAME && ListVarGame[pq->Var] == pq->Value) { s_plaqueOn = i; break; }
+    }
+    if (s_plaqueOn < 0) { s_plaqueKeysWere = 1; return; }
+    const int keys = ActionHeld(s_plaqueInput, 1) || (s_plaqueInput & I_MENUS) != 0;
+    if (keys && !s_plaqueKeysWere) {
+        ListVarGame[s_plaques[s_plaqueOn].Var] = 0;
+        Log_Info("[racemod] plaque: \"%s\" closed", s_plaques[s_plaqueOn].Title);
+        s_plaqueOn = -1; s_plaqueEat = 1;
+    }
+    s_plaqueKeysWere = keys;
+}
+// Its panel: the title over the list (in two lines, at its " -- ", when it is wider than the panel), each row's name at the left and its
+// time to the right edge, the times' ends lined up
+static void PlaqueDraw(void) {
+    if (s_plaqueOn < 0 || s_plaqueOn >= s_nbPlaques) return;
+    const T_RACE_PLAQUE *pq = &s_plaques[s_plaqueOn];
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, pw = w - 160 < 360 ? 360 : w - 160, x0 = (w - pw) / 2;
+    char head[2][96];
+    int heads = 1;
+    snprintf(head[0], sizeof(head[0]), "%s", pq->Title);
+    const char *cut = strstr(pq->Title, " -- ");
+    if (SizeFont(head[0]) > pw - 24 && cut) {
+        snprintf(head[0], sizeof(head[0]), "%.*s", (int)(cut - pq->Title), pq->Title);
+        snprintf(head[1], sizeof(head[1]), "%s", cut + 4);
+        heads = 2;
+    }
+    const S32 step = 30, top = 14 + heads * 34 + 10, ph = top + pq->NbRows * step + 18, y0 = (h - ph) / 2 > 8 ? (h - ph) / 2 : 8;
+    Box(x0 - 4, y0 - 4, x0 + pw + 3, y0 + ph + 3, 9 * 16 + 4);
+    Box(x0, y0, x0 + pw - 1, y0 + ph - 1, GpuOverlay_Black());
+    BoxMovingAdd(x0 - 4, y0 - 4, x0 + pw + 3, y0 + ph + 3);
+    for (int i = 0; i < heads; i++) HudLine(w / 2 - SizeFont(head[i]) / 2, y0 + 12 + i * 34, head[i], -1);
+    for (int i = 0; i < pq->NbRows; i++) {
+        const S32 y = y0 + top + i * step;
+        HudLine(x0 + 28, y, pq->Name[i], -1);
+        HudLine(x0 + pw - 28, y, pq->Time[i], 1);
+    }
+}
+
 // His words on a panel: "HAL on the radio", the words wrapped to it
 static void HalDraw(void) {
     if (!s_halUntil || TimerRefHR > s_halUntil) return;
@@ -22020,6 +22095,7 @@ void RaceMod_Frame(void) {
     FruitFrame(TimerRefHR);
     FruitReels(TimerRefHR);
     HalFrame(TimerRefHR);
+    PlaqueFrame();
     if (!DartShowFrame(TimerRefHR)) DartFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
@@ -24491,6 +24567,7 @@ void RaceMod_Draw(void) {
     if (!LbaFont) return;
     FruitDraw();
     HalDraw();
+    PlaqueDraw();
     // (LBA2_CARVIS=1: the first opponent's car's state logged as it changes -- in this scene or not, out of sight at Y -20000, hidden,
     // bodiless, behind the camera (16), off the screen (32) -- and how many mushrooms of the next cubes are drawn: the user saw FunFrock's
     // car vanish and come back, 2026-10-27, not yet seen here)

@@ -42,8 +42,39 @@ internal static partial class RaceTrackStory
     // and the holomap's arrow to Ker'aooc's house; Ker'aooc's house, its assistant; the Pearl of Incandescence's cave
     private const int CuredDinoFly = 62, KeraoocArrow = 35, KeraoocHouse = 35, KeraoocAssistant = 2, PearlCave = 113, PearlClam = 5;
     // Kash's tomb in the clam's place: its facing, how near Action reads it (it is long: from its side, its middle is that far), how far
-    // past its ends the candlesticks stand
-    private const int KashTombBeta = 0, KashTombReach = 1700, KashCandleOut = 350;
+    // past its ends the candlesticks stand. Turned half round (the user, 2026-11-19, "spin the tomb around"; a quarter turn won't fit the
+    // raised floor, 1,536 deep to the tomb's 1,960): the name on its lid reads from the camera, the helmet at its far end
+    private const int KashTombBeta = 2048, KashTombReach = 1700, KashCandleOut = 200;
+    // The speedrun records' slates on the cave's back wall either side of the tomb, where its stone divers stood (KashTombCave): LBA1's on
+    // the left, LBA2's on the right (x, z of each, the floor's height the tomb's); how near Action reads one; the cube variables each keeps
+    // while Twinsen is that near it (the tomb's Action not answered then: the right one is within its reach); the game variable the plaque
+    // is shown by (RACEMOD.CPP plaque=: 1 LBA1's, 2 LBA2's, 0 closed -- the engine sets it back as the plaque is closed)
+    private static readonly (int X, int Z)[] SlateAt = { (3996, 1030), (7468, 1030) };
+    private const int SlateReach = 700, SlateNearFirst = 60;
+    public const int PlaqueVar = 272;
+    // the records, as speedrun.com's Any% boards (Regular) have them on 2026-11-20: every runner who has held the world record, with their
+    // best world record, fastest first
+    private static readonly (string Title, (string Name, string Time)[] Rows)[] SlateRecords =
+    {
+        ("Little Big Adventure -- Any%, world record holders", new[]
+        {
+            ("Roxer", "26:26"), ("banta546", "28:09"), ("Kash_Lba", "28:28"), ("Freem4n", "37:22"), ("amnesti", "52:59"), ("serializer", "57:09"),
+        }),
+        ("Little Big Adventure 2 -- Any%, world record holders", new[]
+        {
+            ("EPmager", "22:35"), ("Amaneko", "24:10"), ("Roxer", "24:34"), ("Kuky_Bro", "26:50"), ("Kash_Lba", "28:10"), ("MarbrieTV", "49:52"),
+            ("Sentinel59", "49:58"), ("kHeinzen", "53:26"), ("Talabarbe", "55:31"),
+        }),
+    };
+    // The race file's lines (the story's file): a plaque each, shown while PlaqueVar is its number
+    internal static IEnumerable<string> SlatePlaqueLines()
+    {
+        for (var k = 0; k < SlateRecords.Length; k++)
+        {
+            yield return $"plaque={PlaqueVar} {k + 1} {SlateRecords[k].Title}";
+            foreach (var (name, time) in SlateRecords[k].Rows) yield return $"plaque_row={name} {time}";
+        }
+    }
     // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
     private static readonly (int X, int Z) DeanAt = (15104, 5040);
     // The exam pages as Twinsen carries them (the user, 2026-11-06: "Add the pages to the inventory as one item with a count, 1/2/3 for how
@@ -327,6 +358,8 @@ void comportement_1()
         KashReads, KashTakes, KashRests,
         // (Mr. Paul at the Desert quay's car ferry: the ticket shown from the car -- RaceTrackStory.Ferry, 2026-11-19)
         FerryTicketOk, FerryNoTicket,
+        // (the speedrun records' slates either side of Kash's tomb -- the user, 2026-11-19: KashTombCave, RACEMOD.CPP plaque=)
+        KashSlate,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -923,6 +956,15 @@ void comportement_1()
             "Niente biglietto, niente traversata, Twinsen. L'ufficio del traghetto di Port-Ludo li vende.",
             "Sem bilhete, sem travessia, Twinsen. O escritório do ferry de Port-Ludo vende-os.",
         },
+        new[]
+        {
+            "It appears to be a list of famous racers, along with their best times. I wonder what track this refers to.",
+            "On dirait une liste de pilotes célèbres, avec leurs meilleurs temps. Je me demande de quel circuit il s'agit.",
+            "Sieht aus wie eine Liste berühmter Rennfahrer mit ihren Bestzeiten. Ich frage mich, welche Strecke damit gemeint ist.",
+            "Parece una lista de pilotos famosos, con sus mejores tiempos. Me pregunto a qué circuito se refiere.",
+            "Sembra un elenco di piloti famosi, con i loro tempi migliori. Mi chiedo a quale percorso si riferisca.",
+            "Parece uma lista de pilotos famosos, com os seus melhores tempos. Pergunto-me a que pista se refere.",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -1274,7 +1316,7 @@ void comportement_1()
 {{
     swif (1 == action())
     {{
-        if ({KashTombReach} > distance(0) && {Driving} != comportement_hero())
+        if ({KashTombReach} > distance(0) && {Driving} != comportement_hero() && 0 == var_cube({SlateNearFirst}) && 0 == var_cube({SlateNearFirst + 1}))
         {{
             message_obj(0, {Say(DesertLine.KashReads)});
             if ({gear})
@@ -1319,8 +1361,38 @@ void comportement_1()
                 var candle = Citadel.CitadelProps.Actor(Citadel.CitadelProps.TombCandle, x + (int)Math.Round(Math.Cos(a) * d), y, z - (int)Math.Round(Math.Sin(a) * d));
                 return IslandBeatsA.Add(model, candle, "void comportement_0()\n{\n}\n");
             }).ToList();
+            var slateEdits = SlateAt.Select((at, k) =>
+            {
+                var slate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.RecordSlate, at.X, y, at.Z, 0);
+                return IslandBeatsA.Add(model, slate, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if ({SlateReach} > distance(0))
+    {{
+        set_var_cube({SlateNearFirst + k}, 1);
+    }}
+    else
+    {{
+        set_var_cube({SlateNearFirst + k}, 0);
+    }}
+    swif (1 == action())
+    {{
+        if ({SlateReach} > distance(0) && {Driving} != comportement_hero())
+        {{
+            message_obj(0, {Say(DesertLine.KashSlate)});
+            set_var_game({PlaqueVar}, {k + 1});
+        }}
+    }}
+}}
+");
+            }).ToList();
             return scripts =>
             {
+                foreach (var e in slateEdits) e(scripts);
                 var hero = Loose(scripts.GetText(0, ScriptKind.Life), "message(327);", "message(337);");
                 hero = Loose(hero, "if (21 == l_track_obj(5) && 0 == var_game(169) && 0 == var_game(19) && 0 == var_game(3) && 2500 > distance_message(5))\n{\nset_var_game(169, 1);\nset_var_game(83, 11);\n}", "");
                 scripts.SetText(0, ScriptKind.Life, hero);
