@@ -84,6 +84,21 @@ internal static class CitadelHouseRooms
     // the scene variables: a seat taken (RaceTrackStory.SeatCube), which chair, the bath's filling count
     private const int WhichChair = 78, Filling = 77;
     private const int ChairZone0 = 80, TapsZone = 82, SitLabel = 100, StandLabel = 120;
+    // The bathroom at work (the user, 2026-11-20: "Let's make all the bathroom assets work in Twinsen's bathroom, the toilet to have a flushing
+    // trigger, let's also allow Tiwnsen to sit on it if he wishes. Let's add a slightly bigger trigger zone on the bath that covers right up
+    // to the wall. Let's have the shower turn on/off as well as the sink"): each fitting's zone before it, Action there --
+    //   - the toilet: facing it (the game's own look -- angle_obj(0) under ToiletFacing), it flushes (its sound, its bowl churning for a
+    //     while: ToiletFlushing); his back to it, he sits on it (as on the kitchen's chairs: TwinsenSit, the engine's seat_cube= stands him
+    //     up at the next Action), facing the room;
+    //   - the sink and the shower: on (their running bodies, their water's sound looped) and off again;
+    //   - the bath's taps: their zone the bath's whole front, to the east wall, and its water's sound while it fills.
+    // The zones (none overlapping another: an actor in two type-2 zones is in the later one only), the scene's variable counting the
+    // flush, the hero's track labels for the toilet's seat; the seat's height (Twinsen's sitting made for a 500 seat: a little over the
+    // toilet's 420 ring, his feet on the floor), how long the bowl churns (frames)
+    private const int ToiletZone = 83, SinkZone = 84, ShowerZone = 85, Flushed = 76, ToiletSitLabel = 140, ToiletStandLabel = 141;
+    private const int ToiletSeatTop = 470, ToiletFacing = 768, FlushFrames = 110;
+    // (the bath's taps' zone to this z: before the bath's south end at the east wall, 1,970, and a step out)
+    private const int BathZoneZ1 = 2500;
     // a door's zone, before it on the room's side: Twinsen in it, it slides down open (the house's door's own way, open_down -- its
     // script without the little key the bedroom's west door wants); away again, it closes. The north doors' zones in scene 0: DoorZone and
     // the one after it
@@ -359,6 +374,9 @@ stop();
         if (doorActor is null) { log.Add("The house's bathroom and kitchen left out: scene 0 has no door (sprite 100)"); return log; }
         var intoHouse = new Dictionary<int, int> { [Bathroom] = (BathDoorX0 + 1) * 512, [Kitchen] = (KitchenDoorX0 + 1) * 512 };
         var gapOf = new Dictionary<int, int> { [Bathroom] = BathGapX, [Kitchen] = KitchenGapX };
+        // (the bathroom's sounds: the flush, the water running -- SAMPLES.HQR's numbers)
+        var sounds = CitadelBathSounds.Install(gameDirectory);
+        log.Add($"the bathroom's sounds: SAMPLES.HQR {sounds.Flush} (the flush), {sounds.Tap} (the sink), {sounds.Shower} (the shower), {sounds.BathTap} (the bath's taps)");
         foreach (var scene in new[] { Bathroom, Kitchen })
         {
             var model = houseModel.Clone();
@@ -380,7 +398,7 @@ stop();
                 Type = 0, Num = House, X0 = gapX, X1 = gapX + 1023, Z0 = (RoomZ1 + 1) * 512 + 64, Z1 = (RoomZ1 + 2) * 512 - 1, Y0 = FloorY - 100, Y1 = FloorY + 1500,
                 Info = new[] { intoHouse[scene], FloorY, IntoHouseZ, 0, 0, 0, 0, 1 },
             });
-            var bath = -1;
+            int bath = -1, toilet = -1, sink = -1, shower = -1;
             foreach (var (generic, x, z, beta) in scene == Bathroom ? CitadelProps.BathroomFittings : CitadelProps.KitchenFittings)
             {
                 var a = CitadelProps.Actor(generic > 127 ? (sbyte)generic : generic, x, FloorY, z, beta);
@@ -390,6 +408,9 @@ stop();
                 if (generic == CitadelProps.ShowerDoor) { a.Move = 3; a.SRot = CitadelProps.ShowerDoorTurn; }
                 var index = SceneOps.AddActor(model, a);
                 if (generic == CitadelProps.CornerBath) bath = index;
+                if (generic == CitadelProps.Toilet) toilet = index;
+                if (generic == CitadelProps.BathSink) sink = index;
+                if (generic == CitadelProps.Shower) shower = index;
                 texts[index] = generic == CitadelProps.ShowerDoor
                     // (Twinsen comes up to it: it swings open; he goes: back to ajar -- the user, 2026-11-16, "a hinged door to the shower
                     // that's slightly ajar ... a door that swings when Twinsen connects to it")
@@ -424,7 +445,10 @@ void comportement_2()
                 // the bath's taps: Action before them, it fills (its bodies with the water higher, a stage a second); again, it empties
                 var bathAt = CitadelProps.BathroomFittings.First(f => f.Generic == CitadelProps.CornerBath);
                 int tx = bathAt.X + (int)CitadelProps.BathTaps.X, tz = bathAt.Z + (int)CitadelProps.BathTaps.Z;
-                model.Zones.Add(new SceneZoneModel { Type = 2, Num = TapsZone, X0 = tx - 920, X1 = tx + 130, Z0 = 512, Z1 = tz + 1080, Y0 = FloorY - 100, Y1 = FloorY + 1200, Info = new int[8] });
+                // (the taps' zone: from west of them along the bath's whole front, round its curve, to the east wall -- its end there reached
+                // out to 1,970 -- and a step out before it; was its west end only, to x tx + 130 and z tz + 1,080: the user, 2026-11-20,
+                // "a slightly bigger trigger zone on the bath that covers right up to the wall")
+                model.Zones.Add(new SceneZoneModel { Type = 2, Num = TapsZone, X0 = tx - 920, X1 = (RoomX1 + 1) * 512, Z0 = 512, Z1 = BathZoneZ1, Y0 = FloorY - 100, Y1 = FloorY + 1200, Info = new int[8] });
                 texts[SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(tx, FloorY, tz))] = ($@"void comportement_0()
 {{
     set_comportement(comportement_1);
@@ -444,6 +468,7 @@ void comportement_1()
 
 void comportement_2()
 {{
+    sample_always({sounds.BathTap});
     add_var_cube({Filling}, 1);
     if (50 == var_cube({Filling}))
     {{
@@ -456,6 +481,7 @@ void comportement_2()
     if (150 == var_cube({Filling}))
     {{
         body_obj({bath}, {CitadelProps.BathWaterFull});
+        sample_stop({sounds.BathTap});
         set_comportement(comportement_3);
     }}
 }}
@@ -490,6 +516,10 @@ void comportement_4()
     }}
 }}
 ", "label(0);\nstop();\n");
+            }
+            if (scene == Bathroom && toilet >= 0 && sink >= 0 && shower >= 0)
+            {
+                Fittings(model, texts, ref heroTrack, toilet, sink, shower, sounds);
             }
             if (scene == Kitchen)
             {
@@ -731,4 +761,131 @@ void comportement_2()
         for (var p = 0; p < n; p++) library = GridPaint.SetEntry(library, count + 1, p, bricks[p], shapes[p], sounds[p]);
         return count + 1;
     }
+
+    // The bathroom's toilet, sink and shower at work (see ToiletZone): their zones, their helpers (invisible actors at them -- the toilet's
+    // where it stands, for the look at it; the sink's and the shower's where their water is, for their sound), the hero's track's labels
+    // for the toilet's seat
+    private static void Fittings(SceneModel model, Dictionary<int, (string Life, string Track)> texts, ref string heroTrack, int toilet, int sink,
+                                 int shower, CitadelBathSounds.Numbers sounds)
+    {
+        var toiletAt = CitadelProps.BathroomFittings.First(f => f.Generic == CitadelProps.Toilet);
+        var sinkAt = CitadelProps.BathroomFittings.First(f => f.Generic == CitadelProps.BathSink);
+        var showerAt = CitadelProps.BathroomFittings.First(f => f.Generic == CitadelProps.Shower);
+        // ---- the toilet: its bowl's middle (70 before its place), its zone before it
+        int bowlZ = toiletAt.Z + 70;
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = ToiletZone, X0 = toiletAt.X - 560, X1 = toiletAt.X + 560, Z0 = toiletAt.Z + 300, Z1 = toiletAt.Z + 1180, Y0 = FloorY - 100, Y1 = FloorY + 1200, Info = new int[8] });
+        var seat = SceneOps.AddTrackPoint(model, new SceneTrackPoint(toiletAt.X, FloorY + ToiletSeatTop, bowlZ));
+        var front = SceneOps.AddTrackPoint(model, new SceneTrackPoint(toiletAt.X, FloorY, bowlZ + 700));
+        // (sat facing the room, +z: beta 0; stood up before it, as he sat)
+        heroTrack += $"\nlabel({ToiletSitLabel});\npos_point({seat});\nbeta(0);\nanim({CitadelSpanking.TwinsenSit});\nstop();\n\nlabel({ToiletStandLabel});\npos_point({front});\nbeta(0);\nanim(0);\nstop();\n";
+        texts[SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(toiletAt.X, FloorY, bowlZ))] = ($@"void comportement_0()
+{{
+    set_var_cube({RaceTrackStory.SeatCube}, 0);
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if ({ToiletZone} == zone_obj(0) && 12 != comportement_hero())
+        {{
+            if ({ToiletFacing} > angle_obj(0))
+            {{
+                sample({sounds.Flush});
+                body_obj({toilet}, {CitadelProps.ToiletFlushing});
+                set_var_cube({Flushed}, 0);
+                set_comportement(comportement_3);
+            }}
+            else
+            {{
+                comportement_hero(0);
+                set_var_cube({RaceTrackStory.SeatCube}, 1);
+                set_dir_obj(0, NO_MOVE);
+                set_track_obj(0, label_{ToiletSitLabel});
+                set_comportement(comportement_2);
+            }}
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if (2 == var_cube({RaceTrackStory.SeatCube}))
+    {{
+        set_track_obj(0, label_{ToiletStandLabel});
+        set_dir_obj(0, MOVE_MANUAL);
+        set_var_cube({RaceTrackStory.SeatCube}, 0);
+        set_comportement(comportement_1);
+    }}
+}}
+
+void comportement_3()
+{{
+    add_var_cube({Flushed}, 1);
+    if ({FlushFrames} == var_cube({Flushed}))
+    {{
+        body_obj({toilet}, {CitadelProps.Toilet});
+        set_comportement(comportement_1);
+    }}
+}}
+", "label(0);\nstop();\n");
+        // ---- the sink (facing the room off the west wall, +x: its zone before it) and the shower (its zone before its front, between it
+        // and the sink's) -- on and off
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = SinkZone, X0 = sinkAt.X + 210, X1 = sinkAt.X + 960, Z0 = sinkAt.Z - 424, Z1 = sinkAt.Z + 426, Y0 = FloorY - 100, Y1 = FloorY + 1200, Info = new int[8] });
+        model.Zones.Add(new SceneZoneModel { Type = 2, Num = ShowerZone, X0 = HouseWestFace, X1 = showerAt.X + 520, Z0 = showerAt.Z + 488, Z1 = sinkAt.Z - 425, Y0 = FloorY - 100, Y1 = FloorY + 1200, Info = new int[8] });
+        texts[SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(sinkAt.X, FloorY + 800, sinkAt.Z))] = (Toggle(SinkZone, sink, CitadelProps.BathSink, CitadelProps.BathSinkRunning, sounds.Tap), "label(0);\nstop();\n");
+        texts[SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(showerAt.X - 160, FloorY + 1500, showerAt.Z - 160))] = (Toggle(ShowerZone, shower, CitadelProps.Shower, CitadelProps.ShowerRunning, sounds.Shower), "label(0);\nstop();\n");
+    }
+    private const int HouseWestFace = 2560;
+
+    // A fitting turned on and off by Action in its zone: its running body and its water's sound looped while on. (Turned, it waits for the
+    // key to be let go before it listens again: the same press read twice would turn it straight back.)
+    private static string Toggle(int zone, int actor, int offBody, int onBody, int sample) => $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if ({zone} == zone_obj(0) && 12 != comportement_hero())
+        {{
+            body_obj({actor}, {onBody});
+            sample_always({sample});
+            set_comportement(comportement_2);
+        }}
+    }}
+}}
+
+void comportement_2()
+{{
+    if (0 == action())
+    {{
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    swif (1 == action())
+    {{
+        if ({zone} == zone_obj(0) && 12 != comportement_hero())
+        {{
+            body_obj({actor}, {offBody});
+            sample_stop({sample});
+            set_comportement(comportement_4);
+        }}
+    }}
+}}
+
+void comportement_4()
+{{
+    if (0 == action())
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+";
 }

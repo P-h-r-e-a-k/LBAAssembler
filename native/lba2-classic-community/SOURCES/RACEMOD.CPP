@@ -14023,6 +14023,14 @@ S32 RaceMod_JetGhost(void) {
     return RaceMod_Active() && Comportement == C_BUGGY && TimerRefHR < s_jetUntil;
 }
 
+// OBJECT.CPP CheckObjCol: Twinsen seated by a script (seat_cube= / seat_var= at 1: SeatFrame) is not pushed out of the actors about him --
+// held still on the seat, as long as he sits: a seat inside its fitting's box, the toilet's in Twinsen's bathroom, pushed him off it to the
+// side (the user, 2026-11-20: "allow Tiwnsen to sit on it if he wishes")
+S32 RaceMod_Seated(void) {
+    if (s_seatCube >= 0 && s_seatCube < MAX_VARS_CUBE && ListVarCube[s_seatCube] == 1) return 1;
+    return s_seatVar >= 0 && s_seatVar < MAX_VARS_GAME && ListVarGame[s_seatVar] == 1;
+}
+
 // BUGGY.CPP RaceSpeed: the golden Gazogem running -- from its first use till its time is up -- the car keeps whatever speed it has over
 // the gear's top (each use's 10 km/h on the last's); after it, the extra is lost as any is (RACE_OVERSPEED_DRAG, the coast).
 S32 RaceMod_NoTopSpeed(void) {

@@ -42,6 +42,11 @@ internal static partial class CitadelProps
     public const int Shower = 140, BathSink = 141, Toilet = 142, CornerBath = 143, TowelRail = 144, BathMat = 145, ToiletRoll = 206;
     public const int KitchenCounter = 146, KitchenRange = 147, Dresser = 148, KitchenTable = 149, PlateShelf = 150;
     public const int KitchenChair = 151, BathWaterLow = 152, BathWaterMid = 153, BathWaterFull = 154, ShowerDoor = 155;
+    // (the fittings at work -- the user, 2026-11-20, "make all the bathroom assets work": the toilet flushing, the sink's tap and the shower
+    // running -- swapped in by the room's scripts, CitadelHouseRooms)
+    public const int ToiletFlushing = 208, BathSinkRunning = 209, ShowerRunning = 210;
+    // (the shower's falling water: the pale blues, kept off their ramp's top -- lit, it would run into the next)
+    private const int HrShowerWater = 11 * 16 + 9;
     // (each colour this far or more from its ramp's top: the light runs a colour up to 0.8 x 9 steps)
     private const int HrPorcelain = 3 * 16 + 8, HrPorcelainShade = 3 * 16 + 5, HrChrome = 3 * 16 + 7, HrWood = 1 * 16 + 5, HrWoodDark = 1 * 16 + 3,
         HrWoodLight = 1 * 16 + 8, HrBrass = 6 * 16 + 8, HrTeal = 10 * 16 + 6, HrTealDark = 10 * 16 + 3, HrTile = 3 * 16 + 7, HrIron = 3 * 16 + 2,
@@ -98,11 +103,11 @@ internal static partial class CitadelProps
     private static short[]? BathMatBox(int generic) => generic switch
     {
         BathMat => new short[] { -MatHalfX, -16, -MatHalfZ, MatHalfX, 0, MatHalfZ },
-        Shower => new short[] { -(short)ShowerHalf, 0, -(short)ShowerHalf, (short)ShowerHalf, 2000, (short)ShowerHalf },
+        Shower or ShowerRunning => new short[] { -(short)ShowerHalf, 0, -(short)ShowerHalf, (short)ShowerHalf, 2000, (short)ShowerHalf },
         ShowerDoor => new short[] { 0, -16, -40, (short)ShowerDoorWide, 0, 40 },
         // (the sink faces +x off the west wall: the engine doesn't turn a box with its actor, so its depth is along x, its width along z)
-        BathSink => new short[] { -230, 0, -310, 250, 1000, 310 },
-        Toilet => new short[] { -250, 0, -320, 250, 950, 340 },
+        BathSink or BathSinkRunning => new short[] { -230, 0, -310, 250, 1000, 310 },
+        Toilet or ToiletFlushing => new short[] { -250, 0, -320, 250, 950, 340 },
         // (the corner bath: a box square to the walls short of its curve -- 45 degrees round it the curve is 1,025 from the corner, the box's
         // corner 1,090; its two ends along the walls past the box are solid cells of the room's grid, CitadelHouseRooms)
         CornerBath or BathWaterLow or BathWaterMid or BathWaterFull => new short[] { (short)(BathCorner.X - 1090), 0, (short)BathCorner.Z, (short)BathCorner.X, 620, (short)(BathCorner.Z + 1090) },
@@ -150,9 +155,12 @@ internal static partial class CitadelProps
     // The shower: a white tray with its recess and drain, frameless glass on its open sides in a slim chrome frame (its door's gap at the
     // front's west end: ShowerDoor), a slim riser in the corner up to an arm and a round rain head, the mixer on the back wall, a corner
     // shelf. Against both walls (its place ShowerX, ShowerZ): the east glass from the north wall's face
-    public static Body BuildShower(byte[] header)
+    public static Body BuildShower(byte[] header) => ShowerBody(header, "the shower", false);
+    // (running: streams of water from the rain head down to the tray, see-through, and the tray wet under them)
+    public static Body BuildShowerRunning(byte[] header) => ShowerBody(header, "the shower, running", true);
+    private static Body ShowerBody(byte[] header, string name, bool running)
     {
-        var m = new CarMesh("the shower", new[] { -1 });
+        var m = new CarMesh(name, new[] { -1 });
         m.Light = 0.8f;
         const float H = ShowerHalf, Tray = ShowerTray, High = ShowerHigh;
         m.Box(0, new Vector3(0, Tray / 2, 0), new Vector3(2 * H, Tray, 2 * H), HrPorcelain, top: HrPorcelain);
@@ -179,6 +187,22 @@ internal static partial class CitadelProps
         // (the corner shelf and a bottle on it)
         m.Up(new[] { m.P(0, new Vector3(-H + 8, 1350, -H + 8)), m.P(0, new Vector3(-H + 8, 1350, -H + 200)), m.P(0, new Vector3(-H + 200, 1350, -H + 8)) }, HrChrome);
         Cylinder(m, new Vector3(-H + 60, 0, -H + 60), 22, 1352, 1460, 6, HrTeal, HrTealDark);
+        if (running)
+        {
+            // (from under the rain head -- its middle the riser's arm's end -- streaks spreading a little as they fall to the tray, thin bars
+            // of a pale blue: see-through, through the teal glass they took its colour and were lost; the tray wet where they land)
+            var head = riser + new Vector3(250, 0, 250);
+            const int Streaks = 9;
+            for (var k = 0; k < Streaks; k++)
+            {
+                var a = k * MathF.Tau / Streaks;
+                var top = head + new Vector3(80 * MathF.Cos(a), 1945, 80 * MathF.Sin(a));
+                var foot = head + new Vector3(150 * MathF.Cos(a), Tray + 4, 150 * MathF.Sin(a));
+                m.Strut(0, top, foot, 9, HrShowerWater);
+            }
+            var wet = Ellipse(m, head, Tray + 3, 210, 210, 12);
+            Fan(m, head + new Vector3(0, Tray + 3, 0), wet, HrWater);
+        }
         return m.ToBody(header);
     }
 
@@ -199,9 +223,12 @@ internal static partial class CitadelProps
 
     // The sink: an oval basin, rounded, hollowed into a bowl, on a slim tapering pedestal; a chrome mixer at its back, its spout over the bowl;
     // over it on the wall a mirror in a brass frame, a little glass shelf under it, a mug and a toothbrush
-    public static Body BuildBathSink(byte[] header)
+    public static Body BuildBathSink(byte[] header) => BathSinkBody(header, "the bathroom's sink", false);
+    // (running: a stream from the spout's end down into the bowl, and the bowl's water)
+    public static Body BuildBathSinkRunning(byte[] header) => BathSinkBody(header, "the bathroom's sink, running", true);
+    private static Body BathSinkBody(byte[] header, string name, bool running)
     {
-        var m = new CarMesh("the bathroom's sink", new[] { -1 });
+        var m = new CarMesh(name, new[] { -1 });
         m.Light = 0.8f;
         const int N = 14;
         var o = Vector3.Zero;
@@ -234,14 +261,27 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, 1060, Wall + 55), new Vector3(500, 14, 100), HrTeal + 4, top: HrTeal + 4);
         Cylinder(m, new Vector3(-160, 0, Wall + 55), 32, 1067, 1170, 8, HrTeal, HrTealDark);
         m.Strut(0, new Vector3(-150, 1100, Wall + 50), new Vector3(-130, 1230, Wall + 62), 8, HrHot);
+        if (running)
+        {
+            // (the stream: from the spout's end straight down into the bowl -- two crossed see-through panes -- and water in the bowl)
+            var spout = o + new Vector3(0, 884, -20);
+            var bottom = o + new Vector3(0, 712, -20);
+            foreach (var side in new[] { new Vector3(11, 0, 0), new Vector3(0, 0, 11) })
+                m.Pane(0, HrWater + 3, spout - side, spout + side, bottom + side, bottom - side);
+            var pool = Ellipse(m, o + new Vector3(0, 0, 30), 712, 120, 82, N);
+            Fan(m, o + new Vector3(0, 712, 30), pool, HrWater);
+        }
         return m.ToBody(header);
     }
 
     // The toilet: a rounded bowl on its pedestal, hollow, the water in it; a wooden seat on the rim and its lid up against the cistern; the
     // cistern against the wall, its lid, the chrome flush button; the pipe between them
-    public static Body BuildToilet(byte[] header)
+    public static Body BuildToilet(byte[] header) => ToiletBody(header, "the toilet", false);
+    // (flushing: the bowl's water low and churning -- a swirl of light and dark round it -- the lid as it was)
+    public static Body BuildToiletFlushing(byte[] header) => ToiletBody(header, "the toilet, flushing", true);
+    private static Body ToiletBody(byte[] header, string name, bool flushing)
     {
-        var m = new CarMesh("the toilet", new[] { -1 });
+        var m = new CarMesh(name, new[] { -1 });
         m.Light = 0.8f;
         const int N = 14;
         var o = new Vector3(0, 0, 70);
@@ -256,7 +296,13 @@ internal static partial class CitadelProps
         // (no porcelain top on the rim: the seat covers it -- sorted over the seat, it came through it in white patches)
         var deep = Ellipse(m, o + new Vector3(0, 0, -10), 300, 85, 110, N);
         Inside(m, rimIn, deep, HrPorcelainShade, o + new Vector3(0, 0, 10));
-        Fan(m, o + new Vector3(0, 300, -10), deep, HrWater);
+        if (!flushing) Fan(m, o + new Vector3(0, 300, -10), deep, HrWater);
+        else
+        {
+            // (the water drawn down: a funnel from the bowl's deep ring to a low middle, its segments light and dark in turn -- the swirl)
+            var hub = m.P(0, o + new Vector3(0, 240, -10));
+            for (var k = 0; k < N; k++) m.Up(new[] { hub, deep[k], deep[(k + 1) % N] }, k % 2 == 0 ? HrWater : HrWater + 3);
+        }
         // (the seat: a wooden ring a little over the rim, its edge; the lid up, a flat oval against the cistern)
         var seatOut = Ellipse(m, o, 420, 215, 266, N);
         var seatIn = Ellipse(m, o + new Vector3(0, 0, 10), 420, 140, 185, N);

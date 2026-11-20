@@ -362,6 +362,8 @@ void RaceMod_Occlude(S32 numobj);
 S32 RaceMod_BallThrough(S32 numobj);
 // Twinsen's car on the super jet-pack: through the island's objects and the scene's actors (EXTFUNC.CPP, OBJECT.CPP CheckObjCol).
 S32 RaceMod_JetGhost(void);
+// Twinsen seated by a script (seat_cube= / seat_var=): not pushed out of the actors about him (OBJECT.CPP CheckObjCol).
+S32 RaceMod_Seated(void);
 // The golden Gazogem running: no top speed (BUGGY.CPP RaceSpeed: the car keeps the speed it is given over the gear's top).
 S32 RaceMod_NoTopSpeed(void);
 // The protection spell a race's power-up casts (EXTRA.CPP): it takes no magic while it lasts, and blinks as it runs out.

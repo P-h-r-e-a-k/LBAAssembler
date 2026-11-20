@@ -1862,7 +1862,7 @@ S32 CheckObjCol(U8 numobj) {
             //		AND (!(ptrobj->Flags&INVISIBLE))
             AND(ptrobjt->CarryBy != numobj)
                 AND !RaceMod_NoCollide(n)         /* a race-track mod's mushrooms, penguins and oil slicks (RACEMOD.CPP) */
-                AND !(numobj == NUM_PERSO AND RaceMod_JetGhost())) {   /* ... and its super jet-pack, through everything */
+                AND !(numobj == NUM_PERSO AND (RaceMod_JetGhost() OR RaceMod_Seated()))) {   /* ... and its super jet-pack, through everything; Twinsen seated, held on his seat */
             xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
             xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
             yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;
@@ -3909,7 +3909,9 @@ void DoAnim(U8 numobj) {
         {
             /* si sous les pieds != cube plein: susceptible de tomber ou reajuste y */
 
-            if ((APtObj->Flags & OBJ_FALLABLE) AND(APtObj->CarryBy == -1)) {
+            /* (Twinsen seated by a script -- RACEMOD.CPP RaceMod_Seated -- stays at his seat's height: not pushed out of the fitting
+               under him, CheckObjCol, it holds him up no more) */
+            if ((APtObj->Flags & OBJ_FALLABLE) AND(APtObj->CarryBy == -1) AND !(numobj == NUM_PERSO AND RaceMod_Seated())) {
                 col = WorldColBrick(Nxw, Nyw - 1, Nzw);
                 if (col) {
                     if (APtObj->WorkFlags & FALLING) {
