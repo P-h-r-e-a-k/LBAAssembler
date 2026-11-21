@@ -942,6 +942,24 @@ internal static class RaceTrackScenes
                 if (carScript is not null) model = carScript;
                 log.Add($"scene {scene}: the car's actor added (actor {carIndex}): Twinsen can get out of his car here");
             }
+            else
+            {
+                // (the scene's own car actors -- the game's, or the start line's -- following the engine putting him in too: FollowHeroIntoCar.
+                // The Desert beach's hovercraft hire puts him in the car where the game's own actor stands waiting, and he couldn't get out)
+                var cars = Enumerable.Range(1, model.Actors.Count - 1).Where(i => model.Actors[i].Entity == BuggyEntity).ToList();
+                var followed = Rebuild(model, scene, "car actors", "the car's actor's script could not follow him in", log, scripts =>
+                {
+                    var any = false;
+                    foreach (var i in cars)
+                    {
+                        var text = scripts.GetText(i, ScriptKind.Life);
+                        var after = FollowHeroIntoCar(text);
+                        if (after != text) { scripts.SetText(i, ScriptKind.Life, after); any = true; }
+                    }
+                    return any;
+                }, () => "its car's actor follows the engine putting Twinsen in");
+                if (followed is not null) model = followed;
+            }
             // zones that would act on a car driving along the road: doors into buildings (cube changes to scenes that are not part of the island's
             // outside), hit, ladder, escalator, grid and rail zones; and, with RemoveTrackCameras, the fixed cameras (type 1) the car would
             // drive into. The cube-edge changes, scenario, giver and message zones stay.
@@ -2112,7 +2130,12 @@ void comportement_1()
         if (!text.Contains("MOVE_BUGGY_MANUAL") || !text.Contains("void comportement_2()")) return text;
         var at = System.Text.RegularExpressions.Regex.Match(text, @"void comportement_1\(\)\s*\{\s*");
         if (!at.Success || text.Substring(at.Index + at.Length).StartsWith("if (12 == comportement_hero())")) return text;
-        return text.Insert(at.Index + at.Length, FollowHeroIn);
+        // (and the car's own guard against the key that put him in -- its comportement_2 waits for Action let go first, `0 != var_cube(n)`,
+        // which its own way in sets: set as he's followed in too, or the Action still held from the talk that put him in -- the hovercraft
+        // hire's -- got him straight back out)
+        var guard = System.Text.RegularExpressions.Regex.Match(text, @"if \(0 != var_cube\((\d+)\)\)");
+        var follow = guard.Success ? FollowHeroIn.Replace("set_comportement(comportement_2);", $"set_var_cube({guard.Groups[1].Value}, 1);\n        set_comportement(comportement_2);") : FollowHeroIn;
+        return text.Insert(at.Index + at.Length, follow);
     }
 
     private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log, (int X, int Y, int Z, int Beta, int When)? park = null,

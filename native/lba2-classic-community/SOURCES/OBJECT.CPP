@@ -3273,6 +3273,8 @@ S32 GereCodesJeu(U8 numobj) {
                 // (a race-track mod's car: put back on the road instead, RACEMOD.CPP RaceMod_Rescue)
                 // (the Imperial Hotel's pool: Twinsen swims in it, he does not drown -- RACEMOD.CPP pool=)
                 { extern S32 RaceMod_PoolSwims(void); if (RaceMod_PoolSwims()) break; }
+                // (a hovercraft hired: driven over the sea, held on it -- RACEMOD.CPP hovercraft=)
+                { extern S32 RaceMod_HoverSea(void); if (RaceMod_HoverSea()) break; }
                 if (RaceMod_Rescue()) break;
                 validepos = FALSE;
 
@@ -6944,6 +6946,9 @@ static S32 DrawTurnedExtra(T_EXTRA *e, S32 num) {
     else ScaleSprite(0, SpriteX, SpriteY, fx, fy, turned);
     return TRUE;
 }
+
+// (whether a door zone's scene is an outside one: RACEMOD.CPP's hovercraft leaves the boat at a door into a room)
+S32 RaceMod_ZoneOutside(S32 num) { return (CubeArrowFlags(num) & 4) != 0; }
 
 S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
     // (a race-track mod's car: not straight back into the scene it has just come from -- RACEMOD.CPP RaceMod_CubeChangeAllowed)

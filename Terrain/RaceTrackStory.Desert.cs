@@ -383,6 +383,8 @@ void comportement_1()
         KashSlate,
         // (the garage tent's mechanics at the raised cars, its racers after the race -- the user, 2026-11-20: RaceTrackStory.Garage)
         MechanicLift, RacerAfter,
+        // (the hovercraft hire on the beach -- RaceTrackStory.Hovercraft, the user, 2026-11-20)
+        HireAsk, HireYes, HireNo, HireGo, HireNoMoney, HireLater, HireOut, HirePrice,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -1009,6 +1011,80 @@ void comportement_1()
             "Che gara, Twinsen! Tornerò per la prossima.",
             "Que corrida, Twinsen! Volto para a próxima.",
         },
+        // (the hovercraft hire: the man's offer, Twinsen's two answers, the man's replies)
+        new[]
+        {
+            "Fancy a hovercraft? Ten kashes and she's yours to take out on the sea, as long as you like. Bring her back here when you're done.",
+            "Un hovercraft, ça te tente ? Dix kashes et il est à toi sur la mer, aussi longtemps que tu veux. Ramène-le ici quand tu as fini.",
+            "Lust auf ein Hovercraft? Zehn Kashes, und es gehört dir auf dem Meer, so lange du willst. Bring es hierher zurück, wenn du fertig bist.",
+            "¿Te apetece un aerodeslizador? Diez kashes y es tuyo en el mar, todo el tiempo que quieras. Tráelo aquí cuando termines.",
+            "Ti va un hovercraft? Dieci kashes ed è tuo sul mare, quanto vuoi. Riportalo qui quando hai finito.",
+            "Apetece-te um hovercraft? Dez kashes e é teu no mar, o tempo que quiseres. Traz-mo de volta aqui quando acabares.",
+        },
+        new[]
+        {
+            "Hire one, 10 kashes",
+            "En louer un, 10 kashes",
+            "Eins mieten, 10 Kashes",
+            "Alquilar uno, 10 kashes",
+            "Noleggiarne uno, 10 kashes",
+            "Alugar um, 10 kashes",
+        },
+        new[]
+        {
+            "No thanks",
+            "Non merci",
+            "Nein danke",
+            "No, gracias",
+            "No, grazie",
+            "Não, obrigado",
+        },
+        new[]
+        {
+            "Hop in! She skims the water like a dream. Out over the sea you can reach the island across from the hacienda, or the old sea caves under the cliffs.",
+            "Monte ! Il file sur l'eau comme un rêve. Par la mer tu peux rejoindre l'île en face de l'hacienda, ou les vieilles grottes marines sous les falaises.",
+            "Steig ein! Es gleitet übers Wasser wie ein Traum. Übers Meer erreichst du die Insel gegenüber der Hacienda oder die alten Meeresgrotten unter den Klippen.",
+            "¡Sube! Se desliza sobre el agua como un sueño. Por el mar puedes llegar a la isla frente a la hacienda, o a las viejas grutas marinas bajo los acantilados.",
+            "Sali! Scivola sull'acqua che è un sogno. Per mare puoi raggiungere l'isola di fronte all'hacienda, o le vecchie grotte marine sotto le scogliere.",
+            "Sobe! Desliza na água que é um sonho. Pelo mar chegas à ilha em frente à hacienda, ou às velhas grutas marinhas debaixo das falésias.",
+        },
+        new[]
+        {
+            "Ten kashes, I'm afraid. Come back when you have them.",
+            "Dix kashes, j'en ai peur. Reviens quand tu les auras.",
+            "Zehn Kashes, leider. Komm wieder, wenn du sie hast.",
+            "Diez kashes, me temo. Vuelve cuando los tengas.",
+            "Dieci kashes, temo. Torna quando li avrai.",
+            "Dez kashes, receio. Volta quando os tiveres.",
+        },
+        new[]
+        {
+            "Any time! They'll be here.",
+            "Quand tu veux ! Ils seront là.",
+            "Jederzeit! Sie sind hier.",
+            "¡Cuando quieras! Estarán aquí.",
+            "Quando vuoi! Saranno qui.",
+            "Quando quiseres! Estão aqui.",
+        },
+        new[]
+        {
+            "You've got one already! Have fun out there, and bring her back here when you're done.",
+            "Tu en as déjà un ! Amuse-toi bien, et ramène-le ici quand tu as fini.",
+            "Du hast doch schon eins! Viel Spaß da draußen, und bring es hierher zurück, wenn du fertig bist.",
+            "¡Ya tienes uno! Diviértete, y tráelo aquí cuando termines.",
+            "Ne hai già uno! Divertiti, e riportalo qui quando hai finito.",
+            "Já tens um! Diverte-te, e traz-mo de volta aqui quando acabares.",
+        },
+        // (the question the two answers go with: short -- a long one paged before them)
+        new[]
+        {
+            "Ten kashes. What do you say?",
+            "Dix kashes. Qu'en dis-tu ?",
+            "Zehn Kashes. Was meinst du?",
+            "Diez kashes. ¿Qué me dices?",
+            "Dieci kashes. Che ne dici?",
+            "Dez kashes. Que me dizes?",
+        },
     };
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
@@ -1213,6 +1289,9 @@ void comportement_1()
         set_var_game({TrophyShown}, 1);
     }}
 ");
+
+        // the hovercraft hire on the beach (RaceTrackStory.Hovercraft)
+        HovercraftHire(b, Say, desert);
 
         // the three pages' places on the road, at 30, 55 and 80 % of the lap (each found driving over it or walking to it, in lap order),
         // and the pages as Twinsen carries them: the item and the arrows (PagesInstall)

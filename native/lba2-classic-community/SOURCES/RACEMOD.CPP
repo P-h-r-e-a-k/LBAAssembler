@@ -239,6 +239,9 @@
  *     ghost_watch=<file>         a ghost played back: Twinsen's car driven along it, round and round, no laps counted (GhostWatch)
  *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
  *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
+ *     hovercraft=<var> <island> <body> <anim> <parked> <sea y> <scene> <x> <z> <beta> <reach>   (2026-11-21) a hovercraft hired: the variable 1
+ *                                (asked) puts Twinsen in his car at x z in that scene, the car drawn as the body and held on the sea at sea y,
+ *                                2 while it's his; on foot within reach of the hire point, or off the island, his own car back, 0 (HovercraftFrame)
  *     twinsen_casual=<generic> <firing> <half size>   (2026-11-21) the buggy's bodies with Twinsen in his everyday clothes: on him while
  *                                he drives before the racing suit is his (FLAG_TUNIQUE 0), before twinsen_body='s (HeroLook)
  *     breakdown=<var> <least> <checkpoint> <speed> <text>   (2026-11-08) the player's car breaks down while game variable <var> is under
@@ -1619,6 +1622,22 @@ static int s_heroBodyVar = -1, s_heroBodyMin = 0;
 // into his car before he's got his racing outfit he's shown in a green tunic with sendell medallion instead of in his casual clothes"
 static int s_casualBody = -1, s_casualFire = -1, s_casualSmall = -1, s_casualChecked = 0;
 static int CasualNow(void) { return s_casualBody >= 0 && !ListVarGame[FLAG_TUNIQUE]; }
+// hovercraft=<var> <island> <body> <anim> <parked body> <sea y> <scene> <x> <z> <beta> <reach> (2026-11-21): a hovercraft hired on the
+// island's beach -- the user, 2026-11-20, "Twinsen hiring the hovercraft should allow Twinsen to drive the hovercraft around in the sea".
+// The game variable: 1 asked for (the hire man's script, paid), 2 his (HovercraftFrame), 0 given back. Hired, Twinsen is put in his car at
+// the hire point (x z, turned beta, in that scene) and the car is the hovercraft (drawn as the body, the parked one with no one in it --
+// the race mode's drive_as), held on the sea's surface (sea y) where the ground is under it and not drowned (OBJECT.CPP: RaceMod_HoverSea),
+// and not got out of over the water; his own car where it was kept, and given back to him as the hovercraft is -- on foot within reach of
+// the hire point -- or as he leaves the island.
+static int s_hoverVar = -1, s_hoverIsland = -1, s_hoverBody = -1, s_hoverAnim = -1, s_hoverParked = -1, s_hoverSeaY = 0;
+static int s_hoverScene = -1, s_hoverX = 0, s_hoverZ = 0, s_hoverBeta = 0, s_hireReach = 2000, s_hoverOn = 0, s_hoverWasOn = 0, s_hoverSaved = 0;
+// (the bodies and the animation named by the entity's generic numbers -- its driving one, its parked one, its animation -- and looked up in
+// its FILE3D entry as first needed: BODY.HQR and ANIM.HQR's numbers)
+static int s_hoverEntity3D = -1, s_hoverResolved = 0, s_hoverDriven = 0;
+// (the hovercraft left at a door into a room -- Kash's sea cave, its mouth on the water -- while he's in: that scene, else -1)
+static int s_hoverDocked = -1, s_hoverDockedIn = 0;
+// (the door's scene and where it puts him, asked for by HovercraftFrame and taken in the actors' loop -- RaceMod_EdgeCross)
+static int s_hoverGoScene = -1; static S32 s_hoverGoX = 0, s_hoverGoY = 0, s_hoverGoZ = 0;
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
 static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 static int s_pyjVar = -1, s_pyjValue = 0, s_pyjBody = -1, s_pyjSaid = 0;
@@ -5573,6 +5592,11 @@ static void Load(const char *path, int carOnly = 0) {
             // (his own car, painted: not another drawn in its place)
             if (s_heroBody >= 0) s_driveBody = s_driveAnim = s_driveSmall = -1;
             s_heroBodyChecked = 0;
+        }
+        else if (!strcmp(key, "hovercraft")) {
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &s_hoverVar, &s_hoverIsland, &s_hoverEntity3D, &s_hoverBody, &s_hoverParked, &s_hoverAnim,
+                       &s_hoverSeaY, &s_hoverScene, &s_hoverX, &s_hoverZ, &s_hoverBeta, &s_hireReach) != 12) s_hoverVar = -1;
+            s_hoverResolved = 0;
         }
         else if (!strcmp(key, "twinsen_casual")) {
             int body = -1, fire = -1, small = -1;
@@ -15116,6 +15140,15 @@ static void SkidSound(void) {
 // pad's left shoulder, or the key bound to it in the options, uses the items too.
 // (on_foot=: the action key gets him out of a car all but stopped, never one that drives; on foot it gets him in by the car, and Ctrl
 // takes him back to it -- OnFoot)
+// The hovercraft over the sea: the island's ground under it below the sea's surface
+static int HoverOverWater(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    return CubeMode == CUBE_EXTERIEUR && CalculAltitudeTerrain(hero->Obj.X, hero->Obj.Z, 0) < s_hoverSeaY + 40;
+}
+// (OBJECT.CPP's water: the hovercraft driven over it is held on it, not drowned)
+// (and as he comes back out on foot where he left it, over the water: straight back in it, HovercraftFrame)
+// (and in the room he left it at the door of, on foot: Kash's sea cave is entered by its water, as the game's hovering had him -- he wades)
+S32 RaceMod_HoverSea(void) { return (s_hoverOn && (Comportement == C_BUGGY || s_hoverDocked == (int)NumCube)) || (s_hoverDocked >= 0 && s_hoverDockedIn && (int)NumCube != s_hoverDocked); }
 U32 RaceMod_FilterInput(U32 input) {
     // (win_stop=: a won race's cut-scene -- nothing but the menus' keys while the car stops and the story's scene plays; the brake is
     // RaceMod_AutoInput's own, kept)
@@ -15129,6 +15162,8 @@ U32 RaceMod_FilterInput(U32 input) {
     if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
     // (a ghost played back: the car is the ghost's -- nothing gets Twinsen out of it, nor fires, jumps or dodges)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) input &= ~(U32)(I_JOY | I_FIRE | I_ACTION | I_ESQUIVE);
+    // (the hovercraft over the water: no getting out there -- HovercraftFrame)
+    if (s_hoverOn && Comportement == C_BUGGY && HoverOverWater()) input &= ~(U32)(I_ACTION | I_ACTION_M);
     // (swimming and diving: his keys are the pool's -- PoolFrame moves him itself)
     s_poolInput = input;
     s_bowlInput = input;
@@ -17925,6 +17960,8 @@ S32 RaceMod_CubeChangeAllowed(S32 scene) {
 void RaceMod_EdgeCross(void) {
     const int heldX = s_edgeX, heldZ = s_edgeZ;
     s_edgeX = s_edgeZ = 0;
+    // (the hovercraft left at a door into a room: him through it once he's out of it -- HovercraftFrame; getting out takes a few frames)
+    if (s_hoverGoScene >= 0 && NewCube == -1 && Comportement != C_BUGGY) { const int scene = s_hoverGoScene; s_hoverGoScene = -1; GoToScene(scene, s_hoverGoX, s_hoverGoY, s_hoverGoZ); return; }
     // (the ghost car, in the simulation's step -- its clock the step's, the car just moved, the camera still to follow it: a time trial's
     // lap recorded, or a ghost played back, the car put where it is and nothing else moving it on -- GhostRecord, GhostWatch)
     if (RaceMod_Active()) {
@@ -22281,6 +22318,92 @@ static void DarkFrame(void) {
 }
 
 static void BackInCar(void);
+static S_BUGGY s_hoverCar;
+static U8 s_hoverCarNum = 0;
+// The hire over: his own car where it was -- this scene's, put back; another's, out of this one -- and the hovercraft gone
+static void HoverEnd(const char *why) {
+    if (s_hoverSaved) {
+        ListBuggy[0] = s_hoverCar;
+        T_OBJET *car = &ListObjet[NUM_BUGGY];
+        if ((S32)s_hoverCar.Cube == (S32)NumCube) {
+            car->Obj.X = s_hoverCar.X; car->Obj.Y = s_hoverCar.Y; car->Obj.Z = s_hoverCar.Z; car->Obj.Beta = s_hoverCar.Beta;
+            NumBuggy = s_hoverCarNum;
+        } else {
+            NumBuggy &= (U8)~BUGGY_PRESENT;
+            car->Flags |= INVISIBLE;
+        }
+        s_hoverSaved = 0;
+    }
+    if (s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME) ListVarGame[s_hoverVar] = 0;
+    s_hoverOn = 0;
+    Log_Info("[racemod] hovercraft: given back (%s) -- his own car where it was, scene %d", why, (int)s_hoverCar.Cube);
+}
+static void HovercraftFrame(void) {
+    if (s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || NewCube != -1) return;
+    if (!s_hoverResolved) {
+        s_hoverResolved = 1;
+        const S32 body = EntityEntry(s_hoverEntity3D, F_BODY, s_hoverBody), parked = EntityEntry(s_hoverEntity3D, F_BODY, s_hoverParked), anim = EntityEntry(s_hoverEntity3D, F_ANIM, s_hoverAnim);
+        if (body < 0 || anim < 0) { Log_Warn("[racemod] hovercraft: entity %d has no body %d or animation %d -- none", s_hoverEntity3D, s_hoverBody, s_hoverAnim); s_hoverVar = -1; return; }
+        Log_Info("[racemod] hovercraft: for hire in scene %d -- BODY.HQR %d (parked %d), ANIM.HQR %d, the sea at %d", s_hoverScene, (int)body, (int)parked, (int)anim, s_hoverSeaY);
+        s_hoverBody = body; s_hoverParked = parked; s_hoverAnim = anim;
+    }
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int driving = Comportement == C_BUGGY;
+    // (gone through the door it was left at: into the room -- re-boarded only once he's back out of it)
+    if (s_hoverDocked >= 0 && (int)NumCube != s_hoverDocked) s_hoverDockedIn = 1;
+    if (ListVarGame[s_hoverVar] == 2 && (S32)Island != s_hoverIsland) HoverEnd("the island left");
+    // (asked for and paid: his own car kept, and him in it at the hire point, the car the hovercraft)
+    if (ListVarGame[s_hoverVar] == 1 && (S32)NumCube == s_hoverScene && CubeMode == CUBE_EXTERIEUR && !driving && NUM_BUGGY < NbObjets) {
+        s_hoverCar = ListBuggy[0]; s_hoverCarNum = NumBuggy; s_hoverSaved = 1;
+        hero->Obj.X = s_hoverX; hero->Obj.Z = s_hoverZ;
+        const S32 ground = CalculAltitudeTerrain(s_hoverX, s_hoverZ, 0);
+        hero->Obj.Y = ground > s_hoverSeaY ? ground : s_hoverSeaY;
+        hero->Obj.Beta = s_hoverBeta & 4095; ClearRealAngle(hero);
+        ListObjet[NUM_BUGGY].Flags &= ~INVISIBLE;
+        BackInCar();
+        ListVarGame[s_hoverVar] = 2;
+        s_hoverDriven = 0;   // (given back only once he has driven it: the frame he is put in, he is still on foot)
+        Log_Info("[racemod] hovercraft: hired -- Twinsen in it at (%d,%d,%d) in scene %d, his own car kept (scene %d)", (int)hero->Obj.X, (int)hero->Obj.Y,
+                 (int)hero->Obj.Z, (int)NumCube, (int)s_hoverCar.Cube);
+    }
+    s_hoverOn = ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && CubeMode == CUBE_EXTERIEUR;
+    if (s_hoverOn) { s_driveBody = s_hoverBody; s_driveAnim = s_hoverAnim; s_driveSmall = -1; }
+    else if (s_hoverWasOn) s_driveBody = s_driveAnim = -1;
+    s_hoverWasOn = s_hoverOn;
+    if (!s_hoverOn) return;
+    if (driving) s_hoverDriven = 1;
+    // (back out of the room by its door, on foot, where he left it: straight back in it -- the door's way out is on the water)
+    if (!driving && s_hoverDocked == (int)NumCube && s_hoverDockedIn) {
+        s_hoverDocked = -1; s_hoverDockedIn = 0;
+        BackInCar();
+        Log_Info("[racemod] hovercraft: back out in scene %d -- in it again at (%d,%d,%d)", (int)NumCube, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+        return;
+    }
+    // (driven into a door into a room -- a car goes through doors into outside scenes only: Kash's sea cave -- the boat left at the door,
+    // him on foot in it, and so through it)
+    if (driving) {
+        extern S32 RaceMod_ZoneOutside(S32 num);
+        for (S32 i = 0; i < NbZones; i++) {
+            const T_ZONE *zn = &ListZone[i];
+            if (zn->Type != 0 || RaceMod_ZoneOutside(zn->Num)) continue;
+            if (hero->Obj.X < zn->X0 || hero->Obj.X > zn->X1 || hero->Obj.Z < zn->Z0 || hero->Obj.Z > zn->Z1 || hero->Obj.Y < zn->Y0 - 256 || hero->Obj.Y > zn->Y1) continue;
+            s_hoverDocked = (int)NumCube; s_hoverDockedIn = 0;
+            LeaveBuggy(C_NORMAL);
+            { const S32 old = hero->Move; hero->Move = MOVE_MANUAL; AdjustDirObject(hero, old); }   // (as set_dir_obj(0, MOVE_MANUAL) does after it)
+            // (and through it, the door's own way in -- on foot over the water he sinks out of its zone: RaceMod_EdgeCross takes him)
+            s_hoverGoScene = zn->Num; s_hoverGoX = zn->Info0; s_hoverGoY = zn->Info1; s_hoverGoZ = zn->Info2;
+            Log_Info("[racemod] hovercraft: left at the door to scene %d in scene %d, him on foot through it", (int)zn->Num, (int)NumCube);
+            return;
+        }
+    }
+    // (over the sea: on its surface)
+    if (driving && HoverOverWater() && hero->Obj.Y < s_hoverSeaY) { hero->Obj.Y = s_hoverSeaY; hero->WorkFlags &= ~FALLING; }
+    // (given back: on foot by the hire point)
+    if (!driving && s_hoverDriven && (S32)NumCube == s_hoverScene) {
+        const double dx = hero->Obj.X - s_hoverX, dz = hero->Obj.Z - s_hoverZ;
+        if (dx * dx + dz * dz < (double)s_hireReach * s_hireReach) HoverEnd("at the hire point");
+    }
+}
 // Twinsen's car on the oil_patch= stretch: a skid, as on a slick (Slicks), whenever the last one is over and the car is still on it
 // (a skid on it, then RACE_OIL_GRACE_MS of grip to drive on before the next; and none for a car crawling, slower than RACE_OIL_SLOW: a car
 // stopped on the oil skidded again the moment a skid was over, from no speed, round and round where it was -- the user, 2026-11-18, "The oil
@@ -22341,6 +22464,7 @@ void RaceMod_Frame(void) {
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
     FerryFrame(TimerRefHR);
+    HovercraftFrame();
     Hover();
     // (Twinsen on foot in a room of foot_room=: its camera -- FootRoomCamera)
     {
@@ -23381,7 +23505,8 @@ static void DrawDriveAs(S32 now) {
 // (`parked`: nobody in it -- the island's car's empty one, ISLANDCARS.TXT, when the car is that island's own)
 static void DrawDriveAsOn(S32 now, const T_OBJET *hero, int parked) {
     const int own = parked ? IslandCar() : -1;
-    const int body = own >= 0 && s_islandCars[own].Body == s_driveBody && s_islandCars[own].Parked >= 0 ? s_islandCars[own].Parked
+    const int body = parked && s_hoverOn && s_hoverParked >= 0 ? s_hoverParked
+                     : own >= 0 && s_islandCars[own].Body == s_driveBody && s_islandCars[own].Parked >= 0 ? s_islandCars[own].Parked
                      : s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
     if (s_driveShown != body) {
         if (!GivePtrBody(body) || !GivePtrAnim(s_driveAnim)) { Log_Info("[racemod] drive_as: no body %d or animation %d", body, s_driveAnim); s_driveBody = -1; return; }

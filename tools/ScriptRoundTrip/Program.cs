@@ -9,6 +9,22 @@ internal static class Program
     // propsinstall <scratch game folder>: the build's props (Citadel/CitadelProps.Install) into it alone, their BODY.HQR numbers printed
     static int PropsInstallTry(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelProps.Install(args[1])) Console.WriteLine(l); return 0; }
     static int HouseRoomsTry(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelHouseRooms.Install(args[1])) Console.WriteLine(l); return 0; }
+    static int Lba1Bodies(string[] args)
+    {
+        var hqr = LBAAssembler.HqrArchive.Open(System.IO.Path.Combine(args[1], "BODY.HQR"));
+        for (var i = int.Parse(args[2]); i <= int.Parse(args[3]); i++)
+        {
+            try
+            {
+                var b = LbaBodyStudio.Body.Read(hqr.Read(i), 1);
+                var w = b.World();
+                if (w.Length == 0) { Console.WriteLine($"{i}: empty"); continue; }
+                Console.WriteLine($"{i}: x {w.Min(v => v.X):0}..{w.Max(v => v.X):0} y {w.Min(v => v.Y):0}..{w.Max(v => v.Y):0} z {w.Min(v => v.Z):0}..{w.Max(v => v.Z):0}, {b.Faces.Count} polygons, {b.Lines.Count} lines, {b.Spheres.Count} spheres, {b.Bones.Count} bones");
+            }
+            catch (Exception e) { Console.WriteLine($"{i}: {e.Message}"); }
+        }
+        return 0;
+    }
     static int HoverboardRun(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelHoverboard.Install(args[1])) Console.WriteLine(l); return 0; }
 
     private const string DefaultSceneHqr = @"E:\GOG Games\Little Big Adventure 2 - Level viewer\SCENE.HQR";
@@ -113,6 +129,8 @@ internal static class Program
             "driveprep" => RaceTrackCommand.DrivePrep(args),
             "bodyname" => RaceTrackCommand.BodyName(args),
             "bodyparts" => BodyPartsCommand.Run(args),
+            // lba1bodies <LBA1 folder> <first> <last>: each LBA1 body's size and polygon count (finding one by its shape)
+            "lba1bodies" => Lba1Bodies(args),
             // hoverboard <game folder>: the story's hoverboard into a folder (Citadel/CitadelHoverboard) -- its bodies, animations, models, texts
             "hoverboard" => HoverboardRun(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
