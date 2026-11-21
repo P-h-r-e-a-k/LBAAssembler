@@ -1616,6 +1616,9 @@ static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 static int s_pyjVar = -1, s_pyjValue = 0, s_pyjBody = -1, s_pyjSaid = 0;
 // hover_helmet=: the helmet's variable and the helmeted rider's body (-1 none)
 static int s_hoverHelmetVar = -1, s_hoverHelmetBody = -1;
+// (set while the helmet on him is the one hover_helmet= put on for the board: it takes off only that one -- never helmet_hook='s or
+// foot_body='s, which it fought every frame in the Moon base, the helmet flashing: the user, 2026-11-20)
+static int s_hoverHelmetOn = 0;
 // helmet_hook=<scene> <actor> (2026-11-16, the moon's airlocks -- the user: "let's have him enter wearing his helmet, go into the airlock,
 // and emerge not wearing his helmet, this mirrors behaviour in the retail game"; "We should show Twinsen's helmet left in the airlocks
 // instead of the spacesuit"): indoors in that scene the foot_body= helmet stays on him while the actor -- the airlock's hook, where the game
@@ -13311,13 +13314,17 @@ static void HeroLook(S32 now, int driving) {
         const S32 g = hero->GenBody;
         const int riding = Comportement == C_PROTOPACK || Comportement == C_JETPACK;
         const int footHelmet = s_footBody == s_hoverHelmetBody && CubeMode == CUBE_EXTERIEUR;
+        if (g != s_hoverHelmetBody) s_hoverHelmetOn = 0;
+        else if (riding) s_hoverHelmetOn = 1;   // (on the board in it -- a game loaded so -- it's the board's: off with the board)
         if (riding && ListVarGame[s_hoverHelmetVar] > 0 && (g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE) && SearchBody((U8)s_hoverHelmetBody, NUM_PERSO) >= 0) {
             InitBody((U8)s_hoverHelmetBody, NUM_PERSO);
+            s_hoverHelmetOn = 1;
             Log_Info("[racemod] hover_helmet: on the hoverboard with his helmet -- body %d", s_hoverHelmetBody);
         }
-        else if (g == s_hoverHelmetBody && !footHelmet && (!riding || ListVarGame[s_hoverHelmetVar] <= 0)) {
+        else if (g == s_hoverHelmetBody && s_hoverHelmetOn && !footHelmet && (!riding || ListVarGame[s_hoverHelmetVar] <= 0)) {
             // (his own: the racing suit once he has it -- the tunic's item -- else his everyday clothes)
             InitBody(ListVarGame[FLAG_TUNIQUE] ? GEN_BODY_TUNIQUE : GEN_BODY_NORMAL, NUM_PERSO);
+            s_hoverHelmetOn = 0;
             Log_Info("[racemod] hover_helmet: %s -- his own body again", riding ? "no helmet" : "off the hoverboard");
         }
     }
