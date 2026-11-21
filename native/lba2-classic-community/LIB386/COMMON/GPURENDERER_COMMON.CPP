@@ -780,8 +780,11 @@ static void Common_BuildDrawParams(GpuDrawParams *out) {
     }
 
     /* Blending for TRANS/TRAME (alphaMode 1/2). INCRUST chroma-keying is a
-       discard, not blending, so Z-write stays enabled there. */
-    out->blend = (out->alphaMode != 0);
+       discard, not blending, so Z-write stays enabled there. TRANS is a
+       tint (2: the target times twice the fragment -- the software keeps the
+       pixel's brightness, its low nibble, and takes the polygon's colour
+       band); TRAME the alpha blend (1), its kept pixels opaque. */
+    out->blend = out->alphaMode == 1 ? 2 : out->alphaMode == 2 ? 1 : 0;
 
     out->clutBaseRow = s_batchCLUTBaseRow;
     out->scaledFogNear = s_batchScaledFogNear;
@@ -2157,7 +2160,8 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
             atlasPage = map;
         }
     }
-    const U8 polyBlend = (typePoly == 2 || typePoly == 3) ? 1 : 0;
+    /* (TRANS and TRAME blend differently -- Common_BuildDrawParams -- so they don't share a batch) */
+    const U8 polyBlend = typePoly == 2 ? 2 : typePoly == 3 ? 1 : 0;
     const S32 atlasSlots = (s_backend->AtlasSlots != NULL && s_backend->TexUpdateAtlasSlot != NULL) ? (S32)s_backend->AtlasSlots() : 0;
     const U8 polyPersp = (typePoly >= POLY_TEXTURE_Z && typePoly <= POLY_TEXTURE_Z_FOG) ? 1 : 0;
 
@@ -2254,6 +2258,10 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
             polyFlags |= 0x20;
             polyLightRow = truePalRow;
         }
+    }
+    /* (the ground's textures, its atlas in tiles of 16 texels: the shader's smoothing keeps to a texel's own tile -- POLY.H) */
+    if (Fill_GroundTiles && typePoly >= POLY_TEXTURE && typePoly <= POLY_TEXTURE_Z_FOG) {
+        polyFlags |= 0x80;
     }
     for (S32 i = 1; i < nbPoints - 1; i++) {
         if (s_batchVertCount + 3 > BATCH_MAX_VERTS) {

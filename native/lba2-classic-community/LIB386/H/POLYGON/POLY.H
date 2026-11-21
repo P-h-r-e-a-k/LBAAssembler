@@ -217,6 +217,11 @@ void Fill_Poly_Set3DPass(S32 open);
 S32 Fill_Poly_GpuOnly(S32 Type_Poly, S32 Color_Poly, S32 Nb_Points,
                       Struc_Point *Ptr_Points);
 
+/* Non-zero while the terrain draws its ground (TERRAIN.CPP): its atlas is in tiles of 16 texels, each a triangle's whole texture,
+   and the GPU's texture smoothing keeps to a texel's own tile (it drew a line along every cell's edge from the next tile's). The
+   software's fillers never smooth and never read it. */
+extern U8 Fill_GroundTiles;
+
 extern void Fill_Sphere(S32 Type_Sphere, S32 Color_Sphere, S32 Centre_X,
                         S32 Centre_Y, S32 Rayon, S32 zBufferValue); ///< Do Not call from C
 

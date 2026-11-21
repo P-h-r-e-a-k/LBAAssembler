@@ -162,6 +162,8 @@ void Fill_Poly_Set3DPass(S32 open) {
     Fill_Flag_3DPass = open ? 1 : 0;
 }
 
+U8 Fill_GroundTiles = 0;
+
 S32 Fill_Poly_GpuOnly(S32 Type_Poly, S32 Color_Poly, S32 Nb_Points,
                       Struc_Point *Ptr_Points) {
     return s_fillPolyHook != NULL &&

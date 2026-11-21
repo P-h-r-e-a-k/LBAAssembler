@@ -23171,7 +23171,9 @@ static void HudLineIn(S32 x, S32 y, const char *text, int align, S32 colour) {
     char buf[96];
     snprintf(buf, sizeof(buf), "%s", text);
     const S32 w = SizeFont(buf), x0 = align > 0 ? x - w : x;
-    ColorFont(0);
+    // (the shadow a black other than index 0: over the OpenGL renderer's picture index 0 is see-through, and the white line had no
+    // shadow -- over a white kerb its letters vanished, 2026-11-21)
+    ColorFont(GpuOverlay_Black());
     Font(x0 + 2, y + 2, buf);
     ColorFont(colour);
     Font(x0, y, buf);
@@ -23296,13 +23298,16 @@ void RaceMod_ShrunkText(const char *cp850, S32 colour, S32 shadow, S32 px0, S32 
     static U8 saved[RACE_SMALL_MAXH][RACE_SMALL_MAXW], drawn[RACE_SMALL_MAXH][RACE_SMALL_MAXW];
     if (fw > RACE_SMALL_MAXW || fh > RACE_SMALL_MAXH) return;
     const S32 sw = fw * num / den, sh = fh * num / den, W = (S32)ModeDesiredX, H = (S32)ModeDesiredY;
-    const U8 none = (U8)(colour == 1 || colour == 0 ? 2 : 1);
+    // (the shadow a black other than index 0, see-through over the OpenGL renderer's picture: HudLineIn; the patch's fill neither)
+    const U8 black = GpuOverlay_Black();
+    U8 none = 1;
+    while (none == (U8)colour || none == black) none++;
     for (S32 r = 0; r < fh; r++) {
         U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
         memcpy(saved[r], row, (size_t)fw);
         memset(row, none, (size_t)fw);
     }
-    ColorFont(0);
+    ColorFont(black);
     Font(px0 + shadow, py0 + shadow, cp850);
     ColorFont(colour);
     Font(px0, py0, cp850);

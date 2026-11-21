@@ -355,6 +355,8 @@ static const char *s_clutFragSrc =
     "uniform sampler2D uPalette;\n"     /* 256×1 BGRA (scene palette, alpha = index) */
     "uniform sampler2D uBlendSrcLog;\n" /* LUMINANCE_ALPHA: .r = walked source index, .a = Log index */
     "uniform sampler2D uBlendDst;\n"    /* per-sprite FBO rect copy, A = destination index */
+    "uniform sampler2D uTransDst;\n"    /* the whole target before a TRANS batch, A = the index under each pixel */
+    "uniform vec2 uTransDstSize;\n"     /* its size in target pixels */
     "uniform sampler2D uTransPal;\n"    /* 256×256 LUMINANCE blend table: row = source, column = destination */
     "uniform int uPolyMode;\n"          /* 0=texture 1=flat 2=gouraud 3=gouraudTable 4=textureNoCLUT 5=fogSmooth 6=sceneShadow 7=brickQuad 8=blendSprite */
     "uniform float uFlatColor;\n"       /* palette index (mode 1) / CLUT column (mode 3) */
@@ -422,22 +424,26 @@ static const char *s_clutFragSrc =
        interpolate the resulting RGBA colors.  This avoids the artifact
        where hardware bilinear on palette indices produces garbage colors. */
     "vec4 bilinearCLUT(vec2 tc, float widthMask, float heightMask,\n"
-    "                   float gouraudRow, vec2 off, int chromaKey, float slot) {\n"
+    "                   float gouraudRow, vec2 off, int chromaKey, float slot, float tile) {\n"
     "    float u = mod(tc.x, widthMask + 1.0);\n"
     "    float v = mod(tc.y, heightMask + 1.0);\n"
     "    float iu = floor(u);\n"
     "    float iv = floor(v);\n"
     "    float fu = u - iu;\n"
     "    float fv = v - iv;\n"
+    /* (the ground's atlas is in tiles of `tile` texels, each a triangle's whole texture: the next texel kept in its own tile -- the
+       next tile's edge smoothed in drew a line along every cell's edge, Polar's ice slabs, 2026-11-21; 0 for any other texture) */
+    "    float iu1 = (tile > 0.5 && mod(iu, tile) > tile - 1.5) ? iu : iu + 1.0;\n"
+    "    float iv1 = (tile > 0.5 && mod(iv, tile) > tile - 1.5) ? iv : iv + 1.0;\n"
     "    /* Wrap each of the 4 texel positions */\n"
     "    vec2 p00 = vec2(mod(iu, widthMask + 1.0),\n"
     "                     mod(iv, heightMask + 1.0));\n"
-    "    vec2 p10 = vec2(mod(iu + 1.0, widthMask + 1.0),\n"
+    "    vec2 p10 = vec2(mod(iu1, widthMask + 1.0),\n"
     "                     mod(iv, heightMask + 1.0));\n"
     "    vec2 p01 = vec2(mod(iu, widthMask + 1.0),\n"
-    "                     mod(iv + 1.0, heightMask + 1.0));\n"
-    "    vec2 p11 = vec2(mod(iu + 1.0, widthMask + 1.0),\n"
-    "                     mod(iv + 1.0, heightMask + 1.0));\n"
+    "                     mod(iv1, heightMask + 1.0));\n"
+    "    vec2 p11 = vec2(mod(iu1, widthMask + 1.0),\n"
+    "                     mod(iv1, heightMask + 1.0));\n"
     "    /* Sample atlas → CLUT → palette for each texel */\n"
     "    float t00 = texture2D(uAtlas, atlasPageUV(atlasTexel(p00, off), slot)).r * 255.0;\n"
     "    float t10 = texture2D(uAtlas, atlasPageUV(atlasTexel(p10, off), slot)).r * 255.0;\n"
@@ -450,7 +456,10 @@ static const char *s_clutFragSrc =
     "    vec4 c10 = clutLookup(t10, gouraudRow);\n"
     "    vec4 c01 = clutLookup(t01, gouraudRow);\n"
     "    vec4 c11 = clutLookup(t11, gouraudRow);\n"
-    "    return mix(mix(c00, c10, fu), mix(c01, c11, fu), fv);\n"
+    /* (the colour smoothed, its alpha -- the palette index the target keeps, read under a TRANS polygon -- one texel's whole) */
+    "    vec4 m = mix(mix(c00, c10, fu), mix(c01, c11, fu), fv);\n"
+    "    m.a = c00.a;\n"
+    "    return m;\n"
     "}\n"
     "void main() {\n"
     "    vec4 color;\n"
@@ -464,6 +473,7 @@ static const char *s_clutFragSrc =
     "    float slot = 0.0;\n"
     "    float lightAdd = 0.0;\n" /* (added to the light row before its floor: 0 the plain types' rounding, ditherAt the dithered) */
     "    float fogRow = -1.0;\n"
+    "    float groundTile = 0.0;\n"
     "    if (uPerVertex != 0) {\n"
     "        polyMode = int(floor(vMode + 0.5));\n"
     "        flatColor = floor(vFlat + 0.5);\n"
@@ -480,6 +490,7 @@ static const char *s_clutFragSrc =
        (GpuRenderer_RenderTriangleList); bit 6: a dithered Gouraud type (Common_PolyState) */
     "        if (mod(floor(fl / 32.0), 2.0) > 0.5) fogRow = polyMode == 4 ? floor(vLight + 0.5) : to;\n"
     "        if (mod(floor(fl / 64.0), 2.0) > 0.5) lightAdd = ditherAt(gl_FragCoord.xy);\n"
+    "        if (fl > 127.5) groundTile = 16.0;\n" /* (bit 7: the ground's, its atlas in tiles of 16 texels -- bilinearCLUT) */
     "    }\n"
     "    float lightRow = floor((vLight + 128.0) / 256.0 + lightAdd);\n"
     /* Select perspective-corrected or affine texture/Z varyings.
@@ -504,7 +515,7 @@ static const char *s_clutFragSrc =
     "            gouraudRow = flatRow;\n"
     "        }\n"
     "        if (uBilinear != 0) {\n"
-    "            color = bilinearCLUT(tc, widthMask, heightMask, gouraudRow, texOff, chromaKey, slot);\n"
+    "            color = bilinearCLUT(tc, widthMask, heightMask, gouraudRow, texOff, chromaKey, slot, groundTile);\n"
     "        } else {\n"
     "            float wrappedU = mod(tc.x, widthMask + 1.0);\n"
     "            float wrappedV = mod(tc.y, heightMask + 1.0);\n"
@@ -643,8 +654,14 @@ static const char *s_clutFragSrc =
     "        if (mod(floor(gl_FragCoord.x) + floor(gl_FragCoord.y), 2.0) < 1.0)\n"
     "            discard;\n"
     "    }\n"
-    "    if (alphaMode > 0) {\n"
-    "        color.a = 0.5;\n"
+    /* TRANS (blend 2, written whole): the index under the pixel -- the target's alpha, from the copy the backend made -- its low
+       nibble in the polygon's colour band, as the software's Filler_Transparent. TRAME's kept pixels opaque, as the software's are. */
+    "    if (alphaMode == 1) {\n"
+    "        float under = floor(texture2D(uTransDst, gl_FragCoord.xy / uTransDstSize).a * 255.0 + 0.5);\n"
+    "        float res = mod(under, 16.0) + floor(flatColor / 16.0) * 16.0;\n"
+    "        color = texture2D(uPalette, vec2((res + 0.5) / 256.0, 0.5));\n"
+    "    } else if (alphaMode == 2) {\n"
+    "        color.a = 1.0;\n"
     "    }\n"
     "    gl_FragColor = color;\n"
     "}\n";
@@ -732,6 +749,10 @@ static GLuint s_blendLogTex = 0; /* full-screen LUMINANCE_ALPHA src/Log (mode 8)
 static U32 s_blendLogW = 0;
 static U32 s_blendLogH = 0;
 static GLuint s_blendDstTex = 0; /* full-screen BGRA dst rect copy (mode 8) */
+static GLuint s_transDstTex = 0; /* the whole target copied before a TRANS batch: its alpha the index under each pixel */
+static U32 s_transDstW = 0, s_transDstH = 0;
+static GLint s_clut_uTransDst = -1;
+static GLint s_clut_uTransDstSize = -1;
 static U32 s_blendDstW = 0;
 static U32 s_blendDstH = 0;
 static U8 *s_blendReadback = NULL; /* rect staging for TargetCopyColorRect */
@@ -1065,6 +1086,8 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_clut_uBrickSize = glGetUniformLocation(s_clutProgram, "uBrickSize");
     s_clut_uBlendSrcLog = glGetUniformLocation(s_clutProgram, "uBlendSrcLog");
     s_clut_uBlendDst = glGetUniformLocation(s_clutProgram, "uBlendDst");
+    s_clut_uTransDst = glGetUniformLocation(s_clutProgram, "uTransDst");
+    s_clut_uTransDstSize = glGetUniformLocation(s_clutProgram, "uTransDstSize");
     s_clut_uTransPal = glGetUniformLocation(s_clutProgram, "uTransPal");
     s_clut_uBlendLogW = glGetUniformLocation(s_clutProgram, "uBlendLogW");
     s_clut_uBlendLogH = glGetUniformLocation(s_clutProgram, "uBlendLogH");
@@ -1231,6 +1254,12 @@ static void GL_DestroyContext(void) {
         s_blendLogTex = 0;
         s_blendLogW = 0;
         s_blendLogH = 0;
+    }
+    if (s_transDstTex) {
+        glDeleteTextures(1, &s_transDstTex);
+        s_transDstTex = 0;
+        s_transDstW = 0;
+        s_transDstH = 0;
     }
     if (s_blendDstTex) {
         glDeleteTextures(1, &s_blendDstTex);
@@ -2001,7 +2030,57 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
        The alpha channel of the target carries the destination palette
        index (the scene palette's alpha byte), so the alpha equation must
        keep it: dst alpha = dst alpha, regardless of the fragment's own. */
-    if (params->blend) {
+    if (params->blend == 2) {
+        /* TRANS, as the software's Filler_Transparent: each pixel the target's
+           palette index's low nibble -- its brightness -- in the polygon's
+           colour band (a car's blue glass over the scene, not half its
+           brightest blue; a Moon lamp's brown glass over the teal ground). The
+           target's index is its alpha byte; the shader reads it from a copy of
+           the target made here, on the GPU (alphaMode 1), and writes the
+           result whole. */
+        glDisable(GL_BLEND);
+        if (s_fbo && s_fboWidth > 0 && s_fboHeight > 0) {
+            glActiveTexture(GL_TEXTURE6);
+            if (s_transDstTex == 0) {
+                glGenTextures(1, &s_transDstTex);
+            }
+            glBindTexture(GL_TEXTURE_2D, s_transDstTex);
+            if (s_transDstW != s_fboWidth || s_transDstH != s_fboHeight) {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)s_fboWidth, (GLsizei)s_fboHeight, 0, GL_RGBA,
+                             GL_UNSIGNED_BYTE, NULL);
+                s_transDstW = s_fboWidth;
+                s_transDstH = s_fboHeight;
+            }
+            {
+                /* (only the batch's own box, in target pixels -- engine pixels times the render scale, rows from the bottom -- to the
+                   same place in the copy, so the shader samples it by its fragment's position) */
+                S32 x0 = 0x7FFFFFFF, y0 = 0x7FFFFFFF, x1 = -0x7FFFFFFF, y1 = -0x7FFFFFFF;
+                for (U32 v = 0; v < vertexCount; v++) {
+                    if (verts[v].XE < x0) x0 = verts[v].XE;
+                    if (verts[v].XE > x1) x1 = verts[v].XE;
+                    if (verts[v].YE < y0) y0 = verts[v].YE;
+                    if (verts[v].YE > y1) y1 = verts[v].YE;
+                }
+                const S32 scale = (s_texWidth != 0 && s_fboWidth / s_texWidth > 0) ? (S32)(s_fboWidth / s_texWidth) : 1;
+                S32 fx0 = (x0 - 1) * scale, fx1 = (x1 + 2) * scale;
+                S32 fy0 = (S32)s_fboHeight - (y1 + 2) * scale, fy1 = (S32)s_fboHeight - (y0 - 1) * scale;
+                if (fx0 < 0) fx0 = 0;
+                if (fy0 < 0) fy0 = 0;
+                if (fx1 > (S32)s_fboWidth) fx1 = (S32)s_fboWidth;
+                if (fy1 > (S32)s_fboHeight) fy1 = (S32)s_fboHeight;
+                if (fx1 > fx0 && fy1 > fy0) {
+                    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, fx0, fy0, fx0, fy0, fx1 - fx0, fy1 - fy0);
+                }
+            }
+            glUniform1i(s_clut_uTransDst, 6);
+            glUniform2f(s_clut_uTransDstSize, (float)s_fboWidth, (float)s_fboHeight);
+            glActiveTexture(GL_TEXTURE0);
+        }
+    } else if (params->blend) {
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO,
                             GL_ONE);

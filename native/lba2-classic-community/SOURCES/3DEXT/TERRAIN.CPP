@@ -1196,6 +1196,7 @@ void AffichageTerrainZBuf(void) {
 
     PtrMap = GroundTexture;
     RepMask = 0xFFFF;
+    Fill_GroundTiles = 1; // (the GPU's smoothing within a texel's tile: POLY.H)
 
     for (S32 tz = 0; tz < TERRAIN_TILES; tz++) {
         for (S32 tx = 0; tx < TERRAIN_TILES; tx++) {
@@ -1231,6 +1232,7 @@ void AffichageTerrainZBuf(void) {
             }
         }
     }
+    Fill_GroundTiles = 0;
 
     if (RendererDrawSea)
         DrawOneSea(Y_SEA);
@@ -1424,6 +1426,7 @@ void DrawAnimatedPolys() {
 
     PtrMap = GroundTexture;
     RepMask = 0xFFFF;
+    Fill_GroundTiles = 1; // (the ground's animated cells: POLY.H)
 
     Switch_Fillers(FILL_POLY_FOG_NZW);
 
@@ -1455,6 +1458,7 @@ void DrawAnimatedPolys() {
     // Met a jour Screen pour recouvrements
     BoxBlitStaticListToScreen();
 
+    Fill_GroundTiles = 0;
     Switch_Fillers(FILL_POLY_TEXTURES);
     SetCLUT(PalLevel);
 
