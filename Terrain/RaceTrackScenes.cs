@@ -880,6 +880,11 @@ internal static class RaceTrackScenes
                 // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with
                 // no pit lane they stand on the grid spots behind the player
                 var grid = t.Grid; var pits = t.Pits;
+                // (fewer waiting spots than opponents: the rest stand on their grid spots, the racing lane -- Otringal's fourth on its line
+                // through the qualifying lap, the user, 2026-11-21: "they're parked on the startline instead of in the pitlane")
+                if (pits.Count > 0 && pits.Count < t.Drivers.Count)
+                    log.Add($"scene {scene}: WARNING: {pits.Count} waiting spots in the pits for {t.Drivers.Count} opponents -- the other " +
+                            $"{t.Drivers.Count - pits.Count} wait on the grid, on the racing lane");
                 t.CarAt = Enumerable.Range(0, t.Drivers.Count).Select(Waiting).ToList();
                 (int X, int Z, int Beta, int Y)? Waiting(int k) =>
                     pits.Count > k ? (pits[k][2], pits[k][4], pits[k][5], pits[k][3])
@@ -930,6 +935,7 @@ internal static class RaceTrackScenes
                     if (!text.Contains(reach)) return false;
                     text = text.Replace(reach, reach + " && 0 == body()");
                     text = System.Text.RegularExpressions.Regex.Replace(text, @"if \(\d+ == carry_obj_by\(0\)\)\s*\{\s*set_dir_obj\(0, MOVE_BUGGY_MANUAL\);\s*set_comportement\(comportement_2\);\s*\}", "");
+                    text = FollowHeroIntoCar(text);
                     scripts.SetText(carIndex, ScriptKind.Life, text);
                     return true;
                 }, () => "in by the action key only where the car stands");
@@ -2095,6 +2101,20 @@ void comportement_1()
     // (`home`: the story's car -- RaceTrackIsland.CarHome: on the start line only when the race file starts the game there, game variable
     // GridCarVar 1; otherwise made at home the first time, in home's scene, and anywhere else shown where Twinsen left it)
     public const int GridCarVar = 211;
+
+    // A car actor's script waiting for Twinsen to get in (its comportement_1) follows him in when the engine put him in the car itself --
+    // in_car= (the saucer's arrivals on the Moon and on Otringal), start_in_car=, racewalk: the script had seen him on foot as the scene
+    // started and stayed waiting, so its comportement_2, the one that answers the action key and lets him out, never ran -- the user,
+    // 2026-11-20, "can't get out of the car" (the Moon's scene 230; Otringal's space port the same)
+    internal const string FollowHeroIn = "if (12 == comportement_hero())\n    {\n        set_comportement(comportement_2);\n    }\n    ";
+    internal static string FollowHeroIntoCar(string text)
+    {
+        if (!text.Contains("MOVE_BUGGY_MANUAL") || !text.Contains("void comportement_2()")) return text;
+        var at = System.Text.RegularExpressions.Regex.Match(text, @"void comportement_1\(\)\s*\{\s*");
+        if (!at.Success || text.Substring(at.Index + at.Length).StartsWith("if (12 == comportement_hero())")) return text;
+        return text.Insert(at.Index + at.Length, FollowHeroIn);
+    }
+
     private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log, (int X, int Y, int Z, int Beta, int When)? park = null,
         (int X, int Y, int Z, int Beta, bool Here)? home = null)
     {
@@ -2120,6 +2140,7 @@ void comportement_1()
             // in the game's scene, another actor's once the build has taken some away -- the user, 2026-10-27: "Twinsen is currently getting
             // automatically put into his car on the start/finish line on Citadel if he's next to it")
             text = System.Text.RegularExpressions.Regex.Replace(text, @"if \(\d+ == carry_obj_by\(0\)\)\s*\{\s*set_dir_obj\(0, MOVE_BUGGY_MANUAL\);\s*set_comportement\(comportement_2\);\s*\}", "");
+            text = FollowHeroIntoCar(text);
             scripts.SetText(buggy, ScriptKind.Life, text);
             return true;
         }, () => "the buggy is put on the start line whenever the scene starts on foot (INIT_BUGGY 2), not when Twinsen drives in" +

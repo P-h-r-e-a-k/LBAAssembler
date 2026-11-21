@@ -63,6 +63,7 @@ internal static partial class RaceTrackStory
     // (the ladder's zone number up from the Tralu's cave's ledge: RaceTrackIsland.TwinLadders)
     internal const int TraluLadderZone = 5;
     public const int DayVar = 200, Tired = 1, Rested = 2, WonVar = 201, BeatVar = 202;
+    private const int ZoeKissAnim = 84;   // (Zoe's kiss, the game's own: Polar/PolarDream.cs ZoeKiss)
     // Celebration Island's lava lake: the souvenir seller beaten (1; 2 once he has told what he saw) and his race run (won or not), 203-204
     public const int SellerBeaten = 203, SellerRaced = 204;
     // (205 is Polar Island's dream, 206 Citadel Island's weather: RACEMOD.CPP RaceMod_CitadelWeather.) Twinsen has driven a car on Citadel
@@ -104,7 +105,7 @@ internal static partial class RaceTrackStory
     // own names: the Weather Wizard is the Mage Météo, the Wettermagier, the Mago Meteo, the Mago Metereologo, the Mago do Tempo.
     // (EsmerTrack was the aliens' thanks with the new track ready tomorrow: since 2026-11-03 the middle of their landing speech, the morning
     // after -- RaceTrackStory.Chapters.cs)
-    private enum Line { Zoe, Wizard, WizardAfter, Raph, RaphBeaten, PaulGloves, PaulReady, EsmerTrack, Tired, Sleep, PaulTicket, RaphTime, PaulStop, ZoeJoins, RaphYell }
+    private enum Line { Zoe, Wizard, WizardAfter, Raph, RaphBeaten, PaulGloves, PaulReady, EsmerTrack, Tired, Sleep, PaulTicket, RaphTime, PaulStop, ZoeJoins, RaphYell, ZoeCongrats }
     private static readonly string[][] Lines =
     {
         new[]
@@ -242,6 +243,17 @@ internal static partial class RaceTrackStory
             "¡Eh! ¡Sal de la pista, Twinsen! ¿Quieres que te atropellen?!",
             "Ehi! Esci dalla pista, Twinsen! Vuoi farti investire?!",
             "Ei! Sai da pista, Twinsen! Queres ser atropelado?!",
+        },
+        // (Zoe, Raph's time beaten and Raph not told yet: her kiss, then this -- the user, 2026-11-20, "let's have her kiss him and say
+        // congratulations before prompting Twinsen to speak to Raph to get him to unlock the lighthouse")
+        new[]
+        {
+            "Congratulations, Twinsen! You beat Raph's time! Now go and tell Raph, he promised he'd unlock the lighthouse for us.",
+            "Félicitations, Twinsen ! Tu as battu le temps de Raph ! Maintenant va le dire à Raph, il a promis de nous ouvrir le phare.",
+            "Glückwunsch, Twinsen! Du hast Raphs Zeit geschlagen! Jetzt geh und sag es Raph, er hat versprochen, uns den Leuchtturm aufzuschließen.",
+            "¡Enhorabuena, Twinsen! ¡Has batido el tiempo de Raph! Ahora ve a decírselo a Raph, prometió abrirnos el faro.",
+            "Congratulazioni, Twinsen! Hai battuto il tempo di Raph! Ora vai a dirlo a Raph, ha promesso di aprirci il faro.",
+            "Parabéns, Twinsen! Bateste o tempo do Raph! Agora vai dizer-lho, ele prometeu abrir-nos o farol.",
         },
     };
     // Raph's yell at the townsman who walks across the storm track while he laps (the race file's parade_walker=, RaphWalkerLine)
@@ -1092,9 +1104,22 @@ void comportement_2()
         invisible(1);
         suicide();
     }}
+    // (talked to before Raph is: her kiss -- the track's label 2, the game's animation 84 -- then her congratulations and Raph's promise)
+    swif (1 == action())
+    {{
+        if (700 > distance(0) && {Driving} != comportement_hero() && 2 != l_track() && 102 != l_track())
+        {{
+            set_track(label_2);
+        }}
+    }}
+    swif (102 == l_track())
+    {{
+        message({Id(Line.ZoeCongrats)});
+        set_track(label_0);
+    }}
 }}
 ");
-                    zoeScript = scripts => { zoeLife(scripts); scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nanim(88);\nstop();\n\nlabel(1);\nanim(89);\ngoto_point({zoeSpot});\nanim(88);\nbeta({zoeWatch.Beta});\nstop();\n"); };
+                    zoeScript = scripts => { zoeLife(scripts); scripts.SetText(zoeIndex, ScriptKind.Track, $"label(0);\nanim(88);\nstop();\n\nlabel(1);\nanim(89);\ngoto_point({zoeSpot});\nanim(88);\nbeta({zoeWatch.Beta});\nstop();\n\nlabel(2);\nface_twinsen(-1);\nanim({ZoeKissAnim});\nwait_anim();\nanim(88);\nlabel(102);\nstop();\n"); };
                 }
                 // (and his car, while he is out of it -- at the lighthouse, till the spell is cast and he walks back to it: out of sight, and
                 // in no one's way -- the race-track mode keeps it parked: one Raph at a time, the user, 2026-11-06)

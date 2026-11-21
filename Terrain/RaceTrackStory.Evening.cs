@@ -436,12 +436,13 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "I can't go out in my pyjamas! My racing suit's folded on the chair by the bed.",
-            "Je ne peux pas sortir en pyjama ! Ma combinaison de course est pliée sur la chaise près du lit.",
-            "Im Schlafanzug kann ich nicht raus! Mein Rennanzug liegt gefaltet auf dem Stuhl neben dem Bett.",
-            "¡No puedo salir en pijama! Mi mono de carreras está doblado en la silla junto a la cama.",
-            "Non posso uscire in pigiama! La mia tuta da corsa è piegata sulla sedia accanto al letto.",
-            "Não posso sair de pijama! O meu fato de corrida está dobrado na cadeira ao lado da cama.",
+            // (his clothes, not the racing suit: the first morning the suit is still in the museum -- the user's words, 2026-11-20)
+            "I can't go out in my pyjamas, that'd be inappropriate and undignified, I should probably get changed first. My clothes should be on the chair by the bed.",
+            "Je ne peux pas sortir en pyjama, ce serait inconvenant et indigne, je devrais d'abord me changer. Mes vêtements doivent être sur la chaise près du lit.",
+            "Im Schlafanzug kann ich nicht rausgehen, das wäre unangebracht und würdelos, ich sollte mich erst umziehen. Meine Sachen müssten auf dem Stuhl neben dem Bett liegen.",
+            "No puedo salir en pijama, sería inapropiado e indigno, debería cambiarme primero. Mi ropa debería estar en la silla junto a la cama.",
+            "Non posso uscire in pigiama, sarebbe inappropriato e poco dignitoso, dovrei prima cambiarmi. I miei vestiti dovrebbero essere sulla sedia accanto al letto.",
+            "Não posso sair de pijama, seria inapropriado e indigno, devia mudar de roupa primeiro. A minha roupa deve estar na cadeira ao lado da cama.",
         },
         new[]
         {

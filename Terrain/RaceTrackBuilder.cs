@@ -4880,6 +4880,28 @@ internal static class RaceTrackBuilder
                 report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({cx},{cz}) taken away (the island's record says so)");
             }
         }
+        foreach (var (cx, cz, x, z, tx, tz) in o.Island.MoveDecors ?? Array.Empty<(int, int, int, int, int, int)>())
+        {
+            if (island.CubeAt(cx, cz) is not { } cube) continue;
+            foreach (var d in cube.Decors.Where(d => d.X == x && d.Z == z).ToList())
+            {
+                d.MoveTo(tx, d.Y, tz);
+                report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({cx},{cz}) moved to ({tx}, {tz}) (the island's record says so)");
+            }
+        }
+        foreach (var (cx, cz, x, z, dx, dz) in o.Island.CopyDecors ?? Array.Empty<(int, int, int, int, int, int)>())
+        {
+            if (island.CubeAt(cx, cz) is not { } cube) continue;
+            foreach (var d in cube.Decors.Where(d => d.X == x && d.Z == z).ToList())
+            {
+                // (a second pass over a folder already built finds its copy there: not again)
+                if (cube.Decors.Any(c => c.X == x + dx && c.Z == z + dz && c.Body == d.Body)) continue;
+                var copy = d.Clone();
+                copy.MoveTo(x + dx, d.Y, z + dz);
+                cube.Decors.Add(copy);
+                report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({cx},{cz}) copied to ({x + dx}, {z + dz}) (the island's record says so)");
+            }
+        }
     }
 
     // `asIs`: bodies kept with their boxes as they are -- a drive-through hut's parts (RaceTrackDriveThrough), its walls beside the road and

@@ -631,11 +631,12 @@ internal static partial class RaceTrackStory
 ");
                 // (and aboard as he comes up to the shuttle's door, the moon won: in the track's copy of the cube the platform's foot can't be
                 // walked onto, its door out of reach)
+                // (on foot or in the car -- set_dir_obj(0, NO_MOVE) takes him out of it, and the saucer's arrival on Otringal puts him back in,
+                // in_car= -- the user, 2026-11-21: "we need to improve the trigger zone though and make it so Twinsen can also drive aboard")
                 var door = model.Zones.First(z => z.Type == 0 && z.Num == ShuttleInside);
-                var helper = RaceTrackScenes.InvisibleHelper((door.X0 + door.X1) / 2, Math.Min(door.Y0, door.Y1), (door.Z0 + door.Z1) / 2);
-                var addHelper = IslandBeatsA.Add(model, helper, $@"void comportement_0()
+                string Aboard(string near) => $@"void comportement_0()
 {{
-    if (5 <= chapter() && {HalDone} == var_game({QHal}) && {BoardReach} > distance(0) && {Driving} != comportement_hero())
+    if (5 <= chapter() && {HalDone} == var_game({QHal}) && {near})
     {{
         set_dir_obj(0, NO_MOVE);
         change_cube({ShuttleInside});
@@ -646,8 +647,13 @@ internal static partial class RaceTrackStory
 void comportement_1()
 {{
 }}
-");
-                return scripts => { addShip(scripts); addHelper(scripts); };
+";
+                var helper = RaceTrackScenes.InvisibleHelper((door.X0 + door.X1) / 2, Math.Min(door.Y0, door.Y1), (door.Z0 + door.Z1) / 2);
+                var addHelper = IslandBeatsA.Add(model, helper, Aboard($"{BoardReach} > distance(0)"));
+                // (and all round the saucer itself, where he comes up to it on the pad -- in 3D, so the road passing over the pad doesn't)
+                var round = RaceTrackScenes.InvisibleHelper(PadTop.X, PadTop.Y, PadTop.Z);
+                var addRound = IslandBeatsA.Add(model, round, Aboard($"{SaucerReach} > distance_3d(0)"));
+                return scripts => { addShip(scripts); addHelper(scripts); addRound(scripts); };
             });
         if (!b.Store.SceneExists(ShuttleInside)) { b.Log.Add($"the saucer to Otringal left out: no scene {ShuttleInside}"); return; }
         b.Edit(ShuttleInside, $"aboard the Esmers' saucer once the moon is won: the lift-off, on to Otringal's space port (scene {SpaceportScene}, in his car)", model =>
@@ -764,7 +770,7 @@ void comportement_1()
     }
 
     // (scene 115's cell variable counting the moments before the lift-off -- its own scripts use 0-3)
-    private const int SaucerWait = 20, BoardReach = 1800;
+    private const int SaucerWait = 20, BoardReach = 1800, SaucerReach = 3000;
 
     // The moon's arrival (the user, 2026-11-17: "when we first land on the moon let's still be in the spaceship with our car in there too.
     // Twinsen drives the car out, and there's a short section of extra track that can take him up to the race track. There's already a

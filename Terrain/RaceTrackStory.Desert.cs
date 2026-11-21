@@ -65,11 +65,11 @@ internal static partial class RaceTrackStory
     // best world record, fastest first
     private static readonly (string Title, (string Name, string Time)[] Rows)[] SlateRecords =
     {
-        ("Little Big Adventure -- Any%, world record holders", new[]
+        ("LBA1 any% WR's", new[]
         {
             ("Roxer", "26:26"), ("banta546", "28:09"), ("Kash_Lba", "28:28"), ("Freem4n", "37:22"), ("amnesti", "52:59"), ("serializer", "57:09"),
         }),
-        ("Little Big Adventure 2 -- Any%, world record holders", new[]
+        ("LBA2 any% WR's", new[]
         {
             ("EPmager", "22:35"), ("Amaneko", "24:10"), ("Roxer", "24:34"), ("Kuky_Bro", "26:50"), ("Kash_Lba", "28:10"), ("MarbrieTV", "49:52"),
             ("Sentinel59", "49:58"), ("kHeinzen", "53:26"), ("Talabarbe", "55:31"),
@@ -316,10 +316,22 @@ void comportement_1()
         var scene = b.SceneAt(x, z);
         if (scene < 0) { b.Log.Add($"{who} at the start line left out: no scene at cell ({x:0.#}, {z:0.#})"); return; }
         var y = track.GroundAfter?.Invoke(x, z) ?? m[8];
-        b.Edit(scene, $"{who}, the marshal, talks at the start line (cell {x:0.#}, {z:0.#})", model =>
+        // (and where she stands on the road for the start -- marshal_start=, m[11..14] -- before the race: the talker at her room's place
+        // alone was 6.4 cells from her there on the Desert, out of reach, and she seemed not to answer -- the user, 2026-11-20, "The race
+        // marshall on desert island doesn't respond when Twinsen attempts to talk to her". Each reach under half the way between the two,
+        // so one answers at a time)
+        (double X, double Z, double Y)? road = m.Length >= 15 && b.SceneAt(m[11] / 512.0, m[12] / 512.0) == scene ? (m[11] / 512.0, m[12] / 512.0, m[13]) : null;
+        var apart = road is { } r0 ? Math.Sqrt((r0.X - x) * (r0.X - x) + (r0.Z - z) * (r0.Z - z)) * 512 : double.MaxValue;
+        if (apart < 600) road = null;
+        var reach = (int)Math.Min(1800, road is null ? 1800 : apart / 2 - 50);
+        b.Edit(scene, $"{who}, the marshal, talks at the start line (cell {x:0.#}, {z:0.#}{(road is { } rr ? $", and on the road at the line, cell {rr.X:0.#}, {rr.Z:0.#}" : "")})", model =>
         {
             var marshal = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(Math.Max(y, m[8])), RaceTrackScenes.CubeLocal(z, model.CubeY), 9);
-            return IslandBeatsA.Add(model, marshal, Talker(when, talk, 1800, extra));
+            var add = IslandBeatsA.Add(model, marshal, Talker(when, talk, reach, extra));
+            if (road is not { } r) return add;
+            var onRoad = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(r.X, model.CubeX), (int)Math.Round(r.Y), RaceTrackScenes.CubeLocal(r.Z, model.CubeY), 9);
+            var addRoad = IslandBeatsA.Add(model, onRoad, Talker(when, talk, reach));
+            return scripts => { add(scripts); addRoad(scripts); };
         });
     }
 
@@ -369,6 +381,8 @@ void comportement_1()
         FerryTicketOk, FerryNoTicket,
         // (the speedrun records' slates either side of Kash's tomb -- the user, 2026-11-19: KashTombCave, RACEMOD.CPP plaque=)
         KashSlate,
+        // (the garage tent's mechanics at the raised cars, its racers after the race -- the user, 2026-11-20: RaceTrackStory.Garage)
+        MechanicLift, RacerAfter,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -653,12 +667,13 @@ void comportement_1()
         },
         new[]
         {
-            "And no helmet, no race! Kash, the greatest racer Twinsun ever had, was laid to rest in a sea cave in the cliffs, his helmet on his tomb for the next racer worthy of it. I've marked it on your holomap.",
-            "Et pas de casque, pas de course ! Kash, le plus grand pilote que Twinsun ait jamais eu, repose dans une grotte marine au pied des falaises, son casque sur sa tombe pour le prochain pilote qui en sera digne. Je te l'ai marquée sur ton holomap.",
-            "Und ohne Helm kein Rennen! Kash, der größte Rennfahrer, den Twinsun je hatte, ruht in einer Meeresgrotte in den Klippen, sein Helm auf seinem Grab für den nächsten Fahrer, der seiner würdig ist. Ich habe sie dir auf dem Holomap markiert.",
-            "¡Y sin casco no hay carrera! Kash, el mejor piloto que ha tenido Twinsun, descansa en una gruta marina de los acantilados, con su casco sobre la tumba para el próximo piloto digno de él. Te la he marcado en el holomapa.",
-            "E niente casco, niente corsa! Kash, il più grande pilota che Twinsun abbia mai avuto, riposa in una grotta marina tra le scogliere, il suo casco sulla tomba per il prossimo pilota che ne sarà degno. Te l'ho segnata sull'olomappa.",
-            "E sem capacete não há corrida! O Kash, o maior piloto que Twinsun alguma vez teve, repousa numa gruta marinha nas falésias, com o capacete sobre o túmulo para o próximo piloto digno dele. Marquei-a no teu holomapa.",
+            // (a new safety rule: every racer must wear a helmet -- the user, 2026-11-20 -- and still the way to Kash's)
+            "There's a new safety rule, Twinsen: all racers must wear a helmet. No helmet, no race! Kash, the greatest racer Twinsun ever had, was laid to rest in a sea cave in the cliffs, his helmet on his tomb for the next racer worthy of it. I've marked it on your holomap.",
+            "Il y a une nouvelle règle de sécurité, Twinsen : tous les pilotes doivent porter un casque. Pas de casque, pas de course ! Kash, le plus grand pilote que Twinsun ait jamais eu, repose dans une grotte marine au pied des falaises, son casque sur sa tombe pour le prochain pilote qui en sera digne. Je te l'ai marquée sur ton holomap.",
+            "Es gibt eine neue Sicherheitsregel, Twinsen: Alle Rennfahrer müssen einen Helm tragen. Ohne Helm kein Rennen! Kash, der größte Rennfahrer, den Twinsun je hatte, ruht in einer Meeresgrotte in den Klippen, sein Helm auf seinem Grab für den nächsten Fahrer, der seiner würdig ist. Ich habe sie dir auf dem Holomap markiert.",
+            "Hay una nueva norma de seguridad, Twinsen: todos los pilotos deben llevar casco. ¡Sin casco no hay carrera! Kash, el mejor piloto que ha tenido Twinsun, descansa en una gruta marina de los acantilados, con su casco sobre la tumba para el próximo piloto digno de él. Te la he marcado en el holomapa.",
+            "C'è una nuova regola di sicurezza, Twinsen: tutti i piloti devono indossare il casco. Niente casco, niente corsa! Kash, il più grande pilota che Twinsun abbia mai avuto, riposa in una grotta marina tra le scogliere, il suo casco sulla tomba per il prossimo pilota che ne sarà degno. Te l'ho segnata sull'olomappa.",
+            "Há uma nova regra de segurança, Twinsen: todos os pilotos têm de usar capacete. Sem capacete não há corrida! O Kash, o maior piloto que Twinsun alguma vez teve, repousa numa gruta marinha nas falésias, com o capacete sobre o túmulo para o próximo piloto digno dele. Marquei-a no teu holomapa.",
         },
         new[]
         {
@@ -967,12 +982,32 @@ void comportement_1()
         },
         new[]
         {
-            "It appears to be a list of famous racers, along with their best times. I wonder what track this refers to.",
+            "It appears to be a list of famous racers, along with their best times. I wonder which track this refers to.",
             "On dirait une liste de pilotes célèbres, avec leurs meilleurs temps. Je me demande de quel circuit il s'agit.",
             "Sieht aus wie eine Liste berühmter Rennfahrer mit ihren Bestzeiten. Ich frage mich, welche Strecke damit gemeint ist.",
             "Parece una lista de pilotos famosos, con sus mejores tiempos. Me pregunto a qué circuito se refiere.",
             "Sembra un elenco di piloti famosi, con i loro tempi migliori. Mi chiedo a quale percorso si riferisca.",
             "Parece uma lista de pilotos famosos, com os seus melhores tempos. Pergunto-me a que pista se refere.",
+        },
+        // (the garage tent's mechanics at the raised cars, and its racers once the race is run -- the user, 2026-11-20: "We should make sure
+        // Twinsen can speak to all of them")
+        new[]
+        {
+            "Mind your head under the lift, Twinsen! We're changing this one's gearbox before the race.",
+            "Attention à ta tête sous le pont, Twinsen ! On change la boîte de vitesses de celle-ci avant la course.",
+            "Pass auf deinen Kopf unter der Hebebühne auf, Twinsen! Wir wechseln bei dem hier vor dem Rennen das Getriebe.",
+            "¡Cuidado con la cabeza bajo el elevador, Twinsen! Le estamos cambiando la caja de cambios a este antes de la carrera.",
+            "Attento alla testa sotto il ponte, Twinsen! Stiamo cambiando il cambio a questa prima della gara.",
+            "Cuidado com a cabeça debaixo do elevador, Twinsen! Estamos a mudar a caixa de velocidades a este antes da corrida.",
+        },
+        new[]
+        {
+            "What a race that was, Twinsen! I'll be back for the next one.",
+            "Quelle course, Twinsen ! Je reviendrai pour la prochaine.",
+            "Was für ein Rennen, Twinsen! Beim nächsten bin ich wieder dabei.",
+            "¡Menuda carrera, Twinsen! Volveré para la próxima.",
+            "Che gara, Twinsen! Tornerò per la prossima.",
+            "Que corrida, Twinsen! Volto para a próxima.",
         },
     };
 

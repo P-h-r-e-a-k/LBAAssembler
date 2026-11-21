@@ -107,6 +107,11 @@ internal sealed record RaceTrackIsland(
         // ... and in the alley between the curved wall and the lattice-walled shop south of it, at cell (518.9, 614.0) (the user, 2026-10-27,
         // "the post on citadel.ile is still ... there")
         NoPiersAt = new[] { (519.0, 582.0, 3.0), (518.9, 614.0, 4.0) },
+        // (the car ferry's quay at the pier's end, in both weathers' files: the blue mooring post by the gangway moved up the pier's west edge,
+        // 3 cells, and the gangway's planks laid twice as wide, a second set beside them to the west -- the user, 2026-11-20, "Still not able to
+        // drive onto the ferry from Citadel. We should probably make the board to the boat slightly wider and move the blue mooring post also")
+        MoveDecors = new[] { (7, 9, 7616, 19712, 7616, 18176) },
+        CopyDecors = new[] { (7, 9, 8196, 20988, -1024, 0) },
         // (Twinsen's car in the story where he left it, first under the carport at his house -- not on a start line: the user, 2026-10-27)
         CarHome = (544.125, 654.75, 1024),
         // (its steep banks beside the road its own ground, walked on by Twinsen, walls to the cars only: RaceTrackBuilder.WallSteepBanks)
@@ -376,6 +381,10 @@ internal sealed record RaceTrackIsland(
         // the start/finish line where our race marshall can stand out of the way")
         MarshalPad = (448 + 55.25, 448 + 63.5, 5000, 1024),
         CopiesScenes = (74, 4), NoHolomap = true, Roster = RaceDriver.Emerald,
+        // (no support before the triangle door into the airlock, scene 230's door zone to 167 at cells (507-510, 535-536): its pier stood at
+        // (509.2, 536.8), just past the doors' margin -- the user, 2026-11-21, "This race track strut by the triangle door on the emerald
+        // moon are we able to just remove it please")
+        NoPiersAt = new[] { (509.25, 536.85, 2.0) },
         // (ladders up from the ground under the road: the user, 2026-11-06, "jumping off the raised track on foot can strand Twinsen in low
         // areas with no way back" -- and the moon base's doors come out on the crater's floor, 5,000 under the road)
         Ladders = true, FootEdge = true,
@@ -424,6 +433,10 @@ internal sealed record RaceTrackIsland(
     // pieces placed there (RaceTrackBuilder.DropDecors) -- Citadel Island's car under Twinsen's carport, a model that can't be driven,
     // where the build parks the real one (2026-10-06: the user found two cars by the house, the island's and the build's).
     public (int CubeX, int CubeZ, int X, int Z)[]? DropDecors { get; init; }
+    // ... and decors of its own moved, each the cube, its pieces' origin and the new origin (cube units; the height as it was), and copied
+    // beside themselves, each the cube, the origin and the copy's shift (RaceTrackBuilder.DropDecors)
+    public (int CubeX, int CubeZ, int X, int Z, int ToX, int ToZ)[]? MoveDecors { get; init; }
+    public (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[]? CopyDecors { get; init; }
     // Where a building the road took away is put back (RaceTrackBuilder.RestoreLostBuildings), by hand, not the nearest place the search
     // finds: the building one of whose pieces has that body, moved (Dx, Dz) whole cells from where it stood (its height as the ground
     // round it says). Otringal's casino right up to the road west from under the roulette wheel -- the search keeps it 5 cells off the

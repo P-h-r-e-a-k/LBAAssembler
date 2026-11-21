@@ -17,7 +17,10 @@ internal static partial class CitadelProps
     public const int FerryDeckTall = 1360;
     // (... and docked a wider gap from its quay: the ramp on its quay's side, +x, that much longer -- the car fell in at the 700 one's end)
     public const int FerryRampTall = 2100;
-    public const int FerryDeck = 746, FerryHalfWide = 1300, FerryHalfLong = 2400, FerryHouseFrom = 1300, FerryRamp = 700;
+    // (a little bigger since 2026-11-21 -- 1,300 and 2,400 across and along before, the wheelhouse from 1,300 -- and its ramps longer, 2,600
+    // along it from 1,800, the quay's gangway laid twice as wide: the user, 2026-11-20, "perhaps making the boat a little bigger also")
+    public const int FerryDeck = 746, FerryHalfWide = 1450, FerryHalfLong = 2700, FerryHouseFrom = 1450, FerryRamp = 700;
+    private const int FerryRampLong = 2600, FerryRampAt = -500;
     // (the rails and the wheelhouse light greys, 54 and 55 -- the greys' row, 48-63, of Citadel's palette (RESS.HQR 27), with room for the
     // light's steps: 14 and 15, the palette's first row, aren't a ramp -- lit, Software drew the wheelhouse pink and OpenGL purple; at 48
     // both drew it black, 2026-11-19)
@@ -41,7 +44,7 @@ internal static partial class CitadelProps
         foreach (var side in new[] { 1, -1 })
         {
             var ramp = side > 0 ? rampPlus : FerryRamp;
-            m.Box(0, new Vector3(side * (FerryHalfWide + ramp / 2f), FerryDeck - 20, -300), new Vector3(ramp, 30, 1800), FerryRampColour);
+            m.Box(0, new Vector3(side * (FerryHalfWide + ramp / 2f), FerryDeck - 20, FerryRampAt), new Vector3(ramp, 30, FerryRampLong), FerryRampColour);
         }
         // the stern's rail (the car driven on across the deck, not off its end)
         m.Box(0, new Vector3(0, FerryDeck + 160, -FerryHalfLong + 40), new Vector3(2 * FerryHalfWide - 80, 40, 40), FerryRail);

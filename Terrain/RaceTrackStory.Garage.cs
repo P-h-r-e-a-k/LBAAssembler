@@ -132,7 +132,9 @@ internal static partial class RaceTrackStory
         return k >= 0 && k < lines.Length ? lines[k] : null;
     }
     // (a car stays whatever the time: its racer answers Action beside it, on foot, while it's garage time -- nearer than the bays are apart)
-    private static string RacerTalker(string garageTime, int line) => $@"void comportement_0()
+    // (and after the race a word of it, not nothing: the user, 2026-11-20, "We should make sure Twinsen can speak to all of them"; within
+    // 1,400 -- a car up on its lift is talked to from beside the lift's posts)
+    private static string RacerTalker(string garageTime, int line, int after) => $@"void comportement_0()
 {{
     set_comportement(comportement_1);
 }}
@@ -141,7 +143,32 @@ void comportement_1()
 {{
     swif (1 == action())
     {{
-        if ({garageTime} && 1000 > distance(0) && {Driving} != comportement_hero())
+        if ({TalkReach} > distance(0) && {Driving} != comportement_hero())
+        {{
+            if ({garageTime})
+            {{
+                message({line});
+            }}
+            else
+            {{
+                message({after});
+            }}
+        }}
+    }}
+}}
+";
+    private const int TalkReach = 1400;
+    // (a mechanic at work: a word any time Twinsen's on foot by him)
+    private static string MechanicTalker(int line) => $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    swif (1 == action())
+    {{
+        if (1000 > distance(0) && {Driving} != comportement_hero())
         {{
             message({line});
         }}
@@ -191,10 +218,19 @@ void comportement_1()
                 var u = -hl + w * (k + 0.5);
                 // (a lift in every bay, Twinsen's too -- raised where a car's up on it, lowered under the rest: the user, 2026-11-16, "Let's add
                 // in a car lift for every racer, even if the car isn't on it, they should have one")
-                people.Add((Citadel.CitadelProps.Actor(liftBays.Contains(k) ? Citadel.CitadelProps.CarLift : Citadel.CitadelProps.CarLiftDown, 0, 0, 0), u, bayV, facingOut, stand, liftBays.Contains(k) ? "a car lift" : "a car lift, lowered"));
+                // (walked past, not into: a lift's box is the whole of it, posts and ramps -- wider than its posts, it shut the way between
+                // the bays at the same depth in every one, invisible: the user, 2026-11-20, "some of the stands appear to have invisible blocks
+                // between them stopping Twinsen from walking through")
+                var lift = Citadel.CitadelProps.Actor(liftBays.Contains(k) ? Citadel.CitadelProps.CarLift : Citadel.CitadelProps.CarLiftDown, 0, 0, 0);
+                lift.Armor = WalkOverArmour;
+                people.Add((lift, u, bayV, facingOut, stand, liftBays.Contains(k) ? "a car lift" : "a car lift, lowered"));
                 if (k == 0 || k - 1 >= grid.Count) continue;
                 var car = grid[k - 1].Clone();
                 car.Flags &= ~1u;
+                // (and walked past: a race car's box is the racers' entity's, square to its length -- wider than the car is -- and, the lifts'
+                // walked through, the cars side by side still shut the way between the bays at their depth: walls no one could see. The
+                // racer in one is talked to from beside it, by distance)
+                car.Armor = WalkOverArmour;
                 // (Baldino's rocket car: empty, Baldino at work on it -- not in it and in the aisle as well)
                 var baldinos = car.Body == RaceTrackBaldinoCar.Generic;
                 var who = RaceTrackCharacterCars.OfGeneric(car.Body);
@@ -210,7 +246,7 @@ void comportement_1()
                     // (beside the raised car, on the other side from its racer, turned to it)
                     var mech = liftMechanic.Clone();
                     mech.Move = 0;
-                    people.Add((mech, u - side * w * RacerOut, bayV - 250, TurnTo(u - side * w * RacerOut, bayV - 250, u, bayV - 250), stand, "a mechanic at the lift"));
+                    people.Add((mech, u - side * w * RacerOut, bayV - 250, TurnTo(u - side * w * RacerOut, bayV - 250, u, bayV - 250), MechanicTalker(say(DesertLine.MechanicLift)), "a mechanic at the lift"));
                 }
                 if (baldinos)
                 {
@@ -225,13 +261,15 @@ void comportement_1()
                     // alternating bay by bay)
                     var man = mechanic.Clone();
                     man.Entity = r.Entity; man.Body = r.Body; man.Anim = r.Anim;
-                    people.Add((man, u + side * w * RacerOut, bayV + RacerFront, facingOut, stand, who!.Driver));
+                    // (talked to where they stand, their own word -- the car's racer, by the car as it was: the car itself is the empty one now)
+                    var standing = RacerLine(grid[k - 1].Body) is { } own ? RacerTalker(garageTime, say(own), say(DesertLine.RacerAfter)) : MechanicTalker(say(DesertLine.RacerAfter));
+                    people.Add((man, u + side * w * RacerOut, bayV + RacerFront, facingOut, standing, who!.Driver));
                 }
                 else
                 {
                     // (a racer in the car -- the Desert track's own, an LBA1 entrant -- talked to there: a word of their own and where they're
                     // from -- the user, 2026-11-17: RacerLines)
-                    if (RacerLine(car.Body) is { } line) people[carAt] = people[carAt] with { Life = RacerTalker(garageTime, say(line)) };
+                    if (RacerLine(car.Body) is { } line) people[carAt] = people[carAt] with { Life = RacerTalker(garageTime, say(line), say(DesertLine.RacerAfter)) };
                     else log.Add($"the racers' garage: bay {k + 1}'s car (body {grid[k - 1].Body}) has no empty copy or no racer to stand by it -- the car as it is");
                 }
             }
@@ -249,7 +287,7 @@ void comportement_1()
                     people.Add((car, u, -700, facingOut, stand, "a car"));
                 }
             if (mechanic is not null)
-                foreach (var u in new[] { -1150.0, 550.0 }) people.Add((mechanic.Clone(), u, -350, (facingOut + 1024) % 4096, stand, "a mechanic"));
+                foreach (var u in new[] { -1150.0, 550.0 }) people.Add((mechanic.Clone(), u, -350, (facingOut + 1024) % 4096, MechanicTalker(say(DesertLine.MechanicLift)), "a mechanic"));
         }
         // Baldino: the filters, then (fitted) his tune and tip -- while it's garage time
         if (baldino is not null)

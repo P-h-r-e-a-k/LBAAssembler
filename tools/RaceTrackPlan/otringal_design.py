@@ -235,7 +235,7 @@ iRWFoot = (iRWLand + 4) % N
 # nor smooths the road beside them)
 WHEELED = np.zeros(N, bool)
 for k in span_of(iJLip, iRWLand): WHEELED[k] = True
-PIT_WAIT = (496.0, 500.0, 504.0)        # where the opponents wait in the pit lane while the player qualifies (z: behind the line, cube (7,7))
+PIT_WAIT = (492.0, 496.0, 500.0, 504.0)  # where the opponents wait in the pit lane while the player qualifies (z: behind the line, cube (7,7)) -- four, one each (2026-11-21)
 
 # ---- heights. Floors: CLEAR over the ground under the deck (its 80th percentile across it: a rock at one rail is cut down, RaisedCut),
 # at least SEA over the sea, over the decors the road passes over (RIDE: their tops); ceilings: the game's tunnel -- the bridge's floor,

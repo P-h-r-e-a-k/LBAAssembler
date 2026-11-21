@@ -124,7 +124,15 @@ internal static partial class RaceTrackStory
         b.Edit(HotelScene, $"Lyra by the hotel's pool: her score for the dive, a clover after it (var_cube {LyraClovers}, {LyraDives})", model =>
         {
             var lyra = SceneOps.BlankActor(SceneGame.Lba2, LyraAt.X, LyraAt.Y, LyraAt.Z, LyraEntity);
-            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Lie; lyra.Beta = LyraAt.Beta; lyra.Flags = LyraNoShadow; // (not shoved by what she lies on: CHECK_OBJ_COL off -- with it the engine pushed her out of the lounger's box and along the deck to the ladder; and no brick collision nor falling -- on the game's deck chair, its bricks, the engine lifted her onto their top and stood her up) lyra.CoulObj = 9; lyra.Armor = 51;
+            // (not shoved by what she lies on: CHECK_OBJ_COL off -- with it the engine pushed her out of the lounger's box and along the deck to
+            // the ladder; and no brick collision nor falling -- on the game's deck chair, its bricks, the engine lifted her onto their top and
+            // stood her up)
+            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Lie; lyra.Beta = LyraAt.Beta; lyra.Flags = LyraNoShadow;
+            // (walked past, not into: her box is the flag marshal's rig's, standing, its flags out -- about 3,400 round her -- and lying on the
+            // lounger it walled off the deck all about the pool and the stairs up, invisible: the user, 2026-11-21, "There seems to be an
+            // invisible wall here in the imperial hotel blocking Twinsen right in front of him" (three places; Twinsen's obj_col her, actor 20).
+            // The lounger's own bricks stop him at it. Her colour and armour were in the comment above, never set: her armour 1)
+            lyra.CoulObj = 9; lyra.Armor = RaceTrackStory.WalkOverArmour;
             var index = model.Actors.Count;
             var add = IslandBeatsA.Add(model, lyra, $@"void comportement_0()
 {{

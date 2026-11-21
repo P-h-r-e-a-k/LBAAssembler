@@ -135,6 +135,9 @@ internal static class CitadelOveralls
         // ---- Twinsen's bodies
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var bodies = HqrArchive.Open(bodyPath);
+        // (the buggy's own driving and firing bodies as they are before their tunic is made the suit's colour: Twinsen at the wheel in his
+        // everyday clothes is made from them -- InstallCasualBuggy)
+        var buggyOwn = (Driving: SafeRead(bodies, BuggyOwnDriving), Firing: SafeRead(bodies, BuggyOwnFiring));
         var overalls = WithBackPatch(Overalls(Body.Read(bodies.Read(Everyday), 2)));
         var armed = new List<(int Entry, Body Body, int Faces)>();
         for (var b = FirstArmed; b <= LastArmed; b++)
@@ -260,6 +263,8 @@ internal static class CitadelOveralls
         log.Add($"OBJFIX.HQR {OverallsSlot}: the racing overalls (the tunic's model); {HelmetSlot}: the racing gloves and helmet together (the pearl's) -- the gloves' slot's second kind");
         // (and Twinsen at the wheel in his helmet: every island's but Citadel's)
         log.AddRange(InstallHelmetBuggy(gameDirectory));
+        // (and at the wheel in his everyday clothes, before the suit is his)
+        log.AddRange(InstallCasualBuggy(gameDirectory, buggyOwn.Driving, buggyOwn.Firing));
 
         // ---- their texts: found, name, description
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -451,6 +456,74 @@ internal static class CitadelOveralls
     // polygons of the engine's 550.
     public const int BuggyEntity = 12, HelmetBuggy = 62, HelmetBuggyFiring = 63, HelmetBuggySmall = 162;
     private const int BuggyDriving = 1, BuggyFiring = 10, BuggyHead = 15;
+
+    // Twinsen at the wheel in his everyday clothes (the user, 2026-11-20: "If Twinsen gets into his car before he's got his racing outfit
+    // he's shown in a green tunic with sendell medallion instead of in his casual clothes"): the buggy's own driving and firing bodies
+    // (BODY.HQR 14 and 22, read before the overalls made their tunic the suit's colour) with the tunic's polygons on his chest and arms --
+    // its bones 13 and 14 -- his shirt's colour, the medallion on his chest (the 16s of bone 13) the shirt's too; the tunic's skirt over his
+    // lap (on the car's bone, 2) stays its blue, his jeans' ramp. More bodies of the buggy's entity -- CasualBuggy, CasualBuggyFiring and the
+    // half-size CasualBuggySmall -- which the story file's twinsen_casual= puts on him while he drives without the suit (RACEMOD.CPP).
+    public const int CasualBuggy = 64, CasualBuggyFiring = 65, CasualBuggySmall = 164;
+    private const int BuggyOwnDriving = 14, BuggyOwnFiring = 22, BuggyChest = 13, BuggyArms = 14, Medallion = 16;
+    private static byte[]? SafeRead(HqrArchive hqr, int entry)
+    {
+        try { return hqr.Read(entry); } catch (ArgumentOutOfRangeException) { return null; } catch (InvalidDataException) { return null; }
+    }
+    internal static Body InCasualClothes(Body car)
+    {
+        // (the tunic's ramp, or -- a second pass over a folder already built -- the suit's, which the overalls made it)
+        bool Tunic(int c, int from) => c >= from && c < from + 16;
+        int BoneOf(int p) => car.Bones.FindIndex(b => p >= b.Start && p < b.Start + b.Count);
+        var from = car.Faces.Any(f => Tunic(f.Colour, TunicBlue) && BoneOf(f.Points[0]) is BuggyChest or BuggyArms) ? TunicBlue : Suit.Ramp;
+        for (var i = 0; i < car.Faces.Count; i++)
+        {
+            var f = car.Faces[i];
+            var bone = BoneOf(f.Points[0]);
+            if (bone is not (BuggyChest or BuggyArms)) continue;
+            if (Tunic(f.Colour, from) || (bone == BuggyChest && f.Colour == Medallion))
+                car.Faces[i] = f with { Colour = Shirt + Math.Clamp(f.Colour - from, 0, 6), Texture = null };
+        }
+        return car;
+    }
+    private static List<string> InstallCasualBuggy(string gameDirectory, byte[]? driving, byte[]? firing)
+    {
+        if (driving is null) return new() { $"Twinsen at the wheel in his everyday clothes: not made -- no BODY.HQR {BuggyOwnDriving}" };
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var drivingRecord = RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, BuggyDriving);
+        var firingRecord = RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, BuggyFiring);
+        if (drivingRecord is null) return new() { $"Twinsen at the wheel in his everyday clothes: not made -- the buggy's entity ({BuggyEntity}) has no body {BuggyDriving}" };
+        byte[] car, gun;
+        try
+        {
+            // (written lit, as the helmeted one: InstallHelmetBuggy)
+            Body Lit(Body b) { b.Lit = true; return b; }
+            car = Lit(InCasualClothes(Body.Read(driving, 2))).Write();
+            gun = firing is not null ? Lit(InCasualClothes(Body.Read(firing, 2))).Write() : car;
+        }
+        catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or ArgumentOutOfRangeException)
+        { return new() { $"Twinsen at the wheel in his everyday clothes: not made -- {e.Message}" }; }
+        // (a second pass: its entries again)
+        if (RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, CasualBuggy) is { } h)
+        {
+            HqrWriter.ReplaceInFile(bodyPath, h.Body, car);
+            if (RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, CasualBuggyFiring) is { } hf) HqrWriter.ReplaceInFile(bodyPath, hf.Body, gun);
+            if (RaceTrackCharacterCars.BodyRecord(table, BuggyEntity, CasualBuggySmall) is { } hs) HqrWriter.ReplaceInFile(bodyPath, hs.Body, RaceTrackSmallCars.Halved(car));
+            return new() { $"Twinsen at the wheel in his everyday clothes: BODY.HQR {h.Body} again (the buggy's entity's body {CasualBuggy})" };
+        }
+        var file = File.ReadAllBytes(bodyPath);
+        var own = HqrArchive.CountEntries(bodyPath);
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(car));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(gun));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(RaceTrackSmallCars.Halved(car)));
+        File.WriteAllBytes(bodyPath, file);
+        table = RaceTrackCharacterCars.WithBodyRecord(table, BuggyEntity, drivingRecord.Value.Record, CasualBuggy, own);
+        table = RaceTrackCharacterCars.WithBodyRecord(table, BuggyEntity, (firingRecord ?? drivingRecord).Value.Record, CasualBuggyFiring, own + 1);
+        table = RaceTrackBaldinoCar.WithBody(table, BuggyEntity, CasualBuggySmall, own + 2);
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
+        return new() { $"Twinsen at the wheel in his everyday clothes: BODY.HQR {own} (driving), {own + 1} (firing), {own + 2} (half size); the buggy's entity ({BuggyEntity}) bodies {CasualBuggy}, {CasualBuggyFiring}, {CasualBuggySmall}" };
+    }
     private static List<string> InstallHelmetBuggy(string gameDirectory)
     {
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");

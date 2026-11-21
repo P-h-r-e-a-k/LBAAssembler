@@ -80,7 +80,9 @@ internal static partial class RaceTrackStory
     // A quay's ticket check and departure in the car, at the start of the hero's comportement_1: the ticket asked over the gangway (held
     // while Mr. Paul says it), and, the ticket shown and the car aboard and still, `depart` -- the game's own departure, the car held and
     // the bars first
-    // (asked over the gangway -- or on the deck, driven aboard past the gangway's zone: the Desert's is narrow -- once a time on)
+    // (asked over the gangway -- or on the deck, driven aboard past the gangway's zone: the Desert's is narrow -- once a time on: asked
+    // again only once he has driven FerryAway from the ferry -- cleared as he left the gangway's zone, the stretch between it and the
+    // engine counting him aboard asked him twice, the user, 2026-11-20: "once before he drives on, and once when he's already on")
     private static string FerryBoarding(int gangway, int ferryActor, string ticketOk, string noTicket, string open, string depart) => $@"    if ({Driving} == comportement_hero() && ({gangway} == zone() || 1 == var_game({FerryAboard})) && 0 == var_cube({GangwayAsked}) && 0 == var_cube({JustArrived}) && 0 == var_game({FerryHold}))
     {{
         set_var_cube({GangwayAsked}, 1);
@@ -96,7 +98,7 @@ internal static partial class RaceTrackStory
         }}
         set_var_game({FerryHold}, 0);
     }}
-    if ({gangway} != zone() && 0 == var_game({FerryAboard}))
+    if ({gangway} != zone() && 0 == var_game({FerryAboard}) && {FerryAway} < distance({ferryActor}))
     {{
         set_var_cube({GangwayAsked}, 0);
     }}

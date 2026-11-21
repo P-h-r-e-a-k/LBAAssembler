@@ -239,6 +239,8 @@
  *     ghost_watch=<file>         a ghost played back: Twinsen's car driven along it, round and round, no laps counted (GhostWatch)
  *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
  *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
+ *     twinsen_casual=<generic> <firing> <half size>   (2026-11-21) the buggy's bodies with Twinsen in his everyday clothes: on him while
+ *                                he drives before the racing suit is his (FLAG_TUNIQUE 0), before twinsen_body='s (HeroLook)
  *     breakdown=<var> <least> <checkpoint> <speed> <text>   (2026-11-08) the player's car breaks down while game variable <var> is under
  *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
  *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
@@ -1611,6 +1613,12 @@ static int s_heroBody = -1, s_heroFire = -1, s_heroBodyChecked = 0;
 // (twinsen_body='s <var> <min>: its bodies only while that game variable is at least <min> -- his helmet on only once he has found it, the
 // user, 2026-11-18: "Getting into the car on Desert Island shows Twinsen wearing the helmet even before he's found it")
 static int s_heroBodyVar = -1, s_heroBodyMin = 0;
+// twinsen_casual=<generic> <firing> <half size> (2026-11-21): Twinsen at the wheel in his everyday clothes, bodies of the buggy's entity
+// the builder adds (Citadel.CitadelOveralls.InstallCasualBuggy) -- put on him while he drives before he has the racing suit (the tunic's
+// item, FLAG_TUNIQUE, not yet his), in place of the buggy's own, whose driver is in the tunic: the user, 2026-11-20, "If Twinsen gets
+// into his car before he's got his racing outfit he's shown in a green tunic with sendell medallion instead of in his casual clothes"
+static int s_casualBody = -1, s_casualFire = -1, s_casualSmall = -1, s_casualChecked = 0;
+static int CasualNow(void) { return s_casualBody >= 0 && !ListVarGame[FLAG_TUNIQUE]; }
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
 static int s_noSuit = 0, s_footBody = -1, s_footChecked = 0;
 static int s_pyjVar = -1, s_pyjValue = 0, s_pyjBody = -1, s_pyjSaid = 0;
@@ -5566,6 +5574,14 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_heroBody >= 0) s_driveBody = s_driveAnim = s_driveSmall = -1;
             s_heroBodyChecked = 0;
         }
+        else if (!strcmp(key, "twinsen_casual")) {
+            int body = -1, fire = -1, small = -1;
+            const int n = sscanf(v, "%d %d %d", &body, &fire, &small);
+            s_casualBody = n >= 1 && body > 0 && body < 255 ? body : -1;
+            s_casualFire = n >= 2 && fire > 0 && fire < 255 ? fire : -1;
+            s_casualSmall = n >= 3 && small > 0 && small < 255 ? small : -1;
+            s_casualChecked = 0;
+        }
         else if (!strcmp(key, "drive_as")) {
             s_driveSmall = -1;
             if (sscanf(v, "%d %d %d", &s_driveBody, &s_driveAnim, &s_driveSmall) < 2) s_driveBody = s_driveAnim = -1;
@@ -5850,7 +5866,10 @@ static void Load(const char *path, int carOnly = 0) {
     // (every track's: the views -- camera= -- are its, whatever cameras of its own the track has; without any it gives the arm's eye)
     FollowCamEyeHook = RaceCameraEye;
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
-    DecorPoseHook = s_wheel.On || s_nbLifts || s_nbLoops ? RaceDecorPose : NULL;
+    // (follow_decor= too: the quay lift's grate went down with its plate only while the island's file had a deck lift as well -- the
+    // museum's, gone since 2026-11-20 -- and stayed at the top after, Twinsen sinking through it: the user, 2026-11-20, "it's reverted to
+    // Twinsen looking like he's passing through the ground instead of the elevator cleanly going down and showing the shaft")
+    DecorPoseHook = s_wheel.On || s_nbLifts || s_nbLoops || s_nbFollow ? RaceDecorPose : NULL;
     TerrainReachHook = RaceTerrainReach;
     CubeViewHook = RaceCubeView;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
@@ -9565,7 +9584,8 @@ static void Marshal(S32 now) {
     if (finishing && m->WaveUntil && (now < m->WaveUntil || !m->MeFinished)) want = MARSHAL_WAVE;
     else if (s_nbSpots && s_phase == PHASE_GRID && s_goAt && now >= s_goAt - RACE_MARSHAL_RAISE) { want = MARSHAL_RAISE; why = "the count-down"; }
     else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now >= s_goAt && now < s_goAt + RACE_MARSHAL_DROP) { want = MARSHAL_DROP; why = "go"; }
-    else if (s_phase == PHASE_QUALIFYING && s_laps == 0 && Comportement == C_BUGGY && !Inert()) { want = MARSHAL_RAISE; why = "Twinsen's qualifying lap"; }
+    // (not while the track's gate is still shut: no lap can start -- the Moon before HAL is mended, the user, 2026-11-20)
+    else if (s_phase == PHASE_QUALIFYING && s_laps == 0 && Comportement == C_BUGGY && !Inert() && !ClosedGate()) { want = MARSHAL_RAISE; why = "Twinsen's qualifying lap"; }
     else if (s_phase == PHASE_QUALIFYING && s_laps == 1 && now >= s_lapStart && now < s_lapStart + RACE_MARSHAL_DROP) { want = MARSHAL_DROP; why = "the qualifying lap begins"; }
     if (want == m->Want) return;
     if (want == MARSHAL_RAISE) Log_Info("[racemod] the flag marshal raises the start flag: %s", why);
@@ -13332,7 +13352,28 @@ static void HeroLook(S32 now, int driving) {
     // whenever he gets in, stops firing or is grown back after the lightning (GEN_BODY_TUNIQUE: the buggy's, or GEN_BODY_NORMAL / _MAGE as
     // ChoiceHeroBody makes it); this runs before the frame is drawn (AffScene), so the buggy's own is never seen. A folder without them
     // (built before 2026-10-20): the buggy's own, said once.
-    if (driving && s_heroBody >= 0 && !s_heroIsSmall && NewCube == -1) {
+    if (driving && s_casualBody >= 0 && !s_heroIsSmall && NewCube == -1) {
+        if (!s_casualChecked) {
+            s_casualChecked = 1;
+            if (SearchBody((U8)s_casualBody, NUM_PERSO) < 0) { Log_Warn("[racemod] twinsen_casual: the buggy has no body %d -- the buggy's own", s_casualBody); s_casualBody = s_casualFire = s_casualSmall = -1; }
+            else {
+                if (s_casualFire >= 0 && SearchBody((U8)s_casualFire, NUM_PERSO) < 0) s_casualFire = -1;
+                if (s_casualSmall >= 0 && SearchBody((U8)s_casualSmall, NUM_PERSO) < 0) s_casualSmall = -1;
+                Log_Info("[racemod] twinsen_casual: before the racing suit, his everyday clothes at the wheel -- bodies %d (firing %d, shrunk %d)", s_casualBody, s_casualFire, s_casualSmall);
+            }
+        }
+        const S32 g = hero->GenBody;
+        const int casualOn = g == s_casualBody || (s_casualFire >= 0 && g == s_casualFire);
+        if (CasualNow()) {
+            const int firing = g == GEN_BODY_TUNIQUE_TIR || g == GEN_BODY_MAGE_TIR || (s_heroFire >= 0 && g == s_heroFire) || (s_casualFire >= 0 && g == s_casualFire);
+            const S32 want = firing ? (s_casualFire >= 0 ? s_casualFire : -1)
+                           : g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE || g == GEN_BODY_MAGE || (s_heroBody >= 0 && g == s_heroBody) ? s_casualBody : -1;
+            if (want >= 0 && g != want) InitBody((U8)want, NUM_PERSO);
+        }
+        // (the suit his now: the buggy's own again -- or twinsen_body='s, below, from it)
+        else if (s_casualBody >= 0 && casualOn) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+    }
+    if (driving && s_heroBody >= 0 && !s_heroIsSmall && NewCube == -1 && !CasualNow()) {
         if (!s_heroBodyChecked) {
             s_heroBodyChecked = 1;
             if (SearchBody((U8)s_heroBody, NUM_PERSO) < 0) { Log_Warn("[racemod] twinsen_body: the buggy has no body %d -- his own buggy", s_heroBody); s_heroBody = s_heroFire = -1; return; }
@@ -13550,9 +13591,11 @@ static void PowerUps(S32 now, int driving) {
     if (used) s_usedAt = now;
     s_useWas = use;
     // shrunk by an opponent's lightning: Twinsen's car at half its size while it lasts
-    const int small = driving && s_heroSmall >= 0 && now < s_shrunkUntil && now >= s_jetUntil;
+    // (in his everyday clothes before the suit: their half-size body -- twinsen_casual=)
+    const S32 smallBody = CasualNow() && s_casualSmall >= 0 ? s_casualSmall : s_heroSmall;
+    const int small = driving && smallBody >= 0 && now < s_shrunkUntil && now >= s_jetUntil;
     s_driveSmallNow = driving && now < s_shrunkUntil && now >= s_jetUntil;
-    if (small && hero->GenBody != s_heroSmall) { InitBody((U8)s_heroSmall, NUM_PERSO); s_heroIsSmall = 1; }
+    if (small && hero->GenBody != smallBody) { InitBody((U8)smallBody, NUM_PERSO); s_heroIsSmall = 1; }
     else if (!small && s_heroIsSmall) { if (driving) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO); s_heroIsSmall = 0; }
     // the protection spell's time up
     if (s_protectSpell && now >= s_protectUntil) { ProtectionOff(); Log_Info("[racemod] the protection spell is over"); }
@@ -20554,16 +20597,33 @@ static void PlaqueFrame(void) {
 static void PlaqueDraw(void) {
     if (s_plaqueOn < 0 || s_plaqueOn >= s_nbPlaques) return;
     const T_RACE_PLAQUE *pq = &s_plaques[s_plaqueOn];
-    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, pw = w - 160 < 360 ? 360 : w - 160, x0 = (w - pw) / 2;
+    // (tight -- the user, 2026-11-20, "let's have the list of times left aligned. Let's also reduce the blank space in the middle": the
+    // times a left-aligned column a fixed gap past the longest name, the panel as wide as the rows or the title need, centred; a title too
+    // wide for the screen still splits at " -- ")
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY, margin = 28, gap = 48;
+    S32 nameW = 0, timeW = 0;
+    for (int i = 0; i < pq->NbRows; i++) {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "%s", pq->Name[i]);
+        if (SizeFont(buf) > nameW) nameW = SizeFont(buf);
+        snprintf(buf, sizeof(buf), "%s", pq->Time[i]);
+        if (SizeFont(buf) > timeW) timeW = SizeFont(buf);
+    }
     char head[2][96];
     int heads = 1;
     snprintf(head[0], sizeof(head[0]), "%s", pq->Title);
     const char *cut = strstr(pq->Title, " -- ");
-    if (SizeFont(head[0]) > pw - 24 && cut) {
+    const S32 most = w - 40;
+    if (SizeFont(head[0]) > most - 2 * margin && cut) {
         snprintf(head[0], sizeof(head[0]), "%.*s", (int)(cut - pq->Title), pq->Title);
         snprintf(head[1], sizeof(head[1]), "%s", cut + 4);
         heads = 2;
     }
+    S32 pw = nameW + gap + timeW + 2 * margin;
+    for (int i = 0; i < heads; i++) if (SizeFont(head[i]) + 2 * margin > pw) pw = SizeFont(head[i]) + 2 * margin;
+    if (pw < 240) pw = 240;
+    if (pw > most) pw = most;
+    const S32 x0 = (w - pw) / 2, rows = x0 + (pw - (nameW + gap + timeW)) / 2;
     const S32 step = 30, top = 14 + heads * 34 + 10, ph = top + pq->NbRows * step + 18, y0 = (h - ph) / 2 > 8 ? (h - ph) / 2 : 8;
     Box(x0 - 4, y0 - 4, x0 + pw + 3, y0 + ph + 3, 9 * 16 + 4);
     Box(x0, y0, x0 + pw - 1, y0 + ph - 1, GpuOverlay_Black());
@@ -20571,8 +20631,8 @@ static void PlaqueDraw(void) {
     for (int i = 0; i < heads; i++) HudLine(w / 2 - SizeFont(head[i]) / 2, y0 + 12 + i * 34, head[i], -1);
     for (int i = 0; i < pq->NbRows; i++) {
         const S32 y = y0 + top + i * step;
-        HudLine(x0 + 28, y, pq->Name[i], -1);
-        HudLine(x0 + pw - 28, y, pq->Time[i], 1);
+        HudLine(rows, y, pq->Name[i], -1);
+        HudLine(rows + nameW + gap, y, pq->Time[i], -1);
     }
 }
 

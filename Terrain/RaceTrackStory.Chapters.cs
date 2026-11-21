@@ -183,6 +183,11 @@ internal static partial class RaceTrackStory
         // (Zoe in the bedroom the morning the aliens land, talked to once she has woken him: still in his pyjamas, or dressed and his answer
         // -- the user, 2026-11-18, "tried to talk to Zoe neither Twinsen nor Zoe say anything. Characters should always have dialogue")
         ZoeGetDressed, ZoeGoLook, TwinsenOnMyWay,
+        // (the museum's door grobo asks for the password; any answer lets Twinsen in, free -- the user, 2026-11-20)
+        MuseumPassword, PasswordAntennas, PasswordSanta, PasswordSpoon, MuseumGoAhead, MuseumFunny,
+        // (the cycle shop in the baggage claim's first room, and the Hoverboard left behind in it -- RaceTrackStory.CycleShop.cs)
+        ShopWelcome, ShopAsk, ShopTown, ShopRacing, ShopChampion, ShopJustLooking, ShopTooDear, ShopBrowse,
+        BoardStory, BoardBuy, BoardNo, BoardSold, BoardNoMoney, BoardLater, BoardAsk,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -981,6 +986,199 @@ internal static partial class RaceTrackStory
             "Sto andando!",
             "Vou já!",
         },
+        // (the museum's door grobo: the password, Twinsen's three answers, and his two replies -- the user, 2026-11-20)
+        new[]
+        {
+            "What's the password?",
+            "Quel est le mot de passe ?",
+            "Wie lautet das Passwort?",
+            "¿Cuál es la contraseña?",
+            "Qual è la parola d'ordine?",
+            "Qual é a palavra-passe?",
+        },
+        new[]
+        {
+            "The password? I'm here to fix the antennas",
+            "Le mot de passe ? Je viens réparer les antennes",
+            "Das Passwort? Ich soll die Antennen reparieren",
+            "¿La contraseña? Vengo a arreglar las antenas",
+            "La parola d'ordine? Sono qui per aggiustare le antenne",
+            "A palavra-passe? Vim arranjar as antenas",
+        },
+        new[]
+        {
+            "I'm Santa Claus, I'm here to deliver presents",
+            "Je suis le Père Noël, je viens livrer des cadeaux",
+            "Ich bin der Weihnachtsmann, ich bringe Geschenke",
+            "Soy Papá Noel, vengo a repartir regalos",
+            "Sono Babbo Natale, sono qui per consegnare i regali",
+            "Sou o Pai Natal, vim entregar presentes",
+        },
+        new[]
+        {
+            "Code Operation: Green Spoon",
+            "Code Opération : Cuillère Verte",
+            "Code Operation: Grüner Löffel",
+            "Código Operación: Cuchara Verde",
+            "Codice Operazione: Cucchiaio Verde",
+            "Código Operação: Colher Verde",
+        },
+        new[]
+        {
+            "Go ahead, Miss Bloop is in the next room.",
+            "Allez-y, Mlle Bloop est dans la salle suivante.",
+            "Nur zu, Fräulein Bloop ist im nächsten Raum.",
+            "Adelante, la señorita Bloop está en la sala de al lado.",
+            "Prego, la signorina Bloop è nella sala accanto.",
+            "Pode entrar, a menina Bloop está na sala ao lado.",
+        },
+        new[]
+        {
+            "Ha ha ha! That's funny. Welcome to the free museum dedicated to the world famous Twinsen!",
+            "Ha ha ha ! Elle est bonne. Bienvenue au musée gratuit consacré au célèbre Twinsen !",
+            "Ha ha ha! Der ist gut. Willkommen im kostenlosen Museum für den weltberühmten Twinsen!",
+            "¡Ja, ja, ja! Qué gracioso. ¡Bienvenido al museo gratuito dedicado al famosísimo Twinsen!",
+            "Ah ah ah! Questa è buona. Benvenuto al museo gratuito dedicato al famosissimo Twinsen!",
+            "Ah ah ah! Essa é boa. Bem-vindo ao museu gratuito dedicado ao famosíssimo Twinsen!",
+        },
+        // (the cycle shop's owner: his welcome, his bikes, Twinsen's four answers, his two replies -- the user, 2026-11-20)
+        new[]
+        {
+            "Welcome to my cycle shop, sales and repairs! Business is good since the racers started training at the Dome of the Slate. They're in here for parts every week.",
+            "Bienvenue dans ma boutique de vélos, vente et réparation ! Les affaires marchent bien depuis que les coureurs s'entraînent au Dôme de l'Ardoise. Ils viennent chercher des pièces toutes les semaines.",
+            "Willkommen in meinem Fahrradladen, Verkauf und Reparatur! Das Geschäft läuft gut, seit die Rennfahrer am Dom des Schiefers trainieren. Sie holen jede Woche Ersatzteile bei mir.",
+            "¡Bienvenido a mi tienda de bicicletas, venta y reparación! El negocio va bien desde que los corredores entrenan en la Cúpula de la Pizarra. Vienen a por piezas cada semana.",
+            "Benvenuto nel mio negozio di biciclette, vendita e riparazioni! Gli affari vanno bene da quando i corridori si allenano alla Cupola dell'Ardesia. Vengono qui a prendere pezzi ogni settimana.",
+            "Bem-vindo à minha loja de bicicletas, venda e reparação! O negócio vai bem desde que os ciclistas começaram a treinar na Cúpula da Ardósia. Vêm cá buscar peças todas as semanas.",
+        },
+        new[]
+        {
+            "Fancy one of my bikes?",
+            "Un de mes vélos te ferait envie ?",
+            "Wie wäre es mit einem meiner Räder?",
+            "¿Te apetece una de mis bicis?",
+            "Ti piacerebbe una delle mie bici?",
+            "Apetece-te uma das minhas bicicletas?",
+        },
+        new[]
+        {
+            "The town bike, 1,000 kashes",
+            "Le vélo de ville, 1 000 kashes",
+            "Das Stadtrad, 1.000 Kashes",
+            "La bici de paseo, 1.000 kashes",
+            "La bici da città, 1.000 kashes",
+            "A bicicleta de cidade, 1000 kashes",
+        },
+        new[]
+        {
+            "The racing bike, 2,000 kashes",
+            "Le vélo de course, 2 000 kashes",
+            "Das Rennrad, 2.000 Kashes",
+            "La bici de carreras, 2.000 kashes",
+            "La bici da corsa, 2.000 kashes",
+            "A bicicleta de corrida, 2000 kashes",
+        },
+        new[]
+        {
+            "The champion's bike, 5,000 kashes",
+            "Le vélo du champion, 5 000 kashes",
+            "Das Meisterrad, 5.000 Kashes",
+            "La bici del campeón, 5.000 kashes",
+            "La bici del campione, 5.000 kashes",
+            "A bicicleta do campeão, 5000 kashes",
+        },
+        new[]
+        {
+            "Just looking, thanks",
+            "Je regarde seulement, merci",
+            "Ich schaue nur, danke",
+            "Solo estoy mirando, gracias",
+            "Sto solo guardando, grazie",
+            "Estou só a ver, obrigado",
+        },
+        new[]
+        {
+            "I'm afraid you can't afford that one. Come back when you've saved up!",
+            "J'ai bien peur que tu n'aies pas les moyens. Reviens quand tu auras économisé !",
+            "Das kannst du dir leider nicht leisten. Komm wieder, wenn du gespart hast!",
+            "Me temo que no te lo puedes permitir. ¡Vuelve cuando hayas ahorrado!",
+            "Temo che non te la possa permettere. Torna quando avrai risparmiato!",
+            "Receio que não tenhas dinheiro para essa. Volta quando tiveres poupado!",
+        },
+        new[]
+        {
+            "Take your time, have a look around.",
+            "Prends ton temps, jette un coup d'œil.",
+            "Lass dir Zeit, sieh dich ruhig um.",
+            "Tómate tu tiempo, echa un vistazo.",
+            "Fai con calma, dai pure un'occhiata.",
+            "Com calma, dá uma vista de olhos.",
+        },
+        // (the Hoverboard left behind in the shop: the owner's story of it and his price, Twinsen's two answers, his three replies)
+        new[]
+        {
+            "Ah, that old hoverboard? One of my customers left it here ages ago, he said he didn't want it any more. I haven't had the heart to throw it away.",
+            "Ah, ce vieil hoverboard ? Un de mes clients l'a laissé ici il y a une éternité, il disait qu'il n'en voulait plus. Je n'ai pas eu le cœur de le jeter.",
+            "Ach, das alte Hoverboard? Ein Kunde hat es vor Ewigkeiten hier gelassen, er sagte, er wolle es nicht mehr. Ich hatte nicht das Herz, es wegzuwerfen.",
+            "Ah, ¿ese viejo hoverboard? Uno de mis clientes lo dejó aquí hace siglos, dijo que ya no lo quería. No he tenido valor para tirarlo.",
+            "Ah, quel vecchio hoverboard? Un mio cliente l'ha lasciato qui secoli fa, diceva che non lo voleva più. Non ho avuto il cuore di buttarlo.",
+            "Ah, esse hoverboard velho? Um cliente meu deixou-o cá há séculos, disse que já não o queria. Não tive coragem de o deitar fora.",
+        },
+        new[]
+        {
+            "Buy it for 50 kashes",
+            "L'acheter pour 50 kashes",
+            "Für 50 Kashes kaufen",
+            "Comprarlo por 50 kashes",
+            "Comprarlo per 50 kashes",
+            "Comprá-lo por 50 kashes",
+        },
+        new[]
+        {
+            "No thanks",
+            "Non merci",
+            "Nein danke",
+            "No, gracias",
+            "No, grazie",
+            "Não, obrigado",
+        },
+        new[]
+        {
+            "There you go, it's yours. Look after it!",
+            "Et voilà, il est à toi. Prends-en soin !",
+            "Bitte schön, es gehört dir. Pass gut darauf auf!",
+            "Aquí tienes, es tuyo. ¡Cuídalo bien!",
+            "Ecco qua, è tuo. Trattalo bene!",
+            "Aqui tens, é teu. Trata bem dele!",
+        },
+        new[]
+        {
+            "You haven't got 50 kashes, I'm afraid. Come back when you have.",
+            "Tu n'as pas 50 kashes, j'en ai peur. Reviens quand tu les auras.",
+            "Du hast leider keine 50 Kashes. Komm wieder, wenn du sie hast.",
+            "Me temo que no tienes 50 kashes. Vuelve cuando los tengas.",
+            "Temo che tu non abbia 50 kashes. Torna quando li avrai.",
+            "Receio que não tenhas 50 kashes. Volta quando os tiveres.",
+        },
+        new[]
+        {
+            "It'll be here if you change your mind.",
+            "Il sera là si tu changes d'avis.",
+            "Es bleibt hier, falls du es dir anders überlegst.",
+            "Estará aquí si cambias de idea.",
+            "Resterà qui se cambi idea.",
+            "Fica aqui se mudares de ideias.",
+        },
+        // (his price, the question the yes and no answer: short -- a long one paged before the answers)
+        new[]
+        {
+            "You can have it for 50 kashes. What do you say?",
+            "Tu peux l'avoir pour 50 kashes. Qu'en dis-tu ?",
+            "Du kannst es für 50 Kashes haben. Was meinst du?",
+            "Te lo dejo por 50 kashes. ¿Qué me dices?",
+            "Te lo do per 50 kashes. Che ne dici?",
+            "Podes ficar com ele por 50 kashes. Que me dizes?",
+        },
     };
 
     // Citadel Island's lines added later (after the darts players': CitadelLaterId), so that none before them move
@@ -1351,6 +1549,7 @@ void comportement_1()
         TraluBackGate(p);
         SecretChamber(p);
         Pyjamas(p);
+        CycleShop(p);
         Lighthouse(p);
         LighthouseClimb(p);
         HiddenPages(p);
@@ -1419,6 +1618,62 @@ void comportement_1()
                 message({p.Say(ChapterLine.DinoFlySun)});
             }}
         }}");
+        DinoFlyFlights(p);
+    }
+
+    // The Dino-Fly flies once the rain has cleared and the town circuit is won (the user, 2026-11-20: "After the rain has cleared and Twinsen
+    // has won the citabau.ile race let's have him be able to fly on dinofly"): its own flights, the game's, from the yard (49) to the Desert's
+    // landing (350 -> scene 55) and the island across from the hacienda (354 -> scene 73), and from them back or on. The game has it fly once
+    // it's cured (variable 42, Ker'aooc's remedy, which the story never gives): the yard's Dino-Fly reads DinoFlies instead, set as the
+    // scene starts once chapter 2 (the rain over) and the town circuit won (WonVar) -- its place home (variable 94, 1) if it has none yet.
+    // The island across from the hacienda offered without the game's variable 121 (its discovery); not the Dome of the Slate (351, and the
+    // Desert's 296): it waits for the velodrome -- the user, 2026-11-20, "Let's wait until we turn the dome of the slate into a velodrome
+    // before we give dinofly the option of flying him there".
+    internal const int DinoFlies = 274;
+    private const int DesertDinoLanding = 55, HaciendaIslandLanding = 73, DinoFlyMenuActor = 3;
+    private static void DinoFlyFlights(StoryParts p)
+    {
+        p.Edit(CarScene, "the Dino-Fly flies once the rain is over and the town circuit won: to the Desert and the island across from the hacienda", _ => scripts =>
+        {
+            var text = scripts.GetText(DinoFlyActor, ScriptKind.Life);
+            text = text.Replace("var_game(42)", $"var_game({DinoFlies})");
+            text = Loose(text, "void comportement_0()\n{", $@"void comportement_0()
+{{
+    if (0 == var_game({DinoFlies}))
+    {{
+        if (0 != var_game(42))
+        {{
+            set_var_game({DinoFlies}, 1);
+        }}
+        else if (2 <= chapter() && 0 < var_game({RaceTrackStory.WonVar}))
+        {{
+            set_var_game({DinoFlies}, 1);
+        }}
+        if (1 == var_game({DinoFlies}) && 0 == var_game(94))
+        {{
+            set_var_game(94, 1);
+        }}
+    }}");
+            text = Loose(text, "if (1 == var_game(121))\n{\nadd_choice(354);\n}", "add_choice(354);");
+            text = Loose(text, "add_choice(351);", "");
+            scripts.SetText(DinoFlyActor, ScriptKind.Life, text);
+            // (Twinsen's side of it, his own script: the Dino-Fly well, his Action by it starts its question -- the game's 100/101, not "it's
+            // sick", 333)
+            scripts.SetText(0, ScriptKind.Life, scripts.GetText(0, ScriptKind.Life).Replace("var_game(42)", $"var_game({DinoFlies})"));
+        });
+        p.Edit(DesertDinoLanding, "the Desert's Dino-Fly: back to Citadel or on to the island across from the hacienda, not the Dome yet", _ => scripts =>
+        {
+            var text = scripts.GetText(DinoFlyMenuActor, ScriptKind.Life);
+            text = Loose(text, "add_choice(296);", "");
+            text = Loose(text, "if (1 == var_game(121))\n{\nadd_choice(298);\n}", "add_choice(298);");
+            scripts.SetText(DinoFlyMenuActor, ScriptKind.Life, text);
+        });
+        p.Edit(HaciendaIslandLanding, "the Dino-Fly on the island across from the hacienda: back to Citadel or on to the oasis, not the Dome yet", _ => scripts =>
+        {
+            var text = scripts.GetText(DinoFlyMenuActor, ScriptKind.Life);
+            text = Loose(text, "add_choice(296);", "");
+            scripts.SetText(DinoFlyMenuActor, ScriptKind.Life, text);
+        });
     }
 
     // ---- the pharmacy's umbrella snatch (scene 22): Twinsen held till the customer is out -------------------------------------------
@@ -2664,20 +2919,46 @@ void comportement_{HeroWatching}()
         // 15 kashes, and chapter 1's Twinsen has 10 (Tim's for the umbrella); in chapter 2 the Cup's purse pays the museum or the pharmacy's
         // gallic acid, not both (the scripted playthrough by inputs, 2026-11-07: he stood against the shut door). The Cup's winner, on the
         // museum's own wall, is let in free: "yes" to the ticket opens the door and takes nothing.
-        p.Edit(Museum, "the museum's ticket free in the story: the hall's door opens without the 15 kashes", _ => scripts =>
+        // (since 2026-11-21 the grobo at the door asks for a password instead, and any answer does -- the museum always free, any chapter: the
+        // user, 2026-11-20, "when Twinsen talks to him he says 'What's the password?' ... If Twinsen responds with one of the first two
+        // answers the grobo should trigger the door and tell Twinsen 'Go ahead, Miss. Bloop is in the next room', if Twinsen answers 'Code
+        // Operation: Green Spoon' let's have the grobo laugh, and say 'That's funny, welcome to the free museum dedicated to the world famous
+        // Twinsen', and then trigger the door. The museum should always be free now". The game's talk -- its greeting, its ticket and
+        // price, the yes/no -- replaced whole; the door opened as the ticket opened it, set_track(label_10). Let in already: the way on.)
+        p.Edit(Museum, "the museum's door grobo: \"What's the password?\", any of Twinsen's three answers lets him in, free", _ => scripts =>
         {
             var guard = scripts.GetText(2, ScriptKind.Life);
-            scripts.SetText(2, ScriptKind.Life, Loose(guard, "if (15 <= nb_gold_pieces())\n{", @"if (0 < chapter())
-                {
-                    set_var_cube(8, 1);
-                    set_var_cube(7, 1);
-                    save_comportement();
-                    set_dir(NO_MOVE);
-                    set_track(label_10);
-                    set_comportement(comportement_2);
-                }
-                else if (15 <= nb_gold_pieces())
-                {"));
+            var talk = new System.Text.RegularExpressions.Regex(@"set_anim_dial\(166\);.*?set_var_cube\(1, 0\);", System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (!talk.IsMatch(guard)) throw new InvalidOperationException("the museum guard's talk isn't the game's");
+            int antennas = p.Say(ChapterLine.PasswordAntennas), santa = p.Say(ChapterLine.PasswordSanta), spoon = p.Say(ChapterLine.PasswordSpoon);
+            scripts.SetText(2, ScriptKind.Life, talk.Replace(guard, $@"set_anim_dial(166);
+        if (0 == var_cube(7) && 0 == var_cube(9))
+        {{
+            add_choice({antennas});
+            add_choice({santa});
+            add_choice({spoon});
+            ask_choice({p.Say(ChapterLine.MuseumPassword)});
+            if ({spoon} == choice())
+            {{
+                message({p.Say(ChapterLine.MuseumFunny)});
+            }}
+            else
+            {{
+                message({p.Say(ChapterLine.MuseumGoAhead)});
+            }}
+            set_var_cube(8, 1);
+            set_var_cube(7, 1);
+            save_comportement();
+            set_dir(NO_MOVE);
+            set_track(label_10);
+            set_comportement(comportement_2);
+        }}
+        else
+        {{
+            message({p.Say(ChapterLine.MuseumGoAhead)});
+            set_track(label_0);
+        }}
+        set_var_cube(1, 0);", 1));
         });
 
         // the museum's security room (upstairs, its door the game's actor 5 -- opened by the red button on its desk, actor 6, when that is hit):
