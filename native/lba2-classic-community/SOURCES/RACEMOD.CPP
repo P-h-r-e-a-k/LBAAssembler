@@ -11224,6 +11224,15 @@ static void FallenBelow(S32 now) {
 // his car: he came back from it on foot and the race stood still (the super jet-pack over Mosquibees Island's plateau's edge, 2026-10-16).
 S32 RaceMod_OffIsland(void) {
     if (FootRescue("off the island's edge")) return 1;
+    // (the hovercraft out to sea past the island's last cube: held at its edge -- the user, 2026-11-21, "Twinsen seems to be getting
+    // blocked from our new hydroglider going lots of places. I'm currently unable to get back to shore": the game sent it into the phantom
+    // cube (94), where the game meant him to drown; the hovercraft held on the sea, he sat there in an empty cube, held at its corner, no
+    // way back)
+    if (s_hoverOn && Comportement == C_BUGGY) {
+        static U32 s_hoverEdgeSaid = 0;
+        if (TimerRefHR - s_hoverEdgeSaid > 5000) { Log_Info("[racemod] hovercraft: at the island's edge -- held (no phantom cube)"); s_hoverEdgeSaid = TimerRefHR; }
+        return 1;
+    }
     if (RaceMod_Active() && Comportement == C_BUGGY && s_ghostWatch) return 1;   // (a ghost played back: held, GhostWatch places it)
     if (!RaceMod_Active() || Comportement != C_BUGGY || !RescueOn() || !Guide()) return 0;
     if (!s_rescue) Log_Info("[racemod] off the island's edge: back on the road");
@@ -18001,6 +18010,16 @@ void RaceMod_EdgeCross(void) {
     }
     if (qx == CurrentCubeX && qz == CurrentCubeY) return;
     int scene = FileCubeScene(qx, qz);
+    // (the hovercraft at sea: the island's own scenes too (CubeScene) -- the story's race file names none for the Desert, so it was held at
+    // every cube edge the game has no zone over, out on the water (the user, 2026-11-21: "getting blocked from our new hydroglider going
+    // lots of places"); at a corner with no scene across it, across the one edge that has)
+    if (scene < 0 && s_hoverOn) {
+        scene = CubeScene(qx, qz);
+        if (scene < 0 && heldX && heldZ) {
+            if ((scene = CubeScene(qx, CurrentCubeY)) >= 0) { qz = CurrentCubeY; z = hero->Obj.Z; }
+            else if ((scene = CubeScene(CurrentCubeX, qz)) >= 0) { qx = CurrentCubeX; x = hero->Obj.X; }
+        }
+    }
     if (scene < 0) return;
     // (only where the car can be on the other side: a cube change puts it half a cell inside the next cube, and a raised road whose rail
     // keeps it short of that took it over and its rail straight back -- a scene change a frame, along the Emerald Moon's straight, its rail
