@@ -98,7 +98,8 @@ typedef struct GpuVertex {
     U16 TexOffset; ///< texture window within the atlas page: (row << 8) + column, added after the repeat mask (ObjPtrMap + offset)
     U8 Mode;       ///< the poly mode (GpuDrawParams.polyMode 0-5)
     U8 Flat;       ///< the colour byte (flatColor)
-    U8 Flags;      ///< bit 0 chroma key; bits 1-2 the CLUT row: 0 from the light, 1 the batch's base row, 2 base + Flat; bits 3-4 alphaMode
+    U8 Flags;      ///< bit 0 chroma key; bits 1-2 the CLUT row: 0 from the light, 1 the batch's base row, 2 base + Flat; bits 3-4 alphaMode;
+                   ///< bit 5 a fog filler's Gouraud: each pixel's index through the CLUT row TexOffset carries; bit 6 a dithered Gouraud type
     U8 Slot;       ///< the atlas slot holding the polygon's page (a backend with AtlasSlots; 0 otherwise)
 } GpuVertex;
 

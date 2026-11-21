@@ -400,6 +400,18 @@ static const char *s_clutFragSrc =
     /* Look up a palette index through the CLUT, returning the final RGBA
        color.  `palIdx` is the raw atlas texel (palette index) and
        `gouraudRow` the CLUT row selected by the gouraud intensity. */
+    /* A 4x4 ordered dither's threshold at this pixel, 0.5/16 .. 15.5/16 (mean 0.5): the dithered Gouraud types' row is
+       floor(light row + it), whose mean is the light row itself -- as the software's fillers, carrying the light's fraction from
+       pixel to pixel, give (GpuVertex.Flags bit 6). */
+    "float bayer2(vec2 p) {\n"
+    "    float x = mod(p.x, 2.0);\n"
+    "    float y = mod(p.y, 2.0);\n"
+    "    return 2.0 * abs(x - y) + y;\n"
+    "}\n"
+    "float ditherAt(vec2 frag) {\n"
+    "    vec2 f = floor(frag);\n"
+    "    return (4.0 * bayer2(f) + bayer2(floor(f / 2.0)) + 0.5) / 16.0;\n"
+    "}\n"
     "vec4 clutLookup(float palIdx, float gouraudRow) {\n"
     "    vec2 cuv = vec2((palIdx + 0.5) / 256.0,\n"
     "                     (gouraudRow + 0.5) / 256.0);\n"
@@ -450,6 +462,8 @@ static const char *s_clutFragSrc =
     "    int alphaMode = uAlphaMode;\n"
     "    vec2 texOff = vec2(0.0, 0.0);\n"
     "    float slot = 0.0;\n"
+    "    float lightAdd = 0.0;\n" /* (added to the light row before its floor: 0 the plain types' rounding, ditherAt the dithered) */
+    "    float fogRow = -1.0;\n"
     "    if (uPerVertex != 0) {\n"
     "        polyMode = int(floor(vMode + 0.5));\n"
     "        flatColor = floor(vFlat + 0.5);\n"
@@ -461,7 +475,13 @@ static const char *s_clutFragSrc =
     "        float to = floor(vTexOffset + 0.5);\n"
     "        texOff = vec2(mod(to, 256.0), floor(to / 256.0));\n"
     "        slot = floor(vSlot + 0.5);\n"
+    /* bit 5: a Gouraud or texel-is-index polygon of the fog fillers -- each pixel's palette index through the current CLUT row, which
+       a Gouraud one carries in its texture window, a texel-is-index one (types 8/12, no light of their own) in its light
+       (GpuRenderer_RenderTriangleList); bit 6: a dithered Gouraud type (Common_PolyState) */
+    "        if (mod(floor(fl / 32.0), 2.0) > 0.5) fogRow = polyMode == 4 ? floor(vLight + 0.5) : to;\n"
+    "        if (mod(floor(fl / 64.0), 2.0) > 0.5) lightAdd = ditherAt(gl_FragCoord.xy);\n"
     "    }\n"
+    "    float lightRow = floor((vLight + 128.0) / 256.0 + lightAdd);\n"
     /* Select perspective-corrected or affine texture/Z varyings.
        uPerspCorrect is 1 for Z-textured types (16-24), where the SW
        rasterizer divides MapU/MapV/ZBuf by W = 1/Z; types 8-15
@@ -476,7 +496,7 @@ static const char *s_clutFragSrc =
     /* SW init: Fill_CurGouraudMin = (Pt_Light << 8) + 0x8000.
         The +128 (0x80) rounding bias shifts the CLUT row by 1 in some
         cases — same bias applied in polyMode 2. */
-    "        float gouraudRow = floor((vLight + 128.0) / 256.0) + uCLUTBaseRow;\n"
+    "        float gouraudRow = lightRow + uCLUTBaseRow;\n"
     /* SW flat-textured fillers (Filler_TextureFlat / Filler_TextureZFlat)
        index the CLUT at the batch base row and never read Pt_Light, so
        flatRow >= 0 pins the row for those types. */
@@ -509,7 +529,12 @@ static const char *s_clutFragSrc =
        SW init: Fill_CurGouraudMin = (Pt_Light << 8) + 0x8000 + (color << 16).
        The +0x8000 rounding bias means the palette index is
        (color + (Pt_Light + 128) / 256), not (color + Pt_Light / 256). */
-    "        float palIdx = mod(flatColor + floor((vLight + 128.0) / 256.0), 256.0);\n"
+    "        float palIdx = mod(flatColor + lightRow, 256.0);\n"
+    /* (the fog fillers' Gouraud: the index through the current CLUT row, Fill_Logical_Palette -- Filler_GouraudFog) */
+    "        if (fogRow >= 0.0) {\n"
+    "            palIdx = texture2D(uCLUT, vec2((palIdx + 0.5) / 256.0, (fogRow + 0.5) / 256.0)).r * 255.0;\n"
+    "            palIdx = floor(palIdx + 0.5);\n"
+    "        }\n"
     "        color = texture2D(uPalette,\n"
     "                 vec2((palIdx + 0.5) / 256.0, 0.5));\n"
     "    } else if (polyMode == 4) {\n"
@@ -528,6 +553,11 @@ static const char *s_clutFragSrc =
     /* Chroma key: atlas texel 0 = transparent.
        Only INCRUST types have chroma key. */
     "        if (chromaKey != 0 && palIdx < 0.5) discard;\n"
+    /* (the fog fillers' texel through the current CLUT row, Fill_Logical_Palette -- Filler_TextureFog) */
+    "        if (fogRow >= 0.0) {\n"
+    "            palIdx = texture2D(uCLUT, vec2((floor(palIdx + 0.5) + 0.5) / 256.0, (fogRow + 0.5) / 256.0)).r * 255.0;\n"
+    "            palIdx = floor(palIdx + 0.5);\n"
+    "        }\n"
     "        color = texture2D(uPalette,\n"
     "                 vec2((palIdx + 0.5) / 256.0, 0.5));\n"
     "    } else if (polyMode == 5) {\n"
@@ -600,8 +630,8 @@ static const char *s_clutFragSrc =
     "        color.a = result / 255.0;\n"
     "    } else {\n"
     /* Gouraud table (types 6/7): CLUT lookup, color = column.
-       Same +128 rounding bias as polyMode 0. */
-    "        float gouraudRow = floor((vLight + 128.0) / 256.0) + uCLUTBaseRow;\n"
+       Same +128 rounding bias as polyMode 0 (and the same dither, type 7). */
+    "        float gouraudRow = lightRow + uCLUTBaseRow;\n"
     "        vec2 clutUV = vec2((flatColor + 0.5) / 256.0,\n"
     "                           (gouraudRow + 0.5) / 256.0);\n"
     "        float palIdx = texture2D(uCLUT, clutUV).r * 255.0;\n"

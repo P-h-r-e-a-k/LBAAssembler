@@ -157,6 +157,7 @@ static void cmd_cube(int argc, const char *argv[]) {
     }
     Console_Close();
     NewCube = target;
+    { extern S32 ConsoleCubeJump; ConsoleCubeJump = TRUE; } // (its palette shown on arrival: OBJECT.CPP)
     /* A jump leaves whatever cutscene the old scene was in (a harness's `cube` straight after boot lands mid-way through the
        new game's opening, whose cinema_mode(1) then stayed on for the whole run: letterbox bars, and the Auto camera never ran
        -- PERSO.CPP runs it only outside CinemaMode). As the --load path does (CONTROL.CPP). */

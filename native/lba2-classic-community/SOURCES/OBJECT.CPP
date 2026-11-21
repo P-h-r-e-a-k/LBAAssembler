@@ -182,6 +182,8 @@ S32 BetaUsedObj = 0;
 S32 PersoFlashTimer = 0;
 
 S32 ShadowYHero;
+// (the scene change under way came from the console's `cube`: its palette shown even outside to outside -- CONSOLE_CMD.CPP cmd_cube)
+S32 ConsoleCubeJump = FALSE;
 
 T_COMPORTEMENT ListComportement[MAX_COMPORTEMENTS] = {
     {0, -1, NULL, CF_STANDARD},   // Normal
@@ -1485,8 +1487,14 @@ void ChangeCube() {
             FlagFade = TRUE;
         } else if (FlagBlackPal AND !FlagFade) {
             FlagPal = TRUE;
+        } else if (ConsoleCubeJump AND !FlagFade) {
+            // (a console `cube` jump, outside to outside: no fade, so the screen kept the island before's palette -- the test
+            // harness's storm Citadel was shown in the normal one, OpenGL's pictures with it, the software's saved with PtrPal,
+            // 2026-11-21. The game's own changes of island pass through a fade.)
+            FlagPal = TRUE;
         }
     }
+    ConsoleCubeJump = FALSE;
 
     ManageSystem(); // for streaming
 

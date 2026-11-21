@@ -210,6 +210,13 @@ void Fill_Poly_SetHook(FillPolyHookFn hook);
    equivalence tests see. */
 void Fill_Poly_Set3DPass(S32 open);
 
+/* The fill hook alone (OpenGL): non-zero when the GPU took the polygon, 0 when there is no hook or it declined -- the caller then
+   draws its own way. A body's spheres and lines (AFF_OBJ.CPP) go to the GPU as polygons with the body's other polygons, in its own
+   sorted order; drawn in software they landed in the Log, laid over the whole GPU picture: a planter's soil (a sphere) over its
+   flowers, a marshal's lines through the pole in front of her (2026-11-21). */
+S32 Fill_Poly_GpuOnly(S32 Type_Poly, S32 Color_Poly, S32 Nb_Points,
+                      Struc_Point *Ptr_Points);
+
 extern void Fill_Sphere(S32 Type_Sphere, S32 Color_Sphere, S32 Centre_X,
                         S32 Centre_Y, S32 Rayon, S32 zBufferValue); ///< Do Not call from C
 

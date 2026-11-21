@@ -2070,9 +2070,16 @@ static void Common_PolyState(S32 type, S32 color, U8 *mode, U8 *flags) {
         }
     }
     const S32 chroma = (type >= POLY_TEXTURE && type <= POLY_TEXTURE_Z_FOG && (type & 4)) ? 1 : 0;
+    /* The dithered Gouraud types, as the software's fillers dither them: 5 and 7 in every filler bank, the textured 11 and 15 only
+       in the plain and fog banks (Z-buffered and NZW take the plain Gouraud texture fillers), 19 and 23 never (Jmp_TextureZGouraud).
+       Their rows carry the light's fraction from pixel to pixel, so a slope of light comes out smooth; GL rounded each pixel's light
+       to a row and drew hard bands -- the trees, and the ground's darker footprint under a decor (a Citadel planter's, 2026-11-21). */
+    const S32 dither = (type == 5 || type == 7 ||
+                        ((type == POLY_TEXTURE_DITHER || type == POLY_TEXTURE_INCRUST_DITHER) && !Fill_Flag_ZBuffer && !Fill_Flag_NZW))
+                           ? 1 : 0;
     (void)color;
     *mode = (U8)m;
-    *flags = (U8)(chroma | (rowKind << 1) | (alpha << 3));
+    *flags = (U8)(chroma | (rowKind << 1) | (alpha << 3) | (dither << 6));
 }
 
 static void Common_PackVertex(GpuVertex *dst, const Struc_Point *src,
@@ -2226,6 +2233,28 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
     const U16 polyRepMask = (U16)(RepMask & 0xFFFF);
     U8 polyMode, polyFlags;
     Common_PolyState(typePoly, colorPoly, &polyMode, &polyFlags);
+    /* The fog fillers' palette row (Fill_Flag_Fog: exterior bodies, decors, the terrain's objects): the solid, flat and trame types
+       take their colour through the current CLUT row -- Fill_Logical_Palette, PalLevel + 16 * the fog level (Jmp_SolidFog,
+       Jmp_TrameFog and their Z-buffered and NZW kin) -- and the Gouraud types each pixel's (Filler_GouraudFog, Filler_DitherFog). GL drew
+       the palette's own colours: the storm's darker Citadel came out bright in its flat and Gouraud parts (a white banner, the
+       kerbs, Twinsen's shirt) and far bodies stood unfogged. The flat ones' colour is looked up here; the Gouraud ones carry the row in
+       their texture window, unused by them, and flag bit 5 (the shader looks each pixel up); so do the texel-is-index ones (types 8
+       and 12, Filler_TextureFog), in their light, which they have no use for. */
+    U8 polyFlat = (U8)(colorPoly & 0xFF);
+    U16 polyTexOffset = texOffset;
+    S32 polyLightRow = -1;
+    if (Fill_Flag_Fog && PtrTruePal != NULL && PtrCLUTFog != NULL) {
+        const U16 truePalRow = (U16)(((const U8 *)PtrTruePal - (const U8 *)PtrCLUTFog) >> 8);
+        if (typePoly == 0 || typePoly == 1 || typePoly == 3) {
+            polyFlat = Fill_Logical_Palette[polyFlat];
+        } else if (typePoly == 4 || typePoly == 5) {
+            polyFlags |= 0x20;
+            polyTexOffset = truePalRow;
+        } else if (typePoly == POLY_TEXTURE || typePoly == POLY_TEXTURE_INCRUST) {
+            polyFlags |= 0x20;
+            polyLightRow = truePalRow;
+        }
+    }
     for (S32 i = 1; i < nbPoints - 1; i++) {
         if (s_batchVertCount + 3 > BATCH_MAX_VERTS) {
             GpuRenderer_FlushBatch();
@@ -2235,9 +2264,12 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
         Common_PackVertex(dst + 1, &ptrPoints[i], polyRepMask);
         Common_PackVertex(dst + 2, &ptrPoints[i + 1], polyRepMask);
         for (S32 k = 0; k < 3; k++) {
-            dst[k].TexOffset = texOffset;
+            dst[k].TexOffset = polyTexOffset;
+            if (polyLightRow >= 0) {
+                dst[k].Light = (U16)polyLightRow;
+            }
             dst[k].Mode = polyMode;
-            dst[k].Flat = (U8)(colorPoly & 0xFF);
+            dst[k].Flat = polyFlat;
             dst[k].Flags = polyFlags;
             dst[k].Slot = atlasSlot;
         }

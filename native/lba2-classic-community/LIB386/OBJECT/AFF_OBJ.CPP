@@ -1103,6 +1103,70 @@ S32 Quad_EnvTexture_Gouraud(U32 typePoly, void *poly) {
     return Fill_Poly(typePoly >> 2, 0, 4, ListFillPoly);
 }
 
+// *************************************
+// *** SPHERES AND LINES ON THE GPU ***
+// *************************************
+// OpenGL drew a body's polygons into its own picture but its spheres and lines in software, into the Log, which is laid over the
+// whole GPU picture: whatever stood in front of them -- the body's own polygons sorted after them, any body or decor nearer -- never
+// hid them (a Citadel planter's soil, a sphere, over its flowers; a flag marshal's lines through the pole before her; Twinsen's
+// ponytail through the digger's cab, 2026-11-20/21). Each now goes to the GPU as a polygon, flat, in its own place in the body's
+// sorted list, with the sphere's depth or the line's ends' (POLY.H Fill_Poly_GpuOnly). No GPU, or one that declines it (menus'
+// models, the holomap): the software draws it as it always did.
+
+// (the depth a sphere's or line's polygon carries: the Z-buffered decors' and the 3D pass's bodies', as GetZO3/GetZO4 give theirs)
+static inline S32 GpuDepthWanted(void) {
+    return (Fill_Flag_ZBuffer || Fill_Flag_3DPass) && TypeProj == TYPE_3D;
+}
+
+// (a body's sphere or line of the 3D pass, tested against the decors' depth: at the nearest its body reaches. The software hides a
+// body behind a decor by its box, never a part of it: a part reaching into a wall at the body's back -- Twinsen's bun, his back to the
+// wall -- stays drawn while the body stands before the wall, and one of a body wholly behind a pole -- a marshal's lines -- is hidden.
+// BodyNearDepth: EntityCreation's, of the body being drawn.)
+static S32 BodyNearDepth = 0x7FFFFFFF;
+static inline U16 BodyPartDepth(S32 depth) {
+    return ZBufferDepth(depth < BodyNearDepth ? depth : BodyNearDepth);
+}
+
+static S32 SphereOnGpu(S32 type, S32 colour, S32 cx, S32 cy, S32 radius, U16 zo) {
+    // (a sphere off any sane screen, or of no size: the software's, which clips it -- or draws nothing)
+    if (radius <= 0 || radius > 8192 || cx < -16384 || cx > 16384 || cy < -16384 || cy > 16384)
+        return FALSE;
+    // the disc Fill_Sphere fills -- spans [cx - r, cx + r) on rows cy - r to cy + r -- as a polygon of 8 to 32 corners, by its size
+    Struc_Point pts[32];
+    const S32 n = radius < 4 ? 8 : radius < 16 ? 16 : radius < 64 ? 24 : 32;
+    memset(pts, 0, sizeof(pts));
+    for (S32 i = 0; i < n; i++) {
+        const double a = 6.283185307179586 * (double)i / (double)n;
+        pts[i].Pt_XE = (S16)(cx + (S32)floor((double)radius * cos(a) + 0.5));
+        pts[i].Pt_YE = (S16)(cy + (S32)floor((double)radius * sin(a) + 0.5));
+        pts[i].Pt_ZO = zo;
+    }
+    // (type 2 the transparent sphere -- Sph_Line_Transp's bank swap, as a transparent polygon's; any other a flat colour)
+    return Fill_Poly_GpuOnly(type == 2 ? 2 : 1, colour, n, pts);
+}
+
+static S32 LineOnGpu(S32 x0, S32 y0, S32 x1, S32 y1, S32 colour, U16 z0, U16 z1) {
+    if (x0 < -16384 || x0 > 16384 || y0 < -16384 || y0 > 16384 || x1 < -16384 || x1 > 16384 || y1 < -16384 || y1 > 16384)
+        return FALSE;
+    // one pixel thick, as Line_A draws it: a thin quad along the line, one pixel across its minor axis, its last pixel in
+    Struc_Point pts[4];
+    memset(pts, 0, sizeof(pts));
+    const S32 dx = x1 > x0 ? x1 - x0 : x0 - x1;
+    const S32 dy = y1 > y0 ? y1 - y0 : y0 - y1;
+    if ((dx >= dy && x1 < x0) || (dx < dy && y1 < y0)) {
+        S32 t = x0; x0 = x1; x1 = t;
+        t = y0; y0 = y1; y1 = t;
+        const U16 tz = z0; z0 = z1; z1 = tz;
+    }
+    const S32 acrossX = dx >= dy ? 0 : 1, acrossY = dx >= dy ? 1 : 0;
+    if (dx >= dy) x1 += 1; else y1 += 1;
+    pts[0].Pt_XE = (S16)x0;             pts[0].Pt_YE = (S16)y0;             pts[0].Pt_ZO = z0;
+    pts[1].Pt_XE = (S16)x1;             pts[1].Pt_YE = (S16)y1;             pts[1].Pt_ZO = z1;
+    pts[2].Pt_XE = (S16)(x1 + acrossX); pts[2].Pt_YE = (S16)(y1 + acrossY); pts[2].Pt_ZO = z1;
+    pts[3].Pt_XE = (S16)(x0 + acrossX); pts[3].Pt_YE = (S16)(y0 + acrossY); pts[3].Pt_ZO = z0;
+    return Fill_Poly_GpuOnly(1, colour, 4, pts);
+}
+
 // ************
 // *** LINE ***
 // ************
@@ -1127,6 +1191,17 @@ S32 Line(U32 typePoly, void *poly) {
 
     if ((p1.X == -0x8000 && p1.Y == -0x8000) || (p2.X == -0x8000 && p2.Y == -0x8000)) {
         return 0;
+    }
+
+    // (on the GPU, its ends at the depths its polygons' corners would have -- GetZO3's -- the 3D pass's bodies too)
+    {
+        U16 g1 = (U16)z1, g2 = (U16)z2;
+        if (!Fill_Flag_ZBuffer && GpuDepthWanted()) {
+            g1 = BodyPartDepth(-Obj_ListRotatedPoints[line->P1].Z - PosZWr);
+            g2 = BodyPartDepth(-Obj_ListRotatedPoints[line->P2].Z - PosZWr);
+        }
+        if (LineOnGpu(p1.X, p1.Y, p2.X, p2.Y, line->Coul, g1, g2))
+            return 0;
     }
 
     Line_A(p1.X, p1.Y, p2.X, p2.Y, line->Coul, z1, z2);
@@ -1188,6 +1263,16 @@ S32 Sphere(U32 typePoly, void *poly) {
         T_OBJ_POINT rotatedP1 = Obj_ListRotatedPoints[sphere->P1];
         z = ZBufferDepth(-rotatedP1.Z - PosZWr);
     }
+    // (on the GPU: a Z-buffered decor's at its centre's depth, as Fill_Sphere writes it; a body's of the 3D pass at the nearest its
+    // body reaches (BodyPartDepth) -- a disc at the centre lost Twinsen's bun to the wall his back was to: SphereOnGpu)
+    {
+        U16 g = (U16)z;
+        if (!Fill_Flag_ZBuffer && GpuDepthWanted())
+            g = BodyPartDepth(-Obj_ListRotatedPoints[sphere->P1].Z - PosZWr - sphere->Rayon);
+        if (SphereOnGpu(sphere->Type, sphere->Coul, p1.X, p1.Y, radius, g))
+            return 0;
+    }
+
     // @@NoZBufSphere:
     Fill_Sphere(sphere->Type, sphere->Coul, p1.X, p1.Y, radius, z);
 
@@ -1245,6 +1330,14 @@ S32 Sphere_Transp(U32 typePoly, void *poly) {
     if (Fill_Flag_ZBuffer && TypeProj == TYPE_3D) {
         T_OBJ_POINT rotatedP1 = Obj_ListRotatedPoints[sphere->P1];
         z = ZBufferDepth(-rotatedP1.Z - PosZWr);
+    }
+
+    {
+        U16 g = (U16)z; // (as Sphere's: a body's at its front)
+        if (!Fill_Flag_ZBuffer && GpuDepthWanted())
+            g = BodyPartDepth(-Obj_ListRotatedPoints[sphere->P1].Z - PosZWr - sphere->Rayon);
+        if (SphereOnGpu(2, sphere->Coul, p1.X, p1.Y, radius, g))
+            return 0;
     }
 
     Fill_Sphere(2, sphere->Coul, p1.X, p1.Y, radius, z);
@@ -1719,6 +1812,16 @@ S32 EntityCreation(T_BODY_HEADER *body) {
             InsertTriangle(0, header, &currentPoly, &bodyOffset);
         } else {
             InsertTriangle(1, header, &currentPoly, &bodyOffset);
+        }
+    }
+
+    // (OpenGL: the nearest the body reaches, its spheres' and lines' depth against the decors -- BodyPartDepth. Only a body of the 3D
+    // pass that has any.)
+    BodyNearDepth = 0x7FFFFFFF;
+    if (Fill_Flag_3DPass && !Fill_Flag_ZBuffer && TypeProj == TYPE_3D && (lBody->NbLines != 0 || lBody->NbSpheres != 0)) {
+        for (S32 i = 0; i < body->NbPoints && i < MAX_NB_POINTS; i++) {
+            const S32 z = -(S32)Obj_ListRotatedPoints[i].Z - PosZWr;
+            if (z < BodyNearDepth) BodyNearDepth = z;
         }
     }
 
