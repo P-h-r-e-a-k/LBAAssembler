@@ -595,7 +595,11 @@ void comportement_2()
         foreach (var (scene, x0, zone) in new[] { (Bathroom, BathDoorX0, DoorZone), (Kitchen, KitchenDoorX0, DoorZone + 1) })
         {
             var opening = (x0 + 1) * 512;
-            houseModel.Zones.Add(new SceneZoneModel { Type = 2, Num = zone, X0 = opening, X1 = opening + 1023, Z0 = 512, Z1 = 512 + DoorFront, Y0 = FloorY - 100, Y1 = FloorY + 1500, Info = new int[8] });
+            // (the zone from the west jamb's cell too -- the user, 2026-11-21: "The door to the bathroom opened, he walked towards it, and as
+            // he did so the door closed again", Twinsen then stuck in that cell: the door slides 1,024 east as it opens, so before the west
+            // jamb he was out of the zone and over DoorFront from the door; it shut, its box his east side, the bedroom's wall lamp over the
+            // cell south of it (block 90, layers 13-14) his height's, the walls the rest. In the zone the door opens and stays open)
+            houseModel.Zones.Add(new SceneZoneModel { Type = 2, Num = zone, X0 = opening - 512, X1 = opening + 1023, Z0 = 512, Z1 = 512 + DoorFront, Y0 = FloorY - 100, Y1 = FloorY + 1500, Info = new int[8] });
             houseModel.Zones.Add(new SceneZoneModel
             {
                 Type = 0, Num = scene, X0 = opening, X1 = opening + 1023, Z0 = 0, Z1 = DoorDeep, Y0 = FloorY - 100, Y1 = FloorY + 1500,

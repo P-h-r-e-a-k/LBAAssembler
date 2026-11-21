@@ -19,13 +19,22 @@ namespace LBAAssembler.Terrain.Citadel;
 //     out to the street where the baggage claim's door did;
 //   - a back doorway on the west wall (ShopDoorway) through to the baggage claim's hall (scene 5), whose way out to the street comes back in
 //     here: the package centre and its hidden room behind it reached as before, through the shop;
-//   - the shop: its owner behind the counter (the race garage's mechanic, entity 30), three bikes for sale along the north wall, a fourth
-//     clamped on the repair stand in the middle of the floor, a wall of wheels, the old tyres by the door, and in the far corner the Hoverboard
-//     left behind, leaning on the wall.
+//   - the shop, Citadel Cycles (redesigned 2026-11-21 evening, after how high-end racing bike shops look -- CitadelProps.CycleShop): its
+//     owner behind the counter, the baggage claim's own clerk (the user: "let's have it staffed by the same NPC who staffed the storage
+//     place that it's replacing" -- scene 5's actor 9, a grobo, entity 33; he has left the hall: RaceTrackStory.CycleShop), the signed
+//     jerseys on the wall behind him; on the north wall the Hoverboard left behind leaning there, the shop's name (the wall only 2,304
+//     high: under it nothing taller than the tandem), the tandem, the racing bike hung up; the wall of wheels on the west wall by the
+//     corner; on the floor the champion's bike on its plinth under a lamp, the town bike on its stand by the door, the penny-farthing on
+//     its plinth along the front, the fitting bike on its trainer with a stand of saddles, the coffee bar and its stools at its end; the
+//     workshop by the back doorway -- the tool wall and bench, the repair stand with a racer's bike on it. Each bike and the jerseys and
+//     wheels: Action before it, its price tag or its plaque (RaceTrackStory.CycleShop, the hero's script);
+//   - outside, over the baggage claim's old sign on its door (CITADEL.OBL body 33's, scene 48), the shop's banner (the user: "a temporary
+//     shop banner across the old logo, so the old logo is still visible behind it").
 internal static class CitadelCycleShop
 {
     public const int Scene = 398, Island = 0;
-    private const int Shop = 14, Street = 48, Hall = 5, MechanicFrom = 46, Mechanic = 30;
+    private const int Shop = 14, Street = 48, Hall = 5, Clerk = 33;
+    public const int ClerkActor = 9;
     private const int Size = 64, Height = 25, FloorLayer = 3, Grow = 12, OldEast = 15, Front = 11;
     public const int East = OldEast + Grow, FloorY = (FloorLayer + 1) * 256;
     // the counter and its till (kept where the shop has them): cells x 4-8, z 4-8
@@ -37,25 +46,31 @@ internal static class CitadelCycleShop
     // inside: in from the street just inside the arch (its opening z 5-6), facing west; the back doorway's middle on the west wall's face,
     // and in from the hall before it, facing east
     public const int ArchZ = 6 * 512, InFromStreetX = (East - 2) * 512, BackDoorX = 512, BackDoorZ = 5 * 512 + 256, InFromHallX = BackDoorX + 1100;
-    // who stands where (scene units, the floor's): the owner behind the counter's till; the bikes for sale along the north wall, side on;
-    // the repair stand mid-floor with a bike on it; the wall of wheels on the north wall past the bikes; the Hoverboard against the north
-    // wall between the counter and the bikes, its back on the wall (in the north-west corner it stood over the owner's head)
+    // who stands where (scene units, the floor's; the walls' faces at x 512 and z 512): the owner behind the counter's till; the Hoverboard
+    // against the north wall past the counter, its back on the wall (in the north-west corner it stood over the owner's head)
     public static readonly (int X, int Z, int Beta) OwnerAt = (2688, 2384, 1024);
-    public static readonly (int X, int Z)[] BikesAt = { (12 * 512, 920), (15 * 512 + 256, 920), (18 * 512 + 512, 920) };
-    public static readonly (int X, int Z) StandAt = (19 * 512, 6 * 512);
-    public static readonly (int X, int Z) WheelsAt = (23 * 512 + 256, 512);
-    // (the shop's sign over the bikes, on the north wall; and a display of three more bikes across the middle of the floor, fronts to the
-    // door, each a little turned -- Twinsen's and Zoe's models in their colours, and the town bike again)
-    public static readonly (int X, int Z) SignAt = (15 * 512 + 256, 512);
-    public static readonly (int Generic, int X, int Z, int Beta)[] DisplayAt =
-    {
-        (CitadelProps.BikeTwinsen, 12 * 512, 6 * 512, 900), (CitadelProps.BikeZoe, 14 * 512 + 256, 6 * 512 + 128, 1024), (CitadelProps.ShopBikeRacing, 16 * 512 + 512, 6 * 512, 1150),
-    };
+    public static readonly (int X, int Z) BoardAt = (9 * 512 + 256, 512 + 16);
+    // the north wall: the jerseys behind the counter, the tandem (turned along the wall) under the shop's name -- its middle at SignX, as
+    // high as SignLowest or under the wall's top -- and the racing bike hung up past it; the wall of wheels on the west wall's face by the
+    // corner (turned to face +x)
+    public static readonly (int X, int Z) JerseysAt = (1742, 512), WheelsAt = (512, 1450);
+    public static readonly (int X, int Z) HungAt = (11500, 512 + (int)CitadelProps.HungOut), TandemAt = (8200, 512 + 330);
+    public const int SignX = 8200, SignLowest = 1600;
+    // the floor: the champion's bike on its plinth under a lamp, the town bike on its stand by the door, the penny-farthing along the
+    // front, the fitting bike and its saddles in the front corner by the door, the coffee bar and two stools at its east end, the workshop
+    // by the back doorway (the tool wall on the west wall's face, the repair stand before it with a racer's bike)
+    public static readonly (int X, int Z) PlinthAt = (8200, 2950), TownAt = (11776, 2304), PennyAt = (9472, 5000), FitAt = (12032, 4864), SaddlesAt = (13300, 4500);
+    public static readonly (int X, int Z) CafeAt = (5632, 4880), ToolsAt = (512, 4352), StandAt = (1800, 4400);
+    public static readonly (int X, int Z)[] StoolsAt = { (6850, 4650), (6850, 5150) };
+    public const int LampHigh = 1500;
     // (the shop's goods on the counter: its two stands of glass bottles, blocks 76 and 90 -- the till, 91, stays)
     private static readonly HashSet<int> CounterGoods = new() { 76, 90 };
-    public static readonly (int X, int Z) BoardAt = (9 * 512 + 256, 512 + 16);
-    // the actors' numbers in the scene, for the story's scripts: the owner, the Hoverboard
-    public const int OwnerActor = 2, BoardActor = 3;
+    // the actors' numbers in the scene, for the story's scripts: the owner, the Hoverboard, and what Action before it tells of
+    public const int OwnerActor = 2, BoardActor = 3, TownActor = 4, RacingActor = 5, ChampionActor = 6, PennyActor = 7, TandemActor = 8,
+                     RepairActor = 9, FitActor = 10, JerseysActor = 11, WheelsActor = 12;
+    // outside: the banner over the baggage claim's sign (CITADEL.OBL body 33's: x 11332, z 14892-15492, y 1150-1650 -- the building's
+    // front at x 11282, the ground at 250)
+    public static readonly (int X, int Y, int Z) BannerAt = (11282, 250, 15192);
 
     public static List<string> Install(string gameDirectory)
     {
@@ -131,9 +146,10 @@ internal static class CitadelCycleShop
         const string Still = "void comportement_0()\n{\n}\n", Stop = "label(0);\nstop();\n";
         // (actor 1 is the engine's own, cleared at each load: an unused helper there)
         texts[SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(0, FloorY, 0))] = (Still, Stop);
-        // the owner (his talk the story's), behind the till
-        var owner = store.Load(MechanicFrom).Actors.Skip(1).FirstOrDefault(a => a.Entity == Mechanic)?.Clone();
-        if (owner is null) { log.Add($"The cycle shop left out: no mechanic (entity {Mechanic}) in scene {MechanicFrom} to keep it"); return log; }
+        // the owner (his talk the story's), behind the till: the baggage claim's clerk
+        var hallActors = store.Load(Hall).Actors;
+        var owner = (hallActors.ElementAtOrDefault(ClerkActor) is { Entity: Clerk } clerk ? clerk : hallActors.Skip(1).FirstOrDefault(a => a.Entity == Clerk))?.Clone();
+        if (owner is null) { log.Add($"The cycle shop left out: no clerk (entity {Clerk}) in the baggage claim (scene {Hall}) to keep it"); return log; }
         (owner.X, owner.Y, owner.Z, owner.Beta) = (OwnerAt.X, FloorY, OwnerAt.Z, OwnerAt.Beta);
         owner.Move = 0; owner.Life = new byte[] { 0 }; owner.Track = new byte[] { 0 };
         if (SceneOps.AddActor(model, owner) != OwnerActor) { log.Add("The cycle shop left out: its owner isn't actor 2"); return log; }
@@ -141,13 +157,40 @@ internal static class CitadelCycleShop
         // the Hoverboard in the corner (its sale the story's)
         if (SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.LeaningBoard, BoardAt.X, FloorY, BoardAt.Z, 0)) != BoardActor) { log.Add("The cycle shop left out: the Hoverboard isn't actor 3"); return log; }
         texts[BoardActor] = (Still, Stop);
-        var bikes = new[] { CitadelProps.ShopBikeTown, CitadelProps.ShopBikeRacing, CitadelProps.ShopBikeChampion };
-        for (var k = 0; k < bikes.Length; k++) texts[SceneOps.AddActor(model, CitadelProps.Actor(bikes[k], BikesAt[k].X, FloorY, BikesAt[k].Z, 1024))] = (Still, Stop);
-        texts[SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.RepairStand, StandAt.X, FloorY, StandAt.Z, 0))] = (Still, Stop);
-        texts[SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.BikeTwinsen, StandAt.X, FloorY + CitadelProps.StandHigh - 420, StandAt.Z, 1024))] = (Still, Stop);
-        texts[SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.WheelWall, WheelsAt.X, FloorY, WheelsAt.Z, 0))] = (Still, Stop);
-        foreach (var (generic, x, z, beta) in DisplayAt) texts[SceneOps.AddActor(model, CitadelProps.Actor(generic, x, FloorY, z, beta))] = (Still, Stop);
-        texts[SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.ShopSign, SignAt.X, FloorY, SignAt.Z, 0))] = (Still, Stop);
+        // what Action before it tells of, in the story's order (TownActor on): the three bikes for sale, the penny-farthing, the tandem, the
+        // racer's bike on the repair stand, the fitting bike, the jerseys, the wheels
+        var told = new (int Generic, int X, int Y, int Z, int Beta)[]
+        {
+            (CitadelProps.ShopBikeTown, TownAt.X, FloorY, TownAt.Z, 1024 + 200),
+            (CitadelProps.ShopBikeRacing, HungAt.X, FloorY, HungAt.Z, 1024),
+            (CitadelProps.ShopBikeChampion, PlinthAt.X, FloorY + (int)CitadelProps.PlinthTop, PlinthAt.Z, 1024 + 320),
+            (CitadelProps.PennyFarthing, PennyAt.X, FloorY, PennyAt.Z, 1024),
+            (CitadelProps.Tandem, TandemAt.X, FloorY, TandemAt.Z, 1024),
+            (CitadelProps.RepairBike, StandAt.X, FloorY + CitadelProps.StandHigh - 520, StandAt.Z, 0),
+            (CitadelProps.FitBike, FitAt.X, FloorY, FitAt.Z, 1024),
+            (CitadelProps.JerseyWall, JerseysAt.X, FloorY, JerseysAt.Z, 0),
+            (CitadelProps.WheelWall, WheelsAt.X, FloorY, WheelsAt.Z, 1024),
+        };
+        for (var k = 0; k < told.Length; k++)
+        {
+            var (generic, x, y, z, beta) = told[k];
+            if (SceneOps.AddActor(model, CitadelProps.Actor(generic, x, y, z, beta)) != TownActor + k) { log.Add($"The cycle shop left out: its things to look at aren't actors {TownActor}-{WheelsActor}"); return log; }
+            texts[TownActor + k] = (Still, Stop);
+        }
+        // the shop's name on the north wall, as high as SignLowest or under the wall's top (its column's highest brick)
+        var wallTop = FloorLayer;
+        for (var y = Height - 1; y > FloorLayer; y--) if (room[At(SignX / 512, y, 0)] != 0) { wallTop = y; break; }
+        var signLow = Math.Max(0, Math.Min(SignLowest, (wallTop + 1) * 256 - FloorY - (int)CitadelProps.SignHeight - 120));
+        texts[SceneOps.AddActor(model, CitadelProps.Actor(CitadelProps.ShopSign, SignX, FloorY + signLow, 512, 0))] = (Still, Stop);
+        // the rest, nothing to say: the champion's plinth and its lamp, the saddles, the coffee bar and its stools, the workshop
+        foreach (var (generic, x, y, z, beta) in new (int, int, int, int, int)[]
+                 {
+                     (CitadelProps.ShowPlinth, PlinthAt.X, FloorY, PlinthAt.Z, 0), (CitadelProps.HangingLamp, PlinthAt.X, FloorY + LampHigh, PlinthAt.Z, 0),
+                     (CitadelProps.SaddleStand, SaddlesAt.X, FloorY, SaddlesAt.Z, 0), (CitadelProps.CafeBar, CafeAt.X, FloorY, CafeAt.Z, 0),
+                     (CitadelProps.ClubBarStool, StoolsAt[0].X, FloorY, StoolsAt[0].Z, 0), (CitadelProps.ClubBarStool, StoolsAt[1].X, FloorY, StoolsAt[1].Z, 0),
+                     (CitadelProps.ToolWall, ToolsAt.X, FloorY, ToolsAt.Z, 0), (CitadelProps.RepairStand, StandAt.X, FloorY, StandAt.Z, 1024),
+                 })
+            texts[SceneOps.AddActor(model, CitadelProps.Actor(generic, x, y, z, beta))] = (Still, Stop);
         // (walked into, not up against: its box out from the wall stopped him short of the doorway's zone)
         var doorway = CitadelProps.Actor(CitadelProps.ShopDoorway, BackDoorX, FloorY, BackDoorZ, 0);
         doorway.Armor = RaceTrackStory.WalkOverArmour;
@@ -189,14 +232,26 @@ internal static class CitadelCycleShop
             if (door is null) { log.Add($"The cycle shop: scene {scene}'s door to {to} isn't the game's -- not to the shop"); continue; }
             door.Num = Scene;
             door.Info = new[] { x, FloorY, z, 0, 0, 0, 0, 1 };
-            var again = SceneScripts.Load(SceneSerializer.Write(m), scene).Build();
+            // (the street: the shop's banner over the baggage claim's sign -- walked past, not into)
+            var banner = -1;
+            if (scene == Street)
+            {
+                var b = CitadelProps.Actor(CitadelProps.ShopBanner, BannerAt.X, BannerAt.Y, BannerAt.Z, 0);
+                b.Armor = RaceTrackStory.WalkOverArmour;
+                banner = SceneOps.AddActor(m, b);
+            }
+            var streetScripts = SceneScripts.Load(SceneSerializer.Write(m), scene);
+            if (banner >= 0) { streetScripts.SetText(banner, ScriptKind.Life, Still); streetScripts.SetText(banner, ScriptKind.Track, Stop); }
+            var again = streetScripts.Build();
             if (!again.Ok) { log.AddRange(again.Errors.Select(e => $"The cycle shop: scene {scene}'s door not to it: {e}")); continue; }
             Store(scene, again.Record!);
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"the cycle shop: scene {Scene}, the town shop's room 12 cells longer (grid {gridNumber}), emptied but its counter; the street's door (scene {Street}) " +
-                $"and the baggage claim's way out (scene {Hall}) lead into it, its arch out to the street, its back doorway into the baggage claim; its owner, " +
-                $"three bikes for sale, one on the repair stand, a wall of wheels, two tyres and the Hoverboard in the corner");
+                $"and the baggage claim's way out (scene {Hall}) lead into it, its arch out to the street, its back doorway into the baggage claim; Citadel Cycles: " +
+                $"its owner (the baggage claim's clerk, entity {Clerk}), three bikes for sale, the penny-farthing, the tandem, a racer's bike on the repair stand, " +
+                $"the fitting bike, the jerseys, the wheels, the coffee bar, the workshop, the Hoverboard; its name on the north wall {signLow} over the floor " +
+                $"(the wall's top {(wallTop + 1) * 256 - FloorY}); its banner outside over the baggage claim's sign");
         return log;
     }
 }

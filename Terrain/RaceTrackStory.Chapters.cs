@@ -186,7 +186,7 @@ internal static partial class RaceTrackStory
         // (the museum's door grobo asks for the password; any answer lets Twinsen in, free -- the user, 2026-11-20)
         MuseumPassword, PasswordAntennas, PasswordSanta, PasswordSpoon, MuseumGoAhead, MuseumFunny,
         // (the cycle shop in the baggage claim's first room, and the Hoverboard left behind in it -- RaceTrackStory.CycleShop.cs)
-        ShopWelcome, ShopAsk, ShopTown, ShopRacing, ShopChampion, ShopJustLooking, ShopTooDear, ShopBrowse,
+        ShopWelcome,
         BoardStory, BoardBuy, BoardNo, BoardSold, BoardNoMoney, BoardLater, BoardAsk,
     }
     private static readonly string[][] ChapterLines =
@@ -1041,78 +1041,17 @@ internal static partial class RaceTrackStory
             "Ah ah ah! Questa è buona. Benvenuto al museo gratuito dedicato al famosissimo Twinsen!",
             "Ah ah ah! Essa é boa. Bem-vindo ao museu gratuito dedicado ao famosíssimo Twinsen!",
         },
-        // (the cycle shop's owner: his welcome, his bikes, Twinsen's four answers, his two replies -- the user, 2026-11-20)
+        // (the cycle shop's owner: his welcome -- the user, 2026-11-20; his price list and its answers gone 2026-11-21 evening, each bike its
+        // own tag: CitadelLater)
         new[]
         {
-            "Welcome to my cycle shop, sales and repairs! Business is good since the racers started training at the Dome of the Slate. They're in here for parts every week.",
-            "Bienvenue dans ma boutique de vélos, vente et réparation ! Les affaires marchent bien depuis que les coureurs s'entraînent au Dôme de l'Ardoise. Ils viennent chercher des pièces toutes les semaines.",
-            "Willkommen in meinem Fahrradladen, Verkauf und Reparatur! Das Geschäft läuft gut, seit die Rennfahrer am Dom des Schiefers trainieren. Sie holen jede Woche Ersatzteile bei mir.",
-            "¡Bienvenido a mi tienda de bicicletas, venta y reparación! El negocio va bien desde que los corredores entrenan en la Cúpula de la Pizarra. Vienen a por piezas cada semana.",
-            "Benvenuto nel mio negozio di biciclette, vendita e riparazioni! Gli affari vanno bene da quando i corridori si allenano alla Cupola dell'Ardesia. Vengono qui a prendere pezzi ogni settimana.",
-            "Bem-vindo à minha loja de bicicletas, venda e reparação! O negócio vai bem desde que os ciclistas começaram a treinar na Cúpula da Ardósia. Vêm cá buscar peças todas as semanas.",
-        },
-        new[]
-        {
-            "Fancy one of my bikes?",
-            "Un de mes vélos te ferait envie ?",
-            "Wie wäre es mit einem meiner Räder?",
-            "¿Te apetece una de mis bicis?",
-            "Ti piacerebbe una delle mie bici?",
-            "Apetece-te uma das minhas bicicletas?",
-        },
-        new[]
-        {
-            "The town bike, 1,000 kashes",
-            "Le vélo de ville, 1 000 kashes",
-            "Das Stadtrad, 1.000 Kashes",
-            "La bici de paseo, 1.000 kashes",
-            "La bici da città, 1.000 kashes",
-            "A bicicleta de cidade, 1000 kashes",
-        },
-        new[]
-        {
-            "The racing bike, 2,000 kashes",
-            "Le vélo de course, 2 000 kashes",
-            "Das Rennrad, 2.000 Kashes",
-            "La bici de carreras, 2.000 kashes",
-            "La bici da corsa, 2.000 kashes",
-            "A bicicleta de corrida, 2000 kashes",
-        },
-        new[]
-        {
-            "The champion's bike, 5,000 kashes",
-            "Le vélo du champion, 5 000 kashes",
-            "Das Meisterrad, 5.000 Kashes",
-            "La bici del campeón, 5.000 kashes",
-            "La bici del campione, 5.000 kashes",
-            "A bicicleta do campeão, 5000 kashes",
-        },
-        new[]
-        {
-            "Just looking, thanks",
-            "Je regarde seulement, merci",
-            "Ich schaue nur, danke",
-            "Solo estoy mirando, gracias",
-            "Sto solo guardando, grazie",
-            "Estou só a ver, obrigado",
-        },
-        new[]
-        {
-            "I'm afraid you can't afford that one. Come back when you've saved up!",
-            "J'ai bien peur que tu n'aies pas les moyens. Reviens quand tu auras économisé !",
-            "Das kannst du dir leider nicht leisten. Komm wieder, wenn du gespart hast!",
-            "Me temo que no te lo puedes permitir. ¡Vuelve cuando hayas ahorrado!",
-            "Temo che non te la possa permettere. Torna quando avrai risparmiato!",
-            "Receio que não tenhas dinheiro para essa. Volta quando tiveres poupado!",
-        },
-        new[]
-        {
-            "Take your time, have a look around.",
-            "Prends ton temps, jette un coup d'œil.",
-            "Lass dir Zeit, sieh dich ruhig um.",
-            "Tómate tu tiempo, echa un vistazo.",
-            "Fai con calma, dai pure un'occhiata.",
-            "Com calma, dá uma vista de olhos.",
+            // (since 2026-11-21 evening the shop's name, and no price list: each bike for sale has its tag -- RaceTrackStory.CycleShop)
+            "Welcome to Citadel Cycles, sales and repairs! Business is good since the racers started training at the Dome of the Slate. Have a look around: every bike for sale has its price on it.",
+            "Bienvenue chez Citadel Cycles, vente et réparation ! Les affaires marchent bien depuis que les coureurs s'entraînent au Dôme de l'Ardoise. Fais le tour : chaque vélo à vendre porte son prix.",
+            "Willkommen bei Citadel Cycles, Verkauf und Reparatur! Das Geschäft läuft gut, seit die Rennfahrer am Dom des Schiefers trainieren. Sieh dich ruhig um: An jedem Rad, das zu verkaufen ist, hängt sein Preis.",
+            "¡Bienvenido a Citadel Cycles, venta y reparación! El negocio va bien desde que los corredores entrenan en la Cúpula de la Pizarra. Echa un vistazo: cada bici en venta lleva su precio.",
+            "Benvenuto da Citadel Cycles, vendita e riparazioni! Gli affari vanno bene da quando i corridori si allenano alla Cupola dell'Ardesia. Dai un'occhiata: ogni bici in vendita ha il suo prezzo.",
+            "Bem-vindo à Citadel Cycles, venda e reparação! O negócio vai bem desde que os ciclistas começaram a treinar na Cúpula da Ardósia. Dá uma vista de olhos: cada bicicleta à venda tem o preço.",
         },
         // (the Hoverboard left behind in the shop: the owner's story of it and his price, Twinsen's two answers, his three replies)
         new[]
@@ -1182,7 +1121,14 @@ internal static partial class RaceTrackStory
     };
 
     // Citadel Island's lines added later (after the darts players': CitadelLaterId), so that none before them move
-    internal enum CitadelLater { PaulBackToPort, FerryTicketOk, FerryNoTicket }
+    internal enum CitadelLater
+    {
+        PaulBackToPort, FerryTicketOk, FerryNoTicket,
+        // (Citadel Cycles, 2026-11-21 evening -- RaceTrackStory.CycleShop: Action before a bike for sale, its tag and Twinsen's question,
+        // his two answers, his sigh; before the others, their plaques -- in quotes, read, not spoken)
+        ShopTagTown, ShopTagRacing, ShopTagChampion, TwinsenBuyAsk, ShopBuyIt, ShopNotToday, TwinsenNeverAfford,
+        ShopPennyFarthing, ShopTandem, ShopRepair, ShopFitting, ShopJerseys, ShopWheels,
+    }
     private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
     internal static readonly string[][] CitadelLaterLines =
     {
@@ -1213,6 +1159,126 @@ internal static partial class RaceTrackStory
             "Sin billete no hay travesía, Twinsen. La oficina del ferry, junto al puerto, los vende.",
             "Niente biglietto, niente traversata, Twinsen. L'ufficio del traghetto, vicino al porto, li vende.",
             "Sem bilhete, sem travessia, Twinsen. O escritório do ferry, junto ao porto, vende-os.",
+        },
+        // (Citadel Cycles: the bikes' price tags)
+        new[]
+        {
+            "\"The town bike, with a basket for the shopping. 1,000 kashes.\"",
+            "\"Le vélo de ville, avec un panier pour les courses. 1 000 kashes.\"",
+            "\"Das Stadtrad, mit Korb für die Einkäufe. 1.000 Kashes.\"",
+            "\"La bici de paseo, con cesta para la compra. 1.000 kashes.\"",
+            "\"La bici da città, con il cestino per la spesa. 1.000 kashes.\"",
+            "\"A bicicleta de cidade, com cesto para as compras. 1000 kashes.\"",
+        },
+        new[]
+        {
+            "\"The racing bike. Light as a feather. 2,000 kashes.\"",
+            "\"Le vélo de course. Léger comme une plume. 2 000 kashes.\"",
+            "\"Das Rennrad. Leicht wie eine Feder. 2.000 Kashes.\"",
+            "\"La bici de carreras. Ligera como una pluma. 2.000 kashes.\"",
+            "\"La bici da corsa. Leggera come una piuma. 2.000 kashes.\"",
+            "\"A bicicleta de corrida. Leve como uma pena. 2000 kashes.\"",
+        },
+        new[]
+        {
+            "\"The champion's bike, as raced at the Dome of the Slate. 5,000 kashes.\"",
+            "\"Le vélo du champion, celui des courses du Dôme de l'Ardoise. 5 000 kashes.\"",
+            "\"Das Meisterrad, wie es am Dom des Schiefers gefahren wird. 5.000 Kashes.\"",
+            "\"La bici del campeón, la de las carreras de la Cúpula de la Pizarra. 5.000 kashes.\"",
+            "\"La bici del campione, quella delle corse alla Cupola dell'Ardesia. 5.000 kashes.\"",
+            "\"A bicicleta do campeão, a das corridas da Cúpula da Ardósia. 5000 kashes.\"",
+        },
+        // (Twinsen's question, his two answers, his sigh at the price -- kashes stop at 999)
+        new[]
+        {
+            "Shall I buy it?",
+            "Je l'achète ?",
+            "Soll ich es kaufen?",
+            "¿La compro?",
+            "La compro?",
+            "Compro-a?",
+        },
+        new[]
+        {
+            "Buy it",
+            "L'acheter",
+            "Kaufen",
+            "Comprarla",
+            "Comprarla",
+            "Comprá-la",
+        },
+        new[]
+        {
+            "Not today",
+            "Pas aujourd'hui",
+            "Heute nicht",
+            "Hoy no",
+            "Non oggi",
+            "Hoje não",
+        },
+        new[]
+        {
+            "That many kashes? I'll never save up that much.",
+            "Autant de kashes ? Je n'économiserai jamais autant.",
+            "So viele Kashes? So viel spare ich nie zusammen.",
+            "¿Tantos kashes? Nunca ahorraré tanto.",
+            "Tutti quei kashes? Non risparmierò mai tanto.",
+            "Tantos kashes? Nunca vou conseguir poupar tanto.",
+        },
+        // (the plaques: the penny-farthing, the tandem, the bike on the repair stand, the fitting bike, the jerseys, the wheels)
+        new[]
+        {
+            "\"The penny-farthing: the oldest bicycle on Twinsun, they say. One turn of the pedals goes a long way on a wheel that big. Getting off is the hard part.\"",
+            "\"Le grand-bi : le plus vieux vélo de Twinsun, dit-on. Un tour de pédales mène loin sur une roue pareille. Le plus dur, c'est d'en descendre.\"",
+            "\"Das Hochrad: das älteste Fahrrad auf Twinsun, sagt man. Eine Pedalumdrehung bringt einen auf so einem Rad weit. Schwierig ist nur das Absteigen.\"",
+            "\"El velocípedo: la bicicleta más antigua de Twinsun, dicen. Una vuelta de pedales llega lejos con una rueda tan grande. Lo difícil es bajarse.\"",
+            "\"Il biciclo: la bicicletta più antica di Twinsun, si dice. Un giro di pedali porta lontano con una ruota così grande. Il difficile è scendere.\"",
+            "\"O biciclo: a bicicleta mais antiga de Twinsun, dizem. Uma volta aos pedais leva longe numa roda tão grande. O difícil é descer.\"",
+        },
+        new[]
+        {
+            "\"A tandem, built for a couple from the Desert Island who wanted to ride everywhere together. A week later they came back for two bikes.\"",
+            "\"Un tandem, construit pour un couple de l'île du Désert qui voulait aller partout ensemble. Une semaine plus tard, ils sont revenus chercher deux vélos.\"",
+            "\"Ein Tandem, gebaut für ein Paar von der Wüsteninsel, das überall zusammen hinfahren wollte. Eine Woche später kamen sie wegen zwei Rädern wieder.\"",
+            "\"Un tándem, hecho para una pareja de la isla del Desierto que quería ir junta a todas partes. Una semana después volvieron a por dos bicis.\"",
+            "\"Un tandem, costruito per una coppia dell'isola del Deserto che voleva andare ovunque insieme. Una settimana dopo sono tornati per due bici.\"",
+            "\"Um tandem, feito para um casal da ilha do Deserto que queria ir a todo o lado junto. Uma semana depois voltaram para levar duas bicicletas.\"",
+        },
+        new[]
+        {
+            "\"In for repair: a new chain and a puncture. Not for sale.\"",
+            "\"En réparation : une chaîne neuve et une crevaison. Pas à vendre.\"",
+            "\"In Reparatur: neue Kette und ein Platten. Unverkäuflich.\"",
+            "\"En reparación: cadena nueva y un pinchazo. No está a la venta.\"",
+            "\"In riparazione: catena nuova e una foratura. Non in vendita.\"",
+            "\"Em reparação: corrente nova e um furo. Não está à venda.\"",
+        },
+        new[]
+        {
+            "\"The fitting bike. Before a racer's bike is built, the saddle and the bars are set to the rider here.\"",
+            "\"Le vélo d'ajustement. Avant de construire le vélo d'un coureur, on règle ici la selle et le guidon à sa taille.\"",
+            "\"Das Anpassungsrad. Bevor ein Rennrad gebaut wird, werden hier Sattel und Lenker auf den Fahrer eingestellt.\"",
+            "\"La bici de ajuste. Antes de montar la bici de un corredor, aquí se ajustan el sillín y el manillar a su medida.\"",
+            "\"La bici per la misura. Prima di costruire la bici di un corridore, qui si regolano sella e manubrio su di lui.\"",
+            "\"A bicicleta de ajuste. Antes de montar a bicicleta de um corredor, aqui ajustam-se o selim e o guiador ao ciclista.\"",
+        },
+        new[]
+        {
+            "\"Signed jerseys from the racers of the Dome of the Slate. They come in for parts and leave their old shirts behind.\"",
+            "\"Maillots signés des coureurs du Dôme de l'Ardoise. Ils viennent chercher des pièces et laissent leurs vieux maillots.\"",
+            "\"Signierte Trikots der Rennfahrer vom Dom des Schiefers. Sie holen Ersatzteile und lassen ihre alten Trikots hier.\"",
+            "\"Maillots firmados por los corredores de la Cúpula de la Pizarra. Vienen a por piezas y dejan sus maillots viejos.\"",
+            "\"Maglie firmate dai corridori della Cupola dell'Ardesia. Vengono per i pezzi e lasciano le loro vecchie maglie.\"",
+            "\"Camisolas assinadas pelos ciclistas da Cúpula da Ardósia. Vêm buscar peças e deixam as camisolas velhas.\"",
+        },
+        new[]
+        {
+            "\"Wheels of every size. Fitted while you wait.\"",
+            "\"Des roues de toutes les tailles. Montées pendant que vous attendez.\"",
+            "\"Räder in jeder Größe. Montage, während Sie warten.\"",
+            "\"Ruedas de todos los tamaños. Montadas en el momento.\"",
+            "\"Ruote di ogni misura. Montate mentre aspetti.\"",
+            "\"Rodas de todos os tamanhos. Montadas na hora.\"",
         },
     };
 
