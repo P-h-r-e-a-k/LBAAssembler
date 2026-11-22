@@ -11170,6 +11170,10 @@ void RaceMod_TestRescue(void) {
 // RACE_BELOW_REACH at least RACE_BELOW_DROP above him. (The line, not the raised road: where the lap runs on the ground beside a raised
 // part -- the Desert island's -- the ground is the lap.) Not in a jump's flight, a loop, the super jet-pack's flight or a fall still going on.
 #define RACE_BELOW_MS 1500
+// (driven free off a race, roam_free=: this far under the road, all but stopped, this long)
+#define RACE_BELOW_DROP_FREE 3000
+#define RACE_BELOW_STILL_FREE 1000
+#define RACE_BELOW_MS_FREE 3000
 #define RACE_TELEPORT_NEAR (28 * 512.0)    // a teleporter's own floor: no one has fallen this near it
 #define RACE_BELOW_DROP 1500
 #define RACE_BELOW_LAP 4500.0
@@ -11189,7 +11193,10 @@ static int SideArea(const T_RACE_OPPONENT *o, int a) {
 static void FallenBelow(S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const T_RACE_OPPONENT *o = Guide();
-    if (!s_nbRaised || !RescueOn() || !o || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
+    // (driven free off a race too -- roam_free=, the story's island after its race or before it: a car fallen off a raised road to the
+    // ground far under it has no way back up. Only this: a car off the road on the ground stays where he drove it. The user, 2026-11-21,
+    // the Moon after its race was won: "Twinsen's car has just slipped off the track and is now unrecoverable")
+    if (!s_nbRaised || !(RescueOn() || (s_rescueOn && s_roamFree)) || !o || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
             || now < s_jetUntil || s_rescue || s_rescueArrive >= 0 || (hero->WorkFlags & FALLING) || s_safeIndex < 0
             || s_wheel.DropOn || OnWheel(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0)) { s_belowSince = 0; return; }
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
@@ -11211,8 +11218,11 @@ static void FallenBelow(S32 now) {
         if (d2 < near2) { near2 = d2; nearY = o->Y[i]; }
     }
     if (near2 > RACE_BELOW_REACH * RACE_BELOW_REACH || nearY < hero->Obj.Y + RACE_BELOW_DROP) { s_belowSince = 0; return; }
+    // (driven free: only a car well under the road and stopped there -- one driven on the ground under a raised stretch goes where he likes)
+    const int free = !RescueOn();
+    if (free && (nearY < hero->Obj.Y + RACE_BELOW_DROP_FREE || abs(ListBuggy[0].Speed) >= RACE_BELOW_STILL_FREE)) { s_belowSince = 0; return; }
     if (!s_belowSince) { s_belowSince = now; return; }
-    if (now - s_belowSince < RACE_BELOW_MS) return;
+    if (now - s_belowSince < (free ? RACE_BELOW_MS_FREE : RACE_BELOW_MS)) return;
     s_belowSince = 0;
     Log_Info("[racemod] fallen off the road to (%.0f,%d,%.0f), %d below the lap %.0f away: put back on it", wx, (int)hero->Obj.Y, wz,
              (int)(nearY - hero->Obj.Y), sqrt(near2));

@@ -1388,6 +1388,23 @@ internal static class RaceTrackScenes
             foreach (var t in tracks) edgeZonesAdded += CoverEdges(model, scene, t.Edges, log);
             changes.Add(new SceneChange(scene, model, null));
         }
+        // (a track raced in a copy of the island's scene -- the lava lake's 223, of Celebration Island's 95 before the statue rises -- driven
+        // in that scene too outside a race (its car file's drive file, RaceCarEngineFile: the raised road alone): its jumps there as well,
+        // only while the statue is down (game variable 79, the one the engine draws CELEBRA2 by) -- the car went off the ramp into the lava,
+        // the user, 2026-11-21: "The jump on Celebration island doesn't appear to work outside of race mode")
+        if (options.Island.OtherFile && options.Island.CopiesScene is int copied && store.SceneExists(copied) && tracks.Any(t => t.Report.Jumps.Count > 0))
+        {
+            var model = store.Load(copied);
+            var added = 0;
+            foreach (var t in tracks)
+                foreach (var jump in t.Report.Jumps)
+                    if (model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ && AddJump(model, copied, jump, log, gate: $"0 == var_game({StatueRisenVar})") is { } jumped) { model = jumped; added++; }
+            if (added > 0)
+            {
+                changes.Add(new SceneChange(copied, model, null));
+                log.Add($"scene {copied}: the {added} jump(s) of {options.Island.Name}'s raced copy (scene {options.Island.FirstScene}) too, for driving there outside a race, while the statue is down");
+            }
+        }
         var edges = tracks.Sum(t => t.Edges.Count);
         if (edges > 0) log.Add($"the lap{(tracks.Count > 1 ? "s cross" : " crosses")} {edges / 2} cube edges; {edgeZonesAdded} crossing zones added where the island's own did not cover the road");
         foreach (var lost in lostWays)
@@ -1791,6 +1808,8 @@ void comportement_1()
     private const uint InvisibleNoShadow = 0x1200;
     // OBJ_FALLABLE: the actor falls onto the ground below it.
     private const uint Fallable = 0x0800;
+    // (Celebration Island's statue risen: the game's FLAG_CELEBRATION, COMMON.H -- CELEBRA2 drawn instead of CELEBRAT)
+    private const int StatueRisenVar = 79;
     // (a falling actor this far over the ground it stood on stood on something else -- a carrier, a decor -- and keeps its height over it)
     private const int OnSomethingOver = 300;
 
@@ -2185,7 +2204,7 @@ void comportement_1()
     // track script only gets the two labels -- each of a lap's jumps its own pair (90 and 91, then 92 and 93), its own zone number and
     // controller, and its own flight.
     // (`weather`: the value game variable 206 has when the jump's file is shown -- RACEMOD.CPP RaceMod_CitadelWeather -- or null for any)
-    private static SceneModel? AddJump(SceneModel model, int scene, JumpInfo jump, List<string> log, int? weather = null)
+    private static SceneModel? AddJump(SceneModel model, int scene, JumpInfo jump, List<string> log, int? weather = null, string? gate = null)
     {
         var ox = jump.CubeX * 64.0; var oz = jump.CubeZ * 64.0;
         var y = (int)Math.Round(jump.Height);
@@ -2214,7 +2233,7 @@ void comportement_1()
 
 void comportement_1()
 {{
-    if (12 == comportement_hero() && {jump.Zone} == zone_obj(0){(weather is { } w ? $" && {w} == var_game(206)" : "")})
+    if (12 == comportement_hero() && {jump.Zone} == zone_obj(0){(weather is { } w ? $" && {w} == var_game(206)" : "")}{(gate is null ? "" : $" && {gate}")})
     {{
         if ({window})
         {{
