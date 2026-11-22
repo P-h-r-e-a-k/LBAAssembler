@@ -1292,6 +1292,17 @@ static void control_dump_state(const char *path) {
             (int)NbObjets, (int)NbZones, (int)NbBrickTrack, (int)NbPatches,
             (unsigned)ModeDesiredX, (unsigned)ModeDesiredY);
 
+    /* The clips the picture is drawn and presented within, and the two widths they are made from (the picture's, ModeDesiredX, and the
+       present surface's, ModeResX, which UnsetClipWindow uses): a picture drawn only part way across shows which one is short. */
+    {
+        extern S32 BoxClipXMin, BoxClipYMin, BoxClipXMax, BoxClipYMax;
+        fprintf(f,
+                "  \"clip\": { \"mode_res\": [%u, %u], \"window\": [%d, %d, %d, %d], \"clip\": [%d, %d, %d, %d], \"box\": [%d, %d, %d, %d] },\n",
+                (unsigned)ModeResX, (unsigned)ModeResY, (int)ClipWindowXMin, (int)ClipWindowYMin, (int)ClipWindowXMax, (int)ClipWindowYMax,
+                (int)ClipXMin, (int)ClipYMin, (int)ClipXMax, (int)ClipYMax, (int)BoxClipXMin, (int)BoxClipYMin, (int)BoxClipXMax,
+                (int)BoxClipYMax);
+    }
+
     fprintf(f,
             "  \"hero\": { \"x\": %d, \"y\": %d, \"z\": %d, "
             "\"alpha\": %d, \"beta\": %d, \"gamma\": %d, "
