@@ -6,8 +6,8 @@ namespace LBAAssembler.Terrain.Citadel;
 // The bowling alley's own fruit machines (the user, 2026-11-16: "The fruit machines we've added in the bowling alley, let's either create
 // proper wheels like the machines in the casino, or just copy them directly. A new machine specific to the bowling area would be preferable
 // though, but we need to replicate the behaviour so it's not just three random things spinning in the middle of the screen, they need to
-// rotate in the fruit machine"): a tall cabinet in the alley's dark red, a bowling pin on its top, bulbs along its brow, a lever at its
-// right, a coin tray -- and in a brass-framed window on its front three reels, each a drum of five faces round its axle (left to right,
+// rotate in the fruit machine"): a tall cabinet in the alley's dark red, a bowling pin on its top, bulbs along its brow, buttons on a ledge
+// across its front, a coin tray -- and in a brass-framed window on its front three reels, each a drum of five faces round its axle (left to right,
 // the cabinet's x): 7, BELL, PIN, SKULL, CHERRY, the engine's order (RACEMOD.CPP s_fmName). The cabinet is bone 0, the reels bones 1-3,
 // each turned about its axle by the engine (FruitFrame: the actor's own frames, MANUAL_INTER_FRAME) -- spinning while it plays, then stopped
 // on its symbol: face k at the front when the reel's bone is turned ReelTurn(k). Its front +z.
@@ -16,9 +16,14 @@ internal static partial class CitadelProps
 {
     public const int BowlSlot = 160, LaneLamps = 161;
     // (where the reels' axles are: their middles across, how high, how far out from the cabinet's front; each reel's radius and width)
-    public static readonly float[] ReelX = { -150, 0, 150 };
-    public const float ReelY = 1000, ReelZ = 270, ReelRadius = 88, ReelWide = 118, SlotDeep = 500, SlotWide = 620, SlotHigh = 1400;
+    // (bigger since 2026-11-22, and turned up towards the alley's camera, which looks down on them -- the user: "what they're showing isn't
+    // visible in game": the reels 118 wide, 88 round, their symbols 70 across, a few pixels from the camera, white pins and skulls on the
+    // reels' light faces. Now 150 wide and 125 round, the symbols half as big again and the pale ones dark, the face shown turned ReelTilt
+    // up off the front)
+    public static readonly float[] ReelX = { -172, 0, 172 };
+    public const float ReelY = 960, ReelZ = 270, ReelRadius = 125, ReelWide = 150, SlotDeep = 500, SlotWide = 620, SlotHigh = 1400;
     public const int ReelFaces = 5;
+    private const float ReelTilt = MathF.PI / 6, SymbolScale = 1.45f;
     // (the reel's turn that shows face k at the front -- RACEMOD.CPP FmFace, which turns them)
     public static int ReelTurn(int k) => (int)Math.Round(k * 4096.0 / ReelFaces) & 4095;
     // (the lit ones ramp starts low enough that the game's light -- up to nine steps on -- stays in their ramp: high in the grey one, the
@@ -36,20 +41,23 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, SlotHigh / 2, 0), new Vector3(SlotWide, SlotHigh, SlotDeep), CabinetRed, top: CabinetTrim);
         m.Box(0, new Vector3(0, 60, 10), new Vector3(SlotWide + 40, 120, SlotDeep + 20), WindowBlack, top: CabinetTrim);
         // the reels' window: black behind them, a brass frame round it
-        float wx = 235, wy0 = ReelY - 130, wy1 = ReelY + 130;
+        float wx = 258, wy0 = ReelY - 170, wy1 = ReelY + 170;
         m.Box(0, new Vector3(0, ReelY, front + 6), new Vector3(2 * wx, wy1 - wy0, 12), WindowBlack);
         m.Box(0, new Vector3(0, wy1 + 22, front + 18), new Vector3(2 * wx + 88, 44, 36), Brass, top: Brass);
         m.Box(0, new Vector3(0, wy0 - 22, front + 18), new Vector3(2 * wx + 88, 44, 36), Brass, top: Brass);
         foreach (var s in new[] { -1f, 1f }) m.Box(0, new Vector3(s * (wx + 22), ReelY, front + 18), new Vector3(44, wy1 - wy0, 36), Brass, top: Brass);
         // the coin tray, and a slot over it
         m.Box(0, new Vector3(0, 330, front + 40), new Vector3(320, 50, 80), CabinetTrim, top: CabinetTrim);
-        m.Box(0, new Vector3(150, 640, front + 4), new Vector3(70, 20, 8), WindowBlack);
+        m.Box(0, new Vector3(170, 560, front + 4), new Vector3(70, 20, 8), WindowBlack);
+        // its buttons on a ledge across its front under the reels -- a big red one to spin, two small lit ones (the user, 2026-11-22: a lever
+        // at a machine's side "would be inaccessible in all the other machines given how close they are": they stand side by side, and the
+        // game plays one by Action at its front)
+        m.Box(0, new Vector3(0, 690, front + 50), new Vector3(SlotWide - 60, 40, 100), CabinetTrim, top: CabinetTrim);
+        m.Ball(0, new Vector3(150, 728, front + 62), 40, LeverKnob);
+        m.Ball(0, new Vector3(-150, 720, front + 62), 24, BulbYellow);
+        m.Ball(0, new Vector3(-60, 720, front + 62), 24, BulbYellow);
         // bulbs along its brow
         for (var bx = -240f; bx <= 241; bx += 80) m.Ball(0, new Vector3(bx, SlotHigh - 60, front + 10), 22, BulbYellow);
-        // the lever at its right: a chrome arm up from a boss, a red knob
-        m.Box(0, new Vector3(SlotWide / 2 + 30, 860, 40), new Vector3(60, 120, 120), CabinetTrim, top: CabinetTrim);
-        m.Strut(0, new Vector3(SlotWide / 2 + 60, 880, 40), new Vector3(SlotWide / 2 + 90, 1260, 70), 26, CabinetTrim);
-        m.Ball(0, new Vector3(SlotWide / 2 + 92, 1290, 72), 50, LeverKnob);
         // the bowling pin on its top: white, two red stripes round its neck
         var pinBase = SlotHigh;
         var rings = new (float Y, float R, int Colour)[] { (0, 70, PinWhite), (90, 110, PinWhite), (200, 120, PinWhite), (300, 85, PinWhite), (360, 55, PinStripe), (400, 50, PinWhite), (440, 52, PinStripe), (480, 62, PinWhite), (560, 72, PinWhite), (640, 45, PinWhite) };
@@ -71,15 +79,15 @@ internal static partial class CitadelProps
         Vector3 Round(float x, float angle, float radius) => at + new Vector3(x, radius * MathF.Sin(angle), radius * MathF.Cos(angle));
         for (var k = 0; k < ReelFaces; k++)
         {
-            float a0 = k * step - step / 2, a1 = k * step + step / 2;
+            float a0 = ReelTilt + k * step - step / 2, a1 = ReelTilt + k * step + step / 2;
             var face = new[] { m.P(bone, Round(-half, a0, ReelRadius)), m.P(bone, Round(half, a0, ReelRadius)), m.P(bone, Round(half, a1, ReelRadius)), m.P(bone, Round(-half, a1, ReelRadius)) };
             m.Out(face, ReelFace, at);
-            Symbol(m, bone, at, k, k * step);
+            Symbol(m, bone, at, k, ReelTilt + k * step);
         }
         // its ends
         foreach (var s in new[] { -1f, 1f })
         {
-            var end = Enumerable.Range(0, ReelFaces).Select(k => m.P(bone, Round(s * half, k * step - step / 2, ReelRadius))).ToArray();
+            var end = Enumerable.Range(0, ReelFaces).Select(k => m.P(bone, Round(s * half, ReelTilt + k * step - step / 2, ReelRadius))).ToArray();
             var c = m.P(bone, at + new Vector3(s * half, 0, 0));
             for (var k = 0; k < ReelFaces; k++) m.Out(new[] { c, end[k], end[(k + 1) % ReelFaces] }, WindowBlack, at - new Vector3(s * half * 2, 0, 0));
         }
@@ -92,7 +100,7 @@ internal static partial class CitadelProps
         var apothem = ReelRadius * MathF.Cos(MathF.PI / ReelFaces) + 2;
         var normal = new Vector3(0, MathF.Sin(angle), MathF.Cos(angle));
         var up = new Vector3(0, MathF.Cos(angle), -MathF.Sin(angle));
-        Vector3 On(float u, float v) => at + normal * apothem + new Vector3(u, 0, 0) + up * v;
+        Vector3 On(float u, float v) => at + normal * apothem + new Vector3(u * SymbolScale, 0, 0) + up * (v * SymbolScale);
         void Quad(float u0, float v0, float u1, float v1, int colour) => m.Out(new[] { m.P(bone, On(u0, v0)), m.P(bone, On(u1, v0)), m.P(bone, On(u1, v1)), m.P(bone, On(u0, v1)) }, colour, at, unlit: true);
         // (a polygon is a triangle or a quad: a wider one -- convex -- a fan of triangles from its first point)
         void Poly(int colour, params (float U, float V)[] pts)
@@ -113,17 +121,17 @@ internal static partial class CitadelProps
                 Quad(-36, -30, 36, -20, SymbolGold);
                 Quad(-7, -40, 7, -30, SymbolDark);
                 break;
-            case 2: // a white bowling pin: its head, neck (a red stripe) and belly
-                Poly(SymbolWhite, (-10, 30), (10, 30), (12, 42), (-12, 42));
+            case 2: // a dark bowling pin (dark on the light reel, 2026-11-22): its head, neck (a red stripe) and belly
+                Poly(SymbolDark, (-10, 30), (10, 30), (12, 42), (-12, 42));
                 Quad(-8, 18, 8, 30, SymbolRed);
-                Poly(SymbolWhite, (-8, 18), (8, 18), (20, -10), (14, -40), (-14, -40), (-20, -10));
+                Poly(SymbolDark, (-8, 18), (8, 18), (20, -10), (14, -40), (-14, -40), (-20, -10));
                 break;
-            case 3: // a white skull: its dome and jaw, two dark eyes, a dark nose
-                Poly(SymbolWhite, (-26, 0), (-20, 30), (0, 40), (20, 30), (26, 0), (16, -18), (-16, -18));
-                Quad(-12, -36, 12, -18, SymbolWhite);
-                Quad(-18, 2, -6, 14, SymbolDark);
-                Quad(6, 2, 18, 14, SymbolDark);
-                Poly(SymbolDark, (-4, -10), (4, -10), (0, -2));
+            case 3: // a dark skull: its dome and jaw, two light eyes, a light nose
+                Poly(SymbolDark, (-26, 0), (-20, 30), (0, 40), (20, 30), (26, 0), (16, -18), (-16, -18));
+                Quad(-12, -36, 12, -18, SymbolDark);
+                Quad(-18, 2, -6, 14, SymbolWhite);
+                Quad(6, 2, 18, 14, SymbolWhite);
+                Poly(SymbolWhite, (-4, -10), (4, -10), (0, -2));
                 break;
             default: // two red cherries on green stalks
                 Poly(SymbolRed, (-30, -14), (-22, -6), (-12, -14), (-12, -26), (-22, -34), (-30, -26));

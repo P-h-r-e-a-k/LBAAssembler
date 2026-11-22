@@ -436,6 +436,11 @@ internal sealed record RaceTrackIsland(
     // ... and decors of its own moved, each the cube, its pieces' origin and the new origin (cube units; the height as it was), and copied
     // beside themselves, each the cube, the origin and the copy's shift (RaceTrackBuilder.DropDecors)
     public (int CubeX, int CubeZ, int X, int Z, int ToX, int ToZ)[]? MoveDecors { get; init; }
+    // ... and its ground widened, a column at a time (island units, rows Z0-Z1): a column of vertices' heights and light copied onto
+    // another's, and a column of cells' triangles (texture, flags, code, diagonal) onto another's -- a deck of ground made wider
+    // (RaceTrackBuilder.DropDecors; Otringal's footbridge)
+    public (int FromX, int ToX, int Z0, int Z1)[]? CopyGroundVertices { get; init; }
+    public (int FromX, int ToX, int Z0, int Z1)[]? CopyGroundCells { get; init; }
     public (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[]? CopyDecors { get; init; }
     // Where a building the road took away is put back (RaceTrackBuilder.RestoreLostBuildings), by hand, not the nearest place the search
     // finds: the building one of whose pieces has that body, moved (Dx, Dz) whole cells from where it stood (its height as the ground
@@ -651,6 +656,16 @@ internal sealed record RaceTrackIsland(
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,
         HiddenFromRaces = new[] { (89, 6) },
+        // (the footbridge into the town, cube (7,8) by the raised road's tightest bend, widened for the car -- the user, 2026-11-22, live:
+        // "let's widen it slightly so his car fits across it, we'll probably have to move the two street lights fractionally to either side
+        // to allow us ot move the sides of the bridge out": its walls (bodies 86-90 west, 91-95 east) stood 1,000 apart, the car 1,266 wide.
+        // Its deck is the island's ground, arched to 8,700 along x 22-24 of the cube, the steep cells either side hidden under the walls:
+        // each wall a cell out, the deck's edge vertices copied a cell out (heights and light), the paving's cells a cell wider each side --
+        // 2,024 between the walls now; the street lights at its far end out too, 256 east and 128 west -- the west one under the raised
+        // road, kept by the plan's keepPlaced, post and head)
+        MoveDecors = new[] { (7, 8, 10776, 7680, 10264, 7680), (7, 8, 12800, 7680, 13312, 7680), (7, 8, 9792, 13056, 9664, 13056), (7, 8, 13760, 13056, 14016, 13056) },
+        CopyGroundVertices = new[] { (470, 469, 527, 539), (472, 473, 527, 539) },
+        CopyGroundCells = new[] { (470, 469, 527, 539), (471, 472, 527, 539) },
     };
 
     // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's

@@ -4889,6 +4889,36 @@ internal static class RaceTrackBuilder
                 report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({cx},{cz}) moved to ({tx}, {tz}) (the island's record says so)");
             }
         }
+        foreach (var (fromX, toX, z0, z1) in o.Island.CopyGroundVertices ?? Array.Empty<(int, int, int, int)>())
+        {
+            var n = 0;
+            for (var gz = z0; gz <= z1; gz++)
+            {
+                if (island.CubeAt(fromX / IslandCube.Cells, gz / IslandCube.Cells) is not { } from || island.CubeAt(toX / IslandCube.Cells, gz / IslandCube.Cells) is not { } to) continue;
+                int fx = fromX % IslandCube.Cells, tx = toX % IslandCube.Cells, z = gz % IslandCube.Cells;
+                to.Heights[z * IslandCube.Vertices + tx] = from.Heights[z * IslandCube.Vertices + fx];
+                to.Intensity[z * IslandCube.Vertices + tx] = from.Intensity[z * IslandCube.Vertices + fx];
+                n++;
+            }
+            report.Notes.Add($"the ground's vertices along x {fromX} copied onto x {toX}, rows {z0}-{z1} ({n}) (the island's record says so)");
+        }
+        foreach (var (fromX, toX, z0, z1) in o.Island.CopyGroundCells ?? Array.Empty<(int, int, int, int)>())
+        {
+            var n = 0;
+            for (var gz = z0; gz <= z1; gz++)
+                for (var half = 0; half < 2; half++)
+                {
+                    if (IslandGround.Pick(island, fromX, gz, half) is not { } sample || island.CubeAt(toX / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } to) continue;
+                    int x = toX % IslandCube.Cells, z = gz % IslandCube.Cells;
+                    var polygon = new IslandPolygon(to.Polygon(x, z, half)).With(bank: sample.Polygon.Bank, texFlag: sample.Polygon.TexFlag, polyFlag: sample.Polygon.PolyFlag,
+                        sampleStep: sample.Polygon.SampleStep, codeJeu: sample.Polygon.CodeJeu, diagonal: sample.Polygon.Diagonal);
+                    if (sample.Texture is not null)
+                        polygon = island.WithGroundTexture(polygon, island.GroundTextureOf(sample.Polygon).Page, IslandGround.TextureIndexFor(to, sample.Texture));
+                    to.SetPolygon(x, z, half, polygon.Raw);
+                    n++;
+                }
+            report.Notes.Add($"the ground's cells along x {fromX} copied onto x {toX}, rows {z0}-{z1} ({n} triangles) (the island's record says so)");
+        }
         foreach (var (cx, cz, x, z, dx, dz) in o.Island.CopyDecors ?? Array.Empty<(int, int, int, int, int, int)>())
         {
             if (island.CubeAt(cx, cz) is not { } cube) continue;

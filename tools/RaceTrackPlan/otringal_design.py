@@ -384,7 +384,10 @@ KEEP = [9, 10, 11, 12, 13, 14, 25, 26, 69, 77, 99, 100, 112]     # the palace, t
 # (the casino, 70/71, is not: the roulette wheel floats where it stood -- the user, 2026-10-09: "We can remove that building if we need to")
 # the footbridge in the town under the road's tightest bend: its west wall (bodies 86-90) and the lamp's head (body 2) at its south-west
 # corner, [body, island cell x, z] -- the user, 2026-11-15: "it's not in the way of the track", "restore the lamp head too"
-KEEP_PLACED = [[86, 469.3, 528.0], [87, 469.3, 530.0], [88, 469.3, 533.0], [89, 469.3, 536.0], [90, 469.3, 538.0], [2, 467.2, 537.0]]
+# (2026-11-22: the footbridge widened a cell each side for the car -- RaceTrackIsland.Otringal's MoveDecors -- its walls and lamps found
+# where they are moved to, the east wall and lamp kept too)
+KEEP_PLACED = [[86, 468.3, 528.0], [87, 468.3, 530.0], [88, 468.3, 533.0], [89, 468.3, 536.0], [90, 468.3, 538.0], [2, 467.0, 537.5], [1, 467.0, 537.5],
+               [95, 473.7, 528.0], [94, 473.7, 530.0], [93, 473.7, 533.0], [92, 473.7, 536.0], [91, 473.7, 538.0], [2, 475.4, 537.5], [1, 475.4, 537.5]]
 
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)
 ride = ~np.zeros(N, bool)

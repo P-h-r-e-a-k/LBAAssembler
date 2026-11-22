@@ -32,6 +32,14 @@ internal static partial class RaceTrackStory
     // (a scene variable of the base: HAL's talker is there this visit -- the eggs' HalTalks is 70, the base's own scripts use 0-2)
     private const int HalHere = 71;
     private static readonly (int X, int Y, int Z) HalSpot = (23152, 2816, 3904), MechanicSpot = (19344, 2816, 6400);
+    // (who answers Action in HAL's room: the one Twinsen faces, near -- the hero's own script sets var_cube Faced, distance_message; the
+    // talkers and the scientists answer only to it. HAL's talker answered for anyone within 2,500 of him, and the scientists by his console
+    // all stand within that: whoever Twinsen went to, he heard HAL's cry and his own "I think that means no" -- the user, 2026-11-21: "for
+    // the first 30 seconds or so that Twinsen tries to talk to them they all say the same thing 'I think that means no' - we need to give
+    // them all informative story related lines". The head scientist is the one at HAL's console, actor 12: the game's own, actor 14, is
+    // gone after chapter 3, and the mechanics' talker spoke from his empty place)
+    private const int Faced = 73, FacedHal = 1, HeadScientist = 12, ScientistWalker = 13, ScientistBench = 15;
+    private const int NearScientist = 1200, NearHead = 1300, NearHal = 2500;
     // (HAL mended while Twinsen waits after lending the radio -- the user, 2026-11-17: "After Twinsen talks to the scientist near HAL and
     // hands over his radio, let's have Twinsen held in a cut scene until HAL is fixed, at which point have a scientist return to him and hand
     // the radio back, along with telling him to talk to HAL": the mechanics' cut scene's frames, counted in a cell variable)
@@ -93,6 +101,8 @@ internal static partial class RaceTrackStory
         MechanicMended,
         // (the private rooms' bouncer, to Twinsen without a dancer -- RaceTrackStory.StellaLounge, 2026-11-17)
         ClubPrivateOnly,
+        // (HAL's scientists, each his own word on HAL as the story goes -- the user, 2026-11-21; Faced)
+        WalkerBroken, BenchBroken, BenchRadioSeen, WalkerMended, BenchMended, WalkerOut, BenchOut, WalkerBeaten, BenchBeaten, TwinsenAskScientists,
     }
     private static readonly string[][] MoonLines =
     {
@@ -602,6 +612,96 @@ internal static partial class RaceTrackStory
             "Di qui si passa solo per gli spettacoli privati, amico. Paga una delle ragazze e ti porterà lei.",
             "Por aqui só se passa para os espetáculos privados, amigo. Paga a uma das raparigas e ela leva-te lá dentro.",
         },
+        new[]
+        {
+            "HAL's gone mad, if you ask me -- \"ZX81! ZX81!\" all night long. Talk to our head scientist at HAL's console. He knows what's wrong.",
+            "HAL est devenu fou, si tu veux mon avis -- « ZX81 ! ZX81 ! » toute la nuit. Parle à notre chef scientifique, à la console de HAL. Il sait ce qui ne va pas.",
+            "HAL ist durchgedreht, wenn du mich fragst -- „ZX81! ZX81!“ die ganze Nacht. Sprich mit unserem Chefwissenschaftler an HALs Konsole. Er weiß, was los ist.",
+            "HAL se ha vuelto loco, si me preguntas: «¡ZX81! ¡ZX81!» toda la noche. Habla con nuestro jefe científico, en la consola de HAL. Él sabe qué le pasa.",
+            "HAL è impazzito, se vuoi saperlo: «ZX81! ZX81!» tutta la notte. Parla con il nostro capo scienziato, alla console di HAL. Lui sa cos'ha che non va.",
+            "O HAL enlouqueceu, se queres saber -- «ZX81! ZX81!» a noite toda. Fala com o nosso cientista-chefe, na consola do HAL. Ele sabe o que se passa.",
+        },
+        new[]
+        {
+            "HAL's broken. His voice box is burnt out, and he won't switch on the start lights till it's mended. A part from a radio would do it, but we haven't got one up here. Ask the head scientist at the console.",
+            "HAL est en panne. Son boîtier vocal a grillé, et il n'allumera pas les feux de départ tant qu'on ne l'aura pas réparé. Une pièce de radio ferait l'affaire, mais on n'en a pas ici. Demande au chef scientifique, à la console.",
+            "HAL ist kaputt. Sein Sprachmodul ist durchgebrannt, und die Startampel schaltet er erst ein, wenn es repariert ist. Ein Teil aus einem Funkgerät würde reichen, aber wir haben hier oben keins. Frag den Chefwissenschaftler an der Konsole.",
+            "HAL está averiado. Se le ha quemado la caja de voz, y no encenderá el semáforo de salida hasta que se la arreglen. Una pieza de una radio serviría, pero aquí arriba no tenemos ninguna. Pregúntale al jefe científico, en la consola.",
+            "HAL è guasto. Gli si è bruciato il modulo vocale, e non accenderà il semaforo di partenza finché non glielo ripariamo. Basterebbe un pezzo di una radio, ma quassù non ne abbiamo. Chiedi al capo scienziato, alla console.",
+            "O HAL está avariado. A caixa de voz queimou-se, e ele não acende as luzes da partida enquanto não a repararem. Uma peça de um rádio resolvia, mas aqui em cima não temos nenhum. Pergunta ao cientista-chefe, na consola.",
+        },
+        new[]
+        {
+            "Is that a radio you've got there? That's just what HAL needs! Show it to the head scientist at the console.",
+            "C'est une radio que tu as là ? C'est exactement ce qu'il faut à HAL ! Montre-la au chef scientifique, à la console.",
+            "Ist das ein Funkgerät, das du da hast? Genau das braucht HAL! Zeig es dem Chefwissenschaftler an der Konsole.",
+            "¿Eso que llevas es una radio? ¡Es justo lo que necesita HAL! Enséñasela al jefe científico, en la consola.",
+            "Quella che hai lì è una radio? È proprio quello che serve a HAL! Mostrala al capo scienziato, alla console.",
+            "Isso aí é um rádio? É mesmo do que o HAL precisa! Mostra-o ao cientista-chefe, na consola.",
+        },
+        new[]
+        {
+            "Your radio did it. HAL's back to himself... more or less. Go on, talk to him.",
+            "C'est ta radio qui a fait ça. HAL est redevenu lui-même... plus ou moins. Vas-y, parle-lui.",
+            "Dein Funkgerät hat's geschafft. HAL ist wieder er selbst ... mehr oder weniger. Na los, sprich mit ihm.",
+            "Lo ha conseguido tu radio. HAL vuelve a ser él mismo... más o menos. Venga, habla con él.",
+            "Ce l'ha fatta la tua radio. HAL è tornato quello di prima... più o meno. Dai, parlagli.",
+            "Foi o teu rádio. O HAL voltou a ser o que era... mais ou menos. Vá, fala com ele.",
+        },
+        new[]
+        {
+            "HAL says he wants to race you himself. We couldn't talk him out of it.",
+            "HAL dit qu'il veut faire la course contre toi en personne. On n'a pas réussi à l'en dissuader.",
+            "HAL sagt, er will selbst gegen dich fahren. Wir konnten es ihm nicht ausreden.",
+            "HAL dice que quiere correr contra ti en persona. No hemos podido quitárselo de la cabeza.",
+            "HAL dice che vuole sfidarti lui in persona. Non siamo riusciti a fargli cambiare idea.",
+            "O HAL diz que quer correr contra ti ele próprio. Não conseguimos tirar-lhe a ideia da cabeça.",
+        },
+        new[]
+        {
+            "HAL's waiting for you in the pit lane. The start lights are on -- go and race.",
+            "HAL t'attend dans la voie des stands. Les feux de départ sont allumés -- va courir.",
+            "HAL wartet in der Boxengasse auf dich. Die Startampel ist an -- los, fahr.",
+            "HAL te espera en el carril de boxes. El semáforo de salida está encendido: ve a correr.",
+            "HAL ti aspetta nella corsia dei box. Il semaforo di partenza è acceso: vai a correre.",
+            "O HAL está à tua espera na via das boxes. As luzes da partida estão acesas -- vai correr.",
+        },
+        new[]
+        {
+            "It's so quiet in here without HAL shouting. He's out at the track, waiting for you.",
+            "C'est si calme ici sans HAL qui crie. Il est sur le circuit, il t'attend.",
+            "Ohne HALs Geschrei ist es so still hier. Er ist draußen an der Strecke und wartet auf dich.",
+            "Qué silencio hay aquí sin los gritos de HAL. Está en el circuito, esperándote.",
+            "Che silenzio qui senza HAL che urla. È in pista, ti aspetta.",
+            "Está tudo tão calado sem os gritos do HAL. Está na pista, à tua espera.",
+        },
+        new[]
+        {
+            "You beat HAL! He hasn't stopped sulking since.",
+            "Tu as battu HAL ! Il n'a pas arrêté de bouder depuis.",
+            "Du hast HAL geschlagen! Seitdem schmollt er ununterbrochen.",
+            "¡Le has ganado a HAL! Desde entonces no ha parado de enfurruñarse.",
+            "Hai battuto HAL! Da allora non ha smesso di tenere il broncio.",
+            "Ganhaste ao HAL! Desde então não parou de amuar.",
+        },
+        new[]
+        {
+            "Thanks for the loan of the radio, Twinsen. HAL's never sounded better.",
+            "Merci pour le prêt de la radio, Twinsen. HAL n'a jamais eu une aussi belle voix.",
+            "Danke, dass du uns dein Funkgerät geliehen hast, Twinsen. HAL hat noch nie so gut geklungen.",
+            "Gracias por prestarnos la radio, Twinsen. HAL nunca había sonado tan bien.",
+            "Grazie per averci prestato la radio, Twinsen. HAL non ha mai avuto una voce così bella.",
+            "Obrigado por nos emprestares o rádio, Twinsen. O HAL nunca soou tão bem.",
+        },
+        new[]
+        {
+            "Maybe one of his scientists knows what's wrong with him.",
+            "Ses scientifiques savent peut-être ce qui ne va pas chez lui.",
+            "Vielleicht weiß einer seiner Wissenschaftler, was mit ihm los ist.",
+            "Quizá alguno de sus científicos sepa qué le pasa.",
+            "Forse uno dei suoi scienziati sa cos'ha che non va.",
+            "Talvez um dos cientistas dele saiba o que se passa com ele.",
+        },
     };
 
     // The moon's landing pad (the outside scene with the game's door into its Esmer shuttle, scene 115 -- the platform's west face): the
@@ -884,6 +984,69 @@ void comportement_3()
         });
     }
 
+    // A talker of HAL's room answering only when the hero's script has Twinsen facing it (Faced): its "within reach" made "faced"
+    private static string FacedTalker(int who, string talker)
+    {
+        const string near = "2500 > distance(0)";
+        if (!talker.Contains(near)) throw new InvalidOperationException("HAL's room: a talker without its reach");
+        return talker.Replace(near, $"{who} == var_cube({Faced})");
+    }
+
+    // The hero's script in HAL's room (the moon base, scene 23): Action -- whom Twinsen faces, near (distance_message, his own facing): the
+    // scientist who walks the room or the one at the bench, each his own word on HAL as the story goes (broken; mended, here or out at the
+    // track; beaten), the head scientist at the console (the mechanics' talker), or HAL (his talker). Not while his radio is being fitted
+    // (Q_HAL 3: the cut scene).
+    private static void FacingInHalsRoom(SceneScripts scripts, int halTalker, string moon, Func<MoonLine, int> say)
+    {
+        string Says(int who, MoonLine broken, MoonLine mended, MoonLine outAtTrack, MoonLine beaten, MoonLine? radioSeen) => $@"                set_var_cube({Faced}, {who});
+                {(radioSeen is { } seen ? $@"if ({RadioLent} > var_game({QHal}) && 0 < var_game({Radio}))
+                {{
+                    message_obj({who}, {say(seen)});
+                }}
+                else " : "")}if ({RadioLent} > var_game({QHal}))
+                {{
+                    message_obj({who}, {say(broken)});
+                }}
+                else if ({HalWon} <= var_game({QHal}))
+                {{
+                    message_obj({who}, {say(beaten)});
+                }}
+                else if (0 == var_cube({HalHere}))
+                {{
+                    message_obj({who}, {say(outAtTrack)});
+                }}
+                else
+                {{
+                    message_obj({who}, {say(mended)});
+                }}";
+        var block = $@"
+    swif (1 == action())
+    {{
+        set_var_cube({Faced}, 0);
+        if ({moon} && {Driving} != comportement_hero() && {RadioLent} != var_game({QHal}))
+        {{
+            if ({NearScientist} > distance_message({ScientistWalker}))
+            {{
+{Says(ScientistWalker, MoonLine.WalkerBroken, MoonLine.WalkerMended, MoonLine.WalkerOut, MoonLine.WalkerBeaten, null)}
+            }}
+            else if ({NearScientist} > distance_message({ScientistBench}))
+            {{
+{Says(ScientistBench, MoonLine.BenchBroken, MoonLine.BenchMended, MoonLine.BenchOut, MoonLine.BenchBeaten, MoonLine.BenchRadioSeen)}
+            }}
+            else if ({NearHead} > distance_message({HeadScientist}))
+            {{
+                set_var_cube({Faced}, {HeadScientist});
+            }}
+            else if ({NearHal} > distance_message({halTalker}))
+            {{
+                set_var_cube({Faced}, {FacedHal});
+            }}
+        }}
+    }}";
+        var hero = scripts.GetText(0, ScriptKind.Life);
+        scripts.SetText(0, ScriptKind.Life, Loose(hero, "void comportement_1()\n{", "void comportement_1()\n{" + block));
+    }
+
     private const uint PushableFlag = 1u << 4, CheckObjColFlag = 1u; // (COMMON.H PUSHABLE, CHECK_OBJ_COL)
     private static List<string> ApplyEmerald(string gameDirectory, RaceTrackReport report, RaceTrackScenes.Result scenes)
     {
@@ -1005,7 +1168,8 @@ void comportement_3()
             {
                 // (HAL speaks in colour 10, the palette's cyan: the base's palette has no ramp in row 15 -- it ends blue, green, cyan, red,
                 // magenta -- so a line in 15 typed out in a rainbow, the user, 2026-11-07)
-                var hal = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(HalSpot.X, HalSpot.Y, HalSpot.Z, HalVoice), Talker($"{moon} && {HalMended} > var_game({QHal})", $@"            if ({RadioLent} == var_game({QHal}))
+                var halTalker = model.Actors.Count;
+                var hal = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(HalSpot.X, HalSpot.Y, HalSpot.Z, HalVoice), FacedTalker(FacedHal, Talker($"{moon} && {HalMended} > var_game({QHal})", $@"            if ({RadioLent} == var_game({QHal}))
             {{
                 message({Say(MoonLine.HalThanks)});
                 message({Say(MoonLine.HalRadio)});
@@ -1019,6 +1183,7 @@ void comportement_3()
                 message({HalZx});
                 message({HalCry});
                 message_obj(0, {Say(MoonLine.TwinsenNo)});
+                message_obj(0, {Say(MoonLine.TwinsenAskScientists)});
                 set_var_game({QHal}, {HalHeard});
             }}
             else if ({HalWon} == var_game({QHal}))
@@ -1028,15 +1193,16 @@ void comportement_3()
             else
             {{
 {HalDaisy(Say(MoonLine.HalThanks), Say(MoonLine.HalDaisy), Say(MoonLine.HalDiagnostic))}
-            }}", 2500, $"    set_var_cube({HalHere}, 1);\n"));
-                var mechanics = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(MechanicSpot.X, MechanicSpot.Y, MechanicSpot.Z, 4), Talker(moon, $@"            if ({RadioLent} > var_game({QHal}) && 0 < var_game({Radio}))
+            }}", 2500, $"    set_var_cube({HalHere}, 1);\n")));
+                // (the head scientist at HAL's console says the mechanics' lines, from his own head)
+                var mechanics = IslandBeatsA.Add(model, RaceTrackScenes.InvisibleHelper(MechanicSpot.X, MechanicSpot.Y, MechanicSpot.Z, 4), FacedTalker(HeadScientist, Talker(moon, $@"            if ({RadioLent} > var_game({QHal}) && 0 < var_game({Radio}))
             {{
-                message({Say(MoonLine.MechanicSpare)});
+                message_obj({HeadScientist}, {Say(MoonLine.MechanicSpare)});
                 message_obj(0, {Say(MoonLine.TwinsenOffer)});
-                message({Say(MoonLine.MechanicThanks)});
+                message_obj({HeadScientist}, {Say(MoonLine.MechanicThanks)});
                 message_obj(0, {Say(MoonLine.TwinsenBack)});
                 set_var_game({Radio}, 0);
-                message({Say(MoonLine.MechanicLeave)});
+                message_obj({HeadScientist}, {Say(MoonLine.MechanicLeave)});
                 set_var_game({QHal}, {RadioLent});
                 set_var_cube({MendWait}, 0);
                 cinema_mode(1);
@@ -1045,23 +1211,23 @@ void comportement_3()
             }}
             else if ({RadioLent} > var_game({QHal}))
             {{
-                message({Say(MoonLine.MechanicSpare)});
+                message_obj({HeadScientist}, {Say(MoonLine.MechanicSpare)});
             }}
             else if ({HalMended} <= var_game({QHal}) && 0 == var_cube({HalHere}))
             {{
-                message({Say(MoonLine.MechanicHalOut)});
+                message_obj({HeadScientist}, {Say(MoonLine.MechanicHalOut)});
             }}
             else
             {{
-                message({Say(MoonLine.MechanicWorking)});
-            }}", 2500) + $@"
+                message_obj({HeadScientist}, {Say(MoonLine.MechanicWorking)});
+            }}", 2500)) + $@"
 // (HAL mended while Twinsen waits, held in a cut scene; the radio brought back, and the word to go and talk to HAL)
 void comportement_2()
 {{
     add_var_cube({MendWait}, 1);
     if ({MendFrames} < var_cube({MendWait}))
     {{
-        message({Say(MoonLine.MechanicMended)});
+        message_obj({HeadScientist}, {Say(MoonLine.MechanicMended)});
         found_object({Radio});
         set_var_game({Radio}, 1);
         set_var_game({QHal}, {HalMended});
@@ -1071,7 +1237,7 @@ void comportement_2()
     }}
 }}
 ");
-                return scripts => { hal(scripts); mechanics(scripts); };
+                return scripts => { hal(scripts); mechanics(scripts); FacingInHalsRoom(scripts, halTalker, moon, Say); };
             });
         }
         else log.Add($"HAL and the mechanics left out: no scene {BaseScene}");
