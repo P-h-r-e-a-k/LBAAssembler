@@ -998,21 +998,22 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "The password? I'm here to fix the antennas",
-            "Le mot de passe ? Je viens réparer les antennes",
-            "Das Passwort? Ich soll die Antennen reparieren",
-            "¿La contraseña? Vengo a arreglar las antenas",
-            "La parola d'ordine? Sono qui per aggiustare le antenne",
-            "A palavra-passe? Vim arranjar as antenas",
+            // (the user, 2026-11-22: the first two too long -- "Fail FunFrock", "It's me Santa Claus")
+            "Fail FunFrock",
+            "À bas FunFrock",
+            "Nieder mit FunFrock",
+            "Abajo FunFrock",
+            "Abbasso FunFrock",
+            "Abaixo o FunFrock",
         },
         new[]
         {
-            "I'm Santa Claus, I'm here to deliver presents",
-            "Je suis le Père Noël, je viens livrer des cadeaux",
-            "Ich bin der Weihnachtsmann, ich bringe Geschenke",
-            "Soy Papá Noel, vengo a repartir regalos",
-            "Sono Babbo Natale, sono qui per consegnare i regali",
-            "Sou o Pai Natal, vim entregar presentes",
+            "It's me, Santa Claus",
+            "C'est moi, le Père Noël",
+            "Ich bin's, der Weihnachtsmann",
+            "Soy yo, Papá Noel",
+            "Sono io, Babbo Natale",
+            "Sou eu, o Pai Natal",
         },
         new[]
         {
@@ -3017,6 +3018,13 @@ void comportement_{HeroWatching}()
             var guard = scripts.GetText(2, ScriptKind.Life);
             var talk = new System.Text.RegularExpressions.Regex(@"set_anim_dial\(166\);.*?set_var_cube\(1, 0\);", System.Text.RegularExpressions.RegexOptions.Singleline);
             if (!talk.IsMatch(guard)) throw new InvalidOperationException("the museum guard's talk isn't the game's");
+            // the door's button pressed before he's let in (the hero's zone 0: the guard sent to his track's label 3): the game's "Know, sir,
+            // that I alone have the right to press this button!! You must pay to enter!" (34) -- nothing to pay now; the guard asks the
+            // password instead, the same talk as speaking to him (the user, 2026-11-22: "the grobo as we enter the museum, if we try to
+            // press the button tells Twinsen that he has to pay, which he no longer does")
+            var button = new System.Text.RegularExpressions.Regex(@"message\(34\);(\s*)set_track\(label_0\);");
+            if (!button.IsMatch(guard)) throw new InvalidOperationException("the museum guard's button line isn't the game's");
+            guard = button.Replace(guard, "set_var_cube(1, 1);$1set_track(label_1);", 1);
             int antennas = p.Say(ChapterLine.PasswordAntennas), santa = p.Say(ChapterLine.PasswordSanta), spoon = p.Say(ChapterLine.PasswordSpoon);
             scripts.SetText(2, ScriptKind.Life, talk.Replace(guard, $@"set_anim_dial(166);
         if (0 == var_cube(7) && 0 == var_cube(9))
