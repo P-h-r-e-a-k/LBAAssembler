@@ -19,7 +19,7 @@ internal static partial class RaceTrackStory
 
     // (lyra, black: while the race is full -- Q_FEE 1, RaceTrackStory.OtringalDays -- where to find Lyra, and what he saw of the black
     // car's driver, 2026-11-19, the user: "somebody who knows somebody")
-    private static void RickAtTheCasino(IslandBeatsA b, string when, int cup, int joint, int kid, int lyra = -1, int black = -1)
+    private static void RickAtTheCasino(IslandBeatsA b, string when, int cup, int joint, int kid, int lyra = -1, int black = -1, string first = "")
     {
         if (Copy(b.Originals, RickScene, RickActor) is not { Entity: >= 0 } rick || !b.Store.SceneExists(CasinoScene))
         {
@@ -37,7 +37,7 @@ internal static partial class RaceTrackStory
             else
             {{
 ";
-            return IslandBeatsA.Add(model, rick, Talker(when, full + $@"            add_var_cube({RickTalks}, 1);
+            return IslandBeatsA.Add(model, rick, Talker(when, first + full + $@"            add_var_cube({RickTalks}, 1);
             if (1 == var_cube({RickTalks}))
             {{
                 message({cup});

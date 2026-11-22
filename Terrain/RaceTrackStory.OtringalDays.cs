@@ -26,7 +26,11 @@ internal static partial class RaceTrackStory
     private static readonly (double X, double Z) CoilPier = (413, 548);
 
     // The race marshal at the start line (MarshalA)
-    private static string MarshalTalk(Func<OtringalLine, int> say) => $@"            if (0 == var_game({QFee}))
+    private static string MarshalTalk(Func<OtringalLine, int> say) => $@"            if ({FeePaid} == var_game({QFee}) && {DayQualified} == var_game({OtringalDay}))
+            {{
+                message({say(OtringalLine.MarshalNight)});
+            }}
+            else if (0 == var_game({QFee}))
             {{
                 message({say(OtringalLine.MarshalFull)});
                 message({say(OtringalLine.EsmerMoney)});
@@ -39,6 +43,7 @@ internal static partial class RaceTrackStory
             }}
             else if ({FeePaid} == var_game({QFee}) && {DayRaceDay} == var_game({OtringalDay}))
             {{
+                message_obj(0, {say(OtringalLine.TwinsenAskCoil)});
                 message({say(OtringalLine.MarshalNoCoil)});
             }}
             else if ({FeePaid} == var_game({QFee}) && {DayCoil} == var_game({OtringalDay}))
@@ -85,23 +90,60 @@ internal static partial class RaceTrackStory
     private static void OtringalDays(IslandBeatsA b, RaceTrackReport report, Func<OtringalLine, int> say, string when)
     {
         // the gazogem seller: on race day, what he saw in the night (his own line, the black car's fellow, the rest of the time)
-        b.Edit(LowerCity, "the gazogem seller on race day: someone in a mask out of the stewards' garage, to the west pier", _ => scripts =>
-            scripts.SetText(GazogemSeller, ScriptKind.Life, Loose(scripts.GetText(GazogemSeller, ScriptKind.Life),
+        // (since 2026-11-22 the coil's fetch quest -- the user: "Maybe yes, maybe no, maybe I have one ... IF you do a small favour for me" -- a
+        // love letter to the singer at Rick's bar and her answer back, then the coil for 10 zlitos and the masked man in black who sold it him)
+        // (and he stays at his stall in chapter 5: the game takes him away once the dissidents' plot is far on and Twinsen has the gazogem can
+        // -- the Island of the Francos gives it him before Otringal -- and the coil's quest is his)
+        b.Edit(LowerCity, "the gazogem seller on race day: the coil for a love letter carried to the singer at Rick's bar, and 10 zlitos", _ => scripts =>
+            scripts.SetText(GazogemSeller, ScriptKind.Life, Loose(Loose(scripts.GetText(GazogemSeller, ScriptKind.Life),
+                "if (7 < chapter() || (0 < var_game(123)", "if (7 < chapter() || (5 != chapter() && 0 < var_game(123)"),
                 "message(245);\nset_var_cube(0, 0);",
-                $"if ({DayRaceDay} == var_game({OtringalDay}))\n{{\nmessage({say(OtringalLine.SellerMask)});\n}}\nelse\n{{\nmessage(245);\n}}\nset_var_cube(0, 0);")));
-        // the crate on the west pier, the coil in it
-        if (OffRoadA(report, CoilPier.X, CoilPier.Z, 1.0) is { } spot && b.SceneAt(spot.X, spot.Z) is var scene and >= 0)
-            b.Edit(scene, $"the crate on the west pier at cell ({spot.X:0.#}, {spot.Z:0.#}): the car's ignition coil, on race day", model =>
-            {
-                var crate = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Crate, 0, 0, 0);
-                Place(crate, model, (spot.X, spot.Z, spot.Y, 0));
-                return IslandBeatsA.Add(model, crate, Talker(when, $@"            if ({DayRaceDay} == var_game({OtringalDay}))
-            {{
-                message({say(OtringalLine.CoilFound)});
-                set_var_game({OtringalDay}, {DayCoil});
-            }}"));
-            });
-        else b.Log.Add("the coil's crate left out: no room off the road by the west pier");
+                $@"if ({DayRaceDay} == var_game({OtringalDay}) && {CoilLetter} > var_game({QCoil}))
+{{
+message_obj(0, {say(OtringalLine.TwinsenAskCoil)});
+message({say(OtringalLine.SellerMaybe)});
+message_obj(0, {say(OtringalLine.TwinsenWhatFavour)});
+message({say(OtringalLine.SellerLetter)});
+set_var_game({QCoil}, {CoilLetter});
+}}
+else if ({DayRaceDay} == var_game({OtringalDay}) && {CoilLetter} == var_game({QCoil}))
+{{
+message({say(OtringalLine.SellerWaiting)});
+}}
+else if ({DayRaceDay} == var_game({OtringalDay}) && {CoilAnswer} == var_game({QCoil}))
+{{
+message({say(OtringalLine.SellerReplyRead)});
+add_choice({say(OtringalLine.Yes)});
+add_choice({say(OtringalLine.No)});
+ask_choice({say(OtringalLine.SellerAsk)});
+if ({say(OtringalLine.Yes)} == choice())
+{{
+if ({CoilPrice} > nb_gold_pieces())
+{{
+message({say(OtringalLine.SellerShort)});
+}}
+else
+{{
+give_gold_pieces({CoilPrice});
+message({say(OtringalLine.SellerSold)});
+set_var_game({QCoil}, {CoilBought});
+set_var_game({OtringalDay}, {DayCoil});
+bulle(0);
+message({say(OtringalLine.CoilFound)});
+bulle(1);
+}}
+}}
+}}
+else if ({CoilBought} == var_game({QCoil}))
+{{
+message({say(OtringalLine.SellerAfter)});
+}}
+else
+{{
+message(245);
+}}
+set_var_cube(0, 0);")));
+        // (the crate on the west pier with the coil in it: gone since 2026-11-22 -- the seller has the coil now, RaceTrackStory.OtringalNight)
     }
 
     // The race file's: the race full till Lyra's been paid; qualifying the first day -- then no race -- held overnight and while the coil is
@@ -111,6 +153,9 @@ internal static partial class RaceTrackStory
         $"gate_not={OtringalDay} {DayQualified} The cars are in the stewards' garage till the morning.\n" +
         $"gate_not={OtringalDay} {DayRaceDay} The marshal: no ignition coil, no race!\n" +
         $"qualify_stop={OtringalDay} 0 {DayQualified}\n" +
+        // (the night: the car in the palace's keeping; race day: its coil gone, it won't start -- RaceTrackStory.OtringalNight)
+        $"car_held={OtringalDay} {DayQualified} {PalaceRoom}\n" +
+        $"car_dead={OtringalDay} {DayRaceDay} The engine won't start -- the ignition coil is missing!\n" +
         $"no_qualify={OtringalDay} {DayRaceDay}\n" +
         $"win={QFee} {FeeWon}\n";
 }

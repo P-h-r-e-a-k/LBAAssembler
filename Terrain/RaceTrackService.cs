@@ -516,6 +516,10 @@ internal static class RaceTrackService
             // (Citadel Island's easter eggs' LBA1 rooms -- the sewers' secret room, its doorway cut in the demo's sewers' wall, and the
             // Tavern's cellar -- from LBA1's own scenes, before the story, which puts their props and lines in: Citadel/CitadelLba1Rooms)
             // (and the museum's displays the story adds, in its own bricks: Citadel/CitadelMuseum)
+            // (the Imperial Hotel's upper floor on Otringal -- its lift, its corridor, its three rooms -- before the story, which walks Twinsen
+            // up to them for the night before the race: OtringalHotel)
+            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Otringal.IleFile))
+                made.AddRange(OtringalHotel.Install(gameDirectory));
             if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Citadel.IleFile))
             {
                 made.AddRange(LBAAssembler.Terrain.Citadel.CitadelLba1Rooms.Install(gameDirectory, Lba1Folder()));

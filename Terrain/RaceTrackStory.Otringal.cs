@@ -51,6 +51,8 @@ internal static partial class RaceTrackStory
         MarshalSetTime, MarshalQualified, NightPasses, MarshalCoil, MarshalNoCoil, SellerMask, CoilFound, MarshalReady,
         // (Johnny's pointer to the harbour taxi, his flight's place -- 2026-11-19)
         JohnnyTaxi,
+        // (the night at the Imperial Hotel and the coil's fetch quest -- RaceTrackStory.OtringalNight, 2026-11-22)
+        MarshalHeld, MarshalNight, ReceptionOffer, RoomClassic, RoomJunior, RoomSuite, ReceptionNoRoom, ReceptionKey, ReceptionShort, ReceptionDay, ReceptionMorning, TwinsenNoKey, RoomLocked, TwinsenSleep, WakeClassic, WakeJunior, WakeSuite, TwinsenAskCoil, SellerMaybe, TwinsenWhatFavour, SellerLetter, SellerWaiting, TwinsenGiveLetter, SingerReply, SingerWaiting, SellerReplyRead, SellerAsk, SellerSold, SellerShort, SellerAfter, RickCoil, JohnnyCoil, LyraCoil, ReceptionCoil,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -395,21 +397,21 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Your car's back from inspection, Twinsen -- but its ignition coil isn't. Somebody had the garage open in the night. No coil, no race.",
-            "Ta voiture est revenue de l'inspection, Twinsen -- mais pas sa bobine d'allumage. Quelqu'un a ouvert le garage cette nuit. Pas de bobine, pas de course.",
-            "Dein Auto ist von der Inspektion zurück, Twinsen -- aber seine Zündspule nicht. Jemand war heute Nacht in der Garage. Keine Zündspule, kein Rennen.",
-            "Tu coche ha vuelto de la inspección, Twinsen, pero su bobina de encendido no. Alguien abrió el garaje por la noche. Sin bobina, no hay carrera.",
-            "La tua auto è tornata dall'ispezione, Twinsen, ma la bobina d'accensione no. Qualcuno ha aperto il garage stanotte. Niente bobina, niente gara.",
-            "O teu carro voltou da inspeção, Twinsen -- mas a bobina de ignição não. Alguém abriu a garagem durante a noite. Sem bobina, não há corrida.",
+            "Your car's back from the palace, Twinsen -- but its ignition coil isn't. Somebody had the stewards' garage open in the night. No coil, no race.",
+            "Ta voiture est revenue du palais, Twinsen -- mais pas sa bobine d'allumage. Quelqu'un a ouvert le garage des commissaires cette nuit. Pas de bobine, pas de course.",
+            "Dein Auto ist aus dem Palast zurück, Twinsen -- aber seine Zündspule nicht. Jemand hat in der Nacht die Garage der Kommissare geöffnet. Keine Spule, kein Rennen.",
+            "Tu coche ha vuelto del palacio, Twinsen, pero su bobina de encendido no. Alguien abrió el garaje de los comisarios por la noche. Sin bobina no hay carrera.",
+            "La tua auto è tornata dal palazzo, Twinsen, ma la sua bobina d'accensione no. Qualcuno ha aperto il garage dei commissari stanotte. Niente bobina, niente gara.",
+            "O teu carro voltou do palácio, Twinsen -- mas a bobina de ignição não. Alguém abriu a garagem dos comissários durante a noite. Sem bobina, não há corrida.",
         },
         new[]
         {
-            "No ignition coil, no race, Twinsen. Ask around -- somebody must have seen something last night.",
-            "Pas de bobine, pas de course, Twinsen. Renseigne-toi -- quelqu'un a bien dû voir quelque chose cette nuit.",
-            "Keine Zündspule, kein Rennen, Twinsen. Hör dich um -- irgendwer muss heute Nacht etwas gesehen haben.",
-            "Sin bobina no hay carrera, Twinsen. Pregunta por ahí: alguien tuvo que ver algo anoche.",
-            "Niente bobina, niente gara, Twinsen. Chiedi in giro: qualcuno deve aver visto qualcosa stanotte.",
-            "Sem bobina não há corrida, Twinsen. Pergunta por aí -- alguém deve ter visto alguma coisa esta noite.",
+            "No ignition coil, no race, Twinsen. Ask the gazogem seller in the Lower City -- his stall is open all night, he sees everything.",
+            "Pas de bobine d'allumage, pas de course, Twinsen. Demande au vendeur de gazogem de la Ville Basse -- son étal est ouvert toute la nuit, il voit tout.",
+            "Keine Zündspule, kein Rennen, Twinsen. Frag den Gazogem-Verkäufer in der Unterstadt -- sein Stand hat die ganze Nacht offen, er sieht alles.",
+            "Sin bobina de encendido no hay carrera, Twinsen. Pregunta al vendedor de gazogem de la Ciudad Baja: su puesto abre toda la noche, lo ve todo.",
+            "Niente bobina d'accensione, niente gara, Twinsen. Chiedi al venditore di gazogem della Città Bassa: il suo banco è aperto tutta la notte, vede tutto.",
+            "Sem bobina de ignição, não há corrida, Twinsen. Pergunta ao vendedor de gazogem da Cidade Baixa -- a banca dele está aberta a noite toda, ele vê tudo.",
         },
         new[]
         {
@@ -422,12 +424,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Twinsen finds his car's ignition coil in the crate!",
-            "Twinsen retrouve la bobine d'allumage de sa voiture dans la caisse !",
-            "Twinsen findet die Zündspule seines Autos in der Kiste!",
-            "¡Twinsen encuentra la bobina de encendido de su coche en la caja!",
-            "Twinsen trova la bobina d'accensione della sua auto nella cassa!",
-            "O Twinsen encontra a bobina de ignição do carro dentro do caixote!",
+            "Twinsen has his car's ignition coil. Back to the car!",
+            "Twinsen a la bobine d'allumage de sa voiture. Retour à la voiture !",
+            "Twinsen hat die Zündspule seines Autos. Zurück zum Auto!",
+            "¡Twinsen tiene la bobina de encendido de su coche! ¡De vuelta al coche!",
+            "Twinsen ha la bobina d'accensione della sua auto. Torna all'auto!",
+            "O Twinsen tem a bobina de ignição do carro. De volta ao carro!",
         },
         new[]
         {
@@ -446,6 +448,312 @@ internal static partial class RaceTrackStory
             "Mi cohete no tiene dónde aterrizar en la Celebración, chico. Coge un taxi en el puerto y dile al conductor que ganaste la Copa.",
             "Il mio razzo non ha dove atterrare sulla Celebrazione, ragazzo. Prendi un taxi al porto: di' all'autista che hai vinto la Coppa.",
             "O meu foguetão não tem onde aterrar na Celebração, miúdo. Apanha um táxi no porto -- diz ao condutor que ganhaste a Taça.",
+        },
+        new[]
+        {
+            "A good lap, Twinsen! Every car spends the night in the Emperor's palace, under the stewards' lock and key -- yours too. Get yourself a room at the Imperial Hotel. The race starts in the morning.",
+            "Joli tour, Twinsen ! Toutes les voitures passent la nuit au palais de l'Empereur, sous la clé des commissaires -- la tienne aussi. Prends-toi une chambre à l'Hôtel Impérial. La course part demain matin.",
+            "Gute Runde, Twinsen! Alle Autos verbringen die Nacht im Palast des Kaisers, unter Verschluss der Rennkommissare -- deins auch. Nimm dir ein Zimmer im Kaiserlichen Hotel. Das Rennen startet morgen früh.",
+            "¡Buena vuelta, Twinsen! Todos los coches pasan la noche en el palacio del Emperador, bajo llave de los comisarios: el tuyo también. Búscate una habitación en el Hotel Imperial. La carrera empieza mañana por la mañana.",
+            "Bel giro, Twinsen! Tutte le auto passano la notte nel palazzo dell'Imperatore, sotto chiave dei commissari: anche la tua. Prenditi una camera all'Hotel Imperiale. La gara parte domattina.",
+            "Boa volta, Twinsen! Todos os carros passam a noite no palácio do Imperador, fechados à chave pelos comissários -- o teu também. Arranja um quarto no Hotel Imperial. A corrida começa amanhã de manhã.",
+        },
+        new[]
+        {
+            "Your car's safe in the palace till morning. Go and get some sleep -- the Imperial Hotel has rooms.",
+            "Ta voiture est en sécurité au palais jusqu'à demain matin. Va dormir un peu -- l'Hôtel Impérial a des chambres.",
+            "Dein Auto ist bis morgen früh sicher im Palast. Geh schlafen -- das Kaiserliche Hotel hat Zimmer.",
+            "Tu coche está a salvo en el palacio hasta mañana. Ve a dormir un poco: el Hotel Imperial tiene habitaciones.",
+            "La tua auto è al sicuro nel palazzo fino a domattina. Vai a dormire un po': l'Hotel Imperiale ha delle camere.",
+            "O teu carro está seguro no palácio até de manhã. Vai dormir um pouco -- o Hotel Imperial tem quartos.",
+        },
+        new[]
+        {
+            "Good evening, sir. A room for the night?",
+            "Bonsoir, monsieur. Une chambre pour la nuit ?",
+            "Guten Abend, der Herr. Ein Zimmer für die Nacht?",
+            "Buenas noches, señor. ¿Una habitación para esta noche?",
+            "Buonasera, signore. Una camera per la notte?",
+            "Boa noite, senhor. Um quarto para esta noite?",
+        },
+        new[]
+        {
+            "The Classic Room, 100 zlitos.",
+            "La Chambre Classique, 100 zlitos.",
+            "Das Klassische Zimmer, 100 Zlitos.",
+            "La Habitación Clásica, 100 zlitos.",
+            "La Camera Classica, 100 zlitos.",
+            "O Quarto Clássico, 100 zlitos.",
+        },
+        new[]
+        {
+            "The Junior Suite, 250 zlitos.",
+            "La Suite Junior, 250 zlitos.",
+            "Die Junior-Suite, 250 Zlitos.",
+            "La Suite Júnior, 250 zlitos.",
+            "La Junior Suite, 250 zlitos.",
+            "A Suite Júnior, 250 zlitos.",
+        },
+        new[]
+        {
+            "The Imperial Suite, 500 zlitos.",
+            "La Suite Impériale, 500 zlitos.",
+            "Die Kaiserliche Suite, 500 Zlitos.",
+            "La Suite Imperial, 500 zlitos.",
+            "La Suite Imperiale, 500 zlitos.",
+            "A Suite Imperial, 500 zlitos.",
+        },
+        new[]
+        {
+            "Not tonight, thank you.",
+            "Pas ce soir, merci.",
+            "Heute nicht, danke.",
+            "Esta noche no, gracias.",
+            "Stasera no, grazie.",
+            "Hoje não, obrigado.",
+        },
+        new[]
+        {
+            "Your key, sir. The lift is in the alcove's wall, by the sofa -- your room is on the first floor. Sleep well.",
+            "Votre clé, monsieur. L'ascenseur est dans le mur de l'alcôve, près du canapé -- votre chambre est au premier étage. Dormez bien.",
+            "Ihr Schlüssel, der Herr. Der Aufzug ist in der Wand der Nische, beim Sofa -- Ihr Zimmer liegt im ersten Stock. Schlafen Sie gut.",
+            "Su llave, señor. El ascensor está en la pared de la alcoba, junto al sofá: su habitación está en el primer piso. Que descanse.",
+            "La sua chiave, signore. L'ascensore è nella parete dell'alcova, vicino al divano: la sua camera è al primo piano. Dorma bene.",
+            "A sua chave, senhor. O elevador está na parede da alcova, junto ao sofá -- o seu quarto fica no primeiro andar. Durma bem.",
+        },
+        new[]
+        {
+            "I'm afraid that's more zlitos than you have, sir. The Casino's machines are just around the corner.",
+            "Je crains que ce soit plus de zlitos que vous n'en avez, monsieur. Les machines du Casino sont juste au coin de la rue.",
+            "Ich fürchte, das sind mehr Zlitos, als Sie haben, der Herr. Die Automaten des Casinos sind gleich um die Ecke.",
+            "Me temo que son más zlitos de los que tiene, señor. Las máquinas del Casino están a la vuelta de la esquina.",
+            "Temo che siano più zlitos di quanti ne abbia, signore. Le macchinette del Casinò sono proprio dietro l'angolo.",
+            "Receio que sejam mais zlitos do que tem, senhor. As máquinas do Casino ficam mesmo ao virar da esquina.",
+        },
+        new[]
+        {
+            "Welcome to the Imperial Hotel, sir. Our rooms are let from the evening.",
+            "Bienvenue à l'Hôtel Impérial, monsieur. Nos chambres se louent à partir du soir.",
+            "Willkommen im Kaiserlichen Hotel, der Herr. Unsere Zimmer vermieten wir ab dem Abend.",
+            "Bienvenido al Hotel Imperial, señor. Nuestras habitaciones se alquilan a partir de la tarde.",
+            "Benvenuto all'Hotel Imperiale, signore. Le nostre camere si affittano dalla sera.",
+            "Bem-vindo ao Hotel Imperial, senhor. Os nossos quartos alugam-se a partir do fim da tarde.",
+        },
+        new[]
+        {
+            "Good morning, sir. I trust you slept well?",
+            "Bonjour, monsieur. Vous avez bien dormi, j'espère ?",
+            "Guten Morgen, der Herr. Ich hoffe, Sie haben gut geschlafen?",
+            "Buenos días, señor. ¿Ha dormido bien?",
+            "Buongiorno, signore. Spero abbia dormito bene?",
+            "Bom dia, senhor. Espero que tenha dormido bem?",
+        },
+        new[]
+        {
+            "The lift's for the hotel's guests. I'd need a room first.",
+            "L'ascenseur est réservé aux clients de l'hôtel. Il me faudrait d'abord une chambre.",
+            "Der Aufzug ist für die Hotelgäste. Ich bräuchte erst ein Zimmer.",
+            "El ascensor es para los huéspedes del hotel. Primero necesitaría una habitación.",
+            "L'ascensore è per gli ospiti dell'hotel. Prima mi servirebbe una camera.",
+            "O elevador é para os hóspedes do hotel. Primeiro precisava de um quarto.",
+        },
+        new[]
+        {
+            "Locked. A \"Do not disturb\" sign hangs on the handle.",
+            "Fermé à clé. Un panneau « Ne pas déranger » pend à la poignée.",
+            "Abgeschlossen. Ein Schild „Bitte nicht stören“ hängt an der Klinke.",
+            "Cerrado con llave. Un cartel de «No molestar» cuelga del pomo.",
+            "Chiuso a chiave. Un cartello «Non disturbare» pende dalla maniglia.",
+            "Fechado à chave. Um aviso «Não incomodar» está pendurado na maçaneta.",
+        },
+        new[]
+        {
+            "Time to get some sleep. Big race tomorrow.",
+            "Il est temps de dormir. Grande course demain.",
+            "Zeit zu schlafen. Morgen ist das große Rennen.",
+            "Hora de dormir. Mañana es la gran carrera.",
+            "È ora di dormire. Domani c'è la grande gara.",
+            "Hora de dormir. Amanhã é a grande corrida.",
+        },
+        new[]
+        {
+            "A narrow bed, but a good one. I slept well enough. Now -- my car.",
+            "Un lit étroit, mais un bon lit. J'ai assez bien dormi. Maintenant -- ma voiture.",
+            "Ein schmales Bett, aber ein gutes. Ich habe ganz gut geschlafen. Jetzt -- mein Auto.",
+            "Una cama estrecha, pero buena. He dormido bastante bien. Y ahora, mi coche.",
+            "Un letto stretto, ma buono. Ho dormito abbastanza bene. E ora, la mia auto.",
+            "Uma cama estreita, mas boa. Dormi razoavelmente bem. Agora -- o meu carro.",
+        },
+        new[]
+        {
+            "Now that's what I call a bed! I slept like a log. Ready for anything.",
+            "Ça, c'est un lit ! J'ai dormi comme une souche. Prêt à tout.",
+            "Das nenne ich ein Bett! Ich habe geschlafen wie ein Murmeltier. Bereit für alles.",
+            "¡Eso sí que es una cama! He dormido como un tronco. Listo para lo que sea.",
+            "Questo sì che è un letto! Ho dormito come un ghiro. Pronto a tutto.",
+            "Isto é que é uma cama! Dormi como uma pedra. Pronto para tudo.",
+        },
+        new[]
+        {
+            "A four-poster bed... I slept like an emperor! The best night's sleep of my life.",
+            "Un lit à baldaquin... j'ai dormi comme un empereur ! La meilleure nuit de ma vie.",
+            "Ein Himmelbett ... ich habe geschlafen wie ein Kaiser! Die beste Nacht meines Lebens.",
+            "Una cama con dosel... ¡he dormido como un emperador! La mejor noche de mi vida.",
+            "Un letto a baldacchino... ho dormito come un imperatore! La notte migliore della mia vita.",
+            "Uma cama de dossel... dormi como um imperador! A melhor noite da minha vida.",
+        },
+        new[]
+        {
+            "Do you know where I can get an ignition coil?",
+            "Vous savez où je pourrais trouver une bobine d'allumage ?",
+            "Wissen Sie, wo ich eine Zündspule bekomme?",
+            "¿Sabe dónde puedo conseguir una bobina de encendido?",
+            "Sa dove posso trovare una bobina d'accensione?",
+            "Sabe onde posso arranjar uma bobina de ignição?",
+        },
+        new[]
+        {
+            "Maybe yes, maybe no, maybe I have one, maybe I could even let you have it, IF you do a small favour for me.",
+            "Peut-être oui, peut-être non, peut-être que j'en ai une, peut-être que je pourrais même te la laisser, SI tu me rends un petit service.",
+            "Vielleicht ja, vielleicht nein, vielleicht habe ich eine, vielleicht könnte ich sie dir sogar überlassen, WENN du mir einen kleinen Gefallen tust.",
+            "Quizá sí, quizá no, quizá tenga una, quizá hasta te la deje, SI me haces un pequeño favor.",
+            "Forse sì, forse no, forse ne ho una, forse potrei perfino dartela, SE mi fai un piccolo favore.",
+            "Talvez sim, talvez não, talvez tenha uma, talvez até ta possa deixar, SE me fizeres um pequeno favor.",
+        },
+        new[]
+        {
+            "What's the favour?",
+            "Quel service ?",
+            "Was für ein Gefallen?",
+            "¿Qué favor?",
+            "Che favore?",
+            "Que favor?",
+        },
+        new[]
+        {
+            "Take this letter to the singer at Rick's bar -- and don't you dare read it! Then bring me back her answer.",
+            "Porte cette lettre à la chanteuse du bar de Rick -- et ne t'avise pas de la lire ! Puis rapporte-moi sa réponse.",
+            "Bring diesen Brief der Sängerin in Ricks Bar -- und wehe, du liest ihn! Dann bring mir ihre Antwort.",
+            "Lleva esta carta a la cantante del bar de Rick, ¡y ni se te ocurra leerla! Luego tráeme su respuesta.",
+            "Porta questa lettera alla cantante del bar di Rick, e guai a te se la leggi! Poi riportami la sua risposta.",
+            "Leva esta carta à cantora do bar do Rick -- e nem penses em lê-la! Depois traz-me a resposta dela.",
+        },
+        new[]
+        {
+            "Has she read it yet? Rick's bar, the singer. Go on -- and no peeking!",
+            "Elle l'a lue ? Le bar de Rick, la chanteuse. Vas-y -- et pas de coup d'œil !",
+            "Hat sie ihn schon gelesen? Ricks Bar, die Sängerin. Los -- und nicht reinschauen!",
+            "¿La ha leído ya? El bar de Rick, la cantante. Venga, ¡y no mires!",
+            "L'ha già letta? Il bar di Rick, la cantante. Vai, e non sbirciare!",
+            "Ela já a leu? O bar do Rick, a cantora. Vá -- e nada de espreitar!",
+        },
+        new[]
+        {
+            "A letter for you -- from the gazogem seller.",
+            "Une lettre pour vous -- de la part du vendeur de gazogem.",
+            "Ein Brief für Sie -- vom Gazogem-Verkäufer.",
+            "Una carta para usted, del vendedor de gazogem.",
+            "Una lettera per lei, dal venditore di gazogem.",
+            "Uma carta para si -- do vendedor de gazogem.",
+        },
+        new[]
+        {
+            "From him? Oh, the sweet man -- he's been writing me poems for a year... Wait, I'll write him an answer. Here, take it to him. And no peeking, Twinsen!",
+            "De lui ? Oh, le pauvre chou -- ça fait un an qu'il m'écrit des poèmes... Attends, je vais lui répondre. Tiens, porte-lui ça. Et pas de coup d'œil, Twinsen !",
+            "Von ihm? Ach, der Süße -- er schreibt mir seit einem Jahr Gedichte ... Warte, ich schreibe ihm eine Antwort. Hier, bring sie ihm. Und nicht reinschauen, Twinsen!",
+            "¿De él? Ay, qué encanto de hombre: lleva un año escribiéndome poemas... Espera, le escribo una respuesta. Toma, llévasela. ¡Y no mires, Twinsen!",
+            "Da lui? Oh, che tesoro: è un anno che mi scrive poesie... Aspetta, gli scrivo una risposta. Ecco, portagliela. E non sbirciare, Twinsen!",
+            "Dele? Ah, que querido -- há um ano que me escreve poemas... Espera, vou escrever-lhe uma resposta. Toma, leva-lha. E nada de espreitar, Twinsen!",
+        },
+        new[]
+        {
+            "Well? Go on, take him my answer!",
+            "Eh bien ? Vas-y, porte-lui ma réponse !",
+            "Na? Los, bring ihm meine Antwort!",
+            "¿Y bien? ¡Venga, llévale mi respuesta!",
+            "Allora? Vai, portagli la mia risposta!",
+            "Então? Vá, leva-lhe a minha resposta!",
+        },
+        new[]
+        {
+            "She answered! She... she'll have dinner with me! Twinsen, you're a true friend. The coil's yours -- for 10 zlitos. Business is business.",
+            "Elle a répondu ! Elle... elle veut bien dîner avec moi ! Twinsen, tu es un vrai ami. La bobine est à toi -- pour 10 zlitos. Les affaires sont les affaires.",
+            "Sie hat geantwortet! Sie ... sie geht mit mir essen! Twinsen, du bist ein wahrer Freund. Die Spule gehört dir -- für 10 Zlitos. Geschäft ist Geschäft.",
+            "¡Ha contestado! Ella... ¡cenará conmigo! Twinsen, eres un amigo de verdad. La bobina es tuya, por 10 zlitos. Los negocios son los negocios.",
+            "Ha risposto! Lei... cenerà con me! Twinsen, sei un vero amico. La bobina è tua, per 10 zlitos. Gli affari sono affari.",
+            "Ela respondeu! Ela... ela vai jantar comigo! Twinsen, és um verdadeiro amigo. A bobina é tua -- por 10 zlitos. Negócios são negócios.",
+        },
+        new[]
+        {
+            "The ignition coil, for 10 zlitos?",
+            "La bobine d'allumage, pour 10 zlitos ?",
+            "Die Zündspule, für 10 Zlitos?",
+            "¿La bobina de encendido, por 10 zlitos?",
+            "La bobina d'accensione, per 10 zlitos?",
+            "A bobina de ignição, por 10 zlitos?",
+        },
+        new[]
+        {
+            "There you are. Funny thing -- somebody dressed all in black and wearing a mask sold it to me yesterday.",
+            "Voilà. Drôle de chose -- quelqu'un tout de noir vêtu et masqué me l'a vendue hier.",
+            "Bitte schön. Komische Sache -- jemand ganz in Schwarz und mit einer Maske hat sie mir gestern verkauft.",
+            "Aquí tienes. Qué curioso: alguien vestido todo de negro y con una máscara me la vendió ayer.",
+            "Eccola. Strano, eh: qualcuno vestito tutto di nero e con una maschera me l'ha venduta ieri.",
+            "Aqui tens. Coisa curiosa -- alguém todo vestido de preto e de máscara vendeu-ma ontem.",
+        },
+        new[]
+        {
+            "10 zlitos, friend. The Casino's machines pay out now and then.",
+            "10 zlitos, l'ami. Les machines du Casino paient de temps en temps.",
+            "10 Zlitos, mein Freund. Die Automaten im Casino zahlen ab und zu aus.",
+            "10 zlitos, amigo. Las máquinas del Casino pagan de vez en cuando.",
+            "10 zlitos, amico. Le macchinette del Casinò ogni tanto pagano.",
+            "10 zlitos, amigo. As máquinas do Casino pagam de vez em quando.",
+        },
+        new[]
+        {
+            "All in black, and a mask... I'd keep an eye open for him if I were you.",
+            "Tout en noir, et un masque... à ta place, je garderais l'œil ouvert.",
+            "Ganz in Schwarz, mit Maske ... an deiner Stelle würde ich die Augen offen halten.",
+            "Todo de negro y con máscara... Yo que tú, estaría atento.",
+            "Tutto di nero, con una maschera... Se fossi in te, terrei gli occhi aperti.",
+            "Todo de preto, e de máscara... No teu lugar, andava de olho aberto.",
+        },
+        new[]
+        {
+            "An ignition coil? Not behind my bar. Try the gazogem seller in the Lower City -- he deals in car parts on the side.",
+            "Une bobine d'allumage ? Pas derrière mon bar. Essaie le vendeur de gazogem de la Ville Basse -- il trafique des pièces auto à côté.",
+            "Eine Zündspule? Nicht hinter meiner Bar. Versuch's beim Gazogem-Verkäufer in der Unterstadt -- der handelt nebenbei mit Autoteilen.",
+            "¿Una bobina de encendido? Detrás de mi barra no. Prueba con el vendedor de gazogem de la Ciudad Baja: trapichea con piezas de coche.",
+            "Una bobina d'accensione? Non dietro il mio bancone. Prova dal venditore di gazogem della Città Bassa: traffica in pezzi d'auto.",
+            "Uma bobina de ignição? Atrás do meu balcão não. Experimenta o vendedor de gazogem da Cidade Baixa -- ele vende peças de carro por fora.",
+        },
+        new[]
+        {
+            "Rocket parts I've got, kid. Car parts, no. Ask the gazogem seller in the Lower City.",
+            "Des pièces de fusée, j'en ai, petit. Des pièces auto, non. Demande au vendeur de gazogem de la Ville Basse.",
+            "Raketenteile hab ich, Kleiner. Autoteile nicht. Frag den Gazogem-Verkäufer in der Unterstadt.",
+            "Piezas de cohete tengo, chaval. De coche, no. Pregunta al vendedor de gazogem de la Ciudad Baja.",
+            "Pezzi di razzo ne ho, ragazzo. Di auto no. Chiedi al venditore di gazogem della Città Bassa.",
+            "Peças de foguetão tenho, miúdo. De carro, não. Pergunta ao vendedor de gazogem da Cidade Baixa.",
+        },
+        new[]
+        {
+            "No coil, no start -- that's the Cup's rule. The gazogem seller in the Lower City might have one. He sees everything from that stall.",
+            "Pas de bobine, pas de départ -- c'est la règle de la Coupe. Le vendeur de gazogem de la Ville Basse en a peut-être une. Il voit tout depuis son étal.",
+            "Keine Spule, kein Start -- das ist die Regel des Pokals. Der Gazogem-Verkäufer in der Unterstadt hat vielleicht eine. Von seinem Stand aus sieht er alles.",
+            "Sin bobina no hay salida: es la norma de la Copa. Puede que el vendedor de gazogem de la Ciudad Baja tenga una. Desde su puesto lo ve todo.",
+            "Niente bobina, niente partenza: è la regola della Coppa. Forse il venditore di gazogem della Città Bassa ne ha una. Dal suo banco vede tutto.",
+            "Sem bobina, não há partida -- é a regra da Taça. O vendedor de gazogem da Cidade Baixa talvez tenha uma. Daquela banca vê tudo.",
+        },
+        new[]
+        {
+            "The hotel can't help with cars, I'm afraid, sir. The gazogem seller in the Lower City, perhaps?",
+            "L'hôtel ne peut rien pour les voitures, monsieur, j'en ai peur. Le vendeur de gazogem de la Ville Basse, peut-être ?",
+            "Mit Autos kann Ihnen das Hotel leider nicht helfen, der Herr. Vielleicht der Gazogem-Verkäufer in der Unterstadt?",
+            "Me temo que el hotel no puede ayudarle con coches, señor. ¿Quizá el vendedor de gazogem de la Ciudad Baja?",
+            "Temo che l'hotel non possa aiutarla con le auto, signore. Forse il venditore di gazogem della Città Bassa?",
+            "Receio que o hotel não possa ajudar com carros, senhor. Talvez o vendedor de gazogem da Cidade Baixa?",
         },
     };
 
@@ -483,7 +791,9 @@ internal static partial class RaceTrackStory
             b.Edit(scene, "the radio rings in chapter 5; after a win Lyra (the Fragment of the Sups), the priest, Zoe", model =>
             {
                 var spot = AfterRaceSpot(report);
-                if ((int)Math.Floor(spot.X / 64) != model.CubeX || (int)Math.Floor(spot.Z / 64) != model.CubeY) spot = (model.CubeX * 64 + 32, model.CubeY * 64 + 32, report.StartLine[0].Y, 0);
+                // (race day's word on the coil only where the start line is -- "When Twinsen arrives at the race track the following day")
+                var atStart = (int)Math.Floor(spot.X / 64) == model.CubeX && (int)Math.Floor(spot.Z / 64) == model.CubeY;
+                if (!atStart) spot = (model.CubeX * 64 + 32, model.CubeY * 64 + 32, report.StartLine[0].Y, 0);
                 var priest = model.Actors.Count;
                 var edits = new List<Action<SceneScripts>>
                 {
@@ -505,15 +815,21 @@ void comportement_1()
         set_var_game({FragmentSups}, 1);
         message_obj({priest}, {Say(OtringalLine.Priest)});
     }}
-    if ({DayQualified} == var_game({OtringalDay}) && {Driving} != comportement_hero())
+    if ({DayQualified} == var_game({OtringalDay}) && 0 == var_game({QNight}) && {Driving} != comportement_hero())
     {{
         cinema_mode(1);
-        message({Say(OtringalLine.MarshalQualified)});
-        message({Say(OtringalLine.NightPasses)});
-        set_var_game({OtringalDay}, {DayRaceDay});
-        message({Say(OtringalLine.MarshalCoil)});
+        message({Say(OtringalLine.MarshalHeld)});
+        set_var_game({QNight}, {NightTold});
         cinema_mode(0);
-    }}
+    }}{(atStart ? $@"
+    if ({DayRaceDay} == var_game({OtringalDay}) && 0 == var_game({QCoil}) && 6000 > distance(0) && {Driving} != comportement_hero())
+    {{
+        cinema_mode(1);
+        message({Say(OtringalLine.MarshalCoil)});
+        message({Say(OtringalLine.MarshalNoCoil)});
+        set_var_game({QCoil}, {CoilTold});
+        cinema_mode(0);
+    }}" : "")}
 }}
 "),
                 };
@@ -568,7 +884,7 @@ void comportement_1()
                 b.Edit(johnnyScene, $"Johnny Rocket by the space port at cell ({spot.X:0.#}, {spot.Z:0.#}): the black car's shuttle, and the harbour taxi to Celebration Island", model =>
                 {
                     Place(johnny, model, Facing(spot, port.CubeX * 64 + Pad.X / 512.0, port.CubeY * 64 + Pad.Z / 512.0));
-                    return IslandBeatsA.Add(model, johnny, Talker(otringal, $@"            if ({FeeTold} == var_game({QFee}))
+                    return IslandBeatsA.Add(model, johnny, Talker(otringal, CoilAsked(Say, OtringalLine.JohnnyCoil) + $@"            if ({FeeTold} == var_game({QFee}))
             {{
                 message({Say(OtringalLine.JohnnyCar)});
                 message({Say(OtringalLine.JohnnyTaxi)});
@@ -659,10 +975,13 @@ void comportement_1()
                 });
 
         // the eggs: Rick in the Casino, Lyra by the hotel's pool (RaceTrackStory.Eggs.Otringal.cs)
-        RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid), Say(OtringalLine.RickLyra), Say(OtringalLine.RickBlackCar));
-        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight), LyraTalk(Say));
+        RickAtTheCasino(b, otringal, Say(OtringalLine.RickCup), Say(OtringalLine.RickTracks), Say(OtringalLine.RickKid), Say(OtringalLine.RickLyra), Say(OtringalLine.RickBlackCar),
+            CoilAsked(Say, OtringalLine.RickCoil));
+        LyraPoolScore(b, otringal, Say(OtringalLine.LyraNine), Say(OtringalLine.LyraEight), CoilAsked(Say, OtringalLine.LyraCoil) + LyraTalk(Say));
         // (the two days: the witness and the coil -- RaceTrackStory.OtringalDays.cs)
         OtringalDays(b, report, Say, otringal);
+        // (the night at the Imperial Hotel, the lift and its upper floor, and the coil's fetch quest: RaceTrackStory.OtringalNight)
+        OtringalNight(b, Say, otringal);
 
         b.Save();
         log.Add($"Otringal's race file: gate={QFee} {FeePaid} (Lyra paid), qualifying the first day (qualify_stop={OtringalDay} 0 {DayQualified}), the race the next once the coil is found (gate_not={OtringalDay} {DayRaceDay}), win={QFee} {FeeWon}");
