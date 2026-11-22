@@ -30,7 +30,8 @@ internal static class ColScanCommand
             for (var half = 0; half < 2; half++)
             {
                 var p = new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, half));
-                if (p.Col && p.CodeJeu != RaceTrackBuilder.CarWall) { blocked = true; code = p.CodeJeu; }
+                // (COLSCAN_ALL=1: the cars-only walls too)
+                if (p.Col && (Environment.GetEnvironmentVariable("COLSCAN_ALL") == "1" || p.CodeJeu != RaceTrackBuilder.CarWall)) { blocked = true; code = p.CodeJeu; }
             }
             return blocked;
         }

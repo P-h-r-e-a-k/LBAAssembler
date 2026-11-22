@@ -41,7 +41,7 @@ internal static partial class CitadelProps
         (ShopBikeRacing, "the cycle shop's racing bike, hung on the wall", BuildShopHungBike),
         (ShopBikeChampion, "the cycle shop's champion's bike", BuildShopChampionBike),
         (LeaningBoard, "the Hoverboard, left behind in the cycle shop", BuildLeaningBoard),
-        (ShopDoorway, "the cycle shop's back doorway", BuildShopDoorway),
+        (ShopDoorway, "the cycle shop's back door, shut", BuildShopDoorway),
         (RepairStand, "the cycle shop's repair stand", BuildRepairStand),
         (WheelWall, "the cycle shop's wall of wheels", BuildWheelWall),
         (ShopSign, "the cycle shop's sign: Citadel Cycles", BuildShopSign),
@@ -129,30 +129,33 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
-    // The banner outside: Citadel Cycles in red on a white cloth, slung a little crooked across the baggage claim's old sign on its door, so
-    // that sign still shows round it -- the shop has only just moved in. Facing +x (the building's front, its wall at x 0), its middle at
-    // y BannerMiddle and z 0, tied back to the wall at its corners; its text read along -z (left to right as one faces the wall)
-    public const float BannerPixel = 30, BannerOut = 95, BannerMiddle = 1150, BannerTilt = 0.11f;
+    // The banner outside: Citadel Cycles in red on a white cloth, two lines, put up on the door itself over the baggage claim's old sign
+    // (CITADEL.OBL body 33's: 600 wide, 500 high) -- the shop has only just moved in. Facing +x (the building's front, its wall at x 0), its
+    // middle at y BannerMiddle and z 0, just out from the old sign; its text read along -z (left to right as one faces the wall). (It was
+    // slung crooked across the doorway, wider than the door, tied back to the wall past it -- as if the way in were barred: the user,
+    // 2026-11-22, "When I said a "Citadel Cycles" banner across the door... I meant on the door its self, not one that would prevent people
+    // from entering")
+    public const float BannerPixel = 19, BannerOut = 60, BannerMiddle = 1150;
+    private static readonly string[] BannerLines = { "Citadel", "Cycles" };
     private static Body BuildShopBanner(byte[] header)
     {
         var m = new CarMesh("Citadel Cycles' banner", new[] { -1 });
         m.Light = 0.9f;
-        var cols = TextRuns(ShopName).Columns;
-        float w = (cols + 2.4f) * BannerPixel, h = (GlyphRows + 2.2f) * BannerPixel;
+        var cols = BannerLines.Max(l => TextRuns(l).Columns);
+        float w = (cols + 2f) * BannerPixel, h = (BannerLines.Length * GlyphRows + 2f) * BannerPixel;
         var front = new Vector3(2000, BannerMiddle, 0);
-        float cos = MathF.Cos(BannerTilt), sin = MathF.Sin(BannerTilt);
-        // (u along the text from its left, v down from its top, both from the cloth's middle; turned by the tilt, its left end lower)
-        Vector3 At(float u, float v, float x) => new(x, BannerMiddle + (-v * cos + u * sin), -(u * cos + v * sin));
-        Vector3 Cloth(float u, float v) => At(u - w / 2, v - h / 2, BannerOut);
-        FlatQuad(m, Cloth(0, 0), Cloth(w, 0), Cloth(w, h), Cloth(0, h), TagWhite, front);
+        // (u along the text from its left, v down from its top, both from the cloth's middle)
+        Vector3 At(float u, float v, float x) => new(x, BannerMiddle - v, -u);
+        FlatQuad(m, At(-w / 2, -h / 2, BannerOut), At(w / 2, -h / 2, BannerOut), At(w / 2, h / 2, BannerOut), At(-w / 2, h / 2, BannerOut), TagWhite, front);
         // a red hem along its top and bottom
-        foreach (var v0 in new[] { 0f, h - BannerPixel * 0.5f })
-            FlatQuad(m, At(-w / 2, v0 - h / 2, BannerOut + 2), At(w / 2, v0 - h / 2, BannerOut + 2), At(w / 2, v0 + BannerPixel * 0.5f - h / 2, BannerOut + 2), At(-w / 2, v0 + BannerPixel * 0.5f - h / 2, BannerOut + 2), InkRed, front);
-        float left = 1.2f * BannerPixel, top = 1.1f * BannerPixel;
-        TextQuads(m, ShopName, (c, r) => At(left + c * BannerPixel - w / 2, top + r * BannerPixel - h / 2, BannerOut + 4), InkRed, front);
-        // its ties: a cord from each corner back to the wall, out past the cloth's ends
-        foreach (var (u, v, du) in new[] { (0f, 0f, -160f), (w, 0f, 160f), (0f, h, -160f), (w, h, 160f) })
-            m.Line(m.P(0, Cloth(u, v)), m.P(0, At(u - w / 2 + du, v - h / 2, 4)), ShopWood);
+        foreach (var v0 in new[] { -h / 2, h / 2 - BannerPixel * 0.5f })
+            FlatQuad(m, At(-w / 2, v0, BannerOut + 2), At(w / 2, v0, BannerOut + 2), At(w / 2, v0 + BannerPixel * 0.5f, BannerOut + 2), At(-w / 2, v0 + BannerPixel * 0.5f, BannerOut + 2), InkRed, front);
+        // each line in the middle of the cloth's width, a glyph's rows apart
+        for (var line = 0; line < BannerLines.Length; line++)
+        {
+            float left = -TextRuns(BannerLines[line]).Columns * BannerPixel / 2, top = -h / 2 + BannerPixel * (1 + line * GlyphRows);
+            TextQuads(m, BannerLines[line], (c, r) => At(left + c * BannerPixel, top + r * BannerPixel, BannerOut + 4), InkRed, front);
+        }
         return m.ToBody(header);
     }
 
@@ -524,17 +527,23 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
-    // The way through to the back -- the baggage claim behind the shop: a dark opening in a wooden frame, flat on the west wall's face (x 0),
-    // facing +x into the shop, its middle at z 0 (as the club's back rooms' doorway, WingDoorway)
+    // The back door: shut, in a wooden frame, flat on the west wall's face (x 0), facing +x into the shop, its middle at z 0 (as the club's
+    // back rooms' doorway, WingDoorway) -- a door of dark planks, two sunk panels, a gold knob. Locked: Action at it, "It's locked." (the
+    // user, 2026-11-22, "The cycle shop, let's add a door at the back and have it locked. We may add something there later, but we definitely
+    // don't want it to lead into the original shop" -- it was an open doorway through to the baggage claim's hall)
     private static Body BuildShopDoorway(byte[] header)
     {
-        var m = new CarMesh("the cycle shop's back doorway", new[] { -1 });
+        var m = new CarMesh("the cycle shop's back door", new[] { -1 });
         m.Light = 0.85f;
         const float Half = 450, Top = 1800, Rim = 80;
         void Face(float z0, float z1, float y0, float y1, float off, int colour, bool unlit = false) =>
             m.In(new[] { m.P(0, new Vector3(off, y0, z0)), m.P(0, new Vector3(off, y0, z1)), m.P(0, new Vector3(off, y1, z1)), m.P(0, new Vector3(off, y1, z0)) },
                  colour, new Vector3(off + 500, (y0 + y1) / 2, (z0 + z1) / 2), unlit);
-        Face(-Half, Half, 0, Top, 20, ShopDark, true);
+        // the door: its leaf, two panels sunk in it (darker), and its knob on the far side from the hinges
+        Face(-Half, Half, 0, Top, 20, ShopWood, true);
+        Face(-Half + 90, Half - 90, Top * 0.55f, Top - 110, 26, ShopDark, true);
+        Face(-Half + 90, Half - 90, 110, Top * 0.45f, 26, ShopDark, true);
+        m.Box(0, new Vector3(60, 950, Half - 110), new Vector3(60, 70, 70), ShopGold);
         Face(-Half - Rim, Half + Rim, Top, Top + 100, 50, ShopWood, true);
         Face(-Half - Rim, -Half, 0, Top, 50, ShopWood, true);
         Face(Half, Half + Rim, 0, Top, 50, ShopWood, true);

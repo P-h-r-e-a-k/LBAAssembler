@@ -328,7 +328,9 @@ internal static partial class RaceTrackStory
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelFound, new[] { Chapter(2), Is(QLucCar, WheelFound) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenEntryFee, new[] { Chapter(2), Is(EntryPaid, 0), Is(WonVar, 0) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenTownRace, new[] { Chapter(2), Is(WonVar, 0) }),
-        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenFerry, new[] { Chapter(2) }),
+        // (the race won, the ferry to the Desert next: a hello -- "I've a ferry to catch to the White Leaf Desert" told no one anything; the
+        // user, 2026-11-22, "In this instance we can just have Twinsen say hello, as it's clear where he's heading". TwinsenFerry's line kept
+        // in the bank, unsaid, so the lines after it keep their ids)
         // the Desert: the Dean, his pages, the filters, the helmet, the race; won (chapter 4 there), the moon
         new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenTrackShut, new[] { Chapter(3), In(QPages, 0, 1), In(PagesFoundVar, 0, 6) }),
         new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenSeekPages, new[] { Chapter(3), In(QPages, 2, PagesDiploma - 1), In(PagesFoundVar, 0, 6) }),

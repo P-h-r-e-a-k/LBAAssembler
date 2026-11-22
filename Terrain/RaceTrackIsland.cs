@@ -128,7 +128,19 @@ internal sealed record RaceTrackIsland(
         // 529-532 at z 577-578 rising to 2,000 towards the bank, and a bump at (529, 580) -- the user, 2026-11-17, "Part of the path near
         // the tavern and the museum is angled, it looks like we could flatten this path out without affecting the race track", "just to the
         // left of the museum entrance in Citabau.ile". The road is on the bank's top, 3,460 and over, x 527 and west: untouched)
-        TwinFlats = new[] { (529, 577, 532, 578, 250), (529, 580, 529, 580, 250) },
+        // (and the slot at the shop's west wall between the hairpin's two legs south of the bridge, x 511-513, z 603-607: the retail
+        // terrace's edge left there by the road -- a 750 ridge (x 511-512) and a 250 trench at the wall (x 513) -- a V a car slid into off the
+        // lower leg's verge and could climb out of neither way: the user, 2026-11-22, "Twinsen's car has driven into the back of a building
+        // and is stuck, we need to make sure the car can't get stuck in the area it's currently in". The verge's slope carried on to the wall
+        // -- each column as the verge's row 608 has it -- and the ledge over it at its 700)
+        TwinFlats = new[] { (529, 577, 532, 578, 250), (529, 580, 529, 580, 250),
+                            (511, 603, 513, 604, 700), (510, 605, 510, 605, 545), (511, 605, 511, 607, 508), (512, 605, 512, 607, 477), (513, 605, 513, 607, 448) },
+        // (... and what held it there: the shop stands a tenth of a cell inside the next cube, scene 42's -- a car driven east to the cube's edge
+        // beside it (scene 43's side, where that cube's decors aren't) came over into scene 42 with its box half inside the shop's, and every
+        // move after was refused (the user's car at scene 42's x 256, 2026-11-22; the harness, steps/nov22/48). Cells x 510-511 by the edge,
+        // from the bridge's leg north of the shop to the shop's south face and a car's glance past it (rows 601-608), walled for the cars
+        // only: no car reaches the edge there, Twinsen on foot walks it)
+        TwinCarWalls = new[] { (510, 601, 511, 608) },
         // (the Tralu's cave's door, scene 45: its ledge at 5,625, x 506-511, z 470-474; the ladder against the road's side at its east end)
         TwinLadders = new[] { (511.05, 470.95, -1.0, 0.0, RaceTrackStory.TraluLadderZone) },
         // (the lifts the sewer lift by the storm track's start line: its striped frame, decor body 47 of the storm's file there, and its grate,
@@ -324,6 +336,9 @@ internal sealed record RaceTrackIsland(
     // (RaceTrackService). Citadel Island's: the path below the town circuit's bank by the museum's door, a fin of the bank's ground across
     // it (RaceTrackIsland.Citadel)
     public (int X0, int Z0, int X1, int Z1, int Height)[]? TwinFlats { get; init; }
+    // Cells of the twin file's ground walled for the cars only (game code 10, open to Twinsen on foot), each x0, z0, x1, z1 inclusive: where a car
+    // would come over a cube's edge into a decor standing just inside the next cube
+    public (int X0, int Z0, int X1, int Z1)[]? TwinCarWalls { get; init; }
     // The Temple of Bu's doorway widened for a car (TempleDoorway): the Desert's.
     public bool WideTempleDoor { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }

@@ -885,6 +885,20 @@ internal static class RaceTrackService
                     if (twin.HasVertex(x, z)) { twin.SetHeight(x, z, h); set++; }
             report.Notes.Add($"the ground levelled at {h} over points x {x0}-{x1}, z {z0}-{z1} ({set} points)");
         }
+        // (cells walled for the cars only where one would come over a cube's edge into a decor just inside the next cube: RaceTrackIsland.TwinCarWalls)
+        foreach (var (x0, z0, x1, z1) in options.Island.TwinCarWalls ?? Array.Empty<(int, int, int, int)>())
+        {
+            var walled = 0;
+            for (var gz = z0; gz <= z1; gz++)
+                for (var gx = x0; gx <= x1; gx++)
+                {
+                    if (twin.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+                    int cx = gx % IslandCube.Cells, cz = gz % IslandCube.Cells;
+                    for (var half = 0; half < 2; half++) cube.SetPolygon(cx, cz, half, new IslandPolygon(cube.Polygon(cx, cz, half)).With(col: true, codeJeu: RaceTrackBuilder.CarWall).Raw);
+                    walled++;
+                }
+            report.Notes.Add($"cells x {x0}-{x1}, z {z0}-{z1} walled for the cars only ({walled} cells)");
+        }
         RaceTrackBuilder.LiftShafts(twin, twinOptions, report);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);

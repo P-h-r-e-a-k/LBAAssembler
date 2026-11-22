@@ -17,8 +17,9 @@ namespace LBAAssembler.Terrain.Citadel;
 //     the shop's goods: its wall tables with their vases and toys, the plant, the pots and the crate by the door. The counter stays;
 //   - the way in: the street's door that led into the baggage claim (scene 48's zone 11) leads in here, through the arch; the arch leads back
 //     out to the street where the baggage claim's door did;
-//   - a back doorway on the west wall (ShopDoorway) through to the baggage claim's hall (scene 5), whose way out to the street comes back in
-//     here: the package centre and its hidden room behind it reached as before, through the shop;
+//   - a back door on the west wall (ShopDoorway), shut and locked (2026-11-22: it was a doorway through to the baggage claim's hall, scene 5,
+//     whose way out came back in here -- the user, "we definitely don't want it to lead into the original shop"); the hall's way out the
+//     game's again, to the street;
 //   - the shop, Citadel Cycles (redesigned 2026-11-21 evening, after how high-end racing bike shops look -- CitadelProps.CycleShop): its
 //     owner behind the counter, the baggage claim's own clerk (the user: "let's have it staffed by the same NPC who staffed the storage
 //     place that it's replacing" -- scene 5's actor 9, a grobo, entity 33; he has left the hall: RaceTrackStory.CycleShop), the signed
@@ -42,6 +43,8 @@ internal static class CitadelCycleShop
     // the doors: the street's into the baggage claim (scene 48's zone 11) and the hall's back out to the street (scene 5's zone 8) -- each
     // its arrival as the game has it, kept
     private const int StreetDoor = 11, HallDoor = 8;
+    // the back door: how near Twinsen's Action reaches it, and what he says (the game's "It's locked.", Citadel's text 110)
+    private const int LockedReach = 900, LockedLine = 110;
     private static readonly int[] StreetArrival = { 11776, 256, 14848 }, HallArrival = { 30720, 3584, 18944 };
     // inside: in from the street just inside the arch (its opening z 5-6), facing west; the back doorway's middle on the west wall's face,
     // and in from the hall before it, facing east
@@ -191,21 +194,27 @@ internal static class CitadelCycleShop
                      (CitadelProps.ToolWall, ToolsAt.X, FloorY, ToolsAt.Z, 0), (CitadelProps.RepairStand, StandAt.X, FloorY, StandAt.Z, 1024),
                  })
             texts[SceneOps.AddActor(model, CitadelProps.Actor(generic, x, y, z, beta))] = (Still, Stop);
-        // (walked into, not up against: its box out from the wall stopped him short of the doorway's zone)
+        // the back door, shut and locked: Action at it, Twinsen's "It's locked." (the game's own line, 110) -- no way through to the baggage claim's
+        // hall (the user, 2026-11-22, "The cycle shop, let's add a door at the back and have it locked. We may add something there later, but we
+        // definitely don't want it to lead into the original shop"; it was a doorway, and the hall's way out came back in through it)
         var doorway = CitadelProps.Actor(CitadelProps.ShopDoorway, BackDoorX, FloorY, BackDoorZ, 0);
         doorway.Armor = RaceTrackStory.WalkOverArmour;
-        texts[SceneOps.AddActor(model, doorway)] = (Still, Stop);
-        // the doors: out through the arch to the street, where the baggage claim's door put him; through the back doorway into the baggage
-        // claim's hall, where the street's door did
+        texts[SceneOps.AddActor(model, doorway)] = ($@"void comportement_0()
+{{
+    swif (1 == action())
+    {{
+        if ({LockedReach} > distance(0))
+        {{
+            message_obj(0, {LockedLine});
+        }}
+    }}
+}}
+", Stop);
+        // the door out: through the arch to the street, where the baggage claim's door put him
         model.Zones.Add(new SceneZoneModel
         {
             Type = 0, Num = Street, X0 = East * 512, X1 = (East + 1) * 512 - 1, Y0 = FloorY, Y1 = FloorY + 1792, Z0 = 5 * 512, Z1 = 7 * 512 - 1,
             Info = new[] { StreetArrival[0], StreetArrival[1], StreetArrival[2], 0, 0, 0, 0, 1 },
-        });
-        model.Zones.Add(new SceneZoneModel
-        {
-            Type = 0, Num = Hall, X0 = BackDoorX - 100, X1 = BackDoorX + 520, Y0 = FloorY, Y1 = FloorY + 1800, Z0 = BackDoorZ - 420, Z1 = BackDoorZ + 420,
-            Info = new[] { HallArrival[0], HallArrival[1], HallArrival[2], 0, 0, 0, 0, 1 },
         });
         var built = SceneScripts.Load(SceneSerializer.Write(model), Scene);
         built.SetText(0, ScriptKind.Life, Still);
@@ -222,8 +231,9 @@ internal static class CitadelCycleShop
         }
         Store(Scene, result.Record!);
 
-        // ---- the street's door and the hall's way out, to the shop (their scripts as they are)
-        foreach (var (scene, zone, x, z) in new[] { (Street, StreetDoor, InFromStreetX, ArchZ), (Hall, HallDoor, InFromHallX, BackDoorZ) })
+        // ---- the street's door, to the shop (its scripts as they are); the hall's way out left the game's, out to the street -- the shop's
+        // back door is locked
+        foreach (var (scene, zone, x, z) in new[] { (Street, StreetDoor, InFromStreetX, ArchZ) })
         {
             var m = store.Load(scene);
             // (the game's zone by its number, else the one door to the other: the race build moves an outside scene's zones about)
@@ -248,7 +258,7 @@ internal static class CitadelCycleShop
         }
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
         log.Add($"the cycle shop: scene {Scene}, the town shop's room 12 cells longer (grid {gridNumber}), emptied but its counter; the street's door (scene {Street}) " +
-                $"and the baggage claim's way out (scene {Hall}) lead into it, its arch out to the street, its back doorway into the baggage claim; Citadel Cycles: " +
+                $"leads into it, its arch out to the street, its back door locked (the baggage claim, scene {Hall}, not through it); Citadel Cycles: " +
                 $"its owner (the baggage claim's clerk, entity {Clerk}), three bikes for sale, the penny-farthing, the tandem, a racer's bike on the repair stand, " +
                 $"the fitting bike, the jerseys, the wheels, the coffee bar, the workshop, the Hoverboard; its name on the north wall {signLow} over the floor " +
                 $"(the wall's top {(wallTop + 1) * 256 - FloorY}); its banner outside over the baggage claim's sign");
