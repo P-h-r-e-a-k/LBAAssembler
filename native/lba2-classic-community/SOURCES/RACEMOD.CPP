@@ -21932,8 +21932,12 @@ static void DartDraw(void) {
         snprintf(name, sizeof(name), "%.6s", f->Name);
         HudSmallIn(mid + 6, top, name, -1, LBAWHITE);
         Line(x0 + 10, top + 26, x1 - 10, top + 26, 15);
-        Line(mid, top + 4, mid, y1 - 12, 15);
-        const S32 step = 20, room = (y1 - 12 - (top + 32)) / step - 1;
+        // (a match of legs: its foot kept for the legs -- under a line across, the legs won, his first as the columns go, and which leg
+        // this is; the user, 2026-11-22: "The top of the screen looks too cluttered in darts when Twinsen is playing a match with legs,
+        // let's add the number of legs to the bottom of the scoreboard instead")
+        const S32 foot = s_dtLegs > 1 ? y1 - 50 : y1 - 12;
+        Line(mid, top + 4, mid, foot, 15);
+        const S32 step = 20, room = (foot - (top + 32)) / step - 1;
         for (int who = 0; who < 2; who++) {
             // (the start, then each turn's: the last that fit)
             int all[41], na = 0;
@@ -21948,16 +21952,19 @@ static void DartDraw(void) {
                 if (k < na - 1) Line(x - 2, y + 11, x + SizeFont(nb) * 3 / 4 + 2, y + 9, 60);
             }
         }
+        if (s_dtLegs > 1) {
+            Line(x0 + 10, foot, x1 - 10, foot, 15);
+            char nb[24];
+            snprintf(nb, sizeof(nb), "Legs %d - %d", s_dtLegsWon[0], s_dtLegsWon[1]);
+            HudSmallIn(mid - SizeFont(nb) * 3 / 8, foot - 10, nb, -1, LBAWHITE);
+            snprintf(nb, sizeof(nb), "Leg %d of %d", s_dtLegNo, s_dtLegs);
+            HudSmallIn(mid - SizeFont(nb) * 3 / 8, foot + 10, nb, -1, LBAWHITE);
+        }
         BoxMovingAdd(x0, y0, x1, y1);
     }
     char line[96];
     snprintf(line, sizeof(line), "%s: %d dart%s left", s_dtTurn == 0 ? "You" : f->Name, s_dtLeft, s_dtLeft == 1 ? "" : "s");
     HudLine(16, 12, line, -1);
-    // (a match of legs: which leg, and the legs won so far)
-    if (s_dtLegs > 1) {
-        snprintf(line, sizeof(line), "Leg %d of %d -- legs: you %d, %s %d", s_dtLegNo, s_dtLegs, s_dtLegsWon[0], f->Name, s_dtLegsWon[1]);
-        HudLine(16, 40, line, -1);
-    }
     if (s_dtState == 1 && s_dtFoe < 0) HudLine(16, 40, "Zoe: press Action!", -1);
     if (s_dtState == 6) {
         char wager[64];
