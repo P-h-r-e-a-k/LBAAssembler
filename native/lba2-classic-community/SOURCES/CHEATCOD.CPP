@@ -132,17 +132,13 @@ static void ApplyCheat(S32 cheat, S32 *text, S32 *sprite) {
         break;
     case CHEAT_GOLD:
         if (MONEY_ZLITOS) {
-            if (NbZlitosPieces < 999) {
-                NbZlitosPieces += 50;
-                if (NbZlitosPieces > 999)
-                    NbZlitosPieces = 999;
+            if (NbZlitosPieces < MAX_MONEY) {
+                MONEY_GAIN(NbZlitosPieces, 50);
                 *text = 4;
             }
         } else {
-            if (NbGoldPieces < 999) {
-                NbGoldPieces += 50;
-                if (NbGoldPieces > 999)
-                    NbGoldPieces = 999;
+            if (NbGoldPieces < MAX_MONEY) {
+                MONEY_GAIN(NbGoldPieces, 50);
                 *text = 3;
             }
         }

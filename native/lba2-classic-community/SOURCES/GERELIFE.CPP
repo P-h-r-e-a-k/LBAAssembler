@@ -1608,16 +1608,10 @@ void DoLife(U8 numobj) {
         case LM_ADD_GOLD_PIECES:
             if (MONEY_ZLITOS) {
                 num = NbZlitosPieces;
-                NbZlitosPieces += *(S16 *)PtrPrg;
-                if (NbZlitosPieces > 999) {
-                    NbZlitosPieces = 999;
-                }
+                MONEY_GAIN(NbZlitosPieces, *(S16 *)PtrPrg);
             } else {
                 num = NbGoldPieces;
-                NbGoldPieces += *(S16 *)PtrPrg;
-                if (NbGoldPieces > 999) {
-                    NbGoldPieces = 999;
-                }
+                MONEY_GAIN(NbGoldPieces, *(S16 *)PtrPrg);
             }
 
             PtrPrg += 2;

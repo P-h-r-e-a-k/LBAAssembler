@@ -2064,7 +2064,7 @@ static void ExchangeFrame(void) {
     // (all but one kash: Otringal's own exchange sells the same zlitos for any kashes at all, so one is left for it -- the user, 2026-11-17,
     // "Let's have the currency conversion machine leave Twinsen with a single kash")
     int z = NbGoldPieces > 0 ? (NbGoldPieces - 1) / 2 : 0;
-    if (NbZlitosPieces + z > 999) z = 999 - NbZlitosPieces;
+    if (NbZlitosPieces + z > MAX_MONEY) z = MAX_MONEY - NbZlitosPieces;
     if (z < 0) z = 0;
     NbGoldPieces -= z * 2;
     NbZlitosPieces += z;
@@ -11198,8 +11198,11 @@ static int RescueOn(void) {
     return 1;
 }
 
+static int FerryCatch(void);
 S32 RaceMod_Rescue(void) {
     if (FootRescue("into the sea or the lava")) return 1;
+    // (the car into the sea under a car ferry's deck: back on the deck -- FerryCatch)
+    if (FerryCatch()) return 1;
     // (a ghost played back: never drowned, nor put back on the road -- it is where its lap had it, GhostWatch)
     if (RaceMod_Active() && Comportement == C_BUGGY && s_ghostWatch) return 1;
     if (!RaceMod_Active() || !RescueOn() || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
@@ -21414,7 +21417,7 @@ static void DartLand(S32 now, double x, double y) {
         // (the wager: won, twice the stake back; lost, it stays the opponent's)
         if (s_dtStake > 0) {
             if (who == 0) {
-                if (MONEY_ZLITOS) NbZlitosPieces += s_dtStake * 2; else NbGoldPieces += s_dtStake * 2;
+                if (MONEY_ZLITOS) MONEY_GAIN(NbZlitosPieces, s_dtStake * 2); else MONEY_GAIN(NbGoldPieces, s_dtStake * 2);
                 snprintf(said, sizeof(said), "You win%s: %d %s!", legs, s_dtStake * 2, MONEY_ZLITOS ? "zlitos" : "kashes");
             } else snprintf(said, sizeof(said), "%s wins%s: your %d %s", DartOpponent()->Name, legs, s_dtStake, MONEY_ZLITOS ? "zlitos" : "kashes");
             Log_Info("[racemod] darts: the wager of %d %s", s_dtStake, who == 0 ? "won, twice over" : "lost");
@@ -23368,6 +23371,30 @@ static S32 FerryDeckAt(S32 x, S32 z, S32 ref, S32 *deck) {
     const T_OBJ_3D *o = &ListObjet[f->Ferry].Obj;
     *deck = o->Y + f->DeckY;
     return ref > *deck - 700 && ref < *deck + 300 && FerryOnDeck(f, o->X, o->Z, o->Beta, x, z);
+}
+// The car gone into the sea while over a car ferry's deck: put back on the deck, where it is, going on as it went (OBJECT.CPP's water,
+// RaceMod_Rescue -- before the engine drowns him). The user, 2026-11-22: "Twinsen no longer seems to be able to drive aboard the boat with
+// his car, he keeps drowning instead" -- his car's trace: on the deck at 746, driven on at speed and braked over the hull's edge, marked
+// falling and at the sea's 0 the very next frame, under the deck still (Citadel's quay, scene 43; at the harness's fixed ticks the same
+// drive held on, the deck its floor). Whatever took the deck from under it that frame, the deck is there: no car drowns under it.
+static int FerryCatch(void) {
+    if (!RaceMod_Active() || Comportement != C_BUGGY) return 0;
+    const T_RACE_FERRY *f = FerryHere();
+    if (!f) return 0;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const T_OBJ_3D *o = &ListObjet[f->Ferry].Obj;
+    if (!FerryOnDeck(f, o->X, o->Z, o->Beta, Nxw, Nzw) && !FerryOnDeck(f, o->X, o->Z, o->Beta, hero->Obj.X, hero->Obj.Z)) return 0;
+    const S32 deck = o->Y + f->DeckY;
+    static S32 told = 0;
+    if (TimerRefHR - told > 2000 || TimerRefHR < told)
+        Log_Info("[racemod] car ferry (scene %d, actor %d): the car into the sea under its deck at (%d,%d,%d) -- back on the deck at %d", (int)NumCube, f->Ferry,
+                 (int)Nxw, (int)Nyw, (int)Nzw, (int)deck);
+    told = TimerRefHR;
+    Nyw = deck;
+    hero->Obj.Y = deck;
+    hero->WorkFlags &= ~FALLING;
+    hero->CodeJeu = 0;
+    return 1;
 }
 // The deck a floor for the car (BUGGY.CPP BuggyFloorY): a point of the car over it, the deck not over the car's own top
 S32 RaceMod_FerryFloor(S32 x, S32 z, S32 top, S32 *y) {

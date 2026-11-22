@@ -2484,9 +2484,7 @@ void	GereExtras()
 								case SPRITE_KASHES: // Money
 									if( numobj==NUM_PERSO )
 									{
-										NbGoldPieces += ptrextra->Divers ;
-										if( NbGoldPieces > 999 )
-											NbGoldPieces = 999 ;
+										MONEY_GAIN( NbGoldPieces, ptrextra->Divers ) ;
 									}
 									taken = TRUE ;
 									break ;
@@ -2494,9 +2492,7 @@ void	GereExtras()
 								case SPRITE_ZLITOS: // Money
 									if( numobj==NUM_PERSO )
 									{
-										NbZlitosPieces += ptrextra->Divers ;
-										if( NbZlitosPieces > 999 )
-											NbZlitosPieces = 999 ;
+										MONEY_GAIN( NbZlitosPieces, ptrextra->Divers ) ;
 									}
 									taken = TRUE ;
 									break ;

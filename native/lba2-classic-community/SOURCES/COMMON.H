@@ -563,6 +563,11 @@ void RaceMod_CarportSeen(S32 numobj);
 S32 RaceMod_EscLast(S32 dial);   // (RACEMOD.CPP esc_last=: a question whose Esc takes its last answer)   // (RACEMOD.CPP car_home=: the carport's car's place as its scene loads)   // (RACEMOD.CPP zlitos_scene=: a scene whose money is zlitos, wherever it is)
 #define	MONEY_ZLITOS	(Planet>=1 || RaceMod_Zlitos())
 #define	SPRITE_PIECE	(SPRITE_KASHES+(MONEY_ZLITOS?1:0))
+// (the most kashes or zlitos he can carry: the game's 999, raised -- the user, 2026-11-22, the race-track mod's darts paying past it: "Let's
+// raise the cap to 9999". A gain takes him up to it, never down to it from more -- a save from before it -- and under the 16 bits the save
+// and the planets' swap (ListVarGame[FLAG_MONEY], S16) keep it in)
+#define	MAX_MONEY	9999
+#define	MONEY_GAIN(have, add)	((have) = (have) + (add) > MAX_MONEY ? ((have) > MAX_MONEY ? (have) : MAX_MONEY) : (have) + (add))
 
 #define	SPRITE_ARDOISE_LEFT_UP	164
 #define	SPRITE_ARDOISE_RIGHT_UP	165

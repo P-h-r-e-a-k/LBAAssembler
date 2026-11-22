@@ -1131,6 +1131,9 @@ internal static partial class RaceTrackStory
         ShopPennyFarthing, ShopTandem, ShopRepair, ShopFitting, ShopJerseys, ShopWheels,
         // (the darts players: a stake Twinsen hasn't the kashes for, when he has them for a smaller one -- 2026-11-22, Citadel/RaceTrackStory.Darts)
         RaphDartsShort, BennyDartsShort,
+        // (Citadel Cycles' tags when Twinsen came in with 1,000 kashes or more: ten times the price -- the user, 2026-11-22, with kashes now
+        // up to 9,999: "if Twinsen enters and he has 1000 kashes or more, then let's make the bikes all 10 times more expensive")
+        ShopTagTownRich, ShopTagRacingRich, ShopTagChampionRich,
     }
     private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
     internal static readonly string[][] CitadelLaterLines =
@@ -1301,6 +1304,34 @@ internal static partial class RaceTrackStory
             "Tu bolsa no da para tanto, amigo. Elige una apuesta más pequeña.",
             "Il tuo borsellino non arriva fin lì, amico. Scegli una posta più bassa.",
             "A tua bolsa não chega para essa, amigo. Escolhe uma aposta mais pequena.",
+        },
+        // (Citadel Cycles' tags, ten times the price: Twinsen came in with 1,000 kashes or more)
+        new[]
+        {
+            "\"The town bike, with a basket for the shopping. 10,000 kashes.\"",
+            "\"Le vélo de ville, avec un panier pour les courses. 10 000 kashes.\"",
+            "\"Das Stadtrad, mit Korb für die Einkäufe. 10.000 Kashes.\"",
+            "\"La bici de paseo, con cesta para la compra. 10.000 kashes.\"",
+            "\"La bici da città, con il cestino per la spesa. 10.000 kashes.\"",
+            "\"A bicicleta de cidade, com cesto para as compras. 10000 kashes.\"",
+        },
+        new[]
+        {
+            "\"The racing bike. Light as a feather. 20,000 kashes.\"",
+            "\"Le vélo de course. Léger comme une plume. 20 000 kashes.\"",
+            "\"Das Rennrad. Leicht wie eine Feder. 20.000 Kashes.\"",
+            "\"La bici de carreras. Ligera como una pluma. 20.000 kashes.\"",
+            "\"La bici da corsa. Leggera come una piuma. 20.000 kashes.\"",
+            "\"A bicicleta de corrida. Leve como uma pena. 20000 kashes.\"",
+        },
+        new[]
+        {
+            "\"The champion's bike, as raced at the Dome of the Slate. 50,000 kashes.\"",
+            "\"Le vélo du champion, celui des courses du Dôme de l'Ardoise. 50 000 kashes.\"",
+            "\"Das Meisterrad, wie es am Dom des Schiefers gefahren wird. 50.000 Kashes.\"",
+            "\"La bici del campeón, la de las carreras de la Cúpula de la Pizarra. 50.000 kashes.\"",
+            "\"La bici del campione, quella delle corse alla Cupola dell'Ardesia. 50.000 kashes.\"",
+            "\"A bicicleta do campeão, a das corridas da Cúpula da Ardósia. 50000 kashes.\"",
         },
     };
 

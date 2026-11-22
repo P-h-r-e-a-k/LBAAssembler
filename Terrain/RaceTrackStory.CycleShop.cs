@@ -13,7 +13,7 @@ namespace LBAAssembler.Terrain;
 // place 'Citadel Cycles'"):
 //   - Action in the shop, the hero's own script (the game's distance_message: what he faces, near): before a bike for sale, its price tag
 //     read (in quotes, no bubble: read, not said) and his question, buy it or not today -- bought, more kashes than he will ever have (they
-//     stop at 999); before the penny-farthing, the tandem, the racer's bike on the repair stand, the fitting bike, the jerseys or the
+//     stopped at 999; since 2026-11-22 they stop at 9,999, and came in with 1,000 or more he finds the tags ten times higher); before the penny-farthing, the tandem, the racer's bike on the repair stand, the fitting bike, the jerseys or the
 //     wheels, its plaque read; before the owner, his welcome -- the racers at the Dome of the Slate, the prices on the bikes;
 //   - the Hoverboard left behind in the corner (the user: "if Twinsen uses action on it, have the shop keeper comment that one of his
 //     customers left it there ages ago as he nolonger wanted it, and he hadn't had the heart to throw it away, he then offers to sell it to
@@ -31,6 +31,10 @@ internal static partial class RaceTrackStory
     // how near Twinsen is to each thing's place (its middle) for Action before it to tell of it -- the long ones and those on a plinth or a
     // wall further; the owner across his counter
     private const int NearBoard = 1100, NearBike = 1350, NearLong = 1600, NearOwner = 2400;
+    // Twinsen came in with RichFrom kashes or more (looked at once a visit, RichLooked): the bikes' tags ten times the price this visit
+    // (RichPrices) -- the user, 2026-11-22, kashes up to 9,999 now: "if Twinsen enters and he has 1000 kashes or more, then let's make the
+    // bikes all 10 times more expensive, so the cheapest bike becomes 10,000". The scene's own variables, cleared each visit.
+    private const int RichFrom = 1000, RichLooked = 10, RichPrices = 11;
 
     private static void CycleShop(StoryParts p)
     {
@@ -38,9 +42,17 @@ internal static partial class RaceTrackStory
         int Later(CitadelLater line) => CitadelLaterId(p.Say, line);
         int buy = p.Say(ChapterLine.BoardBuy), no = p.Say(ChapterLine.BoardNo);
         int buyIt = Later(CitadelLater.ShopBuyIt), notToday = Later(CitadelLater.ShopNotToday);
-        // a bike for sale: its tag read, his question, his sigh if he would buy it; a plaque: read
-        string Sale(CitadelLater tag) => $@"bulle(0);
-                message({Later(tag)});
+        // a bike for sale: its tag read -- ten times the price if he came in with 1,000 kashes or more -- his question, his sigh if he would
+        // buy it; a plaque: read
+        string Sale(CitadelLater tag, CitadelLater rich) => $@"bulle(0);
+                if (1 == var_cube({RichPrices}))
+                {{
+                    message({Later(rich)});
+                }}
+                else
+                {{
+                    message({Later(tag)});
+                }}
                 bulle(1);
                 add_choice({buyIt});
                 add_choice({notToday});
@@ -54,9 +66,9 @@ internal static partial class RaceTrackStory
                 bulle(1);";
         var things = new (int Actor, int Near, string Says)[]
         {
-            (CycleShopRoom.TownActor, NearBike, Sale(CitadelLater.ShopTagTown)),
-            (CycleShopRoom.RacingActor, NearBike, Sale(CitadelLater.ShopTagRacing)),
-            (CycleShopRoom.ChampionActor, NearLong, Sale(CitadelLater.ShopTagChampion)),
+            (CycleShopRoom.TownActor, NearBike, Sale(CitadelLater.ShopTagTown, CitadelLater.ShopTagTownRich)),
+            (CycleShopRoom.RacingActor, NearBike, Sale(CitadelLater.ShopTagRacing, CitadelLater.ShopTagRacingRich)),
+            (CycleShopRoom.ChampionActor, NearLong, Sale(CitadelLater.ShopTagChampion, CitadelLater.ShopTagChampionRich)),
             (CycleShopRoom.PennyActor, NearLong, Plaque(CitadelLater.ShopPennyFarthing)),
             (CycleShopRoom.TandemActor, NearLong, Plaque(CitadelLater.ShopTandem)),
             (CycleShopRoom.RepairActor, NearBike, Plaque(CitadelLater.ShopRepair)),
@@ -73,6 +85,14 @@ internal static partial class RaceTrackStory
         {
             scripts.SetText(0, ScriptKind.Life, $@"void comportement_0()
 {{
+    if (0 == var_cube({RichLooked}))
+    {{
+        set_var_cube({RichLooked}, 1);
+        if ({RichFrom} <= nb_gold_pieces())
+        {{
+            set_var_cube({RichPrices}, 1);
+        }}
+    }}
     swif (1 == action())
     {{
         if ({Driving} != comportement_hero())
