@@ -25,6 +25,17 @@ internal static class Program
         }
         return 0;
     }
+    static int HoverStance(string[] args)
+    {
+        static int A(string v) => (int)Math.Round(double.Parse(v, System.Globalization.CultureInfo.InvariantCulture) * 4096 / 360);
+        if (args.Length > 6) { LBAAssembler.Terrain.Citadel.CitadelHoverboard.Spread = A(args[3]); LBAAssembler.Terrain.Citadel.CitadelHoverboard.StanceThigh = A(args[4]); LBAAssembler.Terrain.Citadel.CitadelHoverboard.StanceKnee = A(args[5]); LBAAssembler.Terrain.Citadel.CitadelHoverboard.StanceFoot = A(args[6]); }
+        var path = System.IO.Path.Combine(args[1], "ANIM.HQR");
+        var retail = LBAAssembler.HqrArchive.Open(System.IO.Path.Combine(args[2], "ANIM.HQR"));
+        foreach (var a in LBAAssembler.Terrain.Citadel.CitadelHoverboard.RiderAnims)
+            if (LBAAssembler.Terrain.Citadel.CitadelHoverboard.Riding(retail.Read(a)) is { } bytes) LBAAssembler.HqrWriter.ReplaceInFile(path, a, bytes);
+        Console.WriteLine($"hoverstance: {LBAAssembler.Terrain.Citadel.CitadelHoverboard.RiderAnims.Length} animations");
+        return 0;
+    }
     static int HoverboardRun(string[] args) { foreach (var l in LBAAssembler.Terrain.Citadel.CitadelHoverboard.Install(args[1])) Console.WriteLine(l); return 0; }
 
     private const string DefaultSceneHqr = @"E:\GOG Games\Little Big Adventure 2 - Level viewer\SCENE.HQR";
@@ -134,6 +145,8 @@ internal static class Program
             "lba1bodies" => Lba1Bodies(args),
             // hoverboard <game folder>: the story's hoverboard into a folder (Citadel/CitadelHoverboard) -- its bodies, animations, models, texts
             "hoverboard" => HoverboardRun(args),
+            // hoverstance <game folder> <retail folder> [spread thigh knee foot]: the rider's animations made again from the retail ones (degrees)
+            "hoverstance" => HoverStance(args),
             "objfixsize" => RaceTrackCommand.ObjFixSize(args),
             "gridtop" => RaceTrackCommand.GridTop(args),
             "gridblocks" => RaceTrackCommand.GridBlocks(args),

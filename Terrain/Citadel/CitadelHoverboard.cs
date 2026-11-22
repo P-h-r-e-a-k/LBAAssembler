@@ -141,6 +141,8 @@ internal static class CitadelHoverboard
         else
         {
             var changed = new List<int>();
+            // (the game's standing, before it's the rider's: the ollie's keys are made from it)
+            var gameStanding = anims.Read(RiderStanding);
             foreach (var a in RiderAnims)
             {
                 var bytes = Riding(anims.Read(a));
@@ -149,6 +151,14 @@ internal static class CitadelHoverboard
                 changed.Add(a);
             }
             log.Add($"the hoverboard: ANIM.HQR {string.Join(", ", changed)} the rider's (his legs under him, his lean in his chest, his hips {Lift} up)");
+            // the ollie (Space on the board: RACEMOD.CPP Ollie) -- the entities' generic OllieGen
+            var ollie = HqrArchive.CountEntries(animPath);
+            HqrWriter.AppendToFile(animPath, Ollie(gameStanding));
+            var ress = Path.Combine(gameDirectory, "RESS.HQR");
+            var entities = HqrArchive.Open(ress).Read(44);
+            foreach (var e in PackEntities) entities = RaceTrackJumpAnim.WithAnim(entities, e, OllieGen, ollie);
+            HqrWriter.ReplaceInFile(ress, 44, entities);
+            log.Add($"the hoverboard: the ollie, ANIM.HQR {ollie}, entities {string.Join(" and ", PackEntities)}'s generic {OllieGen}");
         }
         // ---- the inventory's model (the protopack's; the super jet-pack's, 48, left the game's: the race's power-up copies it)
         var objfixPath = Path.Combine(gameDirectory, "OBJFIX.HQR");
@@ -319,20 +329,69 @@ internal static class CitadelHoverboard
     // the protopack's (entity 4's: standing, forward, back, the turns, the turns going, the fall, the landing) and the super jet-pack's
     // (entity 8's own: flying, its turns, its fall, its landing, its 32nd) -- not the hits, the deaths, the drowning (111, 114-116, 163):
     // he comes off the board
-    private static readonly int[] RiderAnims = { 104, 105, 106, 107, 108, 109, 110, 112, 113, 160, 161, 162, 164, 165, 166 };
+    internal static readonly int[] RiderAnims = { 104, 105, 106, 107, 108, 109, 110, 112, 113, 160, 161, 162, 164, 165, 166 };
     private const int Thigh = 8, OtherThigh = 11;
     // (his hips over the ground: the standing's, and a third of what the pack's own lift them as he goes -- a fall's landing all but down)
     private const int Lift = 150;
     private static int Angle(double degrees) => (int)Math.Round(degrees * 4096 / 360);
     // (a rider's legs: the thighs a little forward, the knees as much back, the feet flat; and how far his lean goes to his chest -- the
     // landings fold him at the hips past a right angle)
-    private static readonly int StanceThigh = Angle(-14), StanceKnee = Angle(28), StanceFoot = Angle(-14), MostLean = Angle(50);
+    // (since 2026-11-22 his feet wider apart along the board, over its pads, his thighs out from the hips and his knees a little bent -- the
+    // user: "he looks like he's got his legs together, and just his lower legs apart at the knees. It should be a more natural stance like a
+    // skateboarder": a spread of 26 degrees with the knees at 28 closed his knees in and splayed his shins)
+    internal static int StanceThigh = Angle(-12), StanceKnee = Angle(24), StanceFoot = Angle(-12), MostLean = Angle(50);
     // (astride the board, sideways: his legs apart to either side of him -- along the board once he's turned on it -- the front one, his
     // left, the thigh FrontThigh; his feet flat again; his head turned to look over his left shoulder, the way he goes; and the deck as
     // much higher as his feet rise with his legs apart: about a leg's length less its height at that spread)
     private const int FrontThigh = OtherThigh, Head = 14;
-    private static readonly int Spread = Angle(26), HeadLook = Angle(-70);
+    internal static int Spread = Angle(36), HeadLook = Angle(-70);
     private const float StanceRise = 50;
+
+    // ---- the ollie (the user, 2026-11-21: "perhaps an ollie animation that allows Twinsen to do a basic jump if he presses space whilst
+    // riding the hoverboard"; the research's keyframes): a crouch, the pop, up -- his hips, the board on them, lifted -- a little tuck at the
+    // top, down onto bent knees, back to the stance. The rider's standing pose (the game's 104, made the rider's frame by frame with each key's
+    // legs) under each key; the tuck kept small, as the board rides on his hips and a deep one lifts his feet off it.
+    public const int OllieGen = 200;
+    private const int RiderStanding = 104;
+    private static readonly (int Time, double Thigh, double Knee, double Foot, int Lift)[] OllieKeys =
+    {
+        (90, -12, 24, -12, 0), (170, -30, 56, -26, -90), (80, -8, 12, -6, 220), (190, -16, 32, -16, 460), (150, -26, 50, -24, -70), (200, -12, 24, -12, 0),
+    };
+    internal static byte[] Ollie(byte[] gameStanding)
+    {
+        int bones = BinaryPrimitives.ReadUInt16LittleEndian(gameStanding.AsSpan(2)), frameSize = 8 + bones * 8;
+        // (the game's standing pose, its first frame alone, made the rider's once for each key)
+        var one = new byte[8 + frameSize];
+        Array.Copy(gameStanding, one, 8 + frameSize);
+        BinaryPrimitives.WriteUInt16LittleEndian(one, 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(one.AsSpan(4), 0);
+        var a = new byte[8 + OllieKeys.Length * frameSize];
+        BinaryPrimitives.WriteUInt16LittleEndian(a, (ushort)OllieKeys.Length);
+        BinaryPrimitives.WriteUInt16LittleEndian(a.AsSpan(2), (ushort)bones);
+        BinaryPrimitives.WriteUInt16LittleEndian(a.AsSpan(4), (ushort)(OllieKeys.Length - 1));
+        var (thigh, knee, foot) = (StanceThigh, StanceKnee, StanceFoot);
+        try
+        {
+            for (var k = 0; k < OllieKeys.Length; k++)
+            {
+                var key = OllieKeys[k];
+                (StanceThigh, StanceKnee, StanceFoot) = (Angle(key.Thigh), Angle(key.Knee), Angle(key.Foot));
+                var frame = Riding(one) ?? throw new InvalidDataException("the rider's standing isn't Twinsen's 19 bones");
+                Array.Copy(frame, 8, a, 8 + k * frameSize, frameSize);
+                var at = 8 + k * frameSize;
+                BinaryPrimitives.WriteUInt16LittleEndian(a.AsSpan(at), (ushort)key.Time);
+                BinaryPrimitives.WriteInt16LittleEndian(a.AsSpan(at + 2), 0);
+                BinaryPrimitives.WriteInt16LittleEndian(a.AsSpan(at + 4), 0);
+                BinaryPrimitives.WriteInt16LittleEndian(a.AsSpan(at + 6), 0);
+                // (his hips -- the board on them -- up or down by the key's lift)
+                var hip = at + 8 + Hip * 8;
+                if ((BinaryPrimitives.ReadInt16LittleEndian(a.AsSpan(hip)) & 1) == 1)
+                    BinaryPrimitives.WriteInt16LittleEndian(a.AsSpan(hip + 4), (short)(BinaryPrimitives.ReadInt16LittleEndian(a.AsSpan(hip + 4)) + key.Lift));
+            }
+        }
+        finally { (StanceThigh, StanceKnee, StanceFoot) = (thigh, knee, foot); }
+        return a;
+    }
 
     private static int Hips(byte[] anim)
     {

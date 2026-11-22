@@ -1675,6 +1675,21 @@ static int s_deadVar = -1, s_deadValue = 0;
 static char s_deadText[160] = "";
 static S32 s_deadSaidAt = -100000;
 static int CarDead(void) { return s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME && ListVarGame[s_deadVar] == s_deadValue && Comportement == C_BUGGY; }
+// The ollie (2026-11-22, the user: "perhaps an ollie animation that allows Twinsen to do a basic jump if he presses space whilst riding the
+// hoverboard"): Space on the hoverboard -- Twinsun's, the protopack's behaviour -- plays the rider's ollie once, uninterrupted: a crouch,
+// the pop, up with the board under his feet, down onto bent knees (the story's animation, the board's entities' generic RACE_OLLIE_GEN:
+// Citadel/CitadelHoverboard)
+#define RACE_OLLIE_GEN 200
+static int s_ollieSpaceWas = 0;
+static void Ollie(U32 input) {
+    const int space = (input & I_ACTION_M) != 0, pressed = space && !s_ollieSpaceWas;
+    s_ollieSpaceWas = space;
+    if (!pressed || !RaceMod_Active() || Comportement != C_PROTOPACK || NewCube != -1) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (hero->GenAnim == RACE_OLLIE_GEN || SearchAnim(RACE_OLLIE_GEN, NUM_PERSO) == -1) return;
+    InitAnim(RACE_OLLIE_GEN, ANIM_ALL_THEN, NUM_PERSO);
+    Log_Info("[racemod] ollie");
+}
 // companion=<entity> <armour> (2026-11-11): the story's companion -- Zoe, from chapter 2 (docs/LBRA_STORY_SCRIPT.md, "Twinsen and Zoe"): the
 // actor of that entity whose armour is that mark, in any scene, put beside Twinsen as the scene starts and as he gets out of his car
 // (Companion); her script does the rest (following him, out of sight while he drives or while the scene has a Zoe of its own)
@@ -15247,6 +15262,7 @@ U32 RaceMod_FilterInput(U32 input) {
     // (the hovercraft over the water: no getting out there -- HovercraftFrame)
     if (s_hoverOn && Comportement == C_BUGGY && HoverOverWater()) input &= ~(U32)(I_ACTION | I_ACTION_M);
     // (swimming and diving: his keys are the pool's -- PoolFrame moves him itself)
+    Ollie(input);
     // (car_dead=: the car won't go -- its words as he tries)
     if (CarDead() && (input & (I_UP | I_DOWN))) {
         input &= ~(U32)(I_UP | I_DOWN);
