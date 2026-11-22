@@ -297,6 +297,7 @@ internal static class Program
             "trackleftovers" => TrackLeftoverProbe.Run(args),
             "zonedump" => ZoneDumpCommand.Run(args),
             "scenechecksum" => SceneChecksumCommand.Run(args),
+            "scenepoints" => SceneChecksumCommand.Points(args),
             "zoneon" => ZoneDumpCommand.On(args),
             "lba2text" => Lba2TextCommand.Run(args),
             "discretail" => DiscRetailCommand.Run(args),

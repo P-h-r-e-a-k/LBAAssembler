@@ -85,7 +85,7 @@ internal sealed record RaceTrackIsland(
         // house, flat at 250 in both files; the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea -- under the
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
         ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
-        DropDecors = new[] { (8, 10, 16448, 7552) }, OwnWeather = 0,
+        DropDecors = new[] { (8, 10, 16448, 7552), (7, 9, 7616, 19712) }, OwnWeather = 0,
         // (the neighbour's white fence along the edge between scenes 49 and 42, east of Twinsen's yard: both its lines, either side of the
         // edge, the town circuit beside its east end)
         KeepDecorBoxes = new[] { (551.0, 638.5, 566.0, 641.0) },
@@ -107,10 +107,10 @@ internal sealed record RaceTrackIsland(
         // ... and in the alley between the curved wall and the lattice-walled shop south of it, at cell (518.9, 614.0) (the user, 2026-10-27,
         // "the post on citadel.ile is still ... there")
         NoPiersAt = new[] { (519.0, 582.0, 3.0), (518.9, 614.0, 4.0) },
-        // (the car ferry's quay at the pier's end, in both weathers' files: the blue mooring post by the gangway moved up the pier's west edge,
-        // 3 cells, and the gangway's planks laid twice as wide, a second set beside them to the west -- the user, 2026-11-20, "Still not able to
-        // drive onto the ferry from Citadel. We should probably make the board to the boat slightly wider and move the blue mooring post also")
-        MoveDecors = new[] { (7, 9, 7616, 19712, 7616, 18176) },
+        // (the car ferry's quay at the pier's end, in both weathers' files: the gangway's planks laid twice as wide, a second set beside them to
+        // the west -- the user, 2026-11-20, "Still not able to drive onto the ferry from Citadel. We should probably make the board to the boat
+        // slightly wider and move the blue mooring post also"; that post, moved 3 cells up the pier's west edge then, gone: DropDecors -- the
+        // user, 2026-11-22, "The mooring post nearest the ferry on Citadel island we should remove to make driving onto the boat easier")
         CopyDecors = new[] { (7, 9, 8196, 20988, -1024, 0) },
         // (Twinsen's car in the story where he left it, first under the carport at his house -- not on a start line: the user, 2026-10-27)
         CarHome = (544.125, 654.75, 1024),

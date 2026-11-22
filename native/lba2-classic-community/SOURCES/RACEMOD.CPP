@@ -1124,6 +1124,9 @@ static double s_ferryWas[4];                  // (the ferry's x, y, z and beta l
 static S32 s_ferryStillSince = 0;
 static int s_ferryArriveFrames = 0;
 static int s_ferryArrived = 0, s_ferryHoldWas = 0;   // (come in on its deck in this scene; the hold last frame: arrive z at its release)
+static int s_ferryStillFrames = 0;                  // (frames the ferry has stood still, no crossing under way: FerryFrame's docking)
+#define RACE_FERRY_SETTLE_FRAMES 25                 // (still this long: docked)
+#define RACE_FERRY_SETTLE_MAX 400                   // (a ferry this far over the sea's level, docked, is set down to it)
 // plaque=<var> <value> <title> and its plaque_row=<name> <time> lines (the story's file): a list on a panel in the screen's middle while
 // game variable <var> is <value>, Twinsen held -- Action or Esc closes it and sets <var> back to 0. The speedrun records' slates by Kash's
 // tomb (the user, 2026-11-19: "perhaps we just show a plaque on screen "Name - time" - let's have names left aligned, and times aligned
@@ -23414,7 +23417,7 @@ static int FerryHolding(void) {
 }
 static void FerryFrame(S32 now) {
     const T_RACE_FERRY *f = FerryHere();
-    if (!f) { s_ferryWasSet = 0; s_ferryArriveFrames = 0; s_ferryArrived = 0; s_ferryHoldWas = 0; return; }
+    if (!f) { s_ferryWasSet = 0; s_ferryArriveFrames = 0; s_ferryArrived = 0; s_ferryHoldWas = 0; s_ferryStillFrames = 0; return; }
     T_OBJET *ferry = &ListObjet[f->Ferry];
     // (the game's ferry hidden, the car ferry's body where it is)
     int deckActor = -1;
@@ -23468,6 +23471,20 @@ static void FerryFrame(S32 now) {
         hero->Obj.Z = (S32)lround(fz - rx * sin(a) + rz * cos(a));
         hero->Obj.Y += (S32)(fy - s_ferryWas[1]);
         if (db) { hero->Obj.Beta = (hero->Obj.Beta + db) & 4095; ClearRealAngle(hero); }
+    }
+    // (still a moment, no crossing under way: docked -- and at the sea's level, 0, its deck the quay's height. The game's Desert ferry comes
+    // in at its sailing height, 256, to its dock point, 0, by goto_sym_point, which keeps the height: docked 256 over its level, its deck
+    // 256 over the quay -- the car dropped off its end onto the quay and jumped straight up onto it coming aboard, through its ramp as seen
+    // (the user's trace, 2026-11-22: "My game looks like Twinsen may have clipped through the boat gangway a few times"). Docked at the
+    // scene's start it is at 0. Set down, the car aboard comes down with it next frame, as carried)
+    {
+        const int moved = fx != s_ferryWas[0] || fz != s_ferryWas[2] || fb != s_ferryWas[3];
+        const int hold = f->HoldVar >= 0 && f->HoldVar < MAX_VARS_GAME && ListVarGame[f->HoldVar] != 0;
+        s_ferryStillFrames = moved || hold ? 0 : s_ferryStillFrames + 1;
+        if (s_ferryStillFrames >= RACE_FERRY_SETTLE_FRAMES && ferry->Obj.Y > 0 && ferry->Obj.Y <= RACE_FERRY_SETTLE_MAX) {
+            Log_Info("[racemod] car ferry (scene %d, actor %d): docked at %d over the sea -- set down to it, its deck the quay's height", (int)NumCube, f->Ferry, (int)ferry->Obj.Y);
+            ferry->Obj.Y = 0;
+        }
     }
     s_ferryWas[0] = fx; s_ferryWas[1] = fy; s_ferryWas[2] = fz; s_ferryWas[3] = fb;
     // (docked after coming in on it, the hold let go: the car moved along the deck by arrive z -- clear of what stands on the quay before
