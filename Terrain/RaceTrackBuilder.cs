@@ -1218,6 +1218,8 @@ internal static class RaceTrackBuilder
         // (a kept building made shallower has bodies of its own, kept as the ones they copy; and so has a piece cut down to a wall)
         if (plan.ThinKept is { Length: > 0 } thin) { keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(ThinKept(island, thin, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
+        // (a building of the island's made over: Otringal's Imperial Hotel -- HotelFacade)
+        if (options.Island.HotelFacade is { } facade) HotelFacade.Apply(island, facade, options, report);
         var natural = new Field(island);
         // (and the ground in front of the island's doors, DoorGroundReach round each: the road's bank stops there in a step, room to walk
         // up to the door -- Citadel Island's pharmacy, the town circuit's bank climbing from its doorstep, the user, 2026-10-27: "if we need

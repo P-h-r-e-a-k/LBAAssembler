@@ -441,6 +441,8 @@ internal sealed record RaceTrackIsland(
     // (RaceTrackBuilder.DropDecors; Otringal's footbridge)
     public (int FromX, int ToX, int Z0, int Z1)[]? CopyGroundVertices { get; init; }
     public (int FromX, int ToX, int Z0, int Z1)[]? CopyGroundCells { get; init; }
+    // A building of the island's made over (HotelFacade, after the build has cut its kept buildings to the road): Otringal's Imperial Hotel
+    public HotelFacade.Spec? HotelFacade { get; init; }
     public (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[]? CopyDecors { get; init; }
     // Where a building the road took away is put back (RaceTrackBuilder.RestoreLostBuildings), by hand, not the nearest place the search
     // finds: the building one of whose pieces has that body, moved (Dx, Dz) whole cells from where it stood (its height as the ground
@@ -666,6 +668,9 @@ internal sealed record RaceTrackIsland(
         MoveDecors = new[] { (7, 8, 10776, 7680, 10264, 7680), (7, 8, 12800, 7680, 13312, 7680), (7, 8, 9792, 13056, 9664, 13056), (7, 8, 13760, 13056, 14016, 13056) },
         CopyGroundVertices = new[] { (470, 469, 527, 539), (472, 473, 527, 539) },
         CopyGroundCells = new[] { (470, 469, 527, 539), (471, 472, 527, 539) },
+        // (the Imperial Hotel, by the start line in cube (7,7): its six pieces at one origin, twice as tall, a new face -- the user, 2026-11-22,
+        // "smarten up and refresh the outside of it. Keep the same basic external footprint, but a new look, and double the height")
+        HotelFacade = new(7, 7, 13872, 13000, new[] { 9, 10, 11, 12, 13, 14 }, (19672, 18800), (13872, 13000)),
     };
 
     // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's

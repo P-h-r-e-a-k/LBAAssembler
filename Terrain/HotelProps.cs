@@ -94,9 +94,30 @@ internal static class HotelProps
         ['R'] = new[] { "##.", "#.#", "##.", "#.#", "#.#" }, ['A'] = new[] { ".#.", "#.#", "###", "#.#", "#.#" },
         ['L'] = new[] { "#..", "#..", "#..", "#..", "###" }, ['S'] = new[] { "###", "#..", "###", "..#", "###" },
         ['U'] = new[] { "#.#", "#.#", "#.#", "#.#", "###" }, ['T'] = new[] { "###", ".#.", ".#.", ".#.", ".#." },
+        ['H'] = new[] { "#.#", "#.#", "###", "#.#", "#.#" }, ['O'] = new[] { "###", "#.#", "#.#", "#.#", "###" },
         [' '] = new[] { ".", ".", ".", ".", "." },
     };
     private static int Columns(string text) => text.Sum(ch => Font[ch][0].Length + 1) - 1;
+    internal static int TextColumns(string text) => Columns(text);
+    // a text's pixels anywhere (the hotel's outside: HotelFacade): `place` takes (column, row) -- 0,0 the text's top left -- to the body's
+    // frame; each run of a row's pixels one quad, facing `towards`, unlit
+    internal static void TextOn(CarMesh m, string text, float px, Func<float, float, Vector3> place, int colour, Vector3 towards)
+    {
+        var left = 0;
+        foreach (var ch in text)
+        {
+            var g = Font[ch];
+            for (var r = 0; r < g.Length; r++)
+                for (var c = 0; c < g[r].Length; c++)
+                {
+                    if (g[r][c] != '#' || (c > 0 && g[r][c - 1] == '#')) continue;
+                    var end = c;
+                    while (end + 1 < g[r].Length && g[r][end + 1] == '#') end++;
+                    m.In(new[] { m.P(0, place(left + c, r)), m.P(0, place(left + end + 1, r)), m.P(0, place(left + end + 1, r + 1)), m.P(0, place(left + c, r + 1)) }, colour, towards, unlit: true);
+                }
+            left += g[0].Length + 1;
+        }
+    }
     // a text's pixels on a plane facing +z at z, its middle at (x, y), each pixel `px` square
     private static void Text(CarMesh m, string text, float x, float y, float z, float px, int colour)
     {
