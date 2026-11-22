@@ -22,7 +22,10 @@ internal static class CitadelPyjamas
     private const int HeroEntity = 0;
     private static readonly int[] BehaviourEntities = { 1, 2, 3 };
     private const int Shirt = 224, Jeans = 194, Jeans2 = 176, Belt = 97, Shoes = 80, Skin = 32;
-    internal const int Gown = 12 * 16 + 11, Stripe = 12 * 16 + 5, White = 3 * 16 + 15;
+    // (the gown low in the blues' ramp, as his own clothes are -- his jeans at its 2: the light climbs the ramp from a polygon's colour, and
+    // from 11 it was at the ramp's end in a few steps, every lit side the same light blue -- the user, 2026-11-22: "Twinsen's pyjama model
+    // looks a bit flat". The stripes the ramp's darkest)
+    internal const int Gown = 12 * 16 + 5, Stripe = 12 * 16 + 2, White = 3 * 16 + 15;
     private const int Hips = 2, Chest = 3, Head = 14;
     private const float HemY = 140;
     private static readonly int[] Shins = { 9, 12 }, Feet = { 10, 13 };
@@ -166,8 +169,13 @@ internal static class CitadelPyjamas
         for (var i = 0; i < body.Lines.Count; i++) body.Lines[i] = body.Lines[i] with { A = Moved(body.Lines[i].A), B = Moved(body.Lines[i].B) };
         for (var i = 0; i < body.Spheres.Count; i++) body.Spheres[i] = body.Spheres[i] with { Point = Moved(body.Spheres[i].Point) };
         foreach (var (q, colour) in faces) body.Faces.Add(new Face(q.Select(p => at + p).ToArray(), colour, Material: -1));
+        // (the new points as much of the light as the bone's own take -- the most of them: 1.6 on most of him, the whole ramp; at 1 the skirt
+        // and the cap climbed only some nine steps of it and looked flat beside him)
         if (body.LightScale is { } scales && scales.Length > at)
-            body.LightScale = scales.Take(at).Concat(Enumerable.Repeat(1f, k2)).Concat(scales.Skip(at)).ToArray();
+        {
+            var own = scales.Skip(owner.Start).Take(owner.Count).DefaultIfEmpty(1f).Max();
+            body.LightScale = scales.Take(at).Concat(Enumerable.Repeat(own, k2)).Concat(scales.Skip(at)).ToArray();
+        }
         body.Vertices = Enumerable.Repeat(Vector3.Zero, world.Count).ToList();
         body.SetWorld(world.ToArray());
         return body;
@@ -180,6 +188,10 @@ internal static class CitadelPyjamas
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var body = Build(Body.Read(HqrArchive.Open(bodyPath).Read(0), 2));
+        // (written lit, as the overalls are: with the points' normals and Gouraud polygons -- read, a body isn't, and written so it had no
+        // normals at all, every polygon flat in its one colour; the user, 2026-11-22: "Twinsen's pyjama model looks a bit flat, apparently it
+        // needs more normals")
+        body.Lit = true;
         var bytes = body.Write();
         var table = HqrArchive.Open(ressPath).Read(44);
         int entry;
