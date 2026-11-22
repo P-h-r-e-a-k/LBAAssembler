@@ -1341,7 +1341,7 @@ internal static partial class RaceTrackStory
 
     // The nearest place to an island cell clear of every road of a track by `clear` cells, on its ground (the sea's out), and out of the
     // island's search zones (Givers): searched outward ring by ring, half a cell at a time, up to `reach` cells. Null when there's none.
-    private static (double X, double Z, double Y)? OffRoad(RaceTrackReport report, double x, double z, double clear, double reach = 10)
+    private static (double X, double Z, double Y)? OffRoad(RaceTrackReport report, double x, double z, double clear, double reach = 10, Func<double, double, bool>? ok = null)
     {
         if (report.GroundAfter is not { } ground) return null;
         for (var r = 0.0; r <= reach; r += 0.5)
@@ -1352,6 +1352,7 @@ internal static partial class RaceTrackStory
                 double a = 2 * Math.PI * k / steps, px = x + r * Math.Sin(a), pz = z + r * Math.Cos(a);
                 if (OffRoads(report, px, pz) < clear) continue;
                 if (givers.Any(b => px > b.X0 - GiverGap && px < b.X1 + GiverGap && pz > b.Z0 - GiverGap && pz < b.Z1 + GiverGap)) continue;
+                if (ok is not null && !ok(px, pz)) continue;
                 var g = ground(px, pz);
                 if (g < 200) continue;
                 return (px, pz, g);
@@ -3861,11 +3862,15 @@ stop();
             // (beside the line, or -- the town circuit's line is on its bridge, over the sea -- on the nearest ground off the roads, in the
             // start scene's cube)
             bool InCube((double X, double Z, double Y, int Beta) at) => (int)Math.Floor(at.X / 64) == model.CubeX && (int)Math.Floor(at.Z / 64) == model.CubeY;
+            // (clear of the Wizard's encore -- his spot is the nearest ground to the line too, and the herald stood right behind him: the user,
+            // 2026-11-22, "At the race start line there's an alien sup standing right behind the wizard, let's move it")
+            var wizardAt = TownWizardSpot(p, model.CubeX, model.CubeY);
+            bool ClearOfWizard(double x, double z, double cells) => wizardAt is not { } w || (x - w.X) * (x - w.X) + (z - w.Z) * (z - w.Z) >= cells * cells;
             (double X, double Z, double Y, int Beta)? Near(double back, double aside)
             {
-                if (Beside(p.Town, start, back, 1, sides) is { } b && InCube(b)) return b;
+                if (Beside(p.Town, start, back, 1, sides) is { } b && InCube(b) && ClearOfWizard(b.X, b.Z, 2.5)) return b;
                 double x = start.X - start.DirX * back - start.DirZ * aside, z = start.Z - start.DirZ * back + start.DirX * aside;
-                return OffRoad(p.Town, x, z, 1, 24) is { } o && Facing(o, start.X, start.Z) is var f && InCube(f) ? f : null;
+                return OffRoad(p.Town, x, z, 1, 24, (px, pz) => ClearOfWizard(px, pz, 2.5)) is { } o && Facing(o, start.X, start.Z) is var f && InCube(f) ? f : null;
             }
             if (herald is not null && Near(3, 0) is { } h)
             {
@@ -3891,7 +3896,7 @@ stop();
             (double X, double Z, double Y, int Beta)? Beside2((double X, double Z, double Y, int Beta) by)
             {
                 foreach (var (dx, dz) in new[] { (1.5, 0.0), (-1.5, 0.0), (0.0, 1.5), (0.0, -1.5), (1.1, 1.1), (-1.1, -1.1) })
-                    if (OffRoad(p.Town, by.X + dx, by.Z + dz, 1, 0) is { } o && Facing(o, start.X, start.Z) is var f && InCube(f)) return f;
+                    if (OffRoad(p.Town, by.X + dx, by.Z + dz, 1, 0, (px, pz) => ClearOfWizard(px, pz, 1.5)) is { } o && Facing(o, start.X, start.Z) is var f && InCube(f)) return f;
                 return null;
             }
             var heraldAt = herald is null ? null : Near(3, 0);

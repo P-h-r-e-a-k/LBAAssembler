@@ -105,6 +105,22 @@ internal static partial class RaceTrackStory
     // the Wizard's encore and Mrs. Brune's second word: per-visit flags of their scenes' own (var_cube)
     private const int BruneSaid = 50;
 
+    // Where the Wizard's encore stands by the town circuit's start line: beside the line a few cells back -- the herald and Mr. Paul stand
+    // nearer it -- or, the line being on its bridge over the sea, on the nearest ground off the roads; in the start scene's cube. Null when
+    // there's no room. (The herald's place keeps clear of it: StartLine.)
+    private static (double X, double Z, double Y, int Beta)? TownWizardSpot(StoryParts p, int cubeX, int cubeY)
+    {
+        if (p.Town.StartLine.Count == 0) return null;
+        var start = p.Town.StartLine[0];
+        bool InCube((double X, double Z, double Y, int Beta) a) => (int)Math.Floor(a.X / 64) == cubeX && (int)Math.Floor(a.Z / 64) == cubeY;
+        foreach (var back in new[] { 7.0, 9.0, 5.5, 11.0 })
+            if (Beside(p.Town, start, back, 1, new[] { 1, -1 }) is { } b && InCube(b)) return b;
+        foreach (var back in new[] { 8.0, 12.0, 4.0 })
+            if (OffRoad(p.Town, start.X - start.DirX * back + start.DirZ * 4, start.Z - start.DirZ * back - start.DirX * 4, 1, 24) is { } o
+                && Facing(o, start.X, start.Z) is var f && InCube(f)) return f;
+        return null;
+    }
+
     private static void CitadelEggs(StoryParts p, string gameDirectory)
     {
         var first = GroupB.AddLines(gameDirectory, CitadelTexts, CitadelEggLines, p.Log, "Citadel Island's easter eggs'");
@@ -198,17 +214,7 @@ void comportement_2()
             var start = p.Town.StartLine[0];
             p.Edit(p.TownScenes.StartScene, "the Wizard's encore (chapter 2): sunshine, rain or snow for the town circuit's race (the race-track mode's weather_var=)", model =>
             {
-                // (beside the line a few cells back -- the herald and Mr. Paul stand nearer it -- or, the line being on its bridge over the
-                // sea, on the nearest ground off the roads; in the start scene's cube)
-                bool InCube((double X, double Z, double Y, int Beta) a) => (int)Math.Floor(a.X / 64) == model.CubeX && (int)Math.Floor(a.Z / 64) == model.CubeY;
-                (double X, double Z, double Y, int Beta)? at = null;
-                foreach (var back in new[] { 7.0, 9.0, 5.5, 11.0 })
-                    if (Beside(p.Town, start, back, 1, new[] { 1, -1 }) is { } b && InCube(b)) { at = b; break; }
-                if (at is null)
-                    foreach (var back in new[] { 8.0, 12.0, 4.0 })
-                        if (OffRoad(p.Town, start.X - start.DirX * back + start.DirZ * 4, start.Z - start.DirZ * back - start.DirX * 4, 1, 24) is { } o
-                            && Facing(o, start.X, start.Z) is var f && InCube(f)) { at = f; break; }
-                if (at is not { } w) throw new NotTheGames("no room off the roads by the town circuit's start line");
+                if (TownWizardSpot(p, model.CubeX, model.CubeY) is not { } w) throw new NotTheGames("no room off the roads by the town circuit's start line");
                 Place(wizard, model, w);
                 p.Log.Add($"the Wizard's encore at cell ({w.X:0.#}, {w.Z:0.#}), {w.Y:0}");
                 var index = model.Actors.Count;
