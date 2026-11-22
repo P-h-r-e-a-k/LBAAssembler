@@ -1185,6 +1185,8 @@ Func_TransNumPtr HoloGivePtrAnim;
 
 void *HoloGivePtrAnim(S32 index) {
     index = index;         // Pour virer Warning
+    if (HoloHoverDrawing AND HoloHoverAnim)
+        return (HoloHoverAnim);
     return (BufAnimTempo); //	Surement plus simple a faire
 }
 /*══════════════════════════════════════════════════════════════════════════*/
@@ -1192,6 +1194,8 @@ Func_TransNumPtr HoloGivePtrBody;
 
 void *HoloGivePtrBody(S32 index) {
     index = index;         // Pour virer Warning
+    if (HoloHoverDrawing AND HoloHoverBody)
+        return (HoloHoverBody);
     return (BufBodyTempo); //	Voir au dessus...
 }
 /*══════════════════════════════════════════════════════════════════════════*/
@@ -1229,6 +1233,10 @@ void HoloMap() {
         InitWaitNoKey();
         PtrMap = ObjPtrMap = BufferTexture;
         RepMask = 0xFFFF;
+        /* The island view draws its marks (Twinsen, the arrows, the car) with whatever fillers are on: opened by the player it is
+           reached through HoloGlobe, which leaves the textured ones (FILL_POLY_TEXTURES); a capture straight into it (ui holoplan)
+           comes from the scene's own, and drew none of them. */
+        Switch_Fillers(FILL_POLY_TEXTURES);
     }
 
     if (Comportement == C_PROTOPACK OR Comportement == C_JETPACK) {

@@ -1635,7 +1635,7 @@ static int CasualNow(void) { return s_casualBody >= 0 && !ListVarGame[FLAG_TUNIQ
 // and not got out of over the water; his own car where it was kept, and given back to him as the hovercraft is -- on foot within reach of
 // the hire point -- or as he leaves the island.
 static int s_hoverVar = -1, s_hoverIsland = -1, s_hoverBody = -1, s_hoverAnim = -1, s_hoverParked = -1, s_hoverSeaY = 0;
-static int s_hoverScene = -1, s_hoverX = 0, s_hoverZ = 0, s_hoverBeta = 0, s_hireReach = 2000, s_hoverOn = 0, s_hoverWasOn = 0, s_hoverSaved = 0;
+static int s_hoverScene = -1, s_hoverX = 0, s_hoverZ = 0, s_hoverBeta = 0, s_hireReach = 2000, s_hoverOn = 0, s_hoverWasOn = 0;
 // (the bodies and the animation named by the entity's generic numbers -- its driving one, its parked one, its animation -- and looked up in
 // its FILE3D entry as first needed: BODY.HQR and ANIM.HQR's numbers)
 static int s_hoverEntity3D = -1, s_hoverResolved = 0, s_hoverDriven = 0;
@@ -9943,6 +9943,40 @@ static void DrawFigures(void) {
     }
 }
 
+// Twinsen's own car while the hovercraft is hired (hovercraft=): the car actor is the hovercraft then, so his car is drawn where he left
+// it, kept in ListBuggy[1] (HoverCarKept), as the figures are -- its body the car actor's own entity's, nobody in it. A scene's head read
+// once for each scene it stands in (its island, its cube).
+static int HoverCarKept(void);
+static void DrawKeptCar(void) {
+    static T_OBJ_3D obj;
+    static S32 shownBody = -1, headScene = -1, headIsland = -1, headX = 0, headZ = 0, headOutside = 0;
+    if (!s_hoverOn || !HoverCarKept() || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || NUM_BUGGY <= 0 || NUM_BUGGY >= NbObjets) return;
+    const S_BUGGY *own = &ListBuggy[1];
+    if (own->Cube != headScene) {
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, SCENE_HQR_NAME);
+        U8 *head = (U8 *)LoadMalloc_HQR(path, own->Cube + 1);
+        if (!head) return;
+        headScene = own->Cube; headIsland = head[0]; headX = (S8)head[1]; headZ = (S8)head[2]; headOutside = head[5] == CUBE_EXTERIEUR;
+        Free(head);
+    }
+    if (!headOutside || headIsland != (S32)Island) return;
+    const S32 body = EntityEntry(ListObjet[NUM_BUGGY].IndexFile3D, F_BODY, GEN_BODY_NORMAL);
+    if (body < 0 || !GivePtrBody(body)) return;
+    if (shownBody != body) {
+        ObjectReady(&obj, body);
+        shownBody = body;
+        Log_Info("[racemod] hovercraft: his own car drawn where he left it -- body %d in scene %d at (%d,%d,%d)", (int)body, (int)own->Cube, (int)own->X, (int)own->Y, (int)own->Z);
+    }
+    const S32 x = own->X + (headX - CurrentCubeX) * 32768, y = own->Y, z = own->Z + (headZ - CurrentCubeY) * 32768;
+    obj.X = x; obj.Y = y; obj.Z = z; obj.Alpha = 0; obj.Beta = own->Beta & 4095; obj.Gamma = 0;
+    memset(obj.CurrentFrame, 0, sizeof(obj.CurrentFrame));
+    LongWorldRotatePoint(x, y + 500, z);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar + 4000) return;
+    BackdropDisplay(&obj, zr, SceneClut());
+}
+
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
 static void DrawSpooks(void);
 static void DrawWebs(void);
@@ -9956,6 +9990,7 @@ void RaceMod_DrawBackdrop(void) {
     DrawMarshal();
     DrawPitCrew();
     DrawFigures();
+    DrawKeptCar();
     DrawStoryCar();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
@@ -22436,25 +22471,54 @@ static void DarkFrame(void) {
 }
 
 static void BackInCar(void);
-static S_BUGGY s_hoverCar;
-static U8 s_hoverCarNum = 0;
-// The hire over: his own car where it was -- this scene's, put back; another's, out of this one -- and the hovercraft gone
+// His own car while the hovercraft is hired: kept in the car records' second slot, ListBuggy[1] -- written to the saves with the first
+// (SAVEGAME.CPP) and used by nothing else -- so a game saved during the hire (the story's own keep, every scene entered) still knows where
+// the car stands, and the holomap shows it beside the hovercraft (RaceMod_HoloOwnCar). The first slot is the hovercraft's meanwhile, as
+// the car Twinsen drives. RACE_HOVER_KEPT in its LastTimer (unused for a parked car) marks it kept: a save from before has a slot of zeros.
+#define RACE_HOVER_KEPT 0x4B455054
+static int HoverCarKept(void) { return ListBuggy[1].LastTimer == RACE_HOVER_KEPT && ListBuggy[1].Cube >= 0; }
+// The hire over: his own car where it was -- this scene's, put back; another's, out of this one -- and the hovercraft gone. Kept nowhere (a
+// game saved during a hire before the car was kept in the saves): at the hire point, on its beach.
 static void HoverEnd(const char *why) {
-    if (s_hoverSaved) {
-        ListBuggy[0] = s_hoverCar;
+    const int kept = HoverCarKept();
+    if (kept) {
+        ListBuggy[0] = ListBuggy[1];
+        ListBuggy[0].LastTimer = 0;
+    } else if (s_hoverScene >= 0) {
+        S_BUGGY *ptb = &ListBuggy[0];
+        ptb->Cube = s_hoverScene; ptb->X = s_hoverX; ptb->Z = s_hoverZ; ptb->Beta = s_hoverBeta & 4095;
+        ptb->Y = (S32)NumCube == s_hoverScene ? CalculAltitudeTerrain(s_hoverX, s_hoverZ, 0) : ptb->Y;
+        ptb->Speed = 0; ptb->SpeedInc = 0;
+    }
+    memset(&ListBuggy[1], 0, sizeof(ListBuggy[1]));
+    const S_BUGGY *own = &ListBuggy[0];
+    if (NUM_BUGGY > 0 && NUM_BUGGY < NbObjets && Comportement != C_BUGGY) {
         T_OBJET *car = &ListObjet[NUM_BUGGY];
-        if ((S32)s_hoverCar.Cube == (S32)NumCube) {
-            car->Obj.X = s_hoverCar.X; car->Obj.Y = s_hoverCar.Y; car->Obj.Z = s_hoverCar.Z; car->Obj.Beta = s_hoverCar.Beta;
-            NumBuggy = s_hoverCarNum;
+        if ((S32)own->Cube == (S32)NumCube) {
+            car->Obj.X = own->X; car->Obj.Y = own->Y; car->Obj.Z = own->Z; car->Obj.Beta = own->Beta;
+            ClearRealAngle(car);
+            car->Flags &= ~INVISIBLE;
+            NumBuggy = (U8)(NUM_BUGGY | BUGGY_PRESENT);
         } else {
             NumBuggy &= (U8)~BUGGY_PRESENT;
             car->Flags |= INVISIBLE;
         }
-        s_hoverSaved = 0;
     }
     if (s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME) ListVarGame[s_hoverVar] = 0;
     s_hoverOn = 0;
-    Log_Info("[racemod] hovercraft: given back (%s) -- his own car where it was, scene %d", why, (int)s_hoverCar.Cube);
+    Log_Info("[racemod] hovercraft: given back (%s) -- his own car %s, scene %d at (%d,%d,%d)", why, kept ? "where it was" : "at the hire point (where it was not kept)",
+             (int)own->Cube, (int)own->X, (int)own->Y, (int)own->Z);
+}
+// The holomap's marks while the hovercraft is hired: 1 when the car record (ListBuggy[0]) is the hovercraft, with the bodies to draw it
+// as (BODY.HQR, ANIM.HQR: the parked one); his own car's record is ListBuggy[1] then, while RaceMod_HoloOwnCar says it is kept
+S32 RaceMod_HoloHovercraft(S32 *body, S32 *anim) {
+    if (!RaceMod_Active() || s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || ListVarGame[s_hoverVar] != 2 || !s_hoverResolved) return 0;
+    *body = s_hoverParked >= 0 ? s_hoverParked : s_hoverBody;
+    *anim = s_hoverAnim;
+    return *body >= 0 && *anim >= 0;
+}
+S32 RaceMod_HoloOwnCar(void) {
+    return RaceMod_Active() && s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME && ListVarGame[s_hoverVar] == 2 && HoverCarKept();
 }
 static void HovercraftFrame(void) {
     if (s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || NewCube != -1) return;
@@ -22472,7 +22536,13 @@ static void HovercraftFrame(void) {
     if (ListVarGame[s_hoverVar] == 2 && (S32)Island != s_hoverIsland) HoverEnd("the island left");
     // (asked for and paid: his own car kept, and him in it at the hire point, the car the hovercraft)
     if (ListVarGame[s_hoverVar] == 1 && (S32)NumCube == s_hoverScene && CubeMode == CUBE_EXTERIEUR && !driving && NUM_BUGGY < NbObjets) {
-        s_hoverCar = ListBuggy[0]; s_hoverCarNum = NumBuggy; s_hoverSaved = 1;
+        // (his own car kept where it stands -- never made yet, at the hire point. Hired only from 0, the hire man's script: whatever the
+        // slot held, another game's)
+        ListBuggy[1] = ListBuggy[0];
+        if (!NumBuggy) { ListBuggy[1].Cube = s_hoverScene; ListBuggy[1].X = s_hoverX; ListBuggy[1].Z = s_hoverZ; ListBuggy[1].Beta = s_hoverBeta & 4095;
+                         ListBuggy[1].Y = CalculAltitudeTerrain(s_hoverX, s_hoverZ, 0); }
+        ListBuggy[1].Speed = 0; ListBuggy[1].SpeedInc = 0;
+        ListBuggy[1].LastTimer = RACE_HOVER_KEPT;
         hero->Obj.X = s_hoverX; hero->Obj.Z = s_hoverZ;
         const S32 ground = CalculAltitudeTerrain(s_hoverX, s_hoverZ, 0);
         hero->Obj.Y = ground > s_hoverSeaY ? ground : s_hoverSeaY;
@@ -22481,8 +22551,8 @@ static void HovercraftFrame(void) {
         BackInCar();
         ListVarGame[s_hoverVar] = 2;
         s_hoverDriven = 0;   // (given back only once he has driven it: the frame he is put in, he is still on foot)
-        Log_Info("[racemod] hovercraft: hired -- Twinsen in it at (%d,%d,%d) in scene %d, his own car kept (scene %d)", (int)hero->Obj.X, (int)hero->Obj.Y,
-                 (int)hero->Obj.Z, (int)NumCube, (int)s_hoverCar.Cube);
+        Log_Info("[racemod] hovercraft: hired -- Twinsen in it at (%d,%d,%d) in scene %d, his own car kept (scene %d at (%d,%d,%d))", (int)hero->Obj.X, (int)hero->Obj.Y,
+                 (int)hero->Obj.Z, (int)NumCube, (int)ListBuggy[1].Cube, (int)ListBuggy[1].X, (int)ListBuggy[1].Y, (int)ListBuggy[1].Z);
     }
     s_hoverOn = ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && CubeMode == CUBE_EXTERIEUR;
     if (s_hoverOn) { s_driveBody = s_hoverBody; s_driveAnim = s_hoverAnim; s_driveSmall = -1; }

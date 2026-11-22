@@ -190,6 +190,11 @@ extern U8 *BufFleche;
 extern U8 *BufLoFleche;
 extern U8 *BufBuggy;
 extern U8 *BufDyno;
+/* A race-track mod's hired hovercraft on the island view (HOLOPLAN.CPP): its body and animation, scaled to the buggy mark's size, and
+   while HoloHoverDrawing is set the holomap's body and animation lookups (HoloGivePtrBody, HoloGivePtrAnim) answer with them */
+extern U8 *HoloHoverBody;
+extern U8 *HoloHoverAnim;
+extern S32 HoloHoverDrawing;
 //----------------------------------------------------------------------------
 
 /*-------------------------------------------------------------------------*/

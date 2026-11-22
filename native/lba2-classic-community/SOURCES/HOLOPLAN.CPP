@@ -12,6 +12,7 @@
 #include <string.h>
 #include "AMBIANCE.H"
 #include "RACEMOD.H"
+#include <SYSTEM/LOG.H>
 
 #define ZOOM_A 2048 //	Big Islands
 #define ZOOM_B 1024 //	Islands with 4 cubes
@@ -120,16 +121,40 @@ void DrawArrowPlan(T_SORT *ptt) {
         DrawTwinsenPlan(ptt); // Twinsen is on me !
 }
 //----------------------------------------------------------------------------
+// (NumObj: the car record drawn -- 0 the car's, 1 Twinsen's own car kept while a race-track mod's hovercraft is hired: RaceMod_HoloOwnCar)
 void DrawBuggyPlan(T_SORT *ptt) {
     S32 a, b, g;
+    const S_BUGGY *ptb = &ListBuggy[(ptt->NumObj == 1) ? 1 : 0];
 
     SetClip(0, 0, ModeDesiredX - 1, Dial_Y0 - 1);
 
-    a = ListBuggy[0].Alpha;
-    b = ListBuggy[0].Beta;
-    g = ListBuggy[0].Gamma;
+    a = ptb->Alpha;
+    b = ptb->Beta;
+    g = ptb->Gamma;
 
     BodyDisplay(ptt->Xw, ptt->Yw + (TimerRefHR & 0xFF), ptt->Zw, a, b, g, BufBuggy);
+
+    BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+}
+//----------------------------------------------------------------------------
+// The hired hovercraft (the car record while it is hired): its own body, with its bones, drawn as Twinsen's mark is
+U8 *HoloHoverBody = NULL;
+U8 *HoloHoverAnim = NULL;
+S32 HoloHoverDrawing = 0;
+static T_OBJ_3D ObjHover;
+void DrawHoverPlan(T_SORT *ptt) {
+    SetClip(0, 0, ModeDesiredX - 1, Dial_Y0 - 1);
+
+    ObjHover.X = ptt->Xw;
+    ObjHover.Y = ptt->Yw + (TimerRefHR & 0xFF);
+    ObjHover.Z = ptt->Zw;
+    ObjHover.Alpha = ListBuggy[0].Alpha;
+    ObjHover.Beta = ListBuggy[0].Beta;
+    ObjHover.Gamma = ListBuggy[0].Gamma;
+
+    HoloHoverDrawing = 1;
+    ObjectDisplay(&ObjHover);
+    HoloHoverDrawing = 0;
 
     BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
 }
@@ -208,49 +233,57 @@ typedef struct {
 //	et dans les cubes 55 a 73 sur le desert ( dans ce cas, on l'affiche ).
 // (and, a race-track mod's car, in any outside scene of the island the holomap shows: its cube read from the scene's head -- the
 // user, 2026-10-27: "We should also have the car position show on the holomap like it does on Desert island", Citadel Island's car
-// parked at Twinsen's house. Kept for the last cube asked about: the holomap asks every frame)
-static S32 BuggyCubeOn(S32 cube, S32 island, S32 *cx, S32 *cz) {
-    static S32 lastCube = -1, lastIsland = -1, lastX = 0, lastZ = 0, lastOutside = 0;
-    if (cube != lastCube) {
+// parked at Twinsen's house. Kept for the last cube asked about, one for each car record: the holomap asks every frame)
+static S32 BuggyCubeOn(S32 slot, S32 cube, S32 island, S32 *cx, S32 *cz) {
+    static S32 lastCube[MAX_BUGGYS] = {-1, -1}, lastIsland[MAX_BUGGYS], lastX[MAX_BUGGYS], lastZ[MAX_BUGGYS], lastOutside[MAX_BUGGYS];
+    if (cube != lastCube[slot]) {
         char path[ADELINE_MAX_PATH];
         GetResPath(path, ADELINE_MAX_PATH, SCENE_HQR_NAME);
         U8 *head = (U8 *)LoadMalloc_HQR(path, cube + 1);
         if (!head) return 0;
-        lastCube = cube;
-        lastIsland = head[0];
-        lastX = (S8)head[1];
-        lastZ = (S8)head[2];
-        lastOutside = head[5] == CUBE_EXTERIEUR;
+        lastCube[slot] = cube;
+        lastIsland[slot] = head[0];
+        lastX[slot] = (S8)head[1];
+        lastZ[slot] = (S8)head[2];
+        lastOutside[slot] = head[5] == CUBE_EXTERIEUR;
         Free(head);
     }
-    *cx = lastX * SCE;
-    *cz = lastZ * SCE;
-    return lastOutside AND lastIsland == island;
+    *cx = lastX[slot] * SCE;
+    *cz = lastZ[slot] * SCE;
+    return lastOutside[slot] AND lastIsland[slot] == island;
+}
+
+// Where a car record's car stands on the island shown (slot 1: a race-track mod's, Twinsen's own car kept while a hovercraft is hired)
+static S32 RecupCoorBuggySlot(S32 slot, S32 island, S32 *xb, S32 *yb, S32 *zb) {
+    S32 cube, cx, cz;
+    const S_BUGGY *ptb = &ListBuggy[slot];
+
+    cube = ptb->Cube;
+
+    if (island == 2 AND cube >= 55 AND cube <= 73) {
+        cx = (7 + (cube - 54) / 5) * SCE;
+        cz = (7 + (cube - 54) % 5) * SCE;
+    } else if (!RaceMod_Active() OR !BuggyCubeOn(slot, cube, island, &cx, &cz))
+        return (0);
+
+    *xb = ptb->X + cx;
+    *yb = ptb->Y;
+    *zb = ptb->Z + cz;
+
+    return (1);
 }
 
 S32 RecupCoorBuggy(S32 island, S32 *xb, S32 *yb, S32 *zb) {
-    S32 cube, cx, cz;
-
     if ((!NumBuggy)
             OR(ListObjet[0].WorkFlags & MANUAL_INTER_FRAME)) { //	Never Init or Twinsen IN Buggy
         return (0);
     }
 
-    cube = ListBuggy[0].Cube;
-
-    if (island == 2 AND cube >= 55 AND cube <= 73) {
-        cx = (7 + (cube - 54) / 5) * SCE;
-        cz = (7 + (cube - 54) % 5) * SCE;
-    } else if (!RaceMod_Active() OR !BuggyCubeOn(cube, island, &cx, &cz))
-        return (0);
-
-    *xb = ListBuggy[0].X + cx;
-    *yb = ListBuggy[0].Y;
-    *zb = ListBuggy[0].Z + cz;
-
-    return (1);
+    return RecupCoorBuggySlot(0, island, xb, yb, zb);
 }
 //────────────────────────────────────────────────────────────────────────────
+// (the island view's marks said in the log once each time it opens: InitHoloPlan sets it)
+static S32 HoloMarksToSay = 0;
 #define MAX_DYNO_POS 4
 typedef struct
 {
@@ -378,8 +411,24 @@ void DrawListHoloPlan() {
 
     if (RecupCoorBuggy(ZoomedIsland, &xb, &yb, &zb)) //	Desert + Buggy (and a race-track mod's car on any island)
     {
+        S32 hoverBody, hoverAnim;
         LongWorldRotatePoint(xb, yb, zb);
-        ptt->Num = 3; //	Type Buggy
+        // (a race-track mod's hovercraft hired: the car record is the hovercraft's, drawn as it)
+        ptt->Num = (HoloHoverBody AND RaceMod_HoloHovercraft(&hoverBody, &hoverAnim)) ? 5 : 3; //	Type Buggy
+        ptt->NumObj = 0;
+        ptt->Z = Z0;
+        ptt->Xw = xb;
+        ptt->Yw = yb;
+        ptt->Zw = zb;
+        ptt++;
+        nbtri++;
+    }
+
+    // (and Twinsen's own car where he left it, meanwhile)
+    if (RaceMod_HoloOwnCar() AND RecupCoorBuggySlot(1, ZoomedIsland, &xb, &yb, &zb)) {
+        LongWorldRotatePoint(xb, yb, zb);
+        ptt->Num = 3;
+        ptt->NumObj = 1;
         ptt->Z = Z0;
         ptt->Xw = xb;
         ptt->Yw = yb;
@@ -409,6 +458,7 @@ void DrawListHoloPlan() {
     ptt = ListTri;
 
     for (arrow = 0; arrow < nbtri; arrow++, ptt++) {
+        const S32 num = ptt->Num, slot = ptt->NumObj;
         switch (ptt->Num) {
         case 0:
             DrawTwinsenPlan(ptt);
@@ -423,8 +473,69 @@ void DrawListHoloPlan() {
         case 4:
             DrawDynoPlan(ptt);
             break;
+        case 5:
+            DrawHoverPlan(ptt);
+            break;
         }
+        // (a race-track mod's island view: its marks other than the arrows, once as it opens -- where each was drawn on the screen)
+        if (HoloMarksToSay AND num != 1 AND num != 2 AND RaceMod_Active())
+            Log_Info("[holomap] island %d: %s at (%d,%d,%d), drawn over x %d..%d, y %d..%d", (int)ZoomedIsland,
+                     num == 0 ? "Twinsen" : num == 3 ? (slot == 1 ? "his own car (kept while the hovercraft is hired)" : "the car") : num == 4 ? "the dinofly" : "the hovercraft",
+                     (int)ptt->Xw, (int)ptt->Yw, (int)ptt->Zw, (int)ScreenXMin, (int)ScreenXMax, (int)ScreenYMin, (int)ScreenYMax);
     }
+    HoloMarksToSay = 0;
+}
+//════════════════════════════════════════════════════════════════════════════
+// A race-track mod's hired hovercraft (RaceMod_HoloHovercraft): its parked body and its animation read from BODY.HQR and ANIM.HQR -- not
+// through the game's cache, whose entries Twinsen's own body is read from -- and scaled to the buggy mark's length, a fifth longer (it is
+// the bigger craft). Before the buggy mark is scaled: its length is read from its own size. Read again each time the island view opens.
+static void InitHoverPlan() {
+    S32 body, anim;
+    char path[ADELINE_MAX_PATH];
+    const T_BODY_HEADER *buggy = (const T_BODY_HEADER *)BufBuggy;
+
+    if (HoloHoverBody)
+        Free(HoloHoverBody);
+    if (HoloHoverAnim)
+        Free(HoloHoverAnim);
+    HoloHoverBody = HoloHoverAnim = NULL;
+
+    if (!RaceMod_HoloHovercraft(&body, &anim) OR !buggy)
+        return;
+
+    GetResPath(path, ADELINE_MAX_PATH, BODY_HQR_NAME);
+    HoloHoverBody = (U8 *)LoadMalloc_HQR(path, body);
+    GetResPath(path, ADELINE_MAX_PATH, ANIM_HQR_NAME);
+    HoloHoverAnim = (U8 *)LoadMalloc_HQR(path, anim);
+    if (!HoloHoverBody OR !HoloHoverAnim) {
+        if (HoloHoverBody)
+            Free(HoloHoverBody);
+        if (HoloHoverAnim)
+            Free(HoloHoverAnim);
+        HoloHoverBody = HoloHoverAnim = NULL;
+        return;
+    }
+
+    const T_BODY_HEADER *hover = (const T_BODY_HEADER *)HoloHoverBody;
+    S32 mark = buggy->XMax - buggy->XMin;
+    if (buggy->ZMax - buggy->ZMin > mark)
+        mark = buggy->ZMax - buggy->ZMin;
+    S32 length = hover->XMax - hover->XMin;
+    if (hover->ZMax - hover->ZMin > length)
+        length = hover->ZMax - hover->ZMin;
+    // (256 is the body's own size: the buggy mark is SCALE_BUGGY_PLAN of its own)
+    S32 scale = length > 0 ? (S32)((S64)mark * SCALE_BUGGY_PLAN * 6 / 5 / length) : 256;
+    if (scale < 1)
+        scale = 1;
+
+    ScaleRotBody3D(HoloHoverBody, scale, FALSE);
+    ScaleRotAnim3D(HoloHoverAnim, scale, FALSE);
+
+    ObjectClear(&ObjHover);
+    HoloHoverDrawing = 1;
+    ObjectInitBody(&ObjHover, 0);
+    ObjectInitAnim(&ObjHover, 0);
+    HoloHoverDrawing = 0;
 }
 //════════════════════════════════════════════════════════════════════════════
 void InitHoloPlan() {
@@ -518,6 +629,9 @@ void InitHoloPlan() {
 
     ScaleRotBody3D(BufFleche, ArrowFactorScale[ZoomedIsland], FALSE);
     ScaleRotBody3D(BufLoFleche, ArrowFactorScale[ZoomedIsland], FALSE);
+
+    InitHoverPlan();
+    HoloMarksToSay = 1;
 
     ScaleRotBody3D(BufBuggy, SCALE_BUGGY_PLAN, FALSE);
     ScaleRotBody3D(BufDyno, SCALE_DYNO_PLAN, FALSE);
@@ -941,6 +1055,16 @@ void HoloPlan(S32 numplan) {
         CheckSaveLogPcx(PtrPal); // F9: Sauve Screen
 #endif
 
+        /* Harness one-shot capture, of a steady frame some way in (past the
+           fade and the zoom-in): corner brackets at the four screen extents,
+           planet body centred via SetProjection, the reticule + dialogue strip
+           the player would see at rest, and the marks. Taken before BoxUpdate,
+           which presents the marks' boxes and puts the picture back under them
+           in Log for the next frame. */
+        const S32 captureNow = s_holoplan_capture_path[0] && --s_holoplan_capture_countdown <= 0;
+        if (captureNow)
+            Control_ScreenshotTo(s_holoplan_capture_path);
+
         BoxUpdate();
 
         OldObjectif = NumObjectif;
@@ -953,13 +1077,7 @@ void HoloPlan(S32 numplan) {
             FlagFade = FALSE;
         }
 
-        /* Harness one-shot capture.  Sits at the bottom of the modal loop so
-           the captured Log buffer contains the post-fade, post-zoom-in steady
-           frame: corner brackets at the four screen extents, planet body
-           centred via SetProjection, and any reticule + dialogue strip the
-           player would see at rest. */
-        if (s_holoplan_capture_path[0] && --s_holoplan_capture_countdown <= 0) {
-            Control_ScreenshotTo(s_holoplan_capture_path);
+        if (captureNow) {
             s_holoplan_capture_path[0] = '\0';
             FlagHoloEnd = TRUE;
             break;
