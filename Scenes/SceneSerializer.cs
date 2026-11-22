@@ -25,6 +25,14 @@ internal static class SceneSerializer
 
     // ---------------------------------------------------------------------------------------------------- reading
 
+    // FNV-1a of the first `count` bytes of a record (never 0)
+    private static uint PartHash(IReadOnlyList<byte> bytes, int count)
+    {
+        var h = 2166136261u;
+        for (var i = 0; i < count; i++) h = (h ^ bytes[i]) * 16777619u;
+        return h == 0 ? 1u : h;
+    }
+
     private sealed class Reader
     {
         private readonly byte[] d;
@@ -155,6 +163,7 @@ internal static class SceneSerializer
             s.Actors.Add(a);
         }
 
+        s.PartHashAsRead = PartHash(record, r.Position);
         s.Checksum = r.U32();
 
         var zones = r.S16();
@@ -316,7 +325,9 @@ internal static class SceneSerializer
             w.S16(a.Life.Length, $"{what} life script length"); sites.Add(new(trackAt, a.Track, w.Bytes.Count, a.Life)); w.Raw(a.Life);
         }
 
-        w.U32(s.Checksum);
+        // (the scene's checksum: as read while all before it is; else its own, from that part -- see SceneModel.PartHashAsRead)
+        var part = PartHash(w.Bytes, w.Bytes.Count);
+        w.U32(s.PartHashAsRead != 0 && part == s.PartHashAsRead ? s.Checksum : part == s.Checksum ? part ^ 0x5A5A5A5Au : part);
 
         w.S16(s.Zones.Count, "zone count");
         for (var i = 0; i < s.Zones.Count; i++)

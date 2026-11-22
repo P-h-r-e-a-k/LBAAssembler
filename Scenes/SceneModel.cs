@@ -98,7 +98,14 @@ internal sealed class SceneModel
     public List<SceneTrackPoint> TrackPoints { get; init; } = new();
 
     // ---- LBA2 ----
-    public uint Checksum;                                   // compared with the one in save games; left as found
+    public uint Checksum;                                   // compared with the one in save games (see PartHashAsRead)
+    // LBA2: a hash of the record up to the checksum (the header and the objects, their scripts with them) as it was read. The engine
+    // compares a save's checksum with the scene's and, when they differ, starts the scene afresh instead of putting back the save's
+    // objects -- their places, behaviours and the points their scripts had reached. Write keeps Checksum while what precedes it is as
+    // read, and gives a changed scene one of its own, from that part: a save made in the scene before it changed would otherwise put
+    // its objects back into scripts that are no longer theirs (the user, 2026-11-22: a save in Citadel's quay, scene 43, after its
+    // actors and the hero's script changed -- "a crash on loading a saved game spriraw.hqr entry 31488 can't be read"). 0: not read.
+    public uint PartHashAsRead;
     // Whatever follows the last piece the loader parses: LBA2's patch count and table, LBA1 normally nothing.
     public byte[] Tail = Array.Empty<byte>();
     // LBA2: write the patch table (see Lba2Patches) fresh from the scripts instead of copying Tail. On by default:
@@ -115,7 +122,7 @@ internal sealed class SceneModel
             SecondMin = SecondMin, SecondEcart = SecondEcart, Music = Music,
             GameOverScene = GameOverScene, Reserved1 = Reserved1, Reserved2 = Reserved2,
             CubeX = CubeX, CubeY = CubeY, ShadowLevel = ShadowLevel, LabyrinthMode = LabyrinthMode, CubeMode = CubeMode, HeaderSpare = HeaderSpare,
-            Checksum = Checksum, Tail = (byte[])Tail.Clone(), RebuildPatches = RebuildPatches,
+            Checksum = Checksum, PartHashAsRead = PartHashAsRead, Tail = (byte[])Tail.Clone(), RebuildPatches = RebuildPatches,
         };
         copy.Ambient = Ambient.Select(a => a.Clone()).ToArray();
         copy.Actors.AddRange(Actors.Select(a => a.Clone()));
