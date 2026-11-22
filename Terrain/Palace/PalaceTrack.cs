@@ -206,7 +206,7 @@ internal static class PalaceTrack
         int NextId(int file)
         {
             var text = HqrArchive.Open(textPath);
-            return Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+            return Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Where(t => t.Id < RaceTrackStory.OpenerBase).Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
         }
         void Append(int file, params (int Id, string[] Lines)[] texts)
         {

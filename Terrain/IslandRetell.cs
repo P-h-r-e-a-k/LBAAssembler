@@ -36,7 +36,7 @@ internal static partial class IslandRetell
         var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
         var text = HqrArchive.Open(textPath);
         var languages = Lba2TextBank.Languages(textPath);
-        var first = Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, texts).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+        var first = Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, texts).Texts.Where(t => t.Id < RaceTrackStory.OpenerBase).Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
         // (once a build: the island's two tracks -- the Emerald Moon and the old moon share island 3's texts -- or a second story pass)
         var englishWords = Lba2TextBank.Load(text, 0, texts).Texts.Select(t => t.Value).ToHashSet();
         if (lines.Length > 0 && englishWords.Contains(Encoding.Latin1.GetString(Dos.GetBytes(lines[0].Words[0]))))

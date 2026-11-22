@@ -85,6 +85,11 @@ void StoryLog_Vars(S32 who) {
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 
+/* A line about to be said by `speaker` in this life: the first line of an answer to Twinsen's Action has his opening line before it, said
+   by him (a race-track mod's opener=: RACEMOD.CPP RaceMod_Opener) -- in the story log as his. */
+extern S32 RaceMod_Opener(S32 lifeObj, S32 speaker, S32 text);
+#define OPENER_BEFORE(speaker, text)                                                                       do {                                                                                                      const S32 openerSaid = RaceMod_Opener((S32)numobj, (S32)(speaker), (S32)(text));                      if (openerSaid >= 0) {                                                                                    STORYLOG("MESSAGE_OBJ 0 dial=%d (opening line)", (int)openerSaid);                                    StoryLog_Said(openerSaid);                                                                        }                                                                                                 } while (0)
+
 void DoFuncLife(T_OBJET *ptrobj) {
     S32 num;
     S32 n;
@@ -135,6 +140,8 @@ void DoFuncLife(T_OBJET *ptrobj) {
         Value = ActionNormal;
         // (Story Mode's player 2, Zoe: her Action reaches no one but herself -- RACEMOD.CPP RaceMod_ActionFor)
         { extern int RaceMod_ActionFor(const T_OBJET *obj); if (Value && !RaceMod_ActionFor(ptrobj)) Value = 0; }
+        // (and the life that saw it: its first line in answer has Twinsen's opening line before it -- RACEMOD.CPP RaceMod_Opener)
+        { extern void RaceMod_ActionSeen(const T_OBJET *obj); if (Value) RaceMod_ActionSeen(ptrobj); }
         break;
 
         //---------------------------------------------------------------------------
@@ -1333,6 +1340,8 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_MESSAGE_OBJ:
             num = *PtrPrg++;
+            if (ListObjet[num].LifePoint > 0)
+                OPENER_BEFORE(num, *(S16 *)PtrPrg);
             STORYLOG("MESSAGE_OBJ %d dial=%d%s", (int)num, (int)*(S16 *)PtrPrg, ListObjet[num].LifePoint > 0 ? "" : " (dead: not said)");
             if (ListObjet[num].LifePoint > 0) {
                 StoryLog_Said(*(S16 *)PtrPrg);
@@ -1352,6 +1361,8 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_ADD_MESSAGE_OBJ:
             num = *PtrPrg++;
+            if (ListObjet[num].LifePoint > 0)
+                OPENER_BEFORE(num, *(S16 *)PtrPrg);
             STORYLOG("MESSAGE_OBJ %d dial=%d%s", (int)num, (int)*(S16 *)PtrPrg, ListObjet[num].LifePoint > 0 ? "" : " (dead: not said)");
             if (ListObjet[num].LifePoint > 0) {
                 StoryLog_Said(*(S16 *)PtrPrg);
@@ -1370,6 +1381,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_MESSAGE:
+            OPENER_BEFORE(numobj, *(S16 *)PtrPrg);
 #ifdef CDROM
             NumObjSpeak = numobj;
 #endif
@@ -1387,6 +1399,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_ADD_MESSAGE:
+            OPENER_BEFORE(numobj, *(S16 *)PtrPrg);
             STORYLOG("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
             StoryLog_Said(*(S16 *)PtrPrg);
 #ifdef CDROM
@@ -1403,6 +1416,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_MESSAGE_ZOE:
+            OPENER_BEFORE(NUM_PERSO, *(S16 *)PtrPrg);
             STORYLOG("MESSAGE_ZOE dial=%d", (int)*(S16 *)PtrPrg);
             StoryLog_Said(*(S16 *)PtrPrg);
 #ifdef CDROM
@@ -1946,6 +1960,7 @@ void DoLife(U8 numobj) {
             //---------------------------------------------------------------------------
         case LM_ASK_CHOICE:
             if (!DemoSlide) {
+                OPENER_BEFORE(numobj, *(S16 *)PtrPrg);
                 SaveTimer();
                 TestCoulDial(ptrobj->CoulObj);
                 NumObjDial = numobj;
@@ -1974,6 +1989,7 @@ void DoLife(U8 numobj) {
             if (!DemoSlide) {
                 num = *PtrPrg++;
                 if (ListObjet[num].LifePoint > 0) {
+                    OPENER_BEFORE(num, *(S16 *)PtrPrg);
                     SaveTimer();
                     TestCoulDial(ListObjet[num].CoulObj);
                     NumObjDial = (U8)num;

@@ -388,6 +388,8 @@ internal static class RaceCarEngineFile
         if (story && info is not null && RaceTrackStory.DeanOilLine(info) is { } deanOil) text.Append(deanOil);
         // chapters 8-10's (the Elevator Platform, Wannies Island's glove, Mosquibees Island's ring: RaceTrackStory.StoryRaceKeysB)
         if (story && info is not null) text.Append(RaceTrackStory.StoryRaceKeysB(RaceTrackIsland.ByName(info.Island)));
+        // Twinsen's opening line to whoever he talks to: his goal on the island in the story, else a hello (RaceTrackStory.Openers.cs)
+        if (info is not null) text.Append(RaceTrackStory.OpenerKeys(RaceTrackIsland.ByName(info.Island), story));
         // a won story race's end, a cut-scene: the car braked to a stop past the line, Twinsen out of it, the controls his again once the
         // story's congratulations have played -- RACEMOD.CPP win_stop= (WinStopVar)
         if (story && info is not null && WinStopVar(RaceTrackIsland.ByName(info.Island), town) is int winStop) text.Append($"win_stop={winStop}\n");

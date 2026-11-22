@@ -439,7 +439,7 @@ internal static partial class RaceTrackStory
 
     // The first id free in a file of TEXT.HQR, in every language (one past the highest any of them has) ...
     private static int NextId(HqrArchive text, int languages, int file) =>
-        Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+        Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Where(t => t.Id < RaceTrackStory.OpenerBase).Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
 
     // Raph's yell at the townsman on the storm track (the user, 2026-11-06: "This guy still walks on the track whilst Raph is driving" --
     // their choice: Raph stops and yells at him as he yells at Twinsen, then drives on). Its text goes in last of all Citadel Island's

@@ -12,6 +12,9 @@ in [LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md), which has the build notes; this
   the congratulations (and the prize) play before he can move again. On the volcano, Island CX and the lava lake the car stays yours:
   walk up to whoever has the next word.
 - **A small quest before each race.** Someone has shut the track, or wants something first. Solve it, and the marshal drops the flag.
+- **Twinsen speaks first.** Whoever he talks to, he opens with his goal on that island ("I'm looking for whoever took my driving
+  gloves.", "I need sand filters for my car's engine.", "Do you know where I can get an ignition coil?"), or a hello when he has none,
+  and then they answer. He says it once a visit to each person; talked to again, they just answer. (Not to Zoe: she's at his side.)
 - **Zoe** is with Twinsen from chapter 2 on. She follows him on foot, and talking to her (Action beside her) gives a hint for whatever
   he's stuck on. In a race she runs the pit box by the start line: drive slowly through it (under 20 km/h) for a pit stop, once a lap.
   It refills your item box with a fuel can and undoes a shrink or a skid.

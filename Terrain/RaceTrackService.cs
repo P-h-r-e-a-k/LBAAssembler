@@ -979,6 +979,8 @@ internal static class RaceTrackService
         if (options.Story && RaceTrackStory.CompanionOn) told.Log.AddRange(RaceTrackStory.Companion(gameDirectory, options.Island));
         // (the masked driver's black car past the finish, in the island's chapter: RaceTrackStory.MaskedCar.cs)
         if (options.Story) told.Log.AddRange(RaceTrackStory.MaskedCar(gameDirectory, report, options.Island));
+        // (Twinsen's opening lines -- his goal, else a hello -- at their fixed ids in the island's bank: RaceTrackStory.Openers.cs)
+        if (options.Story) told.Log.AddRange(RaceTrackStory.OpenerTexts(gameDirectory, options.Island));
         return told;
     }
     private static (List<string> Log, StoryInfo? Info) IslandStory(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes,

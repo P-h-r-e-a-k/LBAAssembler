@@ -180,7 +180,7 @@ internal static class PolarDream
         var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
         var text = HqrArchive.Open(textPath);
         var languages = Math.Min(Lba2TextBank.Languages(textPath), PolarScenes.Languages);
-        var id = Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, CitadelTexts).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+        var id = Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, CitadelTexts).Texts.Where(t => t.Id < RaceTrackStory.OpenerBase).Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
         var hqr = File.ReadAllBytes(textPath);
         for (var lang = 0; lang < languages; lang++)
         {

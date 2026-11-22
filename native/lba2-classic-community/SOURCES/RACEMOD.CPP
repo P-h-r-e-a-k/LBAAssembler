@@ -253,6 +253,11 @@
  *                                from once the variable moves on, or (a game loaded meanwhile) on the start line (CarHeld)
  *     car_dead=<var> <value> <text>   (2026-11-22) while the variable holds the value, Twinsen's car won't go: forward and back do nothing,
  *                                <text> over the screen as he tries (Otringal's race day, its ignition coil taken in the night)
+ *     opener=<text> [<var> <lo> <hi>]...   (2026-11-22) Twinsen's opening line to whoever answers his Action: the first opener= whose game
+ *                                variables are all within their bounds -- his goal there; none, a hello. Said by him before their first line,
+ *                                once a scene visit for each person and line; not to things, nor when his script speaks first (RaceMod_Opener)
+ *     opener_hello=<text>...     the hellos, said in turn where no opener= holds
+ *     opener_quiet=<entity>      the entity he never opens to (the companion, Zoe)
  *     companion=<entity> <armour> (2026-11-11) that entity's actor with that armour, in any scene: put beside Twinsen as the scene starts
  *                                and as he gets out of his car (Companion: the story's Zoe from chapter 2)
  *     car_home=<scene> <away var> <fetch var>   (2026-11-11) the away variable 1 while the story car stands abandoned in another scene of
@@ -368,6 +373,7 @@ extern void AdjustDirObject(T_OBJET *ptrobj, S32 oldmove);       // GERELIFE.CPP
 #include <SYSTEM/LOG.H>
 #include <SVGA/FONT.H>
 #include <SVGA/SCREEN.H>
+#include <SVGA/VIDEO.H>
 #include <SYSTEM/KEYBOARD.H>
 #include <SYSTEM/KEYBOARD_KEYS.H>
 #include <SYSTEM/TIMER.H>
@@ -1675,6 +1681,17 @@ static int s_deadVar = -1, s_deadValue = 0;
 static char s_deadText[160] = "";
 static S32 s_deadSaidAt = -100000;
 static int CarDead(void) { return s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME && ListVarGame[s_deadVar] == s_deadValue && Comportement == C_BUGGY; }
+// opener= (2026-11-22, the user: "We need Twinsen's opening line goal led everywhere. If there's times he isn't explicitly goal led then he
+// can just say hello and have the NPCs respond"): Twinsen speaks first to whoever answers his Action (RaceMod_Opener). Each opener= a text
+// and the game variables it wants, each within its bounds -- the first that holds is his goal there; none, one of opener_hello='s in
+// turn. opener_quiet=: the entity he never opens to (Zoe, the companion: at his side, her hints answer his goal already).
+#define RACE_MAX_OPENERS 48
+#define RACE_OPENER_CONDS 5
+#define RACE_MAX_HELLOS 4
+typedef struct { S16 Text; int NbConds; S16 Var[RACE_OPENER_CONDS]; int Lo[RACE_OPENER_CONDS], Hi[RACE_OPENER_CONDS]; } T_RACE_OPENER;
+static T_RACE_OPENER s_openers[RACE_MAX_OPENERS];
+static int s_nbOpeners = 0, s_nbHellos = 0, s_helloNext = 0, s_openerQuiet = -1;
+static S16 s_hellos[RACE_MAX_HELLOS];
 // The ollie (2026-11-22, the user: "perhaps an ollie animation that allows Twinsen to do a basic jump if he presses space whilst riding the
 // hoverboard"): Space on the hoverboard -- Twinsun's, the protopack's behaviour -- plays the rider's ollie once, uninterrupted: a crouch,
 // the pop, up with the board under his feet, down onto bent knees (the story's animation, the board's entities' generic RACE_OLLIE_GEN:
@@ -5592,6 +5609,28 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d", &s_heldVar, &s_heldValue, &s_heldScene) != 3 || s_heldVar < 0 || s_heldVar >= MAX_VARS_GAME || s_heldScene < 0) s_heldVar = -1;
             s_heldCube = -1;
         }
+        else if (!strcmp(key, "opener")) {
+            T_RACE_OPENER o;
+            int text = -1, n = 0, used = 0;
+            const char *p = v;
+            if (s_nbOpeners < RACE_MAX_OPENERS && sscanf(p, "%d%n", &text, &used) == 1 && text >= 0) {
+                p += used;
+                int var, lo, hi;
+                o.Text = (S16)text;
+                while (n < RACE_OPENER_CONDS && sscanf(p, "%d %d %d%n", &var, &lo, &hi, &used) == 3 && var >= 0 && var < MAX_VARS_GAME) {
+                    o.Var[n] = (S16)var; o.Lo[n] = lo; o.Hi[n] = hi; n++; p += used;
+                }
+                o.NbConds = n;
+                s_openers[s_nbOpeners++] = o;
+            }
+        }
+        else if (!strcmp(key, "opener_hello")) {
+            const char *p = v;
+            int text, used = 0;
+            s_nbHellos = 0;
+            while (s_nbHellos < RACE_MAX_HELLOS && sscanf(p, "%d%n", &text, &used) == 1) { s_hellos[s_nbHellos++] = (S16)text; p += used; }
+        }
+        else if (!strcmp(key, "opener_quiet")) { if (sscanf(v, "%d", &s_openerQuiet) != 1) s_openerQuiet = -1; }
         else if (!strcmp(key, "car_dead")) {
             int used = 0;
             if (sscanf(v, "%d %d %n", &s_deadVar, &s_deadValue, &used) >= 2 && used > 0 && s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME) snprintf(s_deadText, sizeof(s_deadText), "%s", v + used);
@@ -9725,7 +9764,9 @@ S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
     if (m->On) {
         const double r2 = RACE_BUBBLE_MARSHAL * RACE_BUBBLE_MARSHAL;
         const double dp = (wx - m->X) * (wx - m->X) + (wz - m->Z) * (wz - m->Z);
-        if (dp < r2) {
+        // (or where she is now: on the road for the start, her talker by her there -- the Desert's Flick, before her race)
+        const double dc = (wx - m->CX) * (wx - m->CX) + (wz - m->CZ) * (wz - m->CZ);
+        if (dp < r2 || dc < r2) {
             *x = (S32)floor(m->CX - CurrentCubeX * 32768.0 + 0.5); *y = (S32)floor(m->CY + 0.5) + RACE_MARSHAL_HEAD; *z = (S32)floor(m->CZ - CurrentCubeY * 32768.0 + 0.5);
             if (say) Log_Info("[racemod] bubble: scene %d actor %d unseen -- at the flag marshal's head (%d,%d,%d)", (int)NumCube, (int)numobj, (int)*x, (int)*y, (int)*z);
             return 1;
@@ -9746,6 +9787,90 @@ S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
     }
     if (say) Log_Info("[racemod] bubble: scene %d actor %d unseen, no one seen by it -- no bubble", (int)NumCube, (int)numobj);
     return 0;
+}
+
+// ---- Twinsen's opening line (opener=). Which lives answered his Action this frame (LF_ACTION held: RaceMod_ActionSeen); the frame's end
+// forgets them (RaceMod_Frame, after every life has run). Each actor's last opening line this scene visit (0: none yet).
+static U8 s_actionAsked[256];
+static int s_askedAny = 0;
+static S16 s_openerSaid[256];
+static S32 s_openerScene = -1;
+void RaceMod_ActionSeen(const T_OBJET *obj) {
+    const S32 n = (S32)(obj - ListObjet);
+    if (n < 0 || n >= 256) return;
+    s_actionAsked[n] = 1; s_askedAny = 1;
+}
+static void OpenerFrame(void) {
+    if (s_askedAny) { memset(s_actionAsked, 0, sizeof(s_actionAsked)); s_askedAny = 0; }
+}
+// Someone Twinsen would greet: a person -- a body that walks (its entity has the walking animation) -- not a thing that answers him (a case,
+// a chest, a sign, a terminal); an unseen talker for whoever it stands for (the flag marshal on her plinth, someone seen beside it, as its
+// speech bubble goes: RaceMod_BulleAt), never the story's controllers (the radio, the narrator, signs read)
+static int OpenerPerson(S32 num, int depth = 0) {
+    if (num <= NUM_PERSO || num >= (S32)NbObjets || depth > 1) return 0;
+    const T_OBJET *o = &ListObjet[num];
+    if (!(o->Flags & INVISIBLE)) return o->GenBody != NO_BODY && !(o->Flags & SPRITE_3D) && SearchAnim(GEN_ANIM_MARCHE, num) != -1;
+    if ((o->Obj.X == 16384 && o->Obj.Z == 16384) || o->Obj.Y < -5000) return 0;
+    const T_RACE_MARSHAL *m = &s_marshal;
+    if (m->On) {
+        const double wx = o->Obj.X + CurrentCubeX * 32768.0, wz = o->Obj.Z + CurrentCubeY * 32768.0;
+        if ((wx - m->X) * (wx - m->X) + (wz - m->Z) * (wz - m->Z) < RACE_BUBBLE_MARSHAL * RACE_BUBBLE_MARSHAL) return 1;
+        if ((wx - m->CX) * (wx - m->CX) + (wz - m->CZ) * (wz - m->CZ) < RACE_BUBBLE_MARSHAL * RACE_BUBBLE_MARSHAL) return 1;
+    }
+    int best = -1;
+    double bd = RACE_BUBBLE_NEAR * RACE_BUBBLE_NEAR;
+    for (int i = 1; i < (int)NbObjets; i++) {
+        const T_OBJET *s = &ListObjet[i];
+        if (i == num || (s->Flags & INVISIBLE) || (s->WorkFlags & OBJ_DEAD) || (s->GenBody == NO_BODY && !(s->Flags & SPRITE_3D))) continue;
+        const double d = (double)(s->Obj.X - o->Obj.X) * (s->Obj.X - o->Obj.X) + (double)(s->Obj.Z - o->Obj.Z) * (s->Obj.Z - o->Obj.Z);
+        if (d < bd) { bd = d; best = i; }
+    }
+    return best > 0 && OpenerPerson(best, depth + 1);
+}
+// A line about to be said by `speaker` in the life of `lifeObj` (GERELIFE.CPP: message, message_obj, ask_choice... before each): the first
+// line of an answer to Twinsen's Action -- his opening line first, said by him (his speech bubble, his voice), and its text returned for
+// the story log; -1 none. None when he speaks first himself (a script's own opener -- the coil's, HAL's room's), to a thing, to Zoe, in a
+// line no one hears (RaceMod_Hush), or what he said to that person already this visit (the same goal; any hello once).
+S32 RaceMod_Opener(S32 lifeObj, S32 speaker, S32 text) {
+    if (lifeObj < 0 || lifeObj >= 256 || !s_actionAsked[lifeObj]) return -1;
+    s_actionAsked[lifeObj] = 0;
+    if (!RaceMod_Active() || (!s_nbOpeners && !s_nbHellos) || speaker == NUM_PERSO || speaker < 0 || speaker >= (S32)NbObjets || speaker >= 256) return -1;
+    if (RaceMod_Hush(text)) return -1;
+    if (s_openerScene != (S32)NumCube) { memset(s_openerSaid, 0, sizeof(s_openerSaid)); s_openerScene = (S32)NumCube; }
+    if (s_openerQuiet >= 0 && ListObjet[speaker].IndexFile3D == s_openerQuiet) return -1;
+    if (!OpenerPerson(speaker)) {
+        static S32 thingScene = -1, thingActor = -1;
+        if (thingScene != (S32)NumCube || thingActor != speaker) Log_Info("[racemod] opener: actor %d of scene %d answers, but isn't someone to greet -- none", (int)speaker, (int)NumCube);
+        thingScene = (S32)NumCube; thingActor = speaker;
+        return -1;
+    }
+    S32 say = -1;
+    for (int i = 0; i < s_nbOpeners && say < 0; i++) {
+        const T_RACE_OPENER *o = &s_openers[i];
+        int holds = 1;
+        for (int k = 0; k < o->NbConds && holds; k++) { const S32 v = ListVarGame[o->Var[k]]; holds = v >= o->Lo[k] && v <= o->Hi[k]; }
+        if (holds) say = o->Text;
+    }
+    const int hello = say < 0;
+    if (hello) {
+        if (!s_nbHellos || s_openerSaid[speaker]) return -1;
+        say = s_hellos[s_helloNext++ % s_nbHellos];
+    } else if (s_openerSaid[speaker] == say) return -1;
+    if (FindText(say) < 0) {
+        static S32 missing = -1;
+        if (missing != say) Log_Warn("[racemod] opener: text %d isn't in this island's texts -- none", (int)say);
+        missing = say;
+        return -1;
+    }
+    s_openerSaid[speaker] = (S16)say;
+    Log_Info("[racemod] opener: Twinsen to actor %d of scene %d first -- %s, text %d", (int)speaker, (int)NumCube, hello ? "a hello" : "his goal", (int)say);
+#ifdef CDROM
+    NumObjSpeak = NUM_PERSO;
+#endif
+    NumObjDial = NUM_PERSO;
+    Palette(PtrPal);
+    Dial(say, TRUE);
+    return say;
 }
 
 static void DrawMarshal(void) {
@@ -9943,32 +10068,48 @@ static void DrawFigures(void) {
     }
 }
 
-// Twinsen's own car while the hovercraft is hired (hovercraft=): the car actor is the hovercraft then, so his car is drawn where he left
-// it, kept in ListBuggy[1] (HoverCarKept), as the figures are -- its body the car actor's own entity's, nobody in it. A scene's head read
-// once for each scene it stands in (its island, its cube).
-static int HoverCarKept(void);
-static void DrawKeptCar(void) {
-    static T_OBJ_3D obj;
-    static S32 shownBody = -1, headScene = -1, headIsland = -1, headX = 0, headZ = 0, headOutside = 0;
-    if (!s_hoverOn || !HoverCarKept() || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || NUM_BUGGY <= 0 || NUM_BUGGY >= NbObjets) return;
-    const S_BUGGY *own = &ListBuggy[1];
-    if (own->Cube != headScene) {
+// While the hovercraft is hired (hovercraft=) the car actor is one of the two -- the hovercraft, or his own car -- and the other is kept
+// in ListBuggy[1] (KeptKind), parked where he left it: drawn there as the figures are, nobody in it, and solid (KeptVehicle). KeptHere:
+// where it stands in this cube's terms (its scene's head read once for each scene it stands in: its island, its cube) -- 0 off this island
+// or indoors. KeptBody: its body (BODY.HQR) -- his own car's, the car actor's entity's own; the hovercraft's, its parked one.
+static int KeptKind(void);
+static int HireOn(void);
+static int KeptHere(S32 *x, S32 *y, S32 *z) {
+    static S32 headScene = -1, headIsland = -1, headX = 0, headZ = 0, headOutside = 0;
+    const S_BUGGY *kept = &ListBuggy[1];
+    if (!KeptKind() || CubeMode != CUBE_EXTERIEUR) return 0;
+    if (kept->Cube != headScene) {
         char path[ADELINE_MAX_PATH];
         GetResPath(path, ADELINE_MAX_PATH, SCENE_HQR_NAME);
-        U8 *head = (U8 *)LoadMalloc_HQR(path, own->Cube + 1);
-        if (!head) return;
-        headScene = own->Cube; headIsland = head[0]; headX = (S8)head[1]; headZ = (S8)head[2]; headOutside = head[5] == CUBE_EXTERIEUR;
+        U8 *head = (U8 *)LoadMalloc_HQR(path, kept->Cube + 1);
+        if (!head) return 0;
+        headScene = kept->Cube; headIsland = head[0]; headX = (S8)head[1]; headZ = (S8)head[2]; headOutside = head[5] == CUBE_EXTERIEUR;
         Free(head);
     }
-    if (!headOutside || headIsland != (S32)Island) return;
-    const S32 body = EntityEntry(ListObjet[NUM_BUGGY].IndexFile3D, F_BODY, GEN_BODY_NORMAL);
+    if (!headOutside || headIsland != (S32)Island) return 0;
+    *x = kept->X + (headX - CurrentCubeX) * 32768; *y = kept->Y; *z = kept->Z + (headZ - CurrentCubeY) * 32768;
+    return 1;
+}
+static S32 KeptBody(void) {
+    const int kind = KeptKind();
+    if (kind == 1) return NUM_BUGGY > 0 && NUM_BUGGY < NbObjets ? EntityEntry(ListObjet[NUM_BUGGY].IndexFile3D, F_BODY, GEN_BODY_NORMAL) : -1;
+    if (kind == 2) return s_hoverParked >= 0 ? s_hoverParked : s_hoverBody;
+    return -1;
+}
+static void DrawKeptCar(void) {
+    static T_OBJ_3D obj;
+    static S32 shownBody = -1;
+    S32 x, y, z;
+    if (!HireOn() || NewCube != -1 || !KeptHere(&x, &y, &z)) return;
+    const S_BUGGY *own = &ListBuggy[1];
+    const S32 body = KeptBody();
     if (body < 0 || !GivePtrBody(body)) return;
     if (shownBody != body) {
         ObjectReady(&obj, body);
         shownBody = body;
-        Log_Info("[racemod] hovercraft: his own car drawn where he left it -- body %d in scene %d at (%d,%d,%d)", (int)body, (int)own->Cube, (int)own->X, (int)own->Y, (int)own->Z);
+        Log_Info("[racemod] hovercraft hired: the %s drawn where he left it -- body %d in scene %d at (%d,%d,%d)", KeptKind() == 2 ? "hovercraft" : "car",
+                 (int)body, (int)own->Cube, (int)own->X, (int)own->Y, (int)own->Z);
     }
-    const S32 x = own->X + (headX - CurrentCubeX) * 32768, y = own->Y, z = own->Z + (headZ - CurrentCubeY) * 32768;
     obj.X = x; obj.Y = y; obj.Z = z; obj.Alpha = 0; obj.Beta = own->Beta & 4095; obj.Gamma = 0;
     memset(obj.CurrentFrame, 0, sizeof(obj.CurrentFrame));
     LongWorldRotatePoint(x, y + 500, z);
@@ -22471,19 +22612,30 @@ static void DarkFrame(void) {
 }
 
 static void BackInCar(void);
-// His own car while the hovercraft is hired: kept in the car records' second slot, ListBuggy[1] -- written to the saves with the first
-// (SAVEGAME.CPP) and used by nothing else -- so a game saved during the hire (the story's own keep, every scene entered) still knows where
-// the car stands, and the holomap shows it beside the hovercraft (RaceMod_HoloOwnCar). The first slot is the hovercraft's meanwhile, as
-// the car Twinsen drives. RACE_HOVER_KEPT in its LastTimer (unused for a parked car) marks it kept: a save from before has a slot of zeros.
+// The two vehicles while the hovercraft is hired: the one the car actor is -- the car record, ListBuggy[0], the one Twinsen drives -- and the
+// other, parked where he left it, in the records' second slot, ListBuggy[1]: written to the saves with the first (SAVEGAME.CPP) and used
+// by nothing else, so a game saved during the hire (the story's own keep, every scene entered) still knows where each stands, and the
+// holomap shows both (RaceMod_HoloHovercraft, RaceMod_HoloKept). Its LastTimer (unused for a parked car) says which it is: RACE_HOVER_KEPT
+// his own car (the hovercraft the one driven), RACE_HOVER_PARKED the hovercraft (his own car the one driven); a save from before has zeros.
 #define RACE_HOVER_KEPT 0x4B455054
-static int HoverCarKept(void) { return ListBuggy[1].LastTimer == RACE_HOVER_KEPT && ListBuggy[1].Cube >= 0; }
-// The hire over: his own car where it was -- this scene's, put back; another's, out of this one -- and the hovercraft gone. Kept nowhere (a
-// game saved during a hire before the car was kept in the saves): at the hire point, on its beach.
+#define RACE_HOVER_PARKED 0x484F5652
+static int KeptKind(void) {
+    if (ListBuggy[1].Cube < 0) return 0;
+    return ListBuggy[1].LastTimer == RACE_HOVER_KEPT ? 1 : ListBuggy[1].LastTimer == RACE_HOVER_PARKED ? 2 : 0;
+}
+static int HireOn(void) {
+    return s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME && ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && CubeMode == CUBE_EXTERIEUR;
+}
+// The hire over: his own car where it was -- this scene's, put back; another's, out of this one -- and the hovercraft gone (driven his own
+// car meanwhile, it is the car record already: the hovercraft only taken back). Kept nowhere (a game saved during a hire before the car
+// was kept in the saves): at the hire point, on its beach.
 static void HoverEnd(const char *why) {
-    const int kept = HoverCarKept();
-    if (kept) {
+    const int kind = KeptKind(), kept = kind != 0;
+    if (kind == 1) {
         ListBuggy[0] = ListBuggy[1];
         ListBuggy[0].LastTimer = 0;
+    } else if (kind == 2) {
+        // (his own car the one driven: where it is)
     } else if (s_hoverScene >= 0) {
         S_BUGGY *ptb = &ListBuggy[0];
         ptb->Cube = s_hoverScene; ptb->X = s_hoverX; ptb->Z = s_hoverZ; ptb->Beta = s_hoverBeta & 4095;
@@ -22509,16 +22661,120 @@ static void HoverEnd(const char *why) {
     Log_Info("[racemod] hovercraft: given back (%s) -- his own car %s, scene %d at (%d,%d,%d)", why, kept ? "where it was" : "at the hire point (where it was not kept)",
              (int)own->Cube, (int)own->X, (int)own->Y, (int)own->Z);
 }
-// The holomap's marks while the hovercraft is hired: 1 when the car record (ListBuggy[0]) is the hovercraft, with the bodies to draw it
-// as (BODY.HQR, ANIM.HQR: the parked one); his own car's record is ListBuggy[1] then, while RaceMod_HoloOwnCar says it is kept
+// The holomap's marks while the hovercraft is hired: which car record is the hovercraft (0, 1; -1 none), with the bodies to draw it as
+// (BODY.HQR, ANIM.HQR: the parked one); and whether the second record holds the other vehicle, parked
 S32 RaceMod_HoloHovercraft(S32 *body, S32 *anim) {
-    if (!RaceMod_Active() || s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || ListVarGame[s_hoverVar] != 2 || !s_hoverResolved) return 0;
+    if (!RaceMod_Active() || s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || ListVarGame[s_hoverVar] != 2 || !s_hoverResolved) return -1;
     *body = s_hoverParked >= 0 ? s_hoverParked : s_hoverBody;
     *anim = s_hoverAnim;
-    return *body >= 0 && *anim >= 0;
+    if (*body < 0 || *anim < 0) return -1;
+    return KeptKind() == 2 ? 1 : 0;
 }
-S32 RaceMod_HoloOwnCar(void) {
-    return RaceMod_Active() && s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME && ListVarGame[s_hoverVar] == 2 && HoverCarKept();
+S32 RaceMod_HoloKept(void) {
+    return RaceMod_Active() && s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME && ListVarGame[s_hoverVar] == 2 && KeptKind() != 0;
+}
+
+// ---- the two vehicles, Twinsen on foot (the user, 2026-11-22: "can we swap it in for a placeholder with collision. When Twinsen is out of
+// his car give both the hovercraft [and the car] a trigger zone for Twinsen to get into them"):
+//   - the parked one is solid: Twinsen, and the vehicle he drives, kept out of its box (its body's, turned its way; a margin round it for
+//     him or for the car) -- pushed back to its edge, the car stopped;
+//   - Action anywhere close to either one, any side of it (its box and RACE_VEHICLE_REACH round it): Twinsen in it. The one driven, as the
+//     car's own script does from in front of it; the parked one, the two changing places first (HoverSwapIn): the car actor is it now,
+//     where it stood, and the one he leaves is kept where the car actor stood.
+#define RACE_VEHICLE_REACH 700
+#define RACE_KEPT_FOOT 120                 // (his own girth round the parked one's box)
+#define RACE_KEPT_DRIVEN 380               // (the driven car's half-width round it)
+// A point (this cube's terms) in a body's box turned by beta: its place in the box's own terms (X across, Z along) -- Rotate's other way
+static void BoxLocal(S32 bx, S32 bz, S32 beta, S32 px, S32 pz, S32 *lx, S32 *lz) {
+    Rotate(px - bx, pz - bz, (4096 - (beta & 4095)) & 4095);
+    *lx = X0; *lz = Z0;
+}
+static void HoverSwapIn(S32 x, S32 y, S32 z) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO], *car = &ListObjet[NUM_BUGGY];
+    const int kind = KeptKind();
+    S_BUGGY left = ListBuggy[0], taken = ListBuggy[1];
+    if (IsBuggyPresent()) { left.Cube = NumCube; left.X = car->Obj.X; left.Y = car->Obj.Y; left.Z = car->Obj.Z; left.Beta = car->Obj.Beta & 4095; }
+    left.Speed = 0; left.SpeedInc = 0;
+    left.LastTimer = kind == 1 ? RACE_HOVER_PARKED : RACE_HOVER_KEPT;
+    taken.Cube = NumCube; taken.X = x; taken.Y = y; taken.Z = z; taken.Speed = 0; taken.SpeedInc = 0; taken.LastTimer = 0;
+    ListBuggy[0] = taken; ListBuggy[1] = left;
+    car->Obj.X = x; car->Obj.Y = y; car->Obj.Z = z; car->Obj.Beta = taken.Beta & 4095; ClearRealAngle(car);
+    car->Flags &= ~INVISIBLE;
+    InitBody(GEN_BODY_NORMAL, (U8)NUM_BUGGY);
+    NumBuggy = (U8)(NUM_BUGGY | BUGGY_PRESENT);
+    Log_Info("[racemod] hovercraft hired: Twinsen into the %s parked at (%d,%d,%d) in scene %d -- the %s kept where it stood, scene %d at (%d,%d,%d)",
+             kind == 1 ? "car" : "hovercraft", (int)x, (int)y, (int)z, (int)NumCube, kind == 1 ? "hovercraft" : "car", (int)left.Cube, (int)left.X, (int)left.Y, (int)left.Z);
+    (void)hero;
+}
+static void IntoVehicle(void) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 old = hero->Move;
+    hero->Move = MOVE_BUGGY_MANUAL;
+    AdjustDirObject(hero, old);   // (as the car's script's set_dir_obj(0, MOVE_BUGGY_MANUAL): TakeBuggy, him to the car)
+}
+static void HireVehicles(void) {
+    // (a fresh press of the key, on foot -- not the one that has just got him out, still held -- and not straight after getting out)
+    static int keyWas = 0, wasDriving = 0;
+    static U32 outAt = 0;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int driving = Comportement == C_BUGGY;
+    if (wasDriving && !driving) outAt = TimerRefHR;
+    wasDriving = driving;
+    const int key = (Input & I_ACTION) != 0;
+    const int pressed = key && !keyWas && ActionNormal == TRUE && TimerRefHR - outAt > 700;
+    keyWas = key;
+    S32 kx, ky, kz;
+    const int here = KeptHere(&kx, &ky, &kz);
+    const S32 keptBody = here ? KeptBody() : -1;
+    const T_BODY_HEADER *kb = keptBody >= 0 ? (const T_BODY_HEADER *)GivePtrBody(keptBody) : NULL;
+    const S32 keptBeta = ListBuggy[1].Beta & 4095;
+    // (the parked one solid)
+    if (kb && hero->Obj.Y < ky + kb->YMax && hero->Obj.Y > ky - 600) {
+        const S32 m = driving ? RACE_KEPT_DRIVEN : RACE_KEPT_FOOT;
+        S32 lx, lz;
+        BoxLocal(kx, kz, keptBeta, hero->Obj.X, hero->Obj.Z, &lx, &lz);
+        const S32 x0 = kb->XMin - m, x1 = kb->XMax + m, z0 = kb->ZMin - m, z1 = kb->ZMax + m;
+        if (lx > x0 && lx < x1 && lz > z0 && lz < z1) {
+            const S32 left = lx - x0, right = x1 - lx, back = lz - z0, front = z1 - lz;
+            const S32 least = left < right ? (left < back ? (left < front ? left : front) : (back < front ? back : front))
+                                           : (right < back ? (right < front ? right : front) : (back < front ? back : front));
+            if (least == left) lx = x0; else if (least == right) lx = x1; else if (least == back) lz = z0; else lz = z1;
+            Rotate(lx, lz, keptBeta);
+            hero->Obj.X = kx + X0; hero->Obj.Z = kz + Z0;
+            if (driving) { ListBuggy[0].Speed = 0; ListBuggy[0].SpeedInc = 0; }
+            static U32 saidAt = 0;
+            if (TimerRefHR - saidAt > 3000) { Log_Info("[racemod] hovercraft hired: Twinsen %s against the parked %s", driving ? "driven" : "on foot", KeptKind() == 2 ? "hovercraft" : "car"); saidAt = TimerRefHR; }
+        }
+    }
+    // (Action close to either one, on foot: in it)
+    if (!pressed || driving || NUM_BUGGY <= 0 || NUM_BUGGY >= NbObjets || (hero->WorkFlags & FALLING)) return;
+    double keptReach = -1, carReach = -1;
+    if (kb) {
+        S32 lx, lz;
+        BoxLocal(kx, kz, keptBeta, hero->Obj.X, hero->Obj.Z, &lx, &lz);
+        const S32 dx = lx < kb->XMin ? kb->XMin - lx : lx > kb->XMax ? lx - kb->XMax : 0, dz = lz < kb->ZMin ? kb->ZMin - lz : lz > kb->ZMax ? lz - kb->ZMax : 0;
+        keptReach = sqrt((double)dx * dx + (double)dz * dz);
+        if (keptReach > RACE_VEHICLE_REACH || abs(hero->Obj.Y - ky) > 1500) keptReach = -1;
+    }
+    if (IsBuggyPresent()) {
+        const T_OBJET *car = &ListObjet[NUM_BUGGY];
+        const S32 shownBody = s_hoverOn ? (s_hoverParked >= 0 ? s_hoverParked : s_hoverBody) : EntityEntry(car->IndexFile3D, F_BODY, GEN_BODY_NORMAL);
+        const T_BODY_HEADER *cb = shownBody >= 0 ? (const T_BODY_HEADER *)GivePtrBody(shownBody) : NULL;
+        if (cb) {
+            S32 lx, lz;
+            BoxLocal(car->Obj.X, car->Obj.Z, car->Obj.Beta & 4095, hero->Obj.X, hero->Obj.Z, &lx, &lz);
+            const S32 dx = lx < cb->XMin ? cb->XMin - lx : lx > cb->XMax ? lx - cb->XMax : 0, dz = lz < cb->ZMin ? cb->ZMin - lz : lz > cb->ZMax ? lz - cb->ZMax : 0;
+            carReach = sqrt((double)dx * dx + (double)dz * dz);
+            if (carReach > RACE_VEHICLE_REACH || abs(hero->Obj.Y - car->Obj.Y) > 1500) carReach = -1;
+        }
+    }
+    if (keptReach >= 0 && (carReach < 0 || keptReach < carReach)) {
+        HoverSwapIn(kx, ky, kz);
+        IntoVehicle();
+    } else if (carReach >= 0) {
+        Log_Info("[racemod] hovercraft hired: Twinsen into the %s (Action beside it)", s_hoverOn ? "hovercraft" : "car");
+        IntoVehicle();
+    }
 }
 static void HovercraftFrame(void) {
     if (s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || NewCube != -1) return;
@@ -22554,10 +22810,13 @@ static void HovercraftFrame(void) {
         Log_Info("[racemod] hovercraft: hired -- Twinsen in it at (%d,%d,%d) in scene %d, his own car kept (scene %d at (%d,%d,%d))", (int)hero->Obj.X, (int)hero->Obj.Y,
                  (int)hero->Obj.Z, (int)NumCube, (int)ListBuggy[1].Cube, (int)ListBuggy[1].X, (int)ListBuggy[1].Y, (int)ListBuggy[1].Z);
     }
-    s_hoverOn = ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && CubeMode == CUBE_EXTERIEUR;
+    // (the hovercraft the one driven -- not his own car, the hovercraft parked meanwhile: KeptKind 2)
+    s_hoverOn = ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && CubeMode == CUBE_EXTERIEUR && KeptKind() != 2;
     if (s_hoverOn) { s_driveBody = s_hoverBody; s_driveAnim = s_hoverAnim; s_driveSmall = -1; }
     else if (s_hoverWasOn) s_driveBody = s_driveAnim = -1;
     s_hoverWasOn = s_hoverOn;
+    // (the parked one solid, and Action by either one: in it)
+    if (HireOn()) HireVehicles();
     if (!s_hoverOn) return;
     if (driving) s_hoverDriven = 1;
     // (back out of the room by its door, on foot, where he left it: straight back in it -- the door's way out is on the water)
@@ -22638,6 +22897,7 @@ static void InCarFrame(void) {
 }
 
 void RaceMod_Frame(void) {
+    OpenerFrame();
     DarkFrame();
     CarryFrame();
     InCarFrame();
@@ -25504,6 +25764,7 @@ static void ResetTrack(void) {
     s_noSuit = 0;
     s_brkVar = -1; s_broken = 0;
     s_heldVar = -1; s_heldCube = -1; s_deadVar = -1;
+    s_nbOpeners = 0; s_nbHellos = 0; s_openerQuiet = -1;
     s_victoryOn = 0;
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);

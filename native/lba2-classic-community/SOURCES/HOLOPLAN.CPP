@@ -121,7 +121,7 @@ void DrawArrowPlan(T_SORT *ptt) {
         DrawTwinsenPlan(ptt); // Twinsen is on me !
 }
 //----------------------------------------------------------------------------
-// (NumObj: the car record drawn -- 0 the car's, 1 Twinsen's own car kept while a race-track mod's hovercraft is hired: RaceMod_HoloOwnCar)
+// (NumObj: the car record drawn -- 0 the car's, 1 the other vehicle parked while a race-track mod's hovercraft is hired: RaceMod_HoloKept)
 void DrawBuggyPlan(T_SORT *ptt) {
     S32 a, b, g;
     const S_BUGGY *ptb = &ListBuggy[(ptt->NumObj == 1) ? 1 : 0];
@@ -137,7 +137,7 @@ void DrawBuggyPlan(T_SORT *ptt) {
     BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
 }
 //----------------------------------------------------------------------------
-// The hired hovercraft (the car record while it is hired): its own body, with its bones, drawn as Twinsen's mark is
+// The hired hovercraft (whichever car record is its: NumObj): its own body, with its bones, drawn as Twinsen's mark is
 U8 *HoloHoverBody = NULL;
 U8 *HoloHoverAnim = NULL;
 S32 HoloHoverDrawing = 0;
@@ -148,9 +148,10 @@ void DrawHoverPlan(T_SORT *ptt) {
     ObjHover.X = ptt->Xw;
     ObjHover.Y = ptt->Yw + (TimerRefHR & 0xFF);
     ObjHover.Z = ptt->Zw;
-    ObjHover.Alpha = ListBuggy[0].Alpha;
-    ObjHover.Beta = ListBuggy[0].Beta;
-    ObjHover.Gamma = ListBuggy[0].Gamma;
+    const S_BUGGY *ptb = &ListBuggy[(ptt->NumObj == 1) ? 1 : 0];
+    ObjHover.Alpha = ptb->Alpha;
+    ObjHover.Beta = ptb->Beta;
+    ObjHover.Gamma = ptb->Gamma;
 
     HoloHoverDrawing = 1;
     ObjectDisplay(&ObjHover);
@@ -413,8 +414,8 @@ void DrawListHoloPlan() {
     {
         S32 hoverBody, hoverAnim;
         LongWorldRotatePoint(xb, yb, zb);
-        // (a race-track mod's hovercraft hired: the car record is the hovercraft's, drawn as it)
-        ptt->Num = (HoloHoverBody AND RaceMod_HoloHovercraft(&hoverBody, &hoverAnim)) ? 5 : 3; //	Type Buggy
+        // (a race-track mod's hovercraft hired: the car record the hovercraft's, drawn as it)
+        ptt->Num = (HoloHoverBody AND RaceMod_HoloHovercraft(&hoverBody, &hoverAnim) == 0) ? 5 : 3; //	Type Buggy
         ptt->NumObj = 0;
         ptt->Z = Z0;
         ptt->Xw = xb;
@@ -424,10 +425,11 @@ void DrawListHoloPlan() {
         nbtri++;
     }
 
-    // (and Twinsen's own car where he left it, meanwhile)
-    if (RaceMod_HoloOwnCar() AND RecupCoorBuggySlot(1, ZoomedIsland, &xb, &yb, &zb)) {
+    // (and the other vehicle where he left it, meanwhile: his own car, or the hovercraft)
+    if (RaceMod_HoloKept() AND RecupCoorBuggySlot(1, ZoomedIsland, &xb, &yb, &zb)) {
+        S32 hoverBody, hoverAnim;
         LongWorldRotatePoint(xb, yb, zb);
-        ptt->Num = 3;
+        ptt->Num = (HoloHoverBody AND RaceMod_HoloHovercraft(&hoverBody, &hoverAnim) == 1) ? 5 : 3;
         ptt->NumObj = 1;
         ptt->Z = Z0;
         ptt->Xw = xb;
@@ -500,7 +502,7 @@ static void InitHoverPlan() {
         Free(HoloHoverAnim);
     HoloHoverBody = HoloHoverAnim = NULL;
 
-    if (!RaceMod_HoloHovercraft(&body, &anim) OR !buggy)
+    if (RaceMod_HoloHovercraft(&body, &anim) < 0 OR !buggy)
         return;
 
     GetResPath(path, ADELINE_MAX_PATH, BODY_HQR_NAME);

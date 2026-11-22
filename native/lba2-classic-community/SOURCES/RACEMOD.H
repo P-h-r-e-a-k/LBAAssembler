@@ -111,11 +111,11 @@ S32 RaceMod_RailTouched(void);
 // whether it has risen in the game (variable 79): a race-track mod's file says which (statue=1, statue=0), else the game does.
 S32 RaceMod_StatueShown(S32 risen);
 
-// The island view's marks while a hovercraft is hired (hovercraft=): 1 when the car record, ListBuggy[0], is the hovercraft's, with the
-// BODY.HQR and ANIM.HQR entries to draw it as (HOLOPLAN.CPP); and 1 while Twinsen's own car is kept meanwhile in ListBuggy[1], where he
-// left it, drawn as the buggy beside it.
+// The island view's marks while a hovercraft is hired (hovercraft=): which car record (ListBuggy[0] or [1]) is the hovercraft, -1 none, with
+// the BODY.HQR and ANIM.HQR entries to draw it as (HOLOPLAN.CPP); and 1 while ListBuggy[1] holds the other vehicle, parked where he left it
+// (the hovercraft, or his own car: drawn as the buggy).
 S32 RaceMod_HoloHovercraft(S32 *body, S32 *anim);
-S32 RaceMod_HoloOwnCar(void);
+S32 RaceMod_HoloKept(void);
 
 // While racing, a car that goes into the lava or the sea is put back on the road behind where it was (rescue=0: as in the game, it
 // burns or drowns Twinsen). GereCodesJeu asks: non-zero, and Twinsen is not to die there.
