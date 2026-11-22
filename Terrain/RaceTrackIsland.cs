@@ -29,6 +29,10 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Desert.json", (7, 10))
     {
         Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert, View = (200000, 150000),
+        // (two of the beach's umbrellas with their deck chairs -- cube (8, 8)'s, umbrella body 29, chairs 30 and 37 -- by the hovercraft hire
+        // in cube (10, 8), on its sand: the user, 2026-11-22, "The hydroglyder hire place, can we add a couple of sets of umbrella's with chairs")
+        PlaceDecors = new[] { (8, 8, 7424, 14592, 10, 8, 4352, 10752), (8, 8, 7424, 13568, 10, 8, 4352, 9728), (8, 8, 6684, 14528, 10, 8, 3612, 10688),
+                              (8, 8, 9088, 14080, 10, 8, 6656, 11264), (8, 8, 8960, 13340, 10, 8, 6528, 10524), (8, 8, 8164, 14530, 10, 8, 5732, 11714) },
         OldActors = new[] { (RaceTrackScenes.RacerScene, 4) },
         // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
         // we're not removing any actors or zones we don't need the same as we checked with citadel")
@@ -459,6 +463,9 @@ internal sealed record RaceTrackIsland(
     // A building of the island's made over (HotelFacade, after the build has cut its kept buildings to the road): Otringal's Imperial Hotel
     public HotelFacade.Spec? HotelFacade { get; init; }
     public (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[]? CopyDecors { get; init; }
+    // Decors of the island's own copied into another of its cubes: the cube and origin (cube units) of the pieces there, and the cube and
+    // origin to put the copies at, their height kept (RaceTrackBuilder.DropDecors)
+    public (int FromCubeX, int FromCubeZ, int X, int Z, int ToCubeX, int ToCubeZ, int ToX, int ToZ)[]? PlaceDecors { get; init; }
     // Where a building the road took away is put back (RaceTrackBuilder.RestoreLostBuildings), by hand, not the nearest place the search
     // finds: the building one of whose pieces has that body, moved (Dx, Dz) whole cells from where it stood (its height as the ground
     // round it says). Otringal's casino right up to the road west from under the roulette wheel -- the search keeps it 5 cells off the

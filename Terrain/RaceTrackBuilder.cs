@@ -4953,6 +4953,24 @@ internal static class RaceTrackBuilder
                 report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({cx},{cz}) copied to ({x + dx}, {z + dz}) (the island's record says so)");
             }
         }
+        foreach (var (fcx, fcz, x, z, tcx, tcz, tx, tz) in o.Island.PlaceDecors ?? Array.Empty<(int, int, int, int, int, int, int, int)>())
+        {
+            if (island.CubeAt(fcx, fcz) is not { } from || island.CubeAt(tcx, tcz) is not { } to) continue;
+            foreach (var d in from.Decors.Where(d => d.X == x && d.Z == z).ToList())
+            {
+                // (a second pass over a folder already built finds its copy there: not again)
+                if (to.Decors.Any(c => c.X == tx && c.Z == tz && c.Body == d.Body)) continue;
+                var copy = d.Clone();
+                // (as high over the ground there as it stood over its own: the beach umbrellas copied to the hovercraft hire stood half in
+                // the sand at their first place's height)
+                var fromGround = IslandOps.Altitude(island, fcx * (double)IslandFile.CubeSize + x, fcz * (double)IslandFile.CubeSize + z) ?? 0;
+                var toGround = IslandOps.Altitude(island, tcx * (double)IslandFile.CubeSize + tx, tcz * (double)IslandFile.CubeSize + tz) ?? fromGround;
+                var y = (int)Math.Round(d.Y - fromGround + toGround);
+                copy.MoveTo(tx, y, tz);
+                to.Decors.Add(copy);
+                report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({fcx},{fcz}) copied to ({tx}, {tz}) in cube ({tcx},{tcz}), {y} high ({d.Y} there; the ground {fromGround:0} there, {toGround:0} here) (the island's record says so)");
+            }
+        }
     }
 
     // `asIs`: bodies kept with their boxes as they are -- a drive-through hut's parts (RaceTrackDriveThrough), its walls beside the road and

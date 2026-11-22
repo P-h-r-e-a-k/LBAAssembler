@@ -1650,6 +1650,19 @@ static int s_hoverScene = -1, s_hoverX = 0, s_hoverZ = 0, s_hoverBeta = 0, s_hir
 static int s_hoverEntity3D = -1, s_hoverResolved = 0, s_hoverDriven = 0;
 // (the hovercraft left at a door into a room -- Kash's sea cave, its mouth on the water -- while he's in: that scene, else -1)
 static int s_hoverDocked = -1, s_hoverDockedIn = 0;
+// hover_door_var=<scene> <var> <in> <out>: the hovercraft left at a door into that room -- the game variable set to <in> as he goes in, to
+// <out> once he's back in it outside. Kash's sea cave (113): 143, "on the raft" -- the cave's raft is there for him only so, as the game's
+// boat brought him to it (the user, 2026-11-22: "Entering the cave where the helmet is on the hydroglyder has caused the hydroglyder to
+// vanish and Twinsen to just be stuck standing on the water unable to move")
+#define RACE_MAX_HOVER_DOORS 4
+static int s_hoverDoor[RACE_MAX_HOVER_DOORS][4], s_nbHoverDoors = 0, s_hoverRoom = -1;
+// far_actor= (DrawFarActors): as far as they are seen, as the far items are (RACE_FAR_ITEMS)
+#define RACE_FAR_ACTOR_REACH 40000.0
+#define RACE_MAX_FAR_ACTORS 8
+typedef struct { int Island, Scene, Entity, Body, Anim; double X, Y, Z; S32 Beta; int Ready; T_OBJ_3D Obj; } T_RACE_FAR_ACTOR;
+static T_RACE_FAR_ACTOR s_farActors[RACE_MAX_FAR_ACTORS];
+static int s_nbFarActors = 0;
+
 // (the door's scene and where it puts him, asked for by HovercraftFrame and taken in the actors' loop -- RaceMod_EdgeCross)
 static int s_hoverGoScene = -1; static S32 s_hoverGoX = 0, s_hoverGoY = 0, s_hoverGoZ = 0;
 // no_suit= and foot_body= (2026-11-08, the Emerald Moon): the suit's behaviours never his, and his body outside on foot (-1 none)
@@ -3483,6 +3496,8 @@ static S32 RaisedUnderHere(S32 x, S32 y, S32 z) {
 static S32 FerryDeckAt(S32 x, S32 z, S32 ref, S32 *deck);
 static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
     if (s_floorRef == RAISED_NOREF || CubeMode != CUBE_EXTERIEUR) return y;
+    // (a hired hovercraft driven, as it moves: the sea's surface its floor, the sea's bottom under it -- RaceMod_HoverFloor's why)
+    if (s_hoverOn && Comportement == C_BUGGY && APtObj == &ListObjet[NUM_PERSO] && y < s_hoverSeaY) y = s_hoverSeaY;
     // (a car ferry's deck, car_ferry=: the floor of what stands near its height over it -- the sea under it)
     { S32 deck; if (FerryDeckAt(x, z, s_floorRef, &deck) && deck > y) return deck; }
     // (the roulette wheel's bowl, for something about its floor's height there)
@@ -5674,6 +5689,28 @@ static void Load(const char *path, int carOnly = 0) {
             // (his own car, painted: not another drawn in its place)
             if (s_heroBody >= 0) s_driveBody = s_driveAnim = s_driveSmall = -1;
             s_heroBodyChecked = 0;
+        }
+        else if (!strcmp(key, "far_actor") && s_nbFarActors < RACE_MAX_FAR_ACTORS) {
+            T_RACE_FAR_ACTOR *a = &s_farActors[s_nbFarActors];
+            memset(a, 0, sizeof(*a));
+            int beta = 0;
+            if (sscanf(v, "%d %d %d %d %d %lf %lf %lf %d", &a->Island, &a->Scene, &a->Entity, &a->Body, &a->Anim, &a->X, &a->Y, &a->Z, &beta) == 9) {
+                a->Beta = beta;
+                // (the same one read again: not a second of it)
+                int k = 0;
+                for (; k < s_nbFarActors; k++)
+                    if (s_farActors[k].Island == a->Island && s_farActors[k].Scene == a->Scene && s_farActors[k].Entity == a->Entity &&
+                        s_farActors[k].X == a->X && s_farActors[k].Z == a->Z) break;
+                if (k == s_nbFarActors) s_nbFarActors++;
+            }
+        }
+        else if (!strcmp(key, "hover_door_var") && s_nbHoverDoors < RACE_MAX_HOVER_DOORS) {
+            int *d = s_hoverDoor[s_nbHoverDoors];
+            if (sscanf(v, "%d %d %d %d", &d[0], &d[1], &d[2], &d[3]) == 4 && d[1] >= 0 && d[1] < MAX_VARS_GAME) {
+                int k = 0;
+                for (; k < s_nbHoverDoors; k++) if (s_hoverDoor[k][0] == d[0] && s_hoverDoor[k][1] == d[1]) { memcpy(s_hoverDoor[k], d, sizeof(s_hoverDoor[k])); break; }
+                if (k == s_nbHoverDoors) s_nbHoverDoors++;
+            }
         }
         else if (!strcmp(key, "hovercraft")) {
             if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &s_hoverVar, &s_hoverIsland, &s_hoverEntity3D, &s_hoverBody, &s_hoverParked, &s_hoverAnim,
@@ -9953,6 +9990,47 @@ static void DrawMarshal(void) {
     BackdropDisplay(o, zr, clut);
 }
 
+// far_actor=<island> <scene> <entity> <body> <anim> <x> <y> <z> <turn>: one of a scene's own people or things seen from the cubes round it --
+// drawn as the flag marshal is, where it stands (island units), its entity's body and animation (generic numbers; anim -1: still), while
+// Twinsen is out of doors on that island in another scene (in its own, the scene's actor is there) and as near as the far items are
+// (RACE_FAR_ITEMS). The Desert's hovercraft hire: its man and its two hovercraft (the user, 2026-11-22: "We need to make sure the
+// hydroglyder hire scene the actors are visible from neighbouring squares").
+static void DrawFarActors(void) {
+    if (!s_nbFarActors || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    const U32 clut = SceneClut();
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    for (int i = 0; i < s_nbFarActors; i++) {
+        T_RACE_FAR_ACTOR *a = &s_farActors[i];
+        if (a->Ready < 0 || a->Island != (int)Island || a->Scene == (int)NumCube) continue;
+        const S32 x = (S32)floor(a->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(a->Y + 0.5), z = (S32)floor(a->Z - CurrentCubeY * 32768.0 + 0.5);
+        const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z;
+        if (dx * dx + dz * dz > RACE_FAR_ACTOR_REACH * RACE_FAR_ACTOR_REACH) continue;
+        T_OBJ_3D *o = &a->Obj;
+        if (!a->Ready) {
+            const S32 body = EntityEntry(a->Entity, F_BODY, a->Body), anim = a->Anim >= 0 ? EntityEntry(a->Entity, F_ANIM, a->Anim) : -1;
+            if (body < 0 || !GivePtrBody(body) || (a->Anim >= 0 && (anim < 0 || !GivePtrAnim(anim)))) {
+                Log_Info("[racemod] far_actor: entity %d has no body %d or animation %d -- left out", a->Entity, a->Body, a->Anim);
+                a->Ready = -1;
+                continue;
+            }
+            ObjectReady(o, body);
+            o->X = x; o->Y = y; o->Z = z; o->Beta = a->Beta & 4095;
+            if (anim >= 0) { o->Anim.Num = -1; ObjectInitAnim(o, (void *)(uintptr_t)(U32)anim); o->Status |= FLAG_BODY; }
+            a->Ready = anim >= 0 ? 2 : 1;
+            Log_Info("[racemod] far_actor: scene %d's entity %d (BODY.HQR %d, ANIM.HQR %d) seen from round it, at (%.0f,%.0f,%.0f)", a->Scene, a->Entity, (int)body, (int)anim, a->X, a->Y, a->Z);
+        }
+        if (a->Ready == 2) ObjectSetInterDep(o);
+        o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = a->Beta & 4095; o->Gamma = 0;
+        if (a->Ready == 2) ObjectSetInterFrame(o);
+        else memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+        LongWorldRotatePoint(x, y + 1000, z);
+        const S32 zr = CameraZr - Z0;
+        if (zr < -4000 || zr > ClipZFar + 4000) continue;
+        BackdropDisplay(o, zr, clut);
+        MarkDrawn();
+    }
+}
+
 // ---- Zoe's pit box (pit_crew=, pit_line=) --------------------------------------------------------------------------------------------
 // The story's pit crew (docs/LBRA_STORY_SCRIPT.md, "Twinsen and Zoe", 2026-11-11): Zoe stands in the pit box by the start line during a
 // race, drawn as the flag marshal is (no actor: seen from any scene), with her toolbox -- standing ready, and waving Twinsen in as his car
@@ -10140,6 +10218,7 @@ void RaceMod_DrawBackdrop(void) {
     if (s_nbWebs) DrawWebs();
     if (s_nbJetSignals && s_signalBody[0] >= 0) DrawJetSignals();
     DrawMarshal();
+    DrawFarActors();
     DrawPitCrew();
     DrawFigures();
     DrawKeptCar();
@@ -22221,6 +22300,15 @@ static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count);
 void RaceMod_ScenePastEdge(void) {
     memset(s_pastEdge, 0, sizeof(s_pastEdge));
     s_pastEdgeDue = 1;
+    // (the room the hovercraft was left at the door of, loading: its door's variable set again now, before the room's scripts first run --
+    // set at the door only, scene 64's own scripts had put Kash's sea cave's 143 back to 0 before he got there, so the cave's raft took
+    // itself away and he stood on the water: hover_door_var)
+    if (s_hoverRoom >= 0 && NewCube == s_hoverRoom)
+        for (int k = 0; k < s_nbHoverDoors; k++)
+            if (s_hoverDoor[k][0] == s_hoverRoom && ListVarGame[s_hoverDoor[k][1]] != s_hoverDoor[k][2]) {
+                ListVarGame[s_hoverDoor[k][1]] = (S16)s_hoverDoor[k][2];
+                Log_Info("[racemod] hovercraft: scene %d loading -- game variable %d set to %d again (hover_door_var)", s_hoverRoom, s_hoverDoor[k][1], s_hoverDoor[k][2]);
+            }
 }
 static void PastEdgeMarks(void) {
     if (!s_pastEdgeDue || NewCube != -1) return;
@@ -22844,6 +22932,9 @@ static void HovercraftFrame(void) {
     // (back out of the room by its door, on foot, where he left it: straight back in it -- the door's way out is on the water)
     if (!driving && s_hoverDocked == (int)NumCube && s_hoverDockedIn) {
         s_hoverDocked = -1; s_hoverDockedIn = 0;
+        for (int k = 0; k < s_nbHoverDoors; k++)
+            if (s_hoverDoor[k][0] == s_hoverRoom) ListVarGame[s_hoverDoor[k][1]] = (S16)s_hoverDoor[k][3];
+        s_hoverRoom = -1;
         BackInCar();
         Log_Info("[racemod] hovercraft: back out in scene %d -- in it again at (%d,%d,%d)", (int)NumCube, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
         return;
@@ -22861,6 +22952,12 @@ static void HovercraftFrame(void) {
             { const S32 old = hero->Move; hero->Move = MOVE_MANUAL; AdjustDirObject(hero, old); }   // (as set_dir_obj(0, MOVE_MANUAL) does after it)
             // (and through it, the door's own way in -- on foot over the water he sinks out of its zone: RaceMod_EdgeCross takes him)
             s_hoverGoScene = zn->Num; s_hoverGoX = zn->Info0; s_hoverGoY = zn->Info1; s_hoverGoZ = zn->Info2;
+            s_hoverRoom = (int)zn->Num;
+            for (int k = 0; k < s_nbHoverDoors; k++)
+                if (s_hoverDoor[k][0] == (int)zn->Num) {
+                    ListVarGame[s_hoverDoor[k][1]] = (S16)s_hoverDoor[k][2];
+                    Log_Info("[racemod] hovercraft: into scene %d -- game variable %d set to %d (hover_door_var)", (int)zn->Num, s_hoverDoor[k][1], s_hoverDoor[k][2]);
+                }
             Log_Info("[racemod] hovercraft: left at the door to scene %d in scene %d, him on foot through it", (int)zn->Num, (int)NumCube);
             return;
         }
@@ -23397,6 +23494,15 @@ static int FerryCatch(void) {
     hero->Obj.Y = deck;
     hero->WorkFlags &= ~FALLING;
     hero->CodeJeu = 0;
+    return 1;
+}
+// The sea's surface the floor under a hired hovercraft (BUGGY.CPP BuggyFloorY), wherever the ground is under it -- so it rides on it as it
+// moves. Held there only after its move, it sank to the sea's bottom each frame and was put back up: the camera, set between the two, aimed
+// at the bottom -- up to 1,500 under the water off the hire beach -- and looked down steeply (the user, 2026-11-22: "The camera when riding
+// the hydroglyder on the water keeps going too vertical and makes it hard to see where Twinsen is going")
+S32 RaceMod_HoverFloor(S32 *y) {
+    if (!s_hoverOn || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || *y >= s_hoverSeaY) return 0;
+    *y = s_hoverSeaY;
     return 1;
 }
 // The deck a floor for the car (BUGGY.CPP BuggyFloorY): a point of the car over it, the deck not over the car's own top
@@ -25825,6 +25931,7 @@ static void ResetTrack(void) {
     s_brkVar = -1; s_broken = 0;
     s_heldVar = -1; s_heldCube = -1; s_deadVar = -1;
     s_nbOpeners = 0; s_nbHellos = 0; s_openerQuiet = -1;
+    // (s_nbHoverDoors, s_nbFarActors: story.txt's, read once -- not the island's track file's, so not undone as it loads)
     s_victoryOn = 0;
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);

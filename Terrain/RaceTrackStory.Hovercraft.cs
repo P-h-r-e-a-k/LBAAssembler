@@ -19,14 +19,28 @@ internal static partial class RaceTrackStory
     public const int HireVar = 275;
     private const int HireScene = 70, HireManFrom = 71, HireManEntity = 177, HirePrice = 10, HireReach = 2500, HireSeaY = 0;
     private static readonly (int X, int Y, int Z, int Beta) HireManAt = (5770, 170, 9848, 3584);
-    private static readonly (int X, int Y, int Z, int Beta)[] ParkedHovercraft = { (6794, 125, 8568, 1536), (7050, 125, 9336, 1400) };
+    // (the two along the shore's edge, well apart and clear of the hire point -- they stood 800 apart, one in the other: the user,
+    // 2026-11-22, "the two hydroglyders at the hire point appear on top of each other, let's have them separated")
+    private static readonly (int X, int Y, int Z, int Beta)[] ParkedHovercraft = { (6600, 90, 8000, 1536), (8800, 150, 10500, 1400) };
+    // Kash's sea cave, behind the door the hovercraft is left at on the sea north of the hire: the game's own way in was by its boat, Twinsen
+    // aboard ("on the raft", game variable 143), and the cave's raft is there only then -- set as he goes in, cleared once he's back out in
+    // the hovercraft (RACEMOD.CPP hover_door_var=)
+    private const int SeaCave = 113, OnTheRaft = 143;
+    // The hire scene's cube, (10, 8): its people and things seen from the cubes round it in world units (RACEMOD.CPP far_actor=)
+    private const int HireCubeX = 10 * 32768, HireCubeZ = 8 * 32768;
     private static readonly (int X, int Z, int Beta) HireAt = (8074, 8824, 1536);
 
     // The story file's line (RACEMOD.CPP hovercraft=): the variable, the Desert (island 2), the racer's entity's bodies -- him in it, nobody in
     // it -- and its driving animation (generic 1), the sea's height, where the hire starts and how near it he gives it back
     internal static string HovercraftLine =>
         $"hovercraft={HireVar} {RaceTrackIsland.Desert.IslandByte} {RaceTrackBaldinoCar.RacerEntity} {RaceTrackCharacterCars.HovercraftDriveGeneric} {RaceTrackCharacterCars.HovercraftGeneric} 1 " +
-        $"{HireSeaY} {HireScene} {HireAt.X} {HireAt.Z} {HireAt.Beta} {HireReach}\n";
+        $"{HireSeaY} {HireScene} {HireAt.X} {HireAt.Z} {HireAt.Beta} {HireReach}\n" +
+        $"hover_door_var={SeaCave} {OnTheRaft} 1 0\n" +
+        // (the hire man standing, and the two hovercraft, from round the hire scene -- the user, 2026-11-22: "We need to make sure the
+        // hydroglyder hire scene the actors are visible from neighbouring squares")
+        $"far_actor={RaceTrackIsland.Desert.IslandByte} {HireScene} {HireManEntity} 0 0 {HireCubeX + HireManAt.X} {HireManAt.Y} {HireCubeZ + HireManAt.Z} {HireManAt.Beta}\n" +
+        string.Concat(ParkedHovercraft.Select(h =>
+            $"far_actor={RaceTrackIsland.Desert.IslandByte} {HireScene} {RaceTrackBaldinoCar.RacerEntity} {RaceTrackCharacterCars.HovercraftGeneric} -1 {HireCubeX + h.X} {h.Y} {HireCubeZ + h.Z} {h.Beta}\n"));
 
     private static void HovercraftHire(IslandBeatsA b, Func<DesertLine, int> say, string desert)
     {
