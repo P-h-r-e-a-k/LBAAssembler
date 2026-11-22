@@ -4643,17 +4643,36 @@ internal static class RaceTrackBuilder
             // (none at a road's verge: its corner by the lap covered the road's red and white kerb -- the user, 2026-11-16, "A patch of the
             // garage ground spills onto the race track, we just need to trim this corner so it doesn't cover the red/white line")
             var trimmed = 0;
+            var inside = new List<(int X, int Z)>();
             for (var gz = (int)Math.Floor(at.Z - hu - hv); gz <= (int)Math.Ceiling(at.Z + hu + hv); gz++)
             for (var gx = (int)Math.Floor(at.X - hu - hv); gx <= (int)Math.Ceiling(at.X + hu + hv); gx++)
             {
                 double cx = gx + 0.5 - at.X, cz = gz + 0.5 - at.Z;
                 if (Math.Abs(cx * ax + cz * az) > hu || Math.Abs(cx * lx + cz * lz) > hv) continue;
+                inside.Add((gx, gz));
                 if (Off(gx + 0.5, gz + 0.5) < TentKerbClear) { trimmed++; continue; }
                 under.Add((gx, gz));
             }
             if (trimmed > 0) report.Notes.Add($"garage tent: {trimmed} of its floor's cells left the sand's, by a road's verge");
             var painted = IslandGround.Paint(island, new TentCells(under), asphalt, PolygonFields.All);
             report.Notes.Add($"garage tent: its floor the road's grey ({painted} ground triangles, {under.Count} cells)");
+            // (and no wall across its floor: the island's own ground had a line of blocking cells (Col) where the tent stands -- cube (8,11)'s
+            // cell row 25, x 24-63 -- and Twinsen walked into it between every two bays at the lifts' depth, the user, 2026-11-20: "some of
+            // the stands appear to have invisible blocks between them stopping Twinsen from walking through")
+            var opened = 0;
+            foreach (var (gx, gz) in inside)
+            {
+                if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+                int x = gx % IslandCube.Cells, z = gz % IslandCube.Cells;
+                for (var half = 0; half < 2; half++)
+                {
+                    var p = new IslandPolygon(cube.Polygon(x, z, half));
+                    if (!p.Col) continue;
+                    cube.SetPolygon(x, z, half, p.With(col: false).Raw);
+                    opened++;
+                }
+            }
+            if (opened > 0) report.Notes.Add($"garage tent: {opened} blocking ground triangles across its floor opened");
         }
 
         // the tent, round its middle on the ground: `along` the road's way, `back` away from the road (the front open towards it)
