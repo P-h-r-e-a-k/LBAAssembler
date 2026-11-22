@@ -134,8 +134,13 @@ internal static partial class RaceTrackStory
             // The lounger's own bricks stop him at it. Her colour and armour were in the comment above, never set: her armour 1)
             lyra.CoulObj = 9; lyra.Armor = RaceTrackStory.WalkOverArmour;
             var index = model.Actors.Count;
+            // (her talking animation her lying one: the engine plays a speaker's set_anim_dial animation while she speaks -- by default the
+            // talking one, standing, and with none of her own there the standing one -- then puts her back: talked to, she stood up through
+            // the lounger and slid back, the user, 2026-11-21: "causes her to move and rubber band back ... causing her to stand through the
+            // chair", MESSAGE.CPP InitWhoSpeak)
             var add = IslandBeatsA.Add(model, lyra, $@"void comportement_0()
 {{
+    set_anim_dial({Temple.TempleMarshal.Lie});
     if ({when})
     {{
         set_comportement(comportement_1);

@@ -243,52 +243,59 @@ internal static partial class RaceTrackStory
         if (who is null) { p.Log.Add($"the darts player of scene {b.Scene} left out: no Raph in scene {TraluCave} to make him from"); return; }
         int Id(DartsTalk line) => DartsTalkId(p.Say, line);
         int Said(int k) => Id(player.Lines + k);
+        // (a stake he hasn't the kashes for, when he has them for a smaller one: said so, and the stakes asked again -- twice more at most,
+        // then a friendly game; under the smallest, a friendly game at once, as before. The user, 2026-11-21: "if Twinsen has money, but
+        // selects a game that's more money than he has, don't default to a friendly game instead let Twinsen pick again")
+        var shortLine = CitadelLaterId(p.Say, player.Lines == DartsTalk.RaphAsk ? CitadelLater.RaphDartsShort : CitadelLater.BennyDartsShort);
+        string Stakes(int again, string pad) => $@"{pad}add_choice({Id(DartsTalk.Fun)});
+{pad}add_choice({Id(DartsTalk.Leg1)});
+{pad}add_choice({Id(DartsTalk.Legs3)});
+{pad}add_choice({Id(DartsTalk.Legs5)});
+{pad}ask_choice({Said(1)});
+{pad}if ({Id(DartsTalk.Fun)} == choice())
+{pad}{{
+{pad}    message({Said(5)});
+{pad}    set_var_game({DartsAsk}, 1);
+{pad}}}
+{pad}else if (25 > nb_gold_pieces())
+{pad}{{
+{pad}    message({Said(2)});
+{pad}    set_var_game({DartsAsk}, 1);
+{pad}}}
+{pad}else if ({Id(DartsTalk.Legs5)} == choice() && 200 > nb_gold_pieces())
+{pad}{{
+{pad}    message({shortLine});
+{TooDear(again, pad + "    ")}
+{pad}}}
+{pad}else if ({Id(DartsTalk.Legs3)} == choice() && 100 > nb_gold_pieces())
+{pad}{{
+{pad}    message({shortLine});
+{TooDear(again, pad + "    ")}
+{pad}}}
+{pad}else
+{pad}{{
+{pad}    message({Said(3)});
+{pad}    if ({Id(DartsTalk.Legs5)} == choice())
+{pad}    {{
+{pad}        set_var_game({DartsAsk}, 4);
+{pad}    }}
+{pad}    else if ({Id(DartsTalk.Legs3)} == choice())
+{pad}    {{
+{pad}        set_var_game({DartsAsk}, 3);
+{pad}    }}
+{pad}    else
+{pad}    {{
+{pad}        set_var_game({DartsAsk}, 2);
+{pad}    }}
+{pad}}}";
+        string TooDear(int again, string pad) => again > 0 ? Stakes(again - 1, pad) : $@"{pad}message({Said(2)});
+{pad}set_var_game({DartsAsk}, 1);";
         var ask = $@"            add_choice({Id(DartsTalk.Yes)});
             add_choice({Id(DartsTalk.No)});
             ask_choice({Said(0)});
             if ({Id(DartsTalk.Yes)} == choice())
             {{
-                add_choice({Id(DartsTalk.Fun)});
-                add_choice({Id(DartsTalk.Leg1)});
-                add_choice({Id(DartsTalk.Legs3)});
-                add_choice({Id(DartsTalk.Legs5)});
-                ask_choice({Said(1)});
-                if ({Id(DartsTalk.Legs5)} == choice() && 200 > nb_gold_pieces())
-                {{
-                    message({Said(2)});
-                    set_var_game({DartsAsk}, 1);
-                }}
-                else if ({Id(DartsTalk.Legs3)} == choice() && 100 > nb_gold_pieces())
-                {{
-                    message({Said(2)});
-                    set_var_game({DartsAsk}, 1);
-                }}
-                else if ({Id(DartsTalk.Leg1)} == choice() && 25 > nb_gold_pieces())
-                {{
-                    message({Said(2)});
-                    set_var_game({DartsAsk}, 1);
-                }}
-                else if ({Id(DartsTalk.Fun)} == choice())
-                {{
-                    message({Said(5)});
-                    set_var_game({DartsAsk}, 1);
-                }}
-                else
-                {{
-                    message({Said(3)});
-                    if ({Id(DartsTalk.Legs5)} == choice())
-                    {{
-                        set_var_game({DartsAsk}, 4);
-                    }}
-                    else if ({Id(DartsTalk.Legs3)} == choice())
-                    {{
-                        set_var_game({DartsAsk}, 3);
-                    }}
-                    else
-                    {{
-                        set_var_game({DartsAsk}, 2);
-                    }}
-                }}
+{Stakes(2, "                ")}
             }}
             else
             {{

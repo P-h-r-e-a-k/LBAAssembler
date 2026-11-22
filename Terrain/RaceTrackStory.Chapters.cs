@@ -1128,6 +1128,8 @@ internal static partial class RaceTrackStory
         // his two answers, his sigh; before the others, their plaques -- in quotes, read, not spoken)
         ShopTagTown, ShopTagRacing, ShopTagChampion, TwinsenBuyAsk, ShopBuyIt, ShopNotToday, TwinsenNeverAfford,
         ShopPennyFarthing, ShopTandem, ShopRepair, ShopFitting, ShopJerseys, ShopWheels,
+        // (the darts players: a stake Twinsen hasn't the kashes for, when he has them for a smaller one -- 2026-11-22, Citadel/RaceTrackStory.Darts)
+        RaphDartsShort, BennyDartsShort,
     }
     private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
     internal static readonly string[][] CitadelLaterLines =
@@ -1279,6 +1281,25 @@ internal static partial class RaceTrackStory
             "\"Ruedas de todos los tamaños. Montadas en el momento.\"",
             "\"Ruote di ogni misura. Montate mentre aspetti.\"",
             "\"Rodas de todos os tamanhos. Montadas na hora.\"",
+        },
+        // (the darts players: that stake's more than his purse -- pick a smaller one)
+        new[]
+        {
+            "That's more kashes than you've got, Twinsen. Pick a smaller stake.",
+            "C'est plus de kashes que tu n'en as, Twinsen. Choisis une mise plus petite.",
+            "Das sind mehr Kashes, als du hast, Twinsen. Such dir einen kleineren Einsatz aus.",
+            "Eso son más kashes de los que tienes, Twinsen. Elige una apuesta más pequeña.",
+            "Sono più kash di quanti ne hai, Twinsen. Scegli una posta più bassa.",
+            "Isso são mais kashes do que tens, Twinsen. Escolhe uma aposta mais pequena.",
+        },
+        new[]
+        {
+            "Your purse won't stretch to that one, friend. Pick a smaller stake.",
+            "Ta bourse n'ira pas jusque-là, l'ami. Choisis une mise plus petite.",
+            "So weit reicht dein Geldbeutel nicht, Freund. Such dir einen kleineren Einsatz aus.",
+            "Tu bolsa no da para tanto, amigo. Elige una apuesta más pequeña.",
+            "Il tuo borsellino non arriva fin lì, amico. Scegli una posta più bassa.",
+            "A tua bolsa não chega para essa, amigo. Escolhe uma aposta mais pequena.",
         },
     };
 
@@ -3279,6 +3300,11 @@ void comportement_1()
                 // (walked through: his box is the landing crowd's whole body's, and stood an invisible wall across the quay south of him -- the
                 // user, 2026-11-15, "Near where we find the tyre on Citadel 2 there seems to be an invisible wall blocking Twinsen")
                 bob.Armor = WalkOverArmour;
+                // (seen, and standing on the quay's paving: the landing crowd's copy kept its INVISIBLE flag, so the race mode's bubble took
+                // him for an unseen talker and put his lines at the nearest one seen -- the tyre (the user, 2026-11-21: "it appears that the
+                // tyre is talking instead of Felix"); and its OBJ_FALLABLE dropped him through the paving to the ground under it, 807)
+                bob.Flags &= ~0xA00u;
+                bob.Y = Math.Max(bob.Y, QuayPaving);
                 var bobLife = p.Add(model, bob, Talker("2 == chapter()", $@"            if ({BaitTraded} == var_game({QBait}))
             {{
                 message({p.Say(ChapterLine.BobAfter)});

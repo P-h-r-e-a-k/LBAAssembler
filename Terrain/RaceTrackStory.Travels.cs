@@ -199,18 +199,10 @@ internal static partial class RaceTrackStory
                     changed++;
                 }
                 if (changed == 0) throw new NotTheGames("no test of variable 83 in the prison");
-                // (and the electric barrier across the gate he comes in by from the town -- off only when he starts by the entrance's door, its
-                // zone 12, else on until its switch is hit: off from the start, its switch showing it, so the way back out is open)
-                var barrier = 0;
-                for (var a = 1; a < scripts.ActorCount; a++)
-                {
-                    var life = scripts.GetText(a, ScriptKind.Life);
-                    if (!life.Contains("flow_point(25, 54)", StringComparison.Ordinal) && !life.Contains("set_comportement_obj(27, comportement_3)", StringComparison.Ordinal)) continue;
-                    if (!life.Contains("12 == zone_obj(0)", StringComparison.Ordinal)) continue;
-                    scripts.SetText(a, ScriptKind.Life, life.Replace("12 == zone_obj(0)", Always(true), StringComparison.Ordinal));
-                    barrier++;
-                }
-                if (barrier != 2) throw new NotTheGames($"the gate's barrier and its switch: {barrier} actors, not 2");
+                // (the electric barriers -- actors 26 and 27, their switches on the wall 19 and 18 -- as the game has them: off only when he
+                // starts by their door's zone, else on until the switch is hit. Until 2026-11-22 the gate's (27) was rewritten off from the
+                // start, "so the way back out is open" -- the user: "some of the retail fire bars seem to have been removed ... there's
+                // actually a switch on the wall he can use to remove them")
             });
             var taxi = AddIslandTexts(gameDirectory, RaceTrackIsland.Otringal.IslandByte, OtringalTaxiLines, log, "Otringal's harbour taxi");
             if (taxi >= 0)

@@ -107,6 +107,7 @@ internal static class Program
             "sendell" => SendellIsland.Run(args),
             "loopanim" => LoopAnimCommand.Run(args),
             "sceneinfo" => SceneInfoCommand.Run(args),
+            "actors" => ActorsCommand.Run(args),
             "racecheck" => SceneInfoCommand.Check(args),
             "islandview" => SceneInfoCommand.IslandView(args),
             "entityrecords" => SceneInfoCommand.EntityAnims(args),

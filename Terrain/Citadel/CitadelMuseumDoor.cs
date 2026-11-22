@@ -143,10 +143,14 @@ internal static class CitadelMuseumDoor
         var model = store.Load(Scene);
         var gone = model.Zones.RemoveAll(z => z.Type == 0 && z.Num == Outside && z.X0 <= WindowX1 * 512 + 511 && z.X1 >= WindowX0 * 512
                                               && z.Y0 >= WindowY0 * 256 - 1024 && z.Z0 <= (WallZ + 2) * 512 && z.Z1 >= WallZ * 512);
-        if (gone > 0)
+        // (and the ladder zone up the wall to it -- type 6 before the window: the user, 2026-11-21, "When we removed the window in the
+        // museum we've left the climbing zone, this needs removing" -- Twinsen climbed the bare wall)
+        var ladder = model.Zones.RemoveAll(z => z.Type == 6 && z.X0 <= WindowX1 * 512 + 511 && z.X1 >= WindowX0 * 512
+                                                && z.Z0 <= (WallZ + 2) * 512 && z.Z1 >= WallZ * 512);
+        if (gone + ladder > 0)
         {
             store.Save(Scene, model, allowErrors: true);
-            log.Add($"The museum's security room (scene {Scene}): its window's way out into scene {Outside} taken away");
+            log.Add($"The museum's security room (scene {Scene}): its window's way out into scene {Outside} ({gone}) and the ladder up to it ({ladder}) taken away");
         }
         return log;
     }

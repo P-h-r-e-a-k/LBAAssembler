@@ -1791,6 +1791,8 @@ void comportement_1()
     private const uint InvisibleNoShadow = 0x1200;
     // OBJ_FALLABLE: the actor falls onto the ground below it.
     private const uint Fallable = 0x0800;
+    // (a falling actor this far over the ground it stood on stood on something else -- a carrier, a decor -- and keeps its height over it)
+    private const int OnSomethingOver = 300;
 
     // After the removals: every set_track_obj / set_comportement_obj the kept scripts aim at the stand-in goes to offset 0 (its one
     // END), and a camera told to follow it follows Twinsen instead -- it stands 20000 below the ground, and a cutscene's
@@ -1885,7 +1887,11 @@ void comportement_1()
         // line and over the school, stand under the raised road or beside it -- moved 12 and 20 cells away, their doors stayed where they
         // were, and Twinsen walking there went down, 2026-10-27)
         if (distanceToRoad(fromX, fromZ) > clear || !inTheWay(fromX, fromZ, actor.Y, actor.Y + 1500)) { PointsOffRoad(); return; }
-        var offset = (actor.Flags & Fallable) != 0 || groundBefore is null ? 0 : actor.Y - stood;
+        // (one that falls on the ground's own level; one that falls but stood well over the ground stood on something -- Otringal's patrol
+        // car's turret on the car (a carrier), moved aside with it and set on the ground beside it, never carried again: the user,
+        // 2026-11-21, "The rotating top part of this vehicle that fires appears to be in the ground instead of on the top of the vehicle")
+        var over = actor.Y - stood;
+        var offset = groundBefore is null ? 0 : (actor.Flags & Fallable) == 0 || over > OnSomethingOver ? over : 0;
         // (well clear of the road first; failing that, anywhere just off its surface -- Celebration Island's square, the road all through
         // it: its people went, none of them anywhere clear of it within the cube, the user, 2026-10-28, "Let's do a full review of all
         // islands checking for actors that have been removed that we can restore")

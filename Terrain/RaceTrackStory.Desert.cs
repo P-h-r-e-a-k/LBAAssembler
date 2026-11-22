@@ -173,6 +173,7 @@ internal static partial class RaceTrackStory
         private readonly Dictionary<int, SceneModel> models = new();
         public readonly List<string> Log = log;
         public readonly RaceTrackIsland Island = island;
+        public readonly string GameDirectory = gameDirectory;
         private SceneModel Model(int scene) => models.TryGetValue(scene, out var m) ? m : models[scene] = Store.Load(scene);
 
         // RaceTrackStory.Apply's Edit: the scene's actors and zones changed, then its scripts, compiled; left out (and logged) otherwise

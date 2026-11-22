@@ -63,6 +63,11 @@ void ThrowMagicBall(S32 x, S32 y, S32 z,
     force = MagicBallHitForce[MagicLevel];
     sprite = MagicBallSprite[MagicLevel];
 
+    // (never more points than the level holds: a save whose points wrapped round under the protection spell -- EXTRA.CPP, 239 at level 0
+    // -- threw nothing, its ball's kind 12; set right as he throws)
+    if (MagicPoint > MagicLevel * 20)
+        MagicPoint = (U8)(MagicLevel * 20);
+
     MagicBallType = (U8)(((MagicPoint - 1) / 20) + 1);
     if (MagicPoint == 0)
         MagicBallType = 0;

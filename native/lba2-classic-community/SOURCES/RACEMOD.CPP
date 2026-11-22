@@ -20620,8 +20620,13 @@ static void HalCall(S32 now) {
     Log_Info("[racemod] HAL on the radio (island %s): %s", IslandName, s_halSay);
 }
 static void HalFrame(S32 now) {
-    // (a use from the console's useitem too: InventoryAction set without the inventory)
-    if (InventoryAction == HAL_RADIO) s_halPending = 1;
+    // (a use from the console's useitem too: InventoryAction set without the inventory -- once, as it turns to the radio: it stays set while
+    // the script that took the call answers it, and each frame of that counted as a use of its own, after the second the taken call's
+    // moment long gone -- HAL called 38 times over Baldino's arrival call on Celebration Island, the user, 2026-11-21: "answering the radio
+    // causes both HAL and Baldino to talk at the same time")
+    static S32 s_halLastAction = -1;
+    if (InventoryAction == HAL_RADIO && s_halLastAction != HAL_RADIO) s_halPending = 1;
+    s_halLastAction = InventoryAction;
     if (s_halPending && !s_halUsedAt) s_halUsedAt = now ? now : 1;
     s_halPending = 0;
     if (s_halUsedAt && now - s_halUsedAt > 200) {

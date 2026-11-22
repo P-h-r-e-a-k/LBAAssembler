@@ -124,8 +124,15 @@ internal static partial class CitadelProps
         m.Box(0, new Vector3(0, PoolTop - 90, 0), new Vector3(PoolLength, 180, PoolWidth), Wood - 2);
         foreach (var (x, z) in new[] { (-L + 60, -W + 60), (0, -W + 50), (L - 60, -W + 60), (-L + 60, W - 60), (0, W - 50), (L - 60, W - 60) })
             m.Box(0, new Vector3(x, PoolTop + 62, z), new Vector3(90, 6, 90), Pocket);
-        foreach (var (x, z) in new[] { (-L + 160, -W + 160), (L - 160, -W + 160), (-L + 160, W - 160), (L - 160, W - 160) })
-            m.Box(0, new Vector3(x, (PoolTop - 180) / 2, z), new Vector3(150, PoolTop - 180, 150), Wood - 2);
+        // (the legs as the alley's camera sees them -- from +x +z, the tables unturned: the back corner's leg (-x -z) never seen, the
+        // others only their +x and +z sides. Whole boxes, a leg's faces sorted over the cloth drew it through the table -- the user,
+        // 2026-11-21: "The leg should be entirely hidden by the table and the area isn't 3D so it doesn't even need to be drawn")
+        foreach (var (x, z) in new[] { (L - 160, -W + 160), (-L + 160, W - 160), (L - 160, W - 160) })
+        {
+            const float Half = 75, Top = PoolTop - 180;
+            m.In(new[] { m.P(0, new(x + Half, 0, z - Half)), m.P(0, new(x + Half, 0, z + Half)), m.P(0, new(x + Half, Top, z + Half)), m.P(0, new(x + Half, Top, z - Half)) }, Wood - 2, new(x + 1000, Top / 2, z));
+            m.In(new[] { m.P(0, new(x - Half, 0, z + Half)), m.P(0, new(x + Half, 0, z + Half)), m.P(0, new(x + Half, Top, z + Half)), m.P(0, new(x - Half, Top, z + Half)) }, Wood - 2, new(x, Top / 2, z + 1000));
+        }
         // (the balls: a triangle of reds and golds, the black in it, the white)
         var balls = new[] { 4 * 16 + 7, 6 * 16 + 10, 4 * 16 + 7, 6 * 16 + 10, 3 * 16 + 1, 4 * 16 + 7, 6 * 16 + 10, 4 * 16 + 7, 6 * 16 + 10, 4 * 16 + 7 };
         var n = 0;

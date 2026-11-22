@@ -1971,13 +1971,18 @@ void	GereExtras()
 			else if( ptrextra->Info==0 )
 			{
 				// regarde si l'on doit consommer de la magie
-				MagicPoint -= GetDeltaMove( &ptrextra->U.Move ) ;
-
-				if( MagicPoint<=0 )
+				// (counted signed: MagicPoint is a U8, and a drain past what was left wrapped it round -- 0 less 17 is 239 -- so the spell
+				// never stopped and the points stood far over the level's; the magic ball's kind, taken from them, came out 12 and no ball
+				// was thrown: the user, 2026-11-22, "Something's stopping Twinsen's ball appearing when he throws it")
 				{
-					MagicPoint = 0 ;
-					ToggleSortProtection() ;
-					continue ;
+					const S32 left = (S32)MagicPoint - GetDeltaMove( &ptrextra->U.Move ) ;
+					if( left<=0 )
+					{
+						MagicPoint = 0 ;
+						ToggleSortProtection() ;
+						continue ;
+					}
+					MagicPoint = (U8)left ;
 				}
 
 				ListObjet[ptrextra->Owner].Flags |= NO_CHOC ;

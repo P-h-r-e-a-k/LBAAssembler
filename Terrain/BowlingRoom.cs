@@ -62,9 +62,11 @@ internal static class BowlingRoom
     // the booths: one of Rick's (his cells x 26-29, z 24-29 -- 4 across, 6 along z: a back, a seat, the table, a seat, a back) stamped
     // where each goes, its cells' corner (the user, 2026-11-16: "The red booths, let's have them against the wall - the edge that's at the
     // right of the screen - which is to the right of the bar with a couple in the middle"): four along the east rim, back to back from
-    // below the bar's stools to the lift's corner (x 51-55, z 42-46), and two in the room's middle, south of the card tables
+    // below the bar's stools to the lift's corner (x 51-55, z 42-46), and two in the room's middle, south of the card tables. (Three along
+    // the rim since 2026-11-22 -- the one by the bar's end, (52, 17), gone: the user, "The last red booth near the bar in the bowling alley
+    // stops us from walking around to talk to the NPC at the side of the bar, let's just remove the last one")
     private static readonly (int X0, int Z0) RickBooth = (26, 24);
-    private static readonly (int X, int Z)[] BoothsAt = { (52, 17), (52, 23), (52, 29), (52, 35), (35, 34), (43, 34) };
+    private static readonly (int X, int Z)[] BoothsAt = { (52, 23), (52, 29), (52, 35), (35, 34), (43, 34) };
 
     public readonly record struct Built(int GridNumber, byte Type, byte[] Grid, int Library);
 
