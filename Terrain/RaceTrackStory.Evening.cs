@@ -391,12 +391,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Luc's barrel car is a wheel short. Old Bob at the harbour's scrap heap might have a tyre.",
-            "La voiture-tonneau de Luc n'a plus qu'une roue arrière. Le vieux Bob, au tas de ferraille du port, aura peut-être un pneu.",
-            "Lucs Fasswagen fehlt ein Rad. Der alte Bob am Schrotthaufen im Hafen hat vielleicht einen Reifen.",
-            "Al coche-barril de Luc le falta una rueda. El viejo Bob, en la chatarra del puerto, quizá tenga un neumático.",
-            "Alla macchina-botte di Luc manca una ruota. Il vecchio Bob, al mucchio di rottami del porto, forse ha uno pneumatico.",
-            "Ao carro-barril do Luc falta uma roda. O velho Bob, na sucata do porto, talvez tenha um pneu.",
+            "Luc's barrel car is a wheel short. Felix the fisherman, by the harbour's scrap heap, might have a tyre.",
+            "La voiture-tonneau de Luc n'a plus qu'une roue arrière. Felix le pêcheur, près du tas de ferraille du port, aura peut-être un pneu.",
+            "Lucs Fasswagen fehlt ein Rad. Felix, der Fischer am Schrotthaufen im Hafen, hat vielleicht einen Reifen.",
+            "Al coche-barril de Luc le falta una rueda. Felix, el pescador de la chatarra del puerto, quizá tenga un neumático.",
+            "Alla macchina-botte di Luc manca una ruota. Felix il pescatore, al mucchio di rottami del porto, forse ha uno pneumatico.",
+            "Ao carro-barril do Luc falta uma roda. O pescador Felix, na sucata do porto, talvez tenha um pneu.",
         },
         new[]
         {

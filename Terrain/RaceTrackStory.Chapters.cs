@@ -79,7 +79,7 @@ internal static partial class RaceTrackStory
                       UmbrellaScene = 48;
     // the game's people copied: the Tavern's drunk rabbibunny, Luc and Tim (scene 3's actors 4, 5, 6), the umbrella thief (48's 6); the
     // landing crowd's quetch, grobo and Bob (scene 42's by their entities)
-    private const int TavernRabbibunny = 4, TavernLuc = 5, TavernTim = 6, UmbrellaThief = 6, CrowdQuetch = 39, CrowdGrobo = 33, CrowdBob = 102;
+    private const int TavernRabbibunny = 4, TavernLuc = 5, TavernTim = 6, UmbrellaThief = 6, CrowdQuetch = 39, CrowdGrobo = 33, Felix = 2;
     // their animations: the thief's run (scene 48's own track)
     private const int ThiefRun = 129;
     // the people of the lighthouse's spell (scene 46): the Weather Wizard and Raph (6 is his fiancee: she said his line until 2026-11-07)
@@ -3292,48 +3292,21 @@ void comportement_1()
                 message(43);"));
         });
 
-        // the harbour in the fine weather: Felix the fisherman by the scrap (the landing crowd's actor, BODY.HQR 152, our CrowdBob -- the user,
-        // 2026-11-09: "The man by the scrap is Felix the fisherman which is why he wants the bait"; the lines name him so), and beside him the old
-        // tyre he fished out of the harbour (a body of its own, CitadelProps). The user, 2026-11-06: the wheel in the scrap answered only once
-        // Luc had told of it (Q_LUCCAR 2), so found first it couldn't be picked up; "model a round rubber tyre"; Bob "found an old tyre and
-        // will give it to him for some more fishing bait", the bait from the shop at any time, handed over at once if Twinsen has it. Spoken
-        // to, Bob asks for a tin of bait (Mr. Bazoo's, QBait); with one, the tyre is Twinsen's (QBait BaitTraded; Q_LUCCAR 3 once Luc has
-        // told -- before, the yard tells and fits it at once) and gone from beside him.
-        var bob = CopyOf(p.Originals, AliensScene, CrowdBob);
-        if (bob is not null && OffRoad(p.Town, Scrap.X, Scrap.Z, 1) is { } bobAt && OffRoad(p.Town, bobAt.X + 1.5, bobAt.Z, 1, 3) is { } tyreAt
-            && OutsideScene(p.Store, bobAt.X, bobAt.Z) == Harbour && OutsideScene(p.Store, tyreAt.X, tyreAt.Z) == Harbour)
-            p.Edit(Harbour, $"Felix the fisherman by the harbour's scrap at cell ({bobAt.X:0.#}, {bobAt.Z:0.#}), the old tyre he'll trade for a tin of bait beside him", model =>
+        // the harbour in the fine weather: Felix the fisherman (the game's own, actor 2: a rabbibunny with his rod, put aside off the town
+        // circuit's road by the scrap) and beside him by the scrap the old tyre he fished out of the harbour (a body of its own, CitadelProps).
+        // The user, 2026-11-06: the wheel in the scrap answered only once Luc had told of it (Q_LUCCAR 2), so found first it couldn't be picked
+        // up; "model a round rubber tyre"; he "found an old tyre and will give it to him for some more fishing bait", the bait from the shop
+        // at any time, handed over at once if Twinsen has it; 2026-11-09: "The man by the scrap is Felix the fisherman which is why he wants
+        // the bait". Spoken to in chapter 2 -- Twinsen's own script's talk to him, Action in front of him -- Felix asks for a tin of bait
+        // (Mr. Bazoo's, QBait); with one, the tyre is Twinsen's (QBait BaitTraded; Q_LUCCAR 3 once Luc has told -- before, the yard tells and
+        // fits it at once) and gone from beside him. His own lines the other chapters.
+        // (Was a copy of the landing crowd's grobo -- Bob, BODY.HQR 152 -- by the scrap, unseen, saying it: the user took Felix beside it for
+        // the talker; seen since 2026-11-21 -- "the tyre is talking instead of Felix" -- an extra character stood there: the user, 2026-11-22,
+        // "We seem to have gained an extra character ... by the quay - the green grobo, I'm not sure the reason for this change". Gone.)
+        if (OffRoad(p.Town, Scrap.X, Scrap.Z, 1) is { } scrapAt && OffRoad(p.Town, scrapAt.X + 1.5, scrapAt.Z, 1, 3) is { } tyreAt
+            && OutsideScene(p.Store, tyreAt.X, tyreAt.Z) == Harbour)
+            p.Edit(Harbour, $"Felix the fisherman: the old tyre he'll trade for a tin of bait by the harbour's scrap at cell ({tyreAt.X:0.#}, {tyreAt.Z:0.#})", model =>
             {
-                Place(bob, model, Facing(bobAt, tyreAt.X, tyreAt.Z));
-                // (walked through: his box is the landing crowd's whole body's, and stood an invisible wall across the quay south of him -- the
-                // user, 2026-11-15, "Near where we find the tyre on Citadel 2 there seems to be an invisible wall blocking Twinsen")
-                bob.Armor = WalkOverArmour;
-                // (seen, and standing on the quay's paving: the landing crowd's copy kept its INVISIBLE flag, so the race mode's bubble took
-                // him for an unseen talker and put his lines at the nearest one seen -- the tyre (the user, 2026-11-21: "it appears that the
-                // tyre is talking instead of Felix"); and its OBJ_FALLABLE dropped him through the paving to the ground under it, 807)
-                bob.Flags &= ~0xA00u;
-                bob.Y = Math.Max(bob.Y, QuayPaving);
-                var bobLife = p.Add(model, bob, Talker("2 == chapter()", $@"            if ({BaitTraded} == var_game({QBait}))
-            {{
-                message({p.Say(ChapterLine.BobAfter)});
-            }}
-            else
-            {{
-                message({p.Say(ChapterLine.BobWheel)});
-                if ({BaitHeld} == var_game({QBait}))
-                {{
-                    message_obj(0, {p.Say(ChapterLine.TyreBait)});
-                    message({p.Say(ChapterLine.TyreDeal)});
-                    message_obj(0, {p.Say(ChapterLine.WheelSeen)});
-                    set_var_game({QBait}, {BaitTraded});
-                    set_var_game({ErrandSlot}, {ErrandTyre});
-                    found_object({ErrandSlot});
-                    if ({LucTold} == var_game({QLucCar}))
-                    {{
-                        set_var_game({QLucCar}, {WheelFound});
-                    }}
-                }}
-            }}"));
                 // (on the quay's paving, a decor of the island's over its ground: 1074 high where Twinsen stands there, 156 over the ground -- the
                 // game seats only Twinsen on it, a prop fell through to the ground under it)
                 var tyre = Citadel.CitadelProps.Actor(Citadel.CitadelProps.Tyre, RaceTrackScenes.CubeLocal(tyreAt.X, model.CubeX), Math.Max((int)Math.Round(tyreAt.Y), QuayPaving), RaceTrackScenes.CubeLocal(tyreAt.Z, model.CubeY));
@@ -3358,9 +3331,41 @@ void comportement_1()
     }}
 }}
 ");
-                return scripts => { bobLife(scripts); tyreLife(scripts); };
+                return scripts =>
+                {
+                    tyreLife(scripts);
+                    // (Twinsen's script: Action in front of Felix -- his own talk, "Hello" and Felix's line of the moment, set going by the
+                    // fisherman's var_cube 0 -- in chapter 2 the tyre's talk instead, Felix turned to him, his lines his)
+                    var hero = scripts.GetText(0, ScriptKind.Life);
+                    scripts.SetText(0, ScriptKind.Life, Loose(hero, $"if (0 != l_track_obj({Felix}) && 1250 > distance_message({Felix}))", $@"if (2 == chapter() && 1250 > distance_message({Felix}))
+                {{
+                    set_track_obj({Felix}, label_10);
+                    if ({BaitTraded} == var_game({QBait}))
+                    {{
+                        message_obj({Felix}, {p.Say(ChapterLine.BobAfter)});
+                    }}
+                    else
+                    {{
+                        message_obj({Felix}, {p.Say(ChapterLine.BobWheel)});
+                        if ({BaitHeld} == var_game({QBait}))
+                        {{
+                            message_obj(0, {p.Say(ChapterLine.TyreBait)});
+                            message_obj({Felix}, {p.Say(ChapterLine.TyreDeal)});
+                            message_obj(0, {p.Say(ChapterLine.WheelSeen)});
+                            set_var_game({QBait}, {BaitTraded});
+                            set_var_game({ErrandSlot}, {ErrandTyre});
+                            found_object({ErrandSlot});
+                            if ({LucTold} == var_game({QLucCar}))
+                            {{
+                                set_var_game({QLucCar}, {WheelFound});
+                            }}
+                        }}
+                    }}
+                }}
+                else if (0 != l_track_obj({Felix}) && 1250 > distance_message({Felix}))"));
+                };
             });
-        else p.Log.Add("Felix and the tyre at the harbour left out: no room off the town circuit by the scrap");
+        else p.Log.Add("The tyre at the harbour left out: no room off the town circuit by the scrap");
 
         // the ferry office (scene 8): Mrs. Brune (actor 3), once Twinsen has the ticket in chapter 2, and Zoe coming too as crew
         p.Edit(FerryOffice, "Mrs. Brune at the ferry office: the ticket for the Desert, and Zoe goes free as crew", _ => scripts =>

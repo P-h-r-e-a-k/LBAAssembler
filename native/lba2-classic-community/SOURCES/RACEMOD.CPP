@@ -9792,12 +9792,15 @@ S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
 // ---- Twinsen's opening line (opener=). Which lives answered his Action this frame (LF_ACTION held: RaceMod_ActionSeen); the frame's end
 // forgets them (RaceMod_Frame, after every life has run). Each actor's last opening line this scene visit (0: none yet).
 static U8 s_actionAsked[256];
+static int s_pressAnswered;     // (an Action press's first answer has come, this pass of the game's loop: RaceMod_Opener -- cleared as the
+                                // loop reads the keys, RaceMod_FilterInput: a message's own redraws run AffScene, so RaceMod_Frame, mid-pass)
 static int s_askedAny = 0;
 static S16 s_openerSaid[256];
 static S32 s_openerScene = -1;
 void RaceMod_ActionSeen(const T_OBJET *obj) {
     const S32 n = (S32)(obj - ListObjet);
     if (n < 0 || n >= 256) return;
+    if (s_pressAnswered) return;    // (the press answered already this frame: the others who answer it get no opener of theirs)
     s_actionAsked[n] = 1; s_askedAny = 1;
 }
 static void OpenerFrame(void) {
@@ -9833,7 +9836,12 @@ static int OpenerPerson(S32 num, int depth = 0) {
 // line no one hears (RaceMod_Hush), or what he said to that person already this visit (the same goal; any hello once).
 S32 RaceMod_Opener(S32 lifeObj, S32 speaker, S32 text) {
     if (lifeObj < 0 || lifeObj >= 256 || !s_actionAsked[lifeObj]) return -1;
-    s_actionAsked[lifeObj] = 0;
+    // (the first to answer the press has it, whether he's greeted or not: two or three who all answer one press -- the Cup's herald, Mr.
+    // Paul and the grid's man side by side at the town circuit's start line -- had Twinsen's line before each, the user, 2026-11-22:
+    // "Twinsen just got told twice that 'I need 20 kashes for the race entry'". The lives after this one see the key later this frame,
+    // so the press is marked answered till the loop's next pass: RaceMod_ActionSeen, RaceMod_FilterInput)
+    memset(s_actionAsked, 0, sizeof(s_actionAsked));
+    s_pressAnswered = 1;
     if (!RaceMod_Active() || (!s_nbOpeners && !s_nbHellos) || speaker == NUM_PERSO || speaker < 0 || speaker >= (S32)NbObjets || speaker >= 256) return -1;
     if (RaceMod_Hush(text)) return -1;
     if (s_openerScene != (S32)NumCube) { memset(s_openerSaid, 0, sizeof(s_openerSaid)); s_openerScene = (S32)NumCube; }
@@ -15423,6 +15431,7 @@ static int HoverOverWater(void) {
 // (and in the room he left it at the door of, on foot: Kash's sea cave is entered by its water, as the game's hovering had him -- he wades)
 S32 RaceMod_HoverSea(void) { return (s_hoverOn && (Comportement == C_BUGGY || s_hoverDocked == (int)NumCube)) || (s_hoverDocked >= 0 && s_hoverDockedIn && (int)NumCube != s_hoverDocked); }
 U32 RaceMod_FilterInput(U32 input) {
+    s_pressAnswered = 0;
     // (win_stop=: a won race's cut-scene -- nothing but the menus' keys while the car stops and the story's scene plays; the brake is
     // RaceMod_AutoInput's own, kept)
     if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0));
