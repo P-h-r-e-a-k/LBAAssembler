@@ -26,6 +26,8 @@ internal static class CitadelPyjamas
     // from 11 it was at the ramp's end in a few steps, every lit side the same light blue -- the user, 2026-11-22: "Twinsen's pyjama model
     // looks a bit flat". The stripes the ramp's darkest)
     internal const int Gown = 12 * 16 + 5, Stripe = 12 * 16 + 2, White = 3 * 16 + 15;
+    // (the most of the light a gown point takes: Install, the ramp's end)
+    private const float MaxGownLight = 1f;
     private const int Hips = 2, Chest = 3, Head = 14;
     private const float HemY = 140;
     private static readonly int[] Shins = { 9, 12 }, Feet = { 10, 13 };
@@ -192,6 +194,18 @@ internal static class CitadelPyjamas
         // normals at all, every polygon flat in its one colour; the user, 2026-11-22: "Twinsen's pyjama model looks a bit flat, apparently it
         // needs more normals")
         body.Lit = true;
+        // (the light a point adds to its polygon's colour (AFF_OBJ.CPP: colour + light >> 8, nothing holding it in the colour's ramp) is
+        // 15,360 x its normal's length / 2^24 at most -- 9 at the 10,240 of a light scale of 1, 15 at Twinsen's own 1.6. The game's own bodies
+        // start their ramps at 0 for it; the gown, at the ramp's 5, went 6 past the blues' end into the next ramp's dark where the light was
+        // full on -- black patches on his chest and shoulders that came and went as he turned (the user, 2026-11-22, "Some parts of Twinsen's
+        // new pyjama body look like they have black patches that come and go as he rotates"). The gown's and the stripes' points at no more
+        // than 1: the gown 5-14, the stripes 2-11, in the ramp)
+        if (body.LightScale is { } scales)
+        {
+            var gown = body.Faces.Where(f => f.Colour is Gown or Stripe).SelectMany(f => f.Points).ToHashSet();
+            for (var p = 0; p < scales.Length; p++)
+                if (gown.Contains(p) && scales[p] > MaxGownLight) scales[p] = MaxGownLight;
+        }
         var bytes = body.Write();
         var table = HqrArchive.Open(ressPath).Read(44);
         int entry;
