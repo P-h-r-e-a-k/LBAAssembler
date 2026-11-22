@@ -64,7 +64,13 @@ internal static partial class RaceTrackStory
     // (the hostesses' homes clear of the private doorway, 177, and the office's door, 187 -- still past the last booth, 155)
     private const float LoungePath = 13.6f, HostHomeAngle = 168, GroboHomeAngle = 162, HostHomeCells = 15.5f, FrontCells = 15.9f;
     // (back out of the private rooms: before their doorway; the bouncer at his post in it, and aside)
-    internal const float PrivateBack = Citadel.CitadelProps.PrivateAt, PrivateBackCells = 16.0f, BouncerCells = 17.4f, AsideAngle = Citadel.CitadelProps.PrivateAt - 6;
+    internal const float PrivateBack = Citadel.CitadelProps.PrivateAt, PrivateBackCells = 16.0f, BouncerCells = 17.4f;
+    // (aside: a step out into the hall and round to the doorway's south side, away from the way in -- the user, 2026-11-21: "Twinsen stuck
+    // by what appears the bodyguard during the cut scene to go into the backroom with the grobo stripper". He went along the wall to 6
+    // degrees north of the doorway, met its jamb halfway and stood at its corner, 420 off the way in: Twinsen held by his side, the Grobo
+    // behind Twinsen. Now: out to AsideCells, well clear of the jambs (a step out less than goto_point's reach was taken as there already,
+    // and he went straight for his place and met the south jamb), then 5 degrees south -- 750 off the way in, 830 off the office door's)
+    private const float AsideCells = 15.8f, AsideAngle = Citadel.CitadelProps.PrivateAt + 5;
 
     private static void StellaLounge(IslandBeatsA b, Func<MoonLine, int> say)
     {
@@ -125,7 +131,8 @@ internal static partial class RaceTrackStory
             guard.Beta = StellaEntities.FacingMiddle(gx, gz);
             guard.Move = 3;
             var guardIndex = model.Actors.Count;
-            var aside = Point(AsideAngle, BouncerCells, StellaEntities.FloorY);
+            var asideStep = Point(Citadel.CitadelProps.PrivateAt, AsideCells, StellaEntities.FloorY);
+            var aside = Point(AsideAngle, AsideCells, StellaEntities.FloorY);
             adds.Add(IslandBeatsA.Add(model, guard, $@"void comportement_0()
 {{
     if (1 == var_cube({Following}))
@@ -148,7 +155,7 @@ void comportement_1()
 {{
 }}
 "));
-            var guardTrack = $"label({BouncerPost});\nanim(0);\nstop();\n\nlabel({BouncerAside});\nanim(1);\ngoto_point({aside});\nanim(0);\nbeta({(guard.Beta + 1024) & 4095});\nstop();\n";
+            var guardTrack = $"label({BouncerPost});\nanim(0);\nstop();\n\nlabel({BouncerAside});\nanim(1);\ngoto_point({asideStep});\ngoto_point({aside});\nanim(0);\nbeta({(guard.Beta + 1024) & 4095});\nstop();\n";
             // the hostesses (StellaStaff: the rabbibunny, the Grobo): home beside the catwalk's foot; each one's way to each booth and back
             var (hx, hz) = StellaEntities.At(HostHomeAngle, HostHomeCells);
             (int Index, string Track) Hostess(float homeAngle, int body, int stand, int walk)
@@ -159,6 +166,10 @@ void comportement_1()
                 host.Beta = StellaEntities.FacingMiddle(x, z);
                 host.Entity = StellaStaff.Entity; host.Body = body; host.Anim = stand;
                 host.Move = 3; host.Flags &= ~1u;
+                // (walked through, as the footprints are: Twinsen, following the one he paid 1.5 s behind, walks faster than the Grobo,
+                // caught her up by the doorway and stood in her box -- neither could move, the user's "stuck ... during the cut scene to go
+                // into the backroom with the grobo stripper", 2026-11-21)
+                host.Armor = WalkOverArmour;
                 var index = model.Actors.Count;
                 adds.Add(IslandBeatsA.Add(model, host, "void comportement_0()\n{\n}\n"));
                 var homePoint = Point(homeAngle, HostHomeCells, StellaEntities.FloorY);
