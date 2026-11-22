@@ -248,6 +248,11 @@
  *                                <least> (the White Leaf Desert's sand filters not fitted): past checkpoint <checkpoint> of the first lap
  *                                it says <text>, goes no faster than <speed> (units/s) and smokes from its engine to the race's end
  *                                (Breakdown, RaceMod_Slide) -- or till the variable reaches <least>: the filters fitted mend it
+ *     car_held=<var> <value> <scene>   (2026-11-22) while the variable holds the value, Twinsen's car isn't on the island: kept in <scene>
+ *                                (an interior -- the Emperor's palace, the stewards' overnight), drawn nowhere; back where it was taken
+ *                                from once the variable moves on, or (a game loaded meanwhile) on the start line (CarHeld)
+ *     car_dead=<var> <value> <text>   (2026-11-22) while the variable holds the value, Twinsen's car won't go: forward and back do nothing,
+ *                                <text> over the screen as he tries (Otringal's race day, its ignition coil taken in the night)
  *     companion=<entity> <armour> (2026-11-11) that entity's actor with that armour, in any scene: put beside Twinsen as the scene starts
  *                                and as he gets out of his car (Companion: the story's Zoe from chapter 2)
  *     car_home=<scene> <away var> <fetch var>   (2026-11-11) the away variable 1 while the story car stands abandoned in another scene of
@@ -1659,6 +1664,17 @@ static int s_brkVar = -1, s_brkLeast = 0, s_brkCheckpoint = 1, s_brkSpeed = 2000
 // car_home= (2026-11-11): the story car's home scene (-1 none), the variable told whether the car stands abandoned in another scene of the
 // island, the variable that fetches it home; what the last look saw (the scene, the car's scene, NumBuggy)
 static int s_carHome = -1, s_carAwayVar = -1, s_carFetchVar = -1, s_carSeenAt = -2, s_carSeenCube = -2, s_carSeenNum = -1, s_carHomeIsland = -2;
+// car_held= (2026-11-22): its variable (-1 none), its value, the scene the car is kept in meanwhile; where it was taken from (-1: not known
+// -- a game loaded since -- the start line then). The user, 2026-11-21: "let's have Twinsen told that all the cars are going to be held over
+// night in the palace"
+static int s_heldVar = -1, s_heldValue = 0, s_heldScene = -1, s_heldCube = -1;
+static S32 s_heldX = 0, s_heldY = 0, s_heldZ = 0, s_heldBeta = 0;
+// car_dead= (2026-11-22): its variable (-1 none), its value, its words, when they were last said ("let's make it so Twinsen's car doesn't
+// drive until he's managed to fix it")
+static int s_deadVar = -1, s_deadValue = 0;
+static char s_deadText[160] = "";
+static S32 s_deadSaidAt = -100000;
+static int CarDead(void) { return s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME && ListVarGame[s_deadVar] == s_deadValue && Comportement == C_BUGGY; }
 // companion=<entity> <armour> (2026-11-11): the story's companion -- Zoe, from chapter 2 (docs/LBRA_STORY_SCRIPT.md, "Twinsen and Zoe"): the
 // actor of that entity whose armour is that mark, in any scene, put beside Twinsen as the scene starts and as he gets out of his car
 // (Companion); her script does the rest (following him, out of sight while he drives or while the scene has a Zoe of its own)
@@ -5557,6 +5573,15 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "two_players")) {
             if (sscanf(v, "%d %d %d %d", &s_twoVar, &s_dblEntity, &s_dblMark, &s_compInMark) != 4 || s_twoVar < 0 || s_twoVar > 254) { s_twoVar = -1; s_dblEntity = -1; }
         }
+        else if (!strcmp(key, "car_held")) {
+            if (sscanf(v, "%d %d %d", &s_heldVar, &s_heldValue, &s_heldScene) != 3 || s_heldVar < 0 || s_heldVar >= MAX_VARS_GAME || s_heldScene < 0) s_heldVar = -1;
+            s_heldCube = -1;
+        }
+        else if (!strcmp(key, "car_dead")) {
+            int used = 0;
+            if (sscanf(v, "%d %d %n", &s_deadVar, &s_deadValue, &used) >= 2 && used > 0 && s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME) snprintf(s_deadText, sizeof(s_deadText), "%s", v + used);
+            else s_deadVar = -1;
+        }
         else if (!strcmp(key, "car_home")) {
             if (sscanf(v, "%d %d %d", &s_carHome, &s_carAwayVar, &s_carFetchVar) != 3 || s_carAwayVar < 0 || s_carAwayVar > 254 || s_carFetchVar < 0 || s_carFetchVar > 254) s_carHome = -1;
             s_carSeenAt = -2; s_carHomeIsland = -2;
@@ -6976,6 +7001,43 @@ static void CarHome(void) {
     if (away) Log_Info("[racemod] car_home: the car left in scene %d", (int)ListBuggy[0].Cube);
 }
 
+// car_held=: Twinsen's car kept in its scene while the variable holds the value -- taken from where it stands (he's out of it: the qualifying
+// lap's end stops it and gets him out), drawn nowhere meanwhile (InitBuggy draws a car whose scene is an interior nowhere outside); given
+// back where it was taken from, or on the start line when that's not known (a game saved in the night and loaded)
+static int CubeScene(int qx, int qz);
+static void CarHeld(void) {
+    if (s_heldVar < 0 || !NumBuggy || NewCube != -1) return;
+    S_BUGGY *ptb = &ListBuggy[0];
+    const int n = NumBuggy & ~BUGGY_PRESENT;
+    T_OBJET *car = n > 0 && n < (int)NbObjets ? &ListObjet[n] : NULL;
+    const int driving = ListObjet[NUM_PERSO].Move == MOVE_BUGGY || ListObjet[NUM_PERSO].Move == MOVE_BUGGY_MANUAL;
+    if (ListVarGame[s_heldVar] == s_heldValue) {
+        if (driving || ptb->Cube == s_heldScene || ptb->Cube < 0 || LoadSceneIsland(ptb->Cube) != Island) return;
+        s_heldCube = ptb->Cube; s_heldX = ptb->X; s_heldY = ptb->Y; s_heldZ = ptb->Z; s_heldBeta = ptb->Beta;
+        ptb->Cube = s_heldScene;
+        if (car && (S32)NumCube == s_heldCube) InitBody(NO_BODY, (U8)n);
+        Log_Info("[racemod] car_held: the car taken from scene %d at (%d,%d,%d) -- kept in scene %d while variable %d is %d", s_heldCube,
+                 (int)s_heldX, (int)s_heldY, (int)s_heldZ, s_heldScene, s_heldVar, s_heldValue);
+        return;
+    }
+    if (ptb->Cube != s_heldScene) return;
+    if (s_heldCube >= 0) { ptb->Cube = s_heldCube; ptb->X = s_heldX; ptb->Y = s_heldY; ptb->Z = s_heldZ; ptb->Beta = s_heldBeta; }
+    else if (s_car.HasLine && CubeScene(s_car.LineCubeX, s_car.LineCubeZ) >= 0) {
+        ptb->Cube = CubeScene(s_car.LineCubeX, s_car.LineCubeZ);
+        ptb->X = (s_car.LineX0 + s_car.LineX1) / 2; ptb->Z = (s_car.LineZ0 + s_car.LineZ1) / 2;
+        ptb->Y = s_lineHasY ? s_lineY : 0;
+        ptb->Beta = TurnOf(atan2((double)s_car.LineDirX, (double)s_car.LineDirZ));
+    } else return;
+    if (car && ptb->Cube == NumCube) {
+        car->Obj.X = ptb->X; car->Obj.Y = ptb->Y; car->Obj.Z = ptb->Z; car->Obj.Beta = ptb->Beta;
+        InitBody(GEN_BODY_NORMAL, (U8)n);
+        ClearRealAngle(car);
+    }
+    Log_Info("[racemod] car_held: variable %d moved on -- the car back in scene %d at (%d,%d,%d)%s", s_heldVar, (int)ptb->Cube, (int)ptb->X, (int)ptb->Y, (int)ptb->Z,
+             s_heldCube >= 0 ? "" : " (the start line: where it was taken from not known)");
+    s_heldCube = -1;
+}
+
 // replay_end=: its variable come to its value -- this frame, after the scripts and before the picture is drawn: the picture as it last was
 // faded to black (and the sound with it), and the menu at once (RaceMod_WantsMenu, RaceMod_ReplayOver). Once.
 static void ReplayEndFrame(void) {
@@ -7046,6 +7108,7 @@ void RaceMod_Story(void) {
     if (!RaceMod_Active()) return;
     ReplayEndFrame();
     CarHome();
+    CarHeld();
     Companion();
     StoryTwo();
     const S32 now = TimerRefHR;
@@ -15184,6 +15247,11 @@ U32 RaceMod_FilterInput(U32 input) {
     // (the hovercraft over the water: no getting out there -- HovercraftFrame)
     if (s_hoverOn && Comportement == C_BUGGY && HoverOverWater()) input &= ~(U32)(I_ACTION | I_ACTION_M);
     // (swimming and diving: his keys are the pool's -- PoolFrame moves him itself)
+    // (car_dead=: the car won't go -- its words as he tries)
+    if (CarDead() && (input & (I_UP | I_DOWN))) {
+        input &= ~(U32)(I_UP | I_DOWN);
+        if (TimerRefHR - s_deadSaidAt > 4000) { s_deadSaidAt = TimerRefHR; Message(s_deadText); Log_Info("[racemod] car_dead: %s", s_deadText); }
+    }
     s_poolInput = input;
     s_bowlInput = input;
     s_dtInput = input;
@@ -23057,6 +23125,8 @@ S32 RaceMod_HoverPack(S32 comp) {
 S32 RaceMod_Held(void) {
     // (not a won dream's car over its jump: wake_flight=; a car ferry's crossing: car_ferry='s hold)
     if (RaceMod_Active() && FerryHolding()) return 1;
+    // (car_dead=: its engine won't start)
+    if (RaceMod_Active() && CarDead()) return 1;
     return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
 }
 
@@ -25347,6 +25417,7 @@ static void ResetTrack(void) {
     // (the suit's behaviours his again, and his outside body off him: his own)
     s_noSuit = 0;
     s_brkVar = -1; s_broken = 0;
+    s_heldVar = -1; s_heldCube = -1; s_deadVar = -1;
     s_victoryOn = 0;
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
