@@ -15,7 +15,7 @@ namespace LBAAssembler.Terrain;
 // Their lines at the end of Citadel Island's texts (GroupB.AddLines), after the story's.
 internal static partial class RaceTrackStory
 {
-    private enum CitadelEggLine { StormLights, StormCar, WizardAsk, Sunshine, Rain, Snow, WizardSun, WizardRain, WizardSnow, BruneSisters }
+    private enum CitadelEggLine { StormLights, StormCar, WizardAsk, Sunshine, Rain, Snow, WizardSun, WizardRain, WizardSnow, BruneSisters, WizardRaced }
     private static readonly string[][] CitadelEggLines =
     {
         new[]
@@ -83,6 +83,16 @@ internal static partial class RaceTrackStory
             "Mis cuatro hermanas se fueron de vacaciones a Zeelich y nunca escribieron. ¡Ni una postal!",
             "Le mie quattro sorelle sono andate in vacanza su Zeelich e non hanno mai scritto. Neanche una cartolina!",
             "As minhas quatro irmãs foram de férias para Zeelich e nunca escreveram. Nem um postal!",
+        },
+        // (the Wizard once the town race is won: no more weather to choose -- he asked on and on after the race, the user, 2026-11-22)
+        new[]
+        {
+            "What a race! And the weather was perfect, if I say so myself.",
+            "Quelle course ! Et le temps était parfait, sans vouloir me vanter.",
+            "Was für ein Rennen! Und das Wetter war perfekt, wenn ich das selbst sagen darf.",
+            "¡Menuda carrera! Y el tiempo fue perfecto, aunque esté mal que yo lo diga.",
+            "Che gara! E il tempo era perfetto, modestamente.",
+            "Que corrida! E o tempo esteve perfeito, modéstia à parte.",
         },
     };
 
@@ -218,7 +228,14 @@ void comportement_2()
                 Place(wizard, model, w);
                 p.Log.Add($"the Wizard's encore at cell ({w.X:0.#}, {w.Z:0.#}), {w.Y:0}");
                 var index = model.Actors.Count;
-                return p.Add(model, wizard, Talker("2 == chapter()", $@"            add_choice({Say(CitadelEggLine.Sunshine)});
+                // (the race won, the weather's no longer his to choose: the Wizard pleased with it instead -- WonVar, the town race won)
+                return p.Add(model, wizard, Talker("2 == chapter()", $@"            if (0 != var_game({WonVar}))
+            {{
+                message({Say(CitadelEggLine.WizardRaced)});
+            }}
+            else
+            {{
+            add_choice({Say(CitadelEggLine.Sunshine)});
             add_choice({Say(CitadelEggLine.Rain)});
             add_choice({Say(CitadelEggLine.Snow)});
             ask_choice_obj({index}, {Say(CitadelEggLine.WizardAsk)});
@@ -236,6 +253,7 @@ void comportement_2()
             {{
                 set_var_game({EggWeather}, {WeatherSun});
                 message({Say(CitadelEggLine.WizardSun)});
+            }}
             }}"));
             });
         }

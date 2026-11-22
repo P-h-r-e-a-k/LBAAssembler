@@ -326,8 +326,10 @@ internal static partial class RaceTrackStory
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenBaitForFelix, new[] { Chapter(2), In(QLucCar, 0, WheelFound - 1), Is(QBait, BaitHeld) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelForLuc, new[] { Chapter(2), In(QLucCar, 0, WheelFound - 1) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelFound, new[] { Chapter(2), Is(QLucCar, WheelFound) }),
-        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenEntryFee, new[] { Chapter(2), Is(EntryPaid, 0), Is(WonVar, 0) }),
-        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenTownRace, new[] { Chapter(2), Is(WonVar, 0) }),
+        // (the entry not yet paid: a hello -- "I need twenty kashes for the race's entry fee" made no sense as an opening line, least of all
+        // before Mr. Paul had told him the fee; the user, 2026-11-22, "Let's have him just say hello". TwinsenEntryFee's line kept in the
+        // bank, unsaid, so the lines after it keep their ids; the race line only once the entry is paid)
+        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenTownRace, new[] { Chapter(2), Is(EntryPaid, 1), Is(WonVar, 0) }),
         // (the race won, the ferry to the Desert next: a hello -- "I've a ferry to catch to the White Leaf Desert" told no one anything; the
         // user, 2026-11-22, "In this instance we can just have Twinsen say hello, as it's clear where he's heading". TwinsenFerry's line kept
         // in the bank, unsaid, so the lines after it keep their ids)

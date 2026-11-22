@@ -19,6 +19,7 @@ internal static class SceneChecksumCommand
     {
         var model = new SceneStore(SceneGame.Lba2, args[1]).Load(int.Parse(args[2]));
         int first = args.Length > 3 ? int.Parse(args[3]) : 0, last = args.Length > 4 ? int.Parse(args[4]) : model.TrackPoints.Count - 1;
+        Console.WriteLine($"cube ({model.CubeX},{model.CubeY}), mode {model.CubeMode}");
         for (var i = Math.Max(0, first); i <= Math.Min(last, model.TrackPoints.Count - 1); i++)
             Console.WriteLine($"point {i}: ({model.TrackPoints[i].X}, {model.TrackPoints[i].Y}, {model.TrackPoints[i].Z})");
         return 0;
