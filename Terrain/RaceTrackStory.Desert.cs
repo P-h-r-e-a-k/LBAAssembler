@@ -1125,10 +1125,38 @@ void comportement_1()
 
     private const int MoyaEntity = 149;
     private static readonly int[] MoyaBellScenes = { 55, 203 };
+    // (and the harbour's bell, scene 64 -- the user, 2026-11-23: "The turtle appears in two places, once by the harbour and once the other
+    // side of the village near where dinofly lands": there her track comes in to label 3, surfaces (4-8) and waits (9) for her old word;
+    // 15-19 turn her round and swim her back, comportement_5 hiding her for the next ring)
+    private const int MoyaHarbour = 64;
+    // (the game's "Oh, hi Twinsen ! If you want to take a little sea trip, jump on my back!!", text 39 of the Desert's)
+    private const string MoyaOldWord = "message(39);";
+    private static readonly System.Text.RegularExpressions.Regex MoyaArrivesAtHarbour = new(
+        @"swif \(3 == l_track\(\)\)\s*\{\s*set_var_cube\(3, 0\);\s*flow_obj\(\d+, 51\);\s*\}");
     private static readonly System.Text.RegularExpressions.Regex MoyaArrives = new(
         @"if \(7 == l_track\(\)\)\s*\{\s*set_track\(label_8\);\s*flow_obj\(\d+, 51\);\s*set_comportement\(comportement_1\);\s*\}");
     private static void MoyaRefuses(IslandBeatsA b, int line)
     {
+        if (b.Store.SceneExists(MoyaHarbour))
+            b.Edit(MoyaHarbour, "Moya, called by the harbour's bell: not interested -- she turns round and swims off", model =>
+            {
+                var moya = model.Actors.FindIndex(a => a.Entity == MoyaEntity);
+                if (moya < 0) { b.Log.Add($"Moya left as she was in scene {MoyaHarbour}: no turtle (entity {MoyaEntity})"); return _ => { }; }
+                return scripts =>
+                {
+                    var life = scripts.GetText(moya, ScriptKind.Life);
+                    if (!MoyaArrivesAtHarbour.IsMatch(life)) { b.Log.Add($"Moya left as she was in scene {MoyaHarbour}: her arrival by the bell isn't the game's"); return; }
+                    // (and her old word wherever else she'd say it -- spoken to from the shore: "jump on my back!!" -- hers now)
+                    life = life.Replace(MoyaOldWord, $"message({line});");
+                    scripts.SetText(moya, ScriptKind.Life, MoyaArrivesAtHarbour.Replace(life, $@"swif (3 == l_track())
+    {{
+        message({line});
+        set_var_cube(0, 0);
+        set_track(label_15);
+        set_comportement(comportement_5);
+    }}", 1));
+                };
+            });
         foreach (var scene in MoyaBellScenes)
         {
             if (!b.Store.SceneExists(scene)) continue;
@@ -1140,6 +1168,7 @@ void comportement_1()
                 {
                     var life = scripts.GetText(moya, ScriptKind.Life);
                     if (!MoyaArrives.IsMatch(life)) { b.Log.Add($"Moya left as she was in scene {scene}: her arrival at the shore isn't the game's"); return; }
+                    life = life.Replace(MoyaOldWord, $"message({line});");
                     scripts.SetText(moya, ScriptKind.Life, MoyaArrives.Replace(life, $@"if (7 == l_track())
     {{
         message({line});
