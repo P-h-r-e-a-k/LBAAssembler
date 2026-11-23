@@ -36,12 +36,15 @@ internal static partial class RaceTrackStory
     {
         (BaitModel, new[]
         {
-            new[] { "You bought a tin of fishing bait. Felix at the harbour will want it.", "Tin of fishing bait", "A tin of lively worms from Mr. Bazoo's shop. Felix at the harbour will trade for it." },
-            new[] { "Tu as acheté une boîte d'appâts. Felix, au port, en voudra.", "Boîte d'appâts", "Une boîte de vers bien vivants de la boutique de M. Bazoo. Felix, au port, l'échangera volontiers." },
-            new[] { "Du hast eine Dose Angelköder gekauft. Felix am Hafen wird sie haben wollen.", "Dose Angelköder", "Eine Dose munterer Würmer aus Herrn Bazoos Laden. Felix am Hafen tauscht gern dafür." },
-            new[] { "Has comprado una lata de cebo. Felix, en el puerto, la querrá.", "Lata de cebo", "Una lata de gusanos bien vivos de la tienda del señor Bazoo. Felix, en el puerto, la cambiará con gusto." },
-            new[] { "Hai comprato una scatola di esche. Felix, al porto, la vorrà.", "Scatola di esche", "Una scatola di vermi vivaci dal negozio del signor Bazoo. Felix, al porto, la scambierà volentieri." },
-            new[] { "Compraste uma lata de isco. O Felix, no porto, vai querê-la.", "Lata de isco", "Uma lata de minhocas bem vivas da loja do senhor Bazoo. O Felix, no porto, troca-a de bom grado." },
+            // (who wants it left for Twinsen to find out -- 2026-11-23, the user: "'You bought a tin of fishing bait. Felix at the harbour
+            // will want it.' - this hint is too explicit and doesn't need to be there"; his own word as he buys it, "Somebody at the harbour
+            // will be glad of this", is the hint)
+            new[] { "You bought a tin of fishing bait.", "Tin of fishing bait", "A tin of lively worms from Mr. Bazoo's shop." },
+            new[] { "Tu as acheté une boîte d'appâts.", "Boîte d'appâts", "Une boîte de vers bien vivants de la boutique de M. Bazoo." },
+            new[] { "Du hast eine Dose Angelköder gekauft.", "Dose Angelköder", "Eine Dose munterer Würmer aus Herrn Bazoos Laden." },
+            new[] { "Has comprado una lata de cebo.", "Lata de cebo", "Una lata de gusanos bien vivos de la tienda del señor Bazoo." },
+            new[] { "Hai comprato una scatola di esche.", "Scatola di esche", "Una scatola di vermi vivaci dal negozio del signor Bazoo." },
+            new[] { "Compraste uma lata de isco.", "Lata de isco", "Uma lata de minhocas bem vivas da loja do senhor Bazoo." },
         }),
         (TrophyModel, new[]
         {
