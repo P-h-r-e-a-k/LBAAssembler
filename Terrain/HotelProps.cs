@@ -70,7 +70,9 @@ internal static partial class HotelProps
         (LiftInsideOpen, "the lift car's doors, open", h => BuildLiftInside(h, true)),
         (LiftCarBack, "the lift car's back wall", BuildLiftCarBack),
         (HotelBath, "a bath", BuildBath),
-        (HotelToilet, "a toilet", BuildToilet),
+        (HotelToilet, "a toilet", h => BuildToilet(h, false)),
+        (GiltToilet, "a toilet, its fittings gilt", h => BuildToilet(h, true)),
+        (SideChair, "a side chair", BuildSideChair),
         (HotelBasin, "a basin", BuildBasin),
     };
 
@@ -91,6 +93,21 @@ internal static partial class HotelProps
         HotelRug => new short[] { -10, 0, -10, 10, 4, 10 },
         Chandelier => new short[] { -10, -10, -10, 10, 10, 10 },
         Painting => new short[] { -960, -60, 0, 960, 1560, 130 },
+        // (the rooms' furniture, 2026-11-23: each its own footprint -- without one the engine gives a body a square box about its origin,
+        // half the average of its width and depth (FICHE.CPP InitBodyZV): the piano's reached 1,080 out every way, past its keyboard's end
+        // into the way to the suite's bedroom, and Twinsen couldn't pass. In the room's axes, as each is placed: the fireplace at beta 1024
+        // on its west wall, the Classic Room's toilet at 1024 on its bathroom's west wall; the gilt toilet, the bath, the basin, the piano,
+        // the four-poster and the coffee table at 0; the sofa and the chair the same at 0 and 2048)
+        GrandPiano => new short[] { -720, 0, -1800, 720, 1960, 1100 },
+        FourPoster => new short[] { -960, 0, -1100, 960, 2400, 1100 },
+        Sofa => new short[] { -990, 0, -470, 990, 960, 470 },
+        CoffeeTable => new short[] { -620, 0, -360, 620, 860, 360 },
+        Fireplace => new short[] { 0, 0, -990, 600, 2760, 990 },
+        HotelBath => new short[] { -330, 0, -650, 330, 800, 650 },
+        HotelBasin => new short[] { -380, 0, 0, 380, 1000, 580 },
+        HotelToilet => new short[] { 0, 0, -260, 715, 1030, 260 },
+        GiltToilet => new short[] { -260, 0, 0, 260, 1030, 715 },
+        SideChair => new short[] { -230, 0, -230, 230, 1000, 230 },
         _ => null,
     };
 

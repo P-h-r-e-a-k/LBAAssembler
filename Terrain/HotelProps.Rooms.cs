@@ -13,14 +13,14 @@ namespace LBAAssembler.Terrain;
 internal static partial class HotelProps
 {
     // (new bodies of entity 17: the Classic Room's bathroom, in the hotel's porcelain and gunmetal)
-    public const int HotelBath = 253, HotelToilet = 254, HotelBasin = 197;
+    public const int HotelBath = 253, HotelToilet = 254, HotelBasin = 197, SideChair = 198, GiltToilet = 199;
 
     // the finishes: the palette's ramp 3 (greys, the gunmetal and the whites), 13 (violet greys, the wardrobes' marble), 2 (peaches, the
     // armchairs' leather), 11 (slate teals, the walls' and the beds'), 6 (golds), 1 (browns)
     private static readonly Finish GunMetal = new(3 * 16 + 1, 0.95f), DarkStone = new(13 * 16 + 0, 0.6f), StoneTop = new(13 * 16 + 1, 0.7f),
         PeachLeather = new(2 * 16 + 2, 0.9f), WhiteLinen = new(3 * 16 + 6, 0.8f), TealCloth = new(11 * 16 + 2, 0.85f), DeepTeal = new(11 * 16 + 1, 0.75f),
         BlackLacquer = new(3 * 16 + 0, 0.7f), LacquerUnder = new(3 * 16 + 1, 0.6f), KeyIvory = new(3 * 16 + 8, 0.65f), GiltLeaf = new(6 * 16 + 3, 0.9f),
-        WhitePorcelain = new(3 * 16 + 7, 0.85f), WhiteGlass = new(3 * 16 + 7, 0.85f), HarpGold = new(6 * 16 + 2, 0.7f), LogWood = new(1 * 16 + 2, 0.6f), Soundboard = new(1 * 16 + 7, 0.8f);
+        WhitePorcelain = new(3 * 16 + 7, 0.85f), WhiteGlass = new(3 * 16 + 7, 0.85f), HarpGold = new(6 * 16 + 2, 0.7f), SeatIvory = new(3 * 16 + 8, 0.75f), SeatGrey = new(3 * 16 + 6, 0.75f), LogWood = new(1 * 16 + 2, 0.6f), Soundboard = new(1 * 16 + 7, 0.8f);
     private static readonly Vector3 Up = Vector3.UnitY, Ahead = Vector3.UnitZ, Right = Vector3.UnitX;
 
     private static CarMesh RoomMesh(string name) => new(name, new[] { -1 }) { Limit = 1100 };
@@ -30,14 +30,14 @@ internal static partial class HotelProps
     private static Body BuildSofa(byte[] header)
     {
         var m = RoomMesh("a leather sofa");
-        const float W = 1050, D = 460;
+        const float W = 990, D = 460;
         HotelKit.Cushion(m, new(0, 250, 0), new(W - 40, 140, D - 20), 5, PeachLeather);
         HotelKit.Cushion(m, new(0, 660, -D + 120), new(W - 150, 290, 120), 4, PeachLeather);
         foreach (var s in new[] { -1f, 1f }) HotelKit.Cushion(m, new(s * (W - 140), 450, 0), new(140, 280, D), 4, PeachLeather);
         for (var k = -1; k <= 1; k++)
         {
-            HotelKit.Cushion(m, new(k * 515, 455, 60), new(252, 75, D - 100), 4, PeachLeather);
-            HotelKit.Cushion(m, new(k * 515, 720, -D + 270), new(245, 200, 80), 3.5f, PeachLeather);
+            HotelKit.Cushion(m, new(k * 475, 455, 60), new(232, 75, D - 100), 4, PeachLeather);
+            HotelKit.Cushion(m, new(k * 475, 720, -D + 270), new(226, 200, 80), 3.5f, PeachLeather);
         }
         foreach (var (sx, sz) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
             HotelKit.Turned(m, new(sx * (W - 120), 0, sz * (D - 110)), new[] { (0f, 0f), (46f, 0f), (58f, 40f), (52f, 90f), (40f, 135f), (32f, 165f), (0f, 168f) }, 6, GunMetal);
@@ -488,17 +488,22 @@ internal static partial class HotelProps
         return m.ToBody(header);
     }
 
-    // ---- a toilet, its back on z 0 (its wall), its front +z: a white porcelain cistern and lid, bevelled, a gunmetal lever; the pedestal and
-    // bowl turned round an oval; a black lacquer seat, its lid raised against the cistern
-    private static Body BuildToilet(byte[] header)
+    // ---- a toilet, its back on z 0 (its wall), its front +z: a white porcelain cistern and lid, bevelled, its lever; the pedestal and bowl
+    // turned round an oval; the seat, its lid raised against the cistern. Gilt: the suites' bathrooms' (the game's room 169: its basin's
+    // and its bath's gold taps, rail and claw feet -- 2026-11-23, the user: "let's model one that matches the sink and bath style") -- gold
+    // fittings, a gold band round the lid, an ivory seat; else the Classic Room's, its fittings gunmetal and its seat black
+    private static Body BuildToilet(byte[] header, bool gilt)
     {
-        var m = RoomMesh("a toilet");
+        var m = RoomMesh(gilt ? "a toilet, gilt" : "a toilet");
+        var fittings = gilt ? GiltLeaf : GunMetal;
+        var seat = gilt ? SeatIvory : BlackLacquer;
         HotelKit.BevelBox(m, new(0, 830, 120), new(460, 320, 200), 30, WhitePorcelain);
         HotelKit.BevelBox(m, new(0, 1005, 120), new(500, 30, 230), 10, WhitePorcelain);
-        HotelKit.Orb(m, new(-170, 930, 222), 24, GunMetal, 6, 3);
-        m.Light = GunMetal.Light;
-        m.Strut(0, new(-170, 930, 230), new(-270, 925, 250), 16, GunMetal.Colour);
-        HotelKit.Turned(m, new(0, 520, 150), new[] { (0f, 0f), (32f, 0f), (30f, 160f), (0f, 160f) }, 6, GunMetal);
+        if (gilt) HotelKit.HardBox(m, new(0, 978, 120), new(470, 24, 210), GiltLeaf);
+        HotelKit.Orb(m, new(-170, 930, 222), 24, fittings, 6, 3);
+        m.Light = fittings.Light;
+        m.Strut(0, new(-170, 930, 230), new(-270, 925, 250), 16, fittings.Colour);
+        HotelKit.Turned(m, new(0, 520, 150), new[] { (0f, 0f), (32f, 0f), (30f, 160f), (0f, 160f) }, 6, fittings);
         var oval = new Vector3(0, 0, 1.25f);
         HotelKit.Lathe(m, new(0, 0, 420), Up, Right, oval, new[]
         {
@@ -507,8 +512,24 @@ internal static partial class HotelProps
         HotelKit.Lathe(m, new(0, 0, 420), Up, Right, oval, new[]
         {
             (196f, 408f), (240f, 410f), (252f, 422f), (244f, 438f), (220f, 444f), (190f, 440f), (178f, 426f), (196f, 408f),
-        }, 10, _ => BlackLacquer);
-        HotelKit.Cushion(m, new(0, 690, 245), new(215, 250, 20), 3, BlackLacquer, 10, 4);
+        }, 10, _ => seat);
+        HotelKit.Cushion(m, new(0, 690, 245), new(215, 250, 20), 3, seat, 10, 4);
+        if (gilt) foreach (var sx in new[] { -1f, 1f }) HotelKit.Orb(m, new(sx * 120, 452, 230), 22, GiltLeaf, 6, 3);
+        return m.ToBody(header);
+    }
+
+    // ---- a side chair in the game's own hotel style (its rooms' chairs: gunmetal posts turned in beads, a round grey seat): four turned
+    // legs, the seat, two beaded back posts with a rail and a row of beads between them; its back at -z
+    private static Body BuildSideChair(byte[] header)
+    {
+        var m = RoomMesh("a side chair");
+        foreach (var (sx, sz) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
+            HotelKit.Turned(m, new(sx * 150, 0, sz * 150), new[] { (0f, 0f), (42f, 0f), (30f, 30f), (20f, 90f), (32f, 150f), (20f, 210f), (26f, 330f), (0f, 330f) }, 6, GunMetal);
+        HotelKit.Lathe(m, new(0, 330, 0), Up, Right, Ahead, new[] { (0f, 0f), (210f, 0f), (222f, 22f), (210f, 46f), (0f, 52f) }, 12, k => k == 0 ? GunMetal : SeatGrey);
+        foreach (var sx in new[] { -1f, 1f }) HotelKit.Post(m, new(sx * 165, 330, -175), 640, 22, 3, GunMetal);
+        HotelKit.Rod(m, new(-165, 330 + 560, -175), new(165, 330 + 560, -175), 16, GunMetal);
+        foreach (var x in new[] { -80f, 0f, 80f }) HotelKit.Orb(m, new(x, 330 + 470, -175), 30, GunMetal, 6, 3);
+        HotelKit.Rod(m, new(-165, 330 + 390, -175), new(165, 330 + 390, -175), 14, GunMetal);
         return m.ToBody(header);
     }
 
