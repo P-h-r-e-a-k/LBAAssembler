@@ -53,6 +53,8 @@ internal static partial class RaceTrackStory
         JohnnyTaxi,
         // (the night at the Imperial Hotel and the coil's fetch quest -- RaceTrackStory.OtringalNight, 2026-11-22)
         MarshalHeld, MarshalNight, ReceptionOffer, RoomClassic, RoomJunior, RoomSuite, ReceptionNoRoom, ReceptionKey, ReceptionShort, ReceptionDay, ReceptionMorning, TwinsenNoKey, RoomLocked, TwinsenSleep, WakeClassic, WakeJunior, WakeSuite, TwinsenAskCoil, SellerMaybe, TwinsenWhatFavour, SellerLetter, SellerWaiting, TwinsenGiveLetter, SingerReply, SingerWaiting, SellerReplyRead, SellerAsk, SellerSold, SellerShort, SellerAfter, RickCoil, JohnnyCoil, LyraCoil, ReceptionCoil,
+        // (the singer on the stage: not now -- the letter in the back room, Rick's office: 2026-11-23)
+        SingerOnStage,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -754,6 +756,15 @@ internal static partial class RaceTrackStory
             "Me temo que el hotel no puede ayudarle con coches, señor. ¿Quizá el vendedor de gazogem de la Ciudad Baja?",
             "Temo che l'hotel non possa aiutarla con le auto, signore. Forse il venditore di gazogem della Città Bassa?",
             "Receio que o hotel não possa ajudar com carros, senhor. Talvez o vendedor de gazogem da Cidade Baixa?",
+        },
+        new[]
+        {
+            "Not now, honey, I'm on! Wait for me in the back.",
+            "Pas maintenant, mon chou, je suis en scène ! Attends-moi dans l'arrière-salle.",
+            "Nicht jetzt, Schätzchen, ich bin dran! Warte hinten auf mich.",
+            "Ahora no, cariño, ¡estoy actuando! Espérame en la trastienda.",
+            "Non adesso, tesoro, sono in scena! Aspettami nel retro.",
+            "Agora não, querido, estou em palco! Espera por mim lá atrás.",
         },
     };
 
