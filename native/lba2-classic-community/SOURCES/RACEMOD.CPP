@@ -15558,6 +15558,48 @@ static int HoverOverWater(void) {
 // (and as he comes back out on foot where he left it, over the water: straight back in it, HovercraftFrame)
 // (and in the room he left it at the door of, on foot: Kash's sea cave is entered by its water, as the game's hovering had him -- he wades)
 S32 RaceMod_HoverSea(void) { return (s_hoverOn && (Comportement == C_BUGGY || s_hoverDocked == (int)NumCube)) || (s_hoverDocked >= 0 && s_hoverDockedIn && (int)NumCube != s_hoverDocked); }
+// ---- Poker at the bowling alley's tables (BOWLMAP.TXT poker) --------------------------------------------------------------------------------
+// The user, 2026-11-22/23: "Let's see if we can make the poker tables playable in the bowling area, they both have a spare [chair], let's
+// allow twinsen to talk to them, take a seat, and get dealt into a game, let's give each poker player their own personality and betting
+// style"; "Let's make the game texas hold 'em. If Twinsen loses all his money he can't play poker any more ... Let's have the buy in to play
+// at each table different, one lower, and the other higher"; "If Twinsen runs out of zilitos he should have to leave the game, if he gets
+// more zilitos he should be able to buy back in to a game again"; "Keep those stakes".
+//   poker <x> <z> <seat x> <seat y> <seat z> <seat beta> <sit anim> <buy-in> <small> <big> <ask var> <ask value> <style W> <style N> <style E>
+//         <actor W> <actor N> <actor E> <name W>|<name N>|<name E>
+// (in the bowling alley's scene, BOWLMAP's scene line.) His word with one of a table's three players -- their scripts ask, and check his
+// zlitos -- sets <ask var> to <ask value>: the buy-in taken, he sits in the empty chair (south) and is dealt in. Texas hold 'em, no limit:
+// the blinds, two cards each, the flop, the turn, the river, a round of bets after each, the best five of seven at the showdown, side pots
+// for anyone all in. Between hands he deals again or leaves, his chips back into zlitos; out of chips he must leave; with zlitos again he can
+// buy back in. Each player plays his style: 0 tight and careful, 1 a bluffer, 2 a calling station, 3 an aggressive raiser, 4 a calculator,
+// 5 reckless -- his chances his own guess (the cards he can't see dealt out a few dozen times), weighed against the pot's odds his way, and
+// a word now and then.
+#define RACE_PK_TABLES 2
+#define RACE_PK_THINK_MS 1100
+#define RACE_PK_TALK_MS 2800
+#define RACE_PK_TRIALS 90
+#define RACE_PK_REPEAT_MS 110
+typedef struct {
+    S32 X, Z, SeatX, SeatY, SeatZ, SeatBeta, SitAnim, BuyIn, Small, Big, AskVar, AskValue;
+    int Style[3], Actor[3];
+    char Name[3][24];
+} T_RACE_PK_TABLE;
+typedef struct { S32 Chips, Bet, Put, Won; int Card[2], Folded, AllIn, Acted; char Last[28]; } T_RACE_PK_PLAYER;
+static T_RACE_PK_TABLE s_pkTables[RACE_PK_TABLES];
+static int s_nbPk = 0;
+static int s_pk = -1;                       // the table Twinsen sits at (-1: none)
+static T_RACE_PK_PLAYER s_pkP[4];           // 0 Twinsen (south), 1-3 the west, north and east players
+static int s_pkDeck[52], s_pkDeckAt = 0, s_pkBoard[5], s_pkNBoard = 0, s_pkDealer = 0, s_pkTurn = -1, s_pkStage = 0;
+static S32 s_pkPot = 0, s_pkHigh = 0, s_pkMinRaise = 0, s_pkAt = 0, s_pkRaiseTo = 0, s_pkRepeatAt = 0;
+static int s_pkState = 0;                   // 0 a hand's betting, 1 a hand over (its result shown), 2 out of chips (to leave)
+static int s_pkPick = 1, s_pkActWas = 1, s_pkKeysWas = 0, s_pkShow[4];
+static char s_pkResult[120], s_pkTalk[120];
+static S32 s_pkTalkUntil = 0;
+static U32 s_pkInput = 0, s_pkSeed = 20261123u, s_pkFallable = 0;
+static S32 s_pkFromX = 0, s_pkFromY = 0, s_pkFromZ = 0, s_pkFromBeta = 0;
+
+static int PokerSeated(void) { return s_pk >= 0; }
+static void BowlLoad(void);
+
 U32 RaceMod_FilterInput(U32 input) {
     s_pressAnswered = 0;
     // (seated: Action stands him up, that press no one else's -- SeatPress; and no one's till it is let go -- the key read as it came,
@@ -15589,12 +15631,14 @@ U32 RaceMod_FilterInput(U32 input) {
     s_poolInput = input;
     s_bowlInput = input;
     s_dtInput = input;
+    s_pkInput = input;
     // (a plaque on the screen: its keys -- Action, Esc -- close it; nothing else moves Twinsen or opens a menu meanwhile: PlaqueFrame)
     // (and the key that closed it, still down, reaches nothing either -- the slate's Action would open it again, Esc the menu -- until let go)
     s_plaqueInput = input;
     if (s_plaqueEat && !(input & (I_ACTION_M | I_ACTION_ALWAYS | I_MENUS))) s_plaqueEat = 0;
     if (s_plaqueOn >= 0 || s_plaqueEat) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS | I_MENUS | I_COMPORTEMENT | I_INVENTORY | I_HOLOMAP);
     if (s_dtOn && (S32)NumCube == s_dtScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
+    if (s_pk >= 0) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS | I_ACTION | I_INVENTORY | I_HOLOMAP | I_COMPORTEMENT);
     if (s_bowlGame >= 0 && s_bowlInit && (S32)NumCube == s_blScene) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
     if (s_nbPools && !s_swimming && !s_poolDive && PoolBoardDive(input)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M);
     if (s_nbPools && (s_swimming || s_poolDive)) input &= ~(U32)(I_JOY | I_FIRE | I_ESQUIVE | I_ACTION_M | I_ACTION_ALWAYS);
@@ -19980,8 +20024,8 @@ static int ZoeGen(int heroGen) { return heroGen == GEN_ANIM_MARCHE || heroGen ==
 
 // Whether a life script's action() sees the Action key: player 2's Zoe talks to no one but herself -- the companion's hint lines
 int RaceMod_ActionFor(const T_OBJET *obj) {
-    // (the press that stood him up from a seat: no one's -- SeatPress)
-    if (s_seatSwallow || TimerRefHR < s_seatQuietUntil) return 0;
+    // (the press that stood him up from a seat: no one's -- SeatPress; and at the poker table, the cards' -- PokerFrame)
+    if (s_seatSwallow || TimerRefHR < s_seatQuietUntil || PokerSeated()) return 0;
     if (!RaceGame_StoryZoe() || s_compEntity < 0) return 1;
     return obj->IndexFile3D == s_compEntity && (obj->Armure == s_compMark || obj->Armure == s_compInMark);
 }
@@ -20603,6 +20647,554 @@ static void AchievementsFrame(S32 now) {
 #define BOWL_PINS 6
 static void HudCentred(S32 w, S32 y, const char *text, int up);
 static void HudLine(S32 x, S32 y, const char *text, int align);
+static void PkParse(const char *v) {
+    if (s_nbPk >= RACE_PK_TABLES) return;
+    T_RACE_PK_TABLE *t = &s_pkTables[s_nbPk];
+    memset(t, 0, sizeof(*t));
+    int used = 0;
+    if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %n", &t->X, &t->Z, &t->SeatX, &t->SeatY, &t->SeatZ, &t->SeatBeta, &t->SitAnim,
+               &t->BuyIn, &t->Small, &t->Big, &t->AskVar, &t->AskValue, &t->Style[0], &t->Style[1], &t->Style[2], &t->Actor[0], &t->Actor[1],
+               &t->Actor[2], &used) < 18 || !used) return;
+    const char *p = v + used;
+    for (int i = 0; i < 3; i++) {
+        int k = 0;
+        while (*p && *p != '|' && *p != '\n' && *p != '\r' && k < (int)sizeof(t->Name[i]) - 1) t->Name[i][k++] = *p++;
+        t->Name[i][k] = 0;
+        while (*p && *p != '|' && *p != '\n') p++;
+        if (*p == '|') p++;
+    }
+    s_nbPk++;
+}
+static U32 PkRnd(void) { s_pkSeed = s_pkSeed * 1664525u + 1013904223u; return s_pkSeed >> 8; }
+static double PkRndF(void) { return (PkRnd() & 0xFFFF) / 65536.0; }
+static S32 *PkPurse(void) { return MONEY_ZLITOS ? &NbZlitosPieces : &NbGoldPieces; }
+static const char *PkName(int i) { return i == 0 ? "Twinsen" : s_pkTables[s_pk].Name[i - 1]; }
+static void PkSay(S32 now, int who, const char *text) {
+    snprintf(s_pkTalk, sizeof(s_pkTalk), "%s: %s", PkName(who), text);
+    s_pkTalkUntil = now + RACE_PK_TALK_MS;
+}
+
+// A hand's worth: the best five of `n` cards (0-51: rank c % 13, 0 a two ... 12 an ace; suit c / 13), its kind and then its ranks in order
+// of weight, as one number -- the higher the better. Kinds: 0 high card, 1 a pair, 2 two pairs, 3 three of a kind, 4 a straight, 5 a flush,
+// 6 a full house, 7 four of a kind, 8 a straight flush.
+static int PkStraightTop(int mask) {
+    for (int top = 12; top >= 4; top--) if ((mask >> (top - 4) & 31) == 31) return top;
+    if ((mask & 0x100F) == 0x100F) return 3;          // (the wheel: A 2 3 4 5)
+    return -1;
+}
+static int PkValue(int kind, const int *r, int n) {
+    int v = kind;
+    for (int i = 0; i < 5; i++) v = v * 13 + (i < n ? r[i] : 0);
+    return v;
+}
+static int PkEval(const int *cards, int n) {
+    int cnt[13] = {0}, sc[4] = {0}, smask[4] = {0}, mask = 0;
+    for (int i = 0; i < n; i++) { const int r = cards[i] % 13, s = cards[i] / 13; cnt[r]++; sc[s]++; smask[s] |= 1 << r; mask |= 1 << r; }
+    for (int s = 0; s < 4; s++)
+        if (sc[s] >= 5) {
+            const int top = PkStraightTop(smask[s]);
+            if (top >= 0) { const int r[1] = {top}; return PkValue(8, r, 1); }
+            int r[5], k = 0;
+            for (int x = 12; x >= 0 && k < 5; x--) if (smask[s] >> x & 1) r[k++] = x;
+            return PkValue(5, r, 5);
+        }
+    int quad = -1, trips[2] = {-1, -1}, pairs[3] = {-1, -1, -1}, nt = 0, np = 0;
+    for (int x = 12; x >= 0; x--) {
+        if (cnt[x] == 4 && quad < 0) quad = x;
+        else if (cnt[x] == 3 && nt < 2) trips[nt++] = x;
+        else if (cnt[x] == 2 && np < 3) pairs[np++] = x;
+    }
+    if (quad >= 0) {
+        int r[2] = {quad, 0};
+        for (int x = 12; x >= 0; x--) if (x != quad && cnt[x]) { r[1] = x; break; }
+        return PkValue(7, r, 2);
+    }
+    if (nt >= 1 && (nt >= 2 || np >= 1)) { const int r[2] = {trips[0], nt >= 2 ? trips[1] : pairs[0]}; return PkValue(6, r, 2); }
+    const int st = PkStraightTop(mask);
+    if (st >= 0) { const int r[1] = {st}; return PkValue(4, r, 1); }
+    if (nt >= 1) {
+        int r[3] = {trips[0], 0, 0}, k = 1;
+        for (int x = 12; x >= 0 && k < 3; x--) if (x != trips[0] && cnt[x]) r[k++] = x;
+        return PkValue(3, r, 3);
+    }
+    if (np >= 2) {
+        int r[3] = {pairs[0], pairs[1], 0};
+        for (int x = 12; x >= 0; x--) if (x != pairs[0] && x != pairs[1] && cnt[x]) { r[2] = x; break; }
+        return PkValue(2, r, 3);
+    }
+    if (np == 1) {
+        int r[4] = {pairs[0], 0, 0, 0}, k = 1;
+        for (int x = 12; x >= 0 && k < 4; x--) if (x != pairs[0] && cnt[x]) r[k++] = x;
+        return PkValue(1, r, 4);
+    }
+    int r[5], k = 0;
+    for (int x = 12; x >= 0 && k < 5; x--) if (cnt[x]) r[k++] = x;
+    return PkValue(0, r, 5);
+}
+static const char *PkKindName(int value) {
+    static const char *const names[9] = {"a high card", "a pair", "two pairs", "three of a kind", "a straight", "a flush", "a full house",
+                                         "four of a kind", "a straight flush"};
+    int kind = value;
+    for (int i = 0; i < 5; i++) kind /= 13;
+    return names[kind < 0 ? 0 : kind > 8 ? 8 : kind];
+}
+static int PkBest(int p) {
+    int c[7], n = 0;
+    c[n++] = s_pkP[p].Card[0]; c[n++] = s_pkP[p].Card[1];
+    for (int i = 0; i < s_pkNBoard; i++) c[n++] = s_pkBoard[i];
+    return PkEval(c, n);
+}
+// His guess at his chances: the cards he can't see dealt out RACE_PK_TRIALS times, against `rivals` hands
+static double PkEquity(int p, int rivals) {
+    int known[7], nk = 0;
+    known[nk++] = s_pkP[p].Card[0]; known[nk++] = s_pkP[p].Card[1];
+    for (int i = 0; i < s_pkNBoard; i++) known[nk++] = s_pkBoard[i];
+    int rest[52], nr = 0;
+    for (int c = 0; c < 52; c++) {
+        int k = 0;
+        for (; k < nk && known[k] != c; k++) {}
+        if (k == nk) rest[nr++] = c;
+    }
+    double won = 0;
+    const int need = (5 - s_pkNBoard) + 2 * rivals;
+    for (int t = 0; t < RACE_PK_TRIALS; t++) {
+        for (int i = 0; i < need && i < nr; i++) { const int j = i + (int)(PkRnd() % (U32)(nr - i)); const int x = rest[i]; rest[i] = rest[j]; rest[j] = x; }
+        int board[5], nb = 0, at = 0;
+        for (int i = 0; i < s_pkNBoard; i++) board[nb++] = s_pkBoard[i];
+        while (nb < 5) board[nb++] = rest[at++];
+        const int mine[7] = {s_pkP[p].Card[0], s_pkP[p].Card[1], board[0], board[1], board[2], board[3], board[4]};
+        const int my = PkEval(mine, 7);
+        int best = 1, tied = 0;
+        for (int r = 0; r < rivals && best; r++) {
+            const int theirs[7] = {rest[at], rest[at + 1], board[0], board[1], board[2], board[3], board[4]};
+            at += 2;
+            const int v = PkEval(theirs, 7);
+            if (v > my) best = 0; else if (v == my) tied++;
+        }
+        if (best) won += tied ? 1.0 / (tied + 1) : 1.0;
+    }
+    return won / RACE_PK_TRIALS;
+}
+static int PkInHand(void) { int n = 0; for (int i = 0; i < 4; i++) if (!s_pkP[i].Folded) n++; return n; }
+// (others still able to answer a raise: in the hand, not all in)
+static int PkCanAnswer(int p) { for (int i = 0; i < 4; i++) if (i != p && !s_pkP[i].Folded && !s_pkP[i].AllIn) return 1; return 0; }
+static void PkPut(int p, S32 amount) {
+    T_RACE_PK_PLAYER *q = &s_pkP[p];
+    if (amount > q->Chips) amount = q->Chips;
+    if (amount < 0) amount = 0;
+    q->Chips -= amount; q->Bet += amount; q->Put += amount; s_pkPot += amount;
+    if (q->Chips == 0) q->AllIn = 1;
+}
+static int PkNext(int from) {
+    for (int k = 1; k <= 4; k++) { const int i = (from + k) % 4; if (!s_pkP[i].Folded && !s_pkP[i].AllIn) return i; }
+    return -1;
+}
+static void PkStartHand(S32 now) {
+    const T_RACE_PK_TABLE *t = &s_pkTables[s_pk];
+    // (one of the table's down to less than the big blind: another stack from his own deep pockets)
+    for (int i = 1; i < 4; i++)
+        if (s_pkP[i].Chips < t->Big) {
+            s_pkP[i].Chips += t->BuyIn;
+            static const char *const rebuy[6] = {"Hm. Another stack, carefully.", "Just warming up! Another stack.", "Deal me in again, I'm due.",
+                                                 "Another stack -- and no mercy this time.", "Statistically, I'm owed. Another stack.", "More chips! Bring me more chips!"};
+            PkSay(now, i, rebuy[t->Style[i - 1] % 6]);
+        }
+    for (int i = 0; i < 52; i++) s_pkDeck[i] = i;
+    for (int i = 51; i > 0; i--) { const int j = (int)(PkRnd() % (U32)(i + 1)); const int x = s_pkDeck[i]; s_pkDeck[i] = s_pkDeck[j]; s_pkDeck[j] = x; }
+    s_pkDeckAt = 0;
+    s_pkPot = 0; s_pkNBoard = 0; s_pkStage = 0; s_pkState = 0; s_pkResult[0] = 0;
+    for (int i = 0; i < 4; i++) {
+        T_RACE_PK_PLAYER *q = &s_pkP[i];
+        q->Bet = q->Put = q->Won = 0; q->Folded = 0; q->AllIn = 0; q->Acted = 0; q->Last[0] = 0;
+        q->Card[0] = s_pkDeck[s_pkDeckAt++]; q->Card[1] = s_pkDeck[s_pkDeckAt++];
+        s_pkShow[i] = i == 0;
+    }
+    s_pkDealer = (s_pkDealer + 1) % 4;
+    const int sb = (s_pkDealer + 1) % 4, bb = (s_pkDealer + 2) % 4;
+    PkPut(sb, t->Small); snprintf(s_pkP[sb].Last, sizeof(s_pkP[sb].Last), "small blind %d", (int)s_pkP[sb].Bet);
+    PkPut(bb, t->Big); snprintf(s_pkP[bb].Last, sizeof(s_pkP[bb].Last), "big blind %d", (int)s_pkP[bb].Bet);
+    s_pkHigh = t->Big; s_pkMinRaise = t->Big;
+    s_pkTurn = PkNext(bb);
+    s_pkAt = now; s_pkPick = 1; s_pkRaiseTo = 0;
+    Log_Info("[racemod] poker: a hand -- the dealer %s, blinds %d/%d, Twinsen has %d", PkName(s_pkDealer), (int)t->Small, (int)t->Big, (int)s_pkP[0].Chips);
+}
+// The hand over: each layer of the pot (a side pot for anyone all in for less) to the best hand among those who put into it, shared on a
+// tie; or the whole pot to the last one in
+static void PkShowdown(S32 now) {
+    const int contested = PkInHand() > 1;
+    int value[4] = {0};
+    for (int i = 0; i < 4; i++) if (!s_pkP[i].Folded) { value[i] = contested ? PkBest(i) : 0; if (contested) s_pkShow[i] = 1; }
+    S32 prev = 0, given = 0;
+    for (;;) {
+        // (the next level up: the smallest stake still above the last one, among those in)
+        S32 level = 0x7FFFFFFF;
+        for (int i = 0; i < 4; i++) if (!s_pkP[i].Folded && s_pkP[i].Put > prev && s_pkP[i].Put < level) level = s_pkP[i].Put;
+        if (level == 0x7FFFFFFF) break;
+        S32 layer = 0;
+        for (int i = 0; i < 4; i++) {
+            const S32 a = s_pkP[i].Put < level ? s_pkP[i].Put : level, b = s_pkP[i].Put < prev ? s_pkP[i].Put : prev;
+            layer += a - b;
+        }
+        int best = -1, winners[4], nw = 0;
+        for (int i = 0; i < 4; i++) {
+            if (s_pkP[i].Folded || s_pkP[i].Put < level) continue;
+            if (value[i] > best) { best = value[i]; nw = 0; }
+            if (value[i] == best) winners[nw++] = i;
+        }
+        for (int k = 0; k < nw; k++) s_pkP[winners[k]].Won += layer / nw;
+        if (nw) s_pkP[winners[0]].Won += layer - layer / nw * nw;
+        given += layer;
+        prev = level;
+    }
+    // (anything left -- folded chips above every stake still in: to the best hand in)
+    if (given < s_pkPot) {
+        int best = -1, w = -1;
+        for (int i = 0; i < 4; i++) if (!s_pkP[i].Folded && value[i] > best) { w = i; best = value[i]; }
+        if (w >= 0) s_pkP[w].Won += s_pkPot - given;
+    }
+    int top = -1;
+    for (int i = 0; i < 4; i++) { s_pkP[i].Chips += s_pkP[i].Won; if (s_pkP[i].Won > 0 && (top < 0 || s_pkP[i].Won > s_pkP[top].Won)) top = i; }
+    int split = 0;
+    for (int i = 0; i < 4; i++) if (i != top && s_pkP[i].Won > 0) split = 1;
+    if (top >= 0) {
+        const char *who = top == 0 ? "You" : PkName(top), *verb = top == 0 ? "win" : "wins";
+        if (!contested) snprintf(s_pkResult, sizeof(s_pkResult), "%s %s the pot, %d", who, top == 0 ? "take" : "takes", (int)s_pkPot);
+        else if (split) snprintf(s_pkResult, sizeof(s_pkResult), "%s %s %d with %s -- shared", who, verb, (int)s_pkP[top].Won, PkKindName(value[top]));
+        else snprintf(s_pkResult, sizeof(s_pkResult), "%s %s %d with %s", who, verb, (int)s_pkP[top].Won, PkKindName(value[top]));
+    }
+    Log_Info("[racemod] poker: %s (Twinsen %d, %s %d, %s %d, %s %d)", s_pkResult, (int)s_pkP[0].Chips, PkName(1), (int)s_pkP[1].Chips, PkName(2),
+             (int)s_pkP[2].Chips, PkName(3), (int)s_pkP[3].Chips);
+    // (the winner's word: his style's)
+    if (top > 0) {
+        static const char *const won[6] = {"Slow and steady takes the pot.", "Never trust a smile at this table!", "See? Calling always pays.",
+                                           "That's how you play it. Hard.", "Exactly as I worked it out.", "Ha! Easy come, easy go -- mostly come!"};
+        PkSay(now, top, won[s_pkTables[s_pk].Style[top - 1] % 6]);
+    } else if (top == 0 && contested) {
+        static const char *const lost[3] = {"Beginner's luck, that's all.", "Hmph. Deal again.", "Well played, young man."};
+        PkSay(now, 1 + (int)(PkRnd() % 3), lost[PkRnd() % 3]);
+    }
+    s_pkPot = 0;
+    s_pkState = s_pkP[0].Chips > 0 ? 1 : 2;
+    s_pkPick = 0;
+    s_pkTurn = -1;
+    s_pkAt = now;
+}
+// The betting round over: the next card or cards out, or the showdown
+static void PkNextStage(S32 now) {
+    for (int i = 0; i < 4; i++) { s_pkP[i].Bet = 0; s_pkP[i].Acted = 0; if (!s_pkP[i].Folded && !s_pkP[i].AllIn) s_pkP[i].Last[0] = 0; }
+    s_pkHigh = 0; s_pkMinRaise = s_pkTables[s_pk].Big;
+    if (s_pkStage >= 3) { PkShowdown(now); return; }
+    s_pkStage++;
+    const int n = s_pkStage == 1 ? 3 : 1;
+    s_pkDeckAt++;                           // (the burnt card)
+    for (int k = 0; k < n; k++) s_pkBoard[s_pkNBoard++] = s_pkDeck[s_pkDeckAt++];
+    s_pkTurn = PkNext(s_pkDealer);
+    // (no betting left -- everyone in but one at most all in: the rest of the board dealt out, a moment between)
+    int canBet = 0;
+    for (int i = 0; i < 4; i++) if (!s_pkP[i].Folded && !s_pkP[i].AllIn) canBet++;
+    if (canBet <= 1) s_pkTurn = -1;
+    s_pkAt = now; s_pkRaiseTo = 0;
+}
+static int PkRoundDone(void) {
+    for (int i = 0; i < 4; i++) {
+        const T_RACE_PK_PLAYER *q = &s_pkP[i];
+        if (q->Folded || q->AllIn) continue;
+        if (!q->Acted || q->Bet != s_pkHigh) return 0;
+    }
+    return 1;
+}
+// One player's move: 0 fold, 1 check or call, 2 raise to `to` (all in at most)
+static void PkAct(S32 now, int p, int move, S32 to) {
+    T_RACE_PK_PLAYER *q = &s_pkP[p];
+    const S32 call = s_pkHigh - q->Bet, most = q->Bet + q->Chips;
+    if (move == 0 && call <= 0) move = 1;   // (nothing to call: a check, not a fold)
+    if (move == 2) {
+        if (!PkCanAnswer(p) || most <= s_pkHigh) move = 1;
+        else {
+            if (to > most) to = most;
+            if (to < s_pkHigh + s_pkMinRaise) to = s_pkHigh + s_pkMinRaise <= most ? s_pkHigh + s_pkMinRaise : most;
+        }
+    }
+    if (move == 0) { q->Folded = 1; snprintf(q->Last, sizeof(q->Last), "folds"); }
+    else if (move == 1) {
+        PkPut(p, call > 0 ? call : 0);
+        if (call <= 0) snprintf(q->Last, sizeof(q->Last), "checks");
+        else if (q->AllIn) snprintf(q->Last, sizeof(q->Last), "calls, all in");
+        else snprintf(q->Last, sizeof(q->Last), "calls %d", (int)call);
+    } else {
+        const int opens = s_pkHigh == 0;
+        if (to - s_pkHigh > s_pkMinRaise) s_pkMinRaise = to - s_pkHigh;
+        s_pkHigh = to;
+        PkPut(p, to - q->Bet);
+        if (q->AllIn) snprintf(q->Last, sizeof(q->Last), "all in, %d", (int)to);
+        else if (opens) snprintf(q->Last, sizeof(q->Last), "bets %d", (int)to);
+        else snprintf(q->Last, sizeof(q->Last), "raises to %d", (int)to);
+        for (int i = 0; i < 4; i++) if (i != p) s_pkP[i].Acted = 0;
+    }
+    q->Acted = 1;
+    Log_Info("[racemod] poker: %s %s", PkName(p), q->Last);
+    s_pkAt = now;
+    if (PkInHand() <= 1) { PkShowdown(now); return; }
+    if (PkRoundDone()) { PkNextStage(now); return; }
+    s_pkTurn = PkNext(p);
+    if (s_pkTurn < 0) PkNextStage(now);
+}
+// A player of the table's turn: his style's way with his chances and the pot's odds
+static void PkThink(S32 now, int p) {
+    const T_RACE_PK_TABLE *t = &s_pkTables[s_pk];
+    const int style = t->Style[p - 1] % 6;
+    // (by style: how much better than the pot's odds he wants his chances to call, his chances to raise, how often he bluffs, how big he bets)
+    static const double margin[6] = {0.10, 0.03, -0.14, 0.0, 0.0, -0.18}, raiseAt[6] = {0.72, 0.58, 0.88, 0.50, 0.62, 0.45},
+                        bluff[6] = {0.02, 0.22, 0.01, 0.12, 0.04, 0.15}, size[6] = {0.5, 0.75, 0.5, 0.9, 0.6, 1.3};
+    const T_RACE_PK_PLAYER *q = &s_pkP[p];
+    const S32 call = s_pkHigh - q->Bet;
+    int rivals = PkInHand() - 1;
+    if (rivals < 1) rivals = 1;
+    const double eq = PkEquity(p, rivals), odds = call > 0 ? (double)call / (double)(s_pkPot + call) : 0.0, r = PkRndF();
+    int move;
+    S32 to = 0;
+    if ((eq >= raiseAt[style] || r < bluff[style]) && PkCanAnswer(p)) {
+        move = 2;
+        S32 bet = (S32)((s_pkPot + call) * size[style]);
+        if (bet < s_pkMinRaise) bet = s_pkMinRaise;
+        bet = (bet + t->Big - 1) / t->Big * t->Big;
+        to = s_pkHigh + bet;
+        // (the reckless one shoves now and then; anyone with a monster, near the end)
+        if ((style == 5 && PkRndF() < 0.10) || (eq > 0.9 && s_pkStage >= 2)) to = q->Bet + q->Chips;
+        // (the careful ones don't raise a big raise without the goods)
+        if ((style == 0 || style == 4) && call > t->Big * 4 && eq < raiseAt[style] + 0.1) move = 1;
+    } else if (call <= 0) move = 1;
+    else move = eq >= odds + margin[style] ? 1 : 0;
+    // (the calling station hates to fold a small bet)
+    if (move == 0 && style == 2 && call <= t->Big * 3) move = 1;
+    if (PkRndF() < 0.25) {
+        static const char *const folds[6] = {"Not with these.", "Bah. Take it.", "Even I can't call that.", "Fine. Fine!", "The numbers say no.", "Boring hand anyway."};
+        static const char *const calls[6] = {"I'll see that.", "Let's see where this goes...", "I always call!", "Just this once.", "Worth a look.", "Why not!"};
+        static const char *const raises[6] = {"I like these cards.", "Feeling lucky? I am!", "Alright, a little more.", "Raise! Keep up if you can.", "The odds favour me.", "Let's make it interesting!"};
+        const char *const *set = move == 0 ? folds : move == 1 ? calls : raises;
+        if (move != 1 || call > 0) PkSay(now, p, set[style]);
+    }
+    PkAct(now, p, move, to);
+}
+// Twinsen out of his seat: his chips back into zlitos, he back where he stood
+static void PkLeave(const char *why) {
+    S32 *purse = PkPurse();
+    *purse += s_pkP[0].Chips;
+    if (*purse > MAX_MONEY) *purse = MAX_MONEY;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    hero->Obj.X = s_pkFromX; hero->Obj.Y = s_pkFromY; hero->Obj.Z = s_pkFromZ; hero->Obj.Beta = s_pkFromBeta;
+    ClearRealAngle(hero);
+    hero->Flags |= s_pkFallable;
+    hero->Move = MOVE_MANUAL;
+    InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+    // (the key that left, still down, is no one's: the player he faces would ask him to sit again)
+    s_seatSwallow = 1; s_seatQuietUntil = TimerRefHR + 400; ActionNormal = FALSE;
+    Log_Info("[racemod] poker: Twinsen leaves the table (%s) -- %d chips back, %d in his purse", why, (int)s_pkP[0].Chips, (int)*purse);
+    s_pkP[0].Chips = 0;
+    s_pk = -1;
+}
+static void PokerFrame(S32 now) {
+    if (CubeMode == CUBE_INTERIEUR && NewCube == -1) BowlLoad();
+    if (!s_nbPk || s_blScene < 0) return;
+    if (s_pk < 0) {
+        // sat down: his word with a player set the table's variable -- the buy-in taken, his seat
+        if (CubeMode != CUBE_INTERIEUR || NewCube != -1 || (int)NumCube != s_blScene) return;
+        for (int k = 0; k < s_nbPk; k++) {
+            const T_RACE_PK_TABLE *t = &s_pkTables[k];
+            if (t->AskVar < 0 || t->AskVar >= MAX_VARS_GAME || ListVarGame[t->AskVar] != t->AskValue) continue;
+            ListVarGame[t->AskVar] = 0;
+            S32 *purse = PkPurse();
+            if (*purse < t->BuyIn) { Log_Info("[racemod] poker: a seat asked for, but %d in his purse (the buy-in %d)", (int)*purse, (int)t->BuyIn); continue; }
+            *purse -= t->BuyIn;
+            s_pk = k;
+            memset(s_pkP, 0, sizeof(s_pkP));
+            for (int i = 0; i < 4; i++) s_pkP[i].Chips = t->BuyIn;
+            T_OBJET *hero = &ListObjet[NUM_PERSO];
+            s_pkFromX = hero->Obj.X; s_pkFromY = hero->Obj.Y; s_pkFromZ = hero->Obj.Z; s_pkFromBeta = hero->Obj.Beta;
+            s_pkFallable = hero->Flags & OBJ_FALLABLE;
+            hero->Flags &= ~OBJ_FALLABLE;
+            hero->Obj.X = t->SeatX; hero->Obj.Y = t->SeatY; hero->Obj.Z = t->SeatZ; hero->Obj.Beta = t->SeatBeta & 4095;
+            ClearRealAngle(hero);
+            hero->Move = NO_MOVE;
+            if (t->SitAnim >= 0) InitAnim((U16)t->SitAnim, ANIM_REPEAT, NUM_PERSO);
+            s_pkSeed ^= (U32)now * 2654435761u;
+            s_pkDealer = (int)(PkRnd() % 4);
+            s_pkActWas = 1; s_pkKeysWas = (int)(s_pkInput & (I_LEFT | I_RIGHT | I_UP | I_DOWN));
+            s_pkTalk[0] = 0;
+            Log_Info("[racemod] poker: Twinsen sits at the table of %s, %s and %s -- a buy-in of %d (blinds %d/%d)", t->Name[0], t->Name[1], t->Name[2],
+                     (int)t->BuyIn, (int)t->Small, (int)t->Big);
+            PkStartHand(now);
+            return;
+        }
+        return;
+    }
+    if ((int)NumCube != s_blScene || NewCube != -1) {
+        ListObjet[NUM_PERSO].Flags |= s_pkFallable;
+        s_pk = -1;
+        return;
+    }
+    // (held in his seat)
+    const T_RACE_PK_TABLE *t = &s_pkTables[s_pk];
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    hero->Obj.X = t->SeatX; hero->Obj.Y = t->SeatY; hero->Obj.Z = t->SeatZ; hero->Obj.Beta = t->SeatBeta & 4095;
+    hero->WorkFlags &= ~FALLING;
+    hero->Move = NO_MOVE;
+    const int act = ActionHeld(s_pkInput, 1) || (s_pkInput & I_RETURN), pressed = act && !s_pkActWas;
+    s_pkActWas = act;
+    const int keys = (int)(s_pkInput & (I_LEFT | I_RIGHT | I_UP | I_DOWN));
+    int edge = keys & ~s_pkKeysWas;
+    // (Up, Down held: they repeat, after a moment)
+    if (edge & (I_UP | I_DOWN)) s_pkRepeatAt = now + 300;
+    else if ((keys & (I_UP | I_DOWN)) && now >= s_pkRepeatAt) { edge |= keys & (I_UP | I_DOWN); s_pkRepeatAt = now + RACE_PK_REPEAT_MS; }
+    s_pkKeysWas = keys;
+    if (s_pkState == 0) {
+        if (s_pkTurn < 0) { if (now - s_pkAt > RACE_PK_THINK_MS) PkNextStage(now); return; }
+        if (s_pkTurn > 0) { if (now - s_pkAt > RACE_PK_THINK_MS) PkThink(now, s_pkTurn); return; }
+        // his turn: Left, Right -- fold, check or call, raise; Up, Down the raise; Action plays it
+        const T_RACE_PK_PLAYER *q = &s_pkP[0];
+        const S32 call = s_pkHigh - q->Bet, most = q->Bet + q->Chips;
+        const int canRaise = most > s_pkHigh && PkCanAnswer(0);
+        const S32 least = s_pkHigh + s_pkMinRaise <= most ? s_pkHigh + s_pkMinRaise : most;
+        if (!s_pkRaiseTo) s_pkRaiseTo = least;
+        if (edge & I_LEFT) s_pkPick = s_pkPick > 0 ? s_pkPick - 1 : 0;
+        if (edge & I_RIGHT) s_pkPick = s_pkPick < (canRaise ? 2 : 1) ? s_pkPick + 1 : s_pkPick;
+        if (call <= 0 && s_pkPick == 0) s_pkPick = 1;
+        if (!canRaise && s_pkPick == 2) s_pkPick = 1;
+        if (s_pkPick == 2) {
+            if (edge & I_UP) s_pkRaiseTo += t->Big;
+            if (edge & I_DOWN) s_pkRaiseTo -= t->Big;
+            if (s_pkRaiseTo > most) s_pkRaiseTo = most;
+            if (s_pkRaiseTo < least) s_pkRaiseTo = least;
+        }
+        if (pressed && now - s_pkAt > 300) { const int move = s_pkPick; const S32 to = s_pkRaiseTo; s_pkRaiseTo = 0; s_pkPick = 1; PkAct(now, 0, move, to); }
+        return;
+    }
+    // between hands: deal again or leave; out of chips, leave
+    if (s_pkState == 1) {
+        if (edge & (I_LEFT | I_UP)) s_pkPick = 0;
+        if (edge & (I_RIGHT | I_DOWN)) s_pkPick = 1;
+        if (pressed && now - s_pkAt > 600) { if (s_pkPick == 0) PkStartHand(now); else PkLeave("he got up"); }
+        return;
+    }
+    if (pressed && now - s_pkAt > 600) PkLeave("out of chips");
+}
+// The cards: white, the rank and the suit's sign in red or black; or the back, blue. (The HUD's small text is about 25 pixels high, drawn 7
+// under the y it is given: HudSmallIn)
+static void PkSuit(S32 x, S32 y, int suit, int colour, int dot) {
+    // (7 x 7: hearts, diamonds, clubs, spades -- each dot `dot` square)
+    static const char *const glyph[4][7] = {
+        {".##.##.", "#######", "#######", ".#####.", "..###..", "...#...", "......."},
+        {"...#...", "..###..", ".#####.", "#######", ".#####.", "..###..", "...#..."},
+        {"..###..", "..###..", "##.#.##", "#######", "##.#.##", "...#...", "..###.."},
+        {"...#...", "..###..", ".#####.", "#######", "#######", "..#.#..", "..###.."},
+    };
+    for (int r = 0; r < 7; r++)
+        for (int c = 0; c < 7; c++)
+            if (glyph[suit][r][c] == '#') Box(x + c * dot, y + r * dot, x + c * dot + dot - 1, y + r * dot + dot - 1, colour);
+}
+static void PkCard(S32 x, S32 y, int card, int face, int big) {
+    const S32 W = big ? 34 : 28, H = big ? 48 : 40;
+    Box(x - 1, y - 1, x + W + 1, y + H + 1, 3 * 16 + 2);
+    if (!face) {
+        Box(x, y, x + W, y + H, 12 * 16 + 3);
+        Box(x + 3, y + 3, x + W - 3, y + H - 3, 12 * 16 + 6);
+        for (S32 k = 7; k < H - 5; k += 6) Line(x + 5, y + k, x + W - 5, y + k, 12 * 16 + 3);
+        return;
+    }
+    Box(x, y, x + W, y + H, 3 * 16 + 15);
+    static const char ranks[] = "23456789TJQKA";
+    const int rank = card % 13, suit = card / 13, red = suit < 2, colour = red ? 4 * 16 + 6 : 3 * 16 + 1;
+    char nb[3] = {ranks[rank], 0, 0};
+    if (rank == 8) { nb[0] = '1'; nb[1] = '0'; }
+    HudSmallIn(x + 2, y - 5, nb, -1, colour);
+    if (big) PkSuit(x + W / 2 - 7, y + H - 17, suit, colour, 2);
+    else PkSuit(x + W - 10, y + H - 10, suit, colour, 1);
+}
+static void PkPanel(S32 x0, S32 y0, S32 x1, S32 y1, int lit) {
+    Box(x0, y0, x1, y1, lit ? 6 * 16 + 12 : 1 * 16 + 4);
+    Box(x0 + 2, y0 + 2, x1 - 2, y1 - 2, 3 * 16 + 1);
+    BoxMovingAdd(x0, y0, x1, y1);
+}
+static S32 PkWide(const char *text) { char buf[96]; snprintf(buf, sizeof(buf), "%s", text); return SizeFont(buf) * 3 / 4; }
+// A row of choices, the one picked on gold
+static void PkChoices(S32 x, S32 y, const char *const *opt, int n, int pick) {
+    for (int k = 0; k < n; k++) {
+        const S32 tw = PkWide(opt[k]);
+        if (k == pick) Box(x - 5, y + 4, x + tw + 5, y + 31, 6 * 16 + 12);
+        HudSmallIn(x, y, opt[k], -1, k == pick ? 3 * 16 + 1 : LBAWHITE);
+        x += tw + 26;
+    }
+}
+static void PkCentred(S32 w, S32 y, const char *text, S32 colour) { HudSmallIn(w / 2 - PkWide(text) / 2, y, text, -1, colour); }
+static void PokerDraw(void) {
+    if (s_pk < 0 || (int)NumCube != s_blScene) return;
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+    const T_RACE_PK_TABLE *t = &s_pkTables[s_pk];
+    char line[120];
+    // the felt in the screen's middle: the board, the pot
+    const S32 fx0 = w / 2 - 150, fx1 = w / 2 + 150, fy0 = h / 2 - 70, fy1 = h / 2 + 40;
+    Box(fx0 - 4, fy0 - 4, fx1 + 4, fy1 + 4, 1 * 16 + 3);
+    Box(fx0, fy0, fx1, fy1, 8 * 16 + 3);
+    for (int i = 0; i < 5; i++) {
+        const S32 x = w / 2 - 2 * 42 - 17 + i * 42, y = fy0 + 10;
+        if (i < s_pkNBoard) PkCard(x, y, s_pkBoard[i], 1, 1);
+        else Box(x, y, x + 34, y + 48, 8 * 16 + 2);
+    }
+    if (s_pkState == 0) { snprintf(line, sizeof(line), "Pot %d", (int)s_pkPot); PkCentred(w, fy1 - 34, line, 6 * 16 + 13); }
+    BoxMovingAdd(fx0 - 4, fy0 - 4, fx1 + 4, fy1 + 4);
+    // the three at the table: west at the left, north at the top, east at the right -- their name, cards, chips, bet, last move
+    const S32 PW = 156, PH = 108;
+    const S32 px[4] = {0, 2, w / 2 - PW / 2, w - 2 - PW}, py[4] = {0, h / 2 - 70, 2, h / 2 - 70};
+    for (int i = 1; i < 4; i++) {
+        const T_RACE_PK_PLAYER *q = &s_pkP[i];
+        const S32 x0 = px[i], y0 = py[i];
+        PkPanel(x0, y0, x0 + PW, y0 + PH, s_pkTurn == i && s_pkState == 0);
+        HudSmallIn(x0 + 6, y0 - 2, t->Name[i - 1], -1, q->Folded ? 3 * 16 + 8 : LBAWHITE);
+        if (i == s_pkDealer) HudSmallIn(x0 + PW - 22, y0 + 24, "D", -1, 4 * 16 + 10);
+        if (!q->Folded || s_pkShow[i]) {
+            PkCard(x0 + 6, y0 + 30, q->Card[0], s_pkShow[i], 0);
+            PkCard(x0 + 26, y0 + 34, q->Card[1], s_pkShow[i], 0);
+        }
+        snprintf(line, sizeof(line), "%d", (int)q->Chips);
+        HudSmallIn(x0 + 64, y0 + 24, line, -1, 6 * 16 + 13);
+        if (q->Bet > 0 && s_pkState == 0) { snprintf(line, sizeof(line), "bet %d", (int)q->Bet); HudSmallIn(x0 + 64, y0 + 48, line, -1, 3 * 16 + 12); }
+        if (q->Last[0]) HudSmallIn(x0 + 6, y0 + 76, q->Last, -1, 3 * 16 + 10);
+    }
+    // the hand's result and the table's talk, under the felt
+    if (s_pkResult[0] && s_pkState != 0) PkCentred(w, fy1 + 4, s_pkResult, 6 * 16 + 13);
+    if (s_pkTalk[0] && (S32)TimerRefHR < s_pkTalkUntil) PkCentred(w, fy1 + 28, s_pkTalk, LBAWHITE);
+    // his own: his cards face up, his chips and bet, a hint, his choices
+    const T_RACE_PK_PLAYER *q = &s_pkP[0];
+    const S32 x0 = w / 2 - 230, x1 = w / 2 + 230, y0 = h - 110, y1 = h - 4, tx = x0 + 94;
+    PkPanel(x0, y0, x1, y1, s_pkTurn == 0 && s_pkState == 0);
+    if (!q->Folded) { PkCard(x0 + 8, y0 + 12, q->Card[0], 1, 1); PkCard(x0 + 48, y0 + 12, q->Card[1], 1, 1); }
+    if (q->Bet > 0 && s_pkState == 0) snprintf(line, sizeof(line), "Chips %d   Bet %d%s", (int)q->Chips, (int)q->Bet, s_pkDealer == 0 ? "   D" : "");
+    else snprintf(line, sizeof(line), "Chips %d%s", (int)q->Chips, s_pkDealer == 0 ? "   D" : "");
+    HudSmallIn(tx, y0 - 2, line, -1, 6 * 16 + 13);
+    if (s_pkState == 0 && s_pkTurn == 0) {
+        const S32 call = s_pkHigh - q->Bet, most = q->Bet + q->Chips;
+        char c[32], r[32];
+        if (call <= 0) snprintf(c, sizeof(c), "Check");
+        else if (call >= q->Chips) snprintf(c, sizeof(c), "All in %d", (int)q->Chips);
+        else snprintf(c, sizeof(c), "Call %d", (int)call);
+        const S32 to = s_pkRaiseTo ? s_pkRaiseTo : s_pkHigh + s_pkMinRaise;
+        if (most > s_pkHigh && PkCanAnswer(0)) {
+            if (to >= most) snprintf(r, sizeof(r), "All in %d", (int)most);
+            else snprintf(r, sizeof(r), s_pkHigh > 0 ? "Raise to %d" : "Bet %d", (int)to);
+        } else snprintf(r, sizeof(r), "-");
+        const char *opt[3] = {call > 0 ? "Fold" : "-", c, r};
+        HudSmallIn(tx, y0 + 24, s_pkPick == 2 ? "Up, Down: how much" : "Left, Right -- Action", -1, 3 * 16 + 10);
+        PkChoices(tx, y0 + 56, opt, 3, s_pkPick);
+    } else if (s_pkState == 1) {
+        const char *opt[2] = {"Deal again", "Leave the table"};
+        PkChoices(tx, y0 + 56, opt, 2, s_pkPick);
+    } else if (s_pkState == 2) {
+        HudSmallIn(tx, y0 + 24, "Out of chips", -1, 4 * 16 + 10);
+        const char *opt[1] = {"Leave the table"};
+        PkChoices(tx, y0 + 56, opt, 1, 0);
+    } else if (q->Folded) HudSmallIn(tx, y0 + 24, "You fold", -1, 3 * 16 + 9);
+    else if (s_pkTurn > 0) { snprintf(line, sizeof(line), "%s to play...", t->Name[s_pkTurn - 1]); HudSmallIn(tx, y0 + 24, line, -1, 3 * 16 + 10); }
+}
 static void BowlLoad(void) {
     if (s_bowlLoaded) return;
     s_bowlLoaded = 1;
@@ -20636,6 +21228,7 @@ static void BowlLoad(void) {
             s_bl[a].Pin[0] = g; s_bl[a].Pin[1] = h2; s_bl[a].Pin[2] = k; s_bl[a].Pin[3] = m; s_bl[a].Pin[4] = n2; s_bl[a].Pin[5] = o;
             if (a + 1 > s_blN) s_blN = a + 1;
         }
+        else if (!strncmp(line, "poker ", 6)) PkParse(line + 6);
         else if (sscanf(line, "fruit %d %d", &a, &b) == 2 && s_fmN < FM_MAX) {
             s_fmX[s_fmN] = a; s_fmZ[s_fmN] = b; s_fmActor[s_fmN] = -1;
             if (sscanf(line, "fruit %d %d %d", &a, &b, &c) == 3) s_fmActor[s_fmN] = c;
@@ -20645,7 +21238,7 @@ static void BowlLoad(void) {
         }
     }
     fclose(f);
-    Log_Info("[racemod] bowling: %d lanes, %d bowlers (scene %d)", s_blN, s_bwN, s_blScene);
+    Log_Info("[racemod] bowling: %d lanes, %d bowlers, %d poker tables (scene %d)", s_blN, s_bwN, s_nbPk, s_blScene);
 }
 // The game's frames and rolls as the rolls so far make them: the frame it is, the ball of it (1 or 2, 3 in the tenth), whether it is over, the score
 static void BowlState(int *frame, int *ball, int *over, int *score) {
@@ -23105,6 +23698,7 @@ void RaceMod_Frame(void) {
     TortoiseWatch(TimerRefHR);
     WinPullFrame(TimerRefHR);
     WinStopFrame(TimerRefHR);
+    PullCamFrame();
     if (s_unlockAtVar >= 0 && s_unlockAtVar < MAX_VARS_GAME && !s_unlockAtDone && ListVarGame[s_unlockAtVar] >= s_unlockAtValue) {
         s_unlockAtDone = 1;
         Log_Info("[racemod] game variable %d at %d: the story unlock %s", s_unlockAtVar, (int)ListVarGame[s_unlockAtVar], s_unlockAt);
@@ -23122,6 +23716,7 @@ void RaceMod_Frame(void) {
     PlaqueFrame();
     LapSessionFrame(TimerRefHR);
     if (!DartShowFrame(TimerRefHR)) DartFrame(TimerRefHR);
+    PokerFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -25692,6 +26287,7 @@ void RaceMod_Draw(void) {
     AchToast(TimerRefHR);
     BowlDraw();
     DartDraw();
+    PokerDraw();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !NoItems() && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,

@@ -23,6 +23,9 @@ internal static partial class CitadelProps
     public static readonly float[] ReelX = { -172, 0, 172 };
     public const float ReelY = 960, ReelZ = 270, ReelRadius = 125, ReelWide = 150, SlotDeep = 500, SlotWide = 620, SlotHigh = 1400;
     public const int ReelFaces = 5;
+    // (the whole machine scaled up by this -- the user, 2026-11-23: "the wheels are still too small to see. Let's reduce the number of
+    // machines, and make the remaining machines both taller and wider": four of them now, each half as big again)
+    public const float MachineScale = 1.5f;
     private const float ReelTilt = MathF.PI / 6, SymbolScale = 1.45f;
     // (the reel's turn that shows face k at the front -- RACEMOD.CPP FmFace, which turns them)
     public static int ReelTurn(int k) => (int)Math.Round(k * 4096.0 / ReelFaces) & 4095;
@@ -66,6 +69,7 @@ internal static partial class CitadelProps
         m.Cap(loops[^1], m.P(0, new Vector3(0, pinBase + 680, 0)), PinWhite, new Vector3(0, pinBase + 600, 0));
         // the reels
         for (var r = 0; r < 3; r++) Reel(m, 1 + r, new Vector3(ReelX[r], ReelY, front + ReelZ - SlotDeep / 2 + 2));
+        m.ScaleAll(MachineScale);
         return m.ToBody(header);
     }
 

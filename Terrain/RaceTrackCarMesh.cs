@@ -37,6 +37,13 @@ internal sealed class CarMesh(string name, int[]? parents = null)
     public void Pivot(int bone, int handle) => pivots[bone] = handle;
     public void Line(int a, int b, int colour) => lines.Add((a, b, colour));
     public void Sphere(int point, int radius, int colour) => spheres.Add((point, radius, colour));
+    // Everything made so far scaled by `k` about the origin -- its points and its spheres' radii (the bowling alley's fruit machines half
+    // as big again, 2026-11-23)
+    public void ScaleAll(float k)
+    {
+        foreach (var bone in points) for (var i = 0; i < bone.Count; i++) bone[i] *= k;
+        for (var i = 0; i < spheres.Count; i++) spheres[i] = (spheres[i].Point, (int)Math.Round(spheres[i].Radius * k), spheres[i].Colour);
+    }
     public void Raw(int[] hs, int colour, bool unlit) => faces.Add((hs, colour, unlit ? 0 : -1, null));
     public void Raw(int[] hs, int colour, int material, FaceTexture? texture = null) => faces.Add((hs, colour, material, texture));
 

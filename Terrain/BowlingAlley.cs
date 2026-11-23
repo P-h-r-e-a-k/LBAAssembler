@@ -60,7 +60,19 @@ internal static class BowlingAlley
     // (the chains' anchors in the dark over the pins: this far over the floor)
     private const int ChainAnchor = 4400;
     // (the poker table's middle -- cells 42, 36: between the booths and the fruit machines -- and its players' distance from it)
-    private const int PokerX = 37 * 512 + 256, PokerZ = 28 * 512 + 256, PokerSeat = 1060;   // (2026-11-16: the table bigger, its players out)
+    private const int PokerX = 37 * 512 + 256, PokerZ = 28 * 512 + 256, PokerSeat = 1060;
+    // The two tables' poker, Texas hold 'em, Twinsen in the empty chair south (RACEMOD.CPP PokerFrame, BOWLMAP's poker lines -- the user,
+    // 2026-11-23: "make the poker tables playable ... give each poker player their own personality and betting style"; "Let's make the game
+    // texas hold 'em ... the buy in to play at each table different, one lower, and the other higher"): a word with one of a table's three
+    // sets POKER_ASK to the table's (1 the low table, the card table; 2 the high, the poker table) -- RaceTrackStory.BowlingTalk. By seat,
+    // west, north, east: a name, a style (RACEMOD: 0 tight, 1 a bluffer, 2 a calling station, 3 aggressive, 4 a calculator, 5 reckless)
+    public const int PokerAskVar = 279, LowTable = 1, HighTable = 2;
+    public const int LowBuyIn = 50, LowSmall = 1, LowBig = 2, HighBuyIn = 500, HighSmall = 10, HighBig = 20;
+    public static readonly Dictionary<string, (string Name, int Style, int Table)> PokerPlayers = new()
+    {
+        ["CardsGloom"] = ("Lucky Grey", 2, LowTable), ["CardsFranco"] = ("Gaston", 1, LowTable), ["CardsSailor"] = ("Bosun", 3, LowTable),
+        ["PokerWannie"] = ("Old Whiskers", 4, HighTable), ["PokerGloom"] = ("The Banker", 0, HighTable), ["PokerDissident"] = ("The Comrade", 5, HighTable),
+    };   // (2026-11-16: the table bigger, its players out)
     // (2026-11-17, the room laid out again -- the user, 2026-11-16: "Let's move the poker tables to the middle, and perhaps add an extra pool
     // table, and poker table even if nobody is using them": both card tables side by side in the room's middle, the second pool table west
     // of the first, an empty poker table south of the middle booths (BowlingRoom.BoothsAt); the actors few -- the scene near the engine's
@@ -77,7 +89,7 @@ internal static class BowlingAlley
     // 2026-11-16, "Every character Twinsen can speak to should have a response line") -- filled as the alley is built, the story after it
     public static readonly List<(int Actor, string Who)> Talkers = new();
     // (where Twinsen stands to play a fruit machine: this far out in front of its cabinet's middle -- RACEMOD.CPP FM_REACH round it)
-    private const int FruitFront = 700;
+    private const int FruitFront = 950;
 
     public static List<string> Install(string gameDirectory)
     {
@@ -529,26 +541,30 @@ void comportement_4()
         Decor(CitadelProps.PokerTable, cardsX, FloorY, cardsZ);
         Decor(CitadelProps.HangingLamp, cardsX, FloorY + 2300, cardsZ);
         // (its own players: the grey gloom, the gas station's Franco, the blue sailor)
+        var lowSeats = new int[3];
         foreach (var (entity, body, dx, dz, beta, who) in new[] { (204, 151, -1, 0, 1024, "CardsGloom"), (203, 0, 0, -1, 0, "CardsFranco"), (295, 0, 1, 0, 3072, "CardsSailor"), (-1, 0, 0, 1, 2048, "") })
         {
             var (sx, sz) = (cardsX + dx * PokerSeat, cardsZ + dz * PokerSeat);
             Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
             // (the blue sailor takes this table's pots: the two tables' winners on different clocks, so the room never cheers twice at once)
-            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who, track: entity == 295 ? PotWin(23, 17) : null);
+            if (entity >= 0) lowSeats[dx < 0 ? 0 : dx > 0 ? 2 : 1] = Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who, track: entity == 295 ? PotWin(23, 17) : null);
         }
+        map.Add(PokerLine(cardsX, cardsZ, LowBuyIn, LowSmall, LowBig, LowTable, lowSeats, "CardsGloom", "CardsFranco", "CardsSailor"));
         // ---- the poker table (the user, 2026-11-15: "add a round table with people sitting playing poker"): round, among the booths and the
         // fruit machines, a sailor, a blue sailor and a Franco dissident sat at it (BowlingAnims.Poker, each at his own pace), the fourth chair
         // empty, toward the room. Each sits PokerSeat from its middle facing it, his chair's seat under him (a chair's seat ChairAhead in front
         // of its own place)
         Decor(CitadelProps.PokerTable, PokerX, FloorY, PokerZ);
         // (its players: the gloom in a tie, an old Wannie, the Franco dissident)
+        var highSeats = new int[3];
         foreach (var (entity, body, dx, dz, beta, who) in new[] { (204, 150, 0, -1, 0, "PokerGloom"), (274, 0, -1, 0, 1024, "PokerWannie"), (56, 93, 1, 0, 3072, "PokerDissident"), (-1, 0, 0, 1, 2048, "") })
         {
             var (sx, sz) = (PokerX + dx * PokerSeat, PokerZ + dz * PokerSeat);
             Decor(CitadelProps.Chair, sx + dx * CitadelProps.ChairAhead, FloorY, sz + dz * CitadelProps.ChairAhead, beta);
             // (the dissident takes this table's pots)
-            if (entity >= 0) Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who, track: entity == 56 ? PotWin(16, 26) : null);
+            if (entity >= 0) highSeats[dx < 0 ? 0 : dx > 0 ? 2 : 1] = Regular(entity, body, sx, sz, beta, BowlingAnims.Poker, who, track: entity == 56 ? PotWin(16, 26) : null);
         }
+        map.Add(PokerLine(PokerX, PokerZ, HighBuyIn, HighSmall, HighBig, HighTable, highSeats, "PokerWannie", "PokerGloom", "PokerDissident"));
         // the fruit machines (BowlingRoom.FruitMachines: CitadelProps.BowlSlot, its reels turned by the engine), for the engine: where
         // Twinsen stands to play each, and its actor
         foreach (var (fx, fz) in BowlingRoom.FruitMachines)
@@ -558,6 +574,12 @@ void comportement_4()
             map.Add($"fruit {fx} {fz + FruitFront} {slot}");
         }
         File.WriteAllLines(Path.Combine(gameDirectory, "BOWLMAP.TXT"), map);
+
+        // A table's BOWLMAP line: its middle, Twinsen's seat south of it (the empty chair's: its seat's top, the bar's sitting -- CitadelSpanking.
+        // TwinsenSit -- facing the table), its stakes, its ask, and its three by seat: style, actor, name
+        static string PokerLine(int x, int z, int buyIn, int small, int big, int table, int[] actors, params string[] who) =>
+            $"poker {x} {z} {x} {FloorY + CitadelSpanking.StoolTop} {z + PokerSeat} 2048 {CitadelSpanking.TwinsenSit} {buyIn} {small} {big} {PokerAskVar} {table} " +
+            $"{string.Join(' ', who.Select(w => PokerPlayers[w].Style))} {string.Join(' ', actors)} {string.Join('|', who.Select(w => PokerPlayers[w].Name))}";
 
         // ---- the scripts
         var built = LbaScript.SceneScripts.Load(SceneSerializer.Write(model), Scene);

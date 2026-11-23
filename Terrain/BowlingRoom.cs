@@ -56,9 +56,9 @@ internal static class BowlingRoom
     // also move the currency exchange machine to the far left next to the bowling alley and have them all pushed back flush against the
     // wall"): their backs on the wall (z 8 cells), 700 apart, from past the change machine (x 33 cells, beside the lanes' east divider) to
     // a walk's width short of the bar's west arm (x 45)
-    public const int MachineWallZ = RoomZ0 * 512, ChangeMachineX = 33 * 512 + 300, FirstMachineX = ChangeMachineX + 280 + 120 + (int)CitadelProps.SlotWide / 2, MachinePitch = 700;
+    public const int MachineWallZ = RoomZ0 * 512, ChangeMachineX = 33 * 512 + 300, FirstMachineX = ChangeMachineX + 280 + 120 + (int)(CitadelProps.SlotWide * CitadelProps.MachineScale) / 2, MachinePitch = 1150;
     public static readonly (int X, int Z)[] FruitMachines =
-        Enumerable.Range(0, 7).Select(k => (FirstMachineX + k * MachinePitch, MachineWallZ + (int)CitadelProps.SlotDeep / 2 + 12)).ToArray();
+        Enumerable.Range(0, 4).Select(k => (FirstMachineX + k * MachinePitch, MachineWallZ + (int)(CitadelProps.SlotDeep * CitadelProps.MachineScale) / 2 + 12)).ToArray();
     // the booths: one of Rick's (his cells x 26-29, z 24-29 -- 4 across, 6 along z: a back, a seat, the table, a seat, a back) stamped
     // where each goes, its cells' corner (the user, 2026-11-16: "The red booths, let's have them against the wall - the edge that's at the
     // right of the screen - which is to the right of the bar with a couple in the middle"): four along the east rim, back to back from

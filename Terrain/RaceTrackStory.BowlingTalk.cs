@@ -136,6 +136,21 @@ internal static partial class RaceTrackStory
         new[] { "Keep them", "Les garder", "Behalten", "Quedármelos", "Tenerli", "Ficar com eles" },
         new[] { "Clunk, clunk... your kashes are zlitos now.", "Clonk, clonk... tes kashes sont des zlitos maintenant.", "Klonk, klonk... deine Kashes sind jetzt Zlitos.", "Clonc, clonc... tus kashes ya son zlitos.", "Clonk, clonk... i tuoi kashes ora sono zlitos.", "Clonk, clonk... os teus kashes agora são zlitos." },
     };
+    // (the poker tables' -- BowlingAlley.PokerAskVar, RACEMOD.CPP PokerFrame: a word with one of a table's three, his own line and then the
+    // table's ask; yes, and his zlitos enough, the table's variable set and he sits in -- the user, 2026-11-23, "allow twinsen to talk to
+    // them, take a seat, and get dealt into a game")
+    private static readonly string[][] BowlingPoker =
+    {
+        // the low table's ask, and its "not enough"
+        new[] { "Pull up a chair? Texas hold 'em: fifty zlitos buys you in, the blinds one and two.", "Tu prends une chaise ? Texas hold'em : cinquante zlitos pour entrer, les blindes à un et deux.", "Willst du dich setzen? Texas Hold'em: Fünfzig Zlitos Einsatz, die Blinds eins und zwei.", "¿Te sientas? Texas hold'em: cincuenta zlitos para entrar, las ciegas a uno y dos.", "Ti siedi? Texas hold'em: cinquanta zlitos per entrare, i bui a uno e due.", "Puxas uma cadeira? Texas hold'em: cinquenta zlitos para entrar, as blinds a um e dois." },
+        new[] { "Fifty zlitos to sit in, friend. Come back when your pockets jingle.", "Cinquante zlitos pour s'asseoir, l'ami. Reviens quand tes poches tinteront.", "Fünfzig Zlitos zum Mitspielen, Freund. Komm wieder, wenn deine Taschen klimpern.", "Cincuenta zlitos para sentarse, amigo. Vuelve cuando te suenen los bolsillos.", "Cinquanta zlitos per sedersi, amico. Torna quando ti tintinnano le tasche.", "Cinquenta zlitos para te sentares, amigo. Volta quando os teus bolsos tilintarem." },
+        // the high table's
+        new[] { "This is the big table. Five hundred zlitos buys you in, the blinds ten and twenty. Sitting in?", "C'est la grande table. Cinq cents zlitos pour entrer, les blindes à dix et vingt. Tu t'assieds ?", "Das ist der große Tisch. Fünfhundert Zlitos Einsatz, die Blinds zehn und zwanzig. Setzt du dich?", "Esta es la mesa grande. Quinientos zlitos para entrar, las ciegas a diez y veinte. ¿Te sientas?", "Questo è il tavolo grosso. Cinquecento zlitos per entrare, i bui a dieci e venti. Ti siedi?", "Esta é a mesa grande. Quinhentos zlitos para entrar, as blinds a dez e vinte. Sentas-te?" },
+        new[] { "Five hundred zlitos at this table. Try the small one over there, or come back richer.", "Cinq cents zlitos à cette table. Essaie la petite, là-bas, ou reviens plus riche.", "Fünfhundert Zlitos an diesem Tisch. Versuch's am kleinen da drüben, oder komm reicher wieder.", "Quinientos zlitos en esta mesa. Prueba la pequeña de allí, o vuelve más rico.", "Cinquecento zlitos a questo tavolo. Prova quello piccolo laggiù, o torna più ricco.", "Quinhentos zlitos nesta mesa. Experimenta a pequena ali, ou volta mais rico." },
+        // the two answers
+        new[] { "Deal me in", "Distribue-moi", "Teil mir aus", "Repárteme", "Dammi le carte", "Dá-me cartas" },
+        new[] { "Not now", "Pas maintenant", "Jetzt nicht", "Ahora no", "Non ora", "Agora não" },
+    };
     // (where the change machine stands: against the north wall at the end of the machines' row by the lanes, its back on the wall, its front
     // south -- the user, 2026-11-16: "move the currency exchange machine to the far left next to the bowling alley and have them all pushed
     // back flush against the wall"; the machine 420 deep)
@@ -145,11 +160,12 @@ internal static partial class RaceTrackStory
     {
         if (!b.Store.SceneExists(BowlingAlley.Scene)) return;
         if (BowlingAlley.Talkers.Count == 0) { log.Add("the bowling alley's people: none listed (the alley built in another run) -- no lines"); return; }
-        var lines = BowlingSays.Select(s => s.Line).Concat(BowlingChange).ToArray();
+        var lines = BowlingSays.Select(s => s.Line).Concat(BowlingChange).Concat(BowlingPoker).ToArray();
         var first = AddIslandTexts(gameDirectory, RaceTrackIsland.Otringal.IslandByte, lines, log, "the bowling alley");
         if (first < 0) return;
         var said = BowlingSays.Select((s, k) => (s.Who, Id: first + k)).ToDictionary(p => p.Who, p => p.Id);
         int ask = first + BowlingSays.Length, yes = ask + 1, no = ask + 2, done = ask + 3;
+        int lowAsk = done + 1, lowShort = done + 2, highAsk = done + 3, highShort = done + 4, dealIn = done + 5, notNow = done + 6;
         b.Edit(BowlingAlley.Scene, $"the bowling alley: a word from each of its people ({BowlingAlley.Talkers.Count}), and a change machine", model =>
         {
             var machine = Citadel.CitadelProps.Actor(Citadel.CitadelProps.ChangeMachine, BowlChangeX, BowlingAlley.FloorY, BowlChangeZ, 0);
@@ -177,9 +193,33 @@ internal static partial class RaceTrackStory
                 addMachine(scripts);
                 foreach (var (actor, who) in BowlingAlley.Talkers)
                     if (said.TryGetValue(who, out var id))
-                        scripts.SetText(actor, LbaScript.ScriptKind.Life, Talker("0 <= chapter()", $"            message({id});", 1300));
+                    {
+                        // (a poker player: his own line, then the table's ask -- his zlitos enough, the engine seats him)
+                        var talk = $"            message({id});";
+                        if (BowlingAlley.PokerPlayers.TryGetValue(who, out var pk))
+                        {
+                            var high = pk.Table == BowlingAlley.HighTable;
+                            talk += $@"
+            add_choice({dealIn});
+            add_choice({notNow});
+            ask_choice_obj({actor}, {(high ? highAsk : lowAsk)});
+            if ({dealIn} == choice())
+            {{
+                if ({(high ? BowlingAlley.HighBuyIn : BowlingAlley.LowBuyIn)} <= nb_gold_pieces())
+                {{
+                    set_var_game({BowlingAlley.PokerAskVar}, {pk.Table});
+                }}
+                else
+                {{
+                    message({(high ? highShort : lowShort)});
+                }}
+            }}";
+                        }
+                        scripts.SetText(actor, LbaScript.ScriptKind.Life, Talker("0 <= chapter()", talk, 1300));
+                    }
             };
         });
-        log.Add($"the bowling alley: {BowlingAlley.Talkers.Count(t => said.ContainsKey(t.Who))} of its people answer Action with a word (texts {first} on), the change machine by the north wall");
+        log.Add($"the bowling alley: {BowlingAlley.Talkers.Count(t => said.ContainsKey(t.Who))} of its people answer Action with a word (texts {first} on), the change machine by the north wall, " +
+                $"{BowlingAlley.Talkers.Count(t => BowlingAlley.PokerPlayers.ContainsKey(t.Who))} poker players asking Twinsen to sit in");
     }
 }
