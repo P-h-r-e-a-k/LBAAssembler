@@ -23602,9 +23602,9 @@ static void HireVehicles(void) {
     }
 }
 // The hovercraft in its room (hover_door_var='s raft and stand-in): the stand-in -- the hovercraft's own entity -- kept where the raft is, on
-// its water, turned as it is; the raft hidden (still carrying him: an actor not drawn is still there to stand on); nobody in the hovercraft
-// while he's off the raft, him in it -- and he himself hidden -- while it carries him. Not hired, or the raft not there (the room's own
-// script takes it away when he hasn't come by the water): the stand-in hidden.
+// its water, turned as it is; the raft hidden (still carrying him: an actor not drawn is still there to stand on); nobody in the hovercraft,
+// him standing on it as it carries him. Not hired, or the raft not there (the room's own script takes it away when he hasn't come by the
+// water): the stand-in hidden.
 static int s_hoverRaftHid = 0, s_hoverStandBody = -1, s_hoverStandSaid = 0, s_hoverRaftIn = 0, s_hoverRaftFlip = 0;
 #define RACE_HOVER_RAFT_SETTLE 8      // (frames on or off the raft before he's in the hovercraft or out of it: at its edge it flickered)
 static void HoverRaftFrame(void) {
@@ -23633,7 +23633,10 @@ static void HoverRaftFrame(void) {
     if (on != s_hoverRaftIn) { if (++s_hoverRaftFlip >= RACE_HOVER_RAFT_SETTLE) { s_hoverRaftIn = on; s_hoverRaftFlip = 0; } }
     else s_hoverRaftFlip = 0;
     const int carried = s_hoverRaftIn;
-    const S32 body = carried ? s_hoverBody : (s_hoverParked >= 0 ? s_hoverParked : s_hoverBody);
+    // (nobody in it, and he himself seen standing on it while it carries him -- the player's still: he steps or jumps off onto the ledge
+    // and back on as onto the game's own raft. Drawn in it, him hidden, he seemed to have lost the hovercraft's wheel as the raft swam its
+    // own way -- the user, 2026-11-23: "He needs to be able to maintain his control, and either stand on the boat to jump off/on")
+    const S32 body = s_hoverParked >= 0 ? s_hoverParked : s_hoverBody;
     if (s_hoverStandBody != body && GivePtrBody(body) && GivePtrAnim(s_hoverAnim)) {
         st->Obj.Body.Num = -1; ObjectInitBody(&st->Obj, (void *)(uintptr_t)(U32)body);
         st->Obj.Anim.Num = -1; ObjectInitAnim(&st->Obj, (void *)(uintptr_t)(U32)s_hoverAnim);
@@ -23641,13 +23644,12 @@ static void HoverRaftFrame(void) {
         if (s_hoverStandSaid < 8) {
             s_hoverStandSaid++;
             Log_Info("[racemod] hovercraft: in scene %d the raft (actor %d) drawn as the hovercraft (actor %d, BODY.HQR %d) -- %s", (int)NumCube, raft, stand,
-                     (int)body, carried ? "Twinsen in it" : "nobody in it");
+                     (int)body, carried ? "Twinsen standing on it" : "nobody on it");
         }
     }
     st->Obj.X = r->Obj.X; st->Obj.Y = r->Obj.Y; st->Obj.Z = r->Obj.Z; st->Obj.Beta = r->Obj.Beta & 4095;
     ClearRealAngle(st);
-    if (carried && !(hero->Flags & INVISIBLE)) { hero->Flags |= INVISIBLE; s_hoverRaftHid = 1; }
-    else if (!carried && s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
+    if (s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
 }
 static void HovercraftFrame(void) {
     if (s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || NewCube != -1) return;
