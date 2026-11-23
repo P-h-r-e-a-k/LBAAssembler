@@ -17,7 +17,7 @@ namespace LBAAssembler.Terrain.Citadel;
 //     colours. A block library of its own, a grid after the game's, LBA_BKG.HQR's scene-to-grid table pointing the new scene at it (as the
 //     LBA1 rooms go in: CitadelLba1Rooms);
 //   - the scene (Scene, 193: under 255, so change_cube() can name it and the holomap and saved games hold it -- and every slot from 222 to
-//     254 is a build's: the story's holomap arrows 222-223, the lava lake 223, Sendell's Well 224, the old moon 225-228, the LBA1 rooms
+//     254 is a build's: 222 free (the story's start-line arrows are scenes 42 and 49's records now), the lava lake 223, Sendell's Well 224, the old moon 225-228, the LBA1 rooms
 //     226-227, the Emerald Moon 229-232, Polar Island 233-254. 193 is the retail game's copy of Twinsen's house for its demo, which no
 //     scene of the game itself leads to and no build uses; claimed by anything else first -- not the game's own record any more when this
 //     runs -- the build stops with an error): scene 0's header -- its light, music, ambience --

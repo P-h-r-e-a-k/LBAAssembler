@@ -48,8 +48,11 @@ namespace LBAAssembler.Terrain;
 // the night in his bed and Zoe wakes him to the morning of chapter 2 (the fine weather, CITABAU), when the Esmers land and the Cup opens.
 internal static partial class RaceTrackStory
 {
-    // the holomap: the storm track's start line, the town circuit's, and the game's own arrow to the Weather Wizard's tent
-    public const int StartArrow = 222, TownArrow = 223, WizardArrow = 21;
+    // the holomap: the storm track's start line, the town circuit's, and the game's own arrow to the Weather Wizard's tent. The start lines'
+    // are the records of the outside scenes they lie in (42, 49), as the game's own arrows are a scene's record: a position past the game's
+    // scenes was another scene's as soon as a build made one there -- the lava lake's copy at 223 took the town circuit's, and Zoe's arrow
+    // the second morning lit the holomap's icon and drew nothing (the user, 2026-11-23). No script of the game's names either.
+    public const int StartArrow = 42, TownArrow = 49, WizardArrow = 21;
     // the game variables: the gloves (an inventory slot), the ferry ticket's, the story's day (Tired after the aliens' thanks, Rested once
     // Twinsen has slept: the town circuit is open), the town circuit won (1; 2 once the ticket is handed over) and Raph's time beaten
     // (1; 2 once Raph has said so). 200-202 are game variables nothing in the game uses.
@@ -332,8 +335,9 @@ internal static partial class RaceTrackStory
         }
     }
 
-    // A holomap arrow (`position`) on a start line, on Citadel Island, labelled with text `label` of the holomap's file, off until a script
-    // switches it on.
+    // A holomap arrow (`position`, an outside scene's record) on a start line, on Citadel Island, labelled with text `label` of the holomap's
+    // file, off until a script switches it on -- the record's own flag that its scene is outside kept (HOLO.H CubeArrowFlags: the cube
+    // changes and the holomap's Twinsen ask it).
     private static byte[] Arrow(byte[] arrows, int position, (double X, double Z, double Y, double DirX, double DirZ) line, int label)
     {
         var at = (50 + position) * ArrowRecordSize;
@@ -344,7 +348,7 @@ internal static partial class RaceTrackStory
         for (var f = 3; f < 6; f++) Put(f, BinaryPrimitives.ReadInt32LittleEndian(arrows.AsSpan(citadel * ArrowRecordSize + f * 4)));
         Put(6, label);
         arrows[at + 28] = 0xFF;         // no inventory object
-        arrows[at + 29] = 0;            // off, never asked
+        arrows[at + 29] &= 4;           // off, never asked; outside as its scene is
         arrows[at + 30] = 0;            // planet Twinsun
         arrows[at + 31] = 0;            // Citadel Island
         return arrows;

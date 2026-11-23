@@ -24,7 +24,7 @@ internal static class SendellWell
 {
     public const string IleFile = "SENDELL.ILE", OblFile = "SENDELL.OBL";
     public const int IslandByte = 1, CubeX = 7, CubeZ = 7;
-    // the scene: past the retail game's 0..221, the race track story's holomap arrow (222) and the lava lake's scene (223)
+    // the scene: past the retail game's 0..221, 222 (the race track story's holomap arrow till 2026-11-23) and the lava lake's scene (223)
     public const int Scene = 224;
     private const string SourceIle = "CITABAU.ILE", SourceObl = "CITABAU.OBL";
     private const int SourceCubeX = 6, SourceCubeZ = 8, SourceScene = 44;
