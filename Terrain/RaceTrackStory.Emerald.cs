@@ -1268,12 +1268,18 @@ void comportement_1()
 {{
     if ({HalWon} == var_game({QHal}) && 1 == var_game({HalPullVar}) && {Driving} != comportement_hero())
     {{
-        set_var_game({HalPullVar}, 2);
-        set_var_game({QHal}, {HalDone});
+        // (a cut scene: the bars, Twinsen held, the camera on HAL's car beside him till it's over -- RACEMOD.CPP win_pull='s camera, back on
+        // Twinsen as HalPullVar moves on at the end; the user, 2026-11-23, HAL on screen as he talks, Twinsen held as in a cut scene)
+        cinema_mode(1);
+        set_dir_obj(0, NO_MOVE);
         message_obj({guard}, {Say(MoonLine.GuardBeaten)});
         message({Say(MoonLine.LyraZeelich)});
         message_obj({hal}, {Say(MoonLine.HalNumber)});
         message({Say(MoonLine.HangarGo)});
+        set_var_game({HalPullVar}, 2);
+        set_var_game({QHal}, {HalDone});
+        set_dir_obj(0, MOVE_MANUAL);
+        cinema_mode(0);
         if (5 > chapter())
         {{
             inc_chapter();

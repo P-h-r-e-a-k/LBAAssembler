@@ -1232,6 +1232,18 @@ static int s_winStopQuick = 0;
 #define RACE_PULL_BACK 8000.0
 #define RACE_PULL_SIDE 1100.0
 static int s_winPullOpp = -1, s_winPullVar = -1, s_winPullValue = 1, s_winPullDelay = 0, s_winPulled = 0;
+// (the camera on the pulled-up car while its driver talks -- from its stop till the story moves win_pull='s variable on: the user,
+// 2026-11-23, "make sure HAL is visible on screen whilst he talks to Twinsen")
+static int s_pullCam = 0, s_pullCamWant = 0;
+static void PullCamFrame(void) {
+    if (!s_pullCam) return;
+    if (s_winPullVar >= 0 && s_winPullVar < MAX_VARS_GAME && ListVarGame[s_winPullVar] == (S16)s_winPullValue && NewCube == -1) return;
+    s_pullCam = 0;
+    NumObjFollow = NUM_PERSO;
+    FirstTime = AFF_ALL_FLIP;
+    CameraCenter(0);
+    Log_Info("[racemod] win_pull: the camera back on Twinsen");
+}
 static S32 s_winStopSince = 0;
 // The race just won: its cars stay where they are (OpponentAway) through the win's own scene -- however often the track is read again
 // meanwhile, as when the car brakes over a cube's edge past the line -- until a scene loads after that scene is over (RaceMod_Island).
@@ -23389,6 +23401,8 @@ void RaceMod_Frame(void) {
                 o->Pull = 2;
                 if (s_winPullVar >= 0) ListVarGame[s_winPullVar] = (S16)s_winPullValue;
                 Log_Info("[racemod] win_pull: %s's car stops beside Twinsen -- variable %d at %d", o->Name, s_winPullVar, s_winPullValue);
+                // (the camera on it, its driver's words to come -- once its actor is known, below: each frame's is found afresh)
+                s_pullCamWant = n + 1;
             }
         }
         // (where its car is, for the others passing it)
@@ -23401,6 +23415,14 @@ void RaceMod_Frame(void) {
         const int index = OpponentActor(o);
         if (index < 0) continue;
         s_carActor[n] = index;
+        if (s_pullCamWant == n + 1) {
+            s_pullCamWant = 0;
+            s_pullCam = 1;
+            NumObjFollow = index;
+            FirstTime = AFF_ALL_FLIP;
+            CameraCenter(0);
+            Log_Info("[racemod] win_pull: the camera on %s's car (actor %d)", o->Name, index);
+        }
         // Twinsen's super jet-pack coming through: pushed aside, away from its way, and slowed
         if (driving && now < s_jetUntil && now >= o->ShoveUntil) {
             const T_OBJET *h = &ListObjet[NUM_PERSO];
