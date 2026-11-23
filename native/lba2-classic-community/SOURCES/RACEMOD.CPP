@@ -1670,8 +1670,12 @@ static int s_hoverDocked = -1, s_hoverDockedIn = 0;
 // <out> once he's back in it outside. Kash's sea cave (113): 143, "on the raft" -- the cave's raft is there for him only so, as the game's
 // boat brought him to it (the user, 2026-11-22: "Entering the cave where the helmet is on the hydroglyder has caused the hydroglyder to
 // vanish and Twinsen to just be stuck standing on the water unable to move")
+// [<raft> <stand-in>] (2026-11-23): the room's raft that carries him on its water (the cave's turtle), and an actor of the hovercraft's own
+// entity there -- the hovercraft in the raft's place, the raft itself hidden: nobody in it while he's off it, him in it while the raft
+// carries him, he himself hidden then (HoverRaftFrame). The user, 2026-11-23: "Driving into the racers cave to get the helmet switches to
+// Twinsen arriving in the cave on the turtle instead".
 #define RACE_MAX_HOVER_DOORS 4
-static int s_hoverDoor[RACE_MAX_HOVER_DOORS][4], s_nbHoverDoors = 0, s_hoverRoom = -1;
+static int s_hoverDoor[RACE_MAX_HOVER_DOORS][6], s_nbHoverDoors = 0, s_hoverRoom = -1;
 // quiet_scene=<scene> (2026-11-23): a scene with no music -- the one playing stopped as it loads (the music goes on across scenes in the
 // race-track mode: RaceMusicFrame); the Imperial Hotel's lift car, its own tune a sample the ride plays (OtringalHotel.LiftCar). The next
 // scene's own music starts as it loads.
@@ -5743,7 +5747,8 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "hover_door_var") && s_nbHoverDoors < RACE_MAX_HOVER_DOORS) {
             int *d = s_hoverDoor[s_nbHoverDoors];
-            if (sscanf(v, "%d %d %d %d", &d[0], &d[1], &d[2], &d[3]) == 4 && d[1] >= 0 && d[1] < MAX_VARS_GAME) {
+            d[4] = d[5] = -1;
+            if (sscanf(v, "%d %d %d %d %d %d", &d[0], &d[1], &d[2], &d[3], &d[4], &d[5]) >= 4 && d[1] >= 0 && d[1] < MAX_VARS_GAME) {
                 int k = 0;
                 for (; k < s_nbHoverDoors; k++) if (s_hoverDoor[k][0] == d[0] && s_hoverDoor[k][1] == d[1]) { memcpy(s_hoverDoor[k], d, sizeof(s_hoverDoor[k])); break; }
                 if (k == s_nbHoverDoors) s_nbHoverDoors++;
@@ -23535,6 +23540,54 @@ static void HireVehicles(void) {
         IntoVehicle();
     }
 }
+// The hovercraft in its room (hover_door_var='s raft and stand-in): the stand-in -- the hovercraft's own entity -- kept where the raft is, on
+// its water, turned as it is; the raft hidden (still carrying him: an actor not drawn is still there to stand on); nobody in the hovercraft
+// while he's off the raft, him in it -- and he himself hidden -- while it carries him. Not hired, or the raft not there (the room's own
+// script takes it away when he hasn't come by the water): the stand-in hidden.
+static int s_hoverRaftHid = 0, s_hoverStandBody = -1, s_hoverStandSaid = 0, s_hoverRaftIn = 0, s_hoverRaftFlip = 0;
+#define RACE_HOVER_RAFT_SETTLE 8      // (frames on or off the raft before he's in the hovercraft or out of it: at its edge it flickered)
+static void HoverRaftFrame(void) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    int raft = -1, stand = -1;
+    if (CubeMode == CUBE_INTERIEUR && NewCube == -1)
+        for (int k = 0; k < s_nbHoverDoors; k++)
+            if (s_hoverDoor[k][0] == (int)NumCube && s_hoverDoor[k][4] > 0 && s_hoverDoor[k][4] < (int)NbObjets) {
+                raft = s_hoverDoor[k][4]; stand = s_hoverDoor[k][5];
+                // (no stand-in named: the room's actor of the hovercraft's own entity marked to be walked over -- the story's)
+                for (int a = 2; (stand <= 0 || stand >= (int)NbObjets) && a < (int)NbObjets; a++)
+                    if (ListObjet[a].IndexFile3D == s_hoverEntity3D && ListObjet[a].Armure == RACE_WALK_OVER) stand = a;
+                if (stand <= 0 || stand >= (int)NbObjets) raft = stand = -1;
+            }
+    const int hired = s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME && ListVarGame[s_hoverVar] == 2 && s_hoverResolved && s_hoverBody >= 0 && s_hoverAnim >= 0;
+    if (raft < 0 || !hired || (ListObjet[raft].WorkFlags & OBJ_DEAD)) {
+        if (s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
+        if (stand > 0) ListObjet[stand].Flags |= INVISIBLE;
+        s_hoverStandBody = -1; s_hoverRaftIn = 0; s_hoverRaftFlip = 0;
+        return;
+    }
+    T_OBJET *r = &ListObjet[raft], *st = &ListObjet[stand];
+    r->Flags |= INVISIBLE;
+    st->Flags &= ~INVISIBLE;
+    const int on = hero->CarryBy == raft;
+    if (on != s_hoverRaftIn) { if (++s_hoverRaftFlip >= RACE_HOVER_RAFT_SETTLE) { s_hoverRaftIn = on; s_hoverRaftFlip = 0; } }
+    else s_hoverRaftFlip = 0;
+    const int carried = s_hoverRaftIn;
+    const S32 body = carried ? s_hoverBody : (s_hoverParked >= 0 ? s_hoverParked : s_hoverBody);
+    if (s_hoverStandBody != body && GivePtrBody(body) && GivePtrAnim(s_hoverAnim)) {
+        st->Obj.Body.Num = -1; ObjectInitBody(&st->Obj, (void *)(uintptr_t)(U32)body);
+        st->Obj.Anim.Num = -1; ObjectInitAnim(&st->Obj, (void *)(uintptr_t)(U32)s_hoverAnim);
+        s_hoverStandBody = body;
+        if (s_hoverStandSaid < 8) {
+            s_hoverStandSaid++;
+            Log_Info("[racemod] hovercraft: in scene %d the raft (actor %d) drawn as the hovercraft (actor %d, BODY.HQR %d) -- %s", (int)NumCube, raft, stand,
+                     (int)body, carried ? "Twinsen in it" : "nobody in it");
+        }
+    }
+    st->Obj.X = r->Obj.X; st->Obj.Y = r->Obj.Y; st->Obj.Z = r->Obj.Z; st->Obj.Beta = r->Obj.Beta & 4095;
+    ClearRealAngle(st);
+    if (carried && !(hero->Flags & INVISIBLE)) { hero->Flags |= INVISIBLE; s_hoverRaftHid = 1; }
+    else if (!carried && s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
+}
 static void HovercraftFrame(void) {
     if (s_hoverVar < 0 || s_hoverVar >= MAX_VARS_GAME || NewCube != -1) return;
     if (!s_hoverResolved) {
@@ -23681,6 +23734,7 @@ void RaceMod_Frame(void) {
     ActorsAt();
     FerryFrame(TimerRefHR);
     HovercraftFrame();
+    HoverRaftFrame();
     Hover();
     // (Twinsen on foot in a room of foot_room=: its camera -- FootRoomCamera)
     {
