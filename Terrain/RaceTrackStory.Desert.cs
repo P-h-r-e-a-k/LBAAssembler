@@ -386,6 +386,8 @@ void comportement_1()
         MechanicLift, RacerAfter,
         // (the hovercraft hire on the beach -- RaceTrackStory.Hovercraft, the user, 2026-11-20)
         HireAsk, HireYes, HireNo, HireGo, HireNoMoney, HireLater, HireOut, HirePrice,
+        // (Moya called by her bell won't carry him any more: MoyaRefuses, the user, 2026-11-23)
+        MoyaNotACow,
     }
     // TROPHY_SHOWN (a wide game variable: the story's 256 on): 1 once Flick has seen Citadel Island's winner's trophy at the Desert's line --
     // the race's gate till then (RaceKeysA). The trophy is the errands' slot's third thing (RaceTrackStory.Errands, ErrandTrophy).
@@ -1086,7 +1088,70 @@ void comportement_1()
             "Dieci kashes. Che ne dici?",
             "Dez kashes. Que me dizes?",
         },
+        new[]
+        {
+            "Oh, Twinsen, it's you. Let me guess, you want to ride me. What do you think I am, some sort of cow you can abuse for your own personal needs? I'm not interested.",
+            "Oh, Twinsen, c'est toi. Laisse-moi deviner, tu veux monter sur mon dos. Tu me prends pour quoi, une vache que tu peux exploiter pour tes besoins personnels ? Ça ne m'intéresse pas.",
+            "Oh, Twinsen, du bist es. Lass mich raten, du willst auf mir reiten. Was glaubst du, was ich bin, eine Kuh, die du für deine eigenen Zwecke ausnutzen kannst? Kein Interesse.",
+            "Oh, Twinsen, eres tú. Déjame adivinar, quieres montarte en mí. ¿Qué te crees que soy, una vaca de la que puedes abusar para tus propias necesidades? No me interesa.",
+            "Oh, Twinsen, sei tu. Fammi indovinare, vuoi salirmi in groppa. Per chi mi hai preso, una mucca da sfruttare per i tuoi comodi? Non mi interessa.",
+            "Oh, Twinsen, és tu. Deixa-me adivinhar, queres montar-me. O que achas que eu sou, uma vaca de que podes abusar para as tuas necessidades? Não estou interessada.",
+        },
     };
+
+    // Moya the turtle, called by her bell (scene 55, by the small oasis; 203, across the harbour): she no longer carries Twinsen -- he has
+    // the hovercraft -- so come to the shore she tells him so from the water and turns round and swims off, never surfacing to be ridden
+    // (her track: label 7 the shore, 8-13 surfacing, 24 on the way back; comportement_2 takes her home and hides her for the next ring).
+    // The user, 2026-11-23: "Let's change Moya the turtles lines on Desert Island when Twinsen summons her with a bell to 'Oh, Twinsen,
+    // it's you, let me guess, you want to ride me, what do you think I am, some sort of cow you can abuse for your own personal needs. I'm
+    // not interested.' - After this Moya should then turn around and swim off. Moya is no longer needed for the story as we now have the
+    // hydroglyder"
+    // The sea cave of Kash's tomb (scene 113): the game's own check over its spike pit (zone 10) froze Twinsen and turned him round unless he
+    // hovered there going forwards -- stopped or backwards on the hoverboard he was frozen again every pass of his script, the board set
+    // down on the spikes, and their blows kept him there till he died (the user, 2026-11-23: "Twinsen gets softlocked in the cave of the
+    // tomb if he attemps to use the hoverboard backwards over the spikes"). On the hoverboard any way he goes is his own; off it, the
+    // game's check as it was.
+    private static readonly System.Text.RegularExpressions.Regex SpikeCheck = new(@"if \(4 != comportement_hero\(\) \|\| 1 != anim\(\)\)");
+    private static void SeaCaveHover(IslandBeatsA b)
+    {
+        if (!b.Store.SceneExists(SeaCave)) return;
+        b.Edit(SeaCave, "the sea cave's spike pit: on the hoverboard Twinsen goes any way he likes over it (backwards and stopped were frozen for good)", _ => scripts =>
+        {
+            var life = scripts.GetText(0, ScriptKind.Life);
+            if (!SpikeCheck.IsMatch(life)) { b.Log.Add($"the sea cave's spike pit left as it was: Twinsen's check over it (scene {SeaCave}) isn't the game's"); return; }
+            scripts.SetText(0, ScriptKind.Life, SpikeCheck.Replace(life, "if (4 != comportement_hero())", 1));
+        });
+    }
+
+    private const int MoyaEntity = 149;
+    private static readonly int[] MoyaBellScenes = { 55, 203 };
+    private static readonly System.Text.RegularExpressions.Regex MoyaArrives = new(
+        @"if \(7 == l_track\(\)\)\s*\{\s*set_track\(label_8\);\s*flow_obj\(\d+, 51\);\s*set_comportement\(comportement_1\);\s*\}");
+    private static void MoyaRefuses(IslandBeatsA b, int line)
+    {
+        foreach (var scene in MoyaBellScenes)
+        {
+            if (!b.Store.SceneExists(scene)) continue;
+            b.Edit(scene, "Moya, called by her bell: not interested -- she turns round and swims off", model =>
+            {
+                var moya = model.Actors.FindIndex(a => a.Entity == MoyaEntity);
+                if (moya < 0) { b.Log.Add($"Moya left as she was in scene {scene}: no turtle (entity {MoyaEntity})"); return _ => { }; }
+                return scripts =>
+                {
+                    var life = scripts.GetText(moya, ScriptKind.Life);
+                    if (!MoyaArrives.IsMatch(life)) { b.Log.Add($"Moya left as she was in scene {scene}: her arrival at the shore isn't the game's"); return; }
+                    scripts.SetText(moya, ScriptKind.Life, MoyaArrives.Replace(life, $@"if (7 == l_track())
+    {{
+        message({line});
+        set_var_cube(1, 1);
+        set_var_cube(6, 0);
+        set_track(label_24);
+        set_comportement(comportement_2);
+    }}", 1));
+                };
+            });
+        }
+    }
 
     // The exam pages' item and their arrows (PagesSlot): the slot's texts and model, and an arrow at each page's place (island cells; null:
     // none). Returns each page's arrow, -1 where it has none. A second pass over the same files finds the texts there already and only
@@ -1194,6 +1259,10 @@ void comportement_1()
         TempleDrive(b);
         // (the cave on the islet across from the Hacienda shut by a rock fall: nothing of the story's in it -- HaciendaIsletCave)
         HaciendaIsletCave(b);
+        // (Moya at her bells: she won't carry him -- MoyaRefuses)
+        MoyaRefuses(b, Say(DesertLine.MoyaNotACow));
+        // (the sea cave's spike pit: the hoverboard free over it -- SeaCaveHover)
+        SeaCaveHover(b);
         Hangar(b, HangarScene, 4, MoonStart, new HangarLines(Say(DesertLine.HangarOffer), Say(DesertLine.HangarYes), Say(DesertLine.HangarNo),
             Say(DesertLine.HangarBoard), Say(DesertLine.HangarLater), Say(DesertLine.HangarLift), Say(DesertLine.HangarClosed)));
         // (Zoe as companion's hints on the Desert: the Dean, his pages, the sand filters, the helmet, the race -- RaceTrackStory.Companion.cs)
