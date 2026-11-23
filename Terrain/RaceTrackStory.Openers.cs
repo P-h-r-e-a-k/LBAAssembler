@@ -104,7 +104,10 @@ internal static partial class RaceTrackStory
     {
         // the dream
         new(RaceTrackIsland.Polar.IslandByte, OpenerLine.TwinsenDreamFunFrock, new[] { Chapter(0) }),
-        // the storm: the Wizard Zoe sent him to, Raph at the track, the gloves, Raph's time, the lighthouse, bed
+        // the storm: the Wizard Zoe sent him to, Raph at the track, the gloves, Raph's time, the lighthouse, bed -- but the gloves first while
+        // he's after the thief, from Tim's word to the thief cornered: the quest he's in (2026-11-23, the user: "We need to be more intelligent
+        // with Twinsen's opening line for the quest he's in" -- the sewers' painter, who saw the thief go by, was asked for the Wizard)
+        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenSeekGloves, new[] { Chapter(1), Is(GlovesSlot, 0), In(QThief, TimTold, ThiefCornered) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenSeekWizard, new[] { Chapter(1), In(StormPlot, 0, 1), Is(RaphHere, 0) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenSeekRaph, new[] { Chapter(1), Is(RaphHere, 0) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenSeekGloves, new[] { Chapter(1), Is(GlovesSlot, 0) }),
@@ -179,7 +182,13 @@ internal static partial class RaceTrackStory
         new(RaceTrackIsland.Celebration.IslandByte, OpenerLine.TwinsenBeatFunFrock, new[] { Chapter(14), In(FinalStep, 0, FinalWon - 1) }),
     };
 
-    // The race file's keys for an island (RaceCarEngineFile.EngineFile): its goals in the story, the hellos, and Zoe never greeted
+    // (the umbrella thief, the game's scene 48's actor 6, copied for the story's thief: not opened to while he's in the sewers, down the hatch
+    // to cornered -- his own lines carry it, "Fine, fine! Here are your gloves" after "I'm looking for the Weather Wizard" made no sense;
+    // the town's other people of his entity opened to as before)
+    private const int ThiefEntityId = 71;
+
+    // The race file's keys for an island (RaceCarEngineFile.EngineFile): its goals in the story, the hellos, Zoe never greeted and the thief
+    // not in the sewers
     internal static string OpenerKeys(RaceTrackIsland island, bool story)
     {
         var text = new System.Text.StringBuilder();
@@ -188,6 +197,7 @@ internal static partial class RaceTrackStory
                 text.Append($"opener={OpenerBase + (int)goal.Line}{string.Concat(goal.When.Select(w => $" {w.Var} {w.Lo} {w.Hi}"))}\n");
         text.Append($"opener_hello={string.Join(' ', OpenerHellos.Select(h => OpenerBase + (int)h))}\n");
         text.Append($"opener_quiet={CompanionEntityId}\n");
+        if (story) text.Append($"opener_quiet={ThiefEntityId} {OpenerChapter} 1 1 {QThief} {ThiefDown} {ThiefCornered}\n");
         return text.ToString();
     }
 

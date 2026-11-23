@@ -257,7 +257,8 @@
  *                                variables are all within their bounds -- his goal there; none, a hello. Said by him before their first line,
  *                                once a scene visit for each person and line; not to things, nor when his script speaks first (RaceMod_Opener)
  *     opener_hello=<text>...     the hellos, said in turn where no opener= holds
- *     opener_quiet=<entity>      the entity he never opens to (the companion, Zoe)
+ *     opener_quiet=<entity> [<var> <lo> <hi>]...   an entity he never opens to (the companion, Zoe), or not while its game
+ *                                variables all hold (the thief cornered); one a line, up to 8
  *     companion=<entity> <armour> (2026-11-11) that entity's actor with that armour, in any scene: put beside Twinsen as the scene starts
  *                                and as he gets out of his car (Companion: the story's Zoe from chapter 2)
  *     car_home=<scene> <away var> <fetch var>   (2026-11-11) the away variable 1 while the story car stands abandoned in another scene of
@@ -1737,7 +1738,12 @@ static int CarDead(void) { return s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME &&
 #define RACE_MAX_HELLOS 4
 typedef struct { S16 Text; int NbConds; S16 Var[RACE_OPENER_CONDS]; int Lo[RACE_OPENER_CONDS], Hi[RACE_OPENER_CONDS]; } T_RACE_OPENER;
 static T_RACE_OPENER s_openers[RACE_MAX_OPENERS];
-static int s_nbOpeners = 0, s_nbHellos = 0, s_helloNext = 0, s_openerQuiet = -1;
+static int s_nbOpeners = 0, s_nbHellos = 0, s_helloNext = 0;
+// opener_quiet=<entity> [<var> <lo> <hi>]...: whom he never opens to (Zoe, the companion, always), or not while those game variables
+// hold (the thief cornered in the sewers: his own lines carry it) -- their entity and conditions in a T_RACE_OPENER's (Text the entity)
+#define RACE_MAX_OPENER_QUIET 8
+static T_RACE_OPENER s_openerQuiet[RACE_MAX_OPENER_QUIET];
+static int s_nbOpenerQuiet = 0;
 static S16 s_hellos[RACE_MAX_HELLOS];
 // The ollie (2026-11-22, the user: "perhaps an ollie animation that allows Twinsen to do a basic jump if he presses space whilst riding the
 // hoverboard"): Space on the hoverboard -- Twinsun's, the protopack's behaviour -- plays the rider's ollie once, uninterrupted: a crouch,
@@ -5689,7 +5695,21 @@ static void Load(const char *path, int carOnly = 0) {
             s_nbHellos = 0;
             while (s_nbHellos < RACE_MAX_HELLOS && sscanf(p, "%d%n", &text, &used) == 1) { s_hellos[s_nbHellos++] = (S16)text; p += used; }
         }
-        else if (!strcmp(key, "opener_quiet")) { if (sscanf(v, "%d", &s_openerQuiet) != 1) s_openerQuiet = -1; }
+        else if (!strcmp(key, "opener_quiet")) {
+            T_RACE_OPENER q;
+            int ent = -1, n = 0, used = 0;
+            const char *p = v;
+            if (s_nbOpenerQuiet < RACE_MAX_OPENER_QUIET && sscanf(p, "%d%n", &ent, &used) == 1 && ent >= 0) {
+                p += used;
+                int var, lo, hi;
+                q.Text = (S16)ent;
+                while (n < RACE_OPENER_CONDS && sscanf(p, "%d %d %d%n", &var, &lo, &hi, &used) == 3 && var >= 0 && var < MAX_VARS_GAME) {
+                    q.Var[n] = (S16)var; q.Lo[n] = lo; q.Hi[n] = hi; n++; p += used;
+                }
+                q.NbConds = n;
+                s_openerQuiet[s_nbOpenerQuiet++] = q;
+            }
+        }
         else if (!strcmp(key, "car_dead")) {
             int used = 0;
             if (sscanf(v, "%d %d %n", &s_deadVar, &s_deadValue, &used) >= 2 && used > 0 && s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME) snprintf(s_deadText, sizeof(s_deadText), "%s", v + used);
@@ -9929,7 +9949,12 @@ S32 RaceMod_Opener(S32 lifeObj, S32 speaker, S32 text) {
     if (!RaceMod_Active() || (!s_nbOpeners && !s_nbHellos) || speaker == NUM_PERSO || speaker < 0 || speaker >= (S32)NbObjets || speaker >= 256) return -1;
     if (RaceMod_Hush(text)) return -1;
     if (s_openerScene != (S32)NumCube) { memset(s_openerSaid, 0, sizeof(s_openerSaid)); s_openerScene = (S32)NumCube; }
-    if (s_openerQuiet >= 0 && ListObjet[speaker].IndexFile3D == s_openerQuiet) return -1;
+    for (int i = 0; i < s_nbOpenerQuiet; i++) {
+        const T_RACE_OPENER *q = &s_openerQuiet[i];
+        int holds = ListObjet[speaker].IndexFile3D == q->Text;
+        for (int k = 0; k < q->NbConds && holds; k++) { const S32 v = ListVarGame[q->Var[k]]; holds = v >= q->Lo[k] && v <= q->Hi[k]; }
+        if (holds) return -1;
+    }
     if (!OpenerPerson(speaker)) {
         static S32 thingScene = -1, thingActor = -1;
         if (thingScene != (S32)NumCube || thingActor != speaker) Log_Info("[racemod] opener: actor %d of scene %d answers, but isn't someone to greet -- none", (int)speaker, (int)NumCube);
@@ -26683,7 +26708,7 @@ static void ResetTrack(void) {
     s_noSuit = 0;
     s_brkVar = -1; s_broken = 0;
     s_heldVar = -1; s_heldCube = -1; s_deadVar = -1;
-    s_nbOpeners = 0; s_nbHellos = 0; s_openerQuiet = -1;
+    s_nbOpeners = 0; s_nbHellos = 0; s_nbOpenerQuiet = 0;
     // (s_nbHoverDoors, s_nbFarActors, s_nbQuiet: story.txt's, read once -- not the island's track file's, so not undone as it loads)
     s_victoryOn = 0;
     s_hoverEntity = -1;
