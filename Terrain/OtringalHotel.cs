@@ -25,7 +25,8 @@ namespace LBAAssembler.Terrain;
 //     facing over a coffee table, a grand piano -- through a doorway room 170 as the bedroom, its bed gone for the four-poster, and through
 //     another room 169's bathroom;
 //   - the lobby (the game's scene 81): the sofa against the west wall of its north corridor (block 84, cells 27-28, 5-8) taken out of the
-//     grid for the lift in that wall (RaceTrackStory.OtringalNight puts the clerk in).
+//     grid for the lift in that wall, its shadow out of the carpet too (RaceTrackStory.OtringalNight puts the clerk in).
+// The rooms' floors are the game's carpet, without the shadows of the pieces taken out (Carpet, Unshadow).
 // The furniture is HotelProps' (its rooms' remade in the game's own hotel style on 2026-11-23: HotelProps.Rooms.cs).
 // The rooms' joins between them are front (cut) walls, as the game's rooms' own front walls: a full wall along x would hide the room behind it
 // from the camera.
@@ -66,6 +67,8 @@ internal static class OtringalHotel
     public const int ClassicSwitch = 1, JuniorSwitch = 2, SuiteSwitch = 3, LiftSwitch = 4;
     // the lobby's sofa: grid block 84, cells x 27-28, z 5-8, layers 12-13
     private const int SofaBlock = 84;
+    // the rooms' carpet (the hotel's brick library's block 25)
+    private const byte CarpetBlock = 25;
     // the actors the installer puts in, for the story: each scene's lift (corridor), the rooms' beds' places (scene units: where Twinsen lies)
     public const int CorridorLiftActor = 2;
     public static readonly (int X, int Y, int Z, int Beta) ClassicBed = (1280, 700, 3072, 1024), JuniorBed = (1280, 700, 2048, 1024), SuiteBed = (8448, 900, 2700, 0);
@@ -131,6 +134,24 @@ internal static class OtringalHotel
             Column(cells, x, 3, was, x, 6);
             Column(cells, x, 4, was, x, 7);
         }
+        // (the rooms' carpet, room 79's block 25, laid at (x, z): its back row's bricks (0-2) along the back wall (z 2), its west column's (4,
+        // 8) along a west wall, elsewhere its middle four (5, 6, 9, 10) -- the game's rooms have the shadows of their beds, wardrobes,
+        // armchairs and lamps in their carpet (blocks 26, 88, 89, block 24's edges), and they stayed on the floor where those pieces were
+        // taken out or the floor was carried on -- 2026-11-23, the user: "Otringal scene 381 the corridor has some shadows on the floor that
+        // need removing")
+        static void Carpet(byte[] cells, int x, int z, bool westEdge, int y = 0)
+        {
+            var row = z == 2 ? 0 : z % 2 == 1 ? 1 : 2;
+            var col = westEdge ? 0 : x % 2 == 0 ? 1 : 2;
+            cells[At(x, y, z)] = CarpetBlock; cells[At(x, y, z) + 1] = (byte)(row * 4 + col);
+        }
+        // (the carpet in place of the shadows in x0..x1, z0..z1, a west wall's edge at westX, the floor at layer y)
+        static void Unshadow(byte[] cells, int x0, int x1, int z0, int z1, int westX = 1, int y = 0)
+        {
+            for (var z = z0; z <= z1; z++)
+                for (var x = x0; x <= x1; x++)
+                    if (cells[At(x, y, z)] is 24 or 26 or 88 or 89) Carpet(cells, x, z, x == westX, y);
+        }
         // (a doorway through a join's cut wall, cells z0 and z0 + 1: the floor carried through)
         static void Doorway(byte[] cells, int x, int z0 = 6) { for (var z = z0; z <= z0 + 1; z++) Column(cells, x, z, (byte[])cells.Clone(), x - 1, z, 0, 0); }
         // (a room's columns x 1..last+1 (its interior and its east cut wall) copied in at offset dx; the join's own column the cut wall before it)
@@ -161,6 +182,9 @@ internal static class OtringalHotel
                 else if (z < CorridorFront) Column(corridor, x, z, a.Cells, fx, 2 + (z - 2) % 10, 0, 0);
                 // (the front wall: room A's front row, one plain column of it -- its door's frame (cells 5-8) stood up in the corridor as pillars)
                 else Column(corridor, x, z, a.Cells, 2, 12);
+                // (its floor the carpet, the one pattern all along: room A's floor carried on brought its bed's, lamp's and wardrobe's shadows
+                // every 11 cells)
+                if (x > 0 && x < CorridorEnd && z >= 2 && z < CorridorFront) Carpet(corridor, x, z, x == 1);
             }
         }
         // ---- the lift car: room A's walls round its 4 x 4 floor, as the corridor's are round its own
@@ -173,6 +197,7 @@ internal static class OtringalHotel
                 if (z <= 1 || x == 0 || x == CarEnd) Column(car, x, z, a.Cells, fx, z == CarFront ? 12 : Math.Min(z, 11));
                 else if (z < CarFront) Column(car, x, z, a.Cells, fx, 2 + (z - 2) % 10, 0, 0);
                 else Column(car, x, z, a.Cells, 2, 12);
+                if (x > 0 && x < CarEnd && z >= 2 && z < CarFront) Carpet(car, x, z, x == 1);
             }
         }
         // ---- the Classic Room: room A, its armchairs (cells 10-11, 8-9) gone for the bathroom
@@ -213,12 +238,16 @@ internal static class OtringalHotel
         // table": the wardrobe, x 7-9 by the back wall, two cells on into the corner (x 9-11), so the sofa stands against the back wall
         // between it and the bed; the little chair by the bed's head (x 4) out -- a brick, it can't turn to face the sofa, so a chair of the
         // hotel's own style stands across the table instead)
+        // (the wardrobe's shadow in the carpet moved with it, the carpet where it stood)
         for (var z = 2; z <= 3; z++)
         {
             for (var x = 11; x >= 9; x--)
-                for (var y = 1; y < Height; y++) { junior[At(x, y, z)] = b.Cells[At(x - 2, y, z)]; junior[At(x, y, z) + 1] = b.Cells[At(x - 2, y, z) + 1]; }
+                for (var y = 0; y < Height; y++) { junior[At(x, y, z)] = b.Cells[At(x - 2, y, z)]; junior[At(x, y, z) + 1] = b.Cells[At(x - 2, y, z) + 1]; }
             for (var x = 7; x <= 8; x++)
+            {
                 for (var y = 1; y < Height; y++) { junior[At(x, y, z)] = 0; junior[At(x, y, z) + 1] = 0; }
+                Carpet(junior, x, z, false);
+            }
         }
         Clear(junior, 4, 4, 2, 2, 1);
         PlainFront(junior, 13, 20, 11, bath.Cells, 3);
@@ -244,6 +273,10 @@ internal static class OtringalHotel
         // (the salon's armchair, x 10-11 z 8-9: with the piano's bench it shut the way to the bedroom's doorway -- the user, "This chair blocks
         // access to the bedroom... let's remove it")
         Clear(suite, 10, 11, 8, 9, 1);
+        // (the shadows of the pieces taken out -- the salon's bed, its lamp, wardrobe and armchair, the bedroom's bed -- out of the carpet)
+        Unshadow(suite, 1, 4, 2, 7);
+        Unshadow(suite, 10, 11, 3, 9);
+        Unshadow(suite, 13, 16, 2, 5, 13);
         PlainFront(suite, 13, 23, 12, b.Cells, 3);
         PlainFront(suite, 25, 32, 11, bath.Cells, 3);
         OpenDoor(suite, DoorA - 1, 12, 3);
@@ -255,6 +288,9 @@ internal static class OtringalHotel
                 for (var y = 12; y <= 13; y++)
                     if (lobbyCells[At(x, y, z)] == SofaBlock) { lobbyCells[At(x, y, z)] = 0; lobbyCells[At(x, y, z) + 1] = 0; sofaCells++; }
         if (sofaCells == 0) { log.Add("The Imperial Hotel's upper floor left out: the lobby's sofa (block 84) isn't where the game has it"); return log; }
+        // (and its shadow in the carpet, the floor's layer 11 -- 2026-11-23, the user: "seems to have a shadow on the floor in front of the
+        // lift from where we removed the sofa")
+        Unshadow(lobbyCells, 27, 28, 5, 8, 27, 11);
 
         // ---- the grids in: four new ones, the lobby's own changed
         var grids = new (int Scene, byte[] Raw, byte[] Shape)[]
