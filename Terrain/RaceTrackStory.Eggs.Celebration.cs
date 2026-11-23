@@ -28,6 +28,14 @@ internal static partial class RaceTrackStory
     // NO_PRE_CLIP | OBJ_ZBUFFER): anything else on the road its roadwatch takes out of sight while a car races -- the eggs on the road with it
     internal const uint RaceProp = 0x1A1000;
 
+    // The Dark Monk's statuette on the road while a car races: the little 3D one (MonkStatuette -- the sprite was drawn statue-size)
+    private static SceneActorModel RoadStatuette(int x, int y, int z)
+    {
+        var a = Citadel.CitadelProps.Actor(MonkStatuette.Generic, x, y, z, 0);
+        a.Flags |= RaceProp;
+        return a;
+    }
+
     // A sprite on the road while a car races (RaceTrackScenes.SpriteProp, the race-track mode's own)
     private static SceneActorModel RoadSprite(int x, int y, int z, int sprite)
     {
@@ -111,7 +119,7 @@ void comportement_2()
         GroupB.EditScene(store, scene, log, $"the fifth statuette at the edge of the first jump's lip, cell ({x:0.#}, {z:0.#}), {lip.Y:0} (variable {EggStatuette} 0 -> {StatuetteFound})", model =>
         {
             // (out of sight until its script sees Twinsen on foot)
-            var statuette = RoadSprite(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(lip.Y), RaceTrackScenes.CubeLocal(z, model.CubeY), RaceTrackScenes.MonkStatuetteSprite);
+            var statuette = RoadStatuette(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(lip.Y), RaceTrackScenes.CubeLocal(z, model.CubeY));
             statuette.Flags |= RaceTrackScenes.InvisibleFlag;
             return GroupB.Add(model, statuette,
                 Pickup($"0 == var_game({EggStatuette})", StatuetteReach, false, $"        set_var_game({EggStatuette}, {StatuetteFound});\n", BonusSample, Say(LavaLine.Statuette5), onFoot: true));
@@ -192,7 +200,7 @@ void comportement_2()
             $"and a clover leaf in the statue's nose at cell ({NoseX:0.#}, {NoseZ:0.#}), {NoseY:0} (text {first})", model =>
         {
             if (!RaceTrackScenes.InCube(model, sx, sz) || !RaceTrackScenes.InCube(model, NoseX, NoseZ)) throw new NotTheGames("the ring isn't in the scene's cube");
-            var statuette = GroupB.Add(model, RoadSprite(RaceTrackScenes.CubeLocal(sx, model.CubeX), (int)Math.Round(top), RaceTrackScenes.CubeLocal(sz, model.CubeY), RaceTrackScenes.MonkStatuetteSprite), $@"void comportement_0()
+            var statuette = GroupB.Add(model, RoadStatuette(RaceTrackScenes.CubeLocal(sx, model.CubeX), (int)Math.Round(top), RaceTrackScenes.CubeLocal(sz, model.CubeY)), $@"void comportement_0()
 {{
     if (0 == var_game({EggStatuette}) || {FinalChapter} != chapter() || 0 == var_game({StatueRisen}))
     {{

@@ -701,6 +701,7 @@ void comportement_1()
         log.AddRange(HangarProps.Install(gameDirectory));
         // (the Imperial Hotel's upper floor's furniture: OtringalHotel)
         log.AddRange(HotelProps.Install(gameDirectory));
+        log.AddRange(MonkStatuette.Install(gameDirectory));
         // (the racing licence's card in the inventory -- LicenceCard)
         log.AddRange(LicenceCard.Install(gameDirectory));
         // (Twinsen's swimming: the Imperial Hotel's pool -- PoolSwim)
