@@ -1849,19 +1849,28 @@ static void LensDraw(void) {
 // variable is free: seat_var=247 was the Polar dream's EggSendell too, its 1 turned to 2 by the first key after Sendell's light, so her
 // line at the wake was never said; a scene variable is the room's own, cleared as it loads)
 static int s_seatVar = -1, s_seatFree = 0, s_seatCube = -1;
-static void SeatFrame(void) {
+// (the press that stands him up is that and nothing else: kept from the scripts till it is let go -- it stood him up from the Tralu bar's
+// bench and, held a frame or two longer, asked Benny for a game of darts too: 2026-11-23)
+static int s_seatSwallow = 0;
+static S32 s_seatQuietUntil = 0;   // (and a moment after it: the engine's Action flag, left set while he sat held, seen by whoever he stood by)
+static U32 SeatPress(U32 input) {
     U8 *seat = s_seatCube >= 0 && s_seatCube < MAX_VARS_CUBE && ListVarCube[s_seatCube] == 1 ? &ListVarCube[s_seatCube] : NULL;
     const int game = !seat && s_seatVar >= 0 && s_seatVar < MAX_VARS_GAME && ListVarGame[s_seatVar] == 1;
-    if (!seat && !game) { s_seatFree = 0; return; }
+    if (!seat && !game) { s_seatFree = 0; return input; }
     // (Action only -- Space or End -- not a way: the user, 2026-11-18, of the Tralu bar's bench, "stays sitting until the user presses action
     // to get up"; an arrow held as the scene ended stood him straight up)
     const U32 keys = I_ACTION_M | I_ACTION_ALWAYS;
-    if (!(Input & keys)) { s_seatFree = 1; return; }
-    if (!s_seatFree) return;
+    if (!(input & keys)) { s_seatFree = 1; return input; }
+    if (!s_seatFree) return input & ~(U32)(keys | I_ACTION);
     if (seat) *seat = 2; else ListVarGame[s_seatVar] = 2;
     s_seatFree = 0;
+    s_seatSwallow = 1;
+    s_seatQuietUntil = TimerRefHR + 400;
+    ActionNormal = FALSE;
     Log_Info("[racemod] seat: a key pressed -- Twinsen gets up");
+    return input & ~(U32)(keys | I_ACTION);
 }
+static void SeatFrame(void) {}
 // drive_marks=<game var> <count>: a story's scripted drive (the user, 2026-11-14: the racing licence shown at the Temple of Bu's gate,
 // "then script the car progression the rest of the way"). A script sets the variable to an actor's index (2-239): the first of <count>
 // markers, consecutive actors of the scene -- and Twinsen's car, he in it, is driven through their places (RaceMod_Walk, DriveInput),
@@ -15531,6 +15540,12 @@ static int HoverOverWater(void) {
 S32 RaceMod_HoverSea(void) { return (s_hoverOn && (Comportement == C_BUGGY || s_hoverDocked == (int)NumCube)) || (s_hoverDocked >= 0 && s_hoverDockedIn && (int)NumCube != s_hoverDocked); }
 U32 RaceMod_FilterInput(U32 input) {
     s_pressAnswered = 0;
+    // (seated: Action stands him up, that press no one else's -- SeatPress; and no one's till it is let go -- the key read as it came,
+    // before SeatPress takes it away)
+    const U32 seatKeys = input & (I_ACTION_M | I_ACTION_ALWAYS);
+    if (s_seatSwallow && !seatKeys) s_seatSwallow = 0;
+    input = SeatPress(input);
+    if (s_seatSwallow) input &= ~(U32)(I_ACTION_M | I_ACTION_ALWAYS | I_ACTION);
     // (win_stop=: a won race's cut-scene -- nothing but the menus' keys while the car stops and the story's scene plays; the brake is
     // RaceMod_AutoInput's own, kept)
     if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0));
@@ -19945,6 +19960,8 @@ static int ZoeGen(int heroGen) { return heroGen == GEN_ANIM_MARCHE || heroGen ==
 
 // Whether a life script's action() sees the Action key: player 2's Zoe talks to no one but herself -- the companion's hint lines
 int RaceMod_ActionFor(const T_OBJET *obj) {
+    // (the press that stood him up from a seat: no one's -- SeatPress)
+    if (s_seatSwallow || TimerRefHR < s_seatQuietUntil) return 0;
     if (!RaceGame_StoryZoe() || s_compEntity < 0) return 1;
     return obj->IndexFile3D == s_compEntity && (obj->Armure == s_compMark || obj->Armure == s_compInMark);
 }

@@ -345,15 +345,25 @@ void comportement_5()
     }}
 }}
 
+// (seated at the table first, then the cheers -- the user, 2026-11-23, Twinsen to sit at the table and stay sitting till Action after the
+// cut scene: he stood through them, sitting only as Luc set off with the drink)
 void comportement_4()
 {{
-    message_obj({patIndex}, {EveningId(p.Say, EveningLine.PatCheer)});
-    message_obj({fabIndex}, {EveningId(p.Say, EveningLine.FabCheer)});
-    message_obj({bunnyIndex}, {EveningId(p.Say, EveningLine.BunnyCheer)});
-    message_obj(0, {EveningId(p.Say, EveningLine.TwinsenJustOne)});
     set_track_obj(0, label_{BarSitDown});
-    set_track_obj({lucIndex}, label_{LucBrings});
-    set_comportement(comportement_2);
+    set_comportement(comportement_9);
+}}
+
+void comportement_9()
+{{
+    if ({BarSeated} == l_track_obj(0))
+    {{
+        message_obj({patIndex}, {EveningId(p.Say, EveningLine.PatCheer)});
+        message_obj({fabIndex}, {EveningId(p.Say, EveningLine.FabCheer)});
+        message_obj({bunnyIndex}, {EveningId(p.Say, EveningLine.BunnyCheer)});
+        message_obj(0, {EveningId(p.Say, EveningLine.TwinsenJustOne)});
+        set_track_obj({lucIndex}, label_{LucBrings});
+        set_comportement(comportement_2);
+    }}
 }}
 
 void comportement_2()
@@ -416,7 +426,7 @@ label({BarSitDown});
 pos_point({seat});
 beta(1024);
 anim({CitadelSpanking.TwinsenSit});
-wait_nb_dizieme(30);
+wait_nb_dizieme(6);
 
 label({BarSeated});
 stop();
