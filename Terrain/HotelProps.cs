@@ -15,13 +15,11 @@ namespace LBAAssembler.Terrain;
 //     pigeonholes with the rooms' keys, a lamp;
 //   - the corridor's doors (CorridorDoors): five panelled doors in their architraves along a wall, each its brass number 101-105, a sconce
 //     between each two, prints in gilt frames; the suite's double doors (SuiteDoors) under a pediment, "Imperial Suite" on a gilt plaque;
-//   - the four-poster (FourPoster) on its dais: turned posts, a canopy with a scalloped pelmet, drapes tied back at each post, a quilted
-//     spread, bolster and cushions;
-//   - a crystal chandelier (Chandelier: its foot at the ceiling's height, hanging down), a damask sofa (Sofa), a coffee table (CoffeeTable),
-//     a grand piano (GrandPiano), a table for eight laid with candelabra (DiningTable), a marble fireplace with its overmantel mirror, clock
-//     and candlesticks (Fireplace), a patterned rug (HotelRug, walked over), a panelled partition with a doorway (Partition: the basic room's
-//     bathroom), a large oil painting in a gilt frame (Painting).
-internal static class HotelProps
+//   - a crystal chandelier (Chandelier: its foot at the ceiling's height, hanging down -- the corridor's), a table for eight laid with
+//     candelabra (DiningTable), a panelled partition with a doorway (Partition) -- neither in the rooms now;
+//   - the rooms' furniture -- the four-poster, a leather sofa, a coffee table, a grand piano, a fireplace, a rug, a painting, the Classic
+//     Room's bath, toilet and basin -- remade in the game's own hotel style on 2026-11-23: HotelProps.Rooms.cs.
+internal static partial class HotelProps
 {
     public const int LiftFront = 229, LiftOpen = 230, ReceptionDesk = 231, CorridorDoors = 232, SuiteDoors = 233, FourPoster = 234, Chandelier = 235,
                      Sofa = 236, CoffeeTable = 237, GrandPiano = 238, DiningTable = 239, Fireplace = 240, HotelRug = 241, Partition = 242, Painting = 243;
@@ -45,7 +43,10 @@ internal static class HotelProps
     // (the lift's opening: how wide, how high; its surround's)
     public const float LiftWide = 1250, LiftHigh = 2300;
 
-    public static List<string> Install(string gameDirectory) => Citadel.CitadelProps.InstallMore(gameDirectory, "the Imperial Hotel", new (int, string, Func<byte[], Body>)[]
+    public static List<string> Install(string gameDirectory) => Citadel.CitadelProps.InstallMore(gameDirectory, "the Imperial Hotel", Bodies);
+
+    // (every body the hotel adds, its generic and name: Install's, and a preview's -- ScriptRoundTrip hotelpreview)
+    internal static readonly (int Generic, string Name, Func<byte[], Body> Build)[] Bodies =
     {
         (LiftFront, "the hotel's lift, its doors shut", h => BuildLift(h, false)),
         (LiftOpen, "the hotel's lift, its doors open", h => BuildLift(h, true)),
@@ -57,7 +58,7 @@ internal static class HotelProps
         (SuiteDoors, "the Imperial Suite's doors", BuildSuiteDoors),
         (FourPoster, "the Imperial Suite's four-poster bed", BuildFourPoster),
         (Chandelier, "a crystal chandelier", BuildChandelier),
-        (Sofa, "a damask sofa", BuildSofa),
+        (Sofa, "a leather sofa", BuildSofa),
         (CoffeeTable, "a coffee table", BuildCoffeeTable),
         (GrandPiano, "a grand piano", BuildGrandPiano),
         (DiningTable, "a table for eight", BuildDiningTable),
@@ -68,7 +69,10 @@ internal static class HotelProps
         (LiftInside, "the lift car's doors, shut", h => BuildLiftInside(h, false)),
         (LiftInsideOpen, "the lift car's doors, open", h => BuildLiftInside(h, true)),
         (LiftCarBack, "the lift car's back wall", BuildLiftCarBack),
-    });
+        (HotelBath, "a bath", BuildBath),
+        (HotelToilet, "a toilet", BuildToilet),
+        (HotelBasin, "a basin", BuildBasin),
+    };
 
     // The boxes the scene stands them in: the rug walked over (OtringalHotel gives it the walk-over armour too); the wall pieces only as
     // deep as they stand out from their wall
@@ -394,57 +398,6 @@ internal static class HotelProps
         return m.ToBody(header);
     }
 
-    // ---- the four-poster bed on its dais, its head at -z, its foot towards +z
-    private static Body BuildFourPoster(byte[] header)
-    {
-        var m = new CarMesh("the four-poster", new[] { -1 });
-        m.Light = 0.8f;
-        // (2026-11-23: smaller -- it filled the suite's bedroom: 1800 x 2100, its posts 2400, the dais 360 wider and longer)
-        const float W = 900, L = 1050, Dais = 160, Mat = 750, Post = 2400;
-        // the dais, its gilt edge
-        m.Box(0, new Vector3(0, Dais / 2, 0), new Vector3(2 * W + 360, Dais, 2 * L + 360), Velvet, Velvet);
-        m.Box(0, new Vector3(0, Dais - 10, 0), new Vector3(2 * W + 400, 20, 2 * L + 400), Brass);
-        // the bed's frame, the mattress, the quilted spread (a pattern of buttons), the bolster and the cushions against the headboard
-        m.Box(0, new Vector3(0, Dais + 220, 0), new Vector3(2 * W, 260, 2 * L), Walnut, Walnut);
-        m.Box(0, new Vector3(0, Dais + Mat - 120, 40), new Vector3(2 * W - 60, 240, 2 * L - 80), Linen, Linen);
-        m.Box(0, new Vector3(0, Dais + Mat + 10, 200), new Vector3(2 * W - 20, 40, 2 * L - 380), Velvet, Velvet);
-        for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) m.Ball(0, new Vector3(i * 560, Dais + Mat + 40, 200 + j * 600), 18, Brass);
-        m.Box(0, new Vector3(0, Dais + Mat + 60, -L + 220), new Vector3(2 * W - 140, 180, 220), Linen, Linen);
-        for (var k = -1; k <= 1; k++) m.Box(0, new Vector3(k * 600, Dais + Mat + 200, -L + 130), new Vector3(520, 300, 120), k == 0 ? Ivory : Velvet, Ivory);
-        // the headboard: a tall carved panel, gilt crest
-        m.Box(0, new Vector3(0, Dais + 1100, -L - 40), new Vector3(2 * W, 1500, 80), Walnut, Walnut);
-        m.Box(0, new Vector3(0, Dais + 1100, -L + 10), new Vector3(2 * W - 300, 1100, 20), Velvet);
-        m.Ball(0, new Vector3(0, Dais + 1900, -L), 90, Brass);
-        // the four posts, turned (a stack of rings), their finials
-        foreach (var (sx, sz) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
-        {
-            float x = sx * (W - 40), z = sz * (L - 40);
-            var rings = new (float Y, float R)[] { (Dais, 90), (Dais + 700, 95), (Dais + 800, 60), (Dais + Post * 0.55f, 80), (Dais + Post, 50) };
-            var loops = rings.Select(r => m.Loop(0, new Vector3(x, r.Y, z), new Vector3(r.R, 0, 0), new Vector3(0, 0, r.R), 6)).ToArray();
-            for (var k = 0; k + 1 < loops.Length; k++) m.Skin(loops[k], loops[k + 1], _ => Walnut, new Vector3(x, (rings[k].Y + rings[k + 1].Y) / 2, z));
-            m.Ball(0, new Vector3(x, Dais + Post + 80, z), 85, Brass);
-        }
-        // the canopy: a frame between the posts' tops, a scalloped pelmet round it, the roof of cloth
-        var ty = Dais + Post;
-        m.Box(0, new Vector3(0, ty, 0), new Vector3(2 * W + 80, 60, 2 * L + 80), Walnut, Velvet);
-        foreach (var (len, alongX, at) in new[] { (2 * W, true, L + 40f), (2 * W, true, -L - 40f), (2 * L, false, W + 40f), (2 * L, false, -W - 40f) })
-            for (var k = 0; k < 4; k++)
-            {
-                var t = -len / 2 + (k + 0.5f) * len / 4;
-                var c = alongX ? new Vector3(t, ty - 160, at) : new Vector3(at, ty - 160, t);
-                m.Box(0, c, alongX ? new Vector3(len / 4 - 20, 300, 30) : new Vector3(30, 300, len / 4 - 20), k % 2 == 0 ? Velvet : VelvetDark, Velvet);
-            }
-        // the drapes: a fall of cloth at each post, tied back with a gold tassel
-        foreach (var (sx, sz) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
-        {
-            float x = sx * (W + 60), z = sz * (L - 160);
-            m.Box(0, new Vector3(x, Dais + 1900, z), new Vector3(120, 1600, 360), Velvet, Velvet);
-            m.Box(0, new Vector3(x, Dais + 600, z + sz * 80), new Vector3(140, 1100, 200), Velvet, Velvet);
-            m.Ball(0, new Vector3(x, Dais + 1150, z), 55, Brass);
-        }
-        return m.ToBody(header);
-    }
-
     // ---- a crystal chandelier: its foot (the origin) at the ceiling, hanging down from it
     private static Body BuildChandelier(byte[] header)
     {
@@ -467,75 +420,6 @@ internal static class HotelProps
             }
         m.Ball(0, new Vector3(0, -760, 0), 60, CrystalWhite);
         m.Ball(0, new Vector3(0, -860, 0), 34, CrystalWhite);
-        return m.ToBody(header);
-    }
-
-    // ---- a damask sofa: three seats, rolled arms, gilt feet, its back at -z
-    private static Body BuildSofa(byte[] header)
-    {
-        var m = new CarMesh("a sofa", new[] { -1 });
-        m.Light = 0.8f;
-        const float W = 1050, D = 420, Seat = 430;
-        m.Box(0, new Vector3(0, Seat - 120, 0), new Vector3(2 * W, 200, 2 * D), Teal, Teal);
-        for (var k = -1; k <= 1; k++) m.Box(0, new Vector3(k * 2 * W / 3, Seat + 30, 40), new Vector3(2 * W / 3 - 30, 100, 2 * D - 140), Teal, Teal + 2);
-        m.Box(0, new Vector3(0, Seat + 330, -D + 70), new Vector3(2 * W, 560, 140), Teal, Teal);
-        m.Box(0, new Vector3(0, Seat + 625, -D + 70), new Vector3(2 * W + 40, 40, 160), Mahogany, Brass);
-        foreach (var s in new[] { -1f, 1f })
-        {
-            m.Box(0, new Vector3(s * (W - 70), Seat + 120, 0), new Vector3(140, 300, 2 * D), Teal, Teal);
-            m.Ball(0, new Vector3(s * (W - 70), Seat + 270, D - 40), 70, Teal + 1);
-        }
-        foreach (var (sx, sz) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
-            m.Box(0, new Vector3(sx * (W - 60), 100, sz * (D - 60)), new Vector3(60, 200, 60), Brass);
-        return m.ToBody(header);
-    }
-
-    // ---- a coffee table: a marble top on gilt legs, a vase of flowers
-    private static Body BuildCoffeeTable(byte[] header)
-    {
-        var m = new CarMesh("a coffee table", new[] { -1 });
-        m.Light = 0.8f;
-        const float W = 600, D = 380, H = 420;
-        m.Box(0, new Vector3(0, H - 20, 0), new Vector3(2 * W, 40, 2 * D), Marble, Marble);
-        m.Box(0, new Vector3(0, H - 60, 0), new Vector3(2 * W - 60, 40, 2 * D - 60), Brass);
-        foreach (var (sx, sz) in new[] { (-1, -1), (1, -1), (-1, 1), (1, 1) })
-            m.Strut(0, new Vector3(sx * (W - 60), H - 60, sz * (D - 60)), new Vector3(sx * (W - 20), 0, sz * (D - 20)), 22, Brass);
-        m.Box(0, new Vector3(0, H + 110, 0), new Vector3(140, 180, 140), Glass, Glass);
-        foreach (var (fx, fz, c) in new[] { (0, 0, Velvet + 4), (-70, 40, FireYellow), (60, -50, Velvet + 2), (40, 70, Ivory + 4) })
-            m.Ball(0, new Vector3(fx, H + 280, fz), 60, c);
-        return m.ToBody(header);
-    }
-
-    // ---- a grand piano: its keyboard towards +z, the lid propped up
-    private static Body BuildGrandPiano(byte[] header)
-    {
-        var m = new CarMesh("a grand piano", new[] { -1 });
-        m.Light = 0.85f;
-        const float Top = 950, Case = 330;
-        // the case: a curved outline (its curve on the right), black lacquer
-        var outline = new List<Vector3> { new(-720, 0, 300), new(720, 0, 300) };
-        for (var k = 0; k <= 8; k++)
-        {
-            var a = MathF.PI / 2 * k / 8;
-            outline.Add(new Vector3(720 - 300 * (1 - MathF.Cos(a)), 0, 300 - 900 * MathF.Sin(a)));
-        }
-        outline.Add(new Vector3(-100, 0, -1700));
-        outline.Add(new Vector3(-720, 0, -1500));
-        var bottom = outline.Select(v => m.P(0, v + new Vector3(0, Top - Case, 0))).ToArray();
-        var top = outline.Select(v => m.P(0, v + new Vector3(0, Top, 0))).ToArray();
-        var centre = new Vector3(0, Top - Case / 2, -600);
-        for (var k = 0; k < outline.Count; k++) m.Out(new[] { bottom[k], bottom[(k + 1) % outline.Count], top[(k + 1) % outline.Count], top[k] }, Ebony, centre);
-        var tc = m.P(0, new Vector3(0, Top, -600)); var bc = m.P(0, new Vector3(0, Top - Case, -600));
-        for (var k = 0; k < outline.Count; k++) { m.Out(new[] { tc, top[k], top[(k + 1) % outline.Count] }, Ebony, centre); m.Out(new[] { bc, bottom[(k + 1) % outline.Count], bottom[k] }, Ebony, centre); }
-        // the lid propped up on its stick, the keyboard (ivory, the black keys over it), the music desk, three legs, the pedals
-        m.Strut(0, new Vector3(650, Top, -400), new Vector3(650, Top + 800, -600), 14, Ebony);
-        var lid = new[] { m.P(0, new Vector3(-720, Top, -1500)), m.P(0, new Vector3(720, Top, -200)), m.P(0, new Vector3(700, Top + 820, -620)), m.P(0, new Vector3(-100, Top + 500, -1700)) };
-        m.Both(lid, Ebony);
-        m.Box(0, new Vector3(0, Top - 120, 400), new Vector3(1420, 60, 200), Ivory, Linen);
-        for (var k = -10; k <= 10; k++) if (k % 7 != 0 && k % 7 != 3) m.Box(0, new Vector3(k * 64, Top - 60, 360), new Vector3(30, 30, 110), Ebony);
-        m.Box(0, new Vector3(0, Top + 200, 150), new Vector3(800, 300, 30), Ebony, Ebony);
-        foreach (var (x, z) in new[] { (-640f, 220f), (640f, 220f), (-100f, -1500f) }) m.Box(0, new Vector3(x, (Top - Case) / 2, z), new Vector3(110, Top - Case, 110), Ebony, Brass);
-        m.Box(0, new Vector3(0, 80, 260), new Vector3(240, 40, 80), Brass);
         return m.ToBody(header);
     }
 
@@ -568,85 +452,6 @@ internal static class HotelProps
         return m.ToBody(header);
     }
 
-    // ---- a marble fireplace against its wall (its back on z 0), the fire in it, the mantel's clock and candlesticks, the mirror over it
-    private static Body BuildFireplace(byte[] header)
-    {
-        var m = new CarMesh("a marble fireplace", new[] { -1 });
-        m.Light = 0.8f;
-        const float W = 900, H = 1150, D = 300;
-        foreach (var s in new[] { -1f, 1f }) m.Box(0, new Vector3(s * (W - 140), H / 2, D / 2), new Vector3(280, H, D), Marble, Marble);
-        m.Box(0, new Vector3(0, H - 120, D / 2), new Vector3(2 * W, 240, D), Marble, Marble);
-        m.Box(0, new Vector3(0, H + 30, D / 2 + 30), new Vector3(2 * W + 160, 60, D + 80), MarbleVein, Marble);
-        // the hearth's dark mouth, the fire, the logs
-        Quad(m, new(-W + 280, 60, 40), new(W - 280, 60, 40), new(W - 280, H - 240, 40), new(-W + 280, H - 240, 40), Ebony, new(0, 400, 400), unlit: true);
-        m.Box(0, new Vector3(0, 30, D / 2 + 100), new Vector3(2 * W, 60, D + 200), MarbleVein, Marble);
-        m.Box(0, new Vector3(0, 120, 140), new Vector3(700, 90, 90), MahoganyDark);
-        foreach (var (x, h, c) in new[] { (-150f, 300f, FireOrange), (0f, 420f, FireYellow), (160f, 280f, FireOrange) }) m.Ball(0, new Vector3(x, 160 + h / 2, 150), (int)(h / 2.4f), c);
-        // the clock and two candlesticks on the mantel
-        m.Box(0, new Vector3(0, H + 220, D / 2), new Vector3(300, 320, 160), Brass, Brass);
-        m.Ball(0, new Vector3(0, H + 240, D / 2 + 90), 90, Ivory + 6);
-        foreach (var s in new[] { -1f, 1f }) { m.Box(0, new Vector3(s * 650, H + 200, D / 2), new Vector3(50, 300, 50), Brass); m.Ball(0, new Vector3(s * 650, H + 380, D / 2), 26, GlowYellow); }
-        // the overmantel mirror in its gilt frame
-        m.Box(0, new Vector3(0, H + 1050, 20), new Vector3(1500, 1300, 40), Brass, Brass);
-        Quad(m, new(-650, H + 470, 44), new(650, H + 470, 44), new(650, H + 1630, 44), new(-650, H + 1630, 44), Glass, new(0, H + 1050, 400));
-        m.Ball(0, new Vector3(0, H + 1730, 40), 70, Brass);
-        return m.ToBody(header);
-    }
-
-    // ---- a patterned rug (flat): a red field, a gold border, a medallion
-    private static Body BuildRug(byte[] header)
-    {
-        // (2026-11-23, the user: "The rug also needs to be in keeping with the rest of the room and of a higher drawing quality": a woven
-        // rug -- 16 x 11 knots of the palette's own colours, drawn as they are -- its dark border, a gold band, a red one, a deep teal
-        // field, a medallion of gold, cream and red in the middle, gold spandrels in its corners, its fringes at both ends; smaller than
-        // before, 2400 x 1700, so it stays clear of the rooms' furniture)
-        var m = new CarMesh("a rug", new[] { -1 });
-        m.Light = 0.75f;
-        const int NX = 16, NZ = 11;
-        const float W = 1200, L = 850, Y = 14;
-        var grid = new int[NX + 1, NZ + 1];
-        for (var i = 0; i <= NX; i++)
-            for (var j = 0; j <= NZ; j++) grid[i, j] = m.P(0, new(-W + 2 * W * i / NX, Y, -L + 2 * L * j / NZ));
-        for (var i = 0; i < NX; i++)
-            for (var j = 0; j < NZ; j++)
-                m.Up(new[] { grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1] }, RugKnot(i, j, NX, NZ), unlit: true);
-        // its thick edge: the sides from the floor up to the pile, lit
-        var bottom = new[] { m.P(0, new(-W, 0, -L)), m.P(0, new(W, 0, -L)), m.P(0, new(W, 0, L)), m.P(0, new(-W, 0, L)) };
-        var top = new[] { grid[0, 0], grid[NX, 0], grid[NX, NZ], grid[0, NZ] };
-        var outwards = new[] { new Vector3(0, 0, -1), new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(-1, 0, 0) };
-        for (var e = 0; e < 4; e++)
-        {
-            int a = e, b = (e + 1) % 4;
-            m.In(new[] { bottom[a], bottom[b], top[b], top[a] }, 1 * 16 + 2, outwards[e] * 2000 + new Vector3(0, Y / 2, 0));
-        }
-        // the fringes: a cream tassel to each pair of warp threads at both short ends, each a little twisted box
-        for (var k = 0; k < 10; k++)
-            foreach (var sx in new[] { -1f, 1f })
-            {
-                var z = -L + 2 * L * (k + 0.5f) / 10;
-                m.Box(0, new Vector3(sx * (W + 55), 6, z), new Vector3(110, 12, 34), 2 * 16 + 8, 2 * 16 + 6);
-                m.Box(0, new Vector3(sx * (W + 118), 5, z + 6), new Vector3(30, 10, 46), 2 * 16 + 8, 2 * 16 + 6);
-            }
-        return m.ToBody(header);
-    }
-
-    // A knot's colour: the border rings from the edge in, the field, the medallion (a lozenge in the middle), the corners' spandrels
-    private static int RugKnot(int i, int j, int nx, int nz)
-    {
-        var ring = Math.Min(Math.Min(i, nx - 1 - i), Math.Min(j, nz - 1 - j));
-        if (ring == 0) return 1 * 16 + 3;                                   // the outer border: dark walnut
-        if (ring == 1) return (i + j) % 2 == 0 ? 6 * 16 + 11 : 6 * 16 + 9;  // the gold band, its little lozenges
-        if (ring == 2) return 4 * 16 + 4;                                   // the red band
-        double cx = (nx - 1) / 2.0, cz = (nz - 1) / 2.0;
-        var d = Math.Abs(i - cx) / (cx - 2.2) + Math.Abs(j - cz) / (cz - 2.2);
-        if (d <= 0.32) return 4 * 16 + 7;                                   // the medallion's heart: red
-        if (d <= 0.62) return 2 * 16 + 13;                                  // cream
-        if (d <= 0.9) return 6 * 16 + 11;                                   // its gold ring
-        // the spandrels: gold in the field's corners
-        if ((i == 3 || i == nx - 4) && (j == 3 || j == nz - 4)) return 6 * 16 + 10;
-        return (i + 2 * j) % 5 == 0 ? 9 * 16 + 4 : 9 * 16 + 3;             // the field: deep teal, a faint weave
-    }
-
     // ---- a panelled partition with a doorway (its length along x, centred; the doorway at its +x end): the basic room's bathroom wall
     private static Body BuildPartition(byte[] header)
     {
@@ -664,99 +469,5 @@ internal static class HotelProps
         }
         foreach (var x in new[] { x1, L }) m.Box(0, new Vector3(x, H / 2, 0), new Vector3(60, H, T + 40), Mahogany, Mahogany);
         return m.ToBody(header);
-    }
-
-    // ---- an oil painting in a heavy gilt frame, on its wall (back on z 0): a landscape, sky, hills, a palace
-    private static Body BuildPainting(byte[] header)
-    {
-        // (2026-11-23, the user: "The picture is low effort and not of the same quality as the rest of the room": an oil painting -- 20 x 15
-        // dabs of the palette's own colours, drawn as they are: Otringal's bay at sunset, the sky warming to the horizon, a cloud or two, the
-        // sun low over the sea and its path on the water, the mountains blue in the distance, a white palace with red domes on the green
-        // shore, dark trees in the foreground, a sail on the bay -- in a heavy gilt frame, its moulding stepped, a dark slip round the canvas,
-        // rosettes at its corners, a crest over it)
-        var m = new CarMesh("a painting", new[] { -1 });
-        m.Light = 0.8f;
-        const int NU = 20, NV = 15;
-        const float W = 800, H = 600, Y = 700, F = 150, Z = 52;
-        // the frame: a gilt moulding's profile (out from the canvas's edge, and its depth off the wall) run round the canvas and mitred at
-        // the corners -- the dark slip, a bead, a hollow cove rising to the crown, the rounded crown, the outer slope back to the wall: each
-        // step its own angle, lit, so the gilt catches the light as a carved frame does
-        var profile = new (float Out, float Depth, int Colour)[]
-        {
-            (0, Z, Ebony), (26, Z + 6, Ebony), (34, Z + 18, BrassDark), (48, Z + 26, Brass), (60, Z + 20, BrassDark), (84, Z + 34, Brass),
-            (108, Z + 52, Brass), (124, Z + 58, Brass), (140, Z + 54, BrassDark), (156, Z + 36, Brass), (F, 6, BrassDark),
-        };
-        var rects = profile.Select(pr => new[]
-        {
-            m.P(0, new(-W - pr.Out, Y - H - pr.Out, pr.Depth)), m.P(0, new(W + pr.Out, Y - H - pr.Out, pr.Depth)),
-            m.P(0, new(W + pr.Out, Y + H + pr.Out, pr.Depth)), m.P(0, new(-W - pr.Out, Y + H + pr.Out, pr.Depth)),
-        }).ToArray();
-        var outward = new[] { new Vector3(0, -1, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(-1, 0, 0) };
-        for (var k = 0; k + 1 < profile.Length; k++)
-            for (var side = 0; side < 4; side++)
-            {
-                int a = side, b = (side + 1) % 4;
-                var mid = new Vector3(0, Y, 0) + outward[side] * (side % 2 == 0 ? H : W);
-                // (each step faces out of the frame's face, tilted out or in as the profile climbs or falls)
-                var rise = profile[k + 1].Depth - profile[k].Depth;
-                var towards = mid + outward[side] * (rise >= 0 ? -60 : 160) + new Vector3(0, 0, 400);
-                m.In(new[] { rects[k][a], rects[k][b], rects[k + 1][b], rects[k + 1][a] }, profile[k].Colour, towards);
-            }
-        // rosettes at the corners, a shell crest over the top
-        foreach (var sx in new[] { -1f, 1f })
-            foreach (var sy in new[] { -1f, 1f }) m.Ball(0, new Vector3(sx * (W + 116), Y + sy * (H + 116), Z + 64), 30, Brass);
-        m.Ball(0, new Vector3(0, Y + H + F + 10, Z + 30), 60, Brass);
-        m.Ball(0, new Vector3(0, Y + H + F + 10, Z + 70), 30, BrassDark);
-        // the canvas
-        var grid = new int[NU + 1, NV + 1];
-        for (var i = 0; i <= NU; i++)
-            for (var j = 0; j <= NV; j++) grid[i, j] = m.P(0, new(-W + 2 * W * i / NU, Y + H - 2 * H * j / NV, Z));
-        for (var i = 0; i < NU; i++)
-            for (var j = 0; j < NV; j++)
-                m.In(new[] { grid[i, j + 1], grid[i + 1, j + 1], grid[i + 1, j], grid[i, j] }, PaintingDab((i + 0.5) / NU, (j + 0.5) / NV), new(0, Y, 400), unlit: true);
-        return m.ToBody(header);
-    }
-
-    // A dab's colour at (u across, v down the canvas, 0..1): ramp * 16 + shade, the palette's ramps -- 12 the sky's blues, 5 its warm
-    // peaches, 14 the clouds' rose greys, 13 the mountains' violet greys, 10 the sea's blue-greens, 6 the gold, 7 and 8 the greens, 3 the
-    // palace's whites, 4 its domes' red, 1 the boat's brown, 2 its sail's cream
-    private static int PaintingDab(double u, double v)
-    {
-        const double Horizon = 0.56;
-        // the sail and its boat on the bay
-        if (u > 0.53 && u < 0.59 && v > 0.56 && v < 0.64 && (v - 0.56) > (0.59 - u) * 0.9) return 2 * 16 + 14;
-        if (u > 0.5 && u < 0.62 && v > 0.64 && v < 0.68) return 1 * 16 + 3;
-        // the palace on the shore: its towers, domes, walls
-        if (v > 0.38 && v < 0.62 && u > 0.1 && u < 0.3)
-        {
-            var tower = (u > 0.11 && u < 0.15) || (u > 0.25 && u < 0.29);
-            if (tower && v < 0.44) return 4 * 16 + 8;
-            if (tower) return 3 * 16 + 13;
-            if (u > 0.17 && u < 0.23 && v > 0.42 && v < 0.49) return 4 * 16 + 7;
-            if (v > 0.49) return (int)(u * 40) % 3 == 0 ? 3 * 16 + 11 : 3 * 16 + 13;
-        }
-        // the trees in the foreground
-        if ((u < 0.09 && v > 0.62) || (u > 0.3 && u < 0.39 && v > 0.76) || (u < 0.05 && v > 0.5)) return (int)((u + v) * 37) % 2 == 0 ? 8 * 16 + 3 : 8 * 16 + 5;
-        // the shore: from the palace's foot down to the corner, green
-        var shore = 0.38 + (v - Horizon) * 0.9;
-        if (v > 0.58 && u < shore) return v > 0.8 ? 7 * 16 + 5 : 7 * 16 + 8;
-        if (v >= Horizon)
-        {
-            // the sea, darker towards us, the sun's path on it
-            if (Math.Abs(u - 0.72) < 0.05 + (v - Horizon) * 0.18 && (int)(v * 30) % 2 == 0) return 6 * 16 + 13;
-            return v < 0.66 ? 10 * 16 + 10 : v < 0.8 ? 10 * 16 + 8 : 10 * 16 + 6;
-        }
-        // the sun, low over the sea
-        var du = u - 0.72; var dv = (v - 0.47) * 0.75;
-        if (du * du + dv * dv < 0.0036) return 15 * 16 + 5;
-        // the mountains, blue in the distance on the left
-        var ridge = Horizon - 0.2 * Math.Max(0, Math.Sin(Math.PI * Math.Min(1, u / 0.55))) - 0.05 * Math.Sin(u * 23);
-        if (u < 0.6 && v > ridge) return v > ridge + 0.06 ? 13 * 16 + 6 : 13 * 16 + 8;
-        // the clouds
-        if ((v > 0.17 && v < 0.21 && u > 0.08 && u < 0.42) || (v > 0.29 && v < 0.32 && u > 0.5 && u < 0.92)) return 14 * 16 + 12;
-        // the sky: blue overhead, warming to the horizon
-        if (v > 0.44) return 5 * 16 + 12;
-        if (v > 0.36) return 5 * 16 + 13;
-        return v < 0.12 ? 12 * 16 + 9 : v < 0.24 ? 12 * 16 + 11 : 12 * 16 + 13;
     }
 }

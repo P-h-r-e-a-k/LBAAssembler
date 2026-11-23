@@ -32,6 +32,10 @@ internal sealed class CarMesh(string name, int[]? parents = null)
     // or so; less keeps a polygon to the few colours above its own (a pink from the end of the reds, a black from the start of the greys).
     public float Light { get; set; } = 1;
 
+    // The most points and polygons the body may have (Body.LimitOverride): null the classic engine's 550, 1,100 a body only LBA Racing
+    // Adventure's own engine draws (LIB386 AFF_OBJ.CPP since 2026-11-15 -- the hotel's furniture, modelled round, 2026-11-23)
+    public int? Limit { get; set; }
+
     public int P(int bone, Vector3 v) { points[bone].Add(v); lights[bone].Add(Light); handles.Add((bone, points[bone].Count - 1)); return handles.Count - 1; }
     public Vector3 At(int handle) { var (b, i) = handles[handle]; return points[b][i]; }
     public void Pivot(int bone, int handle) => pivots[bone] = handle;
@@ -160,7 +164,7 @@ internal sealed class CarMesh(string name, int[]? parents = null)
         var offsets = new int[bones];
         for (int b = 0, next = 0; b < bones; b++) { offsets[b] = next; next += points[b].Count; }
         int Global(int h) => offsets[handles[h].Bone] + handles[h].Index;
-        var body = new Body { Game = 2, Lit = true, Header = (byte[])header.Clone() };
+        var body = new Body { Game = 2, Lit = true, Header = (byte[])header.Clone(), LimitOverride = Limit };
         var world = new List<Vector3>();
         for (var b = 0; b < bones; b++)
         {

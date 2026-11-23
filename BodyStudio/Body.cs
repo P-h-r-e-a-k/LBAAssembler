@@ -113,7 +113,9 @@ public sealed class Body
         {
             Range(b,0,96); m.Static=(I(b,0)&256)==0; if (m.Static&&!allowStatic) throw new InvalidDataException("Choose an animated body template.");
             m.Header=b[..96]; groupCount=I(b,32);groupOffset=I(b,36);count=I(b,40);p=I(b,44);
-            if(count<1||count>550||groupCount<1||groupCount>30)throw new InvalidDataException("Body exceeds engine limits.");
+            // (up to 1,100 points: LBA Racing Adventure's own engine's -- its bodies over the classic 550 read with that limit, LimitOverride)
+            if(count<1||count>1100||groupCount<1||groupCount>30)throw new InvalidDataException("Body exceeds engine limits.");
+            if(count>550)m.LimitOverride=1100;
             Range(b,p,count*8);Range(b,groupOffset,groupCount*8);
             for(int i=0;i<count;i++,p+=8)m.Vertices.Add(ReadVector(b,p));
             // normals notably shorter or longer than 10240: the body's own light scales (LightScale)

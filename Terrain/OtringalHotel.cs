@@ -18,15 +18,15 @@ namespace LBAAssembler.Terrain;
 //   - the corridor (Corridor): room 79's walls and floor carried on to 34 cells long and 5 wide, empty; along its back wall the doors of
 //     rooms 101-105 (HotelProps.CorridorDoors) and at its east end the Imperial Suite's double doors; at its west end the lift;
 //   - the Classic Room (Classic, 100 zlitos, door 102): room 79 as it is -- its bed, wardrobe, tables -- but its armchairs, which give way to
-//     a little bathroom behind a panelled partition in the front corner: a shower, a basin, a toilet;
-//   - the Junior Suite (Junior, 250, door 104): room 170, a sofa and coffee table under a chandelier, and through a doorway room 169's
-//     bathroom, its clawfoot bath;
-//   - the Imperial Suite (Suite, 500, the double doors): room 79 as its salon, its bed gone -- a marble fireplace, sofas facing over a coffee
-//     table, a grand piano, a table for eight, chandeliers -- through a doorway room 170 as the bedroom, its bed gone for the four-poster on
-//     its dais, and through another room 169's bathroom;
+//     a little bathroom walled off in the front corner: a shower, a basin, a toilet;
+//   - the Junior Suite (Junior, 250, door 104): room 170, a sofa, a rug and a coffee table, and through a doorway room 169's bathroom, its
+//     clawfoot bath;
+//   - the Imperial Suite (Suite, 500, the double doors): room 79 as its salon, its bed, wardrobe and potted tree gone -- a fireplace, sofas
+//     facing over a coffee table, a grand piano -- through a doorway room 170 as the bedroom, its bed gone for the four-poster, and through
+//     another room 169's bathroom;
 //   - the lobby (the game's scene 81): the sofa against the west wall of its north corridor (block 84, cells 27-28, 5-8) taken out of the
-//     grid -- the lift in that wall, a damask sofa at the alcove's edge -- and the reception desk (RaceTrackStory.OtringalNight puts them and
-//     the clerk in).
+//     grid for the lift in that wall (RaceTrackStory.OtringalNight puts the clerk in).
+// The furniture is HotelProps' (its rooms' remade in the game's own hotel style on 2026-11-23: HotelProps.Rooms.cs).
 // The rooms' joins between them are front (cut) walls, as the game's rooms' own front walls: a full wall along x would hide the room behind it
 // from the camera.
 internal static class OtringalHotel
@@ -55,7 +55,9 @@ internal static class OtringalHotel
     // (the rooms' doors, the game's rooms' own: in their front walls -- room 79's at cells 6-7, room 170's at 8-9, room 169's at 6-7 -- in
     // from the corridor there, facing in)
     public static readonly (int X, int Z) RoomArrival = (3584, 5500), JuniorArrival = (4608, 5500);
-    private const int DoorA = 6, DoorB = 8, DoorBath = 6;
+    private const int DoorA = 6, DoorB = 8;
+    // (where a suite's bathroom's doorway is in the cut wall it joins on by: z 9-10, clear of its basin and toilet)
+    private const int BathDoorway = 9;
     // the cube-change switches (zone info 4, set_change_cube): the corridor's doors into the three rooms (off till booked), the lifts' (off
     // till the ride's end)
     public const int ClassicSwitch = 1, JuniorSwitch = 2, SuiteSwitch = 3, LiftSwitch = 4;
@@ -100,11 +102,24 @@ internal static class OtringalHotel
         {
             for (var z = z0; z <= z1; z++) for (var x = x0; x <= x1; x++) for (var y = y0; y < Height; y++) { cells[At(x, y, z)] = 0; cells[At(x, y, z) + 1] = 0; }
         }
-        // (a room's door in its front wall, cells 6-7 of its front row: the plain wall's column over it -- the second and third rooms of a suite
-        // open into the first, not out of the grid)
-        static void ShutDoor(byte[] cells, int x0, int door, int frontZ) { for (var x = x0 + door; x <= x0 + door + 1; x++) Column(cells, x, frontZ, (byte[])cells.Clone(), x0 + 3, frontZ); }
-        // (a doorway through a join's cut wall, cells z 6-7: the floor carried through)
-        static void Doorway(byte[] cells, int x) { for (var z = 6; z <= 7; z++) Column(cells, x, z, (byte[])cells.Clone(), x - 1, z, 0, 0); }
+        // (a joined room's front wall, x0..x1 of its front row, all its plain column: its door -- the second and third rooms of a suite open
+        // into the first, not out of the grid -- and with it its door's frame and the room's own front corner's pillar, which stood up out of
+        // the joined front wall. 2026-11-23, the user: "Along the front wall there's part of original door ways that you've copied that are
+        // just randomly sticking up and need removing")
+        static void PlainFront(byte[] cells, int x0, int x1, int frontZ, byte[] room, int plainX)
+        {
+            for (var x = x0; x <= x1; x++) Column(cells, x, frontZ, room, plainX, frontZ);
+        }
+        // (a room's own door in its front wall -- its frame's two pillars at x0 and x0 + 3, its lintel over x0 + 1 and x0 + 2 -- made an opening
+        // in the low front wall, as the doorways between the rooms are: the frame stood up out of the cut wall and hid what was behind it,
+        // a diagonal stripe of the room -- a sofa, a table)
+        static void OpenDoor(byte[] cells, int x0, int frontZ, int plainX)
+        {
+            foreach (var x in new[] { x0, x0 + 3 }) Column(cells, x, frontZ, (byte[])cells.Clone(), plainX, frontZ);
+            for (var x = x0 + 1; x <= x0 + 2; x++) Column(cells, x, frontZ, (byte[])cells.Clone(), x, frontZ, 0, 0);
+        }
+        // (a doorway through a join's cut wall, cells z0 and z0 + 1: the floor carried through)
+        static void Doorway(byte[] cells, int x, int z0 = 6) { for (var z = z0; z <= z0 + 1; z++) Column(cells, x, z, (byte[])cells.Clone(), x - 1, z, 0, 0); }
         // (a room's columns x 1..last+1 (its interior and its east cut wall) copied in at offset dx; the join's own column the cut wall before it)
         static void Join(byte[] to, byte[] from, int dx, int last, int depth)
         {
@@ -168,24 +183,37 @@ internal static class OtringalHotel
             classic[At(1, y, 8)] = 0; classic[At(1, y, 8) + 1] = 0;
         }
         Clear(classic, 1, 2, 2, 3, 1);
+        OpenDoor(classic, DoorA - 1, 12, 3);
         // ---- the Junior Suite: room B, room 169's bathroom east of it through a doorway
+        // (the doorway at z 9-10: at 6-7 it opened onto the bathroom's basin and toilet, and Twinsen couldn't get in -- 2026-11-23, the user:
+        // "This bathroom area isn't even accessible" -- so the potted tree by the bathroom's front wall, where it now opens, gone)
         var junior = (byte[])b.Cells.Clone();
         Join(junior, bath.Cells, 12, 8, 11);
         for (var z = 0; z <= 12; z++) Column(junior, 12, z, b.Cells, 12, z);
-        Doorway(junior, 12);
-        ShutDoor(junior, 12, DoorBath, 11);
-        // ---- the Imperial Suite: room A (the salon, its bed and the plant by it gone), room B (the bedroom, its bed gone), room 169's bathroom
+        Doorway(junior, 12, BathDoorway);
+        Clear(junior, 13, 14, 9, 10, 1);
+        PlainFront(junior, 13, 20, 11, bath.Cells, 3);
+        OpenDoor(junior, DoorB - 1, 12, 3);
+        // ---- the Imperial Suite: room A (the salon: its bed, the potted tree, the chair at the back wall and the wardrobe gone -- the sofas,
+        // the piano where they stood), room B (the bedroom: its bed gone, the potted tree, the lamp and the chair behind the four-poster's head too), room 169's
+        // bathroom through its doorway at z 9-10 (its potted tree gone), the joined rooms' front walls plain
         var suite = (byte[])a.Cells.Clone();
         Clear(suite, 1, 4, 5, 7, 1);
+        Clear(suite, 1, 2, 2, 3, 1);
+        Clear(suite, 4, 4, 2, 2, 1);
+        Clear(suite, 10, 11, 3, 5, 1);
         Join(suite, b.Cells, 12, 11, 12);
         for (var z = 0; z <= 12; z++) Column(suite, 12, z, a.Cells, 12, z);
         Clear(suite, 13, 16, 3, 5, 1);
+        Clear(suite, 13, 16, 2, 2, 1);
         Join(suite, bath.Cells, 24, 8, 11);
         for (var z = 0; z <= 12; z++) Column(suite, 24, z, b.Cells, 12, z);
         Doorway(suite, 12);
-        Doorway(suite, 24);
-        ShutDoor(suite, 12, DoorB, 12);
-        ShutDoor(suite, 24, DoorBath, 11);
+        Doorway(suite, 24, BathDoorway);
+        Clear(suite, 25, 26, 9, 10, 1);
+        PlainFront(suite, 13, 23, 12, b.Cells, 3);
+        PlainFront(suite, 25, 32, 11, bath.Cells, 3);
+        OpenDoor(suite, DoorA - 1, 12, 3);
         // ---- the lobby: its sofa out of the wall's way
         var lobbyCells = (byte[])lobby.Cells.Clone();
         var sofaCells = 0;
@@ -288,42 +316,41 @@ internal static class OtringalHotel
         if (!Save(Corridor, c, "the corridor")) return log;
         // (back out to the corridor from a room, before its door there)
         SceneZoneModel Out(int doorX, int doorCell) => Door(Corridor, doorCell * 512, (doorCell + 2) * 512, 6144, 6656, FloorY, (doorX, FloorY, BackWallFace + 900), 0, true);
-        // the Classic Room: the bathroom in the front corner behind its partition
+        // The rooms' furniture, all in the game's own hotel style (HotelProps.Rooms.cs, 2026-11-23: "They need to look sleek, uniform,
+        // upmarket, and modelled to a high degree. Anything in the room needs to be visible and clear what it is"): each piece where it
+        // stands clear of the others and of the game's own furniture, facing the camera where it has a face; the chandeliers gone from the
+        // rooms (hung at the ceiling's height, they drew over the rooms as a tangle of white). The rugs are walked over and drawn before
+        // everything standing on them (SORT.CPP).
+        // the Classic Room: its bathroom in the front corner -- the bath along its east wall, its taps at the north end; the basin on its
+        // north wall and the toilet on its west wall, both facing into it, towards the camera; the floor between them clear from the doorway
         var r1 = Room(RoomA, (RoomArrival.X, RoomArrival.Z, 2048));
-        // (the bathroom's walls are bricks now, its doorway at their north-west; the shower in its back corner, against the north and east
-        // walls, the toilet on the east wall by the front, the basin against the west wall's inside)
-        Put(r1, Citadel.CitadelProps.Shower, 5664, FloorY, 4576, 1024);
-        Put(r1, Citadel.CitadelProps.Toilet, 5850, FloorY, 5650, 3072);
-        Put(r1, Citadel.CitadelProps.BathSink, 4760, FloorY, 5450, 1024);
+        Put(r1, HotelProps.HotelBath, 5820, FloorY, 4800, 0);
+        Put(r1, HotelProps.HotelBasin, 5000, FloorY, 4100, 0);
+        Put(r1, HotelProps.HotelToilet, 4612, FloorY, 5750, 1024);
         Put(r1, HotelProps.Painting, 2600, FloorY + 600, 1034, 0);
-        // (the rug -- 2400 x 1700 -- on the open floor between the bed, the wardrobe and the bathroom: it stood under the wardrobe and was
-        // drawn over it, the user: "drawn over what is presumably a cupboard standing in the corner")
+        // (the rug -- 2400 x 1700 -- on the open floor between the bed, the wardrobe and the bathroom)
         Put(r1, HotelProps.HotelRug, 3840, FloorY, 2300, 0, walkOver: true);
         r1.Zones.Add(Out(DoorX(ClassicDoor), DoorA));
         if (!Save(Classic, r1, "the Classic Room")) return log;
-        // the Junior Suite: its lounge, its chandelier, a painting; the bath through the doorway
+        // the Junior Suite: its lounge -- the sofa facing into the room, the rug before it, the coffee table on the rug; the bathroom through
+        // its doorway (no painting: on room 170's back wall it stood behind the wardrobe, and there is no width of wall clear of the furniture)
         var r2 = Room(RoomB, (JuniorArrival.X, JuniorArrival.Z, 2048));
         Put(r2, HotelProps.Sofa, 3800, FloorY, 3500, 0);
-        Put(r2, HotelProps.CoffeeTable, 3800, FloorY, 4600, 0);
-        Put(r2, HotelProps.Chandelier, 3800, FloorY + 2650, 3900, 0);
-        Put(r2, HotelProps.HotelRug, 3800, FloorY, 4300, 0, walkOver: true);
-        // (no painting: on room 170's back wall it stood behind the wardrobe, and there is no width of wall clear of the furniture for it)
+        Put(r2, HotelProps.HotelRug, 3800, FloorY, 4750, 0, walkOver: true);
+        Put(r2, HotelProps.CoffeeTable, 3800, FloorY, 4700, 0);
         r2.Zones.Add(Out(DoorX(JuniorDoor), DoorB));
         if (!Save(Junior, r2, "the Junior Suite")) return log;
-        // the Imperial Suite: the salon (the fireplace on its west wall, sofas facing over the coffee table, the piano, the table for eight,
-        // two chandeliers), the bedroom (the four-poster, a chandelier, a rug), the bathroom as room 169 has it
+        // the Imperial Suite: the salon -- the fireplace on its west wall, two sofas facing over the coffee table and the rug before it, the
+        // painting over them on the back wall, the grand piano in the back corner where the wardrobe stood, its keyboard and open lid towards
+        // the room; the bedroom -- the four-poster, a rug at its foot; the bathroom as room 169 has it
         var r3 = Room(RoomA, (RoomArrival.X, RoomArrival.Z, 2048));
         Put(r3, HotelProps.Fireplace, 522, FloorY, 3200, 1024);
-        Put(r3, HotelProps.Sofa, 2100, FloorY, 2000, 0);
-        Put(r3, HotelProps.Sofa, 2100, FloorY, 4400, 2048);
-        Put(r3, HotelProps.CoffeeTable, 2100, FloorY, 3200, 1024);
-        Put(r3, HotelProps.HotelRug, 2100, FloorY, 3200, 1024, walkOver: true);
-        Put(r3, HotelProps.GrandPiano, 4700, FloorY, 2300, 3072 - 300);
-        // (2026-11-23: the table for eight gone -- the salon crowded, its chairs in the sofas -- and its chandelier; the painting over the
-        // piano, on the salon's back wall clear of the furniture; the bedroom's chandelier, inside the four-poster's canopy, gone; its rug
-        // before the bed, clear of the front wall)
-        Put(r3, HotelProps.Chandelier, 2100, FloorY + 2650, 3200, 0);
-        Put(r3, HotelProps.Painting, 3840, FloorY + 600, 1034, 0);
+        Put(r3, HotelProps.Sofa, 2250, FloorY, 1950, 0);
+        Put(r3, HotelProps.Sofa, 2250, FloorY, 4450, 2048);
+        Put(r3, HotelProps.HotelRug, 2250, FloorY, 3200, 0, walkOver: true);
+        Put(r3, HotelProps.CoffeeTable, 2250, FloorY, 3200, 0);
+        Put(r3, HotelProps.Painting, 2250, FloorY + 700, 1034, 0);
+        Put(r3, HotelProps.GrandPiano, 4800, FloorY, 2900, 0);
         Put(r3, HotelProps.FourPoster, SuiteBed.X, FloorY, SuiteBed.Z, 0);
         Put(r3, HotelProps.HotelRug, 8448, FloorY, 4900, 0, walkOver: true);
         r3.Zones.Add(Out(SuiteDoorX, DoorA));

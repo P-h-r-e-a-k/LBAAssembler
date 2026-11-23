@@ -160,8 +160,13 @@ void BaseReset(void) {
 // alone the Dean's oil -- a strip 14,000 long -- came after the car on it and was drawn over it (the user, 2026-11-18, "It also draws over
 // the top of the car").
 extern S32 RaceMod_WalkOver(S32 numobj);
-static S32 SortFloorFirst(S16 numtype) {
-    return CubeMode == CUBE_EXTERIEUR && (numtype & ~(SORT_NO_PRECLIP | 1023)) == TYPE_OBJ_3D && RaceMod_WalkOver(numtype & 1023);
+// Indoors too (2026-11-23), but only a flat one: the Imperial Hotel's rugs, whose box is a point at their middle (so the bricks in front of
+// them are redrawn over them as over a floor), came after the furniture standing on them and were drawn over it -- a wardrobe, a sofa's
+// feet. A walked-over thing that stands up (the sea cave's hovercraft, carrying Twinsen) is sorted by its box as anything else is.
+static S32 SortFloorFirst(S16 numtype, S32 ymin, S32 ymax) {
+    if ((numtype & ~(SORT_NO_PRECLIP | 1023)) != TYPE_OBJ_3D || !RaceMod_WalkOver(numtype & 1023))
+        return FALSE;
+    return CubeMode == CUBE_EXTERIEUR || (CubeMode == CUBE_INTERIEUR && ymax - ymin <= 64);
 }
 
 S32 TreeInsert(S16 numtype, S32 posx, S32 posy, S32 posz,
@@ -251,10 +256,10 @@ S32 TreeInsert(S16 numtype, S32 posx, S32 posy, S32 posz,
     pt = ListTri;
     elem = Base.aElem;
 
-    const S32 floorNew = SortFloorFirst(numtype);
+    const S32 floorNew = SortFloorFirst(numtype, tymin, tymax);
     for (i = 0; i < Base.cElem; i++, pt++, elem++) {
         // (a floor prop before every other thing, whatever their boxes say -- SortFloorFirst)
-        if (floorNew != SortFloorFirst(pt->NumObj)) {
+        if (floorNew != SortFloorFirst(pt->NumObj, pt->YMin, pt->YMax)) {
             if (floorNew)
                 BaseAddRelation(i, Base.cElem);
             else

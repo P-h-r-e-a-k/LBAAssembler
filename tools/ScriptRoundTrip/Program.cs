@@ -277,6 +277,7 @@ internal static class Program
             // lba2scene <game folder> <scene> <out.png> [crop=x,y,w,h] [mark=x,y,z]...: an interior scene's grid, its actors and zones marked (CitadelRoomsCommand)
             "lba2scene" => CitadelRoomsCommand.Scene(args),
             "museumblock" => MuseumStudy.Block(args),
+            "hotelpreview" => HotelPreview.Run(args),
             "libstats" => CitadelRoomsCommand.LibStats(args),
             "lba1port" => CitadelRoomsCommand.Port(args),
             "cellinfo" => CitadelRoomsCommand.CellInfo(args),
