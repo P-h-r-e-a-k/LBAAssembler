@@ -13,8 +13,12 @@ internal static class CitadelBathSounds
 
     public sealed record Numbers(int Flush, int Tap, int Shower, int BathTap);
 
+    // (the flush the user's own recording, sounds\House\toiletFlush2.wav -- 2026-11-23, "can we use this sound for the toilet flush sound in
+    // Twinsen's house" -- the one made here (Flush) where the program doesn't carry it)
+    public const string FlushRecording = "toiletFlush2";
+
     public static Numbers Install(string gameDirectory) =>
-        new(Put(gameDirectory, Flush()), Put(gameDirectory, Running(seed: 11, seconds: 1.6, low: 0.10, high: 0.55, level: 0.55)),
+        new(Put(gameDirectory, RaceSounds.HouseSound(FlushRecording) ?? Flush()), Put(gameDirectory, Running(seed: 11, seconds: 1.6, low: 0.10, high: 0.55, level: 0.55)),
             Put(gameDirectory, Running(seed: 23, seconds: 1.8, low: 0.22, high: 0.85, level: 0.62, flutter: 0.18)),
             Put(gameDirectory, Running(seed: 37, seconds: 1.7, low: 0.07, high: 0.45, level: 0.6, flutter: 0.1)));
 

@@ -171,12 +171,30 @@ internal static class RaceSounds
     }
 
     // A 16-bit mono 44.1 kHz WAV
-    public static void WriteWav(string path, byte[] mono)
+    public static void WriteWav(string path, byte[] mono) => File.WriteAllBytes(path, Wav(mono));
+
+    public static byte[] Wav(byte[] mono)
     {
-        using var f = File.Create(path);
-        using var w = new BinaryWriter(f);
+        var f = new MemoryStream();
+        var w = new BinaryWriter(f);
         w.Write(Encoding.ASCII.GetBytes("RIFF")); w.Write(36 + mono.Length); w.Write(Encoding.ASCII.GetBytes("WAVE"));
         w.Write(Encoding.ASCII.GetBytes("fmt ")); w.Write(16); w.Write((short)1); w.Write((short)1); w.Write(Rate); w.Write(Rate * 2); w.Write((short)2); w.Write((short)16);
         w.Write(Encoding.ASCII.GetBytes("data")); w.Write(mono.Length); w.Write(mono);
+        return f.ToArray();
+    }
+
+    // A sound of the repo's sounds\House\ folder (<name>.wav or .mp3, the name's case as it likes) as a SAMPLES.HQR entry: a 16-bit mono
+    // 44.1 kHz WAV (the engine's mixer plays any rate, 8- or 16-bit), its silence trimmed, as loud as the race's sounds (Prepare) -- or
+    // null where the program doesn't carry it. Not the race's: Carried passes over that folder, so it isn't written into RACESOUNDS\.
+    // (2026-11-23, the user: "E:\dump\LBAAssembler\sounds\toiletFlush2.wav can we use this sound for the toilet flush sound in Twinsen's
+    // house" -- CitadelBathSounds)
+    public static byte[]? HouseSound(string name)
+    {
+        var res = typeof(RaceSounds).Assembly.GetManifestResourceNames().FirstOrDefault(r =>
+            r.Replace('\\', '/') is var p && p.StartsWith(ResourcePrefix + "House/", StringComparison.OrdinalIgnoreCase)
+            && Path.GetFileNameWithoutExtension(p).Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (res is null || Read(res) is not { } pcm) return null;
+        var (mono, _) = Prepare(pcm);
+        return mono.Length == 0 ? null : Wav(mono);
     }
 }
