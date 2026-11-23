@@ -101,7 +101,23 @@ internal static class Demo96Rooms
     private static readonly Dictionary<int, int> Samples = new() { [35] = 617, [41] = 501, [54] = 126, [122] = 441 };
     private static readonly Regex MessageCall = new(@"\b(message|message_zoe)\((\d+)\)|\b(message_obj)\((\d+), (\d+)\)", RegexOptions.Compiled);
     private const int DemoMecaPenguin = 9, MecaPenguin = 14;
-    private static readonly Regex SampleCall = new(@"\b(sample|sample_rnd|sample_always|stop_sample|repeat_sample)\((\d+)", RegexOptions.Compiled);
+    private static readonly Regex SampleCall = new(@"\b(sample|sample_rnd|sample_always|sample_stop|stop_sample|repeat_sample)\((\d+)", RegexOptions.Compiled);
+    private static readonly Regex LoopCall = new(@"\b(sample_always|sample_stop)\((\d+)\)", RegexOptions.Compiled);
+
+    // A script's sample_stop of a number none of its sample_always started made the stop of the loop it started last: the demo's far halls'
+    // lift (its scene 18, actor 7) hums 41 down and stops 37, and the game's engine stops an actor's loop only by its own number
+    // (GERETRAK.CPP TM_SAMPLE_STOP) -- the lift's hum went on for ever, the user, 2026-11-23: "There's a loud repeating sound when Twinsen
+    // enters the Citadel sewers by the grate above the school"
+    private static string StopsTheirLoops(string text)
+    {
+        var started = LoopCall.Matches(text).Where(m => m.Groups[1].Value == "sample_always").Select(m => m.Groups[2].Value).ToHashSet();
+        string? last = null;
+        return LoopCall.Replace(text, m =>
+        {
+            if (m.Groups[1].Value == "sample_always") { last = m.Groups[2].Value; return m.Value; }
+            return started.Contains(m.Groups[2].Value) || last is null ? m.Value : $"sample_stop({last})";
+        });
+    }
 
     // Twinsen's generic animations, the demo's numbers as the game's. The rooms' Twinsen is the game's (entity 0, its animations), but the
     // demo's scripts name his animations by the demo's generic numbers, and from 25 on they aren't the game's: the game put in more of
@@ -422,7 +438,7 @@ internal static class Demo96Rooms
                 foreach (var kind in new[] { ScriptKind.Life, ScriptKind.Track })
                 {
                     var text = scripts.GetText(a, kind);
-                    var mapped = SampleCall.Replace(text, m => $"{m.Groups[1].Value}({(Samples.TryGetValue(int.Parse(m.Groups[2].Value), out var g) ? g : int.Parse(m.Groups[2].Value))}");
+                    var mapped = SampleCall.Replace(StopsTheirLoops(text), m => $"{m.Groups[1].Value}({(Samples.TryGetValue(int.Parse(m.Groups[2].Value), out var g) ? g : int.Parse(m.Groups[2].Value))}");
                     // (and the texts the game's, where the demo's numbers aren't: `texts`)
                     if (texts is not null)
                         mapped = MessageCall.Replace(mapped, m => m.Groups[1].Success
