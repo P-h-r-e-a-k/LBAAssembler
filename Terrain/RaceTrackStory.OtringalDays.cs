@@ -105,6 +105,8 @@ message({say(OtringalLine.SellerMaybe)});
 message_obj(0, {say(OtringalLine.TwinsenWhatFavour)});
 message({say(OtringalLine.SellerLetter)});
 set_var_game({QCoil}, {CoilLetter});
+set_var_game({LetterSlot}, {LetterHeld});
+found_object({LetterSlot});
 }}
 else if ({DayRaceDay} == var_game({OtringalDay}) && {CoilLetter} == var_game({QCoil}))
 {{
@@ -113,6 +115,7 @@ message({say(OtringalLine.SellerWaiting)});
 else if ({DayRaceDay} == var_game({OtringalDay}) && {CoilAnswer} == var_game({QCoil}))
 {{
 message({say(OtringalLine.SellerReplyRead)});
+set_var_game({LetterSlot}, 0);
 add_choice({say(OtringalLine.Yes)});
 add_choice({say(OtringalLine.No)});
 ask_choice({say(OtringalLine.SellerAsk)});
@@ -153,6 +156,8 @@ set_var_cube(0, 0);")));
         $"gate_not={OtringalDay} {DayQualified} The cars are in the stewards' garage till the morning.\n" +
         $"gate_not={OtringalDay} {DayRaceDay} The marshal: no ignition coil, no race!\n" +
         $"qualify_stop={OtringalDay} 0 {DayQualified}\n" +
+        // (the sand filters' slot holding the letters here: RaceTrackStory.Errands LetterSlot)
+        $"inv_kinds={FiltersSlot} {FiltersModel} {LoveLetterModel} {ReplyModel}\n" +
         // (the others out of sight while he qualifies: they qualified already, their cars kept in the palace overnight -- the user, 2026-11-23,
         // "For qualifying we don't need the other cars on the pitlane"; on race day they come out onto the grid)
         "pit_hidden=1\n" +

@@ -380,6 +380,8 @@ void comportement_3()
                 message_obj(0, {say(OtringalLine.TwinsenGiveLetter)});
                 message({say(OtringalLine.SingerReply)});
                 set_var_game({QCoil}, {CoilAnswer});
+                set_var_game({LetterSlot}, {ReplyHeld});
+                found_object({LetterSlot});
             }}
             else
             {{

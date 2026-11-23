@@ -22,6 +22,10 @@ internal static partial class RaceTrackStory
     // to present to be allowed to enter the desert race")
     public const int ErrandSlot = 19, ErrandBait = 1, ErrandTyre = 2, ErrandTrophy = 3;
     public const int BaitModel = 154, TyreModel = 155, TrophyModel = 157;   // (156 the sand filters': RaceTrackStory.Garage FiltersModel)
+    // (Otringal's letters, 2026-11-23 -- the user: "The letter from and to the gazogem seller need to be an inventory item, perhaps a different
+    // colour for each to differentiate them": in the sand filters' slot, free once they're fitted at the Desert -- 2 the seller's love
+    // letter, a pink envelope sealed in red wax; 3 the singer's reply, pale blue, a lipstick kiss on its flap; 0 handed over)
+    public const int LoveLetterModel = 158, ReplyModel = 159, LetterSlot = FiltersSlot, LetterHeld = 2, ReplyHeld = 3;
     // (the inventory's tin less than half the counter's height: the user, 2026-11-08, "Its inventory model is too tall: at least half the
     // height"; scaled to the inventory's size by its width then)
     private const float InventoryBaitHeight = 0.45f;
@@ -48,6 +52,24 @@ internal static partial class RaceTrackStory
             new[] { "Il signor Paul ti consegna il trofeo del vincitore dell'isola della Cittadella. La corsa del Deserto ammette solo i vincitori delle isole: mostralo là.", "Trofeo del vincitore dell'isola", "Il trofeo del vincitore dell'isola della Cittadella, vinto sul circuito della città. Mostralo nel Deserto per correre contro i migliori di Twinsun." },
             new[] { "O senhor Paul entrega-te o troféu do vencedor da ilha da Cidadela. A corrida do Deserto só aceita os vencedores das ilhas: mostra-o lá.", "Troféu do vencedor da ilha", "O troféu do vencedor da ilha da Cidadela, ganho no circuito da cidade. Mostra-o no Deserto para correr contra os melhores de Twinsun." },
         }),
+        (LoveLetterModel, new[]
+        {
+            new[] { "The gazogem seller gave you his love letter for the singer at Rick's bar.", "The seller's love letter", "A pink envelope, scented, sealed with red wax. For the singer at Rick's bar -- and not to be read!" },
+            new[] { "Le vendeur de gazogem t'a confié sa lettre d'amour pour la chanteuse du bar de Rick.", "La lettre d'amour du vendeur", "Une enveloppe rose, parfumée, scellée de cire rouge. Pour la chanteuse du bar de Rick -- et pas question de la lire !" },
+            new[] { "Der Gazogem-Verkäufer hat dir seinen Liebesbrief für die Sängerin in Ricks Bar gegeben.", "Der Liebesbrief des Verkäufers", "Ein rosa Umschlag, parfümiert, mit rotem Wachs versiegelt. Für die Sängerin in Ricks Bar -- und nicht zum Lesen!" },
+            new[] { "El vendedor de gazogem te ha dado su carta de amor para la cantante del bar de Rick.", "La carta de amor del vendedor", "Un sobre rosa, perfumado, sellado con lacre rojo. Para la cantante del bar de Rick... ¡y no se lee!" },
+            new[] { "Il venditore di gazogem ti ha dato la sua lettera d'amore per la cantante del bar di Rick.", "La lettera d'amore del venditore", "Una busta rosa, profumata, sigillata con ceralacca rossa. Per la cantante del bar di Rick -- e guai a leggerla!" },
+            new[] { "O vendedor de gazogem deu-te a carta de amor dele para a cantora do bar do Rick.", "A carta de amor do vendedor", "Um envelope cor-de-rosa, perfumado, selado com lacre vermelho. Para a cantora do bar do Rick -- e não é para ler!" },
+        }),
+        (ReplyModel, new[]
+        {
+            new[] { "The singer gave you her answer for the gazogem seller.", "The singer's reply", "A pale blue envelope with a kiss of lipstick on its flap. For the gazogem seller in the Lower City." },
+            new[] { "La chanteuse t'a donné sa réponse pour le vendeur de gazogem.", "La réponse de la chanteuse", "Une enveloppe bleu pâle, un baiser de rouge à lèvres sur le rabat. Pour le vendeur de gazogem de la Ville Basse." },
+            new[] { "Die Sängerin hat dir ihre Antwort für den Gazogem-Verkäufer gegeben.", "Die Antwort der Sängerin", "Ein hellblauer Umschlag mit einem Lippenstiftkuss auf der Lasche. Für den Gazogem-Verkäufer in der Unterstadt." },
+            new[] { "La cantante te ha dado su respuesta para el vendedor de gazogem.", "La respuesta de la cantante", "Un sobre azul pálido con un beso de carmín en la solapa. Para el vendedor de gazogem de la Ciudad Baja." },
+            new[] { "La cantante ti ha dato la sua risposta per il venditore di gazogem.", "La risposta della cantante", "Una busta azzurra con un bacio di rossetto sul lembo. Per il venditore di gazogem della Città Bassa." },
+            new[] { "A cantora deu-te a resposta dela para o vendedor de gazogem.", "A resposta da cantora", "Um envelope azul-claro com um beijo de batom na aba. Para o vendedor de gazogem da Cidade Baixa." },
+        }),
         (TyreModel, new[]
         {
             new[] { "Felix gave you the old tyre he fished out of the harbour.", "Old tyre", "The tyre Felix fished out of the harbour. Zoe can fit it to Luc's barrel car." },
@@ -67,7 +89,7 @@ internal static partial class RaceTrackStory
         var objfix = HqrArchive.Open(objfixPath);
         var header = Body.Read(objfix.Read(20), 2, allowStatic: true).Header;
         var bodyHeader = Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(30), 2, allowStatic: true).Header;
-        var models = new (int Model, Func<byte[], Body> Build)[] { (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre), (TrophyModel, Citadel.CitadelProps.BuildTrophy) };
+        var models = new (int Model, Func<byte[], Body> Build)[] { (LoveLetterModel, h => BuildEnvelope(h, reply: false)), (ReplyModel, h => BuildEnvelope(h, reply: true)), (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre), (TrophyModel, Citadel.CitadelProps.BuildTrophy) };
         var bytes = File.ReadAllBytes(objfixPath);
         var count = HqrArchive.CountEntries(objfixPath);
         // (the entries up to the models: each empty one a copy of the game's first, never shown)
@@ -105,6 +127,42 @@ internal static partial class RaceTrackStory
         if (written > 0) File.WriteAllBytes(textPath, hqr);
         log.Add($"the errands' texts: {written} written ({BaitModel}, {TyreModel}, {TrophyModel} and +100, +200, in all {languages} languages)");
         return log;
+    }
+
+    // An envelope (the inventory's: InventorySized after): a body with depth -- its back, its edges' sides, the front's two side flaps and
+    // the bottom flap sloping in to the middle, the top flap folded over them, a wax seal (the love letter's) or a lipstick kiss (the
+    // reply's) on its point; every face at its own angle and lit, each colour low on its ramp so the light stays in it
+    private static Body BuildEnvelope(byte[] header, bool reply)
+    {
+        // (lying flat, face up -- the inventory looks down on its things: stood up, it showed edge-on, a sliver)
+        var m = new CarMesh(reply ? "the singer's reply" : "the seller's love letter", new[] { -1 });
+        m.Light = 0.7f;
+        int paper = reply ? 12 * 16 + 7 : 4 * 16 + 8, fold = reply ? 12 * 16 + 6 : 4 * 16 + 7, edge = reply ? 12 * 16 + 4 : 4 * 16 + 5;
+        const float W = 900, D = 580, T = 50, Rise = 26;
+        // the back and the edges' sides: a slab
+        m.Box(0, new Vector3(0, T / 2, 0), new Vector3(2 * W, T, 2 * D), paper, edge);
+        // the front's flaps: triangles from the corners in to the middle, its point lifted a little so they slope
+        var c = new Vector3(0, T + Rise, 40);
+        Vector3 nl = new(-W, T, -D), nr = new(W, T, -D), fr = new(W, T, D), fl = new(-W, T, D);
+        m.In(new[] { m.P(0, fl), m.P(0, fr), m.P(0, c) }, fold, new Vector3(0, 300, D));
+        m.In(new[] { m.P(0, fr), m.P(0, nr), m.P(0, c + new Vector3(60, 0, 0)) }, paper, new Vector3(W, 300, 0));
+        m.In(new[] { m.P(0, nl), m.P(0, fl), m.P(0, c - new Vector3(60, 0, 0)) }, paper, new Vector3(-W, 300, 0));
+        // the top flap folded over them, its point past the middle
+        var tip = new Vector3(0, T + Rise + 14, 150);
+        m.In(new[] { m.P(0, nl + new Vector3(0, 4, 0)), m.P(0, nr + new Vector3(0, 4, 0)), m.P(0, tip) }, fold, new Vector3(0, 300, -D));
+        if (!reply)
+        {
+            // the wax seal: a red disc, raised, and its stamp
+            m.Ball(0, tip + new Vector3(0, 18, 0), 120, 4 * 16 + 3);
+            m.Box(0, tip + new Vector3(0, 70, 0), new Vector3(90, 20, 70), 4 * 16 + 1, 4 * 16 + 2);
+        }
+        else
+        {
+            // a kiss of lipstick on the flap: two little red lips
+            m.Box(0, tip + new Vector3(0, 10, -90), new Vector3(170, 12, 40), 4 * 16 + 5, 4 * 16 + 4);
+            m.Box(0, tip + new Vector3(0, 10, -40), new Vector3(150, 12, 36), 4 * 16 + 5, 4 * 16 + 4);
+        }
+        return m.ToBody(header);
     }
 
     // A prop's body at the inventory's size: centred on its middle and scaled so its widest side is InventoryExtent
