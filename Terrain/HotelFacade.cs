@@ -77,6 +77,21 @@ internal static class HotelFacade
             float sign = side is 'W' or 'N' ? -1 : 1;
             Vector3 P(float s, float y, float o) => alongX ? L(s, y, at + sign * o) : L(at + sign * o, y, s);
             void Face(float a0, float a1, float y0, float y1, float o, int colour, bool unlit = false) => Quad(P(a0, y0, o), P(a1, y0, o), P(a1, y1, o), P(a0, y1, o), colour, unlit);
+            // (a window's surround: four strips round its glass, none behind it -- a whole panel just behind the glass was sorted over it a
+            // triangle at a time as the view turned, the panes going grey: the user, 2026-11-23, "Some parts of the imperial hotel on the
+            // outside like the windows go grey instead of staying a solid colour")
+            // (eight points, outer and inner corners shared -- four separate strips passed the engine's points for a piece)
+            void Surround(float a0, float a1, float y0, float y1, float g0, float g1, float gy0, float gy1, float o, int colour)
+            {
+                int o00 = m.P(0, P(a0, y0, o)), o10 = m.P(0, P(a1, y0, o)), o11 = m.P(0, P(a1, y1, o)), o01 = m.P(0, P(a0, y1, o));
+                int i00 = m.P(0, P(g0, gy0, o)), i10 = m.P(0, P(g1, gy0, o)), i11 = m.P(0, P(g1, gy1, o)), i01 = m.P(0, P(g0, gy1, o));
+                m.Out(new[] { o00, o10, i10, i00 }, colour, mid);
+                m.Out(new[] { o10, o11, i11, i10 }, colour, mid);
+                m.Out(new[] { o11, o01, i01, i11 }, colour, mid);
+                m.Out(new[] { o01, o00, i00, i01 }, colour, mid);
+                // (the glass on the frame's own inner corners, in its plane: no point more than the surround and glass had before)
+                m.Out(new[] { i00, i10, i11, i01 }, Glass, mid, unlit: true);
+            }
             var looks = outward.Contains(side);
             // the wall (every side: the inner ones keep the L closed where the pieces' tops differ)
             Face(s0, s1, 0, high, 0, Stone);
@@ -103,13 +118,11 @@ internal static class HotelFacade
                 else
                 {
                     // (round-arched: the glass, its stone surround, the arch's point)
-                    Face(c - WindowHalf - 70, c + WindowHalf + 70, 520, floor2 - 300, Offset, Trim);
-                    Face(c - WindowHalf, c + WindowHalf, 580, floor2 - 420, Offset * 2, Glass, unlit: true);
+                    Surround(c - WindowHalf - 70, c + WindowHalf + 70, 520, floor2 - 300, c - WindowHalf, c + WindowHalf, 580, floor2 - 420, Offset, Trim);
                     m.Out(new[] { m.P(0, P(c - WindowHalf - 70, floor2 - 300, Offset)), m.P(0, P(c + WindowHalf + 70, floor2 - 300, Offset)), m.P(0, P(c, floor2 - 120, Offset)) }, Trim, mid);
                 }
                 // the first floor: a French window, its surround, a balcony's slab and rail
-                Face(c - WindowHalf - 70, c + WindowHalf + 70, floor2 + 200, high - 420, Offset, Trim);
-                Face(c - WindowHalf, c + WindowHalf, floor2 + 240, high - 500, Offset * 2, Glass, unlit: true);
+                Surround(c - WindowHalf - 70, c + WindowHalf + 70, floor2 + 200, high - 420, c - WindowHalf, c + WindowHalf, floor2 + 240, high - 500, Offset, Trim);
                 Quad(P(c - WindowHalf - 140, floor2 + 200, 0), P(c + WindowHalf + 140, floor2 + 200, 0), P(c + WindowHalf + 140, floor2 + 200, 260), P(c - WindowHalf - 140, floor2 + 200, 260), Trim);
                 Face(c - WindowHalf - 140, c + WindowHalf + 140, floor2 + 380, floor2 + 440, 260, Iron);
             }
