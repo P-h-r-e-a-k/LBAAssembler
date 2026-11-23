@@ -200,7 +200,10 @@ internal sealed record RaceTrackIsland(
         KeepOffRoadActors = true,
         // (two flames, high over the square the road now crosses, with nothing left under them: the user, 2026-10-31, "2 flames floating in
         // the air on the start/finish line")
-        OldActors = new[] { (95, 2), (95, 3) },
+        // (and, 2026-11-23, the user: "There's a gas monster on the side of the island in a patch of gas ... it's coming through the track and
+        // is blocking cars. The retail game also had blocks that floated in the lava which seem to have been repositioned and lost their
+        // scripting, let's just remove them": the lava's six floating blocks, entity 218, and the gas monster, entity 222)
+        OldActors = new[] { (95, 2), (95, 3), (95, 15), (95, 16), (95, 17), (95, 18), (95, 19), (95, 20), (95, 30) },
     };
 
     // Celebration Island before the statue rises (CELEBRAT: the mesa's top a plateau round a lake of lava level with it, the temple on its
