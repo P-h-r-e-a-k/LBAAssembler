@@ -1728,6 +1728,12 @@ static int CarDead(void) { return s_deadVar >= 0 && s_deadVar < MAX_VARS_GAME &&
 // turn. opener_quiet=: the entity he never opens to (Zoe, the companion: at his side, her hints answer his goal already).
 #define RACE_MAX_OPENERS 48
 #define RACE_OPENER_CONDS 5
+// (whom he opens to: within this reach (scene units -- across a shop's counter to its till: the cycle shop's owner 2,100 from its edge)
+// and this far off his facing (of 4096) -- answering his Action in their own life, or made to speak by another's (RaceMod_Opener))
+#define RACE_OPENER_REACH_OWN 2500
+#define RACE_OPENER_CONE_OWN 1024
+#define RACE_OPENER_REACH 2500
+#define RACE_OPENER_CONE 683
 #define RACE_MAX_HELLOS 4
 typedef struct { S16 Text; int NbConds; S16 Var[RACE_OPENER_CONDS]; int Lo[RACE_OPENER_CONDS], Hi[RACE_OPENER_CONDS]; } T_RACE_OPENER;
 static T_RACE_OPENER s_openers[RACE_MAX_OPENERS];
@@ -9929,6 +9935,36 @@ S32 RaceMod_Opener(S32 lifeObj, S32 speaker, S32 text) {
         if (thingScene != (S32)NumCube || thingActor != speaker) Log_Info("[racemod] opener: actor %d of scene %d answers, but isn't someone to greet -- none", (int)speaker, (int)NumCube);
         thingScene = (S32)NumCube; thingActor = speaker;
         return -1;
+    }
+    // (only to the one he's addressing: near him and before him. A line called to him by someone he isn't facing -- a shopkeeper behind
+    // the counter pricing the thing he stands at, which his own script has the keeper say -- is answered, not opened: 2026-11-23, the user,
+    // "It makes no sense for example when Twinsen is trying to buy a meca penguin in the shop to first say 'I'm looking for the weather
+    // wizard', especially when he's standing next to the penguin and not close to the shop keeper. If he's closer to the shop keeper he can
+    // perhaps ask". Squarer before him when another life makes them speak (Twinsen's own, an item's, a zone's) than when their own life
+    // answers his Action. An unseen talker by where the one it stands for is -- the one seen nearest it, as its speech bubble goes (the
+    // shop's life-point machine speaks by one: the keeper passing it isn't addressed); the flag marshal's, as before.)
+    S32 face = speaker;
+    if (ListObjet[speaker].Flags & INVISIBLE) {
+        double bd = RACE_BUBBLE_NEAR * RACE_BUBBLE_NEAR;
+        face = -1;
+        for (int i = 1; i < (int)NbObjets; i++) {
+            const T_OBJET *c = &ListObjet[i];
+            if (i == speaker || (c->Flags & INVISIBLE) || (c->WorkFlags & OBJ_DEAD) || (c->GenBody == NO_BODY && !(c->Flags & SPRITE_3D))) continue;
+            const double d = (double)(c->Obj.X - ListObjet[speaker].Obj.X) * (c->Obj.X - ListObjet[speaker].Obj.X) + (double)(c->Obj.Z - ListObjet[speaker].Obj.Z) * (c->Obj.Z - ListObjet[speaker].Obj.Z);
+            if (d < bd) { bd = d; face = i; }
+        }
+    }
+    if (face > 0) {
+        const T_OBJET *h = &ListObjet[NUM_PERSO], *s = &ListObjet[face];
+        const S32 dist = Distance2D(h->Obj.X, h->Obj.Z, s->Obj.X, s->Obj.Z);
+        S32 off = (h->Obj.Beta - GetAngle2D(h->Obj.X, h->Obj.Z, s->Obj.X, s->Obj.Z)) & 4095;
+        if (off > 2048) off = 4096 - off;
+        const int own = lifeObj == speaker;
+        if (dist > (own ? RACE_OPENER_REACH_OWN : RACE_OPENER_REACH) || off > (own ? RACE_OPENER_CONE_OWN : RACE_OPENER_CONE)) {
+            Log_Info("[racemod] opener: actor %d of scene %d answers %s, %d away, %d off his facing -- not the one he's addressing, none",
+                     (int)speaker, (int)NumCube, own ? "him" : "for another's life", (int)dist, (int)off);
+            return -1;
+        }
     }
     S32 say = -1;
     for (int i = 0; i < s_nbOpeners && say < 0; i++) {
