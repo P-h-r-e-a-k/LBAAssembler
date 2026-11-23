@@ -86,7 +86,7 @@ internal static class HotelProps
         SuiteDoors => new short[] { -1300, 0, 0, 1300, 3000, 160 },
         HotelRug => new short[] { -10, 0, -10, 10, 4, 10 },
         Chandelier => new short[] { -10, -10, -10, 10, 10, 10 },
-        Painting => new short[] { -900, 0, 0, 900, 1400, 60 },
+        Painting => new short[] { -960, -60, 0, 960, 1560, 130 },
         _ => null,
     };
 
@@ -399,10 +399,11 @@ internal static class HotelProps
     {
         var m = new CarMesh("the four-poster", new[] { -1 });
         m.Light = 0.8f;
-        const float W = 1150, L = 1300, Dais = 160, Mat = 750, Post = 2900;
+        // (2026-11-23: smaller -- it filled the suite's bedroom: 1800 x 2100, its posts 2400, the dais 360 wider and longer)
+        const float W = 900, L = 1050, Dais = 160, Mat = 750, Post = 2400;
         // the dais, its gilt edge
-        m.Box(0, new Vector3(0, Dais / 2, 0), new Vector3(2 * W + 600, Dais, 2 * L + 600), Velvet, Velvet);
-        m.Box(0, new Vector3(0, Dais - 10, 0), new Vector3(2 * W + 640, 20, 2 * L + 640), Brass);
+        m.Box(0, new Vector3(0, Dais / 2, 0), new Vector3(2 * W + 360, Dais, 2 * L + 360), Velvet, Velvet);
+        m.Box(0, new Vector3(0, Dais - 10, 0), new Vector3(2 * W + 400, 20, 2 * L + 400), Brass);
         // the bed's frame, the mattress, the quilted spread (a pattern of buttons), the bolster and the cushions against the headboard
         m.Box(0, new Vector3(0, Dais + 220, 0), new Vector3(2 * W, 260, 2 * L), Walnut, Walnut);
         m.Box(0, new Vector3(0, Dais + Mat - 120, 40), new Vector3(2 * W - 60, 240, 2 * L - 80), Linen, Linen);
@@ -595,19 +596,55 @@ internal static class HotelProps
     // ---- a patterned rug (flat): a red field, a gold border, a medallion
     private static Body BuildRug(byte[] header)
     {
+        // (2026-11-23, the user: "The rug also needs to be in keeping with the rest of the room and of a higher drawing quality": a woven
+        // rug -- 16 x 11 knots of the palette's own colours, drawn as they are -- its dark border, a gold band, a red one, a deep teal
+        // field, a medallion of gold, cream and red in the middle, gold spandrels in its corners, its fringes at both ends; smaller than
+        // before, 2400 x 1700, so it stays clear of the rooms' furniture)
         var m = new CarMesh("a rug", new[] { -1 });
         m.Light = 0.75f;
-        const float W = 1800, L = 1300, Y = 6;
-        void Flat(float x0, float z0, float x1, float z1, float y, int c) => m.Up(new[] { m.P(0, new(x0, y, z0)), m.P(0, new(x1, y, z0)), m.P(0, new(x1, y, z1)), m.P(0, new(x0, y, z1)) }, c);
-        Flat(-W, -L, W, L, Y, Brass);
-        Flat(-W + 140, -L + 140, W - 140, L - 140, Y + 2, Velvet);
-        Flat(-W + 260, -L + 260, W - 260, L - 260, Y + 3, VelvetDark);
-        // the medallion, a lozenge of gold and blue
-        var c0 = m.P(0, new(0, Y + 5, -L + 420)); var c1 = m.P(0, new(W - 520, Y + 5, 0)); var c2 = m.P(0, new(0, Y + 5, L - 420)); var c3 = m.P(0, new(-W + 520, Y + 5, 0));
-        m.Up(new[] { c0, c1, c2, c3 }, Brass);
-        var d0 = m.P(0, new(0, Y + 7, -L + 640)); var d1 = m.P(0, new(W - 820, Y + 7, 0)); var d2 = m.P(0, new(0, Y + 7, L - 640)); var d3 = m.P(0, new(-W + 820, Y + 7, 0));
-        m.Up(new[] { d0, d1, d2, d3 }, 12 * 16 + 4);
+        const int NX = 16, NZ = 11;
+        const float W = 1200, L = 850, Y = 14;
+        var grid = new int[NX + 1, NZ + 1];
+        for (var i = 0; i <= NX; i++)
+            for (var j = 0; j <= NZ; j++) grid[i, j] = m.P(0, new(-W + 2 * W * i / NX, Y, -L + 2 * L * j / NZ));
+        for (var i = 0; i < NX; i++)
+            for (var j = 0; j < NZ; j++)
+                m.Up(new[] { grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1] }, RugKnot(i, j, NX, NZ), unlit: true);
+        // its thick edge: the sides from the floor up to the pile, lit
+        var bottom = new[] { m.P(0, new(-W, 0, -L)), m.P(0, new(W, 0, -L)), m.P(0, new(W, 0, L)), m.P(0, new(-W, 0, L)) };
+        var top = new[] { grid[0, 0], grid[NX, 0], grid[NX, NZ], grid[0, NZ] };
+        var outwards = new[] { new Vector3(0, 0, -1), new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(-1, 0, 0) };
+        for (var e = 0; e < 4; e++)
+        {
+            int a = e, b = (e + 1) % 4;
+            m.In(new[] { bottom[a], bottom[b], top[b], top[a] }, 1 * 16 + 2, outwards[e] * 2000 + new Vector3(0, Y / 2, 0));
+        }
+        // the fringes: a cream tassel to each pair of warp threads at both short ends, each a little twisted box
+        for (var k = 0; k < 10; k++)
+            foreach (var sx in new[] { -1f, 1f })
+            {
+                var z = -L + 2 * L * (k + 0.5f) / 10;
+                m.Box(0, new Vector3(sx * (W + 55), 6, z), new Vector3(110, 12, 34), 2 * 16 + 8, 2 * 16 + 6);
+                m.Box(0, new Vector3(sx * (W + 118), 5, z + 6), new Vector3(30, 10, 46), 2 * 16 + 8, 2 * 16 + 6);
+            }
         return m.ToBody(header);
+    }
+
+    // A knot's colour: the border rings from the edge in, the field, the medallion (a lozenge in the middle), the corners' spandrels
+    private static int RugKnot(int i, int j, int nx, int nz)
+    {
+        var ring = Math.Min(Math.Min(i, nx - 1 - i), Math.Min(j, nz - 1 - j));
+        if (ring == 0) return 1 * 16 + 3;                                   // the outer border: dark walnut
+        if (ring == 1) return (i + j) % 2 == 0 ? 6 * 16 + 11 : 6 * 16 + 9;  // the gold band, its little lozenges
+        if (ring == 2) return 4 * 16 + 4;                                   // the red band
+        double cx = (nx - 1) / 2.0, cz = (nz - 1) / 2.0;
+        var d = Math.Abs(i - cx) / (cx - 2.2) + Math.Abs(j - cz) / (cz - 2.2);
+        if (d <= 0.32) return 4 * 16 + 7;                                   // the medallion's heart: red
+        if (d <= 0.62) return 2 * 16 + 13;                                  // cream
+        if (d <= 0.9) return 6 * 16 + 11;                                   // its gold ring
+        // the spandrels: gold in the field's corners
+        if ((i == 3 || i == nx - 4) && (j == 3 || j == nz - 4)) return 6 * 16 + 10;
+        return (i + 2 * j) % 5 == 0 ? 9 * 16 + 4 : 9 * 16 + 3;             // the field: deep teal, a faint weave
     }
 
     // ---- a panelled partition with a doorway (its length along x, centred; the doorway at its +x end): the basic room's bathroom wall
@@ -632,16 +669,94 @@ internal static class HotelProps
     // ---- an oil painting in a heavy gilt frame, on its wall (back on z 0): a landscape, sky, hills, a palace
     private static Body BuildPainting(byte[] header)
     {
+        // (2026-11-23, the user: "The picture is low effort and not of the same quality as the rest of the room": an oil painting -- 20 x 15
+        // dabs of the palette's own colours, drawn as they are: Otringal's bay at sunset, the sky warming to the horizon, a cloud or two, the
+        // sun low over the sea and its path on the water, the mountains blue in the distance, a white palace with red domes on the green
+        // shore, dark trees in the foreground, a sail on the bay -- in a heavy gilt frame, its moulding stepped, a dark slip round the canvas,
+        // rosettes at its corners, a crest over it)
         var m = new CarMesh("a painting", new[] { -1 });
         m.Light = 0.8f;
-        const float W = 800, H = 600, Y = 700;
-        m.Box(0, new Vector3(0, Y, 25), new Vector3(2 * W + 180, 2 * H + 180, 50), Brass, Brass);
-        Quad(m, new(-W, Y, 52), new(W, Y, 52), new(W, Y + H, 52), new(-W, Y + H, 52), PaintSky, new(0, Y, 300), unlit: true);
-        Quad(m, new(-W, Y - H, 52), new(W, Y - H, 52), new(W, Y, 52), new(-W, Y, 52), PaintGreen, new(0, Y, 300), unlit: true);
-        var h0 = m.P(0, new(-W, Y - 60, 54)); var h1 = m.P(0, new(-200, Y + 220, 54)); var h2 = m.P(0, new(300, Y - 20, 54));
-        m.In(new[] { h0, h1, h2 }, PaintGreen - 3, new(0, Y, 300), unlit: true);
-        m.Box(0, new Vector3(380, Y + 80, 56), new Vector3(260, 200, 8), Ivory + 4);
-        m.Box(0, new Vector3(380, Y + 230, 58), new Vector3(90, 120, 8), PaintDark);
+        const int NU = 20, NV = 15;
+        const float W = 800, H = 600, Y = 700, F = 150, Z = 52;
+        // the frame: a gilt moulding's profile (out from the canvas's edge, and its depth off the wall) run round the canvas and mitred at
+        // the corners -- the dark slip, a bead, a hollow cove rising to the crown, the rounded crown, the outer slope back to the wall: each
+        // step its own angle, lit, so the gilt catches the light as a carved frame does
+        var profile = new (float Out, float Depth, int Colour)[]
+        {
+            (0, Z, Ebony), (26, Z + 6, Ebony), (34, Z + 18, BrassDark), (48, Z + 26, Brass), (60, Z + 20, BrassDark), (84, Z + 34, Brass),
+            (108, Z + 52, Brass), (124, Z + 58, Brass), (140, Z + 54, BrassDark), (156, Z + 36, Brass), (F, 6, BrassDark),
+        };
+        var rects = profile.Select(pr => new[]
+        {
+            m.P(0, new(-W - pr.Out, Y - H - pr.Out, pr.Depth)), m.P(0, new(W + pr.Out, Y - H - pr.Out, pr.Depth)),
+            m.P(0, new(W + pr.Out, Y + H + pr.Out, pr.Depth)), m.P(0, new(-W - pr.Out, Y + H + pr.Out, pr.Depth)),
+        }).ToArray();
+        var outward = new[] { new Vector3(0, -1, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(-1, 0, 0) };
+        for (var k = 0; k + 1 < profile.Length; k++)
+            for (var side = 0; side < 4; side++)
+            {
+                int a = side, b = (side + 1) % 4;
+                var mid = new Vector3(0, Y, 0) + outward[side] * (side % 2 == 0 ? H : W);
+                // (each step faces out of the frame's face, tilted out or in as the profile climbs or falls)
+                var rise = profile[k + 1].Depth - profile[k].Depth;
+                var towards = mid + outward[side] * (rise >= 0 ? -60 : 160) + new Vector3(0, 0, 400);
+                m.In(new[] { rects[k][a], rects[k][b], rects[k + 1][b], rects[k + 1][a] }, profile[k].Colour, towards);
+            }
+        // rosettes at the corners, a shell crest over the top
+        foreach (var sx in new[] { -1f, 1f })
+            foreach (var sy in new[] { -1f, 1f }) m.Ball(0, new Vector3(sx * (W + 116), Y + sy * (H + 116), Z + 64), 30, Brass);
+        m.Ball(0, new Vector3(0, Y + H + F + 10, Z + 30), 60, Brass);
+        m.Ball(0, new Vector3(0, Y + H + F + 10, Z + 70), 30, BrassDark);
+        // the canvas
+        var grid = new int[NU + 1, NV + 1];
+        for (var i = 0; i <= NU; i++)
+            for (var j = 0; j <= NV; j++) grid[i, j] = m.P(0, new(-W + 2 * W * i / NU, Y + H - 2 * H * j / NV, Z));
+        for (var i = 0; i < NU; i++)
+            for (var j = 0; j < NV; j++)
+                m.In(new[] { grid[i, j + 1], grid[i + 1, j + 1], grid[i + 1, j], grid[i, j] }, PaintingDab((i + 0.5) / NU, (j + 0.5) / NV), new(0, Y, 400), unlit: true);
         return m.ToBody(header);
+    }
+
+    // A dab's colour at (u across, v down the canvas, 0..1): ramp * 16 + shade, the palette's ramps -- 12 the sky's blues, 5 its warm
+    // peaches, 14 the clouds' rose greys, 13 the mountains' violet greys, 10 the sea's blue-greens, 6 the gold, 7 and 8 the greens, 3 the
+    // palace's whites, 4 its domes' red, 1 the boat's brown, 2 its sail's cream
+    private static int PaintingDab(double u, double v)
+    {
+        const double Horizon = 0.56;
+        // the sail and its boat on the bay
+        if (u > 0.53 && u < 0.59 && v > 0.56 && v < 0.64 && (v - 0.56) > (0.59 - u) * 0.9) return 2 * 16 + 14;
+        if (u > 0.5 && u < 0.62 && v > 0.64 && v < 0.68) return 1 * 16 + 3;
+        // the palace on the shore: its towers, domes, walls
+        if (v > 0.38 && v < 0.62 && u > 0.1 && u < 0.3)
+        {
+            var tower = (u > 0.11 && u < 0.15) || (u > 0.25 && u < 0.29);
+            if (tower && v < 0.44) return 4 * 16 + 8;
+            if (tower) return 3 * 16 + 13;
+            if (u > 0.17 && u < 0.23 && v > 0.42 && v < 0.49) return 4 * 16 + 7;
+            if (v > 0.49) return (int)(u * 40) % 3 == 0 ? 3 * 16 + 11 : 3 * 16 + 13;
+        }
+        // the trees in the foreground
+        if ((u < 0.09 && v > 0.62) || (u > 0.3 && u < 0.39 && v > 0.76) || (u < 0.05 && v > 0.5)) return (int)((u + v) * 37) % 2 == 0 ? 8 * 16 + 3 : 8 * 16 + 5;
+        // the shore: from the palace's foot down to the corner, green
+        var shore = 0.38 + (v - Horizon) * 0.9;
+        if (v > 0.58 && u < shore) return v > 0.8 ? 7 * 16 + 5 : 7 * 16 + 8;
+        if (v >= Horizon)
+        {
+            // the sea, darker towards us, the sun's path on it
+            if (Math.Abs(u - 0.72) < 0.05 + (v - Horizon) * 0.18 && (int)(v * 30) % 2 == 0) return 6 * 16 + 13;
+            return v < 0.66 ? 10 * 16 + 10 : v < 0.8 ? 10 * 16 + 8 : 10 * 16 + 6;
+        }
+        // the sun, low over the sea
+        var du = u - 0.72; var dv = (v - 0.47) * 0.75;
+        if (du * du + dv * dv < 0.0036) return 15 * 16 + 5;
+        // the mountains, blue in the distance on the left
+        var ridge = Horizon - 0.2 * Math.Max(0, Math.Sin(Math.PI * Math.Min(1, u / 0.55))) - 0.05 * Math.Sin(u * 23);
+        if (u < 0.6 && v > ridge) return v > ridge + 0.06 ? 13 * 16 + 6 : 13 * 16 + 8;
+        // the clouds
+        if ((v > 0.17 && v < 0.21 && u > 0.08 && u < 0.42) || (v > 0.29 && v < 0.32 && u > 0.5 && u < 0.92)) return 14 * 16 + 12;
+        // the sky: blue overhead, warming to the horizon
+        if (v > 0.44) return 5 * 16 + 12;
+        if (v > 0.36) return 5 * 16 + 13;
+        return v < 0.12 ? 12 * 16 + 9 : v < 0.24 ? 12 * 16 + 11 : 12 * 16 + 13;
     }
 }
