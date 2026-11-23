@@ -103,6 +103,44 @@ internal static class TempleOfBuDrive
             Set(12, NewFloor, z, t.Block, t.Pos);
             Set(12, NewFloor + 1, z, 0, 0);
         }
+        // the rail tracks gone, smooth floor in their place (the user, 2026-11-23: "We need to remove the rail tracks from the temple of Bu and
+        // replace them with smooth ground"): every block of the minecart's track in the scene, at each of its three levels (layers 1, 5 and
+        // 9 -- straights along x and z, curves, ends, the crossing) -- the stone floor tile under it laid in its place, at its own height: the
+        // track's bed is a layer over the halls' floor, and the car's way along it (z 40-42, x 20-22) and the zones on it stay where they are.
+        // Under a track block something other than the floor tile (a grate, a slab): the floor tile's 3 x 3 pattern carried on from the
+        // nearest one there. And the track's junctions (block 20, a 3 x 3 tile at the floor's own level, its switch lever beside it): the
+        // floor tile, its pattern carried on from the floor round it.
+        var railBlocks = new HashSet<int> { 50, 51, 52, 53, 54, 55, 57, 58, 59, 61, 63 };
+        const int Junction = 20;
+        (int Block, int Pos) Now(int x, int y, int z) => edits.TryGetValue((x, y, z), out var e) ? (e.Block, e.Pos) : At(x, y, z);
+        const int FloorTile = 8;
+        (int Block, int Pos) FloorUnder(int x, int y, int z, int level)
+        {
+            if (level == y - 1 && y > 0 && At(x, y - 1, z) is { Block: FloorTile } under) return under;
+            for (var r = 1; r <= 4 && level >= 0; r++)
+                for (var dz = -r; dz <= r; dz++)
+                    for (var dx = -r; dx <= r; dx++)
+                    {
+                        int nx = x + dx, nz = z + dz;
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r || nx < 0 || nz < 0 || nx >= Size || nz >= Size) continue;
+                        if (At(nx, level, nz) is not { Block: FloorTile } n || n.Pos > 8) continue;
+                        // (the tile's rows run along z, its columns along x: pos = row * 3 + column)
+                        int row = ((n.Pos / 3 - dz) % 3 + 3) % 3, col = ((n.Pos % 3 - dx) % 3 + 3) % 3;
+                        return (FloorTile, row * 3 + col);
+                    }
+            return (FloorTile, 0);
+        }
+        var rails = 0;
+        for (var y = 0; y < Height; y++)
+            for (var z = 0; z < Size; z++)
+                for (var x = 0; x < Size; x++)
+                {
+                    var block = Now(x, y, z).Block;
+                    if (!railBlocks.Contains(block) && block != Junction) continue;
+                    var t = FloorUnder(x, y, z, block == Junction ? y : y - 1);
+                    Set(x, y, z, t.Block, t.Pos);
+                    rails++;
+                }
         shape = Lba1GridEdit.SetCells(shape, edits.Values.ToList());
         raw = Lba2GridBackend.FromLba1Shape(raw, shape);
         bkg.SetStored(gridEntry, raw);
@@ -115,7 +153,7 @@ internal static class TempleOfBuDrive
         File.WriteAllBytes(bkgPath, bkg.ToBytes());
         log.Add($"The Temple of Bù's drive: scene 10's grid {gridNumber}{(sharers.Count > 0 ? $" (shared with scenes {string.Join(", ", sharers)})" : "")} -- " +
                 $"the door's hall and its corridor east raised a layer ({raised} floor cells), a doorway north from the hall, a bridge over the gap, a " +
-                $"doorway into the halls beyond, the bench in the turn east gone: {edits.Count} cells");
+                $"doorway into the halls beyond, the bench in the turn east gone, the minecart's track floored over ({rails} cells): {edits.Count} cells");
         return log;
     }
 }
