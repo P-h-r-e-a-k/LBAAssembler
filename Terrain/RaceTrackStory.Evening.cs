@@ -1018,7 +1018,9 @@ goto(label_0);
         anim(0);
         set_dir(MOVE_MANUAL);
     }}
-    if ({Scolded} == var_game({Drunk}) && 0 == var_game({PyjamaVar}) && {LiftShaftZone} == zone())
+    // (not yet sent to wash tonight: 0 -- or 3, dressed again after the game's first morning, which a played game has always had before the
+    // spanking: with 0 only, the walk to the bathroom never came in the user's game, 2026-11-23)
+    if ({Scolded} == var_game({Drunk}) && (0 == var_game({PyjamaVar}) || {PyjamasOff} == var_game({PyjamaVar})) && {LiftShaftZone} == zone())
     {{
         set_var_cube({PyjamaWait}, 0);
         set_comportement(comportement_10);
