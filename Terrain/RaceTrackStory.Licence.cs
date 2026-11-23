@@ -169,20 +169,18 @@ internal static partial class RaceTrackStory
         });
     }
 
-    // The Temple of Bú driven through (TempleOfBuDrive made its way): in scene 10, the actors and the points stood on the floor raised a
-    // layer raised with it; the stairs down to scene 11 shut to the car, and in their place, in front of them, the car's own door to the
-    // Esmers' hangar (scene 12 -- scene 11 is all stairs) -- each on by whether Twinsen drives (a helper's life every frame). He arrives in
-    // the hangar's hall where he would on foot, a little to its side, still facing as he drove.
-    private const int TempleToLower = 5, TempleCarDoor = 6;
+    // The Temple of Bú driven through (TempleOfBuDrive made its way): in scenes 10 and 11, the actors and the points stood on a floor raised
+    // a layer raised with it; the car through both rooms by the minecart's way, through the stairs' door into 11 and the base's into 12.
     private static void TempleDrive(IslandBeatsA b)
     {
-        if (!b.Store.SceneExists(TempleScene) || !b.Store.SceneExists(HangarScene)) { b.Log.Add("the Temple of Bú's drive left out: no scene 10 or no hangar"); return; }
-        b.Edit(TempleScene, "the Temple of Bú driven through: the raised floor's actors and points raised, the car's door to the hangar by the stairs down", model =>
+        if (!b.Store.SceneExists(TempleScene) || !b.Store.SceneExists(TempleOfBuDrive.Lower)) { b.Log.Add("the Temple of Bú's drive left out: no scene 10 or 11"); return; }
+        // what stood on a floor raised a layer goes up with it (TempleOfBuDrive: the door's hall and corridor, and each level's floor laid a
+        // layer up -- RaisedTops, read off the game's own grid)
+        int RaiseOnFloors(SceneModel model, int scene)
         {
-            // (and on each level's floor laid a layer up -- TempleOfBuDrive.RaisedTops, read off the game's own grid)
-            var tops = TempleOfBuDrive.RaisedTops(b.GameDirectory);
+            var tops = TempleOfBuDrive.RaisedTops(b.GameDirectory, scene);
             int Up(int x, int y, int z) =>
-                (TempleOfBuDrive.Raised(x / 512, z / 512) && y == (TempleOfBuDrive.OldFloor + 1) * 256) ||
+                (scene == TempleScene && TempleOfBuDrive.Raised(x / 512, z / 512) && y == (TempleOfBuDrive.OldFloor + 1) * 256) ||
                 (tops.TryGetValue((x / 512, z / 512), out var top) && y == top) ? y + TempleOfBuDrive.Raise : y;
             var raised = 0;
             foreach (var a in model.Actors)
@@ -196,33 +194,25 @@ internal static partial class RaceTrackStory
                 var y = Up(p.X, p.Y, p.Z);
                 if (y != p.Y) { model.TrackPoints[i] = p with { Y = y }; raised++; }
             }
-            // (the two figures before the hall's north wall stay where the game has them: the car's way is east along the corridor and round
-            // the minecart's loop now, not north through a doorway of ours -- the user, 2026-11-23, "There is a complete path through the
-            // temple of Bu through to the spaceship area, the retail game takes it, which is why I asked you to remove your bridge")
-            var down = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == 11);
-            if (down is null) { b.Log.Add("the Temple of Bú's car door left out: no stairs down to scene 11 in scene 10"); return _ => { }; }
-            down.Info[4] = TempleToLower;
-            // (in front of the stairs, the way the car comes to them -- cells x 18-19, z 19-21, the halls' floor; where he lands: this plus
-            // where he was in it, x 0-1023 and z 0-1535 -- the hangar's hall round his arrival on foot)
-            model.Zones.Add(new SceneZoneModel { Type = 0, Num = HangarScene, X0 = 18 * 512, X1 = 20 * 512 - 1, Y0 = (TempleOfBuDrive.NewFloor + 1) * 256, Y1 = (TempleOfBuDrive.NewFloor + 5) * 256,
-                Z0 = 19 * 512, Z1 = 22 * 512 - 1, Info = new[] { ArriveAt.X - 512, ArriveAt.Y, ArriveAt.Z - 768, 0, TempleCarDoor, 0, 0, 0 } });
-            b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor");
-            var helper = RaceTrackScenes.InvisibleHelper(2 * 512, (TempleOfBuDrive.NewFloor + 1) * 256, 56 * 512);
-            var add = IslandBeatsA.Add(model, helper, $@"void comportement_0()
-{{
-    if ({Driving} == comportement_hero())
-    {{
-        set_change_cube({TempleToLower}, 0);
-        set_change_cube({TempleCarDoor}, 1);
-    }}
-    else
-    {{
-        set_change_cube({TempleToLower}, 1);
-        set_change_cube({TempleCarDoor}, 0);
-    }}
-}}
-");
-            return scripts => add(scripts);
+            return raised;
+        }
+        // Scene 10: the car's way on is the stairs down's own door into scene 11, as on foot -- the minecart's way on through the temple's
+        // second room to the Esmers' base (the user, 2026-11-23: "Please remove the rails from this scene 11 ... We also need to add a slope
+        // to the doorway into the esmer base"; drive_in= lets the car through). Its own door straight to the hangar from the stairs' top,
+        // 11-19's, gone.
+        b.Edit(TempleScene, "the Temple of Bú driven through: the raised floors' actors and points raised", model =>
+        {
+            var raised = RaiseOnFloors(model, TempleScene);
+            b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor in scene 10");
+            return _ => { };
+        });
+        // Scene 11: the same, and the ladder down to the corridor before the base's door gone -- a ramp there now (TempleOfBuDrive)
+        b.Edit(TempleOfBuDrive.Lower, "the Temple of Bú's second room driven through: the raised floors' actors and points raised, the ladder to the base's door a ramp", model =>
+        {
+            var raised = RaiseOnFloors(model, TempleOfBuDrive.Lower);
+            var ladders = model.Zones.RemoveAll(z => z.Type == 6 && z.X0 >= 7 * 1024 && z.X1 <= 9 * 1024 && z.Z0 >= 14 * 1024 && z.Z1 <= 16 * 1024);
+            b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor in scene 11, {ladders} ladder taken out");
+            return _ => { };
         });
     }
 }
