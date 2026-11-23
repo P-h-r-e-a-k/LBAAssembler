@@ -18,7 +18,9 @@ internal sealed class RaceCarWindow : Window
     private readonly ComboBox suitColour = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly StackPanel gearRows = new();
     private readonly List<(FrameworkElement Row, Slider Slider)> gearSliders = new();
-    private readonly CheckBox automatic = new() { Content = "Automatic gearbox (the gears change by themselves)" };
+    // (the gears always change by themselves since 2026-11-23 -- the game's hand-changed box, X up and Z down, is gone: Z is the handbrake.
+    // The box stays, ticked and greyed, so a car file's line still reads as it is)
+    private readonly CheckBox automatic = new() { Content = "Automatic gearbox (always: the gears change by themselves)", IsChecked = true, IsEnabled = false };
     private readonly CheckBox display = new() { Content = "Show the gear, the speed and the lap times on screen" };
     private readonly CheckBox askBeforePlay = new() { Content = "Show this before each race-track play" };
     private readonly CheckBox opponent = new() { Content = "Race the opponents" };
@@ -138,7 +140,7 @@ internal sealed class RaceCarWindow : Window
 
         // ---- the gearbox
         gearbox.Children.Add(Section("Gearbox", first: true));
-        gearbox.Children.Add(Text("X shifts up a gear and Z down, unless the gearbox is automatic. Each gear has its own top speed, and a low gear pulls " +
+        gearbox.Children.Add(Text("The gears change by themselves (Z is the handbrake). Each gear has its own top speed, and a low gear pulls " +
                                   "harder than a high one. Speeds are as the game's display shows them, a cell taken as a metre: the original buggy " +
                                   "tops out at 27 km/h.", new Thickness(0, 0, 0, 6)));
         gearboxNote.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
@@ -292,7 +294,7 @@ internal sealed class RaceCarWindow : Window
     {
         updating = true;
         gears.SelectedItem = Math.Clamp(setup.Gears, 1, RaceCarSetup.MaxGears);
-        automatic.IsChecked = setup.Automatic;
+        automatic.IsChecked = true;
         display.IsChecked = setup.ShowDisplay;
         showCheckpoints.IsChecked = setup.ShowCheckpoints;
         askBeforePlay.IsChecked = setup.AskBeforePlay;

@@ -2282,8 +2282,8 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Down arrow", "Brake, reverse"},
         {"Left, right", "Steer"},
         {"Ctrl", "Use your item"},
-        {"Shift", "Handbrake"},
-        {"", ""},                           // (the gears: by hand or by themselves)
+        {"Z", "Handbrake"},                 // (2026-11-23: Z, Shift the inventory's again -- RACEMOD.CPP HandbrakeKey; the gears' row gone,
+        {"Shift", "Inventory, off the track"},  // the gears always by themselves)
         {"V", "Camera view"},               // (2026-10-21: RACEMOD.CPP RaceCameraKey -- and the gears' row only for gears by hand, so
         {"Space", RG_ON_FOOT},              // that the page still fits)
         {"P, Esc", "Pause, menu"},
@@ -2313,15 +2313,15 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Left trigger", "Brake, reverse"},
         {"Left stick", "Steer"},
         {"Left shoulder", "Use your item"},
-        {"Y button", "Handbrake"},
+        {"B button", "Handbrake"},
         {"X button", RG_ON_FOOT},
         {"Back, Start", "Camera view, menu"},
     };
     const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, kx = cx - RG_PAGE_HALF + 36, ax = cx - 40;
-    const int onFoot = pg && pg->OnFoot, manual = pg && pg->Manual;
+    const int onFoot = pg && pg->OnFoot;
     // (the rows shown and the room for them: the last row's top is the first's, a line for each row, a quarter more and 2 -- the gamepad's
     // heading -- at most RG_CONTROLS_FOOT)
-    const int rows = (int)(nbKeys + sizeof(pad) / sizeof(pad[0])) - (onFoot ? 0 : guest ? 1 : 2) - (manual || guest ? 0 : 1);
+    const int rows = (int)(nbKeys + sizeof(pad) / sizeof(pad[0])) - (onFoot ? 0 : guest ? 1 : 2);
     S32 line = (S32)((RG_CONTROLS_FOOT - RG_CONTROLS_TOP - RG_PAGE_TOP - 2) * 4 / (4 * rows + 1));
     if (line > RG_LINE) line = RG_LINE;
     PageFrame(s_localGuest > 0 ? "Controls: player 2" : guest ? "Controls: player 1" : "Controls");
@@ -2330,11 +2330,6 @@ static void DrawControls(const T_RACE_PAGE *pg) {
     for (size_t i = 0; i < nbKeys; i++) {
         const char *key = list[i][0], *what = list[i][1];
         if (!onFoot && !strcmp(what, RG_ON_FOOT)) continue;
-        if (!key[0]) {
-            if (!manual) continue;
-            key = "X, Z";
-            what = "Gear up, down";
-        }
         Label(text, key);
         TextAt(kx, y, text, LBAWHITE);
         Label(text, what);
@@ -5295,7 +5290,7 @@ void RaceGame_SharedKeys(void) {
         if (down & RACENET_KEY_LEFT) Input |= I_LEFT;
         if (down & RACENET_KEY_RIGHT) Input |= I_RIGHT;
         if (down & RACENET_KEY_ITEM) Input |= I_COMPORTEMENT | I_RETURN;
-        if (down & RACENET_KEY_HANDBRAKE) Input |= I_INVENTORY;
+        if (down & RACENET_KEY_HANDBRAKE) TabKeys[K_Z] |= 0x80;     // (the handbrake is Z since 2026-11-23: RACEMOD.CPP HandbrakeKey)
         if (down & RACENET_KEY_VIEW) TabKeys[K_V] |= 0x80;
     }
     else if (RaceNet_Local()) {
@@ -5315,12 +5310,14 @@ void RaceGame_SharedKeys(void) {
         if (left) Input |= I_LEFT;
         if (right) Input |= I_RIGHT;
         if (item) Input |= I_COMPORTEMENT;
-        if (brake) Input |= I_INVENTORY;
+        if (brake) TabKeys[K_Z] |= 0x80;
         if (view) TabKeys[K_V] |= 0x80;
     }
 }
 
 // The first player's game has gone: the second's race is over, and its menu closes it (RaceGame_Menu)
+S32 RaceGame_LocalGuest(void) { return s_localGuest > 0; }
+
 S32 RaceGame_LocalAlone(void) {
     if (s_localGuest <= 0) return 0;
     s_raceOver = 1;

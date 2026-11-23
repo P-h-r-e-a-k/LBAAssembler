@@ -1186,11 +1186,13 @@ restartloop:
                 }
             }
 
+            // (the race mod: in the car too, driving about -- RACEMOD.CPP RaceMod_CarInventory; the buggy's behaviour has no inventory)
+            const S32 carInv = RaceMod_CarInventory() && ptrobj->Move == MOVE_BUGGY_MANUAL;
             if ((Input & I_INVENTORY)
-                    AND(PtrComportement->Flags & CF_INVENTORY)
+                    AND((PtrComportement->Flags & CF_INVENTORY) OR carInv)
                         AND(ptrobj->Obj.Body.Num != -1)
                             AND !(ptrobj->WorkFlags & SKATING)
-                                AND(ptrobj->Move == MOVE_MANUAL)) {
+                                AND((ptrobj->Move == MOVE_MANUAL) OR carInv)) {
                 SaveTimer();
                 StopSpeak();
                 BackupScreen(TRUE);
@@ -1198,7 +1200,11 @@ restartloop:
 
                 // (the race mod's inv_kinds=: a slot given another thing -- the story's errands, its sand filters -- has the game's
                 // own use of it no more: no lightning spell from the errands' slot, no protection spell from the filters' -- RACEMOD.CPP)
-                switch (RaceMod_InvKindHas(InventoryAction) ? -1 : InventoryAction) {
+                // (picked in the car: only what leaves him in it -- the holomap, the slate, the viewer, the note; a weapon, a spell, the
+                // protopack or the conch would change his behaviour, out of the car)
+                S32 invAct = RaceMod_InvKindHas(InventoryAction) ? -1 : InventoryAction;
+                if (carInv && invAct != FLAG_HOLOMAP && invAct != FLAG_ARDOISE && invAct != FLAG_VISIONNEUSE && invAct != FLAG_NOTE_BOURGMESTRE) invAct = -1;
+                switch (invAct) {
                 case FLAG_HOLOMAP: // holomap
                     if (PtrComportement->Flags & CF_HOLOMAP) {
                         HoloMap();

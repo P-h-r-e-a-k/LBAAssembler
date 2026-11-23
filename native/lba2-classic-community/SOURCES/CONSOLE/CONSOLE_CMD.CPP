@@ -611,6 +611,15 @@ static U32 Console_ScancodeFromName(const char *s) {
    pcx-message, slideshow, menu-main, config) ignore it. The flag is cleared
    at the end of the verb so non-harness callers are unaffected. */
 static void cmd_ui_dispatch(int argc, const char *argv[]) {
+    /* `ui inventory-next <path>`: the capture armed for the next inventory the
+       game itself opens (the player's key, through PERSO.CPP's own checks) --
+       written and the modal closed as `ui inventory` does; a harness test of
+       when the inventory opens at all (the race mod's car, 2026-11-23). */
+    if (argc >= 3 && !strcmp(argv[1], "inventory-next")) {
+        Inv_RequestCapture(argv[2]);
+        Console_Print("ui inventory-next -> %s (armed)", argv[2]);
+        return;
+    }
     if (argc >= 3 && !strcmp(argv[1], "inventory")) {
         /* MenuInventory's `tempo` argument is virtual game-ms; under fixed-dt
            16 that's ~31 frames of modal loop -- plenty of room past the

@@ -477,7 +477,6 @@ static const T_RACE_CAR *PlayerCar(void) {
 }
 
 static S32 s_gear = 1;
-static int s_lastX = 0, s_lastZ = 0;       // the shift keys' state last frame
 
 static S32 s_laps = 0;                     // laps started (0: the start line not crossed yet)
 static S32 s_lapStart = 0, s_lastLap = 0, s_bestLap = 0;
@@ -4921,7 +4920,8 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "coast")) s_car.Coast = Milli(v);
         else if (!strcmp(key, "reverse")) s_car.Reverse = atoi(v);
         else if (!strcmp(key, "steer")) s_car.Steer = atoi(v);
-        else if (!strcmp(key, "automatic")) s_car.Automatic = atoi(v);
+        else if (!strcmp(key, "automatic")) s_car.Automatic = 1;   // (the gears always change themselves: the hand-changed box -- X up, Z down --
+                                                                    // gone 2026-11-23, Z the handbrake now; a file's automatic=0 is read as 1)
         else if (!strcmp(key, "hud")) s_car.Hud = atoi(v);
         else if (!strcmp(key, "speedometer")) s_speedo = atoi(v);
         else if (!strcmp(key, "startline")) {
@@ -6154,30 +6154,19 @@ S32 RaceMod_Gear(void) { return s_gear; }
 
 void RaceMod_ResetGear(void) {
     s_gear = 1;
-    s_lastX = CheckKey(K_X) ? 1 : 0;
-    s_lastZ = CheckKey(K_Z) ? 1 : 0;
 }
 
 static int s_auto = 0; // (the test pilot, autodrive: RaceMod_AutoDrive below)
 
+// The gearbox: always automatic (2026-11-23 -- the hand-changed box, X up and Z down, gone: Z is the handbrake, the user: "Let's put
+// handbrake on Z"; every car the setup installs was automatic already)
 void RaceMod_UpdateGear(S32 speed) {
-    const int x = CheckKey(K_X) ? 1 : 0, z = CheckKey(K_Z) ? 1 : 0;
     const S32 was = s_gear;
     const T_RACE_CAR *car = PlayerCar();
-    // (the test pilot -- autodrive -- changes gear as the automatic box would, on a hand-changed one too: the story's cars have one, and
-    // the pilot left in first crawled round at 11 km/h -- the scripted playthrough, 2026-11-05)
-    if (s_car.Automatic || s_auto) {
-        // up at the gear's top speed, down when the car has slowed well into the gear below's range
-        if (s_gear < car->Gears && speed >= car->GearTop[s_gear - 1] - 40) s_gear++;
-        else if (s_gear > 1 && speed < car->GearTop[s_gear - 2] * 7 / 10) s_gear--;
-    } else {
-        if (x && !s_lastX && s_gear < s_car.Gears) s_gear++;
-        if (z && !s_lastZ && s_gear > 1) s_gear--;
-    }
-    s_lastX = x;
-    s_lastZ = z;
-    // (every change in the log, with what made it: the keys are the game window's keyboard, so a key typed while it has the focus counts)
-    if (s_gear != was) Log_Info("[racemod] gear %d (%s)", (int)s_gear, s_car.Automatic ? "automatic" : s_auto ? "the pilot" : s_gear > was ? "X" : "Z");
+    // up at the gear's top speed, down when the car has slowed well into the gear below's range
+    if (s_gear < car->Gears && speed >= car->GearTop[s_gear - 1] - 40) s_gear++;
+    else if (s_gear > 1 && speed < car->GearTop[s_gear - 2] * 7 / 10) s_gear--;
+    if (s_gear != was) Log_Info("[racemod] gear %d (%s)", (int)s_gear, s_auto ? "the pilot" : "automatic");
 }
 
 static void Message(const char *text) {
@@ -15223,7 +15212,6 @@ static U32 DriveInput(void) {
 #define RACE_HB_SMOKE_MS 90                // a puff of tyre smoke this often while it slides ...
 #define RACE_HB_SMOKE_SLIP 200             // ... at least this far sideways (4096ths: 18 degrees) ...
 #define RACE_HB_SMOKE_SPEED 3500           // ... and this fast (units/s: 25 km/h)
-static int s_hbInput = 0;                  // the inventory's key or button down this frame (RaceMod_FilterInput: kept out of Input in the car)
 static S32 s_slideFrom = 0, s_slideLet = 0, s_slideLog = 0, s_slideSmoke = 0, s_slideV0 = 0;
 static double s_slideMost = 0;
 static S32 s_slidePrevBeta = -1;           // (the heading a frame ago: which way the player steers -- against the slide or with it)
@@ -15237,8 +15225,10 @@ static double SlideGap(S32 beta) {
     if (gap > 2048) gap -= 4096; else if (gap < -2048) gap += 4096;
     return gap;
 }
+// (Z, or a pad's B -- 2026-11-23, the user: "We need the shift keys to work to load the inventory whilst Twinsen is in the car ... Let's put
+// handbrake on Z". Two players at one keyboard: their handbrake keys, E and Right Shift, come in as Z -- RACEGAME.CPP RaceGame_SharedKeys)
 static int HandbrakeKey(void) {
-    return s_hbInput || CheckKey(K_SHIFT_LEFT) || CheckKey(K_SHIFT_RIGHT);
+    return CheckKey(K_Z) || CheckKey(K_GAMEPAD_B);
 }
 // Whether the player has the car: nothing drives it for him, and it isn't flying or going round a loop. (Across a cube's edge -- the
 // next scene, NewCube -- the slide goes on.)
@@ -15248,6 +15238,15 @@ static int HandbrakeFree(void) {
 }
 S32 RaceMod_Handbrake(void) {
     return HandbrakeFree() && HandbrakeKey();
+}
+// The inventory opened in the car (2026-11-23, the user: "We need the shift keys to work to load the inventory whilst Twinsen is in the
+// car"): driving about, not in a race -- not from the grid's GO to the finish, nor online, two at one keyboard or a ghost played back, where
+// it would stop one player's clock. PERSO.CPP opens it in the buggy's behaviour too, and there only what leaves him in the car acts.
+S32 RaceMod_CarInventory(void) {
+    extern int RaceNet_Local(void);
+    extern S32 RaceGame_LocalGuest(void);
+    return RaceMod_Active() && Comportement == C_BUGGY && !RaceOn() && !RaceRunning() && !s_online && !s_ghostWatch && !RaceNet_Local() &&
+           !RaceGame_LocalGuest() && !RaceMod_Takeover() && !s_winStop;
 }
 double RaceMod_HandbrakeSteer(S32 on) { return on ? s_hbSteer : 1; }
 double RaceMod_HandbrakeBrake(void) { return s_hbBrake; }
@@ -15522,9 +15521,8 @@ U32 RaceMod_FilterInput(U32 input) {
     if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0));
     s_useHeld = (input & I_COMPORTEMENT) != 0;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
-    // (the inventory's key -- Shift -- and a pad's Y are the handbrake in the car: RaceMod_Handbrake)
-    s_hbInput = (input & I_INVENTORY) != 0;
-    if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_INVENTORY;
+    // (the inventory's key -- Shift, a pad's Y -- opens the inventory in the car too, but not in a race: RaceMod_CarInventory)
+    if (RaceMod_Active() && Comportement == C_BUGGY && !RaceMod_CarInventory()) input &= ~(U32)I_INVENTORY;
     // (a pad's Back button changes the camera's view in the car -- RaceCameraKey -- not the holomap)
     if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
     // (a ghost played back: the car is the ghost's -- nothing gets Twinsen out of it, nor fires, jumps or dodges)
@@ -24996,7 +24994,8 @@ S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page) {
         }
     }
     fclose(f);
-    page->Manual = gears > 1 && !automatic;
+    page->Manual = 0;                       // (the gears always by themselves since 2026-11-23: RaceMod_UpdateGear)
+    (void)gears; (void)automatic;
     if (page->Trial) page->Item[page->Count++] = PU_FUEL;
     else if (powerups && nbOnly) {
         for (int i = 0; i < nbOnly && page->Count < RACE_PAGE_ITEMS; i++) {
