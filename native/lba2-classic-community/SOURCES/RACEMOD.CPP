@@ -1219,6 +1219,11 @@ static int s_victoryFresh = 0;              // (the lap of honour's halfway mark
 // (the file's key, read again with each track; the stage and the variable watched outlive a track loaded again on the way -- the car
 // braking over a cube's edge into the next scene)
 static int s_winStopVar = -1, s_winStop = 0, s_winStopWatch = -1, s_winStopHeld = 0;
+// (qualify_stop='s stop: the controls back a moment after he is out of the car -- the day's variable it watched moves on only at night, and
+// held till then he stood twenty seconds for nothing: the user, 2026-11-23, "Twinsen is getting held for a long time for apparently no
+// reason on Otringal after completing his qualifying lap". The marshal's word after it is a cut scene of its own)
+static int s_winStopQuick = 0;
+#define RACE_QSTOP_FREE_MS 700
 // win_pull=<opponent> <var> <value> <delay ms> (the Emerald Moon's HAL, the user, 2026-11-17: "have Twinsen held in a cut scene and have HAL
 // pull up next to him a couple of seconds after Twinsen wins the race, and then HAL talks to him from his car"): out of his car after the
 // win (win_stop=), <delay> later the opponent's car comes up the road from behind him and stops alongside (WinPullFrame), then game
@@ -6715,7 +6720,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             Log_Info("[racemod] qualify_stop: qualified in %.2f s -- variable %d = %d, no race today", s_lastLap / 1000.0, s_qStopVar, s_qStopSet);
             WinStopStart(now);
             // (held till the story moves the day on -- the qualify_stop variable from the value it was given, not win_stop='s own)
-            if (s_winStop) { s_winStopWatch = s_qStopVar; s_winStopHeld = s_qStopSet; }
+            if (s_winStop) { s_winStopWatch = s_qStopVar; s_winStopHeld = s_qStopSet; s_winStopQuick = 1; }
             return;
         }
         if (s_phase == PHASE_QUALIFYING) {
@@ -8065,8 +8070,11 @@ static void WinStopFrame(S32 now) {
         Log_Warn("[racemod] win_pull: %s's car never reported its stop -- variable %d at %d all the same", s_opp[s_winPullOpp].Name, s_winPullVar,
                  s_winPullValue);
     }
-    if (ListVarGame[s_winStopWatch] != s_winStopHeld) {
-        s_winStop = 0;
+    if (s_winStopQuick && now - s_winStopSince > RACE_QSTOP_FREE_MS) {
+        s_winStop = 0; s_winStopQuick = 0;
+        Log_Info("[racemod] qualify_stop: out of the car -- the controls back to the player");
+    } else if (ListVarGame[s_winStopWatch] != s_winStopHeld) {
+        s_winStop = 0; s_winStopQuick = 0;
         Log_Info("[racemod] win_stop: variable %d %d -> %d -- the controls back to the player", s_winStopWatch, s_winStopHeld, (int)ListVarGame[s_winStopWatch]);
     } else if (now - s_winStopSince > RACE_WINSTOP_MS) {
         s_winStop = 0;

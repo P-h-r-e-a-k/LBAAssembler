@@ -153,6 +153,9 @@ set_var_cube(0, 0);")));
         $"gate_not={OtringalDay} {DayQualified} The cars are in the stewards' garage till the morning.\n" +
         $"gate_not={OtringalDay} {DayRaceDay} The marshal: no ignition coil, no race!\n" +
         $"qualify_stop={OtringalDay} 0 {DayQualified}\n" +
+        // (the others out of sight while he qualifies: they qualified already, their cars kept in the palace overnight -- the user, 2026-11-23,
+        // "For qualifying we don't need the other cars on the pitlane"; on race day they come out onto the grid)
+        "pit_hidden=1\n" +
         // (the night: the car in the palace's keeping; race day: its coil gone, it won't start -- RaceTrackStory.OtringalNight)
         $"car_held={OtringalDay} {DayQualified} {PalaceRoom}\n" +
         $"car_dead={OtringalDay} {DayRaceDay} The engine won't start -- the ignition coil is missing!\n" +
