@@ -1655,6 +1655,11 @@ static int s_hoverDocked = -1, s_hoverDockedIn = 0;
 // vanish and Twinsen to just be stuck standing on the water unable to move")
 #define RACE_MAX_HOVER_DOORS 4
 static int s_hoverDoor[RACE_MAX_HOVER_DOORS][4], s_nbHoverDoors = 0, s_hoverRoom = -1;
+// quiet_scene=<scene> (2026-11-23): a scene with no music -- the one playing stopped as it loads (the music goes on across scenes in the
+// race-track mode: RaceMusicFrame); the Imperial Hotel's lift car, its own tune a sample the ride plays (OtringalHotel.LiftCar). The next
+// scene's own music starts as it loads.
+#define RACE_MAX_QUIET 4
+static int s_quiet[RACE_MAX_QUIET], s_nbQuiet = 0;
 // far_actor= (DrawFarActors): as far as they are seen, as the far items are (RACE_FAR_ITEMS)
 #define RACE_FAR_ACTOR_REACH 40000.0
 #define RACE_MAX_FAR_ACTORS 8
@@ -5703,6 +5708,12 @@ static void Load(const char *path, int carOnly = 0) {
                         s_farActors[k].X == a->X && s_farActors[k].Z == a->Z) break;
                 if (k == s_nbFarActors) s_nbFarActors++;
             }
+        }
+        else if (!strcmp(key, "quiet_scene") && s_nbQuiet < RACE_MAX_QUIET) {
+            const int scene = atoi(v);
+            int k = 0;
+            for (; k < s_nbQuiet && s_quiet[k] != scene; k++) {}
+            if (k == s_nbQuiet) s_quiet[s_nbQuiet++] = scene;
         }
         else if (!strcmp(key, "hover_door_var") && s_nbHoverDoors < RACE_MAX_HOVER_DOORS) {
             int *d = s_hoverDoor[s_nbHoverDoors];
@@ -22298,6 +22309,12 @@ static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count);
 void RaceMod_ScenePastEdge(void) {
     memset(s_pastEdge, 0, sizeof(s_pastEdge));
     s_pastEdgeDue = 1;
+    // (quiet_scene=: the music stopped as it loads)
+    for (int k = 0; k < s_nbQuiet; k++)
+        if (NewCube == s_quiet[k]) {
+            StopMusic();
+            Log_Info("[racemod] quiet_scene: scene %d -- the music stopped", (int)NewCube);
+        }
     // (the room the hovercraft was left at the door of, loading: its door's variable set again now, before the room's scripts first run --
     // set at the door only, scene 64's own scripts had put Kash's sea cave's 143 back to 0 before he got there, so the cave's raft took
     // itself away and he stood on the water: hover_door_var)
@@ -25930,7 +25947,7 @@ static void ResetTrack(void) {
     s_brkVar = -1; s_broken = 0;
     s_heldVar = -1; s_heldCube = -1; s_deadVar = -1;
     s_nbOpeners = 0; s_nbHellos = 0; s_openerQuiet = -1;
-    // (s_nbHoverDoors, s_nbFarActors: story.txt's, read once -- not the island's track file's, so not undone as it loads)
+    // (s_nbHoverDoors, s_nbFarActors, s_nbQuiet: story.txt's, read once -- not the island's track file's, so not undone as it loads)
     s_victoryOn = 0;
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);

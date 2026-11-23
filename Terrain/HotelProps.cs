@@ -27,6 +27,9 @@ internal static class HotelProps
                      Sofa = 236, CoffeeTable = 237, GrandPiano = 238, DiningTable = 239, Fireplace = 240, HotelRug = 241, Partition = 242, Painting = 243;
     // (each of the corridor's doors a body of its own -- the five in one passed the engine's 550 points: RoomDoor + its number's last digit - 1)
     public const int RoomDoor = 244;
+    // (the lift car's own: its doors seen from inside, shut and open; its back wall's lacquer, mirror and rail -- 2026-11-23, the user: "Let's add
+    // an actual scene for the lift that Twinsen can walk inside": OtringalHotel.LiftCar)
+    public const int LiftInside = 249, LiftInsideOpen = 250, LiftCarBack = 251;
 
     // (the palette's ramps, lit: a face's light takes it up to nine steps along its ramp -- each base low enough to stay in it)
     private const int Mahogany = 1 * 16 + 3, MahoganyDark = 1 * 16 + 1, Walnut = 1 * 16 + 5, Brass = 6 * 16 + 6, BrassDark = 6 * 16 + 3,
@@ -62,13 +65,20 @@ internal static class HotelProps
         (HotelRug, "a hotel rug", BuildRug),
         (Partition, "a panelled partition", BuildPartition),
         (Painting, "an oil painting", BuildPainting),
+        (LiftInside, "the lift car's doors, shut", h => BuildLiftInside(h, false)),
+        (LiftInsideOpen, "the lift car's doors, open", h => BuildLiftInside(h, true)),
+        (LiftCarBack, "the lift car's back wall", BuildLiftCarBack),
     });
 
     // The boxes the scene stands them in: the rug walked over (OtringalHotel gives it the walk-over armour too); the wall pieces only as
     // deep as they stand out from their wall
     public static short[]? Box(int generic) => generic switch
     {
-        LiftFront or LiftOpen => new short[] { -900, 0, 0, 900, 2900, 160 },
+        // (the lift stands on a wall along z facing +x, and the engine never turns an actor's box with its beta: the box in the room's own
+        // axes -- x out from the wall, z along it. Its x along the wall before 2026-11-23 reached 900 out into the room and the doors drew
+        // over Twinsen walking by them, the user: "need to be flush in the wall and not drawn over Twinsen")
+        LiftFront or LiftOpen or LiftInside or LiftInsideOpen => new short[] { 0, 0, -1260, 130, 3100, 1260 },
+        LiftCarBack => new short[] { -1000, 0, 0, 1000, 2600, 60 },
         // (the counter only: the board of keys behind it is drawn, the clerk stands between them -- its whole extent's box pushed him out)
         ReceptionDesk => new short[] { -1320, 0, -440, 1320, 1150, 440 },
         CorridorDoors => new short[] { 0, 0, 0, (short)(DoorPitch * (Rooms - 1)), 2200, 120 },
@@ -147,13 +157,14 @@ internal static class HotelProps
         m.Light = 0.8f;
         float half = LiftWide / 2, jamb = 220;
         // the marble surround: jambs, lintel, a step of marble at its foot
+        // (flush in its wall, 2026-11-23: the surround a relief 50 deep, the doors set back in it, nothing standing out at the foot)
         foreach (var s in new[] { -1f, 1f })
-            m.Box(0, new Vector3(s * (half + jamb / 2), LiftHigh / 2 + 100, 70), new Vector3(jamb, LiftHigh + 200, 140), Marble, Marble);
-        m.Box(0, new Vector3(0, LiftHigh + 250, 75), new Vector3(LiftWide + 2 * jamb + 80, 300, 150), Marble, Marble);
-        m.Box(0, new Vector3(0, LiftHigh + 410, 85), new Vector3(LiftWide + 2 * jamb + 160, 40, 170), BrassDark, Brass);
-        m.Box(0, new Vector3(0, 15, 120), new Vector3(LiftWide + 2 * jamb, 30, 240), MarbleVein, Marble);
+            m.Box(0, new Vector3(s * (half + jamb / 2), LiftHigh / 2 + 100, 25), new Vector3(jamb, LiftHigh + 200, 50), Marble, Marble);
+        m.Box(0, new Vector3(0, LiftHigh + 250, 27), new Vector3(LiftWide + 2 * jamb + 80, 300, 54), Marble, Marble);
+        m.Box(0, new Vector3(0, LiftHigh + 410, 32), new Vector3(LiftWide + 2 * jamb + 160, 40, 64), BrassDark, Brass);
+        m.Box(0, new Vector3(0, 8, 14), new Vector3(LiftWide + 2 * jamb, 16, 28), MarbleVein, Marble);
         // the floor dial over the lintel: a brass half disc, its numerals' ticks, its arrow (at the ground floor shut, between the floors open)
-        var dialC = new Vector3(0, LiftHigh + 430, 175);
+        var dialC = new Vector3(0, LiftHigh + 430, 60);
         const int N = 10; const float R = 330;
         var rim = Enumerable.Range(0, N + 1).Select(k => m.P(0, dialC + new Vector3(-R * MathF.Cos(MathF.PI * k / N), R * MathF.Sin(MathF.PI * k / N), 0))).ToArray();
         var hub = m.P(0, dialC);
@@ -167,28 +178,28 @@ internal static class HotelProps
         m.Strut(0, dialC + new Vector3(0, 0, 20), dialC + new Vector3(-0.72f * R * MathF.Cos(arrowAngle), 0.72f * R * MathF.Sin(arrowAngle), 20), 14, Ebony);
         m.Ball(0, dialC + new Vector3(0, 0, 22), 34, BrassDark);
         // the call button: a brass plate, two buttons
-        m.Box(0, new Vector3(half + jamb + 170, 1150, 20), new Vector3(120, 260, 30), Brass, Brass);
-        m.Ball(0, new Vector3(half + jamb + 170, 1210, 40), 22, GlowYellow);
-        m.Ball(0, new Vector3(half + jamb + 170, 1090, 40), 22, Ivory);
+        m.Box(0, new Vector3(half + jamb + 170, 1150, 10), new Vector3(120, 260, 20), Brass, Brass);
+        m.Ball(0, new Vector3(half + jamb + 170, 1210, 24), 18, GlowYellow);
+        m.Ball(0, new Vector3(half + jamb + 170, 1090, 24), 18, Ivory);
         // a lantern each side
         foreach (var s in new[] { -1f, 1f })
         {
             var x = s * (half + jamb + 330);
-            m.Box(0, new Vector3(x, 1800, 40), new Vector3(60, 60, 80), BrassDark);
-            m.Box(0, new Vector3(x, 1930, 110), new Vector3(150, 220, 150), Glass, BrassDark);
-            m.Ball(0, new Vector3(x, 1930, 110), 50, GlowYellow);
+            m.Box(0, new Vector3(x, 1800, 20), new Vector3(60, 60, 40), BrassDark);
+            m.Box(0, new Vector3(x, 1930, 70), new Vector3(140, 220, 120), Glass, BrassDark);
+            m.Ball(0, new Vector3(x, 1930, 70), 46, GlowYellow);
         }
         if (!open)
         {
             // the doors: two brass leaves meeting in the middle, a sunburst in relief over both, the line between them
             foreach (var s in new[] { -1f, 1f })
             {
-                m.Box(0, new Vector3(s * half / 2, LiftHigh / 2, 40), new Vector3(half - 10, LiftHigh, 40), BrassDark, Brass);
+                m.Box(0, new Vector3(s * half / 2, LiftHigh / 2, 12), new Vector3(half - 10, LiftHigh, 16), BrassDark, Brass);
                 // (the leaf's panels: a raised frame)
-                m.Box(0, new Vector3(s * half / 2, LiftHigh * 0.32f, 64), new Vector3(half - 160, 40, 10), Brass);
-                m.Box(0, new Vector3(s * half / 2, LiftHigh * 0.62f, 64), new Vector3(half - 160, 40, 10), Brass);
+                m.Box(0, new Vector3(s * half / 2, LiftHigh * 0.32f, 24), new Vector3(half - 160, 40, 8), Brass);
+                m.Box(0, new Vector3(s * half / 2, LiftHigh * 0.62f, 24), new Vector3(half - 160, 40, 8), Brass);
             }
-            var sun = new Vector3(0, LiftHigh * 0.8f, 66);
+            var sun = new Vector3(0, LiftHigh * 0.8f, 26);
             for (var k = 0; k <= 8; k++)
             {
                 var a = MathF.PI * k / 8;
@@ -199,13 +210,82 @@ internal static class HotelProps
         else
         {
             // the car between the leaves slid back into the jambs: its red lacquer back and sides, its mirror, its brass rail, its carpet
-            m.Box(0, new Vector3(0, LiftHigh / 2, 8), new Vector3(LiftWide - 20, LiftHigh, 16), Lacquer, Lacquer);
-            Quad(m, new(-half + 160, 700, 20), new(half - 160, 700, 20), new(half - 160, 1900, 20), new(-half + 160, 1900, 20), Glass, new(0, 1300, 300));
-            m.Box(0, new Vector3(0, 900, 40), new Vector3(LiftWide - 120, 30, 30), Brass);
-            m.Box(0, new Vector3(0, 6, 60), new Vector3(LiftWide - 20, 12, 100), VelvetDark);
+            m.Box(0, new Vector3(0, LiftHigh / 2, 4), new Vector3(LiftWide - 20, LiftHigh, 8), Lacquer, Lacquer);
+            Quad(m, new(-half + 160, 700, 10), new(half - 160, 700, 10), new(half - 160, 1900, 10), new(-half + 160, 1900, 10), Glass, new(0, 1300, 300));
+            m.Box(0, new Vector3(0, 900, 16), new Vector3(LiftWide - 120, 24, 16), Brass);
+            m.Box(0, new Vector3(0, 4, 20), new Vector3(LiftWide - 20, 8, 40), VelvetDark);
             // (the leaves' edges, just showing at the jambs)
-            foreach (var s in new[] { -1f, 1f }) m.Box(0, new Vector3(s * (half - 30), LiftHigh / 2, 50), new Vector3(60, LiftHigh, 40), BrassDark, Brass);
+            foreach (var s in new[] { -1f, 1f }) m.Box(0, new Vector3(s * (half - 30), LiftHigh / 2, 18), new Vector3(60, LiftHigh, 24), BrassDark, Brass);
         }
+        return m.ToBody(header);
+    }
+
+    // ---- the lift car's doors from inside (its west wall, facing +x as the floors' lifts are): two brushed brass leaves meeting in the
+    // middle, a red lacquer surround, the button panel beside them (the two floors' buttons, the one lit), the floor dial over them; open,
+    // the leaves slid into the surround and the landing beyond a dim gold
+    private static Body BuildLiftInside(byte[] header, bool open)
+    {
+        var m = new CarMesh(open ? "the lift car's doors, open" : "the lift car's doors, shut", new[] { -1 });
+        m.Light = 0.8f;
+        float half = LiftWide / 2, side = 260;
+        foreach (var s in new[] { -1f, 1f })
+            m.Box(0, new Vector3(s * (half + side / 2), LiftHigh / 2 + 150, 15), new Vector3(side, LiftHigh + 300, 30), Lacquer, Lacquer);
+        m.Box(0, new Vector3(0, LiftHigh + 200, 15), new Vector3(LiftWide + 2 * side, 200, 30), Lacquer, Lacquer);
+        // (a brass bead round the opening)
+        m.Box(0, new Vector3(0, LiftHigh + 20, 32), new Vector3(LiftWide + 40, 40, 8), Brass);
+        foreach (var s in new[] { -1f, 1f }) m.Box(0, new Vector3(s * (half + 20), LiftHigh / 2, 32), new Vector3(40, LiftHigh, 8), Brass);
+        // the floor dial, small, over the doors
+        var dialC = new Vector3(0, LiftHigh + 200, 34);
+        const int N = 8; const float R = 120;
+        var rim = Enumerable.Range(0, N + 1).Select(k => m.P(0, dialC + new Vector3(-R * MathF.Cos(MathF.PI * k / N), R * MathF.Sin(MathF.PI * k / N) - 60, 0))).ToArray();
+        var hub = m.P(0, dialC + new Vector3(0, -60, 0));
+        for (var k = 0; k < N; k++) m.In(new[] { hub, rim[k], rim[k + 1] }, Brass, dialC + new Vector3(0, 0, 200));
+        m.Strut(0, dialC + new Vector3(0, -60, 6), dialC + new Vector3(-80, 10, 6), 10, Ebony);
+        // the button panel, right of the doors: a brass plate, the ground floor's and the first's buttons, an alarm bell's red one
+        var px = half + side / 2;
+        m.Box(0, new Vector3(px, 1150, 36), new Vector3(150, 420, 12), Brass, Brass);
+        m.Ball(0, new Vector3(px, 1270, 46), 26, GlowYellow);
+        m.Ball(0, new Vector3(px, 1150, 46), 26, Ivory);
+        m.Ball(0, new Vector3(px, 1010, 46), 22, FireOrange);
+        if (!open)
+        {
+            // the leaves: brushed brass, the seam between them, a kick plate at their foot
+            foreach (var s in new[] { -1f, 1f })
+            {
+                m.Box(0, new Vector3(s * half / 2, LiftHigh / 2, 10), new Vector3(half - 8, LiftHigh, 12), Brass, BrassDark);
+                m.Box(0, new Vector3(s * half / 2, 160, 18), new Vector3(half - 60, 300, 6), BrassDark);
+                m.Box(0, new Vector3(s * half / 2, LiftHigh * 0.55f, 18), new Vector3(half - 160, 24, 6), BrassDark);
+            }
+            m.Box(0, new Vector3(0, LiftHigh / 2, 18), new Vector3(10, LiftHigh, 6), Ebony);
+        }
+        else
+        {
+            // the landing beyond: its dim gold light, the leaves' edges showing at the jambs
+            m.Box(0, new Vector3(0, LiftHigh / 2, 2), new Vector3(LiftWide - 20, LiftHigh, 4), BrassDark, BrassDark);
+            foreach (var s in new[] { -1f, 1f }) m.Box(0, new Vector3(s * (half - 30), LiftHigh / 2, 12), new Vector3(60, LiftHigh, 16), Brass, BrassDark);
+        }
+        return m.ToBody(header);
+    }
+
+    // ---- the lift car's back wall (on a wall along x, facing +z): red lacquer panelling, a tall mirror in a brass frame, the brass hand rail
+    // at waist height, a little velvet bench under it
+    private static Body BuildLiftCarBack(byte[] header)
+    {
+        var m = new CarMesh("the lift car's back wall", new[] { -1 });
+        m.Light = 0.8f;
+        const float W = 980, H = 2500;
+        m.Box(0, new Vector3(0, H / 2, 10), new Vector3(2 * W, H, 20), Lacquer, Lacquer);
+        foreach (var x in new[] { -W + 40, W - 40 }) m.Box(0, new Vector3(x, H / 2, 24), new Vector3(30, H, 10), Brass);
+        m.Box(0, new Vector3(0, H - 20, 24), new Vector3(2 * W, 40, 10), Brass);
+        // the mirror: brass frame, the glass
+        m.Box(0, new Vector3(0, 1550, 26), new Vector3(1120, 1060, 12), Brass, BrassDark);
+        Quad(m, new(-500, 1060, 34), new(500, 1060, 34), new(500, 2040, 34), new(-500, 2040, 34), Glass, new(0, 1550, 300));
+        // the hand rail on its brackets
+        m.Box(0, new Vector3(0, 900, 70), new Vector3(2 * W - 120, 36, 36), Brass, BrassDark);
+        foreach (var x in new[] { -W + 200, 0f, W - 200 }) m.Box(0, new Vector3(x, 900, 44), new Vector3(24, 24, 50), BrassDark);
+        // the bench: velvet on a brass frame
+        m.Box(0, new Vector3(0, 380, 140), new Vector3(1000, 70, 260), Velvet, VelvetDark);
+        foreach (var x in new[] { -460f, 460f }) m.Box(0, new Vector3(x, 175, 140), new Vector3(30, 350, 240), BrassDark);
         return m.ToBody(header);
     }
 

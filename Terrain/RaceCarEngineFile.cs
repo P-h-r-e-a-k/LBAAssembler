@@ -734,6 +734,8 @@ internal static class RaceCarEngineFile
                 text.Append($"hover_helmet={Citadel.CitadelOveralls.HelmetSlot} {Citadel.CitadelOveralls.HelmetBody}\n");
                 // (the Desert beach's hovercraft for hire: RACEMOD.CPP hovercraft=, RaceTrackStory.Hovercraft)
                 text.Append(RaceTrackStory.HovercraftLine);
+                // (the Imperial Hotel's lift car: the floor's music stopped as it loads, its own tune played in it -- RACEMOD.CPP quiet_scene=)
+                text.Append($"quiet_scene={OtringalHotel.LiftCar}\n");
                 // (at the wheel in his everyday clothes until the racing suit is his: RACEMOD.CPP twinsen_casual=, Citadel/CitadelOveralls)
                 text.Append($"twinsen_casual={Citadel.CitadelOveralls.CasualBuggy} {Citadel.CitadelOveralls.CasualBuggyFiring} {Citadel.CitadelOveralls.CasualBuggySmall}\n");
                 foreach (var (file, grate) in RaceTrackBuilder.GameShaftGrates)

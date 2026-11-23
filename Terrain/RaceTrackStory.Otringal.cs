@@ -514,12 +514,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Your key, sir. The lift is in the alcove's wall, by the sofa -- your room is on the first floor. Sleep well.",
-            "Votre clé, monsieur. L'ascenseur est dans le mur de l'alcôve, près du canapé -- votre chambre est au premier étage. Dormez bien.",
-            "Ihr Schlüssel, der Herr. Der Aufzug ist in der Wand der Nische, beim Sofa -- Ihr Zimmer liegt im ersten Stock. Schlafen Sie gut.",
-            "Su llave, señor. El ascensor está en la pared de la alcoba, junto al sofá: su habitación está en el primer piso. Que descanse.",
-            "La sua chiave, signore. L'ascensore è nella parete dell'alcova, vicino al divano: la sua camera è al primo piano. Dorma bene.",
-            "A sua chave, senhor. O elevador está na parede da alcova, junto ao sofá -- o seu quarto fica no primeiro andar. Durma bem.",
+            "Your key, sir. The lift is right beside me -- your room is on the first floor. Sleep well.",
+            "Votre clé, monsieur. L'ascenseur est juste à côté de moi -- votre chambre est au premier étage. Dormez bien.",
+            "Ihr Schlüssel, der Herr. Der Aufzug ist gleich neben mir -- Ihr Zimmer liegt im ersten Stock. Schlafen Sie gut.",
+            "Su llave, señor. El ascensor está justo a mi lado: su habitación está en el primer piso. Que descanse.",
+            "La sua chiave, signore. L'ascensore è proprio accanto a me: la sua camera è al primo piano. Dorma bene.",
+            "A sua chave, senhor. O elevador está mesmo ao meu lado -- o seu quarto fica no primeiro andar. Durma bem.",
         },
         new[]
         {

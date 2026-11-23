@@ -33,12 +33,14 @@ internal static partial class RaceTrackStory
     // Rick's bar: the singer (actor 28) on the stage while game variable 131 is 2 -- the guitarist (24) at 0 and 3
     private const int Singer = 28, StageTurn = 131, SingerOnStage = 2;
     private static readonly (int X, int Y, int Z) SingerSpot = (17408, 1024, 9728);
-    // the lobby: the reception desk facing the street's door, its clerk behind it (the doorman's uniform: scene 81's actor 8), the damask sofa
-    // at the alcove's edge (the alcove's own sofa made way for the lift: OtringalHotel)
-    private static readonly (int X, int Z) DeskAt = (10496, 10240), ClerkAt = (10496, 11140), LobbySofaAt = (17920, 4300);
+    // the lobby: the clerk (the doorman's uniform: scene 81's actor 8) by the lift, beside its doors, facing the room -- the reception desk
+    // that stood facing the street's door is gone, and the sofa at the alcove's edge (the user, 2026-11-23: the desk "is ugly and seems to
+    // have no point. It also stops Twinsen getting inside to speak to the race marshall"; the sofa "near the pool needs removing")
+    private static readonly (int X, int Z) ClerkAt = (OtringalHotel.LobbyLift.X + 650, OtringalHotel.LobbyLift.Z + 1700);
     private const int HotelDoorman = 8;
-    // the hero's labels: to the lift's doors and stopped there; in bed, the night, up again
-    private const int ToLift = 220, AtLift = 222, Sleeping = 230, NightOver = 231, GettingUp = 232, RoomUp = 233, NightFall = 234;
+    // the hero's labels: to the lift's doors and into them; out of them on arriving; in bed, the night, up again; the lift car's walk out
+    private const int ToLift = 220, AtLift = 222, FromLift = 224, OutOfLift = 225, Sleeping = 230, NightOver = 231, GettingUp = 232, RoomUp = 233,
+        NightFall = 234, CarWalk = 240, CarWalked = 241;
     private const int Asleep_ = 56, GetUp_ = 58;
 
     // Twinsen's question about a coil and the answer, before a talker's own lines on race day while the coil's still to be got
@@ -61,10 +63,7 @@ internal static partial class RaceTrackStory
         b.Edit(HotelScene, "the Imperial Hotel's lobby: the reception (a room for the night), the lift up to the first floor in the alcove's wall", model =>
         {
             var adds = new List<Action<SceneScripts>>();
-            var desk = Citadel.CitadelProps.Actor(HotelProps.ReceptionDesk, DeskAt.X, OtringalHotel.LobbyFloorY, DeskAt.Z, 2048);
-            adds.Add(IslandBeatsA.Add(model, desk, "void comportement_0()\n{\n}\n"));
-            adds.Add(IslandBeatsA.Add(model, Citadel.CitadelProps.Actor(HotelProps.Sofa, LobbySofaAt.X, OtringalHotel.LobbyFloorY, LobbySofaAt.Z, 2048), "void comportement_0()\n{\n}\n"));
-            (clerk.X, clerk.Y, clerk.Z, clerk.Beta) = (ClerkAt.X, OtringalHotel.LobbyFloorY, ClerkAt.Z, 2048);
+            (clerk.X, clerk.Y, clerk.Z, clerk.Beta) = (ClerkAt.X, OtringalHotel.LobbyFloorY, ClerkAt.Z, 1024);
             clerk.Move = 0;
             string Book(OtringalLine room, int price, int night) => $@"if ({say(room)} == choice())
                 {{
@@ -102,28 +101,26 @@ internal static partial class RaceTrackStory
             else
             {{
                 message({say(OtringalLine.ReceptionDay)});
-            }}", 2600)));
-            // the lift: Action before it with a room booked tonight -- its doors open, Twinsen steps in (gone from sight: the hero's last
-            // comportement, invisible), the doors shut, eight seconds, the first floor (its zone on, Twinsen in it)
+            }}")));
+            // the lift: Action before it with a room booked tonight -- its doors open, Twinsen walks into them, into the lift car (its zone on,
+            // Twinsen in it: OtringalHotel.LiftCar, the ride there); back from it, out of the doors and they shut behind him
             var front = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.LobbyLift.X + OtringalHotel.LiftFrontOut, OtringalHotel.LobbyFloorY, OtringalHotel.LobbyLift.Z));
+            var doorway = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.LobbyLift.X + OtringalHotel.LiftDoorOut, OtringalHotel.LobbyFloorY, OtringalHotel.LobbyLift.Z));
             var lift = Citadel.CitadelProps.Actor(HotelProps.LiftFront, OtringalHotel.LobbyLift.X, OtringalHotel.LobbyFloorY, OtringalHotel.LobbyLift.Z, 1024);
             lift.Move = 3;
             var liftIndex = model.Actors.Count;
             model.Zones.Add(new SceneZoneModel
             {
-                Type = 0, Num = OtringalHotel.Corridor, X0 = OtringalHotel.LobbyLift.X, X1 = OtringalHotel.LobbyLift.X + 1100, Y0 = OtringalHotel.LobbyFloorY, Y1 = OtringalHotel.LobbyFloorY + 2000,
+                Type = 0, Num = OtringalHotel.LiftCar, X0 = OtringalHotel.LobbyLift.X, X1 = OtringalHotel.LobbyLift.X + 1100, Y0 = OtringalHotel.LobbyFloorY, Y1 = OtringalHotel.LobbyFloorY + 2000,
                 Z0 = OtringalHotel.LobbyLift.Z - 500, Z1 = OtringalHotel.LobbyLift.Z + 500,
-                Info = new[] { OtringalHotel.CorridorLift.X + OtringalHotel.LiftFrontOut, OtringalHotel.FloorY, OtringalHotel.CorridorLift.Z, 0, OtringalHotel.LiftSwitch, 0, 0, 0 },
+                Info = new[] { OtringalHotel.CarStand.X, OtringalHotel.FloorY, OtringalHotel.CarStand.Z, 0, OtringalHotel.LiftSwitch, 0, 0, 0 },
             });
             adds.Add(scripts =>
             {
-                var hero = scripts.GetText(0, ScriptKind.Life);
-                var hidden = Regex.Matches(hero, @"void comportement_(\d+)\(\)").Select(m => int.Parse(m.Groups[1].Value)).DefaultIfEmpty(0).Max() + 1;
-                scripts.SetText(0, ScriptKind.Life, hero.TrimEnd() + $"\n\n// (in the lift, out of sight: the ride up)\nvoid comportement_{hidden}()\n{{\n    invisible(1);\n}}\n");
                 var track = scripts.GetText(0, ScriptKind.Track).TrimEnd();
                 if (!track.Contains("label(")) track += "\nlabel(0);\nstop();";
-                scripts.SetText(0, ScriptKind.Track, track + $"\n\nlabel({ToLift});\nanim(1);\ngoto_point({front});\nanim(0);\nbeta(3072);\n\nlabel({AtLift});\nstop();\n");
-                scripts.SetText(liftIndex, ScriptKind.Life, LiftLife(say, when, hidden, rideTo: 1, arrive: 2, needsRoom: true));
+                scripts.SetText(0, ScriptKind.Track, track + "\n\n" + HeroLiftTrack(front, doorway));
+                scripts.SetText(liftIndex, ScriptKind.Life, LiftLife(say, when, rideTo: 1, arrive: 2, needsRoom: true));
                 scripts.SetText(liftIndex, ScriptKind.Track, LiftTrack);
             });
             var addLift = IslandBeatsA.Add(model, lift, "void comportement_0()\n{\n}\n");
@@ -134,6 +131,7 @@ internal static partial class RaceTrackStory
         b.Edit(OtringalHotel.Corridor, "the hotel's corridor: his room's door open to him, the others locked; the lift down", model =>
         {
             var front = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.CorridorLift.X + OtringalHotel.LiftFrontOut, OtringalHotel.FloorY, OtringalHotel.CorridorLift.Z));
+            var doorway = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.CorridorLift.X + OtringalHotel.LiftDoorOut, OtringalHotel.FloorY, OtringalHotel.CorridorLift.Z));
             model.Actors[OtringalHotel.CorridorLiftActor].Move = 3;
             // (the doors: actor 4 + k room 101 + k, the suite's after them -- OtringalHotel puts them in that order)
             const int FirstDoor = 4;
@@ -179,16 +177,89 @@ void comportement_1()
         }}{doors}
     }}
 }}
+");
+                scripts.SetText(0, ScriptKind.Track, "label(0);\nstop();\n\n" + HeroLiftTrack(front, doorway));
+                scripts.SetText(OtringalHotel.CorridorLiftActor, ScriptKind.Life, LiftLife(say, when, rideTo: 2, arrive: 1, needsRoom: false));
+                scripts.SetText(OtringalHotel.CorridorLiftActor, ScriptKind.Track, LiftTrack);
+            };
+        });
 
-// (in the lift, out of sight: the ride down)
+        // ---- the lift car: the ride between the floors (2026-11-23, the user: "Let's add an actual scene for the lift that Twinsen can walk
+        // inside, have the door close, we'll play some music for 5 seconds, then bing and the doors open again at the different floor") --
+        // in through its open doors, the cut-scene's bars, Twinsen held facing them; they shut, the lift's tune five seconds (the floor's
+        // music stopped as it loads: RACEMOD.CPP quiet_scene=), its bell, they open, out he walks -- to the floor LIFT_RIDE says (1 the first
+        // floor, 2 the lobby; a game saved in the car, and loaded: the lobby)
+        var liftSounds = HotelLiftSounds.Install(b.GameDirectory);
+        b.Log.Add($"the hotel lift's tune SAMPLES.HQR {liftSounds.Tune}, its bell {liftSounds.Bell}");
+        b.Edit(OtringalHotel.LiftCar, "the Imperial Hotel's lift car: in, the doors shut, its tune, its bell, out at the other floor", model =>
+        {
+            var outPoint = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.CarOut.X, OtringalHotel.FloorY, OtringalHotel.CarOut.Z));
+            return scripts =>
+            {
+                scripts.SetText(0, ScriptKind.Track, $"label(0);\nstop();\n\nlabel({CarWalk});\nanim(1);\ngoto_point({outPoint});\n\nlabel({CarWalked});\nstop();\n");
+                scripts.SetText(OtringalHotel.CarDoorsActor, ScriptKind.Life, $@"void comportement_0()
+{{
+    cinema_mode(1);
+    set_dir_obj(0, NO_MOVE);
+    body({HotelProps.LiftInsideOpen});
+    set_track(label_10);
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if (11 == l_track())
+    {{
+        body({HotelProps.LiftInside});
+        sample({liftSounds.Tune});
+        set_track(label_12);
+        set_comportement(comportement_2);
+    }}
+}}
+
 void comportement_2()
 {{
-    invisible(1);
+    if (13 == l_track())
+    {{
+        sample({liftSounds.Bell});
+        set_track(label_14);
+        set_comportement(comportement_3);
+    }}
+}}
+
+void comportement_3()
+{{
+    if (15 == l_track())
+    {{
+        body({HotelProps.LiftInsideOpen});
+        set_track_obj(0, label_{CarWalk});
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if ({CarWalked} == l_track_obj(0))
+    {{
+        if (1 == var_game({HotelLiftRide}))
+        {{
+            set_change_cube({OtringalHotel.CarToCorridor}, 1);
+        }}
+        else
+        {{
+            set_var_game({HotelLiftRide}, 2);
+            set_change_cube({OtringalHotel.CarToLobby}, 1);
+        }}
+        set_comportement(comportement_5);
+    }}
+}}
+
+void comportement_5()
+{{
 }}
 ");
-                scripts.SetText(0, ScriptKind.Track, $"label(0);\nstop();\n\nlabel({ToLift});\nanim(1);\ngoto_point({front});\nanim(0);\nbeta(3072);\n\nlabel({AtLift});\nstop();\n");
-                scripts.SetText(OtringalHotel.CorridorLiftActor, ScriptKind.Life, LiftLife(say, when, 2, rideTo: 2, arrive: 1, needsRoom: false));
-                scripts.SetText(OtringalHotel.CorridorLiftActor, ScriptKind.Track, LiftTrack);
+                scripts.SetText(OtringalHotel.CarDoorsActor, ScriptKind.Track, $"label(0);\nstop();\n\nlabel(10);\nwait_nb_dizieme(9);\n\nlabel(11);\nstop();\n\n" +
+                    $"label(12);\nwait_nb_dizieme({(int)Math.Round(HotelLiftSounds.TuneSeconds * 10)});\n\nlabel(13);\nstop();\n\nlabel(14);\nwait_nb_dizieme(6);\n\nlabel(15);\nstop();\n");
             };
         });
 
@@ -297,13 +368,16 @@ void comportement_3()
     // A lift's life: Action before it -- its doors open, Twinsen walks to them and is in (his comportement `hidden`: out of sight), the doors
     // shut, eight seconds, LIFT_RIDE `rideTo` and the zone round him on (the other floor); come up or down to it (LIFT_RIDE `arrive`): open, a
     // moment, shut, Twinsen free. The lobby's only with a room booked tonight.
-    private static string LiftLife(Func<OtringalLine, int> say, string when, int hidden, int rideTo, int arrive, bool needsRoom) => $@"void comportement_0()
+    // A floor's lift: Action before it -- the doors open, Twinsen walks into them and so into the lift car (LIFT_RIDE the floor he's going
+    // to); come back from the car -- the doors open, he walks out of them, they shut behind him
+    private static string LiftLife(Func<OtringalLine, int> say, string when, int rideTo, int arrive, bool needsRoom) => $@"void comportement_0()
 {{
     if ({arrive} == var_game({HotelLiftRide}))
     {{
         cinema_mode(1);
         set_dir_obj(0, NO_MOVE);
         body({HotelProps.LiftOpen});
+        set_track_obj(0, label_{FromLift});
         set_track(label_20);
         set_comportement(comportement_4);
     }}
@@ -334,21 +408,14 @@ void comportement_2()
 {{
     if ({AtLift} == l_track_obj(0))
     {{
-        set_comportement_obj(0, comportement_{hidden});
-        body({HotelProps.LiftFront});
-        set_track(label_10);
-        set_comportement(comportement_3);
+        set_var_game({HotelLiftRide}, {rideTo});
+        set_change_cube({OtringalHotel.LiftSwitch}, 1);
+        set_comportement(comportement_5);
     }}
 }}
 
 void comportement_3()
 {{
-    if (11 == l_track())
-    {{
-        set_var_game({HotelLiftRide}, {rideTo});
-        set_change_cube({OtringalHotel.LiftSwitch}, 1);
-        set_comportement(comportement_5);
-    }}
 }}
 
 void comportement_4()
@@ -374,5 +441,9 @@ void comportement_5()
                 set_track_obj(0, label_{ToLift});
                 set_comportement(comportement_2);
 ";
-    private const string LiftTrack = "label(0);\nstop();\n\nlabel(10);\nwait_nb_dizieme(80);\n\nlabel(11);\nstop();\n\nlabel(20);\nwait_nb_dizieme(14);\n\nlabel(21);\nstop();\n";
+    private const string LiftTrack = "label(0);\nstop();\n\nlabel(20);\nwait_nb_dizieme(20);\n\nlabel(21);\nstop();\n";
+    // (the hero's walk into a floor's lift -- up to its doors, through them -- and out of it, from its doorway to before it, turned to the room)
+    private static string HeroLiftTrack(int front, int doorway) =>
+        $"label({ToLift});\nanim(1);\ngoto_point({front});\ngoto_point({doorway});\n\nlabel({AtLift});\nstop();\n\n" +
+        $"label({FromLift});\nanim(1);\ngoto_point({front});\nanim(0);\nbeta(1024);\n\nlabel({OutOfLift});\nstop();\n";
 }

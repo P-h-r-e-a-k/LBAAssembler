@@ -31,7 +31,7 @@ namespace LBAAssembler.Terrain;
 // from the camera.
 internal static class OtringalHotel
 {
-    public const int Corridor = 381, Classic = 382, Junior = 383, Suite = 384, Lobby = 81, Island = 4;
+    public const int Corridor = 381, Classic = 382, Junior = 383, Suite = 384, LiftCar = 385, Lobby = 81, Island = 4;
     private const int RoomA = 79, RoomB = 170, Bath = 169;
     private const int Size = 64, Height = 25, Library = 8;
     public const int FloorY = 256, LobbyFloorY = 3072;
@@ -41,8 +41,17 @@ internal static class OtringalHotel
     public static int DoorX(int room) => (int)(1536 + (room - HotelProps.FirstRoom) * HotelProps.DoorPitch);
     public const int ClassicDoor = 102, JuniorDoor = 104, SuiteDoorX = 16640, BackWallFace = 1024;
     // the lifts: on the corridor's west wall's face (x 512) and the lobby's alcove's (x 13824), facing +x; where Twinsen stands before each
-    public static readonly (int X, int Z) CorridorLift = (522, 2304), LobbyLift = (13834, 3328);
+    public static readonly (int X, int Z) CorridorLift = (514, 2304), LobbyLift = (13826, 3328);
     public const int LiftFrontOut = 700;
+    // (the lift's doorway, where Twinsen walks into the lift and out of it: this far out from its wall -- clear of its box, 130 deep)
+    public const int LiftDoorOut = 180;
+    // the lift car (2026-11-23, the user: "Let's add an actual scene for the lift that Twinsen can walk inside, have the door close, we'll play
+    // some music for 5 seconds, then bing and the doors open again at the different floor"): room A's walls round a floor 4 cells square,
+    // x 1-4, z 2-5 -- its doors on its west wall's face (x 512) facing +x as the floors' lifts are, its back wall's panelling at z 1024;
+    // where Twinsen stands in it (facing the doors), where he walks out to; its cube-change switches: 1 the first floor, 2 the lobby
+    private const int CarEnd = 5, CarFront = 6;
+    public static readonly (int X, int Z) CarDoors = (514, 2048), CarStand = (1500, 2048), CarOut = (700, 2048);
+    public const int CarToCorridor = 1, CarToLobby = 2, CarDoorsActor = 2;
     // (the rooms' doors, the game's rooms' own: in their front walls -- room 79's at cells 6-7, room 170's at 8-9, room 169's at 6-7 -- in
     // from the corridor there, facing in)
     public static readonly (int X, int Z) RoomArrival = (3584, 5500), JuniorArrival = (4608, 5500);
@@ -64,7 +73,7 @@ internal static class OtringalHotel
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         if (new[] { RoomA, RoomB, Bath, Lobby }.Any(s => !store.SceneExists(s))) { log.Add("The Imperial Hotel's upper floor left out: its rooms (scenes 79, 170, 169) or its lobby (81) aren't there"); return log; }
         var scenes = HqrFile.Parse(File.ReadAllBytes(scenePath));
-        foreach (var s in new[] { Corridor, Classic, Junior, Suite })
+        foreach (var s in new[] { Corridor, Classic, Junior, Suite, LiftCar })
             if (s + 1 < scenes.Count && !scenes.IsEmpty(s + 1)) { log.Add($"The Imperial Hotel's upper floor left out: scene {s} is already another part of the build's"); return log; }
         var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
         var header = new MapBricks.BkgHeader(bkg.Read(0));
@@ -126,6 +135,18 @@ internal static class OtringalHotel
                 else Column(corridor, x, z, a.Cells, 2, 12);
             }
         }
+        // ---- the lift car: room A's walls round its 4 x 4 floor, as the corridor's are round its own
+        var car = new byte[a.Cells.Length];
+        for (var x = 0; x <= CarEnd; x++)
+        {
+            var fx = x == 0 ? 0 : x == CarEnd ? 12 : 1 + (x - 1) % 11;
+            for (var z = 0; z <= CarFront; z++)
+            {
+                if (z <= 1 || x == 0 || x == CarEnd) Column(car, x, z, a.Cells, fx, z == CarFront ? 12 : Math.Min(z, 11));
+                else if (z < CarFront) Column(car, x, z, a.Cells, fx, 2 + (z - 2) % 10, 0, 0);
+                else Column(car, x, z, a.Cells, 2, 12);
+            }
+        }
         // ---- the Classic Room: room A, its armchairs (cells 10-11, 8-9) gone for the bathroom
         var classic = (byte[])a.Cells.Clone();
         Clear(classic, 10, 11, 8, 9, 1);
@@ -161,6 +182,7 @@ internal static class OtringalHotel
         {
             (Corridor, a.Raw, Shape(a.Shape, a.Cells, corridor)), (Classic, a.Raw, Shape(a.Shape, a.Cells, classic)),
             (Junior, b.Raw, Shape(b.Shape, b.Cells, junior)), (Suite, a.Raw, Shape(a.Shape, a.Cells, suite)),
+            (LiftCar, a.Raw, Shape(a.Shape, a.Cells, car)),
         };
         var type = table[RoomA * 2];
         foreach (var (scene, raw, shape) in grids)
@@ -225,6 +247,15 @@ internal static class OtringalHotel
             built.Add(what);
             return true;
         }
+        // the lift car: its doors (actor 2: the story's ride turns on them), its back wall's panelling; the two ways out by its doors, off
+        // till the ride's end -- to the first floor's lift, to the lobby's, Twinsen in each lift's doorway
+        var lc = Room(RoomA, (CarStand.X, CarStand.Z, 3072));
+        lc.Music = -1;      // (none of its own: the lift's tune, the floor's music stopped as it loads -- RACEMOD.CPP quiet_scene=)
+        if (Put(lc, HotelProps.LiftInsideOpen, CarDoors.X, FloorY, CarDoors.Z, 1024) != CarDoorsActor) { log.Add("The Imperial Hotel: the lift car's doors aren't actor 2"); return log; }
+        Put(lc, HotelProps.LiftCarBack, 1536, FloorY, 1034, 0);
+        lc.Zones.Add(Door(Corridor, 512, 1100, CarDoors.Z - 600, CarDoors.Z + 600, FloorY, (CorridorLift.X + LiftDoorOut, FloorY, CorridorLift.Z), CarToCorridor, false));
+        lc.Zones.Add(Door(Lobby, 512, 1100, CarDoors.Z - 600, CarDoors.Z + 600, FloorY, (LobbyLift.X + LiftDoorOut, LobbyFloorY, LobbyLift.Z), CarToLobby, false));
+        if (!Save(LiftCar, lc, "the lift car")) return log;
         // the corridor: out of the lift at its west end, facing +x
         var c = Room(RoomA, (CorridorLift.X + LiftFrontOut, CorridorLift.Z, 1024));
         if (Put(c, HotelProps.LiftFront, CorridorLift.X, FloorY, CorridorLift.Z, 1024) != CorridorLiftActor) { log.Add("The Imperial Hotel: the corridor's lift isn't actor 2"); return log; }
@@ -235,7 +266,7 @@ internal static class OtringalHotel
         c.Zones.Add(Door(Classic, DoorX(ClassicDoor) - 450, DoorX(ClassicDoor) + 450, BackWallFace, BackWallFace + 600, FloorY, (RoomArrival.X, FloorY, RoomArrival.Z), ClassicSwitch, false));
         c.Zones.Add(Door(Junior, DoorX(JuniorDoor) - 450, DoorX(JuniorDoor) + 450, BackWallFace, BackWallFace + 600, FloorY, (JuniorArrival.X, FloorY, JuniorArrival.Z), JuniorSwitch, false));
         c.Zones.Add(Door(Suite, SuiteDoorX - 800, SuiteDoorX + 800, BackWallFace, BackWallFace + 600, FloorY, (RoomArrival.X, FloorY, RoomArrival.Z), SuiteSwitch, false));
-        c.Zones.Add(Door(Lobby, CorridorLift.X, CorridorLift.X + 900, CorridorLift.Z - 500, CorridorLift.Z + 500, FloorY, (LobbyLift.X + LiftFrontOut, LobbyFloorY, LobbyLift.Z), LiftSwitch, false));
+        c.Zones.Add(Door(LiftCar, CorridorLift.X, CorridorLift.X + 900, CorridorLift.Z - 500, CorridorLift.Z + 500, FloorY, (CarStand.X, FloorY, CarStand.Z), LiftSwitch, false));
         if (!Save(Corridor, c, "the corridor")) return log;
         // (back out to the corridor from a room, before its door there)
         SceneZoneModel Out(int doorX, int doorCell) => Door(Corridor, doorCell * 512, (doorCell + 2) * 512, 6144, 6656, FloorY, (doorX, FloorY, BackWallFace + 900), 0, true);
@@ -280,7 +311,7 @@ internal static class OtringalHotel
         if (!Save(Suite, r3, "the Imperial Suite")) return log;
 
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
-        log.Add($"the Imperial Hotel's upper floor: scenes {Corridor}-{Suite} ({string.Join(", ", built)}), from the hotel's rooms 79, 170 and 169; " +
+        log.Add($"the Imperial Hotel's upper floor: scenes {Corridor}-{LiftCar} ({string.Join(", ", built)}), from the hotel's rooms 79, 170 and 169; " +
                 $"the lobby's sofa out of its alcove's west wall ({sofaCells} cells) for the lift");
         return log;
     }
