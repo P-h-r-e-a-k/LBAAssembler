@@ -6551,7 +6551,9 @@ void RaceMod_Lap(S32 x, S32 z) {
     // (the lap of honour's last leg -- off the line to Raph's car, by the start line: crossing it is no lap, and no checkpoint missed -- it
     // sent the car back to checkpoint 1, into the sea and rescued at the line: the user, 2026-11-12, "Twinsen's car doesn't successfully
     // drive a victory lap after beating Raph's time, it first drowned, before getting rescued, and ultimately returning to the start line")
-    if (s_victory >= 2) { s_missBackAt = 0; return; }
+    // (and the whole lap of honour, 2026-11-23: no lap begins on it -- the user, "The citadel island scripted victory lap triggers the lap
+    // timer as it ends past the start line")
+    if (s_victory) { s_missBackAt = 0; return; }
     // (a sprint's start line counts once: its race begins there)
     if (s_sprint && s_laps > 0) return;
     const S32 now = TimerRefHR;
@@ -8089,6 +8091,8 @@ static void VictoryFrame(void) {
     if (Comportement != C_BUGGY) {
         s_victory = 0; s_auto = 0; s_stopResume = 0;
         s_stopping = 0; s_stopReach = 0;   // (the stop is done: left armed, it got him out of the car again each time he got back in by Raph's -- the user, 2026-11-12)
+        // (no lap left timing: the lap the time was beaten on ended it, and the next begins only at the line, driven again -- 2026-11-23)
+        s_laps = 0; s_lapStart = 0; s_halfway = 0; s_next = 0;
         Log_Info("[racemod] victory_lap: over -- Twinsen out of the car, the controls his again");
         return;
     }
@@ -25742,9 +25746,9 @@ void RaceMod_Draw(void) {
             else if (s_place) snprintf(text, sizeof(text), "Finished %d%s of %d", s_place, Ordinal(s_place), s_racers);
             else if (s_phase == PHASE_WAIT) { if (!Inert()) snprintf(text, sizeof(text), "Drive to the start line"); }
             else if (s_phase == PHASE_GRID) text[0] = 0;
-            else if (s_laps > 0) {
+            else if (s_laps > 0 && (!s_victory || Held(now))) {
                 // (a lap just driven: its number and time held a moment, still, before the new lap's clock -- a time trial's new best
-                // time in gold)
+                // time in gold; on the lap of honour, the beaten time held and no clock after it)
                 const int held = Held(now);
                 const S32 lap = held ? s_heldLap : s_laps;
                 if (held && s_heldBest) colour = RACE_GOLD;

@@ -10,8 +10,8 @@ namespace LBAAssembler.Terrain;
 // says their own lines. Once a scene visit for each person and line: talked to again for the same goal, he doesn't say it again. Zoe is
 // never greeted: she's at his side, and her hints answer his goal already (opener_quiet=, the companion's entity).
 // The lines are at fixed ids in each island's text bank, past every story line (OpenerBase: NextId leaves them out), so the race file can
-// name them whatever order the islands are built in. Each goal is said as Twinsen's statement of it, not a question: it reads the same
-// to anyone, in every language (no "tu" or "vous" to choose).
+// name them whatever order the islands are built in. Each goal is said as a question to the one he talks to (the user, 2026-11-23,
+// "Twinsen should be using questions, not statements"), in the polite forms a young man uses to a stranger -- vous, Sie, usted, Lei.
 internal static partial class RaceTrackStory
 {
     public const int OpenerBase = 3000;
@@ -31,275 +31,64 @@ internal static partial class RaceTrackStory
         TwinsenBeatFunFrock,
     }
 
-    // English, French, German, Spanish, Italian, Portuguese -- in OpenerLine's order
+    // English, French, German, Spanish, Italian, Portuguese -- in OpenerLine's order; each goal a question to whoever he talks to, in the
+    // polite forms (vous, Sie, usted, Lei) a young man uses to a stranger (the user, 2026-11-23: "Twinsen should be using questions, not
+    // statements i.e. 'Hi, do you know where I can find a car tyre?'")
     internal static readonly string[][] OpenerLines =
     {
         new[] { "Hello!", "Bonjour !", "Hallo!", "¡Hola!", "Salve!", "Olá!" },
         new[] { "Hi! How's it going?", "Salut, ça va ?", "Hallo, wie geht's?", "¡Hola! ¿Qué tal?", "Ciao, come va?", "Olá, como vai?" },
         new[] { "Good day!", "Bien le bonjour !", "Guten Tag!", "¡Buenos días!", "Buongiorno!", "Bom dia!" },
-        new[]
-        {
-            "I have to catch FunFrock before he reaches the Sendells!", "Je dois rattraper FunFrock avant qu'il n'atteigne les Sendell !",
-            "Ich muss FunFrock einholen, bevor er die Sendells erreicht!", "¡Tengo que alcanzar a FunFrock antes de que llegue a los Sendell!",
-            "Devo raggiungere FunFrock prima che arrivi dai Sendell!", "Tenho de apanhar o FunFrock antes que chegue aos Sendell!",
-        },
-        // ---- Citadel Island, the storm (chapter 1)
-        new[]
-        {
-            "I'm looking for the Weather Wizard.", "Je cherche le Mage Météo.", "Ich suche den Wettermagier.", "Busco al Mago Meteo.",
-            "Sto cercando il Mago Metereologo.", "Procuro o Mago do Tempo.",
-        },
-        new[]
-        {
-            "I need to find Raph at the race track.", "Je dois trouver Raph sur le circuit.", "Ich muss Raph an der Rennstrecke finden.",
-            "Tengo que encontrar a Raph en el circuito.", "Devo trovare Raph sul circuito.", "Tenho de encontrar o Raph no circuito.",
-        },
-        new[]
-        {
-            "I'm looking for whoever took my driving gloves.", "Je cherche celui qui a pris mes gants de pilote.",
-            "Ich suche den, der meine Fahrhandschuhe genommen hat.", "Busco a quien se llevó mis guantes de conducir.",
-            "Cerco chi ha preso i miei guanti da pilota.", "Procuro quem levou as minhas luvas de condução.",
-        },
-        new[]
-        {
-            "I have to beat Raph's lap time on the storm track.", "Je dois battre le temps au tour de Raph sur le circuit de la tempête.",
-            "Ich muss Raphs Rundenzeit auf der Sturmstrecke schlagen.", "Tengo que batir el tiempo por vuelta de Raph en el circuito de la tormenta.",
-            "Devo battere il tempo sul giro di Raph sul circuito della tempesta.", "Tenho de bater o tempo de volta do Raph no circuito da tempestade.",
-        },
-        new[]
-        {
-            "The Weather Wizard is waiting for me at the lighthouse.", "Le Mage Météo m'attend au phare.", "Der Wettermagier wartet am Leuchtturm auf mich.",
-            "El Mago Meteo me espera en el faro.", "Il Mago Metereologo mi aspetta al faro.", "O Mago do Tempo está à minha espera no farol.",
-        },
-        new[]
-        {
-            "What a day! I'm off home to bed.", "Quelle journée ! Je rentre me coucher.", "Was für ein Tag! Ich gehe nach Hause ins Bett.",
-            "¡Menudo día! Me voy a casa a dormir.", "Che giornata! Vado a casa a dormire.", "Que dia! Vou para casa dormir.",
-        },
-        // ---- Citadel Island, the town circuit (chapter 2)
-        new[]
-        {
-            "I've got bait for Felix's old tyre.", "J'ai de l'appât pour le vieux pneu de Felix.", "Ich habe Köder für Felix' alten Reifen.",
-            "Tengo cebo para el neumático viejo de Felix.", "Ho l'esca per il vecchio pneumatico di Felix.", "Tenho isco para o pneu velho do Felix.",
-        },
-        new[]
-        {
-            "Luc needs a new wheel for his barrel car.", "Luc a besoin d'une roue pour sa voiture-tonneau.", "Luc braucht ein neues Rad für seinen Faßwagen.",
-            "Luc necesita una rueda para su coche-barril.", "Luc ha bisogno di una ruota per la sua macchina-botte.", "O Luc precisa de uma roda para o carro-barril dele.",
-        },
-        new[]
-        {
-            "I've found a wheel for Luc's car!", "J'ai trouvé une roue pour la voiture de Luc !", "Ich habe ein Rad für Lucs Wagen gefunden!",
-            "¡He encontrado una rueda para el coche de Luc!", "Ho trovato una ruota per la macchina di Luc!", "Encontrei uma roda para o carro do Luc!",
-        },
-        new[]
-        {
-            "I need twenty kashes for the race's entry fee.", "Il me faut vingt kashes pour l'inscription à la course.", "Ich brauche zwanzig Kashes für die Startgebühr.",
-            "Necesito veinte kashes para la inscripción de la carrera.", "Mi servono venti kash per l'iscrizione alla gara.", "Preciso de vinte kashes para a inscrição na corrida.",
-        },
-        new[]
-        {
-            "Time to win the race round the town!", "C'est l'heure de gagner la course autour de la ville !", "Zeit, das Rennen durch die Stadt zu gewinnen!",
-            "¡Es hora de ganar la carrera por la ciudad!", "È ora di vincere la gara in città!", "Está na hora de ganhar a corrida pela cidade!",
-        },
-        new[]
-        {
-            "I've a ferry to catch to the White Leaf Desert.", "J'ai un ferry à prendre pour le Désert de la Feuille Blanche.", "Ich muss die Fähre zur Weißblattwüste erwischen.",
-            "Tengo que coger el ferry al Desierto de la Hoja Blanca.", "Devo prendere il traghetto per il Deserto della Foglia Bianca.", "Tenho de apanhar o ferry para o Deserto da Folha Branca.",
-        },
-        // ---- the White Leaf Desert (chapter 3)
-        new[]
-        {
-            "I need the Dean to open the race track again.", "Il faut que le Recteur rouvre le circuit.", "Der Rektor muss die Rennstrecke wieder öffnen.",
-            "Necesito que el rector vuelva a abrir el circuito.", "Il Rettore deve riaprire il circuito.", "Preciso que o Reitor volte a abrir o circuito.",
-        },
-        new[]
-        {
-            "I'm looking for the Dean's lost exam pages.", "Je cherche les feuilles d'examen perdues du Recteur.", "Ich suche die verlorenen Prüfungsblätter des Rektors.",
-            "Busco las hojas de examen perdidas del rector.", "Cerco le pagine d'esame perdute del Rettore.", "Procuro as páginas de exame perdidas do Reitor.",
-        },
-        new[]
-        {
-            "I've got all three of the Dean's pages!", "J'ai les trois feuilles du Recteur !", "Ich habe alle drei Blätter des Rektors!",
-            "¡Tengo las tres hojas del rector!", "Ho tutte e tre le pagine del Rettore!", "Tenho as três páginas do Reitor!",
-        },
-        new[]
-        {
-            "I need sand filters for my car's engine.", "Il me faut des filtres à sable pour le moteur de ma voiture.", "Ich brauche Sandfilter für meinen Motor.",
-            "Necesito filtros de arena para el motor de mi coche.", "Mi servono dei filtri per la sabbia per il motore.", "Preciso de filtros de areia para o motor do carro.",
-        },
-        new[]
-        {
-            "These sand filters need fitting to my car.", "Ces filtres à sable doivent être montés sur ma voiture.", "Diese Sandfilter müssen noch in meinen Wagen.",
-            "Hay que montar estos filtros de arena en mi coche.", "Questi filtri per la sabbia vanno montati sulla mia macchina.", "Estes filtros de areia têm de ser montados no carro.",
-        },
-        new[]
-        {
-            "I'm looking for a racing helmet.", "Je cherche un casque de course.", "Ich suche einen Rennhelm.", "Busco un casco de carreras.",
-            "Cerco un casco da corsa.", "Procuro um capacete de corrida.",
-        },
-        new[]
-        {
-            "Time to beat the Desert champion!", "C'est l'heure de battre le champion du Désert !", "Zeit, den Wüstenchampion zu schlagen!",
-            "¡Es hora de vencer al campeón del Desierto!", "È ora di battere il campione del Deserto!", "Está na hora de vencer o campeão do Deserto!",
-        },
-        new[]
-        {
-            "Next stop: the Emerald Moon!", "Prochaine étape : la Lune d'Emeraude !", "Nächster Halt: der Smaragd-Mond!",
-            "¡Próxima parada: la Luna de Esmeralda!", "Prossima tappa: la Luna di Smeraldo!", "Próxima paragem: a Lua de Esmeralda!",
-        },
-        // ---- the Emerald Moon (chapter 4)
-        new[]
-        {
-            "I need to get HAL working again.", "Il faut que je fasse remarcher HAL.", "Ich muss HAL wieder zum Laufen bringen.",
-            "Tengo que hacer que HAL vuelva a funcionar.", "Devo far funzionare di nuovo HAL.", "Tenho de pôr o HAL a funcionar outra vez.",
-        },
-        new[]
-        {
-            "Time to race HAL!", "C'est l'heure d'affronter HAL !", "Zeit, gegen HAL anzutreten!", "¡Es hora de correr contra HAL!",
-            "È ora di sfidare HAL!", "Está na hora de correr contra o HAL!",
-        },
-        new[]
-        {
-            "Next stop: Otringal, on Zeelich!", "Prochaine étape : Otringal, sur Zeelich !", "Nächster Halt: Otringal auf Zeelich!",
-            "¡Próxima parada: Otringal, en Zeelich!", "Prossima tappa: Otringal, su Zeelich!", "Próxima paragem: Otringal, em Zeelich!",
-        },
-        // ---- Otringal (chapter 5)
-        new[]
-        {
-            "I've come to race in the Cup here.", "Je suis venu courir la Coupe ici.", "Ich bin hier, um im Cup zu fahren.",
-            "He venido a correr la Copa aquí.", "Sono venuto a correre la Coppa qui.", "Vim correr a Taça aqui.",
-        },
-        new[]
-        {
-            "The race is full. I need someone to get me on the grid.", "La course est complète. Il me faut quelqu'un pour me faire entrer sur la grille.",
-            "Das Rennen ist voll. Ich brauche jemanden, der mich in die Startaufstellung bringt.", "La carrera está completa. Necesito que alguien me meta en la parrilla.",
-            "La gara è al completo. Mi serve qualcuno che mi metta in griglia.", "A corrida está cheia. Preciso de alguém que me ponha na grelha.",
-        },
-        new[]
-        {
-            "I've a qualifying lap to drive today.", "J'ai un tour de qualification à faire aujourd'hui.", "Ich muss heute eine Qualifikationsrunde fahren.",
-            "Hoy tengo que dar una vuelta de clasificación.", "Oggi devo fare un giro di qualifica.", "Hoje tenho uma volta de qualificação para fazer.",
-        },
-        new[]
-        {
-            "I need a room for the night.", "Il me faut une chambre pour la nuit.", "Ich brauche ein Zimmer für die Nacht.",
-            "Necesito una habitación para esta noche.", "Mi serve una camera per la notte.", "Preciso de um quarto para esta noite.",
-        },
-        new[]
-        {
-            "Time I got some sleep before race day.", "Il est temps que je dorme avant le jour de la course.", "Zeit, vor dem Renntag zu schlafen.",
-            "Ya es hora de dormir antes del día de la carrera.", "È ora di dormire prima del giorno della gara.", "Está na hora de dormir antes do dia da corrida.",
-        },
-        new[]
-        {
-            "Do you know where I can get an ignition coil?", "Vous savez où je pourrais trouver une bobine d'allumage ?", "Wissen Sie, wo ich eine Zündspule bekomme?",
-            "¿Sabe dónde puedo conseguir una bobina de encendido?", "Sa dove posso trovare una bobina d'accensione?", "Sabe onde posso arranjar uma bobina de ignição?",
-        },
-        new[]
-        {
-            "I've a love letter for the singer at Rick's bar.", "J'ai une lettre d'amour pour la chanteuse du bar de Rick.", "Ich habe einen Liebesbrief für die Sängerin in Ricks Bar.",
-            "Tengo una carta de amor para la cantante del bar de Rick.", "Ho una lettera d'amore per la cantante del bar di Rick.", "Tenho uma carta de amor para a cantora do bar do Rick.",
-        },
-        new[]
-        {
-            "I'm taking the singer's reply back to the gazogem seller.", "Je rapporte la réponse de la chanteuse au vendeur de gazogem.",
-            "Ich bringe die Antwort der Sängerin zum Gazogem-Verkäufer.", "Llevo la respuesta de la cantante al vendedor de gazogem.",
-            "Porto la risposta della cantante al venditore di gazogem.", "Levo a resposta da cantora ao vendedor de gazogem.",
-        },
-        new[]
-        {
-            "Time to win the Otringal race!", "C'est l'heure de gagner la course d'Otringal !", "Zeit, das Rennen von Otringal zu gewinnen!",
-            "¡Es hora de ganar la carrera de Otringal!", "È ora di vincere la gara di Otringal!", "Está na hora de ganhar a corrida de Otringal!",
-        },
-        new[]
-        {
-            "I'm on the trail of that black car.", "Je suis la piste de cette voiture noire.", "Ich bin diesem schwarzen Wagen auf der Spur.",
-            "Sigo la pista de ese coche negro.", "Sono sulle tracce di quella macchina nera.", "Ando atrás daquele carro preto.",
-        },
-        // ---- the later islands (chapters 6-14)
-        new[]
-        {
-            "They say the souvenir seller has a picture of that black car.", "On dit que le vendeur de souvenirs a une photo de cette voiture noire.",
-            "Der Souvenirverkäufer soll ein Bild von diesem schwarzen Wagen haben.", "Dicen que el vendedor de recuerdos tiene una foto de ese coche negro.",
-            "Dicono che il venditore di souvenir abbia una foto di quella macchina nera.", "Dizem que o vendedor de lembranças tem uma foto daquele carro preto.",
-        },
-        new[]
-        {
-            "I need De La Fontaine to let the race go ahead.", "Il faut que De la Fontaine laisse la course avoir lieu.", "Brunnenschein muss das Rennen stattfinden lassen.",
-            "Necesito que De la Fontaine deje que se corra la carrera.", "De la Fontaine deve lasciare che la gara si faccia.", "Preciso que o De La Fontaine deixe a corrida avançar.",
-        },
-        new[]
-        {
-            "Time to beat De La Fontaine's tanker!", "C'est l'heure de battre le camion-citerne de De la Fontaine !", "Zeit, Brunnenscheins Tankwagen zu schlagen!",
-            "¡Es hora de vencer al camión cisterna de De la Fontaine!", "È ora di battere l'autocisterna di De la Fontaine!", "Está na hora de vencer o camião-cisterna do De La Fontaine!",
-        },
-        new[]
-        {
-            "Time to race the monkey monster!", "C'est l'heure d'affronter le monstre singe !", "Zeit, gegen das Affenmonster anzutreten!",
-            "¡Es hora de correr contra el monstruo mono!", "È ora di sfidare il mostro scimmia!", "Está na hora de correr contra o monstro macaco!",
-        },
-        new[]
-        {
-            "I'm looking for the miner's lost glove.", "Je cherche le gant perdu du mineur.", "Ich suche den verlorenen Handschuh des Bergmanns.",
-            "Busco el guante perdido del minero.", "Cerco il guanto perduto del minatore.", "Procuro a luva perdida do mineiro.",
-        },
-        new[]
-        {
-            "I've found the miner's glove!", "J'ai trouvé le gant du mineur !", "Ich habe den Handschuh des Bergmanns gefunden!",
-            "¡He encontrado el guante del minero!", "Ho trovato il guanto del minatore!", "Encontrei a luva do mineiro!",
-        },
-        new[]
-        {
-            "Time to beat the miner's bulldozer!", "C'est l'heure de battre le bulldozer du mineur !", "Zeit, die Planierraupe des Bergmanns zu schlagen!",
-            "¡Es hora de vencer a la excavadora del minero!", "È ora di battere il bulldozer del minatore!", "Está na hora de vencer o buldózer do mineiro!",
-        },
-        new[]
-        {
-            "I need a pass for the Queen's race.", "Il me faut un laissez-passer pour la course de la Reine.", "Ich brauche einen Passierschein für das Rennen der Königin.",
-            "Necesito un pase para la carrera de la Reina.", "Mi serve un lasciapassare per la gara della Regina.", "Preciso de um passe para a corrida da Rainha.",
-        },
-        new[]
-        {
-            "Time to race the Queen of the Mosquibees!", "C'est l'heure d'affronter la Reine des Mosquibees !", "Zeit, gegen die Königin der Mosquibees anzutreten!",
-            "¡Es hora de correr contra la Reina de los Mosquibees!", "È ora di sfidare la Regina dei Mosquibee!", "Está na hora de correr contra a Rainha dos Mosquibees!",
-        },
-        new[]
-        {
-            "The cracks in the hide-out need sealing before the race.", "Il faut boucher les fissures de la cachette avant la course.",
-            "Die Risse im Versteck müssen vor dem Rennen abgedichtet werden.", "Hay que sellar las grietas del escondite antes de la carrera.",
-            "Bisogna sigillare le crepe del nascondiglio prima della gara.", "É preciso tapar as fendas do esconderijo antes da corrida.",
-        },
-        new[]
-        {
-            "Time to race the dissident!", "C'est l'heure d'affronter le dissident !", "Zeit, gegen den Dissidenten anzutreten!",
-            "¡Es hora de correr contra el disidente!", "È ora di sfidare il dissidente!", "Está na hora de correr contra o dissidente!",
-        },
-        new[]
-        {
-            "I need a way through the door to the halls.", "Il me faut un moyen de passer la porte des salles.", "Ich muss durch die Tür zu den Hallen kommen.",
-            "Necesito una forma de cruzar la puerta de las salas.", "Mi serve un modo per passare la porta delle sale.", "Preciso de passar a porta das salas.",
-        },
-        new[]
-        {
-            "Time to beat the Emperor's soldier!", "C'est l'heure de battre le soldat de l'Empereur !", "Zeit, den Soldaten des Kaisers zu schlagen!",
-            "¡Es hora de vencer al soldado del Emperador!", "È ora di battere il soldato dell'Imperatore!", "Está na hora de vencer o soldado do Imperador!",
-        },
-        new[]
-        {
-            "I need to find a way through the palace to Stan.", "Il me faut trouver un chemin jusqu'à Stan dans le palais.", "Ich muss durch den Palast zu Stan kommen.",
-            "Tengo que encontrar el camino hasta Stan en el palacio.", "Devo trovare la strada fino a Stan nel palazzo.", "Tenho de encontrar o caminho até ao Stan no palácio.",
-        },
-        new[]
-        {
-            "Time to race Stan to the window!", "C'est l'heure de faire la course avec Stan jusqu'à la fenêtre !", "Zeit für das Rennen gegen Stan bis zum Fenster!",
-            "¡Es hora de echar una carrera a Stan hasta la ventana!", "È ora di sfidare Stan fino alla finestra!", "Está na hora de correr contra o Stan até à janela!",
-        },
-        new[]
-        {
-            "Time to beat FunFrock, once and for all!", "C'est l'heure de battre FunFrock, une fois pour toutes !", "Zeit, FunFrock ein für alle Mal zu schlagen!",
-            "¡Es hora de vencer a FunFrock de una vez por todas!", "È ora di battere FunFrock, una volta per tutte!", "Está na hora de vencer o FunFrock de uma vez por todas!",
-        },
+        new[] { "Have you seen FunFrock? I have to catch him before he reaches the Sendells!", "Avez-vous vu FunFrock ? Je dois le rattraper avant qu'il n'atteigne les Sendell !", "Haben Sie FunFrock gesehen? Ich muss ihn einholen, bevor er die Sendells erreicht!", "¿Ha visto a FunFrock? ¡Tengo que alcanzarlo antes de que llegue a los Sendell!", "Ha visto FunFrock? Devo raggiungerlo prima che arrivi dai Sendell!", "Viu o FunFrock? Tenho de o apanhar antes que chegue aos Sendell!" },
+        new[] { "Hi, do you know where I can find the Weather Wizard?", "Bonjour, savez-vous où je peux trouver le Mage Météo ?", "Hallo, wissen Sie, wo ich den Wettermagier finde?", "Hola, ¿sabe dónde puedo encontrar al Mago Meteo?", "Salve, sa dove posso trovare il Mago Metereologo?", "Olá, sabe onde posso encontrar o Mago do Tempo?" },
+        new[] { "Hi, have you seen Raph? He should be at the race track.", "Bonjour, avez-vous vu Raph ? Il devrait être sur le circuit.", "Hallo, haben Sie Raph gesehen? Er müsste an der Rennstrecke sein.", "Hola, ¿ha visto a Raph? Debería estar en el circuito.", "Salve, ha visto Raph? Dovrebbe essere sul circuito.", "Olá, viu o Raph? Deve estar no circuito." },
+        new[] { "Hi, have you seen who took my driving gloves?", "Bonjour, avez-vous vu qui a pris mes gants de conduite ?", "Hallo, haben Sie gesehen, wer meine Fahrhandschuhe genommen hat?", "Hola, ¿ha visto quién se llevó mis guantes de conducir?", "Salve, ha visto chi ha preso i miei guanti da pilota?", "Olá, viu quem levou as minhas luvas de condução?" },
+        new[] { "Hi, any tips for beating Raph's lap time on the storm track?", "Bonjour, un conseil pour battre le temps au tour de Raph sur le circuit de la tempête ?", "Hallo, haben Sie einen Tipp, wie ich Raphs Rundenzeit auf der Sturmstrecke schlage?", "Hola, ¿algún consejo para batir el tiempo por vuelta de Raph en el circuito de la tormenta?", "Salve, qualche consiglio per battere il tempo sul giro di Raph sul circuito della tempesta?", "Olá, algum conselho para bater o tempo de volta do Raph no circuito da tempestade?" },
+        new[] { "Hi, is this the way to the lighthouse? The Weather Wizard is waiting for me.", "Bonjour, c'est bien par ici, le phare ? Le Mage Météo m'attend.", "Hallo, geht es hier zum Leuchtturm? Der Wettermagier wartet auf mich.", "Hola, ¿se va por aquí al faro? El Mago Meteo me espera.", "Salve, è da questa parte il faro? Il Mago Metereologo mi aspetta.", "Olá, é por aqui o farol? O Mago do Tempo está à minha espera." },
+        new[] { "Is it that late already? I'd better get home to bed.", "Il est déjà si tard ? Je ferais mieux de rentrer me coucher.", "Ist es schon so spät? Ich gehe besser nach Hause ins Bett.", "¿Ya es tan tarde? Mejor me voy a casa a dormir.", "È già così tardi? Farei meglio ad andare a casa a dormire.", "Já é assim tão tarde? É melhor ir para casa dormir." },
+        new[] { "Hi, do you know where Felix is? I've got bait for his old tyre.", "Bonjour, savez-vous où est Felix ? J'ai de l'appât pour son vieux pneu.", "Hallo, wissen Sie, wo Felix ist? Ich habe Köder für seinen alten Reifen.", "Hola, ¿sabe dónde está Felix? Tengo cebo para su neumático viejo.", "Salve, sa dov'è Felix? Ho l'esca per il suo vecchio pneumatico.", "Olá, sabe onde está o Felix? Tenho isco para o pneu velho dele." },
+        new[] { "Hi, do you know where I can find a car tyre?", "Bonjour, savez-vous où je peux trouver un pneu de voiture ?", "Hallo, wissen Sie, wo ich einen Autoreifen finde?", "Hola, ¿sabe dónde puedo encontrar un neumático de coche?", "Salve, sa dove posso trovare uno pneumatico per auto?", "Olá, sabe onde posso encontrar um pneu de carro?" },
+        new[] { "Hi, have you seen Luc? I've got a wheel for his barrel car!", "Bonjour, avez-vous vu Luc ? J'ai une roue pour sa voiture-tonneau !", "Hallo, haben Sie Luc gesehen? Ich habe ein Rad für seinen Faßwagen!", "Hola, ¿ha visto a Luc? ¡Tengo una rueda para su coche-barril!", "Salve, ha visto Luc? Ho una ruota per la sua macchina-botte!", "Olá, viu o Luc? Tenho uma roda para o carro-barril dele!" },
+        new[] { "Hi, do you know how much the race entry is?", "Bonjour, savez-vous combien coûte l'inscription à la course ?", "Hallo, wissen Sie, was die Startgebühr kostet?", "Hola, ¿sabe cuánto cuesta la inscripción de la carrera?", "Salve, sa quanto costa l'iscrizione alla gara?", "Olá, sabe quanto custa a inscrição na corrida?" },
+        new[] { "Hi! When does the race round the town start?", "Bonjour ! Quand commence la course autour de la ville ?", "Hallo! Wann beginnt das Rennen durch die Stadt?", "¡Hola! ¿Cuándo empieza la carrera por la ciudad?", "Salve! Quando comincia la gara in città?", "Olá! Quando começa a corrida pela cidade?" },
+        new[] { "Hi, when's the next ferry to the White Leaf Desert?", "Bonjour, quand part le prochain ferry pour le Désert de la Feuille Blanche ?", "Hallo, wann fährt die nächste Fähre zur Weißblattwüste?", "Hola, ¿cuándo sale el próximo ferry al Desierto de la Hoja Blanca?", "Salve, quando parte il prossimo traghetto per il Deserto della Foglia Bianca?", "Olá, quando sai o próximo ferry para o Deserto da Folha Branca?" },
+        new[] { "Hi, do you know how I can get the Dean to open the race track again?", "Bonjour, savez-vous comment convaincre le Recteur de rouvrir le circuit ?", "Hallo, wissen Sie, wie ich den Rektor dazu bringe, die Rennstrecke wieder zu öffnen?", "Hola, ¿sabe cómo puedo convencer al rector de que vuelva a abrir el circuito?", "Salve, sa come posso convincere il Rettore a riaprire il circuito?", "Olá, sabe como posso convencer o Reitor a reabrir o circuito?" },
+        new[] { "Hi, have you seen any of the Dean's lost exam pages?", "Bonjour, avez-vous vu des feuilles d'examen perdues du Recteur ?", "Hallo, haben Sie irgendwo die verlorenen Prüfungsblätter des Rektors gesehen?", "Hola, ¿ha visto alguna de las hojas de examen perdidas del rector?", "Salve, ha visto qualcuna delle pagine d'esame perdute del Rettore?", "Olá, viu alguma das páginas de exame perdidas do Reitor?" },
+        new[] { "Hi, is the Dean about? I've got all three of his pages!", "Bonjour, le Recteur est-il là ? J'ai ses trois feuilles !", "Hallo, ist der Rektor da? Ich habe alle drei Blätter!", "Hola, ¿está el rector? ¡Tengo sus tres hojas!", "Salve, c'è il Rettore? Ho tutte e tre le sue pagine!", "Olá, o Reitor está por aí? Tenho as três páginas dele!" },
+        new[] { "Hi, do you know where I can get sand filters for my car's engine?", "Bonjour, savez-vous où trouver des filtres à sable pour le moteur de ma voiture ?", "Hallo, wissen Sie, wo ich Sandfilter für meinen Motor bekomme?", "Hola, ¿sabe dónde puedo conseguir filtros de arena para el motor de mi coche?", "Salve, sa dove posso trovare dei filtri per la sabbia per il motore?", "Olá, sabe onde posso arranjar filtros de areia para o motor do carro?" },
+        new[] { "Hi, could you help me fit these sand filters to my car?", "Bonjour, pourriez-vous m'aider à monter ces filtres à sable sur ma voiture ?", "Hallo, könnten Sie mir helfen, diese Sandfilter in meinen Wagen einzubauen?", "Hola, ¿podría ayudarme a montar estos filtros de arena en mi coche?", "Salve, potrebbe aiutarmi a montare questi filtri per la sabbia sulla mia macchina?", "Olá, podia ajudar-me a montar estes filtros de areia no carro?" },
+        new[] { "Hi, do you know where I can find a racing helmet?", "Bonjour, savez-vous où je peux trouver un casque de course ?", "Hallo, wissen Sie, wo ich einen Rennhelm finde?", "Hola, ¿sabe dónde puedo encontrar un casco de carreras?", "Salve, sa dove posso trovare un casco da corsa?", "Olá, sabe onde posso encontrar um capacete de corrida?" },
+        new[] { "Hi! When does the race against the Desert champion start?", "Bonjour ! Quand commence la course contre le champion du Désert ?", "Hallo! Wann beginnt das Rennen gegen den Wüstenchampion?", "¡Hola! ¿Cuándo empieza la carrera contra el campeón del Desierto?", "Salve! Quando comincia la gara contro il campione del Deserto?", "Olá! Quando começa a corrida contra o campeão do Deserto?" },
+        new[] { "Hi! How do I get to the Emerald Moon from here?", "Bonjour ! Comment aller sur la Lune d'Emeraude d'ici ?", "Hallo! Wie komme ich von hier zum Smaragd-Mond?", "¡Hola! ¿Cómo llego desde aquí a la Luna de Esmeralda?", "Salve! Come si arriva da qui alla Luna di Smeraldo?", "Olá! Como chego daqui à Lua de Esmeralda?" },
+        new[] { "Hi, do you know how I can get HAL working again?", "Bonjour, savez-vous comment faire remarcher HAL ?", "Hallo, wissen Sie, wie ich HAL wieder zum Laufen bringe?", "Hola, ¿sabe cómo puedo hacer que HAL vuelva a funcionar?", "Salve, sa come posso far funzionare di nuovo HAL?", "Olá, sabe como posso pôr o HAL a funcionar outra vez?" },
+        new[] { "Hi! When does the race against HAL start?", "Bonjour ! Quand commence la course contre HAL ?", "Hallo! Wann beginnt das Rennen gegen HAL?", "¡Hola! ¿Cuándo empieza la carrera contra HAL?", "Salve! Quando comincia la gara contro HAL?", "Olá! Quando começa a corrida contra o HAL?" },
+        new[] { "Hi! How do I get to Otringal, on Zeelich?", "Bonjour ! Comment aller à Otringal, sur Zeelich ?", "Hallo! Wie komme ich nach Otringal auf Zeelich?", "¡Hola! ¿Cómo llego a Otringal, en Zeelich?", "Salve! Come si arriva a Otringal, su Zeelich?", "Olá! Como chego a Otringal, em Zeelich?" },
+        new[] { "Hi, where do I sign up for the Cup race here?", "Bonjour, où puis-je m'inscrire pour la Coupe ici ?", "Hallo, wo kann ich mich hier für den Cup anmelden?", "Hola, ¿dónde me apunto a la Copa aquí?", "Salve, dove posso iscrivermi alla Coppa qui?", "Olá, onde me inscrevo na Taça aqui?" },
+        new[] { "Hi, do you know anyone who could get me a place on the grid?", "Bonjour, connaissez-vous quelqu'un qui pourrait me trouver une place sur la grille ?", "Hallo, kennen Sie jemanden, der mir einen Platz in der Startaufstellung besorgen kann?", "Hola, ¿conoce a alguien que pueda conseguirme un sitio en la parrilla?", "Salve, conosce qualcuno che possa trovarmi un posto in griglia?", "Olá, conhece alguém que me possa arranjar um lugar na grelha?" },
+        new[] { "Hi, where do I drive my qualifying lap?", "Bonjour, où dois-je faire mon tour de qualification ?", "Hallo, wo fahre ich meine Qualifikationsrunde?", "Hola, ¿dónde tengo que dar mi vuelta de clasificación?", "Salve, dove devo fare il mio giro di qualifica?", "Olá, onde faço a minha volta de qualificação?" },
+        new[] { "Hi, do you know where I can find a room for the night?", "Bonjour, savez-vous où je peux trouver une chambre pour la nuit ?", "Hallo, wissen Sie, wo ich ein Zimmer für die Nacht finde?", "Hola, ¿sabe dónde puedo encontrar una habitación para esta noche?", "Salve, sa dove posso trovare una camera per la notte?", "Olá, sabe onde posso arranjar um quarto para esta noite?" },
+        new[] { "Is it late already? I'd better get some sleep before race day.", "Il est déjà tard ? Je ferais mieux de dormir avant le jour de la course.", "Ist es schon spät? Ich sollte vor dem Renntag lieber schlafen.", "¿Ya es tarde? Mejor duermo un poco antes del día de la carrera.", "È già tardi? Meglio dormire un po' prima del giorno della gara.", "Já é tarde? É melhor dormir antes do dia da corrida." },
+        new[] { "Do you know where I can get an ignition coil?", "Vous savez où je pourrais trouver une bobine d'allumage ?", "Wissen Sie, wo ich eine Zündspule bekomme?", "¿Sabe dónde puedo conseguir una bobina de encendido?", "Sa dove posso trovare una bobina d'accensione?", "Sabe onde posso arranjar uma bobina de ignição?" },
+        new[] { "Hi, do you know where I can find the singer at Rick's bar? I've a letter for her.", "Bonjour, savez-vous où trouver la chanteuse du bar de Rick ? J'ai une lettre pour elle.", "Hallo, wissen Sie, wo ich die Sängerin aus Ricks Bar finde? Ich habe einen Brief für sie.", "Hola, ¿sabe dónde puedo encontrar a la cantante del bar de Rick? Tengo una carta para ella.", "Salve, sa dove posso trovare la cantante del bar di Rick? Ho una lettera per lei.", "Olá, sabe onde posso encontrar a cantora do bar do Rick? Tenho uma carta para ela." },
+        new[] { "Hi, do you know where the gazogem seller is? I've the singer's reply for him.", "Bonjour, savez-vous où est le vendeur de gazogem ? J'ai la réponse de la chanteuse pour lui.", "Hallo, wissen Sie, wo der Gazogem-Verkäufer ist? Ich habe die Antwort der Sängerin für ihn.", "Hola, ¿sabe dónde está el vendedor de gazogem? Tengo la respuesta de la cantante para él.", "Salve, sa dov'è il venditore di gazogem? Ho la risposta della cantante per lui.", "Olá, sabe onde está o vendedor de gazogem? Tenho a resposta da cantora para ele." },
+        new[] { "Hi! When does the Otringal race start?", "Bonjour ! Quand commence la course d'Otringal ?", "Hallo! Wann beginnt das Rennen von Otringal?", "¡Hola! ¿Cuándo empieza la carrera de Otringal?", "Salve! Quando comincia la gara di Otringal?", "Olá! Quando começa a corrida de Otringal?" },
+        new[] { "Hi, have you seen a black car come this way?", "Bonjour, avez-vous vu passer une voiture noire ?", "Hallo, haben Sie hier einen schwarzen Wagen vorbeifahren sehen?", "Hola, ¿ha visto pasar por aquí un coche negro?", "Salve, ha visto passare di qui una macchina nera?", "Olá, viu passar por aqui um carro preto?" },
+        new[] { "Hi, is it true the souvenir seller has a picture of that black car?", "Bonjour, est-ce vrai que le vendeur de souvenirs a une photo de cette voiture noire ?", "Hallo, stimmt es, dass der Souvenirverkäufer ein Bild von diesem schwarzen Wagen hat?", "Hola, ¿es verdad que el vendedor de recuerdos tiene una foto de ese coche negro?", "Salve, è vero che il venditore di souvenir ha una foto di quella macchina nera?", "Olá, é verdade que o vendedor de lembranças tem uma foto daquele carro preto?" },
+        new[] { "Hi, how can I get De La Fontaine to let the race go ahead?", "Bonjour, comment convaincre De la Fontaine de laisser la course avoir lieu ?", "Hallo, wie bringe ich Brunnenschein dazu, das Rennen stattfinden zu lassen?", "Hola, ¿cómo puedo convencer a De la Fontaine de que deje que se corra la carrera?", "Salve, come posso convincere De la Fontaine a lasciar fare la gara?", "Olá, como convenço o De La Fontaine a deixar a corrida avançar?" },
+        new[] { "Hi! When does the race against De La Fontaine's tanker start?", "Bonjour ! Quand commence la course contre le camion-citerne de De la Fontaine ?", "Hallo! Wann beginnt das Rennen gegen Brunnenscheins Tankwagen?", "¡Hola! ¿Cuándo empieza la carrera contra el camión cisterna de De la Fontaine?", "Salve! Quando comincia la gara contro l'autocisterna di De la Fontaine?", "Olá! Quando começa a corrida contra o camião-cisterna do De La Fontaine?" },
+        new[] { "Hi! When does the race against the monkey monster start?", "Bonjour ! Quand commence la course contre le monstre singe ?", "Hallo! Wann beginnt das Rennen gegen das Affenmonster?", "¡Hola! ¿Cuándo empieza la carrera contra el monstruo mono?", "Salve! Quando comincia la gara contro il mostro scimmia?", "Olá! Quando começa a corrida contra o monstro macaco?" },
+        new[] { "Hi, have you seen the miner's lost glove?", "Bonjour, avez-vous vu le gant perdu du mineur ?", "Hallo, haben Sie den verlorenen Handschuh des Bergmanns gesehen?", "Hola, ¿ha visto el guante perdido del minero?", "Salve, ha visto il guanto perduto del minatore?", "Olá, viu a luva perdida do mineiro?" },
+        new[] { "Hi, do you know where the miner is? I've found his glove!", "Bonjour, savez-vous où est le mineur ? J'ai trouvé son gant !", "Hallo, wissen Sie, wo der Bergmann ist? Ich habe seinen Handschuh gefunden!", "Hola, ¿sabe dónde está el minero? ¡He encontrado su guante!", "Salve, sa dov'è il minatore? Ho trovato il suo guanto!", "Olá, sabe onde está o mineiro? Encontrei a luva dele!" },
+        new[] { "Hi! When does the race against the miner's bulldozer start?", "Bonjour ! Quand commence la course contre le bulldozer du mineur ?", "Hallo! Wann beginnt das Rennen gegen die Planierraupe des Bergmanns?", "¡Hola! ¿Cuándo empieza la carrera contra la excavadora del minero?", "Salve! Quando comincia la gara contro il bulldozer del minatore?", "Olá! Quando começa a corrida contra o buldózer do mineiro?" },
+        new[] { "Hi, do you know where I can get a pass for the Queen's race?", "Bonjour, savez-vous où obtenir un laissez-passer pour la course de la Reine ?", "Hallo, wissen Sie, wo ich einen Passierschein für das Rennen der Königin bekomme?", "Hola, ¿sabe dónde puedo conseguir un pase para la carrera de la Reina?", "Salve, sa dove posso avere un lasciapassare per la gara della Regina?", "Olá, sabe onde posso arranjar um passe para a corrida da Rainha?" },
+        new[] { "Hi! When does the race against the Queen of the Mosquibees start?", "Bonjour ! Quand commence la course contre la Reine des Mosquibees ?", "Hallo! Wann beginnt das Rennen gegen die Königin der Mosquibees?", "¡Hola! ¿Cuándo empieza la carrera contra la Reina de los Mosquibees?", "Salve! Quando comincia la gara contro la Regina dei Mosquibee?", "Olá! Quando começa a corrida contra a Rainha dos Mosquibees?" },
+        new[] { "Hi, do you know how I can seal the cracks in the hide-out before the race?", "Bonjour, savez-vous comment boucher les fissures de la cachette avant la course ?", "Hallo, wissen Sie, wie ich die Risse im Versteck vor dem Rennen abdichte?", "Hola, ¿sabe cómo puedo sellar las grietas del escondite antes de la carrera?", "Salve, sa come posso sigillare le crepe del nascondiglio prima della gara?", "Olá, sabe como posso tapar as fendas do esconderijo antes da corrida?" },
+        new[] { "Hi! When does the race against the dissident start?", "Bonjour ! Quand commence la course contre le dissident ?", "Hallo! Wann beginnt das Rennen gegen den Dissidenten?", "¡Hola! ¿Cuándo empieza la carrera contra el disidente?", "Salve! Quando comincia la gara contro il dissidente?", "Olá! Quando começa a corrida contra o dissidente?" },
+        new[] { "Hi, do you know how I can get through the door to the halls?", "Bonjour, savez-vous comment passer la porte des salles ?", "Hallo, wissen Sie, wie ich durch die Tür zu den Hallen komme?", "Hola, ¿sabe cómo puedo cruzar la puerta de las salas?", "Salve, sa come posso passare la porta delle sale?", "Olá, sabe como posso passar a porta das salas?" },
+        new[] { "Hi! When does the race against the Emperor's soldier start?", "Bonjour ! Quand commence la course contre le soldat de l'Empereur ?", "Hallo! Wann beginnt das Rennen gegen den Soldaten des Kaisers?", "¡Hola! ¿Cuándo empieza la carrera contra el soldado del Emperador?", "Salve! Quando comincia la gara contro il soldato dell'Imperatore?", "Olá! Quando começa a corrida contra o soldado do Imperador?" },
+        new[] { "Hi, do you know the way through the palace to Stan?", "Bonjour, connaissez-vous le chemin jusqu'à Stan dans le palais ?", "Hallo, kennen Sie den Weg durch den Palast zu Stan?", "Hola, ¿conoce el camino hasta Stan en el palacio?", "Salve, conosce la strada fino a Stan nel palazzo?", "Olá, conhece o caminho até ao Stan no palácio?" },
+        new[] { "Hi! When does my race with Stan to the window start?", "Bonjour ! Quand commence la course avec Stan jusqu'à la fenêtre ?", "Hallo! Wann beginnt das Rennen gegen Stan bis zum Fenster?", "¡Hola! ¿Cuándo empieza la carrera con Stan hasta la ventana?", "Salve! Quando comincia la sfida con Stan fino alla finestra?", "Olá! Quando começa a corrida com o Stan até à janela?" },
+        new[] { "Have you seen FunFrock? It's time to beat him once and for all!", "Avez-vous vu FunFrock ? Il est temps de le battre une fois pour toutes !", "Haben Sie FunFrock gesehen? Zeit, ihn ein für alle Mal zu schlagen!", "¿Ha visto a FunFrock? ¡Es hora de vencerlo de una vez por todas!", "Ha visto FunFrock? È ora di batterlo una volta per tutte!", "Viu o FunFrock? Está na hora de o vencer de uma vez por todas!" },
     };
 
     private static readonly OpenerLine[] OpenerHellos = { OpenerLine.TwinsenHello, OpenerLine.TwinsenHowsItGoing, OpenerLine.TwinsenGoodDay };
@@ -323,9 +112,11 @@ internal static partial class RaceTrackStory
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenToLighthouse, new[] { Chapter(1), In(KeeperPlot, 0, KeeperSpell - 1) }),
         new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenToBed, new[] { Chapter(1) }),
         // the town circuit: Luc's wheel (Felix's tyre for bait), the entry fee, the race, the ferry
-        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenBaitForFelix, new[] { Chapter(2), In(QLucCar, 0, WheelFound - 1), Is(QBait, BaitHeld) }),
-        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelForLuc, new[] { Chapter(2), In(QLucCar, 0, WheelFound - 1) }),
-        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelFound, new[] { Chapter(2), Is(QLucCar, WheelFound) }),
+        // (the tyre in hand is the bait traded for it, QBait BaitTraded, whatever Luc's own step -- traded before Luc had told, his step
+        // never came to WheelFound and Twinsen went on asking for a tyre with one in hand: the user, 2026-11-23)
+        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenBaitForFelix, new[] { Chapter(2), In(QLucCar, 0, WheelFitted - 1), Is(QBait, BaitHeld) }),
+        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelForLuc, new[] { Chapter(2), In(QLucCar, 0, WheelFound - 1), In(QBait, 0, BaitHeld) }),
+        new(RaceTrackIsland.Citadel.IslandByte, OpenerLine.TwinsenWheelFound, new[] { Chapter(2), In(QLucCar, 0, WheelFitted - 1), Is(QBait, BaitTraded) }),
         // (the entry not yet paid: a hello -- "I need twenty kashes for the race's entry fee" made no sense as an opening line, least of all
         // before Mr. Paul had told him the fee; the user, 2026-11-22, "Let's have him just say hello". TwinsenEntryFee's line kept in the
         // bank, unsaid, so the lines after it keep their ids; the race line only once the entry is paid)
@@ -334,9 +125,11 @@ internal static partial class RaceTrackStory
         // user, 2026-11-22, "In this instance we can just have Twinsen say hello, as it's clear where he's heading". TwinsenFerry's line kept
         // in the bank, unsaid, so the lines after it keep their ids)
         // the Desert: the Dean, his pages, the filters, the helmet, the race; won (chapter 4 there), the moon
-        new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenTrackShut, new[] { Chapter(3), In(QPages, 0, 1), In(PagesFoundVar, 0, 6) }),
+        // (the track shut only once Flick has said so, Q_PAGES 1 -- the user, 2026-11-23: "Twinsen shouldn't tell people he needs the dean
+        // to open the race track, until he's been told the dean has shut the race track"; the pages' line with all three in hand, 7)
+        new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenTrackShut, new[] { Chapter(3), Is(QPages, 1), In(PagesFoundVar, 0, 6) }),
         new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenSeekPages, new[] { Chapter(3), In(QPages, 2, PagesDiploma - 1), In(PagesFoundVar, 0, 6) }),
-        new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenPagesFound, new[] { Chapter(3), In(QPages, 0, PagesDiploma - 1) }),
+        new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenPagesFound, new[] { Chapter(3), In(QPages, 0, PagesDiploma - 1), Is(PagesFoundVar, 7) }),
         new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenSandFilters, new[] { Chapter(3), Is(QFilters, 0) }),
         new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenFitFilters, new[] { Chapter(3), Is(QFilters, FiltersGiven) }),
         new(RaceTrackIsland.Desert.IslandByte, OpenerLine.TwinsenSeekHelmet, new[] { Chapter(3), In(Citadel.CitadelOveralls.GlovesSlot, 0, Citadel.CitadelOveralls.GearBoth - 1) }),
