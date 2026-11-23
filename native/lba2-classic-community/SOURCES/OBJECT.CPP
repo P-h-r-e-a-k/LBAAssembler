@@ -2884,6 +2884,30 @@ void ReceptionObj() {
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 /*──────────────────────────────────────────────────────────────────────────*/
+// Twinsen's car driven indoors (drive_in=, RACEMOD.CPP), a corner of its box: in a solid brick with a slope over it within two layers --
+// the support under an incline's slope ahead, not a wall. Its box reaches two bricks before its middle, and an incline rises a layer a
+// brick: at the foot of one its nose's corners were in the supports at its wheels' height while its middle was still on the flat, and it
+// could never start up (the Temple of Bu's minecart inclines, 2026-11-23). Let through, the middle comes to the slope and rides up it
+// (ReajustPos), as Twinsen walks up.
+// And at its top: the car's middle on the slope still, its nose at the floor it comes up to -- a solid brick, clear over it within two
+// layers -- the lip at the incline's top, let through too.
+S32 CarInclineFoot(S32 nx, S32 ny, S32 nz) {
+    const S32 x = Nxw + nx, y = Nyw + ny, z = Nzw + nz;
+    if (x < 0 OR z < 0 OR x > 64 * SIZE_BRICK_XZ - 1 OR z > 64 * SIZE_BRICK_XZ - 1)
+        return FALSE;
+    const S32 onSlope = WorldColBrick(Nxw, Nyw, Nzw) >= 2;
+    if (WorldColBrick(x, y, z) != 1)
+        return FALSE;
+    for (S32 k = 1; k <= 2; k++) {
+        const U8 c = WorldColBrick(x, y + k * SIZE_BRICK_Y, z);
+        if (c >= 2)
+            return TRUE;
+        if (c == 0)
+            return onSlope;
+    }
+    return FALSE;
+}
+
 void DoCornerReajust(S32 nx, S32 ny, S32 nz) {
     S32 recalx = FALSE;
     S32 recalz = FALSE;
@@ -3824,7 +3848,11 @@ void DoAnim(U8 numobj) {
 
         Col1 = 0;
 
-        if ((AnimNumObj == NUM_PERSO) AND((ptrobj->Flags & COL_BASSE) == 0)) {
+        // (Twinsen's car driven indoors, drive_in= (RACEMOD.CPP): the corners as any object's whose box is bigger than a brick -- Twinsen's own
+        // test puts him back against the brick by where he was, his half-box never a brick wide; the car's is two, and at the foot of an
+        // incline its nose's corners in the slope bounced it back where it came from: the Temple of Bu's minecart inclines, 2026-11-23)
+        const S32 carIndoors = APtObj->Move == MOVE_BUGGY_MANUAL AND CubeMode == CUBE_INTERIEUR;
+        if ((AnimNumObj == NUM_PERSO) AND((ptrobj->Flags & COL_BASSE) == 0) AND !carIndoors) {
             if (!DoCornerReajustTwinsen(APtObj->XMin, APtObj->YMin, APtObj->ZMin))
                 validepos = FALSE;
             if (!DoCornerReajustTwinsen(APtObj->XMax, APtObj->YMin, APtObj->ZMin))
@@ -3840,10 +3868,11 @@ void DoAnim(U8 numobj) {
             // pseudo en X ou en Z puissent monter dans les
             // penches
             if (!(APtObj->Flags & CHECK_ONLY_FLOOR)) {
-                DoCornerReajust(APtObj->XMin, APtObj->YMin, APtObj->ZMin);
-                DoCornerReajust(APtObj->XMax, APtObj->YMin, APtObj->ZMin);
-                DoCornerReajust(APtObj->XMax, APtObj->YMin, APtObj->ZMax);
-                DoCornerReajust(APtObj->XMin, APtObj->YMin, APtObj->ZMax);
+                // (the indoor car: a corner at the foot of an incline -- CarInclineFoot -- not held back by its supports)
+                if (!(carIndoors AND CarInclineFoot(APtObj->XMin, APtObj->YMin, APtObj->ZMin))) DoCornerReajust(APtObj->XMin, APtObj->YMin, APtObj->ZMin);
+                if (!(carIndoors AND CarInclineFoot(APtObj->XMax, APtObj->YMin, APtObj->ZMin))) DoCornerReajust(APtObj->XMax, APtObj->YMin, APtObj->ZMin);
+                if (!(carIndoors AND CarInclineFoot(APtObj->XMax, APtObj->YMin, APtObj->ZMax))) DoCornerReajust(APtObj->XMax, APtObj->YMin, APtObj->ZMax);
+                if (!(carIndoors AND CarInclineFoot(APtObj->XMin, APtObj->YMin, APtObj->ZMax))) DoCornerReajust(APtObj->XMin, APtObj->YMin, APtObj->ZMax);
             }
 
             //			col = WorldColBrick( Nxw, Nyw, Nzw ) ;

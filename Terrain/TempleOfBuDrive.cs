@@ -10,25 +10,74 @@ namespace LBAAssembler.Terrain;
 // through it. In my test earlier Twinsen had control taken from him and the game tried and failed to drive into the temple of Bu. We've
 // already done work to implement indoor driving, so let's allow Twinsen to drive inside"). The car needs three cells of room (its box
 // reaches about 658 either side of its middle) and one floor: indoors it drives down a step, never up one (project notes, 2026-11-15).
-// The temple's way from its door to the stairs down (the zone into scene 11, cells x 16, z 19-21) had neither: the door's hall and the
-// corridor east from it a layer under the halls beyond (8 to 9), a two-cell corridor, walls and ledges. The way made here (cells):
+// Its way is the game's own, the minecart's loop (the user, 2026-11-23: "There is a complete path through the temple of Bu through to the
+// spaceship area, the retail game takes it, which is why I asked you to remove your bridge" -- the bridge north from the door's hall that
+// 11-19 made, a shortcut, gone again): the corridor east, round the east hall, down an incline to the bottom level, up one to the top,
+// across, down one to the middle level, up the last into the halls before the stairs down (the zone into scene 11, cells x 16, z 19-21).
+// Made drivable here (cells):
 //   - the door's hall (x 0-14, z 52-61) and its corridor east (x 15-35, z 56-57) raised a layer to the halls' 9 -- every floor tile there
 //     laid again a layer up (the door's own arrival raised with it: RaceTrackStory.TempleGate; the actors and points stood on it:
-//     RaceTrackStory.TempleDrive);
-//   - a doorway in the hall's north wall (x 12-14, z 51: layers 10-15 taken out -- the car's box stands over 1024 tall: at 10-13 the lintel
-//     stopped it -- the wall's top left as its lintel), a bridge north across
-//     the gap between the hall and the halls beyond (z 45-50, floor at 9, invisible walls either side), and a doorway through those halls'
-//     south wall (z 44), the strip behind it (z 43) raised to 9 too, and the low bench in the way of the turn east (x 12, z 40-42) gone;
-//   - from there east along z 40-42 and north along x 20-22 the halls are already one floor three cells wide, to the stairs down: there the
-//     car's own door, to the Esmers' hangar (scene 12), on only while he drives (RaceTrackStory.TempleDrive) -- scene 11 is all stairs.
+//     RaceTrackStory.TempleDrive); the corridor three planks wide, its south railing out a plank;
+//   - the minecart's track floored over (the user, 2026-11-23: "replace them with smooth ground"), and each level's floor laid a layer up
+//     to the track's height -- one flat floor a level, the inclines meeting it level;
+//   - at the top, the strip between the two tracks' ends floored (a pillar in it gone); at the last incline's foot two columns gone;
+//   - the car up the inclines: OBJECT.CPP's corners for the indoor car (CarInclineFoot);
+//   - at the stairs down the car's own door, to the Esmers' hangar (scene 12), on only while he drives (RaceTrackStory.TempleDrive) --
+//     scene 11 is all stairs.
 internal static class TempleOfBuDrive
 {
     public const int Scene = 10, OldFloor = 8, NewFloor = 9, Raise = 256;
+    private const int CorridorDeck = 70;
     private const int Size = 64, Height = 25;
 
-    // the cells whose floor goes up a layer (the door's hall, its corridor east, the strip behind the far doorway)
+    // the cells whose floor goes up a layer (the door's hall, its corridor east)
     public static bool Raised(int x, int z) =>
-        (x >= 0 && x <= 14 && z >= 52 && z <= 61) || (x >= 15 && x <= 35 && z >= 56 && z <= 57) || (x >= 12 && x <= 14 && z == 43);
+        (x >= 0 && x <= 14 && z >= 52 && z <= 61) || (x >= 15 && x <= 35 && z >= 56 && z <= 57);
+    // Each level's floor laid again a layer up (Install): a floor tile on layer 0, 4 or 8 with three layers clear over it. The same cells
+    // read off the game's own grid (the story's edit of the scene's actors runs before the grid's edit): the cell, its floor's old top --
+    // what stood on it at that height goes up with it (RaceTrackStory.TempleDrive)
+    private static readonly HashSet<int> FloorTiles = new() { 8, 12, 13, 14, 15, 44, 47, 48 };
+    private static IEnumerable<(int X, int Low, int Z)> LevelCells(Func<int, int, int, (int Block, int Pos)> at)
+    {
+        foreach (var low in new[] { 0, 4, 8 })
+            for (var z = 0; z < Size; z++)
+                for (var x = 0; x < Size; x++)
+                {
+                    if (!FloorTiles.Contains(at(x, low, z).Block)) continue;
+                    var clear = true;
+                    for (var y = low + 1; y <= low + 3 && clear; y++) { var c = at(x, y, z); clear = c.Block == 0 && c.Pos == 0; }
+                    if (clear) yield return (x, low, z);
+                }
+    }
+    public static Dictionary<(int X, int Z), int> RaisedTops(string gameDirectory)
+    {
+        var tops = new Dictionary<(int X, int Z), int>();
+        var bkgPath = Path.Combine(gameDirectory, "LBA_BKG.HQR");
+        if (!File.Exists(bkgPath)) return tops;
+        var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
+        var header = new MapBricks.BkgHeader(bkg.Read(0));
+        var table = bkg.Read(header.Brk + header.MaxBrk);
+        if (Scene * 2 + 1 >= table.Length) return tops;
+        var cells = Lba1GridCodec.Decode(Lba2GridBackend.ToLba1Shape(bkg.Read(header.Gri + table[Scene * 2 + 1])));
+        (int Block, int Pos) At(int x, int y, int z) { var i = ((z * Size + x) * Height + y) * 2; return (cells[i], cells[i + 1]); }
+        // (the grid's edit made already -- the builds run the grids' installs and the stories' edits in either order: a level's cells are
+        // its floor tile laid on its floor tile, room over them)
+        if (At(20, NewFloor, 58).Block == CorridorDeck)
+        {
+            foreach (var low in new[] { 0, 4, 8 })
+                for (var z = 0; z < Size; z++)
+                    for (var x = 0; x < Size; x++)
+                    {
+                        if (!FloorTiles.Contains(At(x, low, z).Block) || !FloorTiles.Contains(At(x, low + 1, z).Block)) continue;
+                        var clear = true;
+                        for (var y = low + 2; y <= low + 3 && clear; y++) { var c = At(x, y, z); clear = c.Block == 0 && c.Pos == 0; }
+                        if (clear) tops[(x, z)] = (low + 1) * 256;
+                    }
+            return tops;
+        }
+        foreach (var (x, low, z) in LevelCells(At)) tops[(x, z)] = (low + 1) * 256;
+        return tops;
+    }
 
     public static List<string> Install(string gameDirectory)
     {
@@ -46,8 +95,8 @@ internal static class TempleOfBuDrive
         var shape = Lba2GridBackend.ToLba1Shape(raw);
         var cells = Lba1GridCodec.Decode(shape);
         (int Block, int Pos) At(int x, int y, int z) { var i = ((z * Size + x) * Height + y) * 2; return (cells[i], cells[i + 1]); }
-        // (already done: the bridge's floor there)
-        if (At(13, NewFloor, 47).Block != 0) { log.Add("The Temple of Bù's drive: in scene 10 already"); return log; }
+        // (already done: the corridor's third plank row raised there)
+        if (At(20, NewFloor, 58).Block == CorridorDeck) { log.Add("The Temple of Bù's drive: in scene 10 already"); return log; }
         var edits = new Dictionary<(int, int, int), Lba1GridCell>();
         void Set(int x, int y, int z, int block, int pos) => edits[(x, y, z)] = new Lba1GridCell(x, y, z, block, pos);
         // the hall's floor tile for a cell, by the pattern's place (the same x, a row of the hall a multiple of three away)
@@ -69,40 +118,50 @@ internal static class TempleOfBuDrive
                 Set(x, NewFloor, z, below.Block, below.Pos);
                 raised++;
             }
-        // the hall's north wall: a doorway (layers 10-13 out, the floor in it); the decoration in front of it, by the wall, out of the way
-        for (var x = 12; x <= 14; x++)
+        // the wooden corridor east three planks wide for the car (it needs three cells): its deck four planks across on layer 8 (z 55-58),
+        // the railings standing on the outer two, the doorways either end between posts -- two cells free. The south railing (z 58) moved
+        // out a plank onto a fourth plank laid at z 59, its posts at the doorways (x 15 and 36) gone, the floor raised over z 58 as over
+        // z 56-57: the corridor z 56-58, a railing either side
+        for (var x = 16; x <= 35; x++)
         {
-            var t = Tile(x, 51);
-            Set(x, NewFloor, 51, t.Block, t.Pos);
-            for (var y = NewFloor + 1; y <= 15; y++) Set(x, y, 51, 0, 0);
-        }
-        for (var y = NewFloor + 1; y <= 13; y++) Set(12, y, 52, 0, 0);
-        if (At(12, NewFloor, 52).Block == 0) { var b = At(12, OldFloor, 52); Set(12, NewFloor, 52, b.Block, b.Pos); }
-        // the bridge: two layers of the hall's tiles, invisible walls either side
-        for (var z = 45; z <= 50; z++)
-        {
-            for (var x = 12; x <= 14; x++)
+            var edge = At(x, OldFloor, 58);
+            var middle = At(x, OldFloor, 57);
+            Set(x, OldFloor, 59, edge.Block, edge.Pos);
+            Set(x, NewFloor, 58, middle.Block, middle.Pos);
+            for (var y = NewFloor; y <= NewFloor + 3; y++)
             {
-                var t = Tile(x, z);
-                Set(x, OldFloor, z, t.Block, t.Pos);
-                Set(x, NewFloor, z, t.Block, t.Pos);
+                var rail = At(x, y, 58);
+                Set(x, y, 59, rail.Block, rail.Pos);
+                if (y > NewFloor) Set(x, y, 58, 0, 0);
             }
-            for (var y = NewFloor; y <= 13; y++) { Set(11, y, z, 0, 1); Set(15, y, z, 0, 1); }
         }
-        // the halls' south wall: a doorway (the wall's foot the floor, its height out)
-        for (var x = 12; x <= 14; x++)
+        foreach (var x in new[] { 15, 36 })
         {
-            var t = Tile(x, 44);
-            Set(x, NewFloor, 44, t.Block, t.Pos);
-            for (var y = NewFloor + 1; y <= 13; y++) Set(x, y, 44, 0, 0);
+            var t = At(x, NewFloor, 57).Block != 0 ? At(x, NewFloor, 57) : At(x, OldFloor, 57);
+            Set(x, NewFloor, 58, t.Block, t.Pos);
+            for (var y = NewFloor + 1; y <= NewFloor + 3; y++) Set(x, y, 58, 0, 0);
         }
-        // the bench in the way of the turn east: the halls' floor tile there instead (its neighbour's, the pattern running along z)
-        for (var z = 40; z <= 42; z++)
-        {
-            var t = At(13, NewFloor, z);
-            Set(12, NewFloor, z, t.Block, t.Pos);
-            Set(12, NewFloor + 1, z, 0, 0);
-        }
+        // at the top of the hall's north-east corner the minecart's two tracks end two cells apart (the one up from the bottom level at
+        // x 57-59, the one on down to the middle level at x 52-54), a strip a layer lower between them (x 55-56) that a walker steps down
+        // into and up out of: floored over at the tracks' height, the pillar standing in it (x 56, z 12-14) gone -- the car drives up
+        // out of the bottom level, across, and on down to the middle level. Its tile the floor's under it.
+        for (var z = 10; z <= 14; z++)
+            for (var x = 55; x <= 56; x++)
+            {
+                var t = At(x, OldFloor, z);
+                Set(x, NewFloor, z, t.Block == 0 ? 8 : t.Block, t.Pos);
+                for (var y = NewFloor + 1; y <= NewFloor + 5; y++) if (At(x, y, z).Block != 0) Set(x, y, z, 0, 0);
+            }
+        // the two columns flanking the foot of the incline up from the middle level into the halls (x 40, z 36 and 40, free-standing, layers
+        // 5-12): the incline three cells wide between them, the car's box through with a fifth of a brick either side -- gone, the level's
+        // floor laid where they stood, at its height (the floor's tile under them a layer up, as the level's all round)
+        foreach (var z in new[] { 36, 40 })
+            if (At(40, 5, z).Block == 7)
+            {
+                for (var y = 5; y <= 12; y++) if (At(40, y, z).Block == 7) Set(40, y, z, 0, 0);
+                var f = At(40, 4, z);
+                if (f.Block != 0) Set(40, 5, z, f.Block, f.Pos);
+            }
         // the rail tracks gone, smooth floor in their place (the user, 2026-11-23: "We need to remove the rail tracks from the temple of Bu and
         // replace them with smooth ground"): every block of the minecart's track in the scene, at each of its three levels (layers 1, 5 and
         // 9 -- straights along x and z, curves, ends, the crossing) -- the stone floor tile under it laid in its place, at its own height: the
@@ -141,6 +200,20 @@ internal static class TempleOfBuDrive
                     Set(x, y, z, t.Block, t.Pos);
                     rails++;
                 }
+        // each level of the halls one flat floor at the track's height (the user, 2026-11-23: "There is a complete path through the temple
+        // of Bu through to the spaceship area, the retail game takes it" -- the minecart's loop: the corridor east, round the east hall, down
+        // to the bottom level, up, across, down to the middle level, up again into the halls before the stairs). The track's bed stood a
+        // layer over its level's floor (the top level's floor 8, the bed 9; the middle's 4 and 5; the bottom's 0 and 1): the car drove a
+        // three-cell causeway, fell off it at a corner and couldn't climb back. Every floor tile of a level with room over it (three layers
+        // clear) laid again a layer up, the track's height -- the floor looks the same, the car drives anywhere on it, the inclines meet
+        // it level. Whatever stood on such a cell goes up with it (RaisedTops: RaceTrackStory.TempleDrive).
+        var levelled = 0;
+        foreach (var (x, low, z) in LevelCells(Now))
+        {
+            var f = Now(x, low, z);
+            Set(x, low + 1, z, f.Block, f.Pos);
+            levelled++;
+        }
         shape = Lba1GridEdit.SetCells(shape, edits.Values.ToList());
         raw = Lba2GridBackend.FromLba1Shape(raw, shape);
         bkg.SetStored(gridEntry, raw);
@@ -152,8 +225,9 @@ internal static class TempleOfBuDrive
         bkg.SetStored(0, header.Bytes);
         File.WriteAllBytes(bkgPath, bkg.ToBytes());
         log.Add($"The Temple of Bù's drive: scene 10's grid {gridNumber}{(sharers.Count > 0 ? $" (shared with scenes {string.Join(", ", sharers)})" : "")} -- " +
-                $"the door's hall and its corridor east raised a layer ({raised} floor cells), a doorway north from the hall, a bridge over the gap, a " +
-                $"doorway into the halls beyond, the bench in the turn east gone, the minecart's track floored over ({rails} cells): {edits.Count} cells");
+                $"the door's hall and its corridor east raised a layer ({raised} floor cells), the corridor three planks wide, the gap between the " +
+                $"top's two tracks floored, the minecart's track floored over ({rails} cells), each level's floor at the track's height ({levelled} cells): " +
+                $"{edits.Count} cells");
         return log;
     }
 }

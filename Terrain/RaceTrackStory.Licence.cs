@@ -179,7 +179,11 @@ internal static partial class RaceTrackStory
         if (!b.Store.SceneExists(TempleScene) || !b.Store.SceneExists(HangarScene)) { b.Log.Add("the Temple of Bú's drive left out: no scene 10 or no hangar"); return; }
         b.Edit(TempleScene, "the Temple of Bú driven through: the raised floor's actors and points raised, the car's door to the hangar by the stairs down", model =>
         {
-            int Up(int x, int y, int z) => TempleOfBuDrive.Raised(x / 512, z / 512) && y == (TempleOfBuDrive.OldFloor + 1) * 256 ? y + TempleOfBuDrive.Raise : y;
+            // (and on each level's floor laid a layer up -- TempleOfBuDrive.RaisedTops, read off the game's own grid)
+            var tops = TempleOfBuDrive.RaisedTops(b.GameDirectory);
+            int Up(int x, int y, int z) =>
+                (TempleOfBuDrive.Raised(x / 512, z / 512) && y == (TempleOfBuDrive.OldFloor + 1) * 256) ||
+                (tops.TryGetValue((x / 512, z / 512), out var top) && y == top) ? y + TempleOfBuDrive.Raise : y;
             var raised = 0;
             foreach (var a in model.Actors)
             {
@@ -192,11 +196,9 @@ internal static partial class RaceTrackStory
                 var y = Up(p.X, p.Y, p.Z);
                 if (y != p.Y) { model.TrackPoints[i] = p with { Y = y }; raised++; }
             }
-            // (the two figures before the hall's north wall -- cells x 12-13, z 54 -- three cells west: the car's way north to the new
-            // doorway runs between x 12 and 14, and stopped at them)
-            var moved = 0;
-            foreach (var a in model.Actors.Skip(1))
-                if (a.X / 512 is >= 12 and <= 13 && a.Z / 512 == 54 && a.Y == (TempleOfBuDrive.NewFloor + 1) * 256) { a.X -= 3 * 512; moved++; }
+            // (the two figures before the hall's north wall stay where the game has them: the car's way is east along the corridor and round
+            // the minecart's loop now, not north through a doorway of ours -- the user, 2026-11-23, "There is a complete path through the
+            // temple of Bu through to the spaceship area, the retail game takes it, which is why I asked you to remove your bridge")
             var down = model.Zones.FirstOrDefault(z => z.Type == 0 && z.Num == 11);
             if (down is null) { b.Log.Add("the Temple of Bú's car door left out: no stairs down to scene 11 in scene 10"); return _ => { }; }
             down.Info[4] = TempleToLower;
@@ -204,7 +206,7 @@ internal static partial class RaceTrackStory
             // where he was in it, x 0-1023 and z 0-1535 -- the hangar's hall round his arrival on foot)
             model.Zones.Add(new SceneZoneModel { Type = 0, Num = HangarScene, X0 = 18 * 512, X1 = 20 * 512 - 1, Y0 = (TempleOfBuDrive.NewFloor + 1) * 256, Y1 = (TempleOfBuDrive.NewFloor + 5) * 256,
                 Z0 = 19 * 512, Z1 = 22 * 512 - 1, Info = new[] { ArriveAt.X - 512, ArriveAt.Y, ArriveAt.Z - 768, 0, TempleCarDoor, 0, 0, 0 } });
-            b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor, {moved} figures moved out of the way north");
+            b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor");
             var helper = RaceTrackScenes.InvisibleHelper(2 * 512, (TempleOfBuDrive.NewFloor + 1) * 256, 56 * 512);
             var add = IslandBeatsA.Add(model, helper, $@"void comportement_0()
 {{
