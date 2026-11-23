@@ -242,14 +242,43 @@ invisible(1);
         });
     }
 
+    // The Desert's quay: the ferry's berth opposite the slope (the user, 2026-11-23: "On Desert Island let's have the ferry park opposite the
+    // slope to make driving onto it easier, we'll also need to move the grobo at the same time"). The slope comes up from the cobbles to the
+    // quay's walkway (1,360) from the east across z 14,700-16,700; the ferry was moored 6,000 further north (z 9,344), the car up the slope,
+    // north along the walkway and west at the gangway. Now its berth is 12 bricks (6,144) south, level with the slope's top: up the slope,
+    // over the walkway and straight on to its deck. Moved with it, by the same: the ferry's way in along x 9,616 and its berth (points 1, 2,
+    // 3, 5) and its way out (20); Mr. Paul's post, his place at the gangway and Twinsen's there (4, 6, 7) and Mr. Paul himself; the gangway
+    // (scenario zone 0) and the crossing's two cameras (zones 2 and 3, their targets in bricks). Its way in from the sea (0) and out (8) as
+    // they were.
+    private const int BerthShift = 12 * 512;
+    private static void ShiftBerth(SceneModel model)
+    {
+        foreach (var i in new[] { 1, 2, 3, 5, 20, 4, 6, 7 })
+            if (i < model.TrackPoints.Count) model.TrackPoints[i] = model.TrackPoints[i] with { Z = model.TrackPoints[i].Z + BerthShift };
+        foreach (var z in model.Zones)
+        {
+            if (!((z.Type == 2 && z.Num == 0) || (z.Type == 1 && z.Num is 2 or 3))) continue;
+            z.Z0 += BerthShift; z.Z1 += BerthShift;
+            if (z.Type == 1) z.Info[2] += BerthShift / 512;
+        }
+        if (model.Actors.ElementAtOrDefault(QuayFerryman) is { } paul) paul.Z += BerthShift;
+    }
+
     // The Desert's quay (65), from the Desert's story (its lines are the Desert's): the car ferry's deck (a deeper hull: the quay stands
     // higher), the ticket shown to Mr. Paul from the car and the crossing back to Citadel; and arriving from Citadel in the car, held till
     // docked, then driven off
     private static void CarFerryDesertQuay(Action<int, string, Func<SceneModel, Action<SceneScripts>>> edit, Func<SceneModel, SceneActorModel, string, Action<SceneScripts>> add,
         Func<DesertLine, int> say)
     {
+        // (the game's other scene of the same cube: its ferry at the same berth)
+        edit(AltDesertQuay, "the Desert's quay (the game's other scene of it): the ferry's berth opposite the slope", model =>
+        {
+            ShiftBerth(model);
+            return _ => { };
+        });
         edit(DesertQuay, "the car ferry at the Desert's quay: its deck in the hovercraft's place, the ticket shown to Mr. Paul from the car, driven aboard -- held, the bars, the crossing; from Citadel in the car, held till docked, then driven off", model =>
         {
+            ShiftBerth(model);
             var ferry = model.Actors.ElementAtOrDefault(DesertFerry) ?? throw new NotTheGames($"no ferry (actor {DesertFerry})");
             var deckEdit = add(model, Citadel.CitadelProps.Actor(Citadel.CitadelProps.CarFerryTall, ferry.X, ferry.Y, ferry.Z, ferry.Beta), "void comportement_0()\n{\n}\n");
             return scripts =>
