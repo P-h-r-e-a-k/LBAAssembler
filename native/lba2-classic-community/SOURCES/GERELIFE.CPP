@@ -2467,7 +2467,10 @@ HERCULE( HPrintf( "errno= %d: %s\n", errno, strerror(errno) ) ) ;
             //---------------------------------------------------------------------------
         case LM_RESTORE_HERO:
             SetComportement(SaveComportementHero);
-            InitBody(SaveBodyHero, NUM_PERSO);
+            // (his everyday clothes restored as his own body: the tunic's, which ChoiceHeroBody makes his everyday clothes again
+            // without the tunic -- a scene restores what another scene saved, or nothing saved yet, and the sewers under the
+            // Weather Wizard's tent, come into by its trapdoor, took the racing suit off him)
+            InitBody(SaveBodyHero == GEN_BODY_NORMAL ? GEN_BODY_TUNIQUE : SaveBodyHero, NUM_PERSO);
             break;
 
             //---------------------------------------------------------------------------
