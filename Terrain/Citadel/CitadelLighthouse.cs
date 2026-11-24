@@ -168,6 +168,10 @@ internal static class CitadelLighthouse
         int[] box = { (int)Math.Floor(all.Min(v => v.X)), (int)Math.Ceiling(all.Max(v => v.X)), (int)Math.Floor(all.Min(v => v.Y)), (int)Math.Ceiling(all.Max(v => v.Y)),
                       (int)Math.Floor(all.Min(v => v.Z)), (int)Math.Ceiling(all.Max(v => v.Z)) };
         for (var b = 0; b < 6; b++) BinaryPrimitives.WriteInt32LittleEndian(w.Header.AsSpan(8 + b * 4), box[b]);
+        // (cut at the engine's close plane, not its near one: the telescope's camera stands a few cells from the pair, and her head, nearest
+        // it, was cut away at the near plane -- AFF_OBJ.CPP MASK_OBJECT_CLOSE. The user, 2026-11-24: "Half of the cow's head isn't displaying
+        // cleanly when viewed through the telescope - it's invisible")
+        BinaryPrimitives.WriteInt32LittleEndian(w.Header, BinaryPrimitives.ReadInt32LittleEndian(w.Header) | Palace.BrickBuilding.CloseFlag);
         rosaPoints = nR;
         return w.Write();
     }
