@@ -3903,9 +3903,12 @@ stop();
                 double x = start.X - start.DirX * back - start.DirZ * aside, z = start.Z - start.DirZ * back + start.DirX * aside;
                 return OffRoad(p.Town, x, z, 1, 24, (px, pz) => ClearOfWizard(px, pz, 2.5)) is { } o && Facing(o, start.X, start.Z) is var f && InCube(f) ? f : null;
             }
+            int heraldIndex = -1, paulIndex = -1;
+            (double X, double Z, double Y, int Beta)? heraldSpot = null, paulSpot = null;
             if (herald is not null && Near(3, 0) is { } h)
             {
                 Place(herald, model, h);
+                (heraldIndex, heraldSpot) = (model.Actors.Count, h);
                 p.Log.Add($"the herald at cell ({h.X:0.#}, {h.Z:0.#}), {h.Y:0}");
                 edits.Add(p.Add(model, herald, Talker("2 == chapter()", $@"            if (0 == var_game({Slate}))
             {{
@@ -3934,13 +3937,15 @@ stop();
             if (paul is not null && (heraldAt is { } nextTo ? Beside2(nextTo) : Near(3, 2.5)) is { } pa)
             {
                 Place(paul, model, pa);
+                (paulIndex, paulSpot) = (model.Actors.Count, pa);
                 p.Log.Add($"Mr. Paul at cell ({pa.X:0.#}, {pa.Z:0.#}), {pa.Y:0}");
                 // (the entry, twenty kashes, paid to him: asked when Twinsen has them, else to come back with them; paid, he's on the grid --
                 // the start line's gate, ENTRY_PAID, open; a lost race runs again without paying twice -- the user, 2026-11-16)
                 // (there till the race is won: then back at the port, the game's own Mr. Paul on the quay -- the user, 2026-11-18, "After Twinsen
                 // wins the race on Citadel island the other racers should go back to their other locations ... Mr. Paul the Port"; their cars
                 // gone from the grid too, RACEMOD.CPP OpponentAway. Right after the win, still here: off back to the port, he says)
-                edits.Add(p.Add(model, paul, Talker($"2 == chapter() && 0 == var_game({WonVar})", $@"            if (0 != var_game({WonVar}))
+                // (and till he's given the prize -- won, he gives it here, seen: PrizeAtLine)
+                edits.Add(p.Add(model, paul, Talker($"2 == chapter() && 2 > var_game({WonVar})", $@"            if (0 != var_game({WonVar}))
             {{
                 message({CitadelLaterId(p.Say, CitadelLater.PaulBackToPort)});
             }}
@@ -3972,7 +3977,106 @@ stop();
             }}")));
             }
             if (edits.Count == 0) throw new NotTheGames("no room by the start line");
+            edits.Add(PrizeAtLine(p, model, start, heraldIndex, heraldSpot, paulIndex, paulSpot));
             return scripts => { foreach (var e in edits) e(scripts); };
         });
+    }
+
+    // The town circuit won: the prize given at the start line by those who give it, seen -- Twinsen, out of his car here, walked up to Mr.
+    // Paul and the herald (the cut scene's bars across), their words and the purse, the trophy and the slate, and his again. Anywhere else
+    // on the island it waits for the line (RaceTrackStory's prize helper gives it only where neither stands here). The user, 2026-11-24:
+    // "After the Citadel race (citabau.ile) Twinsen has somebody talking to him at the end of the race, but they're not on screen. Let's see
+    // if we can walk Twinsen over to who ever is talking and make sure they're clearly on screen before the dialogue starts". His walk is
+    // his track's labels PrizeWalk on (past the game's 0-8 and 60 here); a walk that hasn't got there in PrizeTimeout frames (something in
+    // his way) puts him there.
+    private const int PrizeWalk = 250, PrizeTick = 70, PrizeWait = 71, PrizeTimeout = 40;   // (PrizeWait counts tens of frames)
+    private const double PrizeBack = 2.2;
+    private static Action<SceneScripts> PrizeAtLine(StoryParts p, SceneModel model, (double X, double Z, double Y, double DirX, double DirZ) start,
+        int heraldIndex, (double X, double Z, double Y, int Beta)? heraldSpot, int paulIndex, (double X, double Z, double Y, int Beta)? paulSpot)
+    {
+        // (who says what: Mr. Paul the purse and the trophy, the herald the slate and Twinsen's lead -- either, the other's lines too)
+        int paulSays = paulIndex >= 0 ? paulIndex : heraldIndex, heraldSays = heraldIndex >= 0 ? heraldIndex : paulIndex;
+        var spots = new[] { heraldSpot, paulSpot }.Where(s => s is not null).Select(s => s!.Value).ToList();
+        double mx = spots.Average(s => s.X), mz = spots.Average(s => s.Z), my = spots.Average(s => s.Y);
+        // (beside them as the camera sees them, not before them: the island's camera looks along -x -z, so a step along (1, -1) or (-1, 1)
+        // is across the screen -- the side nearer the start line. Before them, he stood between the camera and Mr. Paul)
+        double side = (start.X - mx) - (start.Z - mz) >= 0 ? 1 : -1;
+        double tx = mx + side * PrizeBack / Math.Sqrt(2), tz = mz - side * PrizeBack / Math.Sqrt(2);
+        var talk = model.TrackPoints.Count;
+        model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(tx, model.CubeX), (int)Math.Round(p.Town.GroundAfter?.Invoke(tx, tz) ?? my),
+            RaceTrackScenes.CubeLocal(tz, model.CubeY)));
+        var beta = RaceTrackMath.Turn(Math.Atan2(mx - tx, mz - tz));
+        p.Log.Add($"the town circuit's prize at its start line: Twinsen walked to cell ({tx:0.#}, {tz:0.#}) before {(paulIndex >= 0 ? "Mr. Paul" : "")}{(paulIndex >= 0 && heraldIndex >= 0 ? " and " : "")}{(heraldIndex >= 0 ? "the herald" : "")}");
+        var controller = RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2);
+        var life = p.Add(model, controller, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if ({Driving} == comportement_hero() && 0 == var_game({HasCar}))
+    {{
+        set_var_game({HasCar}, 1);
+    }}
+    if (1 == var_game({WonVar}) && {Driving} != comportement_hero())
+    {{
+        cinema_mode(1);
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj(0, label_{PrizeWalk});
+        set_var_cube({PrizeTick}, 0);
+        set_var_cube({PrizeWait}, 0);
+        set_comportement(comportement_2);
+    }}
+}}
+
+void comportement_2()
+{{
+    if ({PrizeWalk + 1} == l_track_obj(0) || {PrizeWalk + 3} == l_track_obj(0))
+    {{
+        set_comportement(comportement_3);
+    }}
+    else
+    {{
+        add_var_cube({PrizeTick}, 1);
+        if (10 < var_cube({PrizeTick}))
+        {{
+            set_var_cube({PrizeTick}, 0);
+            add_var_cube({PrizeWait}, 1);
+        }}
+        if ({PrizeTimeout} == var_cube({PrizeWait}))
+        {{
+            set_track_obj(0, label_{PrizeWalk + 2});
+        }}
+    }}
+}}
+
+void comportement_3()
+{{
+    message_obj({paulSays}, {p.Said(Line.PaulTicket)});
+    add_gold_pieces({Purse});
+    message_obj({paulSays}, {p.Say(ChapterLine.PaulTrophy)});
+    set_var_game({ErrandSlot}, {ErrandTrophy});
+    found_object({ErrandSlot});
+    if (0 == var_game({Slate}))
+    {{
+        message_obj({heraldSays}, {p.Say(ChapterLine.HeraldSlate)});
+        found_object({Slate});
+        set_var_game({Slate}, 1);
+    }}
+    message_obj({heraldSays}, {p.Say(ChapterLine.HeraldLeads)});
+    set_var_game({WonVar}, 2);
+    cinema_mode(0);
+    set_dir_obj(0, MOVE_MANUAL);
+    set_comportement(comportement_1);
+}}
+");
+        return scripts =>
+        {
+            life(scripts);
+            scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() +
+                $"\n\nlabel({PrizeWalk});\nanim(1);\ngoto_point({talk});\nanim(0);\nbeta({beta});\n\nlabel({PrizeWalk + 1});\nstop();\n" +
+                $"\nlabel({PrizeWalk + 2});\npos_point({talk});\nbeta({beta});\nanim(0);\n\nlabel({PrizeWalk + 3});\nstop();\n");
+        };
     }
 }

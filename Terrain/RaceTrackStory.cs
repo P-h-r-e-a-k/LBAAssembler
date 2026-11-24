@@ -1332,24 +1332,18 @@ void comportement_1()
         // wasn't taken before the race (the user, 2026-11-16: "Let's have Twinsen given the magic slate at the end of the Citadel 2 race if
         // he doesn't pick it up before. For winning Citadel 2 he gets an island winners trophy that he has to present to be allowed to enter
         // the desert race")
+        // (2026-11-24: the prize is given at the town circuit's start line, by Mr. Paul and the herald, seen -- Twinsen walked up to them:
+        // RaceTrackStory.Chapters PrizeAtLine. Here, everywhere else on the island, only his car noted; the prize spoken from nowhere only
+        // with no start line to give it at)
+        var prizeHere = townScenes.StartScene < 0;
         var paulColour = paul?.CoulObj ?? 4;
         for (var scene = RaceTrackIsland.Citadel.FirstScene; scene <= RaceTrackIsland.Citadel.LastScene; scene++)
         {
-            if (!store.SceneExists(scene)) continue;
-            Edit(scene, "Mr. Paul hands over his prize, the purse and the island winner's trophy, after a win on the town circuit; Twinsen driving here means he has his car", model =>
+            if (!store.SceneExists(scene) || scene == townScenes.StartScene) continue;
+            Edit(scene, prizeHere ? "Mr. Paul hands over his prize, the purse and the island winner's trophy, after a win on the town circuit; Twinsen driving here means he has his car" : "Twinsen driving here means he has his car (the town circuit's prize given at its start line)", model =>
             {
                 var prize = RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, paulColour);
-                return Add(model, prize, $@"void comportement_0()
-{{
-    set_comportement(comportement_1);
-}}
-
-void comportement_1()
-{{
-    if ({Driving} == comportement_hero() && 0 == var_game({HasCar}))
-    {{
-        set_var_game({HasCar}, 1);
-    }}
+                var given = prizeHere ? $@"
     if (1 == var_game({WonVar}) && {Driving} != comportement_hero())
     {{
         message({Id(Line.PaulTicket)});
@@ -1365,7 +1359,19 @@ void comportement_1()
         }}
         message({Say(ChapterLine.HeraldLeads)});
         set_var_game({WonVar}, 2);
+    }}" : "";
+                return Add(model, prize, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if ({Driving} == comportement_hero() && 0 == var_game({HasCar}))
+    {{
+        set_var_game({HasCar}, 1);
     }}
+{given}
 }}
 ");
             });
