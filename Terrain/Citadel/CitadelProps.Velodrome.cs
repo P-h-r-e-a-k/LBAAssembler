@@ -12,9 +12,7 @@ namespace LBAAssembler.Terrain.Citadel;
 // of them a rider, the cranks a turn's part further round each: the engine shows them in turn as the rider goes round (RACEMOD.CPP
 // VeloFrame), so the legs pedal. Along z (the front +z), the wheels on y = 0: leaned into the banking by the engine, about z.
 //
-// Their bodies are an entity's of their own (InstallVelodrome: a new one at the entity table's end, like entity 17), numbered from 0:
-// entity 17's numbers are all but used up, and builds of different islands add to it with numbers of their own -- the Imperial Hotel's
-// are 229-244, and a second user of them overwrites the first's.
+// Their bodies are an entity's of their own (InstallVelodrome, CitadelProps.InstallOwn), numbered from 0.
 internal static partial class CitadelProps
 {
     public const int RiderFirst = 0, RiderPhases = 6, RiderCount = 4, TeamTentRed = RiderCount * RiderPhases, TeamTentBlue = TeamTentRed + 1;
@@ -29,8 +27,10 @@ internal static partial class CitadelProps
     private const int KitRed = 4 * 16, KitBlue = 12 * 16, KitYellow = 6 * 16, KitWhite = 3 * 16, KitBlack = 3 * 16;
     // (the black's light: the greys' ramp from its dark end, kept to its first few shades)
     private const float KitBlackLight = 0.3f;
-    // (the tents' white canvas: up the greys' ramp from its start, the light taking it the rest of the way -- from the start it showed dark)
-    private const int Canvas = KitWhite + 5;
+    // (the tents' roof panels: up their ramps -- the canvas near white, the team's colour bright; from a ramp's start the roof showed dark --
+    // each panel's points taking half the light, so a colour up its ramp stays in it)
+    private const int Canvas = KitWhite + 10, RoofUp = 6;
+    private const float RoofLight = 0.5f;
     private static readonly (int Character, int Jersey, int Trim, string Name)[] RiderKits =
     {
         (120, KitRed, KitWhite, "a Citadel Comets rider"),
@@ -273,17 +273,23 @@ internal static partial class CitadelProps
             for (var s = 0; s < 3; s++)
             {
                 Vector3 a0 = Vector3.Lerp(a, b, s / 3f), a1 = Vector3.Lerp(a, b, (s + 1) / 3f);
+                m.Light = RoofLight;
                 var hs = new[] { m.P(0, a0), m.P(0, a1), m.P(0, peak) };
-                m.Out(hs, s == 1 ? colour : Canvas, inside);
-                m.In(new[] { m.P(0, a0), m.P(0, a1), m.P(0, peak) }, s == 1 ? colour : Canvas, inside - new Vector3(0, 600, 0));
+                m.Light = 1f;
+                // (its outside only: the underside, a second face on the same points, drawn over it on OpenGL and showed the roof dark)
+                m.Out(hs, s == 1 ? colour + RoofUp : Canvas, inside);
             }
             // the valance: a band hanging from the eave
+            // (its outside only, as the roof's, up its ramp: two-sided it showed its dark inside on OpenGL)
+            var middle = new Vector3(0, Eave - Valance / 2, 0);
+            m.Light = RoofLight;
             var va = new[] { m.P(0, a), m.P(0, b), m.P(0, b - new Vector3(0, Valance, 0)), m.P(0, a - new Vector3(0, Valance, 0)) };
-            m.Both(va, colour);
+            m.Out(va, colour + RoofUp, middle);
             // and its second colour's band along its foot
             Vector3 Proud(Vector3 v, float down) => new(v.X * 1.012f, v.Y - down, v.Z * 1.012f);
             var vb = new[] { m.P(0, Proud(a, Valance - 40)), m.P(0, Proud(b, Valance - 40)), m.P(0, Proud(b, Valance + 5)), m.P(0, Proud(a, Valance + 5)) };
-            m.Both(vb, stripe);
+            m.Out(vb, stripe + RoofUp, middle);
+            m.Light = 1f;
         }
         return m.ToBody(header);
     }

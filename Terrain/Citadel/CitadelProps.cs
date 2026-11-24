@@ -290,27 +290,6 @@ internal static partial class CitadelProps
         return new() { $"chapter 2's props, entity {Prop}'s bodies: {string.Join(", ", made)}" };
     }
 
-    // More props made elsewhere (from the game folder's own bodies -- StellaPosters): appended to BODY.HQR and given to entity 17 as above
-    public static List<string> InstallMore(string gameDirectory, string what, IEnumerable<(int Generic, string Name, Func<byte[], Body> Build)> more)
-    {
-        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
-        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
-        var header = Body.Read(HqrArchive.Open(bodyPath).Read(HeaderBody), 2, allowStatic: true).Header;
-        if (Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == Prop) is null)
-            return new() { $"WARNING: {what}: no prop entity {Prop} -- not made" };
-        var table = HqrArchive.Open(ressPath).Read(44);
-        var made = new List<string>();
-        foreach (var (generic, name, build) in more)
-        {
-            var count = HqrArchive.CountEntries(bodyPath);
-            File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(build(header).Write())));
-            table = BoxOf(generic) is { } box ? WithBodyBox(table, Prop, generic, count, box) : RaceTrackBaldinoCar.WithBody(table, Prop, generic, count);
-            made.Add($"{name} BODY.HQR {count} (body {generic})");
-        }
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        return new() { $"{what}, entity {Prop}'s bodies: {string.Join(", ", made)}" };
-    }
-
     // A feature's props on an entity of their own (the user, 2026-11-24: "let's start with more entities"): entity 17's body numbers are
     // all but used up, and builds of different islands gave it bodies under numbers of their own -- the Imperial Hotel's 229-244 overwrote
     // the velodrome's. A new entity at the entity table's end, like entity 17 -- or the one this build gave the feature already, known by its

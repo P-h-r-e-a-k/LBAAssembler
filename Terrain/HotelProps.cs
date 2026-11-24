@@ -7,7 +7,7 @@ namespace LBAAssembler.Terrain;
 // some bedrooms for Twinsen to spend the night in ... model a lift in the wall the sofa is in front of ... 3 different rooms ... the luxury
 // room ... Super large, 4 poster bed, as grand as we can make it"; "Do some research before you model these" -- the grand hotels' rooms,
 // corridors and old lifts, E:\dump\TEMP\nov22\research_hotel_skate.md). Each body stands on the floor at its origin, its front towards +z
-// (an actor's beta 0 looks along +z); a wall piece's back on z 0. Entity 17's bodies (CitadelProps.InstallMore), generics 229-244:
+// (an actor's beta 0 looks along +z); a wall piece's back on z 0. Bodies of an entity of the hotel's own (CitadelProps.InstallOwn), generics 229-251:
 //   - the lift's front (LiftFront, LiftOpen): a marble surround, two brass doors with a sunburst in relief -- slid apart, the car's red
 //     lacquer, its mirror and brass rail between them -- the floor dial over the lintel (a half disc, its arrow), the call button, a lantern
 //     each side;
