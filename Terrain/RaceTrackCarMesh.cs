@@ -315,11 +315,11 @@ internal sealed class CarDriver
     public const float SolidLineThickness = 14;
     public delegate (int Colour, float Light, int Material)? Painter(Face face, int[] bones);
 
-    // The posed driver's kept bones added to the car's bone 13, through `place` (the body's coordinates to the car's); polygons wholly below
+    // The posed driver's kept bones added to the car's bone 13 (or `bone`), through `place` (the body's coordinates to the car's); polygons wholly below
     // `rim` (inside the car) are left out, and with `cut` lines and spheres below it too. Returns the car's point for any of the body's
     // points (made when the car has none yet). `solid`: the lines and spheres made polygons (CarMesh.SolidLine, SolidSphere -- a driver
     // sat inside a cab, seen through it on OpenGL otherwise).
-    public Func<int, int> Seat(CarMesh m, HashSet<int> keep, Func<Vector3, Vector3> place, float rim, float scale, Painter? paint = null, bool cut = false, bool solid = false)
+    public Func<int, int> Seat(CarMesh m, HashSet<int> keep, Func<Vector3, Vector3> place, float rim, float scale, Painter? paint = null, bool cut = false, bool solid = false, int bone = 13)
     {
         bool Inside(int p) => cut && place(posed[p]).Y < rim - 20;
         if (body.Faces.Any(f => f.Texture is not null)) m.Textures = body.Textures;
@@ -329,7 +329,7 @@ internal sealed class CarDriver
             if (light < 0) light = body.LightScale is { } own ? own[i] : 1;
             if (map.TryGetValue((i, light), out var h)) return h;
             var before = m.Light; m.Light = light;
-            map[(i, light)] = h = m.P(13, place(posed[i]));
+            map[(i, light)] = h = m.P(bone, place(posed[i]));
             m.Light = before;
             return h;
         }

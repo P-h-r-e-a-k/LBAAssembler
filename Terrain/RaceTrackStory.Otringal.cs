@@ -55,6 +55,8 @@ internal static partial class RaceTrackStory
         MarshalHeld, MarshalNight, ReceptionOffer, RoomClassic, RoomJunior, RoomSuite, ReceptionNoRoom, ReceptionKey, ReceptionShort, ReceptionDay, ReceptionMorning, TwinsenNoKey, RoomLocked, TwinsenSleep, WakeClassic, WakeJunior, WakeSuite, TwinsenAskCoil, SellerMaybe, TwinsenWhatFavour, SellerLetter, SellerWaiting, TwinsenGiveLetter, SingerReply, SingerWaiting, SellerReplyRead, SellerAsk, SellerSold, SellerShort, SellerAfter, RickCoil, JohnnyCoil, LyraCoil, ReceptionCoil,
         // (the singer on the stage: not now -- the letter in the back room, Rick's office: 2026-11-23)
         SingerOnStage,
+        // (the hotel's guards in chapter 5: a racer is a guest -- RaceTrackStory.OtringalNight, 2026-11-24)
+        GuardGuest,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -399,21 +401,21 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Your car's back from the palace, Twinsen -- but its ignition coil isn't. Somebody had the stewards' garage open in the night. No coil, no race.",
-            "Ta voiture est revenue du palais, Twinsen -- mais pas sa bobine d'allumage. Quelqu'un a ouvert le garage des commissaires cette nuit. Pas de bobine, pas de course.",
-            "Dein Auto ist aus dem Palast zurück, Twinsen -- aber seine Zündspule nicht. Jemand hat in der Nacht die Garage der Kommissare geöffnet. Keine Spule, kein Rennen.",
-            "Tu coche ha vuelto del palacio, Twinsen, pero su bobina de encendido no. Alguien abrió el garaje de los comisarios por la noche. Sin bobina no hay carrera.",
-            "La tua auto è tornata dal palazzo, Twinsen, ma la sua bobina d'accensione no. Qualcuno ha aperto il garage dei commissari stanotte. Niente bobina, niente gara.",
-            "O teu carro voltou do palácio, Twinsen -- mas a bobina de ignição não. Alguém abriu a garagem dos comissários durante a noite. Sem bobina, não há corrida.",
+            "Your car's back from the palace, Twinsen -- it's waiting in the pit lane, but without its ignition coil. Somebody had the stewards' garage open in the night. The others are already on the grid.",
+            "Ta voiture est revenue du palais, Twinsen -- elle t'attend dans la voie des stands, mais sans sa bobine d'allumage. Quelqu'un a ouvert le garage des commissaires cette nuit. Les autres sont déjà sur la grille.",
+            "Dein Auto ist aus dem Palast zurück, Twinsen -- es wartet in der Boxengasse, aber ohne seine Zündspule. Jemand hat in der Nacht die Garage der Kommissare geöffnet. Die anderen stehen schon in der Startaufstellung.",
+            "Tu coche ha vuelto del palacio, Twinsen: te espera en la calle de boxes, pero sin su bobina de encendido. Alguien abrió el garaje de los comisarios por la noche. Los demás ya están en la parrilla.",
+            "La tua auto è tornata dal palazzo, Twinsen: ti aspetta nella corsia dei box, ma senza la bobina d'accensione. Qualcuno ha aperto il garage dei commissari stanotte. Gli altri sono già in griglia.",
+            "O teu carro voltou do palácio, Twinsen -- está à tua espera na via das boxes, mas sem a bobina de ignição. Alguém abriu a garagem dos comissários durante a noite. Os outros já estão na grelha.",
         },
         new[]
         {
-            "No ignition coil, no race, Twinsen. Ask the gazogem seller in the Lower City -- his stall is open all night, he sees everything.",
-            "Pas de bobine d'allumage, pas de course, Twinsen. Demande au vendeur de gazogem de la Ville Basse -- son étal est ouvert toute la nuit, il voit tout.",
-            "Keine Zündspule, kein Rennen, Twinsen. Frag den Gazogem-Verkäufer in der Unterstadt -- sein Stand hat die ganze Nacht offen, er sieht alles.",
-            "Sin bobina de encendido no hay carrera, Twinsen. Pregunta al vendedor de gazogem de la Ciudad Baja: su puesto abre toda la noche, lo ve todo.",
-            "Niente bobina d'accensione, niente gara, Twinsen. Chiedi al venditore di gazogem della Città Bassa: il suo banco è aperto tutta la notte, vede tutto.",
-            "Sem bobina de ignição, não há corrida, Twinsen. Pergunta ao vendedor de gazogem da Cidade Baixa -- a banca dele está aberta a noite toda, ele vê tudo.",
+            "No ignition coil, no race, Twinsen -- and the race starts in an hour. Ask the gazogem seller in the Lower City; his stall is open all night, he sees everything.",
+            "Pas de bobine d'allumage, pas de course, Twinsen -- et la course part dans une heure. Demande au vendeur de gazogem de la Ville Basse : son étal est ouvert toute la nuit, il voit tout.",
+            "Keine Zündspule, kein Rennen, Twinsen -- und das Rennen startet in einer Stunde. Frag den Gazogem-Verkäufer in der Unterstadt: Sein Stand hat die ganze Nacht offen, er sieht alles.",
+            "Sin bobina de encendido no hay carrera, Twinsen, y la carrera empieza dentro de una hora. Pregunta al vendedor de gazogem de la Ciudad Baja: su puesto abre toda la noche, lo ve todo.",
+            "Niente bobina d'accensione, niente gara, Twinsen, e la gara parte tra un'ora. Chiedi al venditore di gazogem della Città Bassa: il suo banco è aperto tutta la notte, vede tutto.",
+            "Sem bobina de ignição, não há corrida, Twinsen -- e a corrida começa daqui a uma hora. Pergunta ao vendedor de gazogem da Cidade Baixa: a banca dele está aberta a noite toda, ele vê tudo.",
         },
         new[]
         {
@@ -435,12 +437,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "The coil's back where it belongs. To the grid, Twinsen -- and watch that black car.",
-            "La bobine est de retour à sa place. En grille, Twinsen -- et méfie-toi de cette voiture noire.",
-            "Die Zündspule ist wieder, wo sie hingehört. Ab in die Startaufstellung, Twinsen -- und pass auf das schwarze Auto auf.",
-            "La bobina vuelve a estar en su sitio. A la parrilla, Twinsen, y ojo con ese coche negro.",
-            "La bobina è tornata al suo posto. In griglia, Twinsen, e occhio a quell'auto nera.",
-            "A bobina voltou ao seu lugar. Para a grelha, Twinsen -- e cuidado com aquele carro preto.",
+            "The coil's back where it belongs. You start from the pit lane, Twinsen -- and watch that black car.",
+            "La bobine est de retour à sa place. Tu pars de la voie des stands, Twinsen -- et méfie-toi de cette voiture noire.",
+            "Die Zündspule ist wieder, wo sie hingehört. Du startest aus der Boxengasse, Twinsen -- und pass auf das schwarze Auto auf.",
+            "La bobina vuelve a estar en su sitio. Sales desde la calle de boxes, Twinsen, y ojo con ese coche negro.",
+            "La bobina è tornata al suo posto. Parti dalla corsia dei box, Twinsen, e occhio a quell'auto nera.",
+            "A bobina voltou ao seu lugar. Partes da via das boxes, Twinsen -- e cuidado com aquele carro preto.",
         },
         new[]
         {
@@ -765,6 +767,15 @@ internal static partial class RaceTrackStory
             "Ahora no, cariño, ¡estoy actuando! Espérame en la trastienda.",
             "Non adesso, tesoro, sono in scena! Aspettami nel retro.",
             "Agora não, querido, estou em palco! Espera por mim lá atrás.",
+        },
+        new[]
+        {
+            "Welcome to the Imperial Hotel, sir. For a room, the reception's by the lift.",
+            "Bienvenue à l'Hôtel Impérial, monsieur. Pour une chambre, la réception est près de l'ascenseur.",
+            "Willkommen im Kaiserlichen Hotel, der Herr. Zimmer gibt es an der Rezeption beim Aufzug.",
+            "Bienvenido al Hotel Imperial, señor. Para una habitación, la recepción está junto al ascensor.",
+            "Benvenuto all'Hotel Imperiale, signore. Per una camera, la reception è vicino all'ascensore.",
+            "Bem-vindo ao Hotel Imperial, senhor. Para um quarto, a receção é junto ao elevador.",
         },
     };
 

@@ -1,3 +1,4 @@
+using System.IO;
 using LBAAssembler.LbaScript;
 using LBAAssembler.Scenes;
 
@@ -104,6 +105,16 @@ internal static partial class RaceTrackStory
     // 2026-11-09/11: "the only thing to work on for Otringal is being able to talk to Lyra so we don't have a softlock": the steward sells
     // no Travel Token till Lyra has told of the fee, Q_FEE 1. From the pool's edge: LyraPoolReach)
     private const int LyraPoolReach = 3200;
+    // A speaker's bubble put at a place of its own, from the actor's (BUBBLES.TXT in the game folder, a line a speaker: scene, actor, the
+    // place's x, y and z from the actor's -- RACEMOD.CPP RaceMod_BulleAt): the line for that scene's actor written again, the others kept
+    internal static void SpeechBubbleAt(string gameDirectory, int scene, int actor, (int X, int Y, int Z) at)
+    {
+        var path = Path.Combine(gameDirectory, "BUBBLES.TXT");
+        var lines = File.Exists(path) ? File.ReadAllLines(path).Where(l => !l.StartsWith($"{scene} {actor} ", StringComparison.Ordinal)).ToList() : new List<string>();
+        lines.Add($"{scene} {actor} {at.X} {at.Y} {at.Z}");
+        File.WriteAllLines(path, lines);
+    }
+
     private static void LyraPoolScore(IslandBeatsA b, string when, int nine, int eight, string talk)
     {
         if (!b.Store.SceneExists(HotelScene)) { b.Log.Add($"Lyra by the pool left out: no Imperial Hotel (scene {HotelScene})"); return; }
@@ -134,6 +145,9 @@ internal static partial class RaceTrackStory
             // The lounger's own bricks stop him at it. Her colour and armour were in the comment above, never set: her armour 1)
             lyra.CoulObj = 9; lyra.Armor = RaceTrackStory.WalkOverArmour;
             var index = model.Actors.Count;
+            // (her speech bubble at her head as she lies -- the game puts it over her feet at her box's top, standing: well above and
+            // beside her, the user, 2026-11-24: "Lyra's speech bubble is a little far from her head")
+            SpeechBubbleAt(b.GameDirectory, HotelScene, index, Temple.TempleMarshal.LieHeadAt);
             // (her talking animation her lying one: the engine plays a speaker's set_anim_dial animation while she speaks -- by default the
             // talking one, standing, and with none of her own there the standing one -- then puts her back: talked to, she stood up through
             // the lounger and slid back, the user, 2026-11-21: "causes her to move and rubber band back ... causing her to stand through the

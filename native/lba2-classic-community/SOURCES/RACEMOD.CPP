@@ -642,6 +642,15 @@ static int s_nbPits = 0;
 // pit_hidden=1: the opponents out of sight while they wait -- qualifying, or before the grid forms -- in the pit lane's place: the Desert's
 // racers wait in their garage tent (the story's), and come out onto the grid (the user, 2026-11-13)
 static int s_pitHidden = 0;
+// pit_start=<var> <least> <below> (2026-11-24): while the variable is in [least, below) -- Otringal's race day, its ignition coil gone and
+// then got back -- Twinsen's car waits in the pit lane (car_held= gives it back on the first pit spot) and the others on the grid from the
+// moment the day's race is waiting (PitGridFrame); the grid formed as he gets into his car, they on it and he where he is: he starts from the
+// pit lane (the user: "let's have Twinsen's car stuck in the pitlane as it's not working, and all the other cars lined up on the grid ...
+// When Twinsen fixes his car he should start from the pitlane instead")
+static int s_pitStartVar = -1, s_pitStartLeast = 0, s_pitStartBelow = 0, s_pitGridSet = 0;
+static int PitStart(void) {
+    return s_pitStartVar >= 0 && s_pitStartVar < MAX_VARS_GAME && ListVarGame[s_pitStartVar] >= s_pitStartLeast && ListVarGame[s_pitStartVar] < s_pitStartBelow;
+}
 enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
@@ -5020,6 +5029,8 @@ static void Load(const char *path, int carOnly = 0) {
             T_RACE_SPOT *g = &s_spots[s_nbSpots];
             if (s_nbSpots < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbSpots++;
         } else if (!strcmp(key, "pit_hidden")) { s_pitHidden = atoi(v) != 0;
+        } else if (!strcmp(key, "pit_start")) {
+            if (sscanf(v, "%d %d %d", &s_pitStartVar, &s_pitStartLeast, &s_pitStartBelow) != 3) s_pitStartVar = -1;
         } else if (!strcmp(key, "pit")) {
             T_RACE_SPOT *g = &s_pits[s_nbPits];
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
@@ -7218,7 +7229,9 @@ static void CarHeld(void) {
         return;
     }
     if (ptb->Cube != s_heldScene) return;
-    if (s_heldCube >= 0) { ptb->Cube = s_heldCube; ptb->X = s_heldX; ptb->Y = s_heldY; ptb->Z = s_heldZ; ptb->Beta = s_heldBeta; }
+    const int pit = PitStart() && s_nbPits ? CubeScene(s_pits[0].CubeX, s_pits[0].CubeZ) : -1;
+    if (pit >= 0) { ptb->Cube = pit; ptb->X = s_pits[0].X; ptb->Y = s_pits[0].Y; ptb->Z = s_pits[0].Z; ptb->Beta = s_pits[0].Beta; }
+    else if (s_heldCube >= 0) { ptb->Cube = s_heldCube; ptb->X = s_heldX; ptb->Y = s_heldY; ptb->Z = s_heldZ; ptb->Beta = s_heldBeta; }
     else if (s_car.HasLine && CubeScene(s_car.LineCubeX, s_car.LineCubeZ) >= 0) {
         ptb->Cube = CubeScene(s_car.LineCubeX, s_car.LineCubeZ);
         ptb->X = (s_car.LineX0 + s_car.LineX1) / 2; ptb->Z = (s_car.LineZ0 + s_car.LineZ1) / 2;
@@ -7231,7 +7244,7 @@ static void CarHeld(void) {
         ClearRealAngle(car);
     }
     Log_Info("[racemod] car_held: variable %d moved on -- the car back in scene %d at (%d,%d,%d)%s", s_heldVar, (int)ptb->Cube, (int)ptb->X, (int)ptb->Y, (int)ptb->Z,
-             s_heldCube >= 0 ? "" : " (the start line: where it was taken from not known)");
+             pit >= 0 ? " (pit_start=: the pit lane's first spot)" : s_heldCube >= 0 ? "" : " (the start line: where it was taken from not known)");
     s_heldCube = -1;
 }
 
@@ -9075,7 +9088,7 @@ static void QualifyingArrival(int wrongWay, S32 now) {
 // up -- the user, 2026-11-14, the Desert's "other racers started from the pitlane instead of forming up on the grid")
 static int s_gridForming = 0;
 static int OpponentAway(const T_RACE_OPPONENT *o) {
-    if (s_pitHidden && !s_gridForming && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
+    if (s_pitHidden && !s_gridForming && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING) && !PitStart()) return 1;
     // (disqualified from a story race lost, rerun=: off the grid from the next race on -- the race just over keeps its car where it stopped)
     if (!s_place && Disqualified((int)(o - s_opp))) return 1;
     // (a race won already, once_won=: its racers gone home -- the user, 2026-11-18, "After Twinsen wins the race on Citadel island the other
@@ -9090,7 +9103,7 @@ static int OpponentAway(const T_RACE_OPPONENT *o) {
 static void FormGrid(S32 now) {
     s_nbOrder = 0;
     s_order[s_nbOrder] = -1;
-    s_orderTime[s_nbOrder++] = s_qualifying ? s_qualifyTime : s_gridBack ? RACE_GRID_BACK : 0;
+    s_orderTime[s_nbOrder++] = (PitStart() || (!s_qualifying && s_gridBack)) ? RACE_GRID_BACK : s_qualifying ? s_qualifyTime : 0;
     s_gridForming = 1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
         if (s_opp[n].Count && s_opp[n].Scenes && !OpponentAway(&s_opp[n])) { s_order[s_nbOrder] = n; s_orderTime[s_nbOrder++] = s_opp[n].QualTime; }
@@ -9102,7 +9115,8 @@ static void FormGrid(S32 now) {
         }
     for (int i = 0; i < s_nbOrder; i++) {
         const T_RACE_SPOT *spot = &s_spots[i < s_nbSpots ? i : s_nbSpots - 1];
-        if (s_order[i] < 0) PlayerOnSpot(spot);
+        // (pit_start=: he starts where he is, in the pit lane -- last in the order, the others on the grid from pole)
+        if (s_order[i] < 0) { if (!PitStart()) PlayerOnSpot(spot); }
         else OnSpot(&s_opp[s_order[i]], spot);
     }
     s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0; s_heldAt = 0; s_broken = 0;
@@ -9115,7 +9129,8 @@ static void FormGrid(S32 now) {
     char text[512];
     int used = snprintf(text, sizeof(text), "[racemod] grid:");
     for (int i = 0; i < s_nbOrder && used < (int)sizeof(text); i++) {
-        if (s_order[i] < 0 && s_orderTime[i] == RACE_GRID_BACK) used += snprintf(text + used, sizeof(text) - used, " %d Twinsen (no qualifying: at the back);", i + 1);
+        if (s_order[i] < 0 && PitStart()) used += snprintf(text + used, sizeof(text) - used, " %d Twinsen (from the pit lane);", i + 1);
+        else if (s_order[i] < 0 && s_orderTime[i] == RACE_GRID_BACK) used += snprintf(text + used, sizeof(text) - used, " %d Twinsen (no qualifying: at the back);", i + 1);
         else used += snprintf(text + used, sizeof(text) - used, " %d %s %.2f s;", i + 1, s_order[i] < 0 ? "Twinsen" : s_opp[s_order[i]].Name, s_orderTime[i] / 1000.0);
     }
     Log_Info("%s", text);
@@ -10076,7 +10091,41 @@ static void Marshal(S32 now) {
 #define RACE_BUBBLE_NEAR 900.0             // (someone seen this near an unseen speaker is the one speaking)
 #define RACE_BUBBLE_MARSHAL 600.0          // (an unseen speaker this near her plinth's place -- where the story puts her talker -- speaks for her)
 #define RACE_MARSHAL_HEAD 1150             // (her head over her feet)
+// A speaker whose bubble has a place of its own (BUBBLES.TXT in the game folder, written by LBA Assembler: a line a speaker -- scene,
+// actor, the place's x, y and z from the actor's own, unturned): Lyra lying on her lounger by the Imperial Hotel's pool, whose bubble
+// the game put over her feet at her box's top, as if she stood
+#define BUBBLE_PLACES 32
+static int s_bubbleN = -1;
+static S32 s_bubbleAt[BUBBLE_PLACES][5];
+static void BubbleLoad(void) {
+    if (s_bubbleN >= 0) return;
+    s_bubbleN = 0;
+    char path[260], line[128];
+    GetResPath(path, sizeof(path), "BUBBLES.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    int a, b, c, d, e;
+    while (fgets(line, sizeof(line), f) && s_bubbleN < BUBBLE_PLACES)
+        if (sscanf(line, "%d %d %d %d %d", &a, &b, &c, &d, &e) == 5) {
+            S32 *p = s_bubbleAt[s_bubbleN++];
+            p[0] = a; p[1] = b; p[2] = c; p[3] = d; p[4] = e;
+        }
+    fclose(f);
+}
 S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
+    BubbleLoad();
+    if (numobj > NUM_PERSO && numobj < (S32)NbObjets)
+        for (int k = 0; k < s_bubbleN; k++)
+            if (s_bubbleAt[k][0] == (S32)NumCube && s_bubbleAt[k][1] == numobj) {
+                const T_OBJET *o = &ListObjet[numobj];
+                *x = o->Obj.X + s_bubbleAt[k][2]; *y = o->Obj.Y + s_bubbleAt[k][3]; *z = o->Obj.Z + s_bubbleAt[k][4];
+                static S32 saidCube = -1, saidActor = -1;
+                if (saidCube != (S32)NumCube || saidActor != numobj) {
+                    saidCube = (S32)NumCube; saidActor = numobj;
+                    Log_Info("[racemod] bubble: scene %d actor %d at its own place (%d,%d,%d) -- BUBBLES.TXT", (int)NumCube, (int)numobj, (int)*x, (int)*y, (int)*z);
+                }
+                return 1;
+            }
     // (rerun=: the flag marshal's word on a race lost -- RerunSay)
     if (s_sayMarshal && RaceMod_Active()) {
         const T_RACE_MARSHAL *m = &s_marshal;
@@ -21775,6 +21824,117 @@ static void BowlLanesFrame(S32 now) {
         BowlLaneFrame(lane, now, dt, !players);
     }
 }
+// The Dome of the Slate's velodrome's riders (VELOMAP.TXT, written with the room by LBA Assembler's DomeVelodrome): each rider an actor
+// of its own, carried round its lane's points at its speed -- turned along the lane, leaned into the banking as the points say, its
+// bodies shown in turn as it goes (the cranks a part further round in each: pedalling). A rider closes on the one ahead in its lane no
+// nearer than a wheel or two, and stops short of Twinsen standing in its way.
+#define VELO_LANES 4
+#define VELO_POINTS 400
+#define VELO_RIDERS 8
+#define VELO_BRAKE 12500.0f
+typedef struct {
+    int N;
+    float X[VELO_POINTS], Y[VELO_POINTS], Z[VELO_POINTS], Lean[VELO_POINTS], S[VELO_POINTS + 1];
+} T_VELO_LANE;
+typedef struct {
+    int Actor, Lane, Body0, Phases, Shown;
+    float Speed, V, S, Cadence, Dist;
+} T_VELO_RIDER;
+static T_VELO_LANE s_vl[VELO_LANES];
+static T_VELO_RIDER s_vr[VELO_RIDERS];
+static int s_vlN = 0, s_vrN = 0, s_veloScene = -1, s_veloLoaded = 0;
+static void VeloLoad(void) {
+    if (s_veloLoaded) return;
+    s_veloLoaded = 1;
+    char path[260], line[256];
+    GetResPath(path, sizeof(path), "VELOMAP.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    int lane = -1;
+    while (fgets(line, sizeof(line), f)) {
+        int a, b, c, d;
+        float x, y, z, w, sp, st, cad;
+        if (sscanf(line, "scene %d", &a) == 1) s_veloScene = a;
+        else if (sscanf(line, "lane %d", &a) == 1 && a >= 0 && a < VELO_LANES) { lane = a; s_vl[a].N = 0; if (a >= s_vlN) s_vlN = a + 1; }
+        else if (sscanf(line, "p %f %f %f %f", &x, &y, &z, &w) == 4 && lane >= 0 && s_vl[lane].N < VELO_POINTS) {
+            T_VELO_LANE *l = &s_vl[lane];
+            l->X[l->N] = x; l->Y[l->N] = y; l->Z[l->N] = z; l->Lean[l->N] = w; l->N++;
+        } else if (sscanf(line, "rider %d %d %f %f %d %d %f", &a, &b, &sp, &st, &c, &d, &cad) == 7 && s_vrN < VELO_RIDERS && b >= 0 && b < VELO_LANES) {
+            T_VELO_RIDER *r = &s_vr[s_vrN++];
+            r->Actor = a; r->Lane = b; r->Speed = sp; r->V = sp; r->S = st; r->Body0 = c; r->Phases = d > 0 ? d : 1; r->Cadence = cad > 1 ? cad : 1000; r->Dist = 0; r->Shown = -1;
+        }
+    }
+    fclose(f);
+    // (each lane's length along it, round to its first point again)
+    for (int k = 0; k < s_vlN; k++) {
+        T_VELO_LANE *l = &s_vl[k];
+        l->S[0] = 0;
+        for (int i = 0; i < l->N; i++) {
+            const int j = (i + 1) % l->N;
+            const float dx = l->X[j] - l->X[i], dy = l->Y[j] - l->Y[i], dz = l->Z[j] - l->Z[i];
+            l->S[i + 1] = l->S[i] + sqrtf(dx * dx + dy * dy + dz * dz);
+        }
+    }
+    Log_Info("[racemod] velodrome: scene %d, %d lanes, %d riders", s_veloScene, s_vlN, s_vrN);
+}
+// a lane's place `s` along it (any distance, round and round): where, and how far over
+static void VeloAt(const T_VELO_LANE *l, float s, float *x, float *y, float *z, float *lean) {
+    const float len = l->S[l->N];
+    s = fmodf(s, len);
+    if (s < 0) s += len;
+    int lo = 0, hi = l->N;
+    while (hi - lo > 1) { const int mid = (lo + hi) / 2; if (l->S[mid] <= s) lo = mid; else hi = mid; }
+    const int j = (lo + 1) % l->N;
+    const float seg = l->S[lo + 1] - l->S[lo], t = seg > 0 ? (s - l->S[lo]) / seg : 0;
+    *x = l->X[lo] + (l->X[j] - l->X[lo]) * t; *y = l->Y[lo] + (l->Y[j] - l->Y[lo]) * t; *z = l->Z[lo] + (l->Z[j] - l->Z[lo]) * t;
+    *lean = l->Lean[lo] + (l->Lean[j] - l->Lean[lo]) * t;
+}
+static void VeloFrame(S32 now) {
+    static S32 last = 0;
+    if (CubeMode != CUBE_INTERIEUR || NewCube != -1) { last = now; return; }
+    VeloLoad();
+    if ((S32)NumCube != s_veloScene || s_vrN < 1) { last = now; return; }
+    const float dt = (float)fmin(0.1, fmax(0.0, (now - last) / 1000.0));
+    last = now;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    for (int k = 0; k < s_vrN; k++) {
+        T_VELO_RIDER *r = &s_vr[k];
+        if (r->Actor <= 0 || r->Actor >= NbObjets) continue;
+        const T_VELO_LANE *l = &s_vl[r->Lane];
+        if (l->N < 3) continue;
+        const float len = l->S[l->N];
+        // (how fast now: its own pace; no faster than the rider a wheel or two ahead in its lane; nothing at all with Twinsen in its way)
+        float target = r->Speed;
+        for (int o = 0; o < s_vrN; o++) {
+            if (o == k || s_vr[o].Lane != r->Lane) continue;
+            float ahead = fmodf(s_vr[o].S - r->S + len, len);
+            if (ahead > 0 && ahead < 1400) target = fminf(target, ahead < 900 ? s_vr[o].V * 0.85f : s_vr[o].V);
+        }
+        // (looked for as far ahead as the rider needs to stop: from its pace at VELO_BRAKE, about 1,300 from 5,600)
+        for (int p = 1; p <= 8; p++) {
+            float px, py, pz, pl;
+            VeloAt(l, r->S + 250.0f * p, &px, &py, &pz, &pl);
+            const float hx = hero->Obj.X - px, hz = hero->Obj.Z - pz;
+            if (hx * hx + hz * hz < 520.0f * 520.0f && fabsf(hero->Obj.Y - py) < 1000) target = 0;
+        }
+        const float dv = target - r->V;
+        r->V += dv < 0 ? fmaxf(dv, -VELO_BRAKE * dt) : fminf(dv, 2200.0f * dt);
+        r->S = fmodf(r->S + r->V * dt, len);
+        float x, y, z, lean, nx, ny, nz, nl;
+        VeloAt(l, r->S, &x, &y, &z, &lean);
+        VeloAt(l, r->S + 250, &nx, &ny, &nz, &nl);
+        T_OBJET *a = &ListObjet[r->Actor];
+        a->Obj.X = (S32)x; a->Obj.Y = (S32)y; a->Obj.Z = (S32)z;
+        a->Obj.Beta = GetAngle2D(a->Obj.X, a->Obj.Z, (S32)nx, (S32)nz);
+        a->Obj.Alpha = (S32)(atan2f(-(ny - y), 250.0f) * 4096.0f / 6.2831853f) & 4095;
+        a->Obj.Gamma = (S32)lean & 4095;
+        // (the cranks: a body a part further round each `Cadence` ridden)
+        r->Dist += r->V * dt;
+        const int phase = (int)(r->Dist / r->Cadence) % r->Phases;
+        if (phase != r->Shown) { r->Shown = phase; InitBody((U8)(r->Body0 + phase), (U8)r->Actor); }
+    }
+}
+
 // A fruit machine: Action by one (on foot, within reach of its front), a coin of the planet's in -- kashes on Twinsun, zlitos on Zeelich --
 // and its three reels spun, stopping one after another; three alike pay (three sevens the most), two sevens give the coin back
 static void BowlSay(S32 now, const char *text);
@@ -24102,6 +24262,7 @@ void RaceMod_Frame(void) {
     AchievementsFrame(TimerRefHR);
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
+    VeloFrame(TimerRefHR);
     FruitFrame(TimerRefHR);
     FruitReels(TimerRefHR);
     HalFrame(TimerRefHR);
@@ -24176,6 +24337,26 @@ void RaceMod_Frame(void) {
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
     // (no_qualify=: the race day come while the track is loaded -- the qualifying lap not begun: none, the grid formed as he drives up)
     if (s_phase == PHASE_QUALIFYING && s_laps == 0 && NoQualify()) { s_qualifying = 0; s_phase = PHASE_WAIT; Log_Info("[racemod] no_qualify: variable %d at %d -- no qualifying lap today", s_noQualVar, (int)ListVarGame[s_noQualVar]); }
+    // (pit_start=: the others on the grid while the race waits for him -- once each time the race day is found waiting)
+    if (!PitStart()) s_pitGridSet = 0;
+    else if (s_phase == PHASE_WAIT && !s_pitGridSet && s_nbSpots && s_car.HasLine) {
+        s_pitGridSet = 1;
+        int spot = 0;
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+            if (s_opp[n].Count && s_opp[n].Scenes && !OpponentAway(&s_opp[n])) OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
+        // (and his car into the pit lane's first spot, standing elsewhere in this scene with him out of it: a game saved on race day
+        // before the pit lane was his)
+        const int carN = NumBuggy & ~BUGGY_PRESENT;
+        if (!driving && s_nbPits && NumBuggy && carN > 0 && carN < (int)NbObjets && ListBuggy[0].Cube == (S32)NumCube &&
+            CurrentCubeX == s_pits[0].CubeX && CurrentCubeY == s_pits[0].CubeZ) {
+            S_BUGGY *ptb = &ListBuggy[0];
+            T_OBJET *car = &ListObjet[carN];
+            ptb->X = car->Obj.X = s_pits[0].X; ptb->Y = car->Obj.Y = s_pits[0].Y; ptb->Z = car->Obj.Z = s_pits[0].Z;
+            ptb->Beta = car->Obj.Beta = s_pits[0].Beta;
+            ClearRealAngle(car);
+        }
+        Log_Info("[racemod] pit_start: variable %d at %d -- %d racers on the grid, Twinsen's car in the pit lane", s_pitStartVar, (int)ListVarGame[s_pitStartVar], spot);
+    }
     if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && !Inert() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     RaceHideActors();
     RoadKeep();
@@ -26907,7 +27088,7 @@ static void ResetTrack(void) {
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopCut = -1;
-    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_pitHidden = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
+    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_pitHidden = 0; s_pitStartVar = -1; s_pitGridSet = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
     s_raceSkyOff = 0;

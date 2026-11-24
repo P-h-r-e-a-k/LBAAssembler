@@ -1026,6 +1026,10 @@ internal static class DomeVelodrome
         Place(3, AtOval(-Lu - 1000, 0, FIn));
         Place(4, AtOval(Lu + 1000, 0, FIn));
         Place(5, AtOval(1800, -(R3 + Ft + Walkway / 2), FOut));
+        // (the riders' and the tents' bodies first: an entity of their own, CitadelProps.InstallVelodrome)
+        var (veloEntity, veloLog) = Citadel.CitadelProps.InstallVelodrome(gameDirectory);
+        log.Add(veloLog);
+        var veloMap = People(room, veloEntity);
         var roomRecord = Rebuilt(Scene, room);
         var outside = store.Load(Outside);
         var door = outside.Zones.Where(z => z.Type == 0 && z.Num == Scene).ToList();
@@ -1036,11 +1040,138 @@ internal static class DomeVelodrome
         scenes.SetStored(Scene + 1, roomRecord);
         scenes.SetStored(Outside + 1, outsideRecord);
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
+        File.WriteAllLines(Path.Combine(gameDirectory, "VELOMAP.TXT"), veloMap);
         log.Add($"The Dome of the Slate's velodrome (scene {Scene}): rendered in {renderTime:0.0} s, {images.Count} cells drawn, {newBricks} bricks, {raised} columns raised to their boards, " +
                 $"{entries.Count} places in {blocks} blocks (library {libraryNumber}), grid {gridNumber} ({grid.Length} bytes); the way in from scene {Outside} " +
                 $"arrives at ({ArrivalInfo.X}, {ArrivalInfo.Y}, {ArrivalInfo.Z}) less where in its door he was");
+        log.Add($"the velodrome's people: {Citadel.CitadelProps.RiderCount} riders round two lanes (VELOMAP.TXT, RACEMOD.CPP VeloFrame), " +
+                $"{Talkers.Count - Citadel.CitadelProps.RiderCount} more -- the teams in the infield, people round the hall");
         return log;
     }
+
+    // ================================================================================================= the people
+    // The user, 2026-11-24: "We need to add some NPCs to the velodrome to bring it to life, perhaps some people riding laps, and their
+    // support team, and generally just people around". Riders round the boards (two teams' pairs, each pair in its lane, the outer one
+    // a little faster: the engine carries them, VELOMAP.TXT); each team's tent in the infield's far half with its kit, a coach by the
+    // finish line, a mechanic at the repair stand, a soigneur with the bag; people along the walkway behind the fence and on the near
+    // floor. Who each one is goes to the story (Talkers: RaceTrackStory.VelodromeTalk gives each a line).
+    public static readonly List<(int Actor, string Who)> Talkers = new();
+    // the lanes: how far out from the oval's spine, on the boards (the lower the slower)
+    private static readonly double[] Lanes = { R2 + 0.22 * Wd, R2 + 0.5 * Wd };
+    // each rider: its lane, its pace (units a second), how far along the lane it starts, its team's speech colour
+    private static readonly (int Lane, int Speed, double Start, string Who)[] Riders =
+    {
+        (0, 5600, 0.10, "RiderComets"), (0, 5600, 0.08, "RiderComets2"), (1, 6300, 0.60, "RiderExpress"), (1, 6300, 0.58, "RiderExpress2"),
+    };
+    // a pedal turn's part a body each this far ridden (a turn of the cranks about 3,600 along)
+    private const int Cadence = 600;
+    private static int BetaTo(double dx, double dz) => (int)Math.Round(Math.Atan2(dx, dz) * 2048 / Math.PI) & 4095;
+    // facing across the oval: towards the spine from the far side (+b, down the screen), from the near side (-b); along it (+a, -a)
+    private const int FacingDown = 512, FacingUp = 2560, FacingRight = 1536, FacingLeft = 3584;
+
+    // a lane round the oval, anticlockwise as velodromes are ridden: the far straight right to left, round the left turn, the near
+    // straight left to right, round the right turn; a point every LaneStep, each with the boards' height and the rider's lean into the
+    // turn (the banking's share of the apex's, as the game's angle)
+    private const double LaneStep = 300;
+    private static List<(int X, int Y, int Z, int Lean)> LanePoints(double d)
+    {
+        var points = new List<(int, int, int, int)>();
+        void Add(double a, double b)
+        {
+            double x = Xc + (a + b) * IRt2, z = Zc + (b - a) * IRt2;
+            Oval(x, z, out _, out _, out var dd, out var psi, out _);
+            var w = Bank(psi);
+            var y = Deck(dd, w, out _);
+            points.Add(((int)Math.Round(x), (int)Math.Round(y), (int)Math.Round(z), (int)Math.Round(w * Math.Atan(TanT) * 2048 / Math.PI)));
+        }
+        var straight = (int)Math.Ceiling(2 * Lu / LaneStep);
+        var turn = (int)Math.Ceiling(Math.PI * d / LaneStep);
+        for (var i = 0; i < straight; i++) Add(Lu - 2 * Lu * i / straight, -d);
+        for (var i = 0; i < turn; i++) { var phi = -Math.PI / 2 - Math.PI * i / turn; Add(-Lu + d * Math.Cos(phi), d * Math.Sin(phi)); }
+        for (var i = 0; i < straight; i++) Add(-Lu + 2 * Lu * i / straight, d);
+        for (var i = 0; i < turn; i++) { var phi = Math.PI / 2 - Math.PI * i / turn; Add(Lu + d * Math.Cos(phi), d * Math.Sin(phi)); }
+        return points;
+    }
+
+    private static List<string> People(SceneModel room, int entity)
+    {
+        Talkers.Clear();
+        var map = new List<string> { $"scene {Scene}" };
+        var lanes = Lanes.Select(LanePoints).ToList();
+        for (var k = 0; k < lanes.Count; k++)
+        {
+            map.Add($"lane {k}");
+            map.AddRange(lanes[k].Select(p => $"p {p.X} {p.Y} {p.Z} {p.Lean}"));
+        }
+        int Add(SceneActorModel a, string who)
+        {
+            a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+            var index = SceneOps.AddActor(room, a);
+            if (who.Length > 0) Talkers.Add((index, who));
+            return index;
+        }
+        int Prop(int generic, (int X, int Y, int Z) at, int beta, string who = "")
+        {
+            var a = Citadel.CitadelProps.Actor(generic, at.X, at.Y, at.Z, beta);
+            a.Move = 0;
+            return Add(a, who);
+        }
+        // (the velodrome's own bodies' entity's: the riders, the tents)
+        int Own(int generic, (int X, int Y, int Z) at, int beta, string who = "")
+        {
+            var a = Citadel.CitadelProps.Actor(generic, at.X, at.Y, at.Z, beta);
+            a.Entity = entity; a.Move = 0;
+            return Add(a, who);
+        }
+        // the riders: the engine moves them (no move of their own), each body its first pedalling one
+        for (var r = 0; r < Riders.Length && entity >= 0; r++)
+        {
+            var lane = lanes[Riders[r].Lane];
+            var length = 0.0;
+            for (var i = 0; i < lane.Count; i++) { var (p, q) = (lane[i], lane[(i + 1) % lane.Count]); length += Math.Sqrt(Sq(q.X - p.X) + Sq(q.Y - p.Y) + Sq(q.Z - p.Z)); }
+            var start = lane[(int)(Riders[r].Start * lane.Count) % lane.Count];
+            var actor = Own(Citadel.CitadelProps.RiderBody(r, 0), (start.X, start.Y, start.Z), 0, Riders[r].Who);
+            map.Add($"rider {actor} {Riders[r].Lane} {Riders[r].Speed} {(int)(Riders[r].Start * length)} {Citadel.CitadelProps.RiderBody(r, 0)} {Citadel.CitadelProps.RiderPhases} {Cadence}");
+        }
+        // the teams' tents in the infield's far half, their kit: the Comets' bike up on the repair stand, crates and a keg of water
+        const double TentA = 4400, TentB = -950, KitB = 250;
+        if (entity >= 0)
+        {
+            Own(Citadel.CitadelProps.TeamTentRed, AtOval(-TentA, TentB, FIn), 0);
+            Own(Citadel.CitadelProps.TeamTentBlue, AtOval(TentA, TentB, FIn), 0);
+        }
+        var stand = AtOval(-TentA, KitB, FIn);
+        Prop(Citadel.CitadelProps.RepairStand, stand, FacingRight);
+        Prop(Citadel.CitadelProps.RepairBike, (stand.X, stand.Y + Citadel.CitadelProps.StandHigh - 520, stand.Z), FacingDown);
+        Prop(Citadel.CitadelProps.Crate, AtOval(-TentA - 700, TentB + 200, FIn), FacingDown);
+        Prop(Citadel.CitadelProps.Crate, AtOval(TentA + 650, TentB + 250, FIn), FacingDown);
+        Prop(Citadel.CitadelProps.Keg, AtOval(TentA - 600, TentB + 300, FIn), FacingDown);
+        // the people: (who, entity, its body, its animation -- the game's own: the ferry quetch's look at his watch for the coach's stopwatch,
+        // the neighbour's hand shading his eyes and his crouch at the stand, the grobo's trumpeting, the teacher's clapping; none that walks
+        // them off, as the neighbour's flag-waving and the child's skipping did -- where, facing)
+        var people = new (string Who, int Entity, int Body, int Anim, (int X, int Y, int Z) At, int Beta)[]
+        {
+            ("CometsCoach", 39, 0, 0, AtOval(FinishA, -(R0 - 350), FIn), FacingUp),
+            ("ExpressCoach", 111, 0, 0, AtOval(-FinishA, -(R0 - 350), FIn), FacingUp),
+            ("Mechanic", 41, 0, 205, AtOval(-TentA + 520, KitB + 120, FIn), FacingLeft),
+            ("Soigneur", 35, 0, 0, AtOval(TentA - 500, KitB, FIn), FacingDown),
+            ("FanFlag", 41, 55, 204, AtOval(-2600, -(R3 + Ft + 1480), FOut), FacingDown),
+            ("FanGrobo", 33, 0, 189, AtOval(3300, -(R3 + Ft + 1520), FOut), FacingDown),
+            ("FanGirl", 29, 45, 0, AtOval(-5400, -(R3 + Ft + 1480), FOut), FacingDown),
+            ("FanChild", 88, 0, 0, AtOval(5500, -(R3 + Ft + 1480), FOut), FacingDown),
+            ("FanTeacher", 89, 0, 295, AtOval(-2000, R3 + Ft + 900, FOut), FacingUp),
+            ("FanSphero", 28, 43, 0, AtOval(2600, R3 + Ft + 900, FOut), FacingUp),
+        };
+        foreach (var p in people)
+        {
+            var a = SceneOps.BlankActor(SceneGame.Lba2, p.At.X, p.At.Y, p.At.Z, p.Entity);
+            // (the record's body a signed byte, as the game's own scenes have it)
+            a.Body = (sbyte)p.Body; a.Anim = p.Anim; a.Beta = p.Beta; a.Flags = 0x1000; a.CoulObj = RaceTrackStory.DefaultVoice; a.Armor = 51; a.LifePoints = -1; a.Move = 0;
+            Add(a, p.Who);
+        }
+        return map;
+    }
+    private static double Sq(double v) => v * v;
 
     internal static string DebugPixel(byte[] palette, double sx, double sy)
     {

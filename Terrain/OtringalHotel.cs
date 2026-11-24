@@ -422,7 +422,8 @@ internal static class OtringalHotel
         Put(r3, HotelProps.CoffeeTable, 2250, FloorY, 3200, 0);
         Put(r3, HotelProps.Painting, 2250, FloorY + 700, 1034, 0);
         Put(r3, HotelProps.GrandPiano, 4800, FloorY, 2900, 0);
-        Put(r3, HotelProps.FourPoster, SuiteBed.X, FloorY, SuiteBed.Z, 0);
+        // (the four-poster carries Twinsen laid on it for the night: RaceTrackStory.OtringalNight)
+        r3.Actors[Put(r3, HotelProps.FourPoster, SuiteBed.X, FloorY, SuiteBed.Z, 0)].Flags |= RaceTrackScenes.CarrierFlag;
         Put(r3, HotelProps.HotelRug, 8448, FloorY, 4900, 0, walkOver: true);
         Put(r3, HotelProps.GiltToilet, 24 * 512 + BathToilet.X, FloorY, BathToilet.Z, 0);
         r3.Zones.Add(Out(SuiteDoorX, DoorA));

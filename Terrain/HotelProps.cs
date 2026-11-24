@@ -21,6 +21,8 @@ namespace LBAAssembler.Terrain;
 //     Room's bath, toilet and basin -- remade in the game's own hotel style on 2026-11-23: HotelProps.Rooms.cs.
 internal static partial class HotelProps
 {
+    // the four-poster's mattress's top over the floor (its teal cover's: HotelProps.Rooms BuildFourPoster)
+    public const short BedTop = 630;
     public const int LiftFront = 229, LiftOpen = 230, ReceptionDesk = 231, CorridorDoors = 232, SuiteDoors = 233, FourPoster = 234, Chandelier = 235,
                      Sofa = 236, CoffeeTable = 237, GrandPiano = 238, DiningTable = 239, Fireplace = 240, HotelRug = 241, Partition = 242, Painting = 243;
     // (each of the corridor's doors a body of its own -- the five in one passed the engine's 550 points: RoomDoor + its number's last digit - 1)
@@ -99,7 +101,9 @@ internal static partial class HotelProps
         // on its west wall, the Classic Room's toilet at 1024 on its bathroom's west wall; the gilt toilet, the bath, the basin, the piano,
         // the four-poster and the coffee table at 0; the sofa and the chair the same at 0 and 2048)
         GrandPiano => new short[] { -720, 0, -1800, 720, 1960, 1100 },
-        FourPoster => new short[] { -960, 0, -1100, 960, 2400, 1100 },
+        // (the four-poster's to its mattress's top, BedTop: Twinsen laid on it to sleep is carried there -- boxed to its canopy he was put
+        // inside its box, pushed out of it and slept on the floor, the user, 2026-11-24)
+        FourPoster => new short[] { -960, 0, -1100, 960, BedTop, 1100 },
         Sofa => new short[] { -990, 0, -470, 990, 960, 470 },
         CoffeeTable => new short[] { -620, 0, -360, 620, 860, 360 },
         Fireplace => new short[] { 0, 0, -990, 600, 2760, 990 },

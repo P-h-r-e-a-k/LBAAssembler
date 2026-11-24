@@ -890,7 +890,7 @@ internal static partial class RaceTrackCharacterCars
         File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(cars, new JsonSerializerOptions { WriteIndented = true }));
 
     // The entity table with a new entity at its end: the animations of `like` (its records less its bodies), no bodies yet.
-    private static (byte[] Table, int Entity) WithEntityLike(byte[] table, int like)
+    internal static (byte[] Table, int Entity) WithEntityLike(byte[] table, int like)
     {
         var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;
         var offsets = Enumerable.Range(0, count + 1).Select(i => BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(i * 4))).ToArray();

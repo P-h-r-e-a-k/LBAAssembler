@@ -164,6 +164,10 @@ set_var_cube(0, 0);")));
         // (the night: the car in the palace's keeping; race day: its coil gone, it won't start -- RaceTrackStory.OtringalNight)
         $"car_held={OtringalDay} {DayQualified} {PalaceRoom}\n" +
         $"car_dead={OtringalDay} {DayRaceDay} The engine won't start -- the ignition coil is missing!\n" +
+        // (race day, the coil gone and then got: his car in the pit lane, the others on the grid; he starts from the pit lane -- the user,
+        // 2026-11-24, "let's have Twinsen's car stuck in the pitlane as it's not working, and all the other cars lined up on the grid ...
+        // When Twinsen fixes his car he should start from the pitlane instead")
+        $"pit_start={OtringalDay} {DayRaceDay} {DayCoil + 1}\n" +
         $"no_qualify={OtringalDay} {DayRaceDay}\n" +
         $"win={QFee} {FeeWon}\n";
 }

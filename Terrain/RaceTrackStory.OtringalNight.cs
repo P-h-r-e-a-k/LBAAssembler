@@ -40,7 +40,7 @@ internal static partial class RaceTrackStory
     // that stood facing the street's door is gone, and the sofa at the alcove's edge (the user, 2026-11-23: the desk "is ugly and seems to
     // have no point. It also stops Twinsen getting inside to speak to the race marshall"; the sofa "near the pool needs removing")
     private static readonly (int X, int Z) ClerkAt = (OtringalHotel.LobbyLift.X + 650, OtringalHotel.LobbyLift.Z + 1700);
-    private const int HotelDoorman = 8;
+    private const int HotelDoorman = 8, HotelGuardFar = 11, HotelBellboy = 4;
     // the hero's labels: to the lift's doors and into them; out of them on arriving; in bed, the night, up again; the lift car's walk out
     private const int ToLift = 220, AtLift = 222, FromLift = 224, OutOfLift = 225, Sleeping = 230, NightOver = 231, GettingUp = 232, RoomUp = 233,
         NightFall = 234, CarWalk = 240, CarWalked = 241;
@@ -120,6 +120,22 @@ internal static partial class RaceTrackStory
             });
             adds.Add(scripts =>
             {
+                // the guards (the doorman, actor 8, inside the door; actor 11, by the far end): in chapter 5 a racer is a guest -- their
+                // word a welcome and the way to the reception, not "members only, get moving", and bumped into, no fight (the user,
+                // 2026-11-24: "the guard at the front won't let Twinsen in so he can't buy a room" -- run into, the game's guard set on
+                // him with a second one, and spoken to, "You can't get in here")
+                foreach (var (guard, refusal) in new[] { (HotelDoorman, 510), (HotelGuardFar, 511) })
+                    try
+                    {
+                        var life = Loose(scripts.GetText(guard, ScriptKind.Life), "if (0 == hit_by())", "if (0 == hit_by() && 5 != chapter())");
+                        life = Loose(life, $"message({refusal});", $"if (5 == chapter()) {{ message({say(OtringalLine.GuardGuest)}); }} else {{ message({refusal}); }}");
+                        scripts.SetText(guard, ScriptKind.Life, life);
+                    }
+                    catch (NotTheGames e) { b.Log.Add($"the hotel's guard (actor {guard}) left as the game has him: {e.Message}"); }
+                // the bellboy (actor 4): no more sitting down at track point 10 now and then -- on the sofa that came out of the alcove for
+                // the lift (the user, 2026-11-24: "we need to stop this NPC sitting in front of the lift on the sofa we removed")
+                try { scripts.SetText(HotelBellboy, ScriptKind.Life, Loose(scripts.GetText(HotelBellboy, ScriptKind.Life), "1 == l_track() && 0 == rnd(25)", "1 == l_track() && 0 > rnd(25)")); }
+                catch (NotTheGames e) { b.Log.Add($"the hotel's bellboy (actor {HotelBellboy}) left as the game has him: {e.Message}"); }
                 var track = scripts.GetText(0, ScriptKind.Track).TrimEnd();
                 if (!track.Contains("label(")) track += "\nlabel(0);\nstop();";
                 scripts.SetText(0, ScriptKind.Track, track + "\n\n" + HeroLiftTrack(front, doorway));
@@ -271,7 +287,7 @@ void comportement_5()
                  {
                      (OtringalHotel.Classic, NightClassic, (X: 1280, Y: 256 + 450, Z: 3328, Beta: 1024), (X: 2900, Z: 3328), (X0: 512, X1: 3000, Z0: 2300, Z1: 4300), OtringalLine.WakeClassic),
                      (OtringalHotel.Junior, NightJunior, (X: 1280, Y: 256 + 450, Z: 2300, Beta: 1024), (X: 2900, Z: 2300), (X0: 512, X1: 3000, Z0: 1300, Z1: 3300), OtringalLine.WakeJunior),
-                     (OtringalHotel.Suite, NightSuite, (X: OtringalHotel.SuiteBed.X, Y: 256 + 910, Z: OtringalHotel.SuiteBed.Z, Beta: 0), (X: OtringalHotel.SuiteBed.X, Z: OtringalHotel.SuiteBed.Z + 1900), (X0: 6800, X1: 10100, Z0: 1000, Z1: 4700), OtringalLine.WakeSuite),
+                     (OtringalHotel.Suite, NightSuite, (X: OtringalHotel.SuiteBed.X, Y: 256 + HotelProps.BedTop + 10, Z: OtringalHotel.SuiteBed.Z, Beta: 0), (X: OtringalHotel.SuiteBed.X, Z: OtringalHotel.SuiteBed.Z + 1900), (X0: 6800, X1: 10100, Z0: 1000, Z1: 4700), OtringalLine.WakeSuite),
                  })
             b.Edit(scene, "a room upstairs at the hotel: Action by its bed on his night there -- asleep, the morning, his word on the bed", model =>
             {

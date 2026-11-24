@@ -147,6 +147,12 @@ internal static class TempleMarshal
     // girl's entity's animation Lie (RaceTrackStory.Eggs.Otringal: LyraPoolScore).
     public const int Lie = 664;
     public const float LiePitch = -0.25f;
+    // (how long she lies still, how long a move takes, in the engine's 50ths of a second)
+    private const int LieHold = 160, LieMove = 90;
+    // Her head over where she lies (her actor's place), for her speech bubble: the hips' pivot (606 up) and the head's middle above it as she
+    // stands (842 up, 10 forward) -- the Imperial Hotel's Sup's own body, BODY.HQR 440 -- turned a quarter back with her (up to -z, forward
+    // to up), and the bubble a little over it
+    public static readonly (int X, int Y, int Z) LieHeadAt = (0, 606 + 10 + 250, -842);
     public static List<string> InstallLying(string gameDirectory)
     {
         var r = GridGirlRig;
@@ -158,14 +164,49 @@ internal static class TempleMarshal
         if (entity is null || !entity.Bodies.Any(b => b.Generic == r.Body)) return new() { $"WARNING: Lyra lying: entity {r.Entity} has no grid girl (body {r.Body}) -- none made" };
         if (entity.Anims.Any(a => a.Generic == Lie)) return new() { $"Lyra lying: entity {r.Entity}'s animation {Lie} there already" };
         Make(HqrArchive.Open(bodyPath).Read(r.Retail), out var standing, r);
+        // (not still: a few seconds as she lies, then her right knee drawn up and her head turned a little, a few seconds so, and back
+        // -- the user, 2026-11-24: "she doesn't move at all")
         var anim = new Anim { Game = 2, LoopFrame = 0 };
-        anim.Frames.Add(new AnimFrame(1000, 0, 0, 0, Enumerable.Range(0, standing.Bones.Count)
-            .Select(i => i == 0 ? AnimBone.Neutral : new AnimBone(0, i == 1 ? LiePitch : 0f, 0f, 0f)).ToArray()));
+        // (her right thigh, its shin and her head found in her own body: the bone turning at the hips on her right with a bone below it,
+        // and the bone whose points stand highest)
+        var world = standing.World();
+        // (heights from her feet, the body's y 0: the flags' poles reach below it)
+        var top = world.Max(v => v.Y);
+        // (a leg reaches down to near the ground: the lowest point of the bone and all that hangs from it -- not a flag's pole)
+        float Reach(int b)
+        {
+            var low = float.MaxValue;
+            for (var c = b; c < standing.Bones.Count; c++)
+            {
+                var up = c; while (up > b && up >= 0) up = standing.Bones[up].Parent;
+                if (up != b) continue;
+                for (var i = standing.Bones[c].Start; i < standing.Bones[c].Start + standing.Bones[c].Count; i++) low = Math.Min(low, world[i].Y);
+            }
+            return low;
+        }
+        // (a thigh hangs from the hips or the pelvis under them -- a hand holding a flag's pole to the ground hangs from an arm)
+        bool FromPelvis(int b) => standing.Bones[b].Parent == 1 || standing.Bones[b].Parent > 0 && standing.Bones[standing.Bones[b].Parent].Parent == 1;
+        var thigh = Enumerable.Range(2, standing.Bones.Count - 2)
+            .Where(b => world[standing.Bones[b].Pivot] is var p && p.X > 10 && p.Y > top * 0.25f && p.Y < top * 0.5f
+                        && standing.Bones.Any(c => c.Parent == b) && Reach(b) < p.Y * 0.25f && FromPelvis(b))
+            .OrderByDescending(b => world[standing.Bones[b].Pivot].Y).FirstOrDefault(-1);
+        var shin = thigh < 0 ? -1 : standing.Bones.FindIndex(c => c.Parent == thigh);
+        var head = Enumerable.Range(1, standing.Bones.Count - 1).Where(b => standing.Bones[b].Count > 0)
+            .OrderByDescending(b => Enumerable.Range(standing.Bones[b].Start, standing.Bones[b].Count).Average(i => world[i].Y)).First();
+        AnimBone[] Pose(float knee) => Enumerable.Range(0, standing.Bones.Count).Select(i =>
+            i == 0 ? AnimBone.Neutral
+            : i == 1 ? new AnimBone(0, LiePitch, 0f, 0f)
+            : i == thigh ? new AnimBone(0, -0.15f * knee, 0f, 0f)
+            : i == shin ? new AnimBone(0, 0.28f * knee, 0f, 0f)
+            : i == head ? new AnimBone(0, 0f, 0.06f * knee, 0f)
+            : new AnimBone(0, 0f, 0f, 0f)).ToArray();
+        foreach (var (time, knee) in new[] { (LieHold, 0f), (LieMove, 0f), (LieHold, 1f), (LieMove, 1f) })
+            anim.Frames.Add(new AnimFrame(time, 0, 0, 0, Pose(knee)));
         var animIndex = HqrArchive.CountEntries(animPath);
         File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(anim.Write())));
         table = RaceTrackJumpAnim.WithAnim(table, r.Entity, Lie, animIndex);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        return new() { $"Lyra lying on her back (bone 1 a quarter turn): ANIM.HQR {animIndex}, entity {r.Entity}'s animation {Lie}" };
+        return new() { $"Lyra lying on her back (bone 1 a quarter turn; her right knee drawn up now and then -- bones {thigh} and {shin} -- her head, {head}, turned): ANIM.HQR {animIndex}, entity {r.Entity}'s animation {Lie}" };
     }
 
     // ---- where she stands -------------------------------------------------------------------------------------------------------

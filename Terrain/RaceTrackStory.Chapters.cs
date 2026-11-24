@@ -1155,6 +1155,11 @@ internal static partial class RaceTrackStory
         // (Citadel Cycles' tags when Twinsen came in with 1,000 kashes or more: ten times the price -- the user, 2026-11-22, with kashes now
         // up to 9,999: "if Twinsen enters and he has 1000 kashes or more, then let's make the bikes all 10 times more expensive")
         ShopTagTownRich, ShopTagRacingRich, ShopTagChampionRich,
+        // (the Dome of the Slate's velodrome's people, 2026-11-24 -- RaceTrackStory.Velodrome: the four riders as they pass, the teams'
+        // coaches, mechanic and soigneur in the infield, the people round the hall)
+        VeloRiderComets, VeloRiderComets2, VeloRiderExpress, VeloRiderExpress2,
+        VeloCometsCoach, VeloExpressCoach, VeloMechanic, VeloSoigneur,
+        VeloFanFlag, VeloFanGrobo, VeloFanGirl, VeloFanChild, VeloFanTeacher, VeloFanSphero,
     }
     private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
     internal static readonly string[][] CitadelLaterLines =
@@ -1353,6 +1358,136 @@ internal static partial class RaceTrackStory
             "\"La bici del campeón, la de las carreras de la Cúpula de la Pizarra. 50.000 kashes.\"",
             "\"La bici del campione, quella delle corse alla Cupola dell'Ardesia. 50.000 kashes.\"",
             "\"A bicicleta do campeão, a das corridas da Cúpula da Ardósia. 50000 kashes.\"",
+        },
+        // (the velodrome's riders, as they pass: the Comets' pair in red on the inside lane, the Express's in blue on the outside)
+        new[]
+        {
+            "On your left, Twinsen! Can't stop -- Coach is timing every lap!",
+            "Attention à gauche, Twinsen ! Je ne peux pas m'arrêter, l'entraîneur chronomètre chaque tour !",
+            "Links vorbei, Twinsen! Kann nicht anhalten -- der Trainer stoppt jede Runde!",
+            "¡Por la izquierda, Twinsen! No puedo parar: ¡el entrenador cronometra cada vuelta!",
+            "Passo a sinistra, Twinsen! Non posso fermarmi: l'allenatore cronometra ogni giro!",
+            "Pela esquerda, Twinsen! Não posso parar -- o treinador cronometra cada volta!",
+        },
+        new[]
+        {
+            "Mind the boards, Twinsen! I'm on my teammate's wheel -- if I lose it now, I'll never get back on.",
+            "Attention à la piste, Twinsen ! Je suis dans la roue de mon coéquipier : si je la perds maintenant, je ne la reprendrai jamais.",
+            "Pass auf der Bahn auf, Twinsen! Ich hänge am Hinterrad meines Teamkollegen -- verliere ich es jetzt, komme ich nie wieder ran.",
+            "¡Cuidado con la pista, Twinsen! Voy a rueda de mi compañero: si la pierdo ahora, no vuelvo a pillarla.",
+            "Attento alla pista, Twinsen! Sono a ruota del mio compagno: se la perdo adesso, non la riprendo più.",
+            "Cuidado com a pista, Twinsen! Vou na roda do meu colega de equipa: se a perder agora, nunca mais a apanho.",
+        },
+        new[]
+        {
+            "Can't talk -- chasing the Dome's lap record! The Comets held it for three whole days.",
+            "Pas le temps de parler, je chasse le record du tour du Dôme ! Les Comets l'ont gardé trois jours entiers.",
+            "Keine Zeit zum Reden -- ich jage den Rundenrekord des Doms! Die Comets hatten ihn drei ganze Tage.",
+            "¡No puedo hablar, voy a por el récord de vuelta de la Cúpula! Los Comets lo tuvieron tres días enteros.",
+            "Non posso parlare, sto inseguendo il record sul giro della Cupola! I Comets l'hanno tenuto per tre giorni interi.",
+            "Não posso falar, ando atrás do recorde da volta da Cúpula! Os Comets ficaram com ele três dias inteiros.",
+        },
+        new[]
+        {
+            "Fancy a go, Twinsen? Citadel Cycles will fit you a bike. Bring plenty of kashes!",
+            "Ça te tente, Twinsen ? Citadel Cycles te trouvera un vélo. Prévois beaucoup de kashes !",
+            "Lust auf eine Runde, Twinsen? Citadel Cycles passt dir ein Rad an. Bring jede Menge Kashes mit!",
+            "¿Te animas, Twinsen? En Citadel Cycles te ajustarán una bici. ¡Trae muchos kashes!",
+            "Ti va di provare, Twinsen? Da Citadel Cycles ti sistemano una bici. Porta un bel po' di kashes!",
+            "Queres experimentar, Twinsen? Na Citadel Cycles arranjam-te uma bicicleta. Traz muitos kashes!",
+        },
+        // (the teams in the infield: the Comets' coach by the finish line with his stopwatch, the Express's, the mechanic at the repair
+        // stand, the soigneur with the bag)
+        new[]
+        {
+            "Seven point six a lap. Hold that and the Comets take the Slate Cup this year. Don't tell them I said so.",
+            "Sept secondes six au tour. S'ils tiennent ce rythme, les Comets remportent la Coupe de l'Ardoise cette année. Ne leur dis pas que je l'ai dit.",
+            "Sieben Komma sechs pro Runde. Halten sie das, holen sich die Comets dieses Jahr den Schiefer-Pokal. Sag ihnen nicht, dass ich das gesagt habe.",
+            "Siete segundos y seis décimas por vuelta. Si lo mantienen, los Comets se llevan la Copa de la Pizarra este año. No les digas que lo he dicho.",
+            "Sette e sei al giro. Se tengono questo ritmo, quest'anno i Comets vincono la Coppa dell'Ardesia. Non dirgli che l'ho detto.",
+            "Sete vírgula seis por volta. Se aguentarem isso, os Comets levam a Taça da Ardósia este ano. Não lhes digas que eu disse isto.",
+        },
+        new[]
+        {
+            "The outside line is longer, but that's where legs are made. My Express riders will thank me at the finish.",
+            "La ligne extérieure est plus longue, mais c'est là qu'on se fait des jambes. Mes coureurs de l'Express me remercieront à l'arrivée.",
+            "Die Außenbahn ist länger, aber dort werden die Beine gemacht. Meine Express-Fahrer werden mir im Ziel danken.",
+            "La línea de fuera es más larga, pero ahí es donde se hacen las piernas. Mis corredores del Express me lo agradecerán en la meta.",
+            "La linea esterna è più lunga, ma è lì che si fanno le gambe. I miei corridori dell'Express mi ringrazieranno al traguardo.",
+            "A linha de fora é mais comprida, mas é lá que se fazem as pernas. Os meus ciclistas do Express vão agradecer-me na meta.",
+        },
+        new[]
+        {
+            "Fixed gear, no brakes. You stop when your legs say so -- or when the wall does.",
+            "Pignon fixe, pas de freins. On s'arrête quand les jambes le décident... ou quand le mur le décide.",
+            "Starrer Gang, keine Bremsen. Man hält an, wenn die Beine es sagen -- oder die Wand.",
+            "Piñón fijo, sin frenos. Paras cuando lo dicen tus piernas... o cuando lo dice la pared.",
+            "Scatto fisso, niente freni. Ti fermi quando lo dicono le gambe... o quando lo dice il muro.",
+            "Carreto fixo, sem travões. Paras quando as pernas mandam... ou quando a parede manda.",
+        },
+        new[]
+        {
+            "Water, bananas, liniment, spare socks. Half of every race is in this bag, Twinsen.",
+            "De l'eau, des bananes, du liniment, des chaussettes de rechange. La moitié de chaque course est dans ce sac, Twinsen.",
+            "Wasser, Bananen, Einreibemittel, Ersatzsocken. Die Hälfte jedes Rennens steckt in dieser Tasche, Twinsen.",
+            "Agua, plátanos, linimento, calcetines de repuesto. La mitad de cada carrera está en esta bolsa, Twinsen.",
+            "Acqua, banane, linimento, calzini di ricambio. Metà di ogni corsa sta in questa borsa, Twinsen.",
+            "Água, bananas, linimento, meias de reserva. Metade de cada corrida está neste saco, Twinsen.",
+        },
+        // (the people round the hall: along the walkway behind the far straight, on the near floor)
+        new[]
+        {
+            "Go on, Comets! Pedal, pedal, PEDAL!",
+            "Allez les Comets ! Pédalez, pédalez, PÉDALEZ !",
+            "Los, Comets! Treten, treten, TRETEN!",
+            "¡Vamos, Comets! ¡Pedalead, pedalead, PEDALEAD!",
+            "Forza Comets! Pedalate, pedalate, PEDALATE!",
+            "Força, Comets! Pedalem, pedalem, PEDALEM!",
+        },
+        new[]
+        {
+            "I trumpet every time they pass. The riders say it helps. The people beside me say it doesn't.",
+            "Je barris à chaque passage. Les coureurs disent que ça les aide. Mes voisins disent que non.",
+            "Ich trompete jedes Mal, wenn sie vorbeifahren. Die Fahrer sagen, es hilft. Meine Nachbarn sagen, es hilft nicht.",
+            "Barrito cada vez que pasan. Los corredores dicen que les ayuda. Los de al lado dicen que no.",
+            "Barrisco ogni volta che passano. I corridori dicono che aiuta. Quelli accanto a me dicono di no.",
+            "Barrito sempre que eles passam. Os ciclistas dizem que ajuda. Os meus vizinhos dizem que não.",
+        },
+        new[]
+        {
+            "Who'd have thought the old Dome would make such a good velodrome? Best seat on the island.",
+            "Qui aurait cru que le vieux Dôme ferait un si beau vélodrome ? La meilleure place de l'île.",
+            "Wer hätte gedacht, dass der alte Dom so ein gutes Velodrom abgibt? Der beste Platz auf der Insel.",
+            "¿Quién iba a decir que la vieja Cúpula sería tan buen velódromo? El mejor sitio de la isla.",
+            "Chi l'avrebbe detto che la vecchia Cupola sarebbe diventata un velodromo così bello? Il posto migliore dell'isola.",
+            "Quem diria que a velha Cúpula dava um velódromo tão bom? O melhor lugar da ilha.",
+        },
+        new[]
+        {
+            "When I grow up I'm going to ride right at the top of the banking. Higher than everyone!",
+            "Quand je serai grand, je roulerai tout en haut du virage. Plus haut que tout le monde !",
+            "Wenn ich groß bin, fahre ich ganz oben in der Steilkurve. Höher als alle anderen!",
+            "¡De mayor voy a rodar arriba del todo del peralte! ¡Más alto que nadie!",
+            "Da grande correrò in cima alla curva sopraelevata. Più in alto di tutti!",
+            "Quando for grande, vou andar mesmo lá em cima da curva. Mais alto do que toda a gente!",
+        },
+        new[]
+        {
+            "I bring my class here every week. Today's lesson: lean into the turn, children, or you end up in the infield!",
+            "J'amène ma classe ici chaque semaine. Leçon du jour : on se penche dans le virage, les enfants, sinon on finit sur la pelouse !",
+            "Ich bringe meine Klasse jede Woche hierher. Die Lektion heute: in die Kurve legen, Kinder, sonst landet ihr im Innenraum!",
+            "Traigo a mi clase aquí cada semana. Lección de hoy: inclinaos en la curva, niños, ¡o acabaréis en el centro de la pista!",
+            "Porto qui la mia classe ogni settimana. Lezione di oggi: in curva ci si piega, bambini, o si finisce nel prato!",
+            "Trago a minha turma cá todas as semanas. Lição de hoje: inclinem-se na curva, meninos, senão acabam no meio da pista!",
+        },
+        new[]
+        {
+            "Spheros don't ride bikes. We'd just roll off. But we love to watch.",
+            "Les Spheros ne font pas de vélo. On roulerait par terre. Mais on adore regarder.",
+            "Spheros fahren nicht Rad. Wir würden einfach runterrollen. Aber wir schauen so gern zu.",
+            "Los Spheros no montan en bici. Nos caeríamos rodando. Pero nos encanta mirar.",
+            "Gli Sphero non vanno in bici. Rotoleremmo giù. Però ci piace un sacco guardare.",
+            "Os Spheros não andam de bicicleta. Íamos rolar por ali abaixo. Mas adoramos ver.",
         },
     };
 
@@ -1693,6 +1828,7 @@ void comportement_1()
         SecretChamber(p);
         Pyjamas(p);
         CycleShop(p);
+        VelodromeTalk(p);
         Lighthouse(p);
         LighthouseClimb(p);
         HiddenPages(p);
