@@ -188,6 +188,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_GHOST_SHARE 2386            // ... "Share my ghosts..." (the setup's --export-ghosts)
 #define RG_ID_STORY_NEW 2387              // Story Mode's rows (StoryMode): a new story, the story kept continued
 #define RG_ID_STORY_CONTINUE 2388
+#define RG_ID_STORY_DEMO 2495               // ... and Play Demo: Citadel Island alone, no code (StoryMode, 2026-11-24)
 #define RG_ID_QUIT_NO 2389                  // the Quit page's rows (QuitPage)
 #define RG_ID_QUIT_YES 2390
 #define RG_ID_ONLINE 2391                   // the main menu: Online race (OnlinePage)
@@ -301,6 +302,12 @@ static int s_tracksOpen = 0;                // ... given right this run
 static char s_storyFile[ADELINE_MAX_PATH] = "";   // story_file=: Story Mode's set (none: Story Mode has nothing to play)
 static char s_storyCode[24] = "";           // story_code=: Story Mode asks for it (none: open)
 static int s_storyOpen = 0;                 // ... given right this run
+// Story Mode's Play Demo (the user, 2026-11-24: "Let's push a demo build, that is only Citadel Island, we can gate this by preventing
+// people being able to buy a ferry ticket. Let's keep the one install, but add a 'Play Demo' to the 'Story Mode' menu - as such we'll need
+// to move the code check to be triggered if a user selects 'New story'"): a new story without the code, marked a demo -- the story's
+// demo_var= set to 1 as the game starts (RACEMOD.CPP RaceMod_NewGameScene, RaceGame_TakeStoryDemo); the story's own scripts keep it
+// on Citadel Island (no ferry ticket sold, no Dino-Fly flights). The mark is a game variable: Continue goes on with a demo as a demo.
+static int s_storyDemo = 0;
 static int s_localGuest = -1;               // this game is the second player's at one PC (-1: not looked yet)
 // Story Mode with two players (2026-11-11, docs/LBRA_STORY_SCRIPT.md "Two players": player 2 *is* Zoe): this game, player 1's, has started
 // player 2's for the story; or this game is player 2's, Zoe, following player 1's story (LBA2_STORY_ZOE) -- it loads what player 1's sends
@@ -1355,7 +1362,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
     if (s_on && num == RG_ID_REPLAY_END) { Label(string, "End the replay"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER)) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO)) return 0;
     // (a player's row: its name, marked when it is this game's)
     // (an achievement's row, a bowler's, the walk round the alley)
     if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) { char row[160]; AchRowLabel(num - RG_ID_ACH_FIRST, row, sizeof(row)); Label(string, row); return 1; }
@@ -1374,6 +1381,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_PLAYER_NEW: Label(string, "New player..."); return 1;
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
+    case RG_ID_STORY_DEMO: Label(string, "Play Demo"); return 1;
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
     case RG_ID_STORY_TWO: Label(string, s_storyTwo && RaceNet_Local() ? "Two players: Zoe is player 2" : "Two players"); return 1;
     case RG_ID_STORY_LEVEL: {
@@ -3757,7 +3765,7 @@ static int TrackSelect(void) {
 // (2026-10-29: LBA2 played as a game, every island's track raced where the story has it -- RACEMOD.CPP's set, story_file= -- behind a
 // code, story_code=)
 
-static U16 s_storyMenu[4 + 2 * 5];
+static U16 s_storyMenu[4 + 2 * 6];
 static int LocalPage(int story);
 static int LevelPage(int story);
 static void StorySave(char *path) { GetSavePath(path, ADELINE_MAX_PATH, RG_STORY_SAVE); }
@@ -3814,6 +3822,8 @@ void RaceGame_SceneEntered(void) {
 int RaceGame_StoryTwo(void) { return s_storyOn && s_storyTwo && RaceNet_Local() && RaceNet_Others() > 0; }
 static void IdentifyGame(void);
 int RaceGame_StoryZoe(void) { return s_storyZoe; }
+// The game starting a new story (RACEMOD.CPP RaceMod_NewGameScene): whether it's the demo -- asked once, then forgotten
+int RaceGame_TakeStoryDemo(void) { const int d = s_storyDemo; s_storyDemo = 0; return d; }
 // (player 2's game, Zoe, started straight into a game -- a test's run, with no race game menu to wait in (StoryZoePage): it joins from the
 // game, once, and the first save player 1's sends replaces whatever it began)
 // (... and before the game's menus at all, with no race game menu to wait in -- a test's run, PERSO.CPP: joined, the first save player
@@ -3950,22 +3960,20 @@ static S32 StoryZoePage(void) {
 
 static S32 StoryMode(void) {
     if (!s_story || !s_storyFile[0]) return 0;
-    if (s_storyCode[0] && !s_storyOpen) {
-        if (!CodePage("Story Mode", s_storyCode)) return 0;
-        s_storyOpen = 1;
-    }
+    // (the code, story_code=, is New story's alone: the demo is open to all, and Continue goes on with whichever story is kept)
     const int saved = HasStorySave();
     ReadSettings();
-    s_storyMenu[0] = (U16)(saved ? 2 : 1);
-    const int rows = RG_STORY_TWO_ON ? 5 : 4;
+    s_storyMenu[0] = (U16)(saved ? 3 : 1);
+    const int rows = RG_STORY_TWO_ON ? 6 : 5;
     s_storyMenu[1] = (U16)rows;
     s_storyMenu[2] = 298;
     s_storyMenu[3] = 0;
     SetRow(s_storyMenu, 0, RG_ID_BACK);
-    SetRow(s_storyMenu, 1, RG_ID_STORY_NEW);
-    SetRow(s_storyMenu, 2, RG_ID_STORY_CONTINUE);
-    SetRow(s_storyMenu, 3, RG_ID_STORY_LEVEL);
-    if (RG_STORY_TWO_ON) SetRow(s_storyMenu, 4, RG_ID_STORY_TWO);
+    SetRow(s_storyMenu, 1, RG_ID_STORY_DEMO);
+    SetRow(s_storyMenu, 2, RG_ID_STORY_NEW);
+    SetRow(s_storyMenu, 3, RG_ID_STORY_CONTINUE);
+    SetRow(s_storyMenu, 4, RG_ID_STORY_LEVEL);
+    if (RG_STORY_TWO_ON) SetRow(s_storyMenu, 5, RG_ID_STORY_TWO);
     for (;;) {
         // (five rows since the Two players row, 2026-11-11: the title and the line under them moved out of their way)
         Page("Story Mode", 298 - (56 * rows) / 2 - 50);
@@ -3974,16 +3982,22 @@ static S32 StoryMode(void) {
         const S32 select = Menu(s_storyMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         // (the story's difficulty: its page, then back here -- the row says the level chosen)
-        if (select == RG_ID_STORY_LEVEL) { LevelPage(1); s_storyMenu[0] = 3; continue; }
+        if (select == RG_ID_STORY_LEVEL) { LevelPage(1); s_storyMenu[0] = 4; continue; }
         // (two players: player 2's game started on its half or screen, as Zoe -- then New story or Continue as with one)
         if (select == RG_ID_STORY_TWO) {
             if (!(s_storyTwo && RaceNet_Local()) && LocalPage(1)) s_storyTwo = 1;
-            s_storyMenu[0] = (U16)(saved ? 2 : 1);
+            s_storyMenu[0] = (U16)(saved ? 3 : 1);
             continue;
         }
-        if (select != RG_ID_STORY_NEW && select != RG_ID_STORY_CONTINUE) continue;
-        // (a new story: its difficulty first -- the one chosen last first; Esc there is Story Mode's page again)
-        if (select == RG_ID_STORY_NEW && LevelPage(1) < 0) { s_storyMenu[0] = 1; continue; }
+        if (select != RG_ID_STORY_NEW && select != RG_ID_STORY_CONTINUE && select != RG_ID_STORY_DEMO) continue;
+        // (New story: its code first, when RACEGAME.TXT asks one -- once a run)
+        if (select == RG_ID_STORY_NEW && s_storyCode[0] && !s_storyOpen) {
+            if (!CodePage("Story Mode", s_storyCode)) { s_storyMenu[0] = 2; continue; }
+            s_storyOpen = 1;
+        }
+        // (a new story or the demo: its difficulty first -- the one chosen last first; Esc there is Story Mode's page again)
+        if ((select == RG_ID_STORY_NEW || select == RG_ID_STORY_DEMO) && LevelPage(1) < 0) { s_storyMenu[0] = (U16)(select == RG_ID_STORY_DEMO ? 1 : 2); continue; }
+        s_storyDemo = select == RG_ID_STORY_DEMO;
         if (select == RG_ID_STORY_CONTINUE) {
             char cur[ADELINE_MAX_PATH], story[ADELINE_MAX_PATH];
             GetSavePath(cur, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
@@ -3995,9 +4009,9 @@ static S32 StoryMode(void) {
         RaceMod_LoadFile(path);
         s_storyOn = 1;
         s_raceSp = -1; s_raceOver = 0; s_raceCar = NULL; s_raceWatch[0] = 0; s_raceLevel = -1;
-        Log_Info("[racegame] Story Mode: %s (%s)", select == RG_ID_STORY_NEW ? "a new story" : "the story continued", path);
+        Log_Info("[racegame] Story Mode: %s (%s)", select == RG_ID_STORY_DEMO ? "the demo (Citadel Island)" : select == RG_ID_STORY_NEW ? "a new story" : "the story continued", path);
         Page(NULL, 0);
-        return select == RG_ID_STORY_NEW ? RACEGAME_STORY_NEW : RACEGAME_STORY_CONTINUE;
+        return select == RG_ID_STORY_CONTINUE ? RACEGAME_STORY_CONTINUE : RACEGAME_STORY_NEW;
     }
 }
 

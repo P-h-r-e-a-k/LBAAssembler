@@ -1768,7 +1768,7 @@ void comportement_1()
         {{
             set_var_game({DinoFlies}, 1);
         }}
-        else if (2 <= chapter() && 0 < var_game({RaceTrackStory.WonVar}))
+        else if (2 <= chapter() && 0 < var_game({RaceTrackStory.WonVar}) && 0 == var_game({DemoVar}))
         {{
             set_var_game({DinoFlies}, 1);
         }}

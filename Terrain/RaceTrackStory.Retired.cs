@@ -250,6 +250,9 @@ internal static partial class RaceTrackStory
             if (!storm.Success) throw new NotTheGames("no storm line");
             return All(
                 Swap("if (0 < var_game(111) || 0 < var_game(62))", $"if (0 < var_game({WonVar}))"),
+                // (Story Mode's demo: no ticket -- every crossing booked, the demo's end; RaceTrackStory.Rerun DemoVar)
+                Swap($"if (0 < var_game({WonVar}))\n{{\nif (0 == var_game(13))\n{{",
+                     $"if (0 < var_game({WonVar}) && 1 == var_game({DemoVar}))\n{{\nmessage({DemoFerryText});\n}}\nelse if (0 < var_game({WonVar}))\n{{\nif (0 == var_game(13))\n{{"),
                 Swap("message(314);\nmessage_obj(0, 311);\nmessage(310);",
                     $"if (2 > chapter())\n{{\nmessage({storm.Groups[1].Value});\n}}\nelse\n{{\nmessage(314);\nmessage_obj(0, 311);\nmessage(310);\n}}"))(life);
         }),

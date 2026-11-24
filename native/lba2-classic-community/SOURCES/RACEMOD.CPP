@@ -782,6 +782,9 @@ static int s_onceWon = 0;                  // once_won=: a race won stays won (I
 // scene and come back: an outside scene loaded reads the race file afresh (RaceMod_Island). Every car of the grid disqualified, the
 // official says the second text instead, and the race is won: win='s variables then, and the win's own scene (win_stop=) follows.
 static int s_rerunVar = -1, s_rerunBy = -1, s_rerunText = -1, s_rerunWinText = -1;
+// demo_var=<var>: the game variable a Story Mode demo is marked by (RACEGAME.CPP's Play Demo): 1 from its first moment, in the save. The
+// story set's own key, kept over every island's file read since (not cleared with a track)
+static int s_demoVar = -1;
 static int s_rerunStep = 0;                // 0 none; 1 lost: the car stopping, Twinsen out of it; 2 walking up to the official; 3 said --
                                            // the race again once he has left the scene
 static int s_rerunDq = -1, s_rerunDefault = 0, s_rerunActor = -1, s_firstHome = -1, s_sayMarshal = 0;
@@ -5872,6 +5875,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d", &var, &by) >= 1 && var >= 0 && var < MAX_VARS_GAME) { s_rerunVar = var; s_rerunBy = by; }
         }
         else if (!strcmp(key, "rerun_text")) sscanf(v, "%d %d", &s_rerunText, &s_rerunWinText);
+        else if (!strcmp(key, "demo_var")) { const int var = atoi(v); if (var >= 0 && var < MAX_VARS_GAME) s_demoVar = var; }
         else if (!strcmp(key, "win_pull")) {
             int n, var, value, delay;
             s_winPullOpp = -1;
@@ -7507,6 +7511,12 @@ S32 RaceMod_NewGameScene(S32 scene) {
     }
     // (the camera's last race's eye forgotten: it opened on it, the car out of the picture -- FOLLOWCAM.CPP FollowCamDropOwnEye)
     FollowCamDropOwnEye();
+    // (Story Mode's Play Demo: the game marked a demo as it starts -- the game's variables cleared just before, InitGameLists)
+    { extern int RaceGame_TakeStoryDemo(void);
+      if (RaceGame_TakeStoryDemo()) {
+          if (s_demoVar >= 0) { ListVarGame[s_demoVar] = 1; Log_Info("[racemod] the demo: game variable %d = 1 (Citadel Island alone)", s_demoVar); }
+          else Log_Warn("[racemod] the demo: the story set has no demo_var= -- played as the whole story");
+      } }
     if (s_startScene >= 0) {
         Log_Info("[racemod] a new game starts at the start line: scene %d", s_startScene);
         return s_startScene;

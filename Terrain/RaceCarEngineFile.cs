@@ -675,6 +675,8 @@ internal static class RaceCarEngineFile
         var text = new StringBuilder("# LBA Assembler race car setup: the folder's tracks, each raced where and when the game is (RACEMOD.CPP track=)\n");
         text.Append(car.CarKeys());
         if (fine) text.Append("set_weather=fine\n");
+        // (Story Mode's Play Demo: the game variable it marks the game with -- RACEMOD.CPP demo_var=, RaceTrackStory.Rerun DemoVar)
+        text.Append($"demo_var={RaceTrackStory.DemoVar}\n");
         var n = 0;
         var onceWritten = false; // (the file's lines for every track -- seat_cube=, follow_decor= -- written once, not once per track)
         foreach (var t in RaceTrackService.Tracks(info))

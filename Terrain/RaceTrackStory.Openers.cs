@@ -222,6 +222,9 @@ internal static partial class RaceTrackStory
             // (and a lost race's official's word, RaceTrackStory.Rerun: Mr. Paul's and the flag marshal's, at RerunBase)
             for (var r = 0; r < RerunLines.Length; r++)
                 bank.Texts.Add(new Lba2TextBank.Text { Id = RerunBase + r, Attribute = Lba2TextBank.NormalAttribute, Bytes = Dos.GetBytes(RerunLines[r][lang < RerunLines[r].Length ? lang : 0]) });
+            // (and the demo's end at the ferry office, Citadel Island's: RaceTrackStory.Rerun DemoFerryLine)
+            if (island.IslandByte == RaceTrackIsland.Citadel.IslandByte)
+                bank.Texts.Add(new Lba2TextBank.Text { Id = DemoFerryText, Attribute = Lba2TextBank.NormalAttribute, Bytes = Dos.GetBytes(DemoFerryLine[lang < DemoFerryLine.Length ? lang : 0]) });
             hqr = bank.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);

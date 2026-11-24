@@ -171,6 +171,7 @@ internal static class NewLinesCommand
         // (a story race lost: the official's word -- RACEMOD.CPP rerun=, RaceTrackStory.Rerun)
         (new(@"^Hold on, Twinsen! There were some irregularities|^Twinsen! More irregularities, I'm afraid"), "Mr Paul", null),
         (new(@"^Twinsen, wait! The stewards found irregularities|^Twinsen! The stewards found irregularities again"), "Flick", null),
+        (new(@"^I'm terribly sorry, Mr\. Twinsen, every crossing to White Leaf Desert"), "Quetch in the Inter-Islands Ferry", null),
         (new(@"^My regular's umbrella, from the pharmacy|^And that umbrella you brought back|^And if you ever find my regular's umbrella"), "Luc", null),
         (new(@"^There's a crowd at the new track already|^Luc's barrel car is a wheel short|^The town circuit's open, Twinsen|^We've won here! Mr\. Paul's ticket|^Twinsen, the Dino-Fly says the sky's too stormy"), "Zoe", null),
         (new(@"^Flick says the Dean has shut the track|^The Dean's exam pages blew all over|^The sand will choke the engine|^No helmet, no race\. The giant clam|^Everything's ready, Twinsen\. Let's go and win the desert"), "Zoe", null),

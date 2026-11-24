@@ -58,6 +58,22 @@ internal static partial class RaceTrackStory
         },
     };
 
+    // Story Mode's Play Demo (the user, 2026-11-24: "Let's push a demo build, that is only Citadel Island, we can gate this by preventing
+    // people being able to buy a ferry ticket. Let's keep the one install, but add a 'Play Demo' to the 'Story Mode' menu"): the game
+    // variable the demo is marked by (RACEMOD.CPP demo_var=, set as the demo starts; kept in its save), and the ferry office's word in
+    // its place of the ticket -- Citadel Island's bank alone, past the officials' (OpenerTexts). The Dino-Fly doesn't fly in it either
+    // (DinoFlyFlights).
+    public const int DemoVar = 293, DemoFerryText = RerunBase + 10;
+    internal static readonly string[] DemoFerryLine =
+    {
+        "I'm terribly sorry, Mr. Twinsen, every crossing to White Leaf Desert is fully booked. That's as far as the demo goes -- thank you for playing!",
+        "Je suis navré, monsieur Twinsen, toutes les traversées pour le Désert de la Feuille Blanche sont complètes. La démo s'arrête ici -- merci d'avoir joué !",
+        "Es tut mir schrecklich leid, Herr Twinsen, alle Überfahrten zur Weißblattwüste sind ausgebucht. Hier endet die Demo -- danke fürs Spielen!",
+        "Lo siento muchísimo, señor Twinsen, todas las travesías al Desierto de la Hoja Blanca están completas. La demo termina aquí: ¡gracias por jugar!",
+        "Mi dispiace tanto, signor Twinsen, tutte le traversate per il Deserto della Foglia Bianca sono al completo. La demo finisce qui: grazie per aver giocato!",
+        "Lamento imenso, senhor Twinsen, todas as travessias para o Deserto da Folha Branca estão esgotadas. A demo termina aqui -- obrigado por jogar!",
+    };
+
     // Each story race's disqualified cars: a game variable of its own (bit n: the race file's opponent n + 1). 280-292, spare until now
     // (reference_game_variables_wide: next free 280).
     internal static int? RerunVar(RaceTrackIsland island, bool town, bool lava) =>
