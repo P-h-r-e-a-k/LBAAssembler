@@ -5843,6 +5843,14 @@ startaffscene:
                    DrawAnimatedPolys — that path is exterior terrain NZW. */
                 GpuRenderer_RestoreTerrain();
             }
+        } else if (GpuRenderer_IsActive() AND (CubeMode == CUBE_EXTERIEUR OR GpuScene)) {
+            /* A speaker's animation in a dialogue redraws the bodies too (AffScene's object pass, its boxes cleaned on Log), so the
+               offscreen target starts again from the terrain as well: kept, each step's pose was drawn over the last ones -- the
+               speaker smeared, a necklace's lines thick blobs (Zoe's, scene 42's cut scene). The animated polys go back on with it
+               (the restore took them off the target; the software keeps the last frame's on Log, still). */
+            GpuRenderer_RestoreTerrain();
+            if (CubeMode == CUBE_EXTERIEUR)
+                DrawAnimatedPolys();
         }
         break;
 
