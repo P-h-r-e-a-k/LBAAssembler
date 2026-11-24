@@ -43,9 +43,12 @@ internal static class DomeVelodrome
     private const double TanS = 0.35355339059327373, TanT = 0.9004040442978399, Kc = 0.15, Fillet = 110;
     // the fence on the top edge: a kickboard, posts, two rails; a gate in the middle of each straight
     private const double KickH = 260, Rail1 = 560, Rail2 = 960, RailR = 28, PostH = 1000, PostHalf = 30, PostGap = 880, GateHalf = 1.4 * Cell;
-    // the stands behind the far straight: a walkway (wide: the fence's invisible wall takes most of a cell either side of it, its cells
-    // across the grid's diagonal), then the rows
-    private const double Walkway = 3 * Cell, RowD = 640, RowR = 320, StandHalf = 13.5 * Cell, SeatPitch = 460, SeatHalf = 180;
+    // the stands behind the far straight: a walkway, then the rows. The walkway runs along the grid's diagonal, so its edges are staircases
+    // of whole cells: the stands' front on the line through a row of cells' corners (R3 + Ft + Walkway = 24 diagonal half-steps, a little
+    // over), so that no cell in front of it holds a stand's pixel -- a brick within Twinsen's height is a wall (GRILLE.CPP WorldColBrickFull)
+    // -- and the walkway between the fence's cells and the stands' four rows of cells wide, a lane of three half-steps (1086) clear all
+    // along it: on one of a single half-step he was pushed from one staircase to the other all the way (the user, 2026-11-24)
+    private const double Walkway = 5 * Cell * IRt2 - Ft + 8, RowD = 640, RowR = 320, StandHalf = 13.5 * Cell, SeatPitch = 460, SeatHalf = 180;
     private const int Rows = 8;
     // the dome's wall: round the hall, full height on the far side, a low kerb on the near (cut away, as the game's rooms are)
     private const double Rw = 30.5 * Cell, Tw = Cell, Hw = 6300, Stub = 110, FarCos = 0.22, ColR = 175, ColAt = Rw - 70, ColStep = 9 * Math.PI / 180;
@@ -788,11 +791,36 @@ internal static class DomeVelodrome
                     dmin = Math.Min(dmin, dd); dmax = Math.Max(dmax, dd);
                 }
                 var fenceLine = R3 + Ft / 2;
-                if (dmin <= fenceLine && dmax >= fenceLine && !(ea <= 0 && Math.Abs(a) < GateHalf + 200))
+                // (on the straights, along the grid's diagonal, the cells the fence's line only reaches into at a corner are left open: the
+                // fence in them goes to its own cells' bricks -- Install, MovedPixel -- and walls them off by its own cells alone)
+                // (the gate: its middle cell -- the cells either side hold its posts, walls to walkers by their bricks anyway)
+                var margin = ea <= 0 ? Ft : 0;
+                if (dmin <= fenceLine - margin && dmax >= fenceLine + margin && !(ea <= 0 && Math.Abs(a) < GateHalf / 2))
                     fence = Math.Min(Height - 1, (int)Math.Ceiling((TopEdge(Bank(psi)) + PostH + 300) / Lay) - 1);
                 cols[x, z] = (top, shape, fence);
             }
         return cols;
+    }
+
+    // A pixel of the fence or the stands whose surface lies in a cell open to walkers at its layer -- a corner of the cell reaching into
+    // them -- goes to the brick of a neighbouring cell that is solid there, when its picture holds it: a brick in the open cell would wall
+    // it (WorldColBrickFull), and the neighbour is on the fence's or the stands' side of the open cell, so it is drawn over Twinsen, or
+    // under him, as the thing itself is (DrawOverBrick re-blits the bricks in front of him)
+    private static (int X, int Z) MovedPixel((int Top, int Shape, int Fence)[,] cols, M mat, int x, int y, int z, int gx, int gy)
+    {
+        if (mat is not (M.Kick or M.Post or M.Rail or M.Stand or M.Seat)) return (x, z);
+        var (top, _, fence) = cols[x, z];
+        if (y <= top || y <= fence) return (x, z);
+        foreach (var (dx, dz) in new[] { (1, 0), (0, 1), (-1, 0), (0, -1) })
+        {
+            int nx = x + dx, nz = z + dz;
+            if (nx < 0 || nz < 0 || nx >= Size || nz >= Size) continue;
+            var (nt, _, nf) = cols[nx, nz];
+            if (y > nt && y > nf) continue;
+            int i = gx - 24 * (nx - nz) + 24, j = gy - 12 * (nx + nz) + 15 * (y + 1);
+            if (i >= 0 && i < 48 && j >= 0 && j < 38) return (nx, nz);
+        }
+        return (x, z);
     }
 
     // ================================================================================================= into the game
@@ -824,6 +852,7 @@ internal static class DomeVelodrome
         // (the cells the floor's and the boards' own pixels are in: none may be over the cell Twinsen stands in -- GRILLE.CPP
         // WorldColBrickFull takes any brick within his height for a wall over his head)
         var groundCells = new HashSet<int>();
+        var cols = Collision();
         const int W = Picture.W, H = Picture.H;
         for (var row = 0; row < H; row++)
             for (var col = 0; col < W; col++)
@@ -832,6 +861,7 @@ internal static class DomeVelodrome
                 if (cell < 0) continue;
                 int cx = cell & 63, cy = cell >> 6 & 31, cz = cell >> 11;
                 int gx = Picture.X0 + col, gy = Picture.Y0 + row;
+                (cx, cz) = MovedPixel(cols, (M)(pic.Mat[row * W + col] & ~GroundPixel), cx, cy, cz, gx, gy);
                 // (the cell's brick: 48 x 38, its top corner the cell's top-back corner; a pixel past its bottom row goes to the cell under
                 // it, or the one in front)
                 foreach (var (dx, dy, dz) in new[] { (0, 0, 0), (0, -1, 0), (1, 0, 1), (1, -1, 1) })
@@ -850,7 +880,6 @@ internal static class DomeVelodrome
         var renderTime = clock.Elapsed.TotalSeconds;
 
         // ---- the cells: the collision under the picture, the bricks where it shows
-        var cols = Collision();
         // (where the boards are drawn in a cell over the collision's top -- the turns' banking, steeper than the game's slopes -- the top
         // raised to that cell, its slope fitted there: he stands on the boards or a little over them, never under a ceiling of them; the
         // edge stress test, 2026-11-24, found him boxed in on the turns, unable to jump or walk on)
