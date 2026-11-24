@@ -544,6 +544,8 @@ internal static class RaceTrackService
                 made.Add(LBAAssembler.Terrain.Citadel.TraluBarRoom.InstallStairs(gameDirectory));
                 // (and the Tavern's plant out of its corner at the end of the bar, for the dartboard: Citadel/TavernPlant)
                 made.Add(LBAAssembler.Terrain.Citadel.TavernPlant.Remove(gameDirectory));
+                // (and the Dome of the Slate's inside made a velodrome: DomeVelodrome)
+                made.AddRange(DomeVelodrome.Install(gameDirectory));
             }
             // (the museum's security room's window shut, in every build of Citadel Island: no lift goes down to it any more -- after the
             // museum's displays, CitadelMuseum, as its grid is theirs too)
