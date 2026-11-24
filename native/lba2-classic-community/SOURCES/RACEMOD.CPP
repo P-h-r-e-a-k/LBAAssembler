@@ -894,6 +894,11 @@ static int s_nbAchs = 0;
 static S32 s_achsAt = 0, s_achUntil = 0;
 static char s_achText[96] = "";
 static char s_achId[24] = "";                // (the achievement shown: its icon in the toast -- AchToast)
+static char s_achHead[32] = "Achievement unlocked";   // (... and the toast's first line: a postcard into the scrapbook has its own)
+// postcards=<last card's game variable> <cards found's> <cards>: each of the Little Big Postcards found put in the player's scrapbook
+// (RACEGAME.CPP RaceGame_Postcard, its Scrapbook page) -- the user, 2026-11-24: "a scrapbook feature that shows every postcard we've
+// gathered ... a per player feature so not all post cards have to be collected in a single playthrough"
+static int s_cardLastVar = -1, s_cardCountVar = -1, s_cardN = 0, s_cardSeen = -1;
 // A sprint (sprint=, finishline=): the race from the start line to the finish line, once. Each opponent's line ends where it crosses the
 // finish (FinishS); the race's end -- the player over the line, or the one to beat there first -- is followed, RACE_SPRINT_END_MS later,
 // by the dream's waking up (wake=) or the race run again (a loss).
@@ -5153,6 +5158,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "pool_anims")) sscanf(v, "%d %d %d %d", &s_poolSwimAnim, &s_poolTreadAnim, &s_poolDiveAnim, &s_poolFlipAnim);
         else if (!strcmp(key, "pool_splash")) s_poolSplash = atoi(v);
         else if (!strcmp(key, "pool_ladder")) s_hasPoolLadder = sscanf(v, "%d %d %d %d", &s_poolLadder[0], &s_poolLadder[1], &s_poolLadder[2], &s_poolLadder[3]) == 4;
+        else if (!strcmp(key, "postcards")) { if (sscanf(v, "%d %d %d", &s_cardLastVar, &s_cardCountVar, &s_cardN) != 3) s_cardLastVar = -1; s_cardSeen = -1; }
         else if (!strcmp(key, "achieve") && s_nbAchs < RACE_MAX_ACH) {
             char kind[12];
             T_RACE_ACH *ac = &s_achs[s_nbAchs];
@@ -16067,7 +16073,7 @@ void RaceMod_LoadFile(const char *path) {
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
     s_nbPlaques = 0; s_plaqueOn = -1;   // (plaque=: the story file's too)
-    s_nbAchs = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
+    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -20987,7 +20993,30 @@ static void AchievementsFrame(S32 now) {
                       : ac->Kind == 2 ? (S32)NumCube == ac->A && ListObjet[NUM_PERSO].Obj.Y < ac->B
                       : (S32)NumCube == ac->A;
         char title[64];
-        if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "%s", title); snprintf(s_achId, sizeof(s_achId), "%s", ac->Id); s_achUntil = now + 6000; }
+        if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "%s", title); snprintf(s_achId, sizeof(s_achId), "%s", ac->Id); snprintf(s_achHead, sizeof(s_achHead), "Achievement unlocked"); s_achUntil = now + 6000; }
+    }
+}
+// The postcards (postcards=), looked at as the achievements are: the last card found -- the story's variable, the chapter's card -- put in
+// the player's scrapbook; with as many found as its number, every one before it too (a story saved before the scrapbook was), and past
+// the cards' number (the reward given, all thirteen found) the lot. Not in a replay: its variables are set for the egg's scene, not found.
+static void PostcardsFrame(S32 now) {
+    if (s_cardLastVar < 0 || s_cardLastVar >= MAX_VARS_GAME || s_cardN <= 0 || NewCube != -1 || RaceGame_Replaying()) return;
+    const int last = ListVarGame[s_cardLastVar];
+    if (last == s_cardSeen) return;
+    s_cardSeen = last;
+    const int found = s_cardCountVar >= 0 && s_cardCountVar < MAX_VARS_GAME ? ListVarGame[s_cardCountVar] : 0;
+    int fresh = 0;
+    if (last >= 1 && last <= s_cardN) {
+        fresh = RaceGame_Postcard(last);
+        if (found >= last) for (int k = 1; k < last; k++) RaceGame_Postcard(k);
+    } else if (last > s_cardN && found >= s_cardN) {
+        for (int k = 1; k <= s_cardN; k++) RaceGame_Postcard(k);
+    }
+    if (fresh) {
+        snprintf(s_achHead, sizeof(s_achHead), "Into the scrapbook");
+        snprintf(s_achText, sizeof(s_achText), "Postcard %d of %d", last, s_cardN);
+        snprintf(s_achId, sizeof(s_achId), "postcards");
+        s_achUntil = now + 6000;
     }
 }
 // ---- the bowling game (the user, 2026-11-12: "we control one of the four bowling characters and not Twinsen") ----------------------------------------
@@ -22550,6 +22579,7 @@ static void DartAchieve(S32 now, const char *id) {
     if (!RaceGame_Achieve(id, title, sizeof(title))) return;
     snprintf(s_achText, sizeof(s_achText), "%s", title);
     snprintf(s_achId, sizeof(s_achId), "%s", "darts");
+    snprintf(s_achHead, sizeof(s_achHead), "Achievement unlocked");
     s_achUntil = now + 6000;
 }
 
@@ -24260,6 +24290,7 @@ void RaceMod_Frame(void) {
     FootEdgeFrame();
     PoolFrame(TimerRefHR);
     AchievementsFrame(TimerRefHR);
+    PostcardsFrame(TimerRefHR);
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
     VeloFrame(TimerRefHR);
@@ -25114,7 +25145,8 @@ static void AchToast(S32 now) {
     if (!s_achText[0] || now >= s_achUntil) return;
     const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
     // (the display's smaller font, the box as wide as its words need and no wider than the screen)
-    char head[32] = "Achievement unlocked", title[96];
+    char head[32], title[96];
+    snprintf(head, sizeof(head), "%s", s_achHead);
     snprintf(title, sizeof(title), "%s", s_achText);
     const S32 words = (SizeFont(title) > SizeFont(head) ? SizeFont(title) : SizeFont(head)) * 3 / 4;
     const S32 margin = 14, boxH = 64;

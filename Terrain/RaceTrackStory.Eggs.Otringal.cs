@@ -77,6 +77,8 @@ internal static partial class RaceTrackStory
     {
         $"achieve=spanked var {Drunk} {Scolded}",
         $"achieve=postcards var {EggLastCard} {PostcardsRewarded}",
+        // (and each card found into the player's scrapbook as it is found -- RACEMOD.CPP postcards=, RACEGAME.CPP's Scrapbook page)
+        $"postcards={EggLastCard} {EggCards} {PostcardCount}",
         $"achieve=dinofly var {Terrain.Polar.PolarDinofly.TalkedVar} 1",
         $"achieve=stella scene {StellaEntities.Scene}",
         // (the Wizard and the cow as the telescope shows them -- its view on, ScopeVar -- not the cow's field walked into: the user, 2026-11-12,

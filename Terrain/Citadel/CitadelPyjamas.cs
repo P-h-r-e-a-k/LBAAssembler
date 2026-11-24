@@ -29,7 +29,9 @@ internal static class CitadelPyjamas
     // (the most of the light a gown point takes: Install, the ramp's end)
     private const float MaxGownLight = 1f;
     private const int Hips = 2, Chest = 3, Head = 14;
-    private const float HemY = 140;
+    // (the hem down at his ankles since 2026-11-24 -- SIN's picture, GitHub #26, "Twinsen's legs glitch through his nightgown": the skirt is
+    // rigid on his hips and, from a hem at his shins, his back leg's bare shin swung out through it as he walked)
+    private const float HemY = 80;
     private static readonly int[] Shins = { 9, 12 }, Feet = { 10, 13 };
 
     internal static Body Build(Body body)
@@ -43,9 +45,10 @@ internal static class CitadelPyjamas
             var bone = BoneOf(f.Points[0]);
             if (Shins.Contains(bone) || Feet.Contains(bone))
             {
-                // (bare under the hem; above it, inside the gown, the gown's -- a knee through the skirt's front as he strides showed skin)
+                // (his feet bare; his shins the gown's, whole: what of a leg swings out through the skirt as he strides is its cloth, not skin
+                // -- GitHub #26)
                 if (f.Colour is Jeans or Jeans2 or Shoes)
-                    body.Faces[i] = f.Points.Max(p => world[p].Y) > HemY + 40 ? f with { Colour = Gown, Material = -1, Texture = null } : f with { Colour = Skin, Material = skinMaterial, Texture = null };
+                    body.Faces[i] = Shins.Contains(bone) ? f with { Colour = Gown, Material = -1, Texture = null } : f with { Colour = Skin, Material = skinMaterial, Texture = null };
                 continue;
             }
             if (f.Colour is not (Shirt or Jeans or Jeans2 or Belt)) continue;
@@ -67,7 +70,7 @@ internal static class CitadelPyjamas
         const int Around = 16;
         var hipPts = world.Skip(body.Bones[Hips].Start).Take(body.Bones[Hips].Count).ToArray();
         var cz = (hipPts.Min(p => p.Z) + hipPts.Max(p => p.Z)) / 2;
-        var rings = new[] { (Y: 600f, Rx: 140f, Rz: 118f), (Y: 330f, Rx: 168f, Rz: 140f), (Y: HemY, Rx: 178f, Rz: 150f) }
+        var rings = new[] { (Y: 600f, Rx: 140f, Rz: 118f), (Y: 330f, Rx: 172f, Rz: 152f), (Y: HemY, Rx: 186f, Rz: 172f) }
             .Select(r => Enumerable.Range(0, Around).Select(k =>
             {
                 var a = (k + 0.5f) * MathF.Tau / Around;

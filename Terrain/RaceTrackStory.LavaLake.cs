@@ -758,10 +758,10 @@ void comportement_1()
             report.Marshal is { Length: >= 10 } m ? (m[6] / 512.0, m[7] / 512.0, m[8]) : null;
 
         // Somewhere off the roads near an island cell, on ground (Chapters' OffRoad, with no search zones of Citadel's in the way)
-        public static (double X, double Z, double Y)? OffRoadNear(RaceTrackReport report, double x, double z, double clear, double reach)
+        public static (double X, double Z, double Y)? OffRoadNear(RaceTrackReport report, double x, double z, double clear, double reach, Func<double, double, bool>? ok = null)
         {
             givers = new();
-            return OffRoad(report, x, z, clear, reach);
+            return OffRoad(report, x, z, clear, reach, ok);
         }
 
         // ... and the island's outside scene it is in, and the way to face (towards `faceX`, `faceZ`); null when there's no such place
@@ -775,7 +775,7 @@ void comportement_1()
 
         // ... on ground near a height `nearY` (within 700: a person beside a start line on a mountain road, not at the cliff's foot)
         public static (int Scene, (double X, double Z, double Y, int Beta) At)? SpotAt(SceneStore store, RaceTrackIsland island, RaceTrackReport report,
-            double x, double z, double nearY, double faceX, double faceZ, double clear = 1, double reach = 12)
+            double x, double z, double nearY, double faceX, double faceZ, double clear = 1, double reach = 12, Func<double, double, bool>? ok = null)
         {
             if (report.GroundAfter is not { } ground) return null;
             for (var r = 0.0; r <= reach; r += 0.5)
@@ -790,6 +790,7 @@ void comportement_1()
                     if (cx < 5 || cx > 59 || cz < 5 || cz > 59) continue;
                     var g = ground(px, pz);
                     if (g < 200 || Math.Abs(g - nearY) > 700) continue;
+                    if (ok is not null && !ok(px, pz)) continue;
                     var scene = OutsideScene(store, island, px, pz);
                     if (scene >= 0) return (scene, Facing((px, pz, g), faceX, faceZ));
                 }

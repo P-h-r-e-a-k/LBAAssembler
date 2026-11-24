@@ -225,6 +225,8 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_BOWL_FIRST 2488
 #define RG_ID_BOWL_WALK 2492
 #define RG_ID_PLAYER_LAST 2492
+#define RG_ID_SCRAPBOOK 2496                // the main menu's Scrapbook: the postcards this player has found (ScrapbookPage, 2026-11-24)
+#define RG_ID_SAVE 73                       // the game's own Save game (GAMEMENU.CPP's case 73): in the story's menu too (the user, 2026-11-24)
 static int StoryResolved(char *out);
 static int AchRowDisabled(int k);
 static void AchRowLabel(int k, char *out, size_t size);
@@ -234,6 +236,9 @@ static const char *PlayerNameAt(int k);
 static int PlayerIndexNow(void);
 static int AchievementsEarned(void);
 static int AchievementsAll(void);
+static int CardsGot(void);
+static int CardsAll(void);
+static void ScrapbookPage(void);
 static S32 AchievementsPage(void);
 static S32 s_replayCode = 0;
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
@@ -1351,6 +1356,7 @@ S32 RaceGame_RowDisabled(S32 num) {
     if (num == RG_ID_GHOST_OWN) return !s_gpLap[0];
     if ((num >= RG_ID_GHOST_EASY && num <= RG_ID_GHOST_HARD) || num == RG_ID_GHOST_EXTREME) return !s_gpLap[GhostRowK(num)] || !GhostLevelOpen(GhostRowK(num) - 1);
     if (num == RG_ID_STORY_CONTINUE) return !HasStorySave();
+    if (num == RG_ID_SCRAPBOOK) return !CardsAll();
     if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) return AchRowDisabled(num - RG_ID_ACH_FIRST);
     return (num == RG_ID_STORY && (!s_story || !s_storyFile[0])) || (num == RG_ID_TRACKS && (!s_tracks || !s_nbTracks));
 }
@@ -1362,7 +1368,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
     if (s_on && num == RG_ID_REPLAY_END) { Label(string, "End the replay"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO)) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO && num != RG_ID_SCRAPBOOK)) return 0;
     // (a player's row: its name, marked when it is this game's)
     // (an achievement's row, a bowler's, the walk round the alley)
     if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) { char row[160]; AchRowLabel(num - RG_ID_ACH_FIRST, row, sizeof(row)); Label(string, row); return 1; }
@@ -1378,6 +1384,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     switch (num) {
     case RG_ID_PLAYER: { char row[96]; snprintf(row, sizeof(row), "Player: %s", PlayerNow()); Label(string, row); return 1; }
     case RG_ID_ACHIEVEMENTS: { char row[64]; snprintf(row, sizeof(row), "Achievements: %d of %d", AchievementsEarned(), AchievementsAll()); Label(string, row); return 1; }
+    case RG_ID_SCRAPBOOK: { char row[64]; snprintf(row, sizeof(row), "Scrapbook: %d of %d", CardsGot(), CardsAll()); Label(string, row); return 1; }
     case RG_ID_PLAYER_NEW: Label(string, "New player..."); return 1;
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -2674,6 +2681,7 @@ static char s_plRoot[ADELINE_MAX_PATH], s_plMine[ADELINE_MAX_PATH], s_plNowName[
 static char s_plNowBorn[12] = "";
 static LogSink *s_plLog = NULL;
 static int s_achRead = 0;                   // (the achievements read from the player's folder: ReadAch)
+static int s_scrapRead = 0;                 // (... and the postcards in their scrapbook: ReadScrap)
 
 static void Slashes(char *s) { for (; *s; s++) if (*s == '\\') *s = '/'; }
 static void TrimSep(char *s) { size_t n = strlen(s); while (n > 1 && (s[n - 1] == '/' || s[n - 1] == '\\')) s[--n] = 0; }
@@ -2800,7 +2808,7 @@ static int AskBorn(const char *who, char *out, size_t size) {
 
 // The per-player settings back as they are before any player's are read, and the files read again for the player now
 static void ForgetPlayer(void) {
-    s_setRead = 0; s_timesRead = 0; s_achRead = 0;
+    s_setRead = 0; s_timesRead = 0; s_achRead = 0; s_scrapRead = 0;
     s_controlsSeen = 0; s_powerupsSeen = 0; s_qualified = 0; s_skipQualifying = 0;
     s_level = 1; s_storyLevel = 1; s_minimap = 1; s_camera = 2; s_raceSky = 0; s_ghost = 0; s_trialLaps = 3;
     s_ghostOther[0] = 0; s_gridCarName[0] = 0; s_setOther[0] = 0; s_nbUnlocked = 0;
@@ -2928,7 +2936,7 @@ static int RemoveFolder(const char *dir) {
 // tracks left. Once only (PLAYERS_MOVED.TXT in it after the first look, whether there was anything to move or not): the game, started there
 // before a player is chosen, makes files of its own in it (an empty save folder, the best times' file) that are nobody's.
 static const char *const s_sharedStays[] = {"lba2.cfg", "RACEGAME_SETTINGS.TXT", "adeline.log", "adeline.prev.log", "Tracks", "crash.txt", "PLAYERS_MOVED.TXT", "REMOTE_CONTROL.TXT"};
-static const char *const s_playerMarks[] = {"PLAYER.TXT", "BESTTIMES.TXT", "STORY_NOW.TXT", "ACHIEVEMENTS.TXT", "GHOSTS", "save", "RACE_NOW.TXT"};
+static const char *const s_playerMarks[] = {"PLAYER.TXT", "BESTTIMES.TXT", "STORY_NOW.TXT", "ACHIEVEMENTS.TXT", "SCRAPBOOK.TXT", "GHOSTS", "save", "RACE_NOW.TXT"};
 static int s_moveFailed = 0;
 static char s_moveTo[ADELINE_MAX_PATH];
 static SDL_EnumerationResult SDLCALL MoveOut(void *, const char *dirname, const char *fname) {
@@ -3368,6 +3376,200 @@ static S32 AchievementsPage(void) {
         if (!strcmp(r->Id, "bowling")) { if (const S32 go = BowlingPage(r)) return go; }
         else if (const S32 go = StartReplay(r, -1)) return go;
     }
+}
+
+// ---- the scrapbook (the user, 2026-11-24: "let's also add a scrapbook feature that shows every postcard we've gathered, we should probably
+// have this as a per player feature so not all post cards have to be collected in a single playthrough") ----------------------------------
+// The Little Big Postcards this player has found, in any of their stories: SCRAPBOOK.TXT in the player's folder ("card <n>" a line), each
+// put there as it is found (RACEMOD.CPP postcards=: RaceGame_Postcard). The cards -- each one's picture, the place its greeting is from,
+// where it was lost, its words -- are the game folder's POSTCARDS.TXT, the build's (LBA Assembler RaceTrackStory.WriteScrapbook):
+// "card <n> <picture> <sky r g b> <far hills r g b> <ground r g b>|<place>|<where>|<words>"; the picture 0 a sun, 1 rain, 2 night, 3 lava.
+#define RG_CARDS_MAX 16
+typedef struct { int Picture; int Sky[3], Far[3], Ground[3]; char Place[64], Where[64], Words[256]; } T_RG_CARD;
+static T_RG_CARD s_cards[RG_CARDS_MAX];
+static int s_nbCards = -1;                  // (the highest card's number; -1: POSTCARDS.TXT not read yet)
+static U8 s_cardGot[RG_CARDS_MAX];
+static void ReadCards(void) {
+    if (s_nbCards >= 0) return;
+    s_nbCards = 0;
+    memset(s_cards, 0, sizeof(s_cards));
+    char path[ADELINE_MAX_PATH], line[512];
+    GetResPath(path, ADELINE_MAX_PATH, "POSTCARDS.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    while (fgets(line, sizeof(line), f)) {
+        int n, pic, c[9], used = 0;
+        if (sscanf(line, "card %d %d %d %d %d %d %d %d %d %d %d%n", &n, &pic, &c[0], &c[1], &c[2], &c[3], &c[4], &c[5], &c[6], &c[7], &c[8], &used) < 11 || !used) continue;
+        if (n < 1 || n > RG_CARDS_MAX) continue;
+        T_RG_CARD *cd = &s_cards[n - 1];
+        cd->Picture = pic;
+        for (int i = 0; i < 3; i++) { cd->Sky[i] = c[i]; cd->Far[i] = c[3 + i]; cd->Ground[i] = c[6 + i]; }
+        // (the place, where, the words: '|' between them)
+        char *fields[3] = {cd->Place, cd->Where, cd->Words};
+        const size_t sizes[3] = {sizeof(cd->Place), sizeof(cd->Where), sizeof(cd->Words)};
+        const char *p = line + used;
+        while (*p == ' ') p++;
+        if (*p == '|') p++;
+        for (int k = 0; k < 3; k++) {
+            size_t m = 0;
+            while (*p && *p != '|' && *p != '\r' && *p != '\n') { if (m + 1 < sizes[k]) fields[k][m++] = *p; p++; }
+            fields[k][m] = 0;
+            if (*p == '|') p++;
+        }
+        if (n > s_nbCards) s_nbCards = n;
+    }
+    fclose(f);
+}
+static void ScrapPath(char *out) { GetCfgPath(out, ADELINE_MAX_PATH, "SCRAPBOOK.TXT"); }
+static void ReadScrap(void) {
+    if (s_scrapRead) return;
+    s_scrapRead = 1;
+    memset(s_cardGot, 0, sizeof(s_cardGot));
+    char path[ADELINE_MAX_PATH], line[64];
+    ScrapPath(path);
+    if (FILE *f = fopen(path, "r")) {
+        int n;
+        while (fgets(line, sizeof(line), f)) if (sscanf(line, "card %d", &n) == 1 && n >= 1 && n <= RG_CARDS_MAX) s_cardGot[n - 1] = 1;
+        fclose(f);
+    }
+}
+static int CardsAll(void) { ReadCards(); return s_nbCards; }
+static int CardsGot(void) { ReadCards(); ReadScrap(); int n = 0; for (int i = 0; i < s_nbCards; i++) n += s_cardGot[i]; return n; }
+S32 RaceGame_Postcard(S32 card) {
+    if (card < 1 || card > RG_CARDS_MAX) return 0;
+    ReadScrap();
+    if (s_cardGot[card - 1]) return 0;
+    s_cardGot[card - 1] = 1;
+    char path[ADELINE_MAX_PATH];
+    ScrapPath(path);
+    if (FILE *f = fopen(path, "a")) { fprintf(f, "card %d\n", (int)card); fclose(f); }
+    Log_Info("[racegame] scrapbook: postcard %d kept for the player", (int)card);
+    return 1;
+}
+
+// A card on the page, its top left at (x0, y0): found, its picture -- the sky, the far hills, the ground, a sun or rain or stars and a
+// moon or the lava's glow -- in a white border with a stamp; not found, its back, the address's lines and the stamp's square, its number
+#define RG_CARD_W 100
+#define RG_CARD_H 66
+#define RG_CARD_GAP 14
+static void DrawCard(S32 x0, S32 y0, int n, int got, int chosen) {
+    const S32 x1 = x0 + RG_CARD_W, y1 = y0 + RG_CARD_H;
+    const T_RG_CARD *cd = &s_cards[n - 1];
+    const U8 paper = NearestColour(238, 232, 214), ink = NearestColour(70, 60, 50), red = NearestColour(200, 40, 40);
+    if (chosen) Box(x0 - 4, y0 - 4, x1 + 4, y1 + 4, RG_ORANGE);
+    else Box(x0 + 4, y0 + 4, x1 + 4, y1 + 4, BLACK);            // (its shadow)
+    if (!got) {
+        Box(x0, y0, x1, y1, NearestColour(150, 140, 120));
+        Box(x0 + 2, y0 + 2, x1 - 2, y1 - 2, NearestColour(196, 188, 166));
+        const S32 mid = x0 + RG_CARD_W / 2 + 4;
+        Line(mid, y0 + 10, mid, y1 - 10, ink);
+        for (int k = 0; k < 3; k++) Line(mid + 8, y0 + 32 + k * 10, x1 - 8, y0 + 32 + k * 10, ink);
+        Line(x1 - 24, y0 + 7, x1 - 8, y0 + 7, ink); Line(x1 - 8, y0 + 7, x1 - 8, y0 + 25, ink);
+        Line(x1 - 8, y0 + 25, x1 - 24, y0 + 25, ink); Line(x1 - 24, y0 + 25, x1 - 24, y0 + 7, ink);
+        char num[8];
+        snprintf(num, sizeof(num), "%d", n);
+        Text(x0 + RG_CARD_W / 4 + 2, y0 + RG_CARD_H / 2 - 13, num, chosen ? RG_ORANGE : LBAWHITE);
+        return;
+    }
+    Box(x0, y0, x1, y1, paper);
+    const S32 ix0 = x0 + 5, iy0 = y0 + 5, ix1 = x1 - 5, iy1 = y1 - 5, horizon = iy0 + (iy1 - iy0) * 55 / 100;
+    const U8 sky = NearestColour(cd->Sky[0], cd->Sky[1], cd->Sky[2]), far = NearestColour(cd->Far[0], cd->Far[1], cd->Far[2]),
+             ground = NearestColour(cd->Ground[0], cd->Ground[1], cd->Ground[2]);
+    Box(ix0, iy0, ix1, iy1, sky);
+    // (the sun, the moon or the lava's glow behind the hills; rain and stars over the sky)
+    const S32 sx = ix0 + (ix1 - ix0) * 30 / 100, sy = iy0 + (horizon - iy0) * 45 / 100;
+    if (cd->Picture == 0 || cd->Picture == 2 || cd->Picture == 3) {
+        const int r = cd->Picture == 3 ? 11 : 7;
+        const U8 disc = cd->Picture == 0 ? NearestColour(250, 220, 90) : cd->Picture == 2 ? NearestColour(230, 230, 210) : NearestColour(250, 150, 50);
+        const S32 cy = cd->Picture == 3 ? horizon - 2 : sy;
+        for (int dy = -r; dy <= r; dy++) {
+            const int w = (int)sqrt((double)(r * r - dy * dy));
+            Line(sx - w, cy + dy, sx + w, cy + dy, disc);
+        }
+        if (cd->Picture == 2) {                                 // (a crescent: the sky over its other side; stars)
+            for (int dy = -r; dy <= r; dy++) {
+                const int w = (int)sqrt((double)(r * r - dy * dy));
+                if (w > 1) Line(sx + 3 - w, cy + dy - 2, sx + 3 + w, cy + dy - 2, sky);
+            }
+            const U8 star = NearestColour(240, 240, 255);
+            for (int k = 0; k < 9; k++) { const S32 px = ix0 + 6 + (k * 37) % (ix1 - ix0 - 10), py = iy0 + 3 + (k * 13) % (horizon - iy0 - 6); Line(px, py, px + 1, py, star); }
+        }
+    }
+    for (S32 x = ix0; x <= ix1; x++) {
+        const S32 top = horizon - 7 - (S32)(6 * sin(x * 0.11 + n * 1.7));
+        Line(x, top, x, iy1, far);
+    }
+    for (S32 x = ix0; x <= ix1; x++) {
+        const S32 top = horizon + 5 + (S32)(4 * sin(x * 0.07 + n * 2.3));
+        Line(x, top, x, iy1, ground);
+    }
+    if (cd->Picture == 1) {                                     // (rain)
+        const U8 rain = NearestColour(170, 180, 200);
+        for (int k = 0; k < 16; k++) { const S32 px = ix0 + 4 + (k * 23) % (ix1 - ix0 - 8), py = iy0 + 2 + (k * 11) % (iy1 - iy0 - 12); Line(px, py, px - 3, py + 7, rain); }
+    }
+    if (cd->Picture == 3) {                                     // (the lava's embers)
+        const U8 ember = NearestColour(255, 200, 60);
+        for (int k = 0; k < 10; k++) { const S32 px = ix0 + 5 + (k * 29) % (ix1 - ix0 - 10), py = horizon - 4 - (k * 7) % (horizon - iy0 - 4); Line(px, py, px, py + 1, ember); }
+    }
+    // (the stamp, in the corner)
+    Box(ix1 - 16, iy0 - 2, ix1 + 1, iy0 + 15, paper);
+    Box(ix1 - 13, iy0 + 1, ix1 - 2, iy0 + 12, red);
+}
+
+// The scrapbook's page: the cards in rows of five, each found one its picture, the others face down; under them the chosen card -- found,
+// its greeting and its words; not found, where it was lost. The arrows (or a click) choose one; Esc, Enter or the right button: back.
+static void ScrapbookPage(void) {
+    ReadCards();
+    ReadScrap();
+    const int n = s_nbCards;
+    if (n <= 0) return;
+    int at = 0;
+    S32 padDir;
+    PageLoopStart(&padDir);
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+        const int cols = 5;
+        const S32 gridW = cols * RG_CARD_W + (cols - 1) * RG_CARD_GAP, left = cx - gridW / 2, top = RG_PAGE_TOP + oy + 68;
+        const S32 rows = (n + cols - 1) / cols, below = top + rows * (RG_CARD_H + RG_CARD_GAP) + 4, keysY = RG_PAGE_BOTTOM + oy - 32;
+        S32 dx, dy;
+        if (Nav(&padDir, &dx, &dy)) {
+            if (dx) at = (at + dx + n) % n;
+            else if (dy) { const int t = at + dy * cols; if (t >= 0 && t < n) at = t; else if (dy > 0 && at / cols < (n - 1) / cols) at = n - 1; }
+        }
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        if (click == 2) break;
+        if (click == 1)
+            for (int k = 0; k < n; k++) {
+                const S32 x0 = left + (k % cols) * (RG_CARD_W + RG_CARD_GAP), y0 = top + (k / cols) * (RG_CARD_H + RG_CARD_GAP);
+                if (mx >= x0 && mx <= x0 + RG_CARD_W && my >= y0 && my <= y0 + RG_CARD_H) at = k;
+            }
+        PageFrame("Scrapbook");
+        char line[320];
+        snprintf(line, sizeof(line), "%d of %d postcards found", CardsGot(), n);
+        SmallText(cx, RG_PAGE_TOP + oy + 40, line, RG_GREY, 0);
+        for (int k = 0; k < n; k++)
+            DrawCard(left + (k % cols) * (RG_CARD_W + RG_CARD_GAP), top + (k / cols) * (RG_CARD_H + RG_CARD_GAP), k + 1, s_cardGot[k], k == at);
+        const T_RG_CARD *cd = &s_cards[at];
+        if (s_cardGot[at]) {
+            snprintf(line, sizeof(line), "Greetings from %s!", cd->Place);
+            Text(cx, below, line, RG_ORANGE);
+            Wrapped(cx - RG_PAGE_HALF + 40, below + 32, 2 * RG_PAGE_HALF - 80, RG_LINE, cd->Words, LBAWHITE);
+        } else {
+            snprintf(line, sizeof(line), "Postcard %d: not found yet", at + 1);
+            Text(cx, below, line, RG_GREY);
+            snprintf(line, sizeof(line), "The wind took it somewhere off the race's road: %s.", cd->Where);
+            Wrapped(cx - RG_PAGE_HALF + 40, below + 32, 2 * RG_PAGE_HALF - 80, RG_LINE, line, RG_GREY);
+        }
+        Text(cx, keysY, "Arrows: choose    Esc: back", RG_GREY);
+        Present();
+        if (Escaped() || Confirmed()) { WaitNoInput(); break; }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
 }
 
 static void FeedbackPage(void) {
@@ -6143,6 +6345,9 @@ static S32 GameMenu(S32 inGame) {
     }
     S32 nb = 0;
     if (resume && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESUME);
+    // (the story's game saved from its menu, as its save key does -- the user, 2026-11-24: "It's already possible to save the game with the
+    // save hotkeys, let's add an option into the menu also": the game's own Save game, GAMEMENU.CPP's case 73, its list of saves to name it in)
+    if (resume && !paused && s_storyOn && !s_replaying && s_raceSp < 0) SetRow(s_mainMenu, nb++, RG_ID_SAVE);
     // (a replay: a way out of it, back to the Achievements page -- the user, 2026-11-12, "I had no way of qutting back to the menu from attempting
     // to re-watch an achievement")
     if (inGame && s_replaying) SetRow(s_mainMenu, nb++, RG_ID_REPLAY_END);
@@ -6155,6 +6360,7 @@ static S32 GameMenu(S32 inGame) {
     // (what this player has found: on every main menu -- the title's, the story's, after a race or a time trial (the user, 2026-11-14:
     // "Can we make sure all menu's are uniform please? This menu still misses the achievements option - after finishing a race"))
     SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);
+    SetRow(s_mainMenu, nb++, RG_ID_SCRAPBOOK);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
     s_mainMenu[1] = (U16)nb;
@@ -6182,6 +6388,7 @@ static S32 GameMenu(S32 inGame) {
             break;
         case RG_ID_RESUME:
         case RG_ID_OPTIONS:
+        case RG_ID_SAVE:
             return select;
         case RG_ID_FEEDBACK:
             FeedbackPage();
@@ -6192,6 +6399,9 @@ static S32 GameMenu(S32 inGame) {
             return RACEGAME_TO_MENU;
         case RG_ID_ACHIEVEMENTS:
             { s_replayCode = AchievementsPage(); if (s_replayCode) return s_replayCode; }
+            break;
+        case RG_ID_SCRAPBOOK:
+            ScrapbookPage();
             break;
         case RG_ID_QUIT:
             // (this player's game left for the player menu, whose own Quit ends the game -- the user, 2026-11-12)
