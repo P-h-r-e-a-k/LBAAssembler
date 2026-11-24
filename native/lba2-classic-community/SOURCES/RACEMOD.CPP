@@ -25205,10 +25205,14 @@ static void HudSmall(S32 x, S32 y, const char *text, int align) { HudSmallIn(x, 
 // show only what is in this cube (the user, 2026-10-30: "all power ups, ghosts, and racers are visible at all times on all tracks i.e.
 // viewable from neighbouring cubes"). Each with the body this scene's copies of it have.
 #define RACE_FAR_ITEMS 40000
-static int s_mushBody = -1, s_fakeBody = -1, s_penguinBody = -1, s_oilBody = -1;
+// (the bodies the far ones are drawn with: each kind's, as this scene's own actors of that kind have it -- looked for again in each scene,
+// the last found kept while a scene has none, and forgotten with the track: kept from the first race of a run, the Long Table's pumpkins
+// were drawn from the next cube as another track's mushrooms -- the user, 2026-11-24)
+static int s_mushBody = -1, s_fakeBody = -1, s_penguinBody = -1, s_oilBody = -1, s_farBodiesScene = -1;
+static void FarBodiesForget(void) { s_mushBody = s_fakeBody = s_penguinBody = s_oilBody = -1; s_farBodiesScene = -1; }
 static int PoolBody(const int *scene, const int *actor, int n, int *body) {
-    for (int k = 0; k < n && *body < 0; k++)
-        if (const int a = PoolActor(scene, actor, k)) if (ListObjet[a].Obj.Body.Num >= 0) *body = ListObjet[a].Obj.Body.Num;
+    for (int k = 0; k < n; k++)
+        if (const int a = PoolActor(scene, actor, k)) if (ListObjet[a].Obj.Body.Num >= 0) { *body = ListObjet[a].Obj.Body.Num; break; }
     return *body;
 }
 // One thing at (wx, y, wz), world units, if it is within RACE_FAR_ITEMS of the car; `drawn` counts them, the first setting up the filler.
@@ -25234,26 +25238,29 @@ static void DrawFarItems(void) {
     if (Comportement != C_BUGGY && !RaceOn()) return;
     const T_RACE_DRAW kept = DrawKept();
     int drawn = 0;
+    // (each kind's body looked for again in a scene come into)
+    const int fresh = s_farBodiesScene != (int)NumCube;
+    s_farBodiesScene = (int)NumCube;
     if (s_powerups && !NoItems() && !Qualifying() && MushroomsOut()) {
-        if (s_mushBody < 0)
-            for (int i = 0; i < s_nbMush && s_mushBody < 0; i++) {
+        if (s_mushBody < 0 || fresh)
+            for (int i = 0; i < s_nbMush; i++) {
                 const int a = MushroomActor(&s_mush[i]);
-                if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) s_mushBody = ListObjet[a].Obj.Body.Num;
+                if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) { s_mushBody = ListObjet[a].Obj.Body.Num; break; }
             }
         for (int i = 0; i < s_nbMush; i++) {
             const T_RACE_MUSHROOM *m = &s_mush[i];
             if (m->HasWorld && m->HasY && m->Scene != (int)NumCube && !m->Back) DrawFarItem(s_mushBody, m->WX, m->Y, m->WZ, 0, 0, 0, &drawn);
         }
     }
-    PoolBody(s_fakeScene, s_fakeActor, s_nbFakeActors, &s_fakeBody);
+    if (s_fakeBody < 0 || fresh) PoolBody(s_fakeScene, s_fakeActor, s_nbFakeActors, &s_fakeBody);
     for (int i = 0; i < RACE_MAX_FAKES; i++)
         if (s_fakes[i].On && !InThisCube(s_fakes[i].X, s_fakes[i].Z)) DrawFarItem(s_fakeBody, s_fakes[i].X, (S32)s_fakes[i].Y, s_fakes[i].Z, 0, 0, 0, &drawn);
-    PoolBody(s_penguinScene, s_penguinActor, s_nbPenguinActors, &s_penguinBody);
+    if (s_penguinBody < 0 || fresh) PoolBody(s_penguinScene, s_penguinActor, s_nbPenguinActors, &s_penguinBody);
     for (int i = 0; i < RACE_MAX_PENGUINS; i++) {
         const T_RACE_PENGUIN *pg = &s_penguins[i];
         if (pg->On && !InThisCube(pg->X, pg->Z)) DrawFarItem(s_penguinBody, pg->X, (S32)pg->Y, pg->Z, 0, TurnOf(pg->Heading), 0, &drawn);
     }
-    PoolBody(s_oilScene, s_oilActor, s_nbOilActors, &s_oilBody);
+    if (s_oilBody < 0 || fresh) PoolBody(s_oilScene, s_oilActor, s_nbOilActors, &s_oilBody);
     for (int i = 0; i < RACE_MAX_SLICKS; i++) {
         const T_RACE_SLICK *sl = &s_slicks[i];
         if (sl->On && !InThisCube(sl->X, sl->Z)) DrawFarItem(s_oilBody, sl->X, (S32)sl->Y, sl->Z, sl->Alpha, 0, sl->Gamma, &drawn);
@@ -27089,6 +27096,7 @@ static void ResetTrack(void) {
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopCut = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_pitHidden = 0; s_pitStartVar = -1; s_pitGridSet = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
+    FarBodiesForget(); s_fakeIconBody = -1;
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
     s_raceSkyOff = 0;
