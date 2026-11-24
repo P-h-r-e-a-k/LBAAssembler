@@ -100,8 +100,21 @@ internal sealed class CarMesh(string name, int[]? parents = null)
         Strut(handles[a].Bone, pa, pb, thickness, colour);
     }
     public void Rod(int bone, Vector3 a, Vector3 b, int colour) => Line(P(bone, a), P(bone, b), colour);
+    // Rounded: a strut a round tube, its points shared round it, so it is lit smoothly as a tube is, its ends domed; a box bevelled, each
+    // face with corners of its own, so it is lit as the plane it is, a bevel between catching the light -- the retail game's own look
+    // (HotelKit's reasons). Off, the square bar and the eight-cornered box: every face lit alike, flat. (The user, 2026-11-24: "Can we
+    // also increase the quality of all of the models in the cycle shop, they look very flat and one dimensional. We need to make sure any
+    // and all models we've added and add in the future are to the same quality as retail versions")
+    public bool Rounded { get; set; }
+
     public int[] Box(int bone, Vector3 centre, Vector3 size, int colour, int top = -1)
     {
+        if (Rounded && bone == 0)
+        {
+            var bevel = Math.Clamp(Math.Min(size.X, Math.Min(size.Y, size.Z)) * 0.14f, 2f, 36f);
+            HotelKit.BevelBox(this, centre, size, bevel, new Finish(colour, Light), top >= 0 ? new Finish(top, Light) : null);
+            return Array.Empty<int>();
+        }
         var h = size / 2;
         var hs = new[] { new Vector3(-1, -1, -1), new(1, -1, -1), new(1, -1, 1), new(-1, -1, 1), new(-1, 1, -1), new(1, 1, -1), new(1, 1, 1), new(-1, 1, 1) }
             .Select(c => P(bone, centre + c * h)).ToArray();
@@ -149,6 +162,19 @@ internal sealed class CarMesh(string name, int[]? parents = null)
     // a square bar from a to b (on `bone`), thickness t; returns a point at b's end (for the next bone's pivot)
     public int Strut(int bone, Vector3 a, Vector3 b, float t, int colour)
     {
+        if (Rounded && Vector3.DistanceSquared(a, b) > 1)
+        {
+            var axis = Vector3.Normalize(b - a);
+            var ru = Vector3.Normalize(Vector3.Cross(axis, Math.Abs(axis.Y) > 0.9f ? Vector3.UnitX : Vector3.UnitY)) * t / 2;
+            var rv = Vector3.Normalize(Vector3.Cross(axis, ru)) * t / 2;
+            var sides = t >= 36 ? 8 : 6;
+            var ringA = Loop(bone, a, ru, rv, sides);
+            var ringB = Loop(bone, b, ru, rv, sides);
+            Skin(ringA, ringB, _ => colour, (a + b) / 2);
+            Cap(ringA, P(bone, a - axis * t * 0.3f), colour, a + axis * t * 0.25f);
+            Cap(ringB, P(bone, b + axis * t * 0.3f), colour, b - axis * t * 0.25f);
+            return ringB[0];
+        }
         var d = Vector3.Normalize(b - a);
         var u = Vector3.Normalize(Vector3.Cross(d, Math.Abs(d.Y) > 0.9f ? Vector3.UnitX : Vector3.UnitY)) * t / 2; var v = Vector3.Normalize(Vector3.Cross(d, u)) * t / 2;
         var corners = new[] { u + v, u - v, -u - v, -u + v };

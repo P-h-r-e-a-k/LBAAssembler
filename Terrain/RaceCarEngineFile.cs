@@ -399,6 +399,10 @@ internal static class RaceCarEngineFile
         // and a story race won stays won: driving back to its start line starts no qualifying lap and no grid (a lost one runs again) --
         // RACEMOD.CPP once_won= (the user, 2026-11-07); Track select's races as they were
         if (story) text.Append("once_won=1\n");
+        // ... and a story race lost isn't run again at once: the winner disqualified, the official's word, the race again once Twinsen has been
+        // somewhere else; every car disqualified, won by default -- RACEMOD.CPP rerun= (RaceTrackStory.Rerun). Not Raph's time to beat, nor a dream
+        if (story && info is not null && !storm && track?.Dream is null && opponents.Any(o => !o.Ghost))
+            text.Append(RaceTrackStory.RerunKeys(RaceTrackIsland.ByName(info.Island), town, lava));
         // the easter eggs' (Bù's lap record, the monster's margin, the grey paint, the Wizard's weather, the tortoise: RaceTrackStory.EggRaceKeys)
         if (story && info is not null)
             foreach (var key in RaceTrackStory.EggRaceKeys(RaceTrackIsland.ByName(info.Island), town, info.Story, opponents.Select(o => o.Name).ToList())) text.Append(key).Append('\n');

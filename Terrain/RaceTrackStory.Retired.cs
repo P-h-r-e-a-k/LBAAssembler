@@ -283,6 +283,19 @@ internal static partial class RaceTrackStory
             Swap("1 == var_game(109)", $"{DesertChapter} > chapter() && 1 == var_game(109)", all: true)),
         new(60, 26, @"2 == var_game\(74\) && 1 == var_game\(26\)", "Baldino's radio in the plaza (the game's \"I fixed the car\", var 74) gone in the story", Gone($"{DesertChapter - 1} < chapter()")),
         new(65, 6, @"4 == var_game\(74\) \|\| 3 == var_game\(74\)", "the game's Zoe off shopping by the harbour (var 74 3 or 4) gone in the story", Gone($"{DesertChapter - 1} < chapter()")),
+        // (the Temple of Bú's doors that took a little key -- the Esmers' base's door at the end of the second room, and the base's own two:
+        // open to Twinsen, on foot or in the car, as he comes up to them, no key (the user, 2026-11-24: "inside the temple of Bu the door to
+        // the esmer base requires a key, let's remove that restriction to it just opens"; "Inside the Esmer base ... there's also a door that
+        // requires a key, however we've removed the key so let's have that door just open also")
+        new(11, 18, @"set_track_obj\(19, label_0\)", "the Temple of Bú's door into the Esmers' base opens as Twinsen comes up to it, no little key",
+            Swap("if (0 < nb_little_keys())\n{\nif (19 == col_obj(0) || 18 == col_obj(0))\n{\nuse_one_little_key();\nset_track(label_0);\nset_track_obj(19, label_0);\nset_comportement(comportement_3);\n}\n}",
+                 "if (19 == col_obj(0) || 18 == col_obj(0) || 2500 > distance(0))\n{\nset_track(label_0);\nset_track_obj(19, label_0);\nset_comportement(comportement_3);\n}")),
+        new(12, 21, @"set_track_obj\(22, label_0\)", "the Esmers' base's door (actors 21 and 22) opens as Twinsen comes up to it, no little key",
+            Swap("if (0 < nb_little_keys())\n{\nif (21 == col_obj(0) || 22 == col_obj(0))\n{\nuse_one_little_key();\nset_track(label_0);\nset_track_obj(22, label_0);\nset_comportement(comportement_1);\n}\n}",
+                 "if (21 == col_obj(0) || 22 == col_obj(0) || 2500 > distance(0))\n{\nset_track(label_0);\nset_track_obj(22, label_0);\nset_comportement(comportement_1);\n}")),
+        new(12, 23, @"set_track_obj\(24, label_0\)", "the Esmers' base's door (actors 23 and 24) opens as Twinsen comes up to it, no little key",
+            Swap("if (23 == col_obj(0) || 24 == col_obj(0))\n{\nif (0 < nb_little_keys())\n{\nuse_one_little_key();\nset_track(label_0);\nset_track_obj(24, label_0);\nset_comportement(comportement_1);\n}\n}",
+                 "if (23 == col_obj(0) || 24 == col_obj(0) || 2500 > distance(0))\n{\nset_track(label_0);\nset_track_obj(24, label_0);\nset_comportement(comportement_1);\n}")),
     }, new List<ClosedDoor>());
 
     private static (List<Retirement>, List<ClosedDoor>) MoonRetired()

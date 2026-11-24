@@ -1,3 +1,4 @@
+using LBAAssembler.LbaScript;
 using LBAAssembler.Assets;
 using LBAAssembler.Scenes;
 
@@ -200,19 +201,35 @@ internal static partial class RaceTrackStory
         // second room to the Esmers' base (the user, 2026-11-23: "Please remove the rails from this scene 11 ... We also need to add a slope
         // to the doorway into the esmer base"; drive_in= lets the car through). Its own door straight to the hangar from the stairs' top,
         // 11-19's, gone.
-        b.Edit(TempleScene, "the Temple of Bú driven through: the raised floors' actors and points raised", model =>
+        // (and each room driven in has a car of its own, the island's car actor's -- scene 64's, entity 152, as Kash's sea cave has: out of
+        // the car in a room without one, the car went back outside the door it came in by, gone from where he left it -- the user,
+        // 2026-11-24, "Getting out of Twinsen's car inside the temple of bu can cause it to despawn, probably because it's not added in all
+        // scenes". BUGGY.CPP InitBuggy: unseen while he drives it or it's parked anywhere else, where he left it when it's parked here)
+        var islandCar = b.Store.SceneExists(CarFrom) ? b.Store.Load(CarFrom).Actors.FirstOrDefault(a => a.Entity == CarEntity) : null;
+        Action<SceneScripts> RoomCar(SceneModel model, int scene)
+        {
+            if (islandCar is null) { b.Log.Add($"the Temple of Bú's room car left out of scene {scene}: no car (entity {CarEntity}) in scene {CarFrom}"); return _ => { }; }
+            var car = islandCar.Clone();
+            var hero = model.Actors[0];
+            (car.X, car.Y, car.Z, car.Beta) = (hero.X, hero.Y, hero.Z, 0);
+            b.Log.Add($"the Temple of Bú's scene {scene}: a car of its own (actor {model.Actors.Count}), where Twinsen leaves it");
+            return IslandBeatsA.Add(model, car, CaveCarLife);
+        }
+        b.Edit(TempleScene, "the Temple of Bú driven through: the raised floors' actors and points raised, a car of the room's own", model =>
         {
             var raised = RaiseOnFloors(model, TempleScene);
             b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor in scene 10");
-            return _ => { };
+            return RoomCar(model, TempleScene);
         });
+        if (b.Store.SceneExists(HangarScene))
+            b.Edit(HangarScene, "the Esmers' base (the Temple of Bú's hangar) driven in: a car of the room's own", model => RoomCar(model, HangarScene));
         // Scene 11: the same, and the ladder down to the corridor before the base's door gone -- a ramp there now (TempleOfBuDrive)
         b.Edit(TempleOfBuDrive.Lower, "the Temple of Bú's second room driven through: the raised floors' actors and points raised, the ladder to the base's door a ramp", model =>
         {
             var raised = RaiseOnFloors(model, TempleOfBuDrive.Lower);
             var ladders = model.Zones.RemoveAll(z => z.Type == 6 && z.X0 >= 7 * 1024 && z.X1 <= 9 * 1024 && z.Z0 >= 14 * 1024 && z.Z1 <= 16 * 1024);
             b.Log.Add($"the Temple of Bú driven through: {raised} actors and points raised with the floor in scene 11, {ladders} ladder taken out");
-            return _ => { };
+            return RoomCar(model, TempleOfBuDrive.Lower);
         });
     }
 }

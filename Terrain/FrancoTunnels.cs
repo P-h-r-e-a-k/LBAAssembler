@@ -224,7 +224,7 @@ internal static class FrancoTunnels
                 parts.Add(SceneOps.AddActor(model, a));
                 plateTracks.Add((low, high));
             }
-            string TrackOf((int Low, int High) t) => $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({t.Low});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
+            string TrackOf((int Low, int High) t) => $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({t.Low});\nsample({LiftStop});\n\nlabel({LiftDown});\nwait_nb_dizieme(50);\ngoto(label_{LiftDown});\n\n" +
                         $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({t.High});\nstop();\n\n" +
                         $"label({LiftPlace});\npos_point({t.Low});\ngoto(label_{LiftDown});\n";
             // (every plate starts up and comes down at the scene's start: where Twinsen arrives on one it takes him to the floor)

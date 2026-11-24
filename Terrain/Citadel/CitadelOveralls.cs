@@ -168,7 +168,7 @@ internal static class CitadelOveralls
                 var couple = CoupleInSuit(Body.Read(coupleBytes, 2), MirroredCouples.Contains(c) ? Overalls(Body.Read(bodies.Read(Everyday), 2)) : WithBackPatch(Overalls(Body.Read(bodies.Read(Everyday), 2))), MirroredCouples.Contains(c));
                 couple.LimitOverride = 1100;
                 log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}): {couple.Vertices.Count} points, {couple.Faces.Count} polygons, {couple.Lines.Count} lines, {couple.Spheres.Count} spheres, {couple.Bones.Count} bones");
-                HqrWriter.ReplaceInFile(bodyPath, c, couple.Write());
+                HqrWriter.ReplaceInFile(bodyPath, c, Lit(couple).Write());
                 coupled.Add(c);
                 log.Add($"Twinsen arm in arm with Zoe (BODY.HQR {c}): his part the racing suit's ({couple.Vertices.Count} points, {couple.Faces.Count} polygons)");
             }
@@ -208,23 +208,23 @@ internal static class CitadelOveralls
             {
                 var driver = WithExtras(WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2)), 8, 4)), Body.Read(driverBytes, 2));
                 log.Add($"the buggy's driver (BODY.HQR {d}): {driver.Vertices.Count} points, {driver.Faces.Count} polygons, {driver.Lines.Count} lines, {driver.Spheres.Count} spheres, {driver.Bones.Count} bones");
-                HqrWriter.ReplaceInFile(bodyPath, d, driver.Write());
+                HqrWriter.ReplaceInFile(bodyPath, d, Lit(driver).Write());
                 log.Add($"the buggy's driver (BODY.HQR {d}): the racing suit and helmet, {driver.Vertices.Count} points, {driver.Bones.Count} bones");
             }
             catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException)
             { log.Add($"the buggy's driver (BODY.HQR {d}) left in the tunic's shape: {e.Message}"); }
         }
-        HqrWriter.ReplaceInFile(bodyPath, Tunic, overalls.Write());
-        foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, body.Write());
+        HqrWriter.ReplaceInFile(bodyPath, Tunic, Lit(overalls).Write());
+        foreach (var (entry, body, _) in armed) HqrWriter.ReplaceInFile(bodyPath, entry, Lit(body).Write());
         // (the helmeted one: its entry again on a second pass, else one more at the file's end, and the hero's entity told of it)
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
         int helmetEntry;
-        if (RaceTrackGuards.BodyOf(table, HeroEntity, HelmetBody) is { } had) { HqrWriter.ReplaceInFile(bodyPath, had, helmeted.Write()); helmetEntry = had; }
+        if (RaceTrackGuards.BodyOf(table, HeroEntity, HelmetBody) is { } had) { HqrWriter.ReplaceInFile(bodyPath, had, Lit(helmeted).Write()); helmetEntry = had; }
         else
         {
             helmetEntry = HqrArchive.CountEntries(bodyPath);
-            HqrWriter.AppendToFile(bodyPath, helmeted.Write());
+            HqrWriter.AppendToFile(bodyPath, Lit(helmeted).Write());
             table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, HelmetBody, helmetEntry);
             HqrWriter.ReplaceInFile(ressPath, 44, table);
         }
@@ -292,6 +292,11 @@ internal static class CitadelOveralls
         log.Add($"the overalls' and the helmet's texts: {written} written ({OverallsSlot}, {HelmetSlot} and +100, +200, in all {languages} languages)");
         return log;
     }
+
+    // (a body written lit: with its points' normals and Gouraud polygons. Read, a body isn't, and written so it had no normals at all, every
+    // polygon flat in its one colour -- the pyjamas' trouble, 2026-11-22, and the racing suit's: the user, 2026-11-24, "Twinsen's racing
+    // outfit seems a little flat the same as his pyjamas did before we remoddelled them")
+    private static Body Lit(Body b) { b.Lit = true; return b; }
 
     // Twinsen's everyday body as his racing overalls: the shirt and the jeans one red, the belt white, and a white stripe down the outside
     // of each arm and leg (the limbs' polygons that face out sideways, away from his middle)
@@ -719,9 +724,14 @@ internal static class CitadelOveralls
         for (var i = 0; i < body.Lines.Count; i++) body.Lines[i] = body.Lines[i] with { A = Moved(body.Lines[i].A), B = Moved(body.Lines[i].B) };
         for (var i = 0; i < body.Spheres.Count; i++) body.Spheres[i] = body.Spheres[i] with { Point = Moved(body.Spheres[i].Point) };
         foreach (var (q, colour) in faces) body.Faces.Add(new Face(q.Select(p => at + p).ToArray(), colour, Material: colour == Bright ? -1 : 0));
-        // (the body's own light scales, a point each, moved along with their points; the new ones their own, 1)
+        // (the body's own light scales, a point each, moved along with their points; the new ones as much of the light as their bone's own
+        // take, the most of them -- at 1 the back patch and the helmet climbed only some of the ramp and looked flat beside him, as the
+        // pyjamas' skirt and cap did)
         if (body.LightScale is { } scales && scales.Length > at)
-            body.LightScale = scales.Take(at).Concat(Enumerable.Repeat(1f, k2)).Concat(scales.Skip(at)).ToArray();
+        {
+            var own = scales.Skip(owner.Start).Take(owner.Count).DefaultIfEmpty(1f).Max();
+            body.LightScale = scales.Take(at).Concat(Enumerable.Repeat(own, k2)).Concat(scales.Skip(at)).ToArray();
+        }
         body.Vertices = Enumerable.Repeat(Vector3.Zero, world.Count).ToList();
         body.SetWorld(world.ToArray());
         return body;

@@ -11,6 +11,7 @@
 #include <SVGA/VIDEO.H>
 #include <SYSTEM/WINDOW.H>
 #include "AMBIANCE.H"
+#include <SYSTEM/LOG.H>
 #include "BOOT_EXIT.H"
 
 /* Declared in AMBIANCE.H; see there for what is deliberately not here. */
@@ -92,6 +93,10 @@ U32 HQ_MixSample(S32 numsample, S32 frequence, S32 decalage, S32 repeat, S32 pan
     U8 *ptr;
     S32 sampleSizeBytes = 0;
 
+    // (LBA2_SAMPLE_LOG=1: every sample started, for finding a sound -- the strip club's lift's whine, 2026-11-24)
+    { static int logSamples = -1;
+      if (logSamples < 0) logSamples = getenv("LBA2_SAMPLE_LOG") != NULL;
+      if (logSamples && numsample != -1) Log_Info("[sample] %d freq %d repeat %d volume %d in scene %d", (int)numsample, (int)frequence, (int)repeat, (int)volume, (int)NumCube); }
     if (SamplesEnable AND numsample != -1) {
         HQR_GET_CALLBACK *memoerrorfunc;
 

@@ -71,6 +71,11 @@ internal static partial class RaceTrackStory
     // game's 0-14 and 90-91 there -- and how far before the two of them he stops, cells)
     private const int VictoryWalk = 240;
     private const double TalkBack = 1.6;
+    // the after-Raph cut scene's camera zone (scene 42's type-1 zone number, unused there) and its shot: pitch, distance
+    private const int VictoryCamera = 72;
+    // ... and the walk up to them: its frame counter, tens of frames waited (scene 42's cube variables, unused there), how many before he's put there
+    private const int VictoryTick = 72, VictoryWait = 73, VictoryTimeout = 30;
+    private static readonly int[] VictoryShot = { 420, 5200 };
     // Celebration Island's lava lake: the souvenir seller beaten (1; 2 once he has told what he saw) and his race run (won or not), 203-204
     public const int SellerBeaten = 203, SellerRaced = 204;
     // (205 is Polar Island's dream, 206 Citadel Island's weather: RACEMOD.CPP RaceMod_CitadelWeather.) Twinsen has driven a car on Citadel
@@ -904,7 +909,7 @@ void comportement_1()
                         if (zoeAt is not null) break;
                     }
                 var raphOut = -1; var raphRun = new List<SceneTrackPoint>(); var runFirst = -1;
-                var talkSpot = -1; var talkBeta = 0;
+                var talkSpot = -1; var talkBeta = 0; var victoryCamOn = ""; var victoryCamOff = "";
                 if (zoeAt is { } zw && parkAt is { } pr)
                 {
                     double d = Apart(pr.X, pr.Z, zw.X, zw.Z), bx = zw.X + (pr.X - zw.X) / d * 1.3, bz = zw.Z + (pr.Z - zw.Z) / d * 1.3;
@@ -918,6 +923,18 @@ void comportement_1()
                         talkSpot = model.TrackPoints.Count;
                         model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(tx, model.CubeX), (int)Math.Round(storm.GroundAfter?.Invoke(tx, tz) ?? zw.Y), RaceTrackScenes.CubeLocal(tz, model.CubeY)));
                         talkBeta = RaceTrackMath.Turn(Math.Atan2(mx - tx, mz - tz));
+                        // (the cut scene's shot: from Zoe's side of the road, off it, looking across at the three of them and the road -- the
+                        // start line's banner over the road behind them, not across the picture in front: the user, 2026-11-24, "we should
+                        // also change the camera angle on this so it's more visible and not blocked by the start/finish line". A camera
+                        // zone round them, on while the cut scene plays -- VictoryCamera)
+                        double cx = (mx + tx) / 2, cz = (mz + tz) / 2;
+                        var groundY = (int)Math.Round(storm.GroundAfter?.Invoke(cx, cz) ?? zw.Y);
+                        int lx0 = RaceTrackScenes.CubeLocal(cx, model.CubeX), lz0 = RaceTrackScenes.CubeLocal(cz, model.CubeY);
+                        // (its target in the scene's own cells, as the island's camera zones have it)
+                        var shot = new[] { lx0 / 512, groundY / 256 + 3, lz0 / 512, VictoryShot[0], RaceTrackMath.Turn(Math.Atan2(pr.X - zw.X, pr.Z - zw.Z)), 0, VictoryShot[1], 8 };
+                        model.Zones.Add(new SceneZoneModel { Type = 1, Num = VictoryCamera, X0 = lx0 - 6144, X1 = lx0 + 6144, Y0 = groundY - 2000, Y1 = groundY + 3000, Z0 = lz0 - 6144, Z1 = lz0 + 6144, Info = shot });
+                        victoryCamOn = $"set_camera({VictoryCamera}, 1);\n        ";
+                        victoryCamOff = $"set_camera({VictoryCamera}, 0);\n        ";
                     }
                     raphOut = model.TrackPoints.Count;
                     // (Raph's car, parked by them on the road: the lap of honour pulls up just short of it)
@@ -1143,7 +1160,7 @@ void comportement_2()
     {{
         message({Id(Line.ZoeJoins)});
         comportement_hero({TwinsenAndZoe});
-        cinema_mode(0);
+        {victoryCamOff}cinema_mode(0);
         set_dir_obj(0, MOVE_MANUAL);
         invisible(1);
         suicide();
@@ -1153,9 +1170,11 @@ void comportement_2()
     // lap walk him to Zoe and Raph and have him talk to them as part of the scripted cut scene, his control scripted till Raph runs off)
     if ({Driving} != comportement_hero() && {RaphOutLabel + 1} == l_track_obj({raphIndex}))
     {{
-        cinema_mode(1);
+        {victoryCamOn}cinema_mode(1);
         set_dir_obj(0, NO_MOVE);
         set_track_obj(0, label_{VictoryWalk});
+        set_var_cube({VictoryTick}, 0);
+        set_var_cube({VictoryWait}, 0);
         set_comportement(comportement_3);
     }}
     // (talked to before Raph is: her kiss -- the track's label 2, the game's animation 84 -- then her congratulations and Raph's promise)
@@ -1175,10 +1194,23 @@ void comportement_2()
 
 void comportement_3()
 {{
-    if ({VictoryWalk + 1} == l_track_obj(0))
+    if ({VictoryWalk + 1} == l_track_obj(0) || {VictoryWalk + 3} == l_track_obj(0))
     {{
         set_track(label_2);
         set_comportement(comportement_4);
+    }}
+    else
+    {{
+        add_var_cube({VictoryTick}, 1);
+        if (10 < var_cube({VictoryTick}))
+        {{
+            set_var_cube({VictoryTick}, 0);
+            add_var_cube({VictoryWait}, 1);
+        }}
+        if ({VictoryTimeout} == var_cube({VictoryWait}))
+        {{
+            set_track_obj(0, label_{VictoryWalk + 2});
+        }}
     }}
 }}
 
@@ -1248,7 +1280,10 @@ void comportement_1()
                     // (Twinsen's walk up to them, the cut scene's -- Zoe's life sets him on it)
                     if (zoeScript is not null && talkSpot >= 0)
                         scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() +
-                            $"\n\nlabel({VictoryWalk});\nanim(1);\ngoto_point({talkSpot});\nanim(0);\nbeta({talkBeta});\n\nlabel({VictoryWalk + 1});\nstop();\n");
+                            $"\n\nlabel({VictoryWalk});\nanim(1);\ngoto_point({talkSpot});\nanim(0);\nbeta({talkBeta});\n\nlabel({VictoryWalk + 1});\nstop();\n" +
+                            // (not there in time -- the start line's post, his own car in the way: put there, as the prize at the town
+                            // circuit's line does)
+                            $"\nlabel({VictoryWalk + 2});\npos_point({talkSpot});\nbeta({talkBeta});\nanim(0);\n\nlabel({VictoryWalk + 3});\nstop();\n");
                     paulScript(scripts);
                     // (Raph's car, parked by the start line: in sight while he stands by Zoe after his time is beaten -- the lap of honour pulls
                     // up by it, the user, 2026-11-10: "Raph should be standing next to Zoe but Raph's car should be there next to him" -- and

@@ -164,7 +164,7 @@ internal static class BowlingAlley
             a.Flags |= RaceTrackScenes.CarrierFlag; a.Move = 3; a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
             var plate = SceneOps.AddActor(model, a);
             parts.Add(plate);
-            Text(plate, Still(), $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({low});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
+            Text(plate, Still(), $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({low});\nsample({LiftStop});\n\nlabel({LiftDown});\nwait_nb_dizieme(50);\ngoto(label_{LiftDown});\n\n" +
                                  $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({high});\nstop();\n");
         }
         var ride = string.Concat(parts.Select(i => $"            set_track_obj({i}, label_{LiftRide});\n"));

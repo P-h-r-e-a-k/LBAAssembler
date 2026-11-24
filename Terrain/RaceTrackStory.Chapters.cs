@@ -1778,6 +1778,11 @@ void comportement_1()
         }}
     }}");
             text = Loose(text, "if (1 == var_game(121))\n{\nadd_choice(354);\n}", "add_choice(354);");
+            // (lying sick, not yet flying, he talks where he lies: no lifting his head first, his track's label 0 (anim 337), nor during his
+            // line -- the lying body with that anim showed two heads, the user, 2026-11-24: "Dinofly lifting his head to talk to us leaves
+            // his static model still so he has two heads". Standing, his own talking anim, 334, as before)
+            text = Loose(text, $"if (0 == var_game({DinoFlies}))\n{{\nset_track(label_0);\n}}", $"if (0 == var_game({DinoFlies}))\n{{\nset_track(label_10);\n}}");
+            text = text.Replace("set_anim_dial(337);", "set_anim_dial(335);");
             scripts.SetText(DinoFlyActor, ScriptKind.Life, text);
             // (Twinsen's side of it, his own script: the Dino-Fly well, his Action by it starts its question -- the game's 100/101, not "it's
             // sick", 333)

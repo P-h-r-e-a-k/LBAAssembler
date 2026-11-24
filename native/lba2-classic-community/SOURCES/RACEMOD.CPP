@@ -770,6 +770,31 @@ static S32 s_runAgainAt = 0;                // ... when the car goes back to the
 #define RACE_RUN_AGAIN_MS 1500             // ... this long after its finish line
 static int s_winSet[2 * RACE_MAX_SETS], s_nbWinSet = 0;
 static int s_onceWon = 0;                  // once_won=: a race won stays won (Inert)
+// rerun=<var> [<entity>] and rerun_text=<text> <default win text> (the user, 2026-11-24: "I just failed to win the citadel 2 race but was
+// still awarded the cup for winning, if Twinsen doesn't win let's have him told by Mr. Paul that there were some irregularities during the
+// race and it's going to be re-run later, after Twinsen drives to a different scene and comes back let's have the race start again ...
+// Every time he doesn't win let's remove a car from the grid as 'disqualified', if all of his opponents get disqualified then Twinsen
+// should win the race by default. Let's implement this for all tracks Twinsen races"): a story race is won in first place, nothing less
+// (main= alone made it a win to finish ahead of the one to beat). Lost, the car is braked to a stop and Twinsen got out of it (as a won
+// race's: WinStopInput), walked up to the race's official -- the nearest actor of <entity> in the scene (Mr. Paul on Citadel Island's town
+// circuit), else the flag marshal -- who says the first text; the car that came in first is disqualified (bit n of game variable <var>
+// for opponent n + 1, kept in the save) and off the grid from then on (OpponentAway). The race runs again once Twinsen has left the
+// scene and come back: an outside scene loaded reads the race file afresh (RaceMod_Island). Every car of the grid disqualified, the
+// official says the second text instead, and the race is won: win='s variables then, and the win's own scene (win_stop=) follows.
+static int s_rerunVar = -1, s_rerunBy = -1, s_rerunText = -1, s_rerunWinText = -1;
+static int s_rerunStep = 0;                // 0 none; 1 lost: the car stopping, Twinsen out of it; 2 walking up to the official; 3 said --
+                                           // the race again once he has left the scene
+static int s_rerunDq = -1, s_rerunDefault = 0, s_rerunActor = -1, s_firstHome = -1, s_sayMarshal = 0;
+static S32 s_rerunAt = 0;
+static int s_rerunPlace = 0;               // (the place before the official walked to: RerunFrame)
+static double s_rerunPlaceX = 0, s_rerunPlaceZ = 0;
+static S32 s_rerunPlaceY = 0;
+#define RACE_RERUN_OUT_MS 15000            // (out of the car within this, or the official speaks to him in it)
+#define RACE_RERUN_WALK_MS 12000           // (the walk up to the official this long at most)
+#define RACE_RERUN_FAR (40 * 512.0)        // (an official further off than this isn't walked up to)
+#define RACE_RERUN_REACH 900               // (Twinsen stops this near the official)
+static int Rerun(void) { return s_rerunVar >= 0 && s_rerunVar < MAX_VARS_GAME; }
+static int Disqualified(int n) { return Rerun() && n >= 0 && n < 15 && ((ListVarGame[s_rerunVar] >> n) & 1); }
 // won_set=: as win=, but only when the player really beat the one to beat -- a dream that wakes him whoever got there first
 // (dream_any_end=) applies win= either way; the story's DREAM_CAUGHT is a won_set=
 static int s_wonSet[2 * RACE_MAX_SETS], s_nbWonSet = 0;
@@ -1211,6 +1236,7 @@ static S32 s_victoryLap = 0;
 static double s_victoryLineX = 0, s_victoryLineZ = 0;
 #define RACE_VICTORY_TURN_OFF 1400.0      // (the pilot this near the line's point by them: off the line to them)
 #define RACE_VICTORY_GAP 1100.0           // (pulled up this far short of Raph's car)
+static S32 s_victoryNearAt = 0;            // (when the pull-up's drive to its place began: VictoryNear)
 static int s_victoryFresh = 0;              // (the lap of honour's halfway mark seen cleared since the time was beaten)
 #define RACE_VICTORY_SHARE 0.6
 #define RACE_VICTORY_SHORT 1500.0
@@ -5841,6 +5867,11 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
         else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
         else if (!strcmp(key, "once_won")) s_onceWon = atoi(v) != 0;
+        else if (!strcmp(key, "rerun")) {
+            int var = -1, by = -1;
+            if (sscanf(v, "%d %d", &var, &by) >= 1 && var >= 0 && var < MAX_VARS_GAME) { s_rerunVar = var; s_rerunBy = by; }
+        }
+        else if (!strcmp(key, "rerun_text")) sscanf(v, "%d %d", &s_rerunText, &s_rerunWinText);
         else if (!strcmp(key, "win_pull")) {
             int n, var, value, delay;
             s_winPullOpp = -1;
@@ -6459,6 +6490,7 @@ static int FinishPlace(int laps, int *racers) {
     *racers = 1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         if (!s_opp[n].Count || !s_opp[n].Scenes) continue;
+        if (Disqualified(n)) continue;     // (rerun=: not on the grid)
         (*racers)++;
         if (s_opp[n].Laps > laps) place++;
     }
@@ -6502,6 +6534,8 @@ static void PackLapLog(int lap);
 static void ChaseStart(void);
 static void ForgetPowerUps(const char *why);
 static void WinStopStart(S32 now);
+static void RerunLost(S32 now);
+static void RerunFrame(S32 now);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car is put on the grid. Into the cube beside, by no more than RACE_CUBE_STEP --
     // driven over its edge -- where it came from in the new cube's units: a checkpoint runs on over a cube's edge where the road does,
@@ -6702,9 +6736,11 @@ void RaceMod_Lap(S32 x, S32 z) {
             s_place = place; s_racers = racers;
             // (with a main opponent, the race is his to lose: ahead of him is a win, whatever the others did)
             const int mainOn = s_main >= 0 && s_main < RACE_MAX_OPPONENTS && s_opp[s_main].Count && s_opp[s_main].Scenes;
-            s_beatMain = mainOn ? s_opp[s_main].Laps <= s_raceLaps : place == 1;
+            // (a story race, rerun=: first place and nothing less -- Citadel 2 finished behind others but ahead of its one to beat gave
+            // Twinsen the cup, the user, 2026-11-24)
+            s_beatMain = Rerun() ? place == 1 : mainOn ? s_opp[s_main].Laps <= s_raceLaps : place == 1;
             char text[64];
-            if (mainOn) snprintf(text, sizeof(text), s_beatMain ? "You beat %s!" : "%s beat you", s_opp[s_main].Name);
+            if (mainOn && !Rerun()) snprintf(text, sizeof(text), s_beatMain ? "You beat %s!" : "%s beat you", s_opp[s_main].Name);
             else if (place == 1) snprintf(text, sizeof(text), "You win!");
             else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
             // (the race game's, 2026-10-20 -- the user: "We need to stop displaying the 'You beat the skeleton' at the end of the race":
@@ -6746,11 +6782,13 @@ void RaceMod_Lap(S32 x, S32 z) {
                 Log_Info("[racemod] missiles that hit Twinsen's car this race: %d", s_heroMissileHits);
                 if (!s_heroMissileHits && s_beatMain) SetAtLeast(s_noHitVar, s_noHitValue, "won without one missile hit");
             }
-            ApplySets(s_finishSet, s_nbFinishSet);
+            // (a story race lost, rerun=: what its end sets after the official has spoken -- RerunSay)
+            if (s_beatMain || !Rerun()) ApplySets(s_finishSet, s_nbFinishSet);
             // (what was held, thrown or in flight goes with the race: a fire ball on its way stayed at Twinsen's feet once he was out of
             // the car -- the user, 2026-11-07, after the town race)
             ForgetPowerUps("the race is over");
             if (s_beatMain) WinStopStart(now);
+            else if (Rerun()) RerunLost(now);
         }
         if (s_phase == PHASE_QUALIFYING && s_qStopVar >= 0 && s_qStopVar < MAX_VARS_GAME && ListVarGame[s_qStopVar] == s_qStopValue) {
             // (qualify_stop=: the day's qualifying done -- no grid; the car stopped and Twinsen out, held till the story moves on)
@@ -6795,9 +6833,9 @@ static void SprintOver(S32 now, int crossed) {
     if (!crossed) place = racers;          // (not there yet: last, whoever else is still on the way)
     s_place = place; s_racers = racers;
     const int mainOn = s_main >= 0 && s_main < RACE_MAX_OPPONENTS && s_opp[s_main].Count && s_opp[s_main].Scenes;
-    s_beatMain = crossed && (mainOn ? s_opp[s_main].Laps <= 1 : place == 1);
+    s_beatMain = crossed && (Rerun() ? place == 1 : mainOn ? s_opp[s_main].Laps <= 1 : place == 1);
     char text[64];
-    if (s_beatMain && mainOn) snprintf(text, sizeof(text), "You beat %s!", s_opp[s_main].Name);
+    if (s_beatMain && mainOn && !Rerun()) snprintf(text, sizeof(text), "You beat %s!", s_opp[s_main].Name);
     else if (s_beatMain) snprintf(text, sizeof(text), "You win!");
     else if (mainOn) snprintf(text, sizeof(text), "%s got there first", s_opp[s_main].Name);
     else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
@@ -6813,7 +6851,7 @@ static void SprintOver(S32 now, int crossed) {
     if (s_beatMain || (s_dreamAnyEnd && s_wakeScene >= 0)) ApplySets(s_winSet, s_nbWinSet);
     if (s_beatMain) ApplySets(s_wonSet, s_nbWonSet);
     if (s_beatMain) StoryUnlock(s_unlockWin);
-    ApplySets(s_finishSet, s_nbFinishSet);
+    if (s_beatMain || !Rerun()) ApplySets(s_finishSet, s_nbFinishSet);
     s_endAt = now + after;
     s_endWon = s_beatMain;
     // (a sprint's time trial: its run, start line to finish line, is its lap -- its ghost kept as a lap's is, GhostLapDone)
@@ -6827,6 +6865,8 @@ static void SprintOver(S32 now, int crossed) {
     if (s_online) RaceNet_Finished(s_raceTime);
     RaceGame_Finished(s_trial, s_raceTime, run, place, racers);
     if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
+    // (a story sprint lost, rerun=: not run again from the grid at once -- the official's word, and the race again later)
+    if (!s_beatMain && Rerun()) { s_endAt = 0; RerunLost(now); }
 }
 
 // A sprint's time trial over its finish line with runs still to go (trial_runs= more than those driven, or 0: endless): its run kept as
@@ -7216,6 +7256,7 @@ static int s_povWas = 0;
 S32 RaceMod_DriveIn(S32 scene);
 
 void RaceMod_Story(void) {
+    RerunFrame(TimerRefHR);
     // (Twinsen's own view just ended: the whole picture drawn again -- with only what moved drawn over the picture kept, the room came back
     // in patches over her close-up as the private show ended, the user, 2026-11-16: "We need to fix whatever this is. It's at the end of
     // the private show. It looks like a screen redraw issue")
@@ -8075,6 +8116,156 @@ static void WinStopStart(S32 now) {
     Log_Info("[racemod] win_stop: the race won -- the car braked to a stop past the line, Twinsen out of it, the controls his again once variable %d moves on from %d",
              s_winStopVar, s_winStopHeld);
 }
+// rerun=: a story race lost -- the car that came in first disqualified (its bit in the game variable: saved), the car stopped and Twinsen
+// out of it as after a win, the controls kept from him till the official has spoken (RerunFrame)
+static void RerunLost(S32 now) {
+    if (!Rerun()) return;
+    S32 mask = ListVarGame[s_rerunVar];
+    if (s_firstHome >= 0 && s_firstHome < 15) mask |= 1 << s_firstHome;
+    ListVarGame[s_rerunVar] = (S16)mask;
+    int left = 0;
+    for (int i = 0; i < s_nbOrder; i++) if (s_order[i] >= 0 && !Disqualified(s_order[i])) left++;
+    s_rerunDq = s_firstHome; s_rerunDefault = left == 0; s_rerunActor = -1;
+    s_rerunStep = 1; s_rerunAt = now;
+    if (!s_winStop) {
+        s_winStop = 1; s_winStopSince = now; s_winStopWatch = -1; s_winStopQuick = 0;
+        s_winPulled = 1;                   // (no pull-up beside him: that is a win's, win_pull=)
+        s_auto = 0; s_stopReach = 0; s_stopping = 0; s_walkN = 0; s_walkCar = 0;
+    }
+    Log_Info("[racemod] rerun: the race lost -- %s disqualified (variable %d now %d), %d car(s) left on the grid%s", s_rerunDq >= 0 ? s_opp[s_rerunDq].Name : "no one",
+             s_rerunVar, (int)mask, left, left ? "; the car stopped, the official to speak" : " -- the race won by default once the official has spoken");
+}
+static void RerunCinema(int on) {
+    if ((U8)on == CinemaMode) return;
+    CinemaMode = (U8)on;
+    if (!on) { FirstTime = AFF_ALL_FLIP; DureeCycleCinema = BoundRegleTrois(1, 500, 39, ClipWindowYMin); }
+    else { DureeCycleCinema = BoundRegleTrois(1, 500, 39, 39 - ClipWindowYMin); ListVarGame[FLAG_ESC] = 0; }
+    DebCycleCinema = ClipWindowYMin; LastYCinema = ClipWindowYMin; TimerCinema = TimerRefHR;
+}
+// (the official: the nearest of rerun='s entity seen in the scene, not too far off; -1 none -- the flag marshal speaks)
+static int RerunOfficial(void) {
+    if (s_rerunBy < 0) return -1;
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    int best = -1;
+    double bd = RACE_RERUN_FAR * RACE_RERUN_FAR;
+    for (int i = 1; i < (int)NbObjets; i++) {
+        const T_OBJET *a = &ListObjet[i];
+        if (a->IndexFile3D != s_rerunBy || (a->Flags & INVISIBLE) || (a->WorkFlags & OBJ_DEAD) || a->Obj.Y <= RACE_OUT_OF_SIGHT_Y) continue;
+        const double d = (double)(a->Obj.X - h->Obj.X) * (a->Obj.X - h->Obj.X) + (double)(a->Obj.Z - h->Obj.Z) * (a->Obj.Z - h->Obj.Z);
+        if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+}
+void RaceMod_Goto(int n, const double *xz);
+extern "C" int RaceMod_Walking(void);
+static void RerunSay(S32 now) {
+    T_OBJET *h = &ListObjet[NUM_PERSO];
+    const int text = s_rerunDefault && s_rerunWinText >= 0 ? s_rerunWinText : s_rerunText;
+    int speaker = NUM_PERSO;
+    if (s_rerunActor > 0 && s_rerunActor < (int)NbObjets) {
+        T_OBJET *a = &ListObjet[s_rerunActor];
+        a->Obj.Beta = TurnOf(atan2((double)(h->Obj.X - a->Obj.X), (double)(h->Obj.Z - a->Obj.Z)));
+        ClearRealAngle(a);
+        speaker = s_rerunActor;
+    } else {
+        // (the flag marshal: the bubble at her head -- RaceMod_BulleAt -- turned to him)
+        s_sayMarshal = 1;
+        if (s_marshal.On) {
+            const double hx = h->Obj.X + CurrentCubeX * 32768.0, hz = h->Obj.Z + CurrentCubeY * 32768.0;
+            s_marshal.CBeta = TurnRound(atan2(hx - s_marshal.CX, hz - s_marshal.CZ));
+        }
+    }
+    const char *name = s_rerunDq >= 0 ? s_opp[s_rerunDq].Name : "The winner";
+    Log_Info("[racemod] rerun: %s says text %d -- %s", speaker == NUM_PERSO ? "the flag marshal" : "the official", text, s_rerunDefault ? "the race won by default" : "the race to be run again");
+    if (text >= 0 && FindText(text) >= 0) {
+#ifdef CDROM
+        NumObjSpeak = speaker;
+#endif
+        NumObjDial = (U8)speaker;
+        Dial(text, TRUE);
+        s_wantFlip = 1;
+    } else if (text >= 0) Log_Warn("[racemod] rerun: text %d isn't in this island's texts -- not said", text);
+    s_sayMarshal = 0;
+    char msg[96];
+    if (s_rerunDefault) snprintf(msg, sizeof(msg), "%s disqualified: you win!", name);
+    else snprintf(msg, sizeof(msg), "%s disqualified", name);
+    Message(msg);
+    s_messageUntil = now + 6000;
+    RerunCinema(0);
+    if (s_rerunDefault) {
+        // (won by default: what a win sets, then what its end sets -- the win's own scene follows, the controls back once it has played)
+        s_beatMain = 1; s_endWon = 1;
+        ApplySets(s_winSet, s_nbWinSet); ApplySets(s_wonSet, s_nbWonSet); StoryUnlock(s_unlockWin);
+        ApplySets(s_finishSet, s_nbFinishSet);
+        s_rerunStep = 0;
+        if (s_winStopVar >= 0) {
+            s_winStop = Comportement == C_BUGGY ? 1 : 2; s_winStopSince = now; s_winStopWatch = s_winStopVar; s_winStopHeld = ListVarGame[s_winStopVar];
+            s_justWon = 1; s_winPulled = 0;
+            for (int i = 0; i < RACE_MAX_OPPONENTS; i++) s_opp[i].Pull = 0;
+        } else s_winStop = 0;
+        Log_Info("[racemod] rerun: every car of the grid disqualified -- the race won by default");
+        return;
+    }
+    ApplySets(s_finishSet, s_nbFinishSet);
+    s_winStop = 0;
+    s_rerunStep = 3;
+    Log_Info("[racemod] rerun: the controls back -- the race again once Twinsen has left the scene and come back");
+}
+// Every frame (RaceMod_Story, before the picture): out of the car, walked up to the official, his word
+static void RerunFrame(S32 now) {
+    if (s_rerunStep != 1 && s_rerunStep != 2) return;
+    if (!RaceMod_Active() || NewCube != -1) return;
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    if (s_rerunStep == 1) {
+        if (Comportement == C_BUGGY && now - s_rerunAt < RACE_RERUN_OUT_MS) return;
+        s_rerunStep = 2; s_rerunAt = now;
+        RerunCinema(1);
+        if (Comportement == C_BUGGY) { Log_Info("[racemod] rerun: Twinsen still in his car after %d s -- spoken to there", RACE_RERUN_OUT_MS / 1000); return; }
+        // (the place before the one who speaks, on the side Twinsen is: walked to by a planned way round what's in the way -- the town
+        // circuit's line is on its bridge, Mr. Paul on the ground off it -- and, not there in time, put there: the controls are his, the
+        // bars up, as the prize at the line puts him before Mr. Paul after its walk's time)
+        s_rerunActor = RerunOfficial();
+        const double hx = h->Obj.X + CurrentCubeX * 32768.0, hz = h->Obj.Z + CurrentCubeY * 32768.0;
+        double ox = 0, oz = 0;
+        s_rerunPlace = 0;
+        if (s_rerunActor > 0) {
+            const T_OBJET *a = &ListObjet[s_rerunActor];
+            ox = a->Obj.X + CurrentCubeX * 32768.0; oz = a->Obj.Z + CurrentCubeY * 32768.0; s_rerunPlaceY = a->Obj.Y; s_rerunPlace = 1;
+        } else if (s_marshal.On) {
+            ox = s_marshal.CX; oz = s_marshal.CZ; s_rerunPlaceY = (S32)s_marshal.Y; s_rerunPlace = 1;
+        }
+        const double dx = hx - ox, dz = hz - oz, d = sqrt(dx * dx + dz * dz);
+        if (s_rerunPlace && d < RACE_RERUN_FAR && d > RACE_RERUN_REACH) {
+            s_rerunPlaceX = ox + dx / d * RACE_RERUN_REACH; s_rerunPlaceZ = oz + dz / d * RACE_RERUN_REACH;
+            const double to[2] = { s_rerunPlaceX, s_rerunPlaceZ };
+            RaceMod_Goto(1, to);
+            Log_Info("[racemod] rerun: Twinsen walks up to %s (to %.0f, %.0f)", s_rerunActor > 0 ? "the official" : "the flag marshal", to[0], to[1]);
+        } else s_rerunPlace = 0;
+        return;
+    }
+    if (RaceMod_Walking() && now - s_rerunAt < RACE_RERUN_WALK_MS) return;
+    if (RaceMod_Walking() || s_rerunPlace) {
+        s_walkN = 0; s_walkAt = 0; s_walkActor = -1; s_walkAction = 0; s_walkAny = 0; s_goalN = 0; s_goalAt = 0;
+        T_OBJET *at = &ListObjet[NUM_PERSO];
+        const double fx = at->Obj.X + CurrentCubeX * 32768.0 - s_rerunPlaceX, fz = at->Obj.Z + CurrentCubeY * 32768.0 - s_rerunPlaceZ;
+        if (s_rerunPlace && fx * fx + fz * fz > 2.0 * RACE_RERUN_REACH * RACE_RERUN_REACH) {
+            at->Obj.X = (S32)(s_rerunPlaceX - CurrentCubeX * 32768.0); at->Obj.Z = (S32)(s_rerunPlaceZ - CurrentCubeY * 32768.0); at->Obj.Y = s_rerunPlaceY;
+            at->WorkFlags &= ~FALLING;
+            Log_Info("[racemod] rerun: the walk up to the official not there after %d s -- Twinsen put before him", RACE_RERUN_WALK_MS / 1000);
+        }
+        s_rerunPlace = 0;
+    }
+    // (facing the one who speaks)
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (Comportement != C_BUGGY) {
+        double tx = -1, tz = -1;
+        if (s_rerunActor > 0 && s_rerunActor < (int)NbObjets) { tx = ListObjet[s_rerunActor].Obj.X; tz = ListObjet[s_rerunActor].Obj.Z; }
+        else if (s_marshal.On) { tx = s_marshal.CX - CurrentCubeX * 32768.0; tz = s_marshal.CZ - CurrentCubeY * 32768.0; }
+        if (tx >= 0 || tz >= 0) { hero->Obj.Beta = TurnOf(atan2(tx - hero->Obj.X, tz - hero->Obj.Z)); ClearRealAngle(hero); }
+    }
+    RerunSay(now);
+}
+
 // Every frame: out of his car after the win, a moment, and the win_pull= opponent comes up the road from behind him and stops alongside
 // -- its line's way, RACE_PULL_BACK back, to RACE_PULL_SIDE off his own place across the road (the side away from him), a little ahead
 static double GuideS(const T_RACE_OPPONENT *o, double x, double y, double z, double hint, double *side);
@@ -8192,7 +8383,7 @@ static void VictoryNear(void) {
     const double d = sqrt(dx * dx + dz * dz);
     if (d > 1) { dx /= d; dz /= d; }
     const double to[2] = { s_victoryX + dx * RACE_VICTORY_GAP, s_victoryZ + dz * RACE_VICTORY_GAP };
-    s_victory = 3; s_auto = 0;
+    s_victory = 3; s_auto = 0; s_victoryNearAt = TimerRefHR;
     RaceMod_Walk(1, to, 0, 0);
     s_stopX = to[0]; s_stopZ = to[1]; s_stopReach = RACE_VICTORY_REACH; s_stopping = 0; s_stopByVictory = 1;
     Log_Info("[racemod] victory_lap: off the line to (%.0f, %.0f), %.0f short of Raph's car, and pulled up", to[0], to[1], RACE_VICTORY_GAP);
@@ -8210,6 +8401,17 @@ U32 RaceMod_AutoInput(void) {
     // (the console's racewalk: on foot, through its points -- on_foot=; and its points anywhere Twinsen is on foot, outside or in: the
     // scripted playthrough's walks by the keys, not teleports, 2026-11-07)
     if ((s_walkN > 0 || s_walkCar || s_walkActor != -1 || s_walkAction || s_goalAt < s_goalN) && (RaceMod_OnFoot() || Comportement != C_BUGGY)) return WalkInput();
+    // (the lap of honour's pull-up: its drive to the place ended once the car is within the stop's reach of it, or after 8 s -- the stop
+    // below waited on the drive, and a car that circled its point kept Twinsen in it: the user, 2026-11-24, "Twinsen seemed to get stuck in
+    // his car for a long while after the car pulled up from the victory lap")
+    if (s_victory == 3 && s_stopByVictory && s_walkN > 0 && Comportement == C_BUGGY) {
+        const T_OBJET *vh = &ListObjet[NUM_PERSO];
+        const double vx = vh->Obj.X + CurrentCubeX * 32768.0 - s_stopX, vz = vh->Obj.Z + CurrentCubeY * 32768.0 - s_stopZ;
+        if (vx * vx + vz * vz < s_stopReach * s_stopReach || TimerRefHR - s_victoryNearAt > 8000) {
+            Log_Info("[racemod] victory_lap: the drive to the place ended %.0f from it -- pulling up", sqrt(vx * vx + vz * vz));
+            s_walkN = 0;
+        }
+    }
     // (... and in his car, driven through them: DriveInput)
     // (indoors too, in a room the car was driven into -- drive_in=: the points the scene's own units)
     if (s_walkN > 0 && Comportement == C_BUGGY) return DriveInput();
@@ -8229,6 +8431,18 @@ U32 RaceMod_AutoInput(void) {
             if (!s_stopping) s_stopResume = s_auto;
             s_stopping = 1; s_auto = 0;
             if (abs(ListBuggy[0].Speed) > 300) return ListBuggy[0].Speed > 0 ? I_DOWN : I_UP;
+            // (the lap of honour's: out of the car the moment it stands, as a won race's stop does (WinStopInput) -- not by the action key
+            // and the car's own script, which sat him in it a while)
+            if (s_stopByVictory) {
+                const int still = !(h->WorkFlags & FALLING) && s_flying < 0 && s_arcOn < 0 && s_loopOn < 0 && s_loopState == LOOP_NONE
+                                  && TimerRefHR >= s_jetUntil && TimerRefHR >= s_skidUntil && h->GenAnim < RACE_JUMP_ANIM_FIRST && NewCube == -1;
+                if (!still) return 0;
+                Log_Info("[racemod] victory_lap: pulled up at (%.0f,%d,%.0f) -- Twinsen out of the car", h->Obj.X + CurrentCubeX * 32768.0, (int)h->Obj.Y, h->Obj.Z + CurrentCubeY * 32768.0);
+                ListObjet[NUM_PERSO].Move = MOVE_MANUAL;
+                LeaveBuggy(C_NORMAL);
+                s_stopping = 2;
+                return 0;
+            }
             // (the action key pressed every other frame till he is out -- OnFoot ends it: a car on the super jet-pack, or skidding, doesn't
             // let him out until it is over)
             static int tries = 0;
@@ -8852,6 +9066,8 @@ static void QualifyingArrival(int wrongWay, S32 now) {
 static int s_gridForming = 0;
 static int OpponentAway(const T_RACE_OPPONENT *o) {
     if (s_pitHidden && !s_gridForming && (s_phase == PHASE_WAIT || s_phase == PHASE_QUALIFYING)) return 1;
+    // (disqualified from a story race lost, rerun=: off the grid from the next race on -- the race just over keeps its car where it stopped)
+    if (!s_place && Disqualified((int)(o - s_opp))) return 1;
     // (a race won already, once_won=: its racers gone home -- the user, 2026-11-18, "After Twinsen wins the race on Citadel island the other
     // racers should go back to their other locations. The Tralu his cave, Luc his bar, Mr. Paul the Port etc." Not the race just finished:
     // its cars stay parked where they stopped, and the one pulling up beside him (win_pull=) drives on, through the win's scene: s_justWon)
@@ -8880,7 +9096,7 @@ static void FormGrid(S32 now) {
         else OnSpot(&s_opp[s_order[i]], spot);
     }
     s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0; s_heldAt = 0; s_broken = 0;
-    s_place = 0;
+    s_place = 0; s_firstHome = -1;
     s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_gridAt = now;
     s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
@@ -9851,6 +10067,13 @@ static void Marshal(S32 now) {
 #define RACE_BUBBLE_MARSHAL 600.0          // (an unseen speaker this near her plinth's place -- where the story puts her talker -- speaks for her)
 #define RACE_MARSHAL_HEAD 1150             // (her head over her feet)
 S32 RaceMod_BulleAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
+    // (rerun=: the flag marshal's word on a race lost -- RerunSay)
+    if (s_sayMarshal && RaceMod_Active()) {
+        const T_RACE_MARSHAL *m = &s_marshal;
+        if (!m->On) return 0;
+        *x = (S32)floor(m->CX - CurrentCubeX * 32768.0 + 0.5); *y = (S32)floor(m->CY + 0.5) + RACE_MARSHAL_HEAD; *z = (S32)floor(m->CZ - CurrentCubeY * 32768.0 + 0.5);
+        return 1;
+    }
     if (!RaceMod_Active() || numobj <= NUM_PERSO || numobj >= (S32)NbObjets) return -1;
     const T_OBJET *o = &ListObjet[numobj];
     if (!(o->Flags & INVISIBLE)) return -1;
@@ -15678,7 +15901,8 @@ U32 RaceMod_FilterInput(U32 input) {
     if (s_seatSwallow) input &= ~(U32)(I_ACTION_M | I_ACTION_ALWAYS | I_ACTION);
     // (win_stop=: a won race's cut-scene -- nothing but the menus' keys while the car stops and the story's scene plays; the brake is
     // RaceMod_AutoInput's own, kept)
-    if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0));
+    if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0)
+                                                     | (s_rerunStep == 2 && Comportement != C_BUGGY ? I_JOY : 0));
     s_useHeld = (input & I_COMPORTEMENT) != 0;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
     // (the inventory's key -- Shift, a pad's Y -- opens the inventory in the car too, but not in a race: RaceMod_CarInventory)
@@ -15846,6 +16070,7 @@ double RaceMod_JetSteer(void) {
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
     if (s_winStop == 1 && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (win_stop=: the car braked to a stop for him)
+    if (s_rerunStep == 2 && RaceMod_Active() && Comportement != C_BUGGY) return 1;  // (rerun=: walked up to the official)
     if (s_victory && RaceMod_Active() && Comportement == C_BUGGY) return 1;   // (victory_lap=: the pilot drives the lap of honour)
     // (drive_marks=: the story's drive through its markers and the stop after them -- the player's keys had the car too, and drove it off at
     // full speed past the last marker, far from the script waiting for the stop: the user, 2026-11-14)
@@ -24110,6 +24335,7 @@ void RaceMod_Frame(void) {
                         else { o->S = o->FinishS; o->Speed = 0; }
                         if (o->Laps <= 1) {
                             o->Laps = 2;
+                            if (s_firstHome < 0) s_firstHome = n;
                             Log_Info("[racemod] %s finished in %.2f s", o->Name, (now - o->LapStart) / 1000.0);
                             if (n == s_main && !s_place) SprintOver(now, 0);
                         }
@@ -24118,8 +24344,10 @@ void RaceMod_Frame(void) {
                 if (!s_sprint && o->S < before) {    // past the start line
                     o->Laps++;
                     if (o->Laps > 1) Log_Info("[racemod] opponent %d: lap %d in %.2f s", n + 1, o->Laps - 1, (now - o->LapStart) / 1000.0);
-                    if (s_raceLaps > 0 && o->Laps == s_raceLaps + 1 && s_phase == PHASE_RACE && s_goAt)
+                    if (s_raceLaps > 0 && o->Laps == s_raceLaps + 1 && s_phase == PHASE_RACE && s_goAt) {
+                        if (s_firstHome < 0) s_firstHome = n;
                         Log_Info("[racemod] %s finishes the race: %.2f s from GO", o->Name, (now - s_goAt) / 1000.0);
+                    }
                     o->LapStart = now;
                 }
                 // (a loop's foot crossed: into its ring, at a speed it gets round at)
@@ -24544,7 +24772,7 @@ static double OpponentProgress(const T_RACE_OPPONENT *o) {
 // RACE_TORTOISE_BEHIND behind him on his own line at a walk (a jet-pack's factor under 1, RACE_TORTOISE_PACE) and passes him; RACE_TORTOISE_MS later the race starts again from the
 // grid, the moral said as a loss's line is (s_pendLose). Off the grid once, nothing more this race (2).
 static void TortoiseWatch(S32 now) {
-    if (s_tortoiseOpp < 0 || !s_goAt || s_place) return;
+    if (s_tortoiseOpp < 0 || !s_goAt || s_place || Disqualified(s_tortoiseOpp)) return;
     T_RACE_OPPONENT *o = &s_opp[s_tortoiseOpp];
     if (!o->Count || !o->Scenes || o->Length <= 0) { static int said = 0; if (!said++) Log_Info("[racemod] tortoise: opponent %d isn't racing", s_tortoiseOpp + 1); return; }
     if (s_tortoiseAt) {
@@ -26714,6 +26942,7 @@ static void ResetTrack(void) {
     s_paradeAgainVar = -1; s_sessionVar = -1; s_sessionDriven = 0; s_sessionWas = 0; s_sessionOffSince = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeEmpty = -1; s_paradeFullGen = -1; s_paradeEmptyOn = 0; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
+    s_rerunVar = s_rerunBy = s_rerunText = s_rerunWinText = -1; s_rerunStep = 0; s_rerunDq = -1; s_rerunDefault = 0; s_rerunActor = -1; s_firstHome = -1; s_sayMarshal = 0;
     s_lapRecordVar = s_marginVar = s_noHitVar = s_weatherVar = s_tortoiseOpp = s_tortoiseText = s_unlockAtVar = -1; s_unlockAtDone = 0; s_nbFootRooms = 0; s_footRoom = -1; s_heroMissileHits = 0; s_tortoiseAt = 0; s_tortoiseArmed = 0;
     s_unlockWin[0] = s_unlockBeat[0] = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
@@ -26803,6 +27032,11 @@ void RaceMod_Island(S32 island) {
     // on whatever track the island would load: the Emperor's palace's sprint, won, flew the car out of the round window into the next
     // cube for its wake_flight=, and the file read again on the way cleared the waiting wake -- Twinsen never woke on Celebration's dock,
     // left in his car in scene 269; the scripted playthrough, 2026-11-05. The end's own reading of the race file follows.)
+    if (s_ownTrack && s_place && (s_rerunStep == 1 || s_rerunStep == 2)) {
+        Log_Info("[racemod] island %d: the race lost, the official still to speak -- its track kept", (int)island);
+        HoldVars();
+        return;
+    }
     if (s_ownTrack && s_place && s_endAt) {
         Log_Info("[racemod] island %d: the race's end is still to come -- its track kept", (int)island);
         HoldVars();

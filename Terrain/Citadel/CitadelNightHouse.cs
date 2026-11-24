@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO;
+using LBAAssembler.Assets;
 using LBAAssembler.Grids;
 using LBAAssembler.Lba1;
 using LBAAssembler.Maps;
@@ -39,6 +40,8 @@ internal static class CitadelNightHouse
     // only where the flame can see it (no light through a wall onto the floor beyond: "with light also going through the wall")
     private static readonly (double R, double G, double B) Night = (0.27, 0.30, 0.44), Lit = (0.92, 0.76, 0.54);
     private const int Levels = 6;
+    // RESS.HQR's sprites' table (8 numbers each: the picture's offset x, y, the box's x0, x1, y0, y1, z0, z1)
+    private const int SpriteBoxes = 5;
     // the people in the house at night: lit at this share of the game's light, as dim as the room round them (RACEMOD.CPP dark_scene=)
     public const int ActorLight = 45;
 
@@ -219,7 +222,7 @@ internal static class CitadelNightHouse
         if (table.Length < (Scene + 1) * 2) Array.Resize(ref table, (Scene + 1) * 2);
         table[Scene * 2] = type; table[Scene * 2 + 1] = (byte)gridNumber;
         bkg.SetStored(header.Brk + header.MaxBrk, table);
-        Finish(bkg);
+        Finish(bkg, true);
         log.Add($"Twinsen's house at night: scene {Scene}, scene 0's grid in {added.Count} darkened bricks (grid {gridNumber}, block library {libraryNumber}), " +
                 $"{lit.Count} blocks in the candle's light in {levels} steps, its front door back to scene {Yard}");
         return log;
@@ -235,12 +238,12 @@ internal static class CitadelNightHouse
             if (dayTable.Length < (Scene + 1) * 2) Array.Resize(ref dayTable, (Scene + 1) * 2);
             dayTable[Scene * 2] = dayTable[House * 2]; dayTable[Scene * 2 + 1] = dayTable[House * 2 + 1];
             day.SetStored(dayHeader.Brk + dayHeader.MaxBrk, dayTable);
-            Finish(day);
+            Finish(day, false);
             log.Add($"Twinsen's house at night not darkened ({why}): scene {Scene} on the day's house's grid, its front door back to scene {Yard}");
             return log;
         }
 
-        void Finish(HqrFile bkgFile)
+        void Finish(HqrFile bkgFile, bool dark)
         {
         // the scene: the house's header, Twinsen by the front door, the penguin's slot, the front door out and the cameras
         var model = store.Load(House).Clone();
@@ -254,6 +257,45 @@ internal static class CitadelNightHouse
         var doors = model.Actors.Skip(keep).Where(CitadelHouseRooms.IsNorthDoor).ToList();
         model.Actors.RemoveRange(keep, model.Actors.Count - keep);
         model.Actors.AddRange(doors);
+        // (the doors -- sprites, drawn as they are: a scene's dimmed light, dark_scene=, is the 3D people's only -- in darkened copies of
+        // their pictures, as dark as the bricks of their place, by the candle's light there: the user, 2026-11-24, "The Citadel night house
+        // the doors seem to still be lit in Twinsen's house")
+        var spritesPath = Path.Combine(gameDirectory, "SPRITES.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        HqrFile? sprites = null, ress = null;
+        var darkDoors = 0;
+        if (dark && File.Exists(spritesPath) && File.Exists(ressPath))
+        {
+            sprites = HqrFile.Parse(File.ReadAllBytes(spritesPath));
+            ress = HqrFile.Parse(File.ReadAllBytes(ressPath));
+            var zv = ress.Read(SpriteBoxes);
+            foreach (var a in model.Actors.Where(a => a.IsSprite && a.Entity == -1 && a.Sprite > 0 && a.Sprite < sprites.Count && !sprites.IsEmpty(a.Sprite)))
+            {
+                double dx = a.X / 512.0 - CandleX, dy = (a.Y / 256.0 - CandleY) * 0.5, dz = a.Z / 512.0 - CandleZ;
+                var d = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                var f = candle == 0 || d >= Reach ? 0 : 1 - d / Reach;
+                var lv = (int)Math.Round(f * f * (3 - 2 * f) * levels);
+                var source = sprites.Read(a.Sprite);
+                var pictureAt = (int)BinaryPrimitives.ReadUInt32LittleEndian(source);
+                var picture = GphImage.Decode(source, pictureAt);
+                for (var i = 0; i < picture.Pixels.Length; i++) if (picture.Opaque[i]) picture.Pixels[i] = maps[lv][picture.Pixels[i]];
+                var encoded = CitadelMuseum.EncodeBrick(picture);
+                var copy = new byte[8 + encoded.Length];
+                BinaryPrimitives.WriteUInt32LittleEndian(copy, 8);
+                BinaryPrimitives.WriteUInt32LittleEndian(copy.AsSpan(4), (uint)encoded.Length);
+                encoded.CopyTo(copy, 8);
+                var number = -1;
+                for (var n = sprites.Count - 1; n >= Math.Max(0, sprites.Count - 16) && number < 0; n--)
+                    if (!sprites.IsEmpty(n) && sprites.Read(n).AsSpan().SequenceEqual(copy)) number = n;
+                if (number < 0) { number = sprites.Count; sprites.Slots.Add(new HqrFile.Slot()); sprites.SetStored(number, copy); }
+                // (its offsets and box as the original's: RESS.HQR's sprites' table, 8 numbers each)
+                if (zv.Length < (number + 1) * 16) Array.Resize(ref zv, (number + 1) * 16);
+                if (zv.Length >= (a.Sprite + 1) * 16) Array.Copy(zv, a.Sprite * 16, zv, number * 16, 16);
+                a.Sprite = number;
+                darkDoors++;
+            }
+            ress.SetStored(SpriteBoxes, zv);
+        }
         model.Zones.RemoveAll(zn => !(zn.Type == 0 && zn.Num == Yard) && zn.Type is not (1 or 5 or 6) && !(keep > 2 && zn.Type == 2 && zn.Num == BackRoomDoorZone) && !CitadelHouseRooms.IsRoomZone(zn));
         var hero = model.Hero;
         (hero.X, hero.Y, hero.Z) = Arrival;
@@ -276,7 +318,10 @@ internal static class CitadelNightHouse
             holo = HqrWriter.ReplaceEntry(holo, 12, HqrWriter.StoredEntry(arrows));
         }
         else log.Add($"Twinsen's house at night: the holomap's table has no place {Scene} (Twinsen not shown there)");
-        new FileTransaction().Write(bkgPath, bkgFile.ToBytes()).Write(scenePath, scenes.ToBytes()).Write(holoPath, holo).Commit();
+        var files = new FileTransaction().Write(bkgPath, bkgFile.ToBytes()).Write(scenePath, scenes.ToBytes()).Write(holoPath, holo);
+        if (sprites is not null && ress is not null && darkDoors > 0) files = files.Write(spritesPath, sprites.ToBytes()).Write(ressPath, ress.ToBytes());
+        files.Commit();
+        if (darkDoors > 0) log.Add($"Twinsen's house at night: its {darkDoors} doors (sprites) drawn darkened, by the candle's light where each stands");
         }
     }
 

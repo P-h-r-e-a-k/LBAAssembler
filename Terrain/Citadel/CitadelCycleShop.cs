@@ -37,6 +37,9 @@ internal static class CitadelCycleShop
     private const int Shop = 14, Street = 48, Hall = 5, Clerk = 33;
     public const int ClerkActor = 9;
     private const int Size = 64, Height = 25, FloorLayer = 3, Grow = 12, OldEast = 15, Front = 11;
+    // the town shop's library: the floor's tile block and its plain tile; the north and west walls' blocks and their shaded copies (layers
+    // 4-5, behind the wall tables: the north's in the same places, 2 x 2; the west's two columns at 0-1 and 2-3 against the wall's 0-1, 4-5)
+    private const int FloorTile = 3, PlainTile = 6, NorthWall = 1, NorthShade = 57, WestWall = 2, WestShade = 58;
     public const int East = OldEast + Grow, FloorY = (FloorLayer + 1) * 256;
     // the counter and its till (kept where the shop has them): cells x 4-8, z 4-8
     private const int CounterX0 = 4, CounterX1 = 8, CounterZ0 = 4, CounterZ1 = 8;
@@ -117,6 +120,19 @@ internal static class CitadelCycleShop
                 }
                 for (var y = FloorLayer + 1; y < Height; y++) { room[At(x, y, z)] = 0; room[At(x, y, z) + 1] = 0; }
             }
+        // (and the shade the goods left: the floor's dark tiles where the wall tables' feet and the old east wall stood -- block 3's tiles
+        // but its plain one, 6 -- and the walls' shaded bricks behind the tables, blocks 57 (the north wall's) and 58 (the west's), their own
+        // walls' bricks in their places, blocks 1 and 2. The user, 2026-11-24: "lots of dark patches on the wall that are the remains of a
+        // source shadow. There's also intermittent black blocks on the floor")
+        for (var z = 0; z <= Front; z++)
+            for (var x = 0; x <= East; x++)
+                for (var y = FloorLayer; y < Height; y++)
+                {
+                    var i = At(x, y, z);
+                    if (y == FloorLayer && room[i] == FloorTile && room[i + 1] != PlainTile && x >= 1 && x < East && z >= 1 && z < Front) room[i + 1] = PlainTile;
+                    else if (room[i] == NorthShade) room[i] = NorthWall;
+                    else if (room[i] == WestShade) { room[i] = WestWall; room[i + 1] = (byte)(room[i + 1] < 2 ? room[i + 1] : room[i + 1] + 2); }
+                }
         var edits = new List<Lba1GridCell>();
         for (var z = 0; z <= Front; z++)
             for (var x = 0; x <= East; x++)

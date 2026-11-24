@@ -489,7 +489,11 @@ void comportement_3()
         foreach (var (generic, a) in Citadel.CitadelProps.CounterAt) { var (x, z) = Round(a, Citadel.CitadelProps.CounterMiddle / 512); Furnish(generic, x, floorY, z); }
         for (var a = Citadel.CitadelProps.BarFrom + 7; a < Citadel.CitadelProps.BarTo - 3; a += 10) { var (x, z) = Round(a, StoolCells); Furnish(Citadel.CitadelProps.ClubBarStool, x, floorY, z); }
         foreach (var a in TableAngles) { var (x, z) = Round(a, TableCells); Furnish(Citadel.CitadelProps.ClubTable, x, floorY, z); }
-        string ClubTrack((int Low, int High) t) => $"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({t.Low});\nsample({LiftStop});\n\nlabel({LiftDown});\nstop();\n\n" +
+        // (down, it waits at LiftDown in a loop, not stop(): a plate moves by its track (MOVE_TRACK), whose stop() the engine starts again
+        // from label 0 the next frame -- its glide down done at once and its stop's clunk played again, every frame, four plates: the user,
+        // 2026-11-24, "The elevator area in the strip club seems to be emitting a constant high pitched sound". The bowling alley's and
+        // the Francos' tunnels' lifts the same)
+        string ClubTrack((int Low, int High) t) =>$"label(0);\nspeed({LiftSpeed});\ngoto_point_3d({t.Low});\nsample({LiftStop});\n\nlabel({LiftDown});\nwait_nb_dizieme(50);\ngoto(label_{LiftDown});\n\n" +
                         $"label({LiftRide});\nsample({LiftStart});\nspeed({LiftSpeed});\ngoto_point_3d({t.High});\nstop();\n";
         var ride = string.Concat(clubParts.Select(i => $"        set_track_obj({i}, label_{LiftRide});\n"));
         // (come down by the lift -- beside its plate as the scene opens, the plates high in the shaft: they glide down whenever the scene

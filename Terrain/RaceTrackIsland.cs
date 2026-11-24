@@ -29,10 +29,12 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Desert.json", (7, 10))
     {
         Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert, View = (200000, 150000),
-        // (two of the beach's umbrellas with their deck chairs -- cube (8, 8)'s, umbrella body 29, chairs 30 and 37 -- by the hovercraft hire
-        // in cube (10, 8), on its sand: the user, 2026-11-22, "The hydroglyder hire place, can we add a couple of sets of umbrella's with chairs")
-        PlaceDecors = new[] { (8, 8, 7424, 14592, 10, 8, 4352, 10752), (8, 8, 7424, 13568, 10, 8, 4352, 9728), (8, 8, 6684, 14528, 10, 8, 3612, 10688),
-                              (8, 8, 9088, 14080, 10, 8, 6656, 11264), (8, 8, 8960, 13340, 10, 8, 6528, 10524), (8, 8, 8164, 14530, 10, 8, 5732, 11714) },
+        // (the hovercraft hire's beach in cube (10, 8) set out as LBA1's credits have it: two parasols in blue and yellow, each with two red deck
+        // chairs facing the sea, a green towel -- BeachHire's own bodies; the user, 2026-11-22, "The hydroglyder hire place, can we add a couple of
+        // sets of umbrella's with chairs", then 2026-11-24, "let's model those in please" from LBA1's ending. Before, the Desert beach's own
+        // straw umbrellas and stools were copied there, PlaceDecors)
+        HireBeach = new BeachHire.Spec(10, 8, new[] { (4352, 10752), (6656, 11264) },
+            new[] { (4150, 10150, 0), (4150, 11350, 0), (6450, 10650, 0), (6450, 11880, 0) }, new[] { (7500, 11950, 1024) }),
         OldActors = new[] { (RaceTrackScenes.RacerScene, 4) },
         // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
         // we're not removing any actors or zones we don't need the same as we checked with citadel")
@@ -410,6 +412,10 @@ internal sealed record RaceTrackIsland(
         // (ladders up from the ground under the road: the user, 2026-11-06, "jumping off the raised track on foot can strand Twinsen in low
         // areas with no way back" -- and the moon base's doors come out on the crater's floor, 5,000 under the road)
         Ladders = true, FootEdge = true,
+        // (and no ground there that stops him or the car: the moon's crater walls and rims were blocking ground, steep pits he dropped into
+        // and couldn't leave -- the user, 2026-11-24, "There's a lot of places outside on the Emerald moon where Twinsen can potentially get
+        // softlocked, let's make all outside terrain both walkable and driveable to prevent this")
+        OpenGround = true,
         // (chapter 4's way to the X building's door: off the road's north edge at x 273144, down onto a ledge and the ground -- ch04/02_deck)
         FootGapsMore = new[] { (270500, 246500, 275500, 251500) },
         Title = "The Emerald Moon: over the reactor, round the base",
@@ -469,6 +475,10 @@ internal sealed record RaceTrackIsland(
     // Decors of the island's own copied into another of its cubes: the cube and origin (cube units) of the pieces there, and the cube and
     // origin to put the copies at, their height kept (RaceTrackBuilder.DropDecors)
     public (int FromCubeX, int FromCubeZ, int X, int Z, int ToCubeX, int ToCubeZ, int ToX, int ToZ)[]? PlaceDecors { get; init; }
+    // A beach of the build's own parasols, deck chairs and towels (BeachHire): the Desert's hovercraft hire
+    public BeachHire.Spec? HireBeach { get; init; }
+    // every ground triangle of the island walkable and drivable: none blocks (Col), cars' walls included (RaceTrackBuilder.OpenAllGround)
+    public bool OpenGround { get; init; }
     // Where a building the road took away is put back (RaceTrackBuilder.RestoreLostBuildings), by hand, not the nearest place the search
     // finds: the building one of whose pieces has that body, moved (Dx, Dz) whole cells from where it stood (its height as the ground
     // round it says). Otringal's casino right up to the road west from under the roulette wheel -- the search keeps it 5 cells off the

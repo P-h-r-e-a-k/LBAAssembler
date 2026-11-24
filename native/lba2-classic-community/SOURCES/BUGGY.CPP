@@ -85,7 +85,9 @@ void InitBuggy(U8 numobj, U32 flaginit) {
                 InitBody(GEN_BODY_NORMAL, numobj);
             }
 #ifndef LBA_EDITOR
-            else if (LoadSceneCubeXY(ptb->Cube, &x, &y)) {
+            // (a room's own car -- drive_in=, the Temple of Bú's rooms: the car parked out of doors isn't drawn in the room at its place
+            // outside, whatever cube the room's numbers would have it near)
+            else if (CubeMode == CUBE_EXTERIEUR AND LoadSceneCubeXY(ptb->Cube, &x, &y)) {
                 x -= CurrentCubeX;
                 y -= CurrentCubeY;
 
@@ -538,6 +540,12 @@ void MoveBuggy(T_OBJET *ptrobj) {
         {
             RaceSpeed(ptb, deltatimer, flagattack AND !raceFires);
             RaceMod_Skid(&ptb3d->Beta, &ptb->Speed);
+            // (indoors -- a room driven into, drive_in=: no faster than the game's own car, either way -- the user, 2026-11-24, "Let's also limit
+            // the car speed when Twinsen is driving inside to the retail car speed")
+            if (CubeMode == CUBE_INTERIEUR) {
+                if (ptb->Speed > MAX_SPEED) ptb->Speed = MAX_SPEED;
+                if (ptb->Speed < -2000) ptb->Speed = -2000;
+            }
         } else if ((Input & I_UP) // j'accelere
                    AND !flagattack) {
             ptb->Speed += deltatimer * 4 * RaceMod_StoryAccel() / 100;   // (an island's own car slower away: RACEMOD.CPP ISLANDCARS.TXT)

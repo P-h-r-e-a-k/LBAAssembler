@@ -219,6 +219,9 @@ internal static partial class RaceTrackStory
             bank.Texts.RemoveAll(t => t.Id >= OpenerBase);
             foreach (var line in lines)
                 bank.Texts.Add(new Lba2TextBank.Text { Id = OpenerBase + (int)line, Attribute = Lba2TextBank.NormalAttribute, Bytes = Dos.GetBytes(OpenerLines[(int)line][lang < OpenerLines[(int)line].Length ? lang : 0]) });
+            // (and a lost race's official's word, RaceTrackStory.Rerun: Mr. Paul's and the flag marshal's, at RerunBase)
+            for (var r = 0; r < RerunLines.Length; r++)
+                bank.Texts.Add(new Lba2TextBank.Text { Id = RerunBase + r, Attribute = Lba2TextBank.NormalAttribute, Bytes = Dos.GetBytes(RerunLines[r][lang < RerunLines[r].Length ? lang : 0]) });
             hqr = bank.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);

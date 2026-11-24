@@ -116,7 +116,8 @@ internal static partial class CitadelProps
     private static Body BuildShopSign(byte[] header)
     {
         var m = new CarMesh("the cycle shop's sign: Citadel Cycles", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         float w = SignWidth, h = SignHeight, rule = SignPixel * 0.45f;
         var front = new Vector3(0, h / 2, 1000);
         // the board: a box for its depth, its face unlit black, the red rule round its edge, the letters
@@ -140,7 +141,8 @@ internal static partial class CitadelProps
     private static Body BuildShopBanner(byte[] header)
     {
         var m = new CarMesh("Citadel Cycles' banner", new[] { -1 });
-        m.Light = 0.9f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         var cols = BannerLines.Max(l => TextRuns(l).Columns);
         float w = (cols + 2f) * BannerPixel, h = (BannerLines.Length * GlyphRows + 2f) * BannerPixel;
         var front = new Vector3(2000, BannerMiddle, 0);
@@ -169,13 +171,8 @@ internal static partial class CitadelProps
         var tyre = racing ? 24f : 34f;
         foreach (var hz in new[] { -Base, Base })
         {
-            // the tyre: a ring of short dark lengths round the hub, the spokes as lines
-            const int N = 14;
-            for (var k = 0; k < N; k++)
-            {
-                float a0 = k * MathF.Tau / N, a1 = (k + 1) * MathF.Tau / N;
-                Bar(new Vector3(0, R + R * MathF.Sin(a0), hz + R * MathF.Cos(a0)), new Vector3(0, R + R * MathF.Sin(a1), hz + R * MathF.Cos(a1)), tyre, ShopRubber);
-            }
+            // the tyre: one smooth ring round the hub, the spokes as lines
+            ShopTyre(m, o + new Vector3(0, R, hz), R, tyre, 16);
             var hub = P(new Vector3(0, R, hz));
             for (var k = 0; k < 8; k++) m.Line(hub, P(new Vector3(0, R + (R - 20) * MathF.Sin(k * MathF.Tau / 8), hz + (R - 20) * MathF.Cos(k * MathF.Tau / 8))), ShopSteel);
         }
@@ -235,7 +232,8 @@ internal static partial class CitadelProps
     private static Body BuildShopTownBike(byte[] header)
     {
         var m = new CarMesh("the cycle shop's town bike", new[] { -1 });
-        m.Light = 0.75f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         AddBike(m, Vector3.Zero, Green, racing: false, basket: true, tag: TagWhite);
         m.Box(0, new Vector3(0, 15, BikeBase), new Vector3(200, 30, 420), ShopSteel);
         foreach (var s in new[] { -1, 1 })
@@ -250,7 +248,8 @@ internal static partial class CitadelProps
     private static Body BuildShopHungBike(byte[] header)
     {
         var m = new CarMesh("the cycle shop's racing bike, on the wall", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         AddBike(m, new Vector3(0, HungLow, 0), ShopGold, racing: true, tag: TagWhite);
         foreach (var z in new[] { -120f, 250f })
         {
@@ -267,7 +266,8 @@ internal static partial class CitadelProps
     private static Body BuildShopChampionBike(byte[] header)
     {
         var m = new CarMesh("the cycle shop's champion's bike", new[] { -1 });
-        m.Light = 0.85f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         AddBike(m, Vector3.Zero, ShopTeal, racing: true, tag: TagWhite);
         foreach (var s in new[] { -1, 1 })
             m.Strut(0, new Vector3(s * 160, 0, -BikeBase - 60), new Vector3(s * 30, BikeWheel, -BikeBase), 20, ShopGold);
@@ -278,7 +278,8 @@ internal static partial class CitadelProps
     private static Body BuildRepairBike(byte[] header)
     {
         var m = new CarMesh("a racer's bike, in for repair", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         AddBike(m, Vector3.Zero, ShopRed, racing: true, tag: InkRed);
         return m.ToBody(header);
     }
@@ -287,7 +288,8 @@ internal static partial class CitadelProps
     private static Body BuildShowPlinth(byte[] header)
     {
         var m = new CarMesh("the cycle shop's plinth", new[] { -1 });
-        m.Light = 0.85f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const int N = 20;
         const float R = 720;
         var bottom = m.Loop(0, Vector3.Zero, new Vector3(R, 0, 0), new Vector3(0, 0, R), N);
@@ -300,14 +302,34 @@ internal static partial class CitadelProps
         return m.ToBody(header);
     }
 
-    // a wheel across y and z (its bike along z) at `hub`: a ring of n struts, `spokes` lines to the hub
+    // A tyre across y and z (its bike along z) round `hub`: a ring of radius r, its tube t thick, n segments round and five round its tube,
+    // every point shared -- lit smoothly all round, as a tyre is (it was a ring of square bars, flat)
+    private static void ShopTyre(CarMesh m, Vector3 hub, float r, float t, int n)
+    {
+        const int Round = 5;
+        var g = new int[n, Round];
+        m.Light = 1f;
+        for (var k = 0; k < n; k++)
+            for (var j = 0; j < Round; j++)
+            {
+                float a = k * MathF.Tau / n, b = j * MathF.Tau / Round;
+                var radial = new Vector3(0, MathF.Sin(a), MathF.Cos(a));
+                g[k, j] = m.P(0, hub + radial * (r + t / 2 * MathF.Cos(b)) + Vector3.UnitX * (t / 2 * MathF.Sin(b)));
+            }
+        for (var k = 0; k < n; k++)
+            for (var j = 0; j < Round; j++)
+            {
+                int k1 = (k + 1) % n, j1 = (j + 1) % Round;
+                float a = (k + 0.5f) * MathF.Tau / n;
+                var ring = hub + new Vector3(0, MathF.Sin(a), MathF.Cos(a)) * r;
+                m.Out(new[] { g[k, j], g[k1, j], g[k1, j1], g[k, j1] }, ShopRubber, ring);
+            }
+    }
+
+    // a wheel across y and z (its bike along z) at `hub`: a tyre of n segments, `spokes` lines to the hub
     private static void ShopWheel(CarMesh m, Vector3 hub, float r, int n, float t, int spokes)
     {
-        for (var k = 0; k < n; k++)
-        {
-            float a0 = k * MathF.Tau / n, a1 = (k + 1) * MathF.Tau / n;
-            m.Strut(0, hub + new Vector3(0, r * MathF.Sin(a0), r * MathF.Cos(a0)), hub + new Vector3(0, r * MathF.Sin(a1), r * MathF.Cos(a1)), t, ShopRubber);
-        }
+        ShopTyre(m, hub, r, t, Math.Max(12, n));
         var h = m.P(0, hub);
         for (var k = 0; k < spokes; k++)
         {
@@ -321,7 +343,8 @@ internal static partial class CitadelProps
     private static Body BuildPennyFarthing(byte[] header)
     {
         var m = new CarMesh("the cycle shop's penny-farthing", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float Lift = 110, Big = 640, Small = 170, BigZ = 300, SmallZ = -780;
         m.Box(0, new Vector3(0, Lift / 2, -220), new Vector3(560, Lift, 2050), ShopWood);
         foreach (var s in new[] { -1f, 1f })
@@ -358,7 +381,8 @@ internal static partial class CitadelProps
     private static Body BuildTandem(byte[] header)
     {
         var m = new CarMesh("the cycle shop's tandem", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float R = BikeWheel, Front = 1000, Back = -1000;
         ShopWheel(m, new Vector3(0, R, Front), R, 14, 34, 8);
         ShopWheel(m, new Vector3(0, R, Back), R, 14, 34, 8);
@@ -403,7 +427,8 @@ internal static partial class CitadelProps
     private static Body BuildFitBike(byte[] header)
     {
         var m = new CarMesh("the cycle shop's fitting bike", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float Up = 70;
         AddBike(m, new Vector3(0, Up, 0), ShopSteel, racing: true);
         m.Box(0, new Vector3(0, Up / 2, -BikeBase), new Vector3(300, Up, 220), ShopDark);
@@ -418,7 +443,8 @@ internal static partial class CitadelProps
     private static Body BuildSaddleStand(byte[] header)
     {
         var m = new CarMesh("the cycle shop's stand of saddles", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         m.Box(0, new Vector3(0, 20, 0), new Vector3(500, 40, 500), ShopDark);
         m.Strut(0, new Vector3(0, 40, 0), new Vector3(0, 1550, 0), 50, ShopSteel);
         var colours = new[] { ShopDark, ShopRed, ShopWhite, ShopWood, ShopDark, ShopTeal };
@@ -437,7 +463,8 @@ internal static partial class CitadelProps
     private static Body BuildJerseyWall(byte[] header)
     {
         var m = new CarMesh("the cycle shop's signed jerseys", new[] { -1 });
-        m.Light = 0.85f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float W = 700, H = 820, Low = 1080, Gap = 780, Rim = 50;
         var front = new Vector3(0, Low + H / 2, 2000);
         var jerseys = new[] { (ShopYellow, ShopDark), (ShopRed, ShopWhite), (ShopBlue, ShopWhite) };
@@ -476,7 +503,8 @@ internal static partial class CitadelProps
     private static Body BuildToolWall(byte[] header)
     {
         var m = new CarMesh("the cycle shop's tool wall and bench", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         var front = new Vector3(2000, 1300, 0);
         m.Box(0, new Vector3(15, 1380, 0), new Vector3(30, 900, 1700), ShopWoodLight);
         void Tool(float z0, float z1, float y0, float y1, int c) => FlatQuad(m, new(34, y0, z0), new(34, y0, z1), new(34, y1, z1), new(34, y1, z0), c, front);
@@ -511,19 +539,41 @@ internal static partial class CitadelProps
     private static Body BuildCafeBar(byte[] header)
     {
         var m = new CarMesh("the cycle shop's coffee bar", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float Long = 1800, Deep = 560, Top = 1000;
-        m.Box(0, new Vector3(0, (Top - 50) / 2, 0), new Vector3(Long - 100, Top - 50, Deep - 60), ShopRed);
+        // the counter (its front -z, to the room): a dark plinth, the red body, its front in raised panels, a wooden top with a rounded
+        // front edge, a brass foot rail on brackets (2026-11-24: one red box before, flat -- the user, "increase the quality of all of the
+        // models in the cycle shop, they look very flat and one dimensional")
+        m.Box(0, new Vector3(0, 60, 20), new Vector3(Long - 160, 120, Deep - 120), ShopDark);
+        m.Box(0, new Vector3(0, 120 + (Top - 170) / 2, 0), new Vector3(Long - 100, Top - 170, Deep - 60), ShopRed);
+        const int Panels = 4;
+        var panelW = (Long - 100) / Panels;
+        for (var k = 0; k < Panels; k++)
+        {
+            var px = -(Long - 100) / 2 + panelW * (k + 0.5f);
+            m.Box(0, new Vector3(px, 120 + (Top - 170) / 2, -(Deep - 60) / 2 - 14), new Vector3(panelW - 90, Top - 330, 28), ShopRed);
+        }
         m.Box(0, new Vector3(0, Top - 25, 0), new Vector3(Long, 50, Deep), ShopWood);
-        // the espresso machine: a steel box, a red strip on top, two heads and a cup under each
+        HotelKit.Rod(m, new Vector3(-Long / 2, Top - 30, -Deep / 2), new Vector3(Long / 2, Top - 30, -Deep / 2), 30, new Finish(ShopWood, 1), 8);
+        HotelKit.Rod(m, new Vector3(-Long / 2 + 80, 210, -Deep / 2 - 130), new Vector3(Long / 2 - 80, 210, -Deep / 2 - 130), 22, new Finish(ShopGold, 1), 8);
+        foreach (var x in new[] { -Long / 2 + 120, 0f, Long / 2 - 120 })
+            HotelKit.Rod(m, new Vector3(x, 210, -Deep / 2 - 130), new Vector3(x, 210, -Deep / 2 + 20), 14, new Finish(ShopGold, 1), 6);
+        // the espresso machine: a steel box with a red band, two round group heads and a cup under each, a gauge on its front
         m.Box(0, new Vector3(-480, Top + 170, 0), new Vector3(460, 300, 320), ShopSteel);
-        m.Box(0, new Vector3(-480, Top + 330, 0), new Vector3(460, 20, 320), InkRed);
+        m.Box(0, new Vector3(-480, Top + 330, 0), new Vector3(470, 26, 330), InkRed);
+        HotelKit.Orb(m, new Vector3(-480, Top + 240, -168), 44, new Finish(ShopWhite, 1), 8, 4);
         foreach (var x in new[] { -580f, -380f })
         {
-            m.Box(0, new Vector3(x, Top + 90, -170), new Vector3(70, 40, 80), ShopDark);
-            m.Box(0, new Vector3(x, Top + 30, -190), new Vector3(60, 60, 60), ShopWhite);
+            HotelKit.Turned(m, new Vector3(x, Top + 70, -190), new[] { (0f, 0f), (38f, 0f), (40f, 40f), (28f, 60f), (0f, 60f) }, 8, new Finish(ShopDark, 1));
+            HotelKit.Turned(m, new Vector3(x, Top, -200), new[] { (0f, 0f), (26f, 0f), (32f, 50f), (34f, 60f), (0f, 60f) }, 8, new Finish(ShopWhite, 1));
         }
-        foreach (var x in new[] { 150f, 260f, 370f }) m.Box(0, new Vector3(x, Top + 35, 60), new Vector3(70, 70, 70), ShopWhite);
+        // three cups and their saucers along the counter
+        foreach (var x in new[] { 150f, 260f, 370f })
+        {
+            HotelKit.Turned(m, new Vector3(x, Top, 60), new[] { (0f, 0f), (55f, 0f), (58f, 8f), (0f, 8f) }, 10, new Finish(ShopWhite, 1));
+            HotelKit.Turned(m, new Vector3(x, Top + 8, 60), new[] { (0f, 0f), (30f, 0f), (38f, 55f), (40f, 62f), (0f, 62f) }, 10, new Finish(ShopWhite, 1));
+        }
         return m.ToBody(header);
     }
 
@@ -534,21 +584,22 @@ internal static partial class CitadelProps
     private static Body BuildShopDoorway(byte[] header)
     {
         var m = new CarMesh("the cycle shop's back door", new[] { -1 });
-        m.Light = 0.85f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float Half = 450, Top = 1800, Rim = 80;
         void Face(float z0, float z1, float y0, float y1, float off, int colour, bool unlit = false) =>
             m.In(new[] { m.P(0, new Vector3(off, y0, z0)), m.P(0, new Vector3(off, y0, z1)), m.P(0, new Vector3(off, y1, z1)), m.P(0, new Vector3(off, y1, z0)) },
                  colour, new Vector3(off + 500, (y0 + y1) / 2, (z0 + z1) / 2), unlit);
         // the door: its leaf, two panels sunk in it (darker), and its knob on the far side from the hinges
-        Face(-Half, Half, 0, Top, 20, ShopWood, true);
-        Face(-Half + 90, Half - 90, Top * 0.55f, Top - 110, 26, ShopDark, true);
-        Face(-Half + 90, Half - 90, 110, Top * 0.45f, 26, ShopDark, true);
+        Face(-Half, Half, 0, Top, 20, ShopWood);
+        m.Box(0, new Vector3(34, (Top * 0.55f + Top - 110) / 2, 0), new Vector3(24, Top * 0.45f - 110, 2 * Half - 180), ShopWood);
+        m.Box(0, new Vector3(34, (110 + Top * 0.45f) / 2, 0), new Vector3(24, Top * 0.45f - 110, 2 * Half - 180), ShopWood);
         m.Box(0, new Vector3(60, 950, Half - 110), new Vector3(60, 70, 70), ShopGold);
-        Face(-Half - Rim, Half + Rim, Top, Top + 100, 50, ShopWood, true);
-        Face(-Half - Rim, -Half, 0, Top, 50, ShopWood, true);
-        Face(Half, Half + Rim, 0, Top, 50, ShopWood, true);
+        m.Box(0, new Vector3(30, Top + 50, 0), new Vector3(60, 100, 2 * (Half + Rim)), ShopWood);
+        m.Box(0, new Vector3(30, Top / 2, -Half - Rim / 2), new Vector3(60, Top, Rim), ShopWood);
+        m.Box(0, new Vector3(30, Top / 2, Half + Rim / 2), new Vector3(60, Top, Rim), ShopWood);
         // (a sign over it: STAFF ONLY's plank, lighter wood)
-        Face(-300, 300, Top + 140, Top + 320, 45, ShopWoodLight, true);
+        m.Box(0, new Vector3(28, Top + 230, 0), new Vector3(30, 180, 600), ShopWoodLight);
         return m.ToBody(header);
     }
 
@@ -558,7 +609,8 @@ internal static partial class CitadelProps
     private static Body BuildRepairStand(byte[] header)
     {
         var m = new CarMesh("the cycle shop's repair stand", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         m.Box(0, new Vector3(0, 20, 0), new Vector3(700, 40, 60), ShopSteel);
         m.Box(0, new Vector3(0, 20, 0), new Vector3(60, 40, 700), ShopSteel);
         m.Box(0, new Vector3(0, StandHigh / 2f, 0), new Vector3(70, StandHigh, 70), ShopSteel);
@@ -571,7 +623,8 @@ internal static partial class CitadelProps
     private static Body BuildWheelWall(byte[] header)
     {
         var m = new CarMesh("the cycle shop's wall of wheels", new[] { -1 });
-        m.Light = 0.8f;
+        m.Rounded = true; m.Limit = 1100;
+        m.Light = 1f;
         const float W = 1700, Low = 420, High = 1820, R = 260, Off = 40;
         m.Box(0, new Vector3(0, (Low + High) / 2, 15), new Vector3(W, High - Low, 30), ShopWoodLight);
         foreach (var row in new[] { Low + 380f, Low + 1040f })
@@ -591,6 +644,7 @@ internal static partial class CitadelProps
     private static Body BuildLeaningBoard(byte[] header)
     {
         var m = new CarMesh("the Hoverboard, leaning on a wall", new[] { -1 });
+        m.Rounded = true; m.Limit = 1100;
         m.Light = 1f;
         // (the board's frame -- x across, y its deck's way, z its nose -- stood on its tail: its nose up, its deck to +z; a turn, not a
         // mirror, as the inventory's model (CitadelHoverboard.Model); then leant back, its top to -z)

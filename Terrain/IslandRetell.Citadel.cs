@@ -159,6 +159,17 @@ internal static partial class IslandRetell
             "Ehi!... sa, lei assomiglia al tipo del quadro! Quello con il trofeo!",
             "Ei!... sabe, você é parecido com o sujeito do quadro! Aquele com o troféu!",
         }),
+        // (Twinsen's first words to Miss Bloop: the museum is free, its door grobo only asks for a password -- RaceTrackStory.Chapters,
+        // the door grobo's password. The user, 2026-11-24: "he still mentions that the counter clerk charges him")
+        (23, new[]
+        {
+            "Geez, the doorman's as smart as ever, he never recognizes me. What's more, he always asks me for the password.",
+            "Pfff, le portier est toujours aussi malin, il ne me reconnaît jamais. En plus, il me demande toujours le mot de passe.",
+            "Mensch, der Türsteher ist so schlau wie immer, er erkennt mich nie. Und dann will er jedes Mal das Passwort hören.",
+            "Vaya, el portero es tan listo como siempre, nunca me reconoce. Y encima siempre me pide la contraseña.",
+            "Accidenti, il portiere è sveglio come sempre, non mi riconosce mai. E per di più mi chiede sempre la parola d'ordine.",
+            "Puxa, o porteiro é esperto como sempre, nunca me reconhece. E ainda por cima sempre me pede a senha.",
+        }),
         // (the museum's tunic is Twinsen's racing overalls now -- Citadel/CitadelOveralls, 2026-11-08: his question, the plaque, his "aha")
         (24, new[]
         {

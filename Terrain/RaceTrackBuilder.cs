@@ -1220,6 +1220,7 @@ internal static class RaceTrackBuilder
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         // (a building of the island's made over: Otringal's Imperial Hotel -- HotelFacade)
         if (options.Island.HotelFacade is { } facade) HotelFacade.Apply(island, facade, options, report);
+        if (options.Island.HireBeach is { } beach) BeachHire.Apply(island, beach, options, report);
         var natural = new Field(island);
         // (and the ground in front of the island's doors, DoorGroundReach round each: the road's bank stops there in a step, room to walk
         // up to the door -- Citadel Island's pharmacy, the town circuit's bank climbing from its doorstep, the user, 2026-10-27: "if we need
@@ -1261,6 +1262,7 @@ internal static class RaceTrackBuilder
         report.Balloons = (options.Island.SharedFrom ?? options.Island) == RaceTrackIsland.Desert || options.Island == RaceTrackIsland.Harvest;
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned, plan);
         if (plan.ClearBlueGround && options.Theme.Palette is { } groundPalette) ClearBlueGround(island, field, index, painted, groundPalette, report);
+        if (options.Island.OpenGround) OpenAllGround(island, report);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         report.LapY = (double[])main.H.Clone(); report.LapRaised = (bool[]?)main.Raised?.Clone(); report.LapArc = (bool[]?)main.Arc?.Clone();
@@ -5672,14 +5674,15 @@ internal static class RaceTrackBuilder
     // trenches (Island CX's as well, at half the size), and over the kerb itself where the trench narrows at its ends. Not under the island
     // (the road's own Under, or the ground over the deck's middle: a doorway's lintel, the hall's roof), nor along a sunk tunnel's stretch,
     // whose walls RaceTrackTunnel cuts.
-    private static void FlushOverDeck(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<int> skip)
+    private static void FlushOverDeck(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<int> skip, bool always = false)
     {
         var up = r.Raised!; var n = r.Count;
-        // (the road's points that are an open deck: raised, no gap, not under the island nor along a sunk tunnel, the sky over the middle)
+        // (the road's points that are an open deck: raised, no gap, not under the island nor along a sunk tunnel, the sky over the middle --
+        // `always`: whatever stands over the middle, a spur's foot)
         var open = new bool[n];
         for (var i = 0; i < n; i++)
             open[i] = up[i] && !r.Gap[i] && !skip.Contains(i) && r.Under?[i] != true
-                      && IslandOps.Altitude(island, r.X[i] * 512, r.Z[i] * 512) is { } middle && middle <= r.H[i] + RaisedFlushUnder;
+                      && (always || (IslandOps.Altitude(island, r.X[i] * 512, r.Z[i] * 512) is { } middle && middle <= r.H[i] + RaisedFlushUnder));
         // (a vertex is a stretch's only where the road's nearest point to it, of those near the deck's height, is an open one: the cliff over a
         // doorway the road runs on into, ahead of the last open point, is the doorway's; the hall under the island runs under the trenches)
         const int bucket = 8;
@@ -6011,6 +6014,27 @@ internal static class RaceTrackBuilder
                 }
             }
         report.Notes.Add($"the banks against the road cut back {plan.SetBack:0.#} cells past the verge: {lowered.Count} corners lowered, {freed} triangles no longer walls");
+    }
+
+    // RaceTrackIsland.OpenGround: no ground triangle of the island blocks -- Twinsen walks and the car drives up and over anything (the engine
+    // lifts both onto higher ground they move into unless its triangle blocks: EXTFUNC.CPP ReajustPosExt). Its game codes kept.
+    private static void OpenAllGround(IslandFile island, RaceTrackReport report)
+    {
+        var opened = 0;
+        foreach (var cube in island.Cubes.Values)
+        {
+            if (!cube.HasPolygons) continue;
+            for (var z = 0; z < IslandCube.Cells; z++)
+                for (var x = 0; x < IslandCube.Cells; x++)
+                    for (var half = 0; half < 2; half++)
+                    {
+                        var p = new IslandPolygon(cube.Polygon(x, z, half));
+                        if (!p.Col) continue;
+                        cube.SetPolygon(x, z, half, p.With(col: false).Raw);
+                        opened++;
+                    }
+        }
+        report.Notes.Add($"open ground: {opened} blocking ground triangles opened -- the whole island walkable and drivable");
     }
 
     // (the user, 2026-10-31, Mosquibees: "it's too easy to get stuck on the wall": where a wall stands by the road a car is kept off it as a deck's rail keeps it on, sliding on along
@@ -7438,6 +7462,11 @@ internal static class RaceTrackBuilder
         if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex, null, branchRoads.Select(b => b.Item1).ToList());
         foreach (var (road, plan) in branchRoads)
             PlaceBranch(island, main, road, plan, options, report, branchRoads.Select(b => b.Item1).Where(b => b != road).Append(main).ToList());
+        // (a spur down onto the ground -- the Emerald Moon's ramp up from its landing pad: the ground standing over its deck out to its rails
+        // brought down under it, as the lap's is -- the user, 2026-11-24, "The bottom of the slope up to the Emerald moon track from the
+        // spaceship has terrain bleeding through")
+        foreach (var (road, _) in branchRoads.Where(b => b.Item1.Spur))
+            FlushOverDeck(island, new Field(island), road, options, report, new HashSet<int>(), always: true);
         // (a giant frog: a still copy of it among the island's decor, for the editor's view)
         foreach (var f in report.Frogs) RaceTrackFrog.AddDecor(island, f, options.NewBodyBase, report);
         if (report.Loops.Count > 0) PlaceLoops(island, options, report);
