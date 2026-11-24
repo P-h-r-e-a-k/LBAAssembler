@@ -67,6 +67,10 @@ internal static partial class RaceTrackStory
     internal const int TraluLadderZone = 5;
     public const int DayVar = 200, Tired = 1, Rested = 2, WonVar = 201, BeatVar = 202;
     private const int ZoeKissAnim = 84;   // (Zoe's kiss, the game's own: Polar/PolarDream.cs ZoeKiss)
+    // (the cut scene after the lap of honour: Twinsen's walk up to Zoe and Raph -- his track's labels in the start line's scene, past the
+    // game's 0-14 and 90-91 there -- and how far before the two of them he stops, cells)
+    private const int VictoryWalk = 240;
+    private const double TalkBack = 1.6;
     // Celebration Island's lava lake: the souvenir seller beaten (1; 2 once he has told what he saw) and his race run (won or not), 203-204
     public const int SellerBeaten = 203, SellerRaced = 204;
     // (205 is Polar Island's dream, 206 Citadel Island's weather: RACEMOD.CPP RaceMod_CitadelWeather.) Twinsen has driven a car on Citadel
@@ -900,9 +904,21 @@ void comportement_1()
                         if (zoeAt is not null) break;
                     }
                 var raphOut = -1; var raphRun = new List<SceneTrackPoint>(); var runFirst = -1;
+                var talkSpot = -1; var talkBeta = 0;
                 if (zoeAt is { } zw && parkAt is { } pr)
                 {
                     double d = Apart(pr.X, pr.Z, zw.X, zw.Z), bx = zw.X + (pr.X - zw.X) / d * 1.3, bz = zw.Z + (pr.Z - zw.Z) / d * 1.3;
+                    // (where Twinsen is walked to, out of his car after the lap of honour: before the two of them, TalkBack cells across the line
+                    // between Zoe and Raph's place, on the side his car pulls up on, facing them -- VictoryTalk)
+                    {
+                        double mx = (zw.X + bx) / 2, mz = (zw.Z + bz) / 2, lx = bx - zw.X, lz = bz - zw.Z, ll = Math.Max(1e-6, Math.Sqrt(lx * lx + lz * lz));
+                        double nx = -lz / ll, nz = lx / ll;
+                        if ((pr.X - mx) * nx + (pr.Z - mz) * nz < 0) { nx = -nx; nz = -nz; }
+                        double tx = mx + nx * TalkBack, tz = mz + nz * TalkBack;
+                        talkSpot = model.TrackPoints.Count;
+                        model.TrackPoints.Add(new SceneTrackPoint(RaceTrackScenes.CubeLocal(tx, model.CubeX), (int)Math.Round(storm.GroundAfter?.Invoke(tx, tz) ?? zw.Y), RaceTrackScenes.CubeLocal(tz, model.CubeY)));
+                        talkBeta = RaceTrackMath.Turn(Math.Atan2(mx - tx, mz - tz));
+                    }
                     raphOut = model.TrackPoints.Count;
                     // (Raph's car, parked by them on the road: the lap of honour pulls up just short of it)
                     victoryStop = new[] { (int)Math.Round(pr.X * 512), (int)Math.Round(pr.Z * 512) };
@@ -1027,6 +1043,25 @@ void comportement_4()
         suicide();
     }}
 }}
+
+// (the cut scene's: told by Zoe's life once he has said he's off to the lighthouse -- he runs, and only once he's gone is Twinsen the
+// player's again and Zoe at his side: BeatVar 2, her life's)
+void comportement_5()
+{{
+    obj_col(0);
+    set_track(label_{RaphRunsLabel});
+    set_comportement(comportement_6);
+}}
+
+void comportement_6()
+{{
+    if ({RaphGoneLabel} == l_track() || 9000 < distance(0))
+    {{
+        set_var_game({BeatVar}, 2);
+        invisible(1);
+        suicide();
+    }}
+}}
 ");
                 var raphTrack = $@"label(0);
 stop();
@@ -1108,8 +1143,20 @@ void comportement_2()
     {{
         message({Id(Line.ZoeJoins)});
         comportement_hero({TwinsenAndZoe});
+        cinema_mode(0);
+        set_dir_obj(0, MOVE_MANUAL);
         invisible(1);
         suicide();
+    }}
+    // (the cut scene, out of his car after the lap of honour, Raph out of his beside her: Twinsen walked up to the two of them, her kiss and
+    // her word, Raph's, and Raph off to the lighthouse -- the player's again only once he's gone. The user, 2026-11-24: after the victory
+    // lap walk him to Zoe and Raph and have him talk to them as part of the scripted cut scene, his control scripted till Raph runs off)
+    if ({Driving} != comportement_hero() && {RaphOutLabel + 1} == l_track_obj({raphIndex}))
+    {{
+        cinema_mode(1);
+        set_dir_obj(0, NO_MOVE);
+        set_track_obj(0, label_{VictoryWalk});
+        set_comportement(comportement_3);
     }}
     // (talked to before Raph is: her kiss -- the track's label 2, the game's animation 84 -- then her congratulations and Raph's promise)
     swif (1 == action())
@@ -1123,6 +1170,37 @@ void comportement_2()
     {{
         message({Id(Line.ZoeCongrats)});
         set_track(label_0);
+    }}
+}}
+
+void comportement_3()
+{{
+    if ({VictoryWalk + 1} == l_track_obj(0))
+    {{
+        set_track(label_2);
+        set_comportement(comportement_4);
+    }}
+}}
+
+void comportement_4()
+{{
+    if (102 == l_track())
+    {{
+        message({Id(Line.ZoeCongrats)});
+        set_track(label_0);
+        message_obj({raphIndex}, {Id(Line.RaphBeaten)});
+        set_var_game({StormPlot}, 3);
+        set_var_game({KeeperPlot}, 3);
+        set_comportement_obj({raphIndex}, comportement_5);
+        set_comportement(comportement_6);
+    }}
+}}
+
+void comportement_6()
+{{
+    if (2 == var_game({BeatVar}))
+    {{
+        set_comportement(comportement_2);
     }}
 }}
 ");
@@ -1167,6 +1245,10 @@ void comportement_1()
                     raphScript(scripts);
                     scripts.SetText(raphIndex, ScriptKind.Track, raphTrack);
                     zoeScript?.Invoke(scripts);
+                    // (Twinsen's walk up to them, the cut scene's -- Zoe's life sets him on it)
+                    if (zoeScript is not null && talkSpot >= 0)
+                        scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() +
+                            $"\n\nlabel({VictoryWalk});\nanim(1);\ngoto_point({talkSpot});\nanim(0);\nbeta({talkBeta});\n\nlabel({VictoryWalk + 1});\nstop();\n");
                     paulScript(scripts);
                     // (Raph's car, parked by the start line: in sight while he stands by Zoe after his time is beaten -- the lap of honour pulls
                     // up by it, the user, 2026-11-10: "Raph should be standing next to Zoe but Raph's car should be there next to him" -- and
