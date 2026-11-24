@@ -185,6 +185,8 @@ internal static partial class RaceTrackStory
         ZoeGetDressed, ZoeGoLook, TwinsenOnMyWay,
         // (the museum's door grobo asks for the password; any answer lets Twinsen in, free -- the user, 2026-11-20)
         MuseumPassword, PasswordAntennas, PasswordSanta, PasswordSpoon, MuseumGoAhead, MuseumFunny,
+        // (and his own answer to two of them -- the user, 2026-11-24)
+        MuseumSantaReply, MuseumFailFunFrock,
         // (the cycle shop in the baggage claim's first room, and the Hoverboard left behind in it -- RaceTrackStory.CycleShop.cs)
         ShopWelcome,
         BoardStory, BoardBuy, BoardNo, BoardSold, BoardNoMoney, BoardLater, BoardAsk,
@@ -1042,6 +1044,25 @@ internal static partial class RaceTrackStory
             "Ah ah ah! Questa è buona. Benvenuto al museo gratuito dedicato al famosissimo Twinsen!",
             "Ah ah ah! Essa é boa. Bem-vindo ao museu gratuito dedicado ao famosíssimo Twinsen!",
         },
+        // (his answer to "It's me, Santa Claus", and to "Fail FunFrock" -- his arm in the air: the user, 2026-11-24)
+        new[]
+        {
+            "That explains the big bulge in your sack.",
+            "Voilà qui explique la grosse bosse dans votre hotte.",
+            "Das erklärt die dicke Beule in Ihrem Sack.",
+            "Eso explica el gran bulto de su saco.",
+            "Questo spiega il grosso rigonfiamento nel suo sacco.",
+            "Isso explica o grande volume no seu saco.",
+        },
+        new[]
+        {
+            "Fail FunFrock!",
+            "À bas FunFrock !",
+            "Nieder mit FunFrock!",
+            "¡Abajo FunFrock!",
+            "Abbasso FunFrock!",
+            "Abaixo o FunFrock!",
+        },
         // (the cycle shop's owner: his welcome -- the user, 2026-11-20; his price list and its answers gone 2026-11-21 evening, each bike its
         // own tag: CitadelLater)
         new[]
@@ -1360,6 +1381,8 @@ internal static partial class RaceTrackStory
     // click), the mop's bucket on the floor between the door and the button (as far from the button as the handle reaches), its fall's
     // first track label
     private const int MuseumDoor = 5, MuseumButton = 6, MuseumButtonState = 2, MuseumButtonSample = 362, MopLabel = 10;
+    // (the museum's door grobo, entity 59: his animation with an arm straight up -- its third keyframe -- for "Fail FunFrock!")
+    private const int GuardArmUp = 178;
     private static readonly (int X, int Y, int Z) MopFoot = (10728 - (int)Citadel.CitadelProps.MopButton.X, 2560, 14815 - (int)Citadel.CitadelProps.MopButton.Z);
 
     private static string Loose(string text, string what, string with)
@@ -3075,9 +3098,15 @@ void comportement_{HeroWatching}()
             {{
                 message({p.Say(ChapterLine.MuseumFunny)});
             }}
+            else if ({santa} == choice())
+            {{
+                message({p.Say(ChapterLine.MuseumSantaReply)});
+            }}
             else
             {{
-                message({p.Say(ChapterLine.MuseumGoAhead)});
+                set_anim_dial({GuardArmUp});
+                message({p.Say(ChapterLine.MuseumFailFunFrock)});
+                set_anim_dial(166);
             }}
             set_var_cube(8, 1);
             set_var_cube(7, 1);
