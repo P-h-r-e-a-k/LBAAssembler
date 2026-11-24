@@ -483,6 +483,8 @@ internal static class DomeVelodrome
     private static (double, double, double) Norm(double x, double y, double z) { var l = Math.Sqrt(x * x + y * y + z * z); return (x / l, y / l, z / l); }
 
     private readonly record struct Sample(bool Hit, byte Ramp, float Shade, int Cell, M Mat, float Depth, float Nx, float Ny, float Nz);
+    // (a pixel of the floor, the boards or the podium's tops facing up: what a column's collision may not be under)
+    private const byte GroundPixel = 0x80;
 
     private static Sample Trace(double sx, double sy, bool lit)
     {
@@ -607,6 +609,7 @@ internal static class DomeVelodrome
         public readonly byte[] Index = new byte[W * H];
         public readonly int[] Cell = new int[W * H];
         public readonly byte[] Bgra = new byte[W * H * 4];
+        public readonly byte[] Mat = new byte[W * H];
     }
 
     internal static Picture Render(byte[] palette)
@@ -664,6 +667,8 @@ internal static class DomeVelodrome
                 var index = (byte)(bestRamp * 16 + Math.Clamp(shade, 0, 15));
                 pic.Index[i] = index;
                 pic.Cell[i] = cell;
+                var own = hits.First(h => h.Cell == cell);
+                pic.Mat[i] = (byte)((byte)own.Mat | (own.Ny > 0.45f && own.Mat is M.Bowl or M.Floor or M.Podium ? GroundPixel : 0));
                 pic.Bgra[i * 4] = palette[index * 3 + 2]; pic.Bgra[i * 4 + 1] = palette[index * 3 + 1]; pic.Bgra[i * 4 + 2] = palette[index * 3]; pic.Bgra[i * 4 + 3] = 255;
             }
         });
@@ -671,21 +676,56 @@ internal static class DomeVelodrome
     }
 
     // ================================================================================================= the cells
-    // The top of what Twinsen stands on (units): the bowl, the floor, the stands' rows, the podium; the wall and beyond it solid to the top
-    // (but in the doors)
+    // The top of what Twinsen stands on (units): the bowl, the floor, the podium; the wall and beyond it solid to the top (but in the way
+    // out), and the stands -- for looking at: their rows rise 320, steps of a layer and a quarter that the cells' layers never fit, so he
+    // stood half in the seats (the edge stress test, 2026-11-24)
     private static double Ground(double x, double z)
     {
         double ax = x - Xc, az = z - Zc, rho = Math.Sqrt(ax * ax + az * az);
-        var door = DoorOf(ax, az, out var across, out var outward);
-        var inDoor = door >= 0 && door != Shut && Math.Abs(across) < DoorHalf - 40 && outward < Rw + Recess - 20;
-        if (rho > Rw - 100 && !inDoor) return Height * Lay;
+        if (rho > Rw - 100 && !InWayOut(ax, az)) return Height * Lay;
         Oval(x, z, out var a, out var b, out var d, out var psi, out _);
         var h = d <= R3 + Ft ? Deck(d, Bank(psi), out _) : FOut;
         var q = -b - (R3 + Ft + Walkway);
-        if (q >= 0 && Math.Abs(a) <= StandHalf) h = Math.Max(h, FOut + (Math.Min(Math.Floor(q / RowD), Rows - 1) + 1) * RowR);
+        // (their front a little out, their ends further: the ends' line runs across the grid, and the cells it cuts let him half into them)
+        if (q >= -250 && Math.Abs(a) <= StandHalf + 600) return Height * Lay;
         foreach (var (px, pz, layers) in Podium)
             if (x >= px * Cell && x <= (px + 2) * Cell && z >= pz * Cell && z <= (pz + 2) * Cell) h = Math.Max(h, FIn + layers * Lay);
         return h;
+    }
+
+    // in the way out's doorway (the wall's ring open there)
+    private static bool InWayOut(double ax, double az)
+    {
+        var door = DoorOf(ax, az, out var across, out var outward);
+        return door >= 0 && door != Shut && Math.Abs(across) < DoorHalf - 40 && outward < Rw + Recess - 20;
+    }
+
+    // a slope's height across its cell (0 to 1, u along x, w along z): the game's shapes (OBJECT.CPP ReajustPos), 1 flat
+    private static double ShapeHeight(int shape, double u, double w) => shape switch
+    {
+        2 => u, 3 => w, 4 => 1 - w, 5 => 1 - u,
+        6 => Math.Max(u, w), 7 => Math.Max(1 - u, 1 - w), 10 => Math.Min(u, w), 11 => Math.Min(1 - u, 1 - w),
+        8 => u + w < 1 ? 1 - w : u, 9 => u + w < 1 ? 1 - u : w, 12 => u + w < 1 ? u : 1 - w, 13 => u + w < 1 ? w : 1 - u,
+        _ => 1,
+    };
+
+    // The slope (or a full cube, 1) and its cell's layer nearest the model's floor over a column -- at a given layer, or the best one
+    private static (int Top, int Shape) Fit(int x, int z, int? at)
+    {
+        var heights = new double[25];
+        for (var i = 0; i < 25; i++) heights[i] = Ground((x + 0.1 + 0.2 * (i % 5)) * Cell, (z + 0.1 + 0.2 * (i / 5)) * Cell) / Lay;
+        (int, int) best = (at ?? 0, 1);
+        var bestErr = double.MaxValue;
+        for (var s = 1; s <= 13; s++)
+        {
+            double sum = 0;
+            for (var i = 0; i < 25; i++) sum += heights[i] - ShapeHeight(s, 0.1 + 0.2 * (i % 5), 0.1 + 0.2 * (i / 5));
+            var l = at ?? (int)Math.Round(sum / 25);
+            double err = 0;
+            for (var i = 0; i < 25; i++) { var e = heights[i] - l - ShapeHeight(s, 0.1 + 0.2 * (i % 5), 0.1 + 0.2 * (i / 5)); err += e * e; }
+            if (err < bestErr - 1e-9) { bestErr = err; best = (l, s); }
+        }
+        return best;
     }
 
     // a cell's slope from which of its corners are a layer higher (bit 0 its (0, 0), 1 (1, 0), 2 (0, 1), 3 (1, 1) -- x, z): the game's
@@ -712,9 +752,31 @@ internal static class DomeVelodrome
                 else if (hi - lo == 1 && ShapeOfCorners[pattern] != 0) { top = lo; shape = ShapeOfCorners[pattern]; }
                 else
                 {
-                    var mid = (int)Math.Clamp(Math.Floor(Ground((x + 0.5) * Cell, (z + 0.5) * Cell) / Lay + 0.5), 0, Height);
-                    top = mid - 1; shape = 1;
+                    var heights = new double[25];
+                    for (var i = 0; i < 25; i++) heights[i] = Ground((x + 0.1 + 0.2 * (i % 5)) * Cell, (z + 0.1 + 0.2 * (i / 5)) * Cell) / Lay;
+                    Oval((x + 0.5) * Cell, (z + 0.5) * Cell, out _, out _, out var dc, out _, out _);
+                    var walls = new[] { h00, h10, h01, h11 }.Count(h => h >= Height - 1);
+                    if (dc >= R2 - 200 && dc <= R3 + Ft && walls == 0)
+                    {
+                        // (the boards steeper than the game's slopes can be -- a cell's corners at most a layer apart: 26.6 degrees along
+                        // the grid, 19.5 across it, the straights' own; the turns bank to 42 -- not walked on: solid to past a jump over
+                        // them. Fitted, he stood a layer and a half in them or over them, and next to a higher cell's boards, a brick
+                        // within his height, couldn't jump: the edge stress test, 2026-11-24)
+                        top = Math.Min(Height - 1, (int)Math.Ceiling(heights.Max()) + 3); shape = 1;
+                    }
+                    else if (walls >= 2) { top = Height - 1; shape = 1; }
+                    else if (heights.Max() - heights.Min() > 2.6)
+                    {
+                        // (a wall's foot, a sheer drop: flat at the middle's height)
+                        var mid = (int)Math.Clamp(Math.Floor(Ground((x + 0.5) * Cell, (z + 0.5) * Cell) / Lay + 0.5), 0, Height);
+                        top = mid - 1; shape = 1;
+                    }
+                    else (top, shape) = Fit(x, z, null);
                 }
+                // (the wall's ring: a cell whose middle is within 300 of the wall's face solid to the top -- a jump at the wall carried
+                // him a fifth of a cell into it, its cells' middles in the room; the way out's doorway open)
+                double mx = (x + 0.5) * Cell - Xc, mz = (z + 0.5) * Cell - Zc;
+                if (Math.Sqrt(mx * mx + mz * mz) > Rw - 300 && !InWayOut(mx, mz)) { top = Height - 1; shape = 1; }
                 // the fence across the cell (not in a gate): solid to over the rails
                 var fence = -1;
                 double cxw = (x + 0.5) * Cell, czw = (z + 0.5) * Cell;
@@ -759,6 +821,9 @@ internal static class DomeVelodrome
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var pic = Render(palette);
         var images = new Dictionary<int, GphImage>();
+        // (the cells the floor's and the boards' own pixels are in: none may be over the cell Twinsen stands in -- GRILLE.CPP
+        // WorldColBrickFull takes any brick within his height for a wall over his head)
+        var groundCells = new HashSet<int>();
         const int W = Picture.W, H = Picture.H;
         for (var row = 0; row < H; row++)
             for (var col = 0; col < W; col++)
@@ -778,6 +843,7 @@ internal static class DomeVelodrome
                     var key = x | y << 6 | z << 11;
                     if (!images.TryGetValue(key, out var image)) images[key] = image = new GphImage(48, 38);
                     image.Set(i, j, pic.Index[row * W + col]);
+                    if ((pic.Mat[row * W + col] & GroundPixel) != 0) groundCells.Add(key);
                     break;
                 }
             }
@@ -785,6 +851,23 @@ internal static class DomeVelodrome
 
         // ---- the cells: the collision under the picture, the bricks where it shows
         var cols = Collision();
+        // (where the boards are drawn in a cell over the collision's top -- the turns' banking, steeper than the game's slopes -- the top
+        // raised to that cell, its slope fitted there: he stands on the boards or a little over them, never under a ceiling of them; the
+        // edge stress test, 2026-11-24, found him boxed in on the turns, unable to jump or walk on)
+        var raised = 0;
+        for (var x = 0; x < Size; x++)
+            for (var z = 0; z < Size; z++)
+            {
+                var g = -1;
+                for (var y = Height - 1; y >= 0 && g < 0; y--) if (groundCells.Contains(x | y << 6 | z << 11)) g = y;
+                var (top, _, fence) = cols[x, z];
+                if (g > top && top < Height - 1)
+                {
+                    var (t, sh) = Fit(x, z, g);
+                    cols[x, z] = (t, sh, fence);
+                    raised++;
+                }
+            }
         var bricks = new Dictionary<string, int>();
         var entries = new List<(int Brick, int Shape, int Sound)>();
         var entryOf = new Dictionary<(int, int, int), int>();
@@ -924,7 +1007,7 @@ internal static class DomeVelodrome
         scenes.SetStored(Scene + 1, roomRecord);
         scenes.SetStored(Outside + 1, outsideRecord);
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
-        log.Add($"The Dome of the Slate's velodrome (scene {Scene}): rendered in {renderTime:0.0} s, {images.Count} cells drawn, {newBricks} bricks, " +
+        log.Add($"The Dome of the Slate's velodrome (scene {Scene}): rendered in {renderTime:0.0} s, {images.Count} cells drawn, {newBricks} bricks, {raised} columns raised to their boards, " +
                 $"{entries.Count} places in {blocks} blocks (library {libraryNumber}), grid {gridNumber} ({grid.Length} bytes); the way in from scene {Outside} " +
                 $"arrives at ({ArrivalInfo.X}, {ArrivalInfo.Y}, {ArrivalInfo.Z}) less where in its door he was");
         return log;
