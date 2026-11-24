@@ -69,7 +69,12 @@ internal static class CitadelOveralls
     };
     public static SuitColour Colour { get; set; } = SuitColour.Green;
     private static (SuitColour Colour, string Name, int Ramp, int Shade) Suit => Suits.First(s => s.Colour == Colour);
-    private static int Bright => Suit.Ramp + Suit.Shade;
+    // (the suit's colour on Twinsen's bodies: their polygons are lit -- Gouraud, each point's light ADDED to the colour, 0 to 15 shades:
+    // AFF_OBJ.CPP LightList and the fillers -- so it is the ramp's start, as the game's own tunic is its blue's, 192. Six shades up, as it
+    // was while they were drawn flat, the brightest points ran past the ramp's end into the palette's next row: black patches on his
+    // shoulders and back, the user, 2026-11-24, "Twinsen's new racing outfit has patches of black on it". Shade: the flat models' --
+    // the inventory's, the folded suit -- SuitLit)
+    private static int Bright => Suit.Ramp;
     // the suit's colour, lit, as the build has chosen it (the inventory's models are made before or after Install sets Colour)
     internal static int SuitLit => Suits.First(x => x.Colour == Chosen()) is var c ? c.Ramp + c.Shade : 132;
     // (the build's choice: RT_SUIT, else the race car window's)
