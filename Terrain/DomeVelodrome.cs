@@ -50,9 +50,12 @@ internal static class DomeVelodrome
     // the dome's wall: round the hall, full height on the far side, a low kerb on the near (cut away, as the game's rooms are)
     private const double Rw = 30.5 * Cell, Tw = Cell, Hw = 6300, Stub = 110, FarCos = 0.22, ColR = 175, ColAt = Rw - 70, ColStep = 9 * Math.PI / 180;
     private const double Ycap = FOut + 3900, BaseTop = FOut + 640;
-    // the doors: the way in from outside (the wall's -z point) and the back door to the slate's garden (its -x point)
+    // the doors: the way in from outside (the wall's -z point) and the game's back door to the slate's garden (its -x point) -- shut, a pair
+    // of wooden doors in its arch (the user, 2026-11-24: "The slate is already given at the start of the citadel 2 race"; the garden is the
+    // slate keeper's, its only way out his reward's, scene 44's actor 3)
     private static readonly double[] DoorAngles = { -HalfPi, Math.PI };
-    private const double DoorHalf = 512, DoorRise = 1700, Recess = Tw - 120;
+    private const int Shut = 1;
+    private const double DoorHalf = 512, DoorRise = 1700, Recess = Tw - 120, ShutDepth = 90;
     // the podium in the infield's middle (cells): first 2 x 2 at (31, 31) two layers high, second at (31, 33) and third at (33, 31) one layer
     private static readonly (int X, int Z, int Layers)[] Podium = { (31, 31, 2), (31, 33, 1), (33, 31, 1) };
     // the finish line across the far straight, the 200 m line across the near
@@ -123,8 +126,9 @@ internal static class DomeVelodrome
         return -1;
     }
     // the door's opening (its arch), across and up from its sill
+    // (the two shapes' union: inside it the nearer edge of either, so no seam where the arch springs from the sides)
     private static double Arch(double across, double up) =>
-        up < DoorRise ? Box2(across, up - DoorRise / 2 + 20, DoorHalf, DoorRise / 2 + 20, 0) : Math.Sqrt(across * across + (up - DoorRise) * (up - DoorRise)) - DoorHalf;
+        Math.Min(Box2(across, up - DoorRise / 2 + 20, DoorHalf, DoorRise / 2 + 20, 0), Math.Sqrt(across * across + (up - DoorRise) * (up - DoorRise)) - DoorHalf);
 
     // the far side of the hall: how far into it (negative) or out of it a place on the floor is, round the middle
     private static double FarSector(double ax, double az, double rho)
@@ -220,7 +224,7 @@ internal static class DomeVelodrome
                 double cx = Math.Cos(DoorAngles[i]), cz = Math.Sin(DoorAngles[i]);
                 double outward = ax * cx + az * cz, across = -ax * cz + az * cx;
                 var open = Arch(across, y - FOut);
-                wall = Math.Max(wall, -Math.Max(open, Math.Max(Rw - 200 - outward, outward - (Rw + Recess))));
+                wall = Math.Max(wall, -Math.Max(open, Math.Max(Rw - 200 - outward, outward - (Rw + (i == Shut ? ShutDepth : Recess)))));
                 // (a gilt moulding round the arch)
                 Take(ref best, ref m, Math.Max(Math.Abs(open + 45) - 45, Math.Max(Rw - 70 - outward, outward - Rw - 10)), M.Frame);
             }
@@ -360,7 +364,7 @@ internal static class DomeVelodrome
             case M.Wall:
             {
                 var door = DoorOf(ax, az, out var across, out var outward);
-                if (door >= 0 && outward > Rw + 40 && Arch(across, y - FOut) < 10) return new Paint(12, 0.5);
+                if (door >= 0 && outward > Rw + 40 && Arch(across, y - FOut) < 10) return door == Shut ? Leaves(across, y - FOut) : new Paint(3, 0);
                 if (rho > Rw + Tw - 8 && Math.Abs(ny) < 0.5) return Cut(y);
                 if (ny > 0.7) return new Paint(3, 9);
                 if (y < BaseTop - 40) return new Paint(14, 9 + 0.5 * (Rand((int)(x / 61), (int)(y / 61), (int)(z / 61)) - 0.5));
@@ -427,6 +431,30 @@ internal static class DomeVelodrome
         double fx = x - tx * 1024, fz = z - tz * 1024;
         if (fx < 18 || fz < 18) return new Paint(11, 3);
         return new Paint(11, 8 + 1.2 * (Rand(tx, tz, 5) - 0.5) + 0.3 * (Rand((int)(x / 43), (int)(z / 43)) - 0.5), 0.25, 40);
+    }
+
+    // the shut back door's two leaves in its arch, across its middle and up from its sill: dark oak, each leaf a frame round two raised
+    // panels, the seam between them, brass handles; over them a fanlight of oak rays
+    private static Paint Leaves(double across, double up)
+    {
+        var grain = 0.5 * (Rand((int)Math.Floor((across + 2000) / 23), (int)Math.Floor(up / 140), 4) - 0.5);
+        if (Math.Abs(across) < 12) return new Paint(1, 2);
+        if (up > DoorRise)
+        {
+            var ang = Math.Atan2(up - DoorRise, across);
+            var ray = Math.Abs(Math.IEEERemainder(ang, Math.PI / 8));
+            if (ray < 0.03 || Math.Sqrt(across * across + (up - DoorRise) * (up - DoorRise)) < 90) return new Paint(1, 4);
+            return new Paint(1, 8 + grain, 0.25);
+        }
+        double hx = Math.Abs(Math.Abs(across) - DoorHalf / 2);
+        if (Math.Abs(Math.Abs(across) - 80) < 24 && Math.Abs(up - 1000) < 24) return new Paint(6, 12, 0.7, 40);
+        foreach (var (lo, hi) in new[] { (180.0, 860.0), (960.0, 1620.0) })
+        {
+            if (up < lo || up > hi || hx > DoorHalf / 2 - 80) continue;
+            var edge = Math.Min(Math.Min(up - lo, hi - up), DoorHalf / 2 - 80 - hx);
+            return edge < 22 ? new Paint(1, edge < 11 ? 5 : 12) : new Paint(1, 10 + grain, 0.3);
+        }
+        return new Paint(1, 8.5 + grain, 0.3);
     }
 
     // where the hall is cut away on the near side: stone in courses
@@ -649,7 +677,7 @@ internal static class DomeVelodrome
     {
         double ax = x - Xc, az = z - Zc, rho = Math.Sqrt(ax * ax + az * az);
         var door = DoorOf(ax, az, out var across, out var outward);
-        var inDoor = door >= 0 && Math.Abs(across) < DoorHalf - 40 && outward < Rw + Recess - 20;
+        var inDoor = door >= 0 && door != Shut && Math.Abs(across) < DoorHalf - 40 && outward < Rw + Recess - 20;
         if (rho > Rw - 100 && !inDoor) return Height * Lay;
         Oval(x, z, out var a, out var b, out var d, out var psi, out _);
         var h = d <= R3 + Ft ? Deck(d, Bank(psi), out _) : FOut;
@@ -857,11 +885,12 @@ internal static class DomeVelodrome
             return built.Record;
         }
         var exits = room.Zones.Where(z => z.Type == 0 && z.Num == Outside).ToList();
-        // (the game's: the first its back door, to the slate's garden; the second the way out by the way in)
-        var backInfo = exits[0].Info; var mainInfo = exits[1].Info;
+        // (the game's: the first its back door, to the slate's garden -- shut now, no way through; the second the way out by the way in)
+        var mainInfo = exits[1].Info;
         room.Zones.RemoveAll(z => z.Type == 0 && z.Num == Outside);
         for (var i = 0; i < DoorAngles.Length; i++)
         {
+            if (i == Shut) continue;
             double cx = Math.Cos(DoorAngles[i]), cz = Math.Sin(DoorAngles[i]);
             // (the doorway: from in front of the wall to its back, across the door less a little -- walked up to, not into: the cells by
             // the wall hold its arch's and its moulding's pixels, and the engine stops a walker at any brick within his height, whatever
@@ -875,7 +904,7 @@ internal static class DomeVelodrome
                 Type = 0, Num = Outside,
                 X0 = (int)corners.Min(c => c.X), X1 = (int)corners.Max(c => c.X), Z0 = (int)corners.Min(c => c.Z), Z1 = (int)corners.Max(c => c.Z),
                 Y0 = (int)FOut - 100, Y1 = (int)FOut + 2000,
-                Info = (int[])(i == 0 ? mainInfo : backInfo).Clone(),
+                Info = (int[])mainInfo.Clone(),
             });
         }
         (room.Hero.X, room.Hero.Y, room.Hero.Z) = Arrival;

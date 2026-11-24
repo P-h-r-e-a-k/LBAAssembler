@@ -1746,14 +1746,17 @@ void comportement_1()
     // landing (350 -> scene 55) and the island across from the hacienda (354 -> scene 73), and from them back or on. The game has it fly once
     // it's cured (variable 42, Ker'aooc's remedy, which the story never gives): the yard's Dino-Fly reads DinoFlies instead, set as the
     // scene starts once chapter 2 (the rain over) and the town circuit won (WonVar) -- its place home (variable 94, 1) if it has none yet.
-    // The island across from the hacienda offered without the game's variable 121 (its discovery); not the Dome of the Slate (351, and the
-    // Desert's 296): it waits for the velodrome -- the user, 2026-11-20, "Let's wait until we turn the dome of the slate into a velodrome
-    // before we give dinofly the option of flying him there".
+    // The island across from the hacienda offered without the game's variable 121 (its discovery), from everywhere the Dino-Fly lands.
+    // The Dome of the Slate (the yard's 351, the Desert's and the hacienda island's 296) offered as the game has it since its inside is a
+    // velodrome (DomeVelodrome) -- the user, 2026-11-20, "Let's wait until we turn the dome of the slate into a velodrome before we give
+    // dinofly the option of flying him there"; 2026-11-24, the velodrome built, "Yes add dinofly to the dome of the slate". (The Dome's
+    // landing, scene 44, is the game's: the velodrome's door its way in; its back door, to the slate keeper's garden, is shut -- the
+    // story's slate is the herald's, at the town circuit's line.)
     internal const int DinoFlies = 274;
-    private const int DesertDinoLanding = 55, HaciendaIslandLanding = 73, DinoFlyMenuActor = 3;
+    private const int DesertDinoLanding = 55, DomeDinoLanding = 44, DinoFlyMenuActor = 3, DomeDinoFly = 4;
     private static void DinoFlyFlights(StoryParts p)
     {
-        p.Edit(CarScene, "the Dino-Fly flies once the rain is over and the town circuit won: to the Desert and the island across from the hacienda", _ => scripts =>
+        p.Edit(CarScene, "the Dino-Fly flies once the rain is over and the town circuit won: to the Desert, the island across from the hacienda and the Dome of the Slate", _ => scripts =>
         {
             var text = scripts.GetText(DinoFlyActor, ScriptKind.Life);
             text = text.Replace("var_game(42)", $"var_game({DinoFlies})");
@@ -1775,24 +1778,22 @@ void comportement_1()
         }}
     }}");
             text = Loose(text, "if (1 == var_game(121))\n{\nadd_choice(354);\n}", "add_choice(354);");
-            text = Loose(text, "add_choice(351);", "");
             scripts.SetText(DinoFlyActor, ScriptKind.Life, text);
             // (Twinsen's side of it, his own script: the Dino-Fly well, his Action by it starts its question -- the game's 100/101, not "it's
             // sick", 333)
             scripts.SetText(0, ScriptKind.Life, scripts.GetText(0, ScriptKind.Life).Replace("var_game(42)", $"var_game({DinoFlies})"));
         });
-        p.Edit(DesertDinoLanding, "the Desert's Dino-Fly: back to Citadel or on to the island across from the hacienda, not the Dome yet", _ => scripts =>
+        p.Edit(DesertDinoLanding, "the Desert's Dino-Fly: back to Citadel, on to the Dome of the Slate or the island across from the hacienda", _ => scripts =>
         {
             var text = scripts.GetText(DinoFlyMenuActor, ScriptKind.Life);
-            text = Loose(text, "add_choice(296);", "");
             text = Loose(text, "if (1 == var_game(121))\n{\nadd_choice(298);\n}", "add_choice(298);");
             scripts.SetText(DinoFlyMenuActor, ScriptKind.Life, text);
         });
-        p.Edit(HaciendaIslandLanding, "the Dino-Fly on the island across from the hacienda: back to Citadel or on to the oasis, not the Dome yet", _ => scripts =>
+        p.Edit(DomeDinoLanding, "the Dino-Fly at the Dome of the Slate: home, the Desert or the island across from the hacienda", _ => scripts =>
         {
-            var text = scripts.GetText(DinoFlyMenuActor, ScriptKind.Life);
-            text = Loose(text, "add_choice(296);", "");
-            scripts.SetText(DinoFlyMenuActor, ScriptKind.Life, text);
+            var text = scripts.GetText(DomeDinoFly, ScriptKind.Life);
+            text = Loose(text, "IF(0 < var_game(121), L1);\nadd_choice(354);\nL1:", "add_choice(354);");
+            scripts.SetText(DomeDinoFly, ScriptKind.Life, text);
         });
     }
 
