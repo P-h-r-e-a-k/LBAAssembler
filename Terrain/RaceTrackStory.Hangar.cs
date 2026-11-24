@@ -68,6 +68,8 @@ internal static partial class RaceTrackStory
 
             // the freighter
             var ship = Citadel.CitadelProps.Actor(HangarProps.Freighter, ShipX, PadY, ShipZ, 0);
+            var hangarEntity = HangarProps.Entity(b.GameDirectory);
+            if (hangarEntity >= 0) ship.Entity = hangarEntity;
             ship.Move = 3;
             var shipIndex = model.Actors.Count;
             adds.Add(IslandBeatsA.Add(model, ship, "void comportement_0()\n{\n}\n"));
@@ -134,6 +136,7 @@ void comportement_2()
             // Twinsen's buggy, beside the ramp's foot (chapter 4): loaded on the officer's word
             var buggyIndex = model.Actors.Count;
             var buggy = Citadel.CitadelProps.Actor(HangarProps.FreighterBuggy, BuggyAt.X, BuggyAt.Y, BuggyAt.Z, 3072);
+            if (hangarEntity >= 0) buggy.Entity = hangarEntity;
             buggy.Move = 3; buggy.Armor = WalkOverArmour;
             adds.Add(IslandBeatsA.Add(model, buggy, $@"void comportement_0()
 {{

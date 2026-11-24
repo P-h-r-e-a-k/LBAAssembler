@@ -28,12 +28,17 @@ internal static class HangarProps
         var palette = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(0);
         Ramp = Citadel.CitadelMuseum.Nearest(palette, 112, 114, 122);
         HatchDark = Citadel.CitadelMuseum.Nearest(palette, 16, 16, 22);
-        return Citadel.CitadelProps.InstallMore(gameDirectory, "the Esmers' hangar", new (int, string, Func<byte[], Body>)[]
+        // (on an entity of their own -- CitadelProps.InstallOwn, 2026-11-24; whoever places them gives them that entity: Entity)
+        var (e, line) = Citadel.CitadelProps.InstallOwn(gameDirectory, "the Esmers' hangar", new (int, string, Func<byte[], Body>, short[]?)[]
         {
-            (Freighter, "the Esmers' freighter", h => BuildFreighter(h, saucer)),
-            (FreighterBuggy, "Twinsen's buggy, to load", h => Still(h, "Twinsen's buggy", buggy, 1).ToBody(h)),
+            (Freighter, "the Esmers' freighter", h => BuildFreighter(h, saucer), Box(Freighter)),
+            (FreighterBuggy, "Twinsen's buggy, to load", h => Still(h, "Twinsen's buggy", buggy, 1).ToBody(h), Box(FreighterBuggy)),
         });
+        entity = e;
+        return new() { line };
     }
+    private static int entity = -1;
+    public static int Entity(string gameDirectory) { Install(gameDirectory); return entity; }
 
     // A game body's polygons, lines and spheres as it stands, on one bone
     private static CarMesh Still(byte[] header, string name, byte[] source, float scale)

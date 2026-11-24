@@ -26,12 +26,17 @@ internal static class StellaPosters
         var palette = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(0);
         Board = Citadel.CitadelMuseum.Nearest(palette, 70, 18, 64);
         Neon = Citadel.CitadelMuseum.Nearest(palette, 255, 90, 200);
-        return Citadel.CitadelProps.InstallMore(gameDirectory, "Stella Entities' posters", new (int, string, Func<byte[], Body>)[]
+        // (on an entity of their own -- CitadelProps.InstallOwn, 2026-11-24; whoever places them gives them that entity: Entity)
+        var (e, line) = Citadel.CitadelProps.InstallOwn(gameDirectory, "Stella Entities' posters", new (int, string, Func<byte[], Body>, short[]?)[]
         {
-            (PosterBack, "a poster of the Grobo and the Quetch", h => Poster(h, made, BackCast, BackWide)),
-            (PosterSide, "a poster of the Franco", h => Poster(h, made, SideCast, SideWide)),
+            (PosterBack, "a poster of the Grobo and the Quetch", h => Poster(h, made, BackCast, BackWide), null),
+            (PosterSide, "a poster of the Franco", h => Poster(h, made, SideCast, SideWide), null),
         });
+        entity = e;
+        return new() { line };
     }
+    private static int entity = -1;
+    public static int Entity(string gameDirectory) { Install(gameDirectory); return entity; }
 
     private static Body Poster(byte[] header, byte[][] made, (int Who, int Key)[] cast, float wide)
     {

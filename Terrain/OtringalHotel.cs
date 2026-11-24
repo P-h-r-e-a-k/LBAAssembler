@@ -352,8 +352,11 @@ internal static class OtringalHotel
             Info = new[] { to.X, to.Y, to.Z, 0, sw, 0, 0, on ? 1 : 0 },
         };
         var built = new List<string>();
+        // (the hotel's props on their own entity: HotelProps.Entity)
+        var hotelEntity = HotelProps.Entity(gameDirectory);
         bool Save(int scene, SceneModel model, string what)
         {
+            Citadel.CitadelProps.OwnActors(model, hotelEntity, HotelProps.Generics);
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
             for (var i = 0; i < model.Actors.Count; i++) { scripts.SetText(i, ScriptKind.Life, Still); scripts.SetText(i, ScriptKind.Track, Stop); }
             var result = scripts.Build();

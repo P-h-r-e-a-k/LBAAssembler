@@ -105,6 +105,9 @@ internal static class StellaRooms
         (Citadel.CitadelProps.Rack, 13 * 512 + 256, 17 * 512 + 200, 2048),
     };
 
+    // (an actor onto a feature's own entity, when it has one -- CitadelProps.InstallOwn)
+    private static SceneActorModel Own(SceneActorModel a, int entity) { if (entity >= 0) a.Entity = entity; return a; }
+
     public static List<string> Install(string gameDirectory)
     {
         var log = new List<string>();
@@ -169,9 +172,10 @@ internal static class StellaRooms
             {
                 // (the office's over the vent walled up, as it was before the dressing room's moved north of its mirrors: there it hid
                 // behind the basin's curtain, the vent's grille bare -- 2026-11-17)
-                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterSide, SidePosterX, PosterY, number == Office ? (VentZ + 1) * 512 : SidePosterZ, 1024));
+                var posters = StellaPosters.Entity(gameDirectory);
+                SceneOps.AddActor(model, Own(Citadel.CitadelProps.Actor(StellaPosters.PosterSide, SidePosterX, PosterY, number == Office ? (VentZ + 1) * 512 : SidePosterZ, 1024), posters));
                 // (the office's higher: the bed's headboard stands under it now, and at the same height the poster was drawn over its top)
-                SceneOps.AddActor(model, Citadel.CitadelProps.Actor(StellaPosters.PosterBack, BackPosterX, number == Office ? PosterY + 350 : PosterY, BackPosterZ, 0));
+                SceneOps.AddActor(model, Own(Citadel.CitadelProps.Actor(StellaPosters.PosterBack, BackPosterX, number == Office ? PosterY + 350 : PosterY, BackPosterZ, 0), posters));
             }
             if (number == Private && StellaEntities.WingGrid >= 0)
             {

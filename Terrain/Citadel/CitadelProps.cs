@@ -311,6 +311,61 @@ internal static partial class CitadelProps
         return new() { $"{what}, entity {Prop}'s bodies: {string.Join(", ", made)}" };
     }
 
+    // A feature's props on an entity of their own (the user, 2026-11-24: "let's start with more entities"): entity 17's body numbers are
+    // all but used up, and builds of different islands gave it bodies under numbers of their own -- the Imperial Hotel's 229-244 overwrote
+    // the velodrome's. A new entity at the entity table's end, like entity 17 -- or the one this build gave the feature already, known by its
+    // first body's bytes -- its bodies under the feature's own numbers, each with its box if it has one. Its number (-1: not made) and a line
+    // for the build's log. The feature's actors take that entity (SceneActorModel.Entity).
+    public static (int Entity, string Log) InstallOwn(string gameDirectory, string what, IEnumerable<(int Generic, string Name, Func<byte[], Body> Build, short[]? Box)> bodies)
+    {
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        if (!File.Exists(bodyPath) || !File.Exists(ressPath)) return (-1, $"WARNING: {what}: no BODY.HQR or RESS.HQR -- not made");
+        var header = Body.Read(HqrArchive.Open(bodyPath).Read(HeaderBody), 2, allowStatic: true).Header;
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var entities = Lba2EntityTable.Parse(table).Entities;
+        if (entities.All(e => e.Id != Prop)) return (-1, $"WARNING: {what}: no prop entity {Prop} to make its entity like -- not made");
+        // (each feature's bodies built once a run: asked for again -- by the scenes that place them, before or after the feature's own
+        // install -- only the entity table is looked at)
+        if (!ownBuilt.TryGetValue(what, out var built))
+            ownBuilt[what] = built = bodies.Select(b => (b.Generic, b.Name, Bytes: b.Build(header).Write(), b.Box)).ToList();
+        if (built.Count == 0) return (-1, $"{what}: no bodies");
+        var archive = HqrArchive.Open(bodyPath);
+        var count = HqrArchive.CountEntries(bodyPath);
+        bool Same(int index, byte[] bytes) => index >= 0 && index < count && archive.Read(index).AsSpan().SequenceEqual(bytes);
+        var entity = -1;
+        foreach (var e in entities.Where(e => e.Id > Prop))
+            if (e.Bodies.FirstOrDefault(b => b.Generic == built[0].Generic) is { } first && Same(first.Body, built[0].Bytes)) { entity = e.Id; break; }
+        var made = entity < 0;
+        if (made) (table, entity) = RaceTrackCharacterCars.WithEntityLike(table, Prop);
+        var have = Lba2EntityTable.Parse(table).Entities.First(e => e.Id == entity).Bodies.GroupBy(b => b.Generic).ToDictionary(g => g.Key, g => g.First().Body);
+        var bodyFile = File.ReadAllBytes(bodyPath);
+        int next = count, added = 0;
+        foreach (var (generic, _, bytes, box) in built)
+        {
+            int index;
+            if (have.TryGetValue(generic, out var h) && Same(h, bytes)) index = h;
+            else { bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(bytes)); index = next++; added++; }
+            table = box is { } b ? WithBodyBox(table, entity, generic, index, b) : RaceTrackBaldinoCar.WithBody(table, entity, generic, index);
+        }
+        if (added > 0) File.WriteAllBytes(bodyPath, bodyFile);
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
+        return (entity, $"{what}: entity {entity} ({(made ? "new" : "this build's already")}), its bodies {string.Join(", ", built.Select(b => b.Generic))}" +
+                        $" -- {added} new in BODY.HQR");
+    }
+    private static readonly Dictionary<string, List<(int Generic, string Name, byte[] Bytes, short[]? Box)>> ownBuilt = new();
+
+    // A scene's actors of entity 17 whose body is one of a feature's onto its own entity (InstallOwn): the props placed with
+    // CitadelProps.Actor, the prop entity's, before the feature had an entity of its own. How many moved.
+    public static int OwnActors(SceneModel model, int entity, IReadOnlyCollection<int> generics)
+    {
+        if (entity < 0) return 0;
+        var moved = 0;
+        foreach (var a in model.Actors)
+            if (a.Entity == Prop && generics.Contains(a.Body & 0xFF)) { a.Entity = entity; moved++; }
+        return moved;
+    }
+
     // The props whose box isn't the one their body's extent makes: the lift's platform (not its rails), the rugs' tiles (CitadelProps.Rugs)
     private static short[]? BoxOf(int generic) =>
         LiftBox(generic) ?? RugTileBox(generic) ?? BeastTileBox(generic) ??BathMatBox(generic) ?? ClubBox(generic) ?? PoolBox(generic) ?? BarBox(generic) ?? MopBox(generic) ?? DressingBox(generic) ?? FerryBox(generic) ?? KashBox(generic) ?? HangarProps.Box(generic) ?? HotelProps.Box(generic) ?? (generic == MonkStatuette.Generic ? MonkStatuette.Box : null);

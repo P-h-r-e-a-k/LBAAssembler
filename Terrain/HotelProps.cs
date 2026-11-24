@@ -45,7 +45,13 @@ internal static partial class HotelProps
     // (the lift's opening: how wide, how high; its surround's)
     public const float LiftWide = 1250, LiftHigh = 2300;
 
-    public static List<string> Install(string gameDirectory) => Citadel.CitadelProps.InstallMore(gameDirectory, "the Imperial Hotel", Bodies);
+    // (on an entity of their own, its body numbers these -- 2026-11-24: on entity 17 the velodrome's took the same numbers and the island
+    // built later overwrote the other's; the scenes placing them move their actors onto it, CitadelProps.OwnActors)
+    private const string What = "the Imperial Hotel";
+    private static IEnumerable<(int, string, Func<byte[], Body>, short[]?)> Own => Bodies.Select(b => (b.Generic, b.Name, b.Build, Box(b.Generic)));
+    public static List<string> Install(string gameDirectory) => new() { Citadel.CitadelProps.InstallOwn(gameDirectory, What, Own).Log };
+    public static int Entity(string gameDirectory) => Citadel.CitadelProps.InstallOwn(gameDirectory, What, Own).Entity;
+    public static IReadOnlyCollection<int> Generics => Bodies.Select(b => b.Generic).ToHashSet();
 
     // (every body the hotel adds, its generic and name: Install's, and a preview's -- ScriptRoundTrip hotelpreview)
     internal static readonly (int Generic, string Name, Func<byte[], Body> Build)[] Bodies =

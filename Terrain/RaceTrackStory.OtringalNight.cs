@@ -111,6 +111,8 @@ internal static partial class RaceTrackStory
             var doorway = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.LobbyLift.X + OtringalHotel.LiftDoorOut, OtringalHotel.LobbyFloorY, OtringalHotel.LobbyLift.Z));
             var lift = Citadel.CitadelProps.Actor(HotelProps.LiftFront, OtringalHotel.LobbyLift.X, OtringalHotel.LobbyFloorY, OtringalHotel.LobbyLift.Z, 1024);
             lift.Move = 3;
+            // (the hotel's props' entity: HotelProps.Entity)
+            if (HotelProps.Entity(b.GameDirectory) is var hotelEntity && hotelEntity >= 0) lift.Entity = hotelEntity;
             var liftIndex = model.Actors.Count;
             model.Zones.Add(new SceneZoneModel
             {

@@ -294,7 +294,7 @@ internal static partial class RaceTrackStory
             {
                 var (x, z, y, i) = spots[k];
                 // (a little 3D statuette, MonkStatuette -- the sprite was drawn statue-size: 2026-11-23)
-                var spot = Citadel.CitadelProps.Actor(MonkStatuette.Generic, RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(y), RaceTrackScenes.CubeLocal(z, model.CubeY), 0);
+                var spot = MonkStatuette.Actor(gameDirectory, RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(y), RaceTrackScenes.CubeLocal(z, model.CubeY), 0);
                 spot.Flags |= RaceTrackScenes.InvisibleFlag;       // (seen only once it is the one to find)
                 log.Add($"statuette {k + 1} at cell ({x:0.#}, {z:0.#}), {y:0} on the ground, {Math.Sqrt((x - report.LapX[i]) * (x - report.LapX[i]) + (z - report.LapZ[i]) * (z - report.LapZ[i])):0.#} cells from the lap's point {i}, a walk of {walk.Walk(x, z)} cells from the dock");
                 edits.Add(GroupB.Add(model, spot, $@"void comportement_0()

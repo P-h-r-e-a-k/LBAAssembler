@@ -55,15 +55,18 @@ internal static partial class RaceTrackStory
         stretch = stretch.Where((_, i) => i % step == 0 || i == stretch.Count - 1).ToList();
         var mid = stretch[stretch.Count / 2];
         double ox = DeanOilCubeX * 32768.0, oz = DeanOilCubeZ * 32768.0;
-        log.AddRange(Citadel.CitadelProps.InstallMore(gameDirectory, "the Dean's oil", new (int, string, Func<byte[], Body>)[]
+        // (on an entity of its own -- CitadelProps.InstallOwn, 2026-11-24)
+        var (oilEntity, oilLog) = Citadel.CitadelProps.InstallOwn(gameDirectory, "the Dean's oil", new (int, string, Func<byte[], Body>, short[]?)[]
         {
-            (DeanOilBody, "the Dean's oil over the road", header => BuildDeanOil(header, stretch, mid)),
-        }));
+            (DeanOilBody, "the Dean's oil over the road", header => BuildDeanOil(header, stretch, mid), null),
+        });
+        log.Add(oilLog);
         foreach (var scene in new[] { SchoolOutside, SchoolOutsideToo })
             if (b.Store.SceneExists(scene))
                 b.Edit(scene, $"the Dean's oil over the road by the School, {stretch.Count} points of the lap, while Q_PAGES is under {PagesDiploma}", model =>
                 {
                     var oil = Citadel.CitadelProps.Actor(DeanOilBody, (int)Math.Round(mid.X - ox), (int)Math.Round(mid.Y + DeanOilLift), (int)Math.Round(mid.Z - oz), 0);
+                    if (oilEntity >= 0) oil.Entity = oilEntity;
                     // (walked and driven over -- and, its armour the walk-over one, drawn before every other actor outside, SORT.CPP
                     // SortFloorFirst: by its box alone, the strip's, it came after the car on it and was drawn over it -- the user, 2026-11-18,
                     // "It also draws over the top of the car". In the Z-buffer instead, OBJ_ZBUFFER, it cut through the car's wheels.)

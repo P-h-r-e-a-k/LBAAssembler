@@ -20,28 +20,10 @@ internal static partial class CitadelProps
     public const int RiderFirst = 0, RiderPhases = 6, RiderCount = 4, TeamTentRed = RiderCount * RiderPhases, TeamTentBlue = TeamTentRed + 1;
     public static int RiderBody(int rider, int phase) => RiderFirst + rider * RiderPhases + phase;
 
-    // The velodrome's bodies into the game folder: appended to BODY.HQR, each its number on a new entity at the end of RESS.HQR's entity
-    // table. Its number (-1: not made) and a line for the build's log.
-    public static (int Entity, string Log) InstallVelodrome(string gameDirectory)
-    {
-        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
-        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
-        var header = Body.Read(HqrArchive.Open(bodyPath).Read(HeaderBody), 2, allowStatic: true).Header;
-        var table = HqrArchive.Open(ressPath).Read(44);
-        if (Lba2EntityTable.Parse(table).Entities.All(e => e.Id != Prop)) return (-1, $"WARNING: the velodrome's riders: no prop entity {Prop} -- not made");
-        (table, var entity) = RaceTrackCharacterCars.WithEntityLike(table, Prop);
-        var bodyFile = File.ReadAllBytes(bodyPath);
-        var next = HqrArchive.CountEntries(bodyPath);
-        var first = next;
-        foreach (var (generic, _, build) in VelodromeBodies(gameDirectory))
-        {
-            bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(build(header).Write()));
-            table = RaceTrackBaldinoCar.WithBody(table, entity, generic, next++);
-        }
-        File.WriteAllBytes(bodyPath, bodyFile);
-        HqrWriter.ReplaceInFile(ressPath, 44, table);
-        return (entity, $"the velodrome's riders ({RiderCount} x {RiderPhases} pedalling) and the teams' tents: entity {entity}, its bodies 0-{TeamTentBlue} BODY.HQR {first}-{next - 1}");
-    }
+    // The velodrome's bodies into the game folder: on an entity of their own (InstallOwn). Its number (-1: not made) and a line for the
+    // build's log.
+    public static (int Entity, string Log) InstallVelodrome(string gameDirectory) =>
+        InstallOwn(gameDirectory, "the velodrome's riders and the teams' tents", VelodromeBodies(gameDirectory).Select(b => (b.Item1, b.Item2, b.Item3, (short[]?)null)));
 
     // the two teams' colours (each a ramp's start: a lit body's polygons climb their ramp with the light), the riders' characters
     private const int KitRed = 4 * 16, KitBlue = 12 * 16, KitYellow = 6 * 16, KitWhite = 3 * 16, KitBlack = 3 * 16;

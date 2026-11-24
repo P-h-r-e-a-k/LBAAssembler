@@ -1,5 +1,6 @@
 using System.Numerics;
 using LbaBodyStudio;
+using LBAAssembler.Scenes;
 
 namespace LBAAssembler.Terrain;
 
@@ -16,10 +17,17 @@ internal static class MonkStatuette
     // (the stone's ramp: dark slate-teal, low on it so the light stays in it; the plinth a darker grey)
     private const int Robe = 9 * 16 + 3, RobeDark = 9 * 16 + 1, Plinth = 11 * 16 + 2, PlinthDark = 11 * 16 + 1, Ring = 6 * 16 + 4, Shadow = 3 * 16 + 1;
 
-    public static List<string> Install(string gameDirectory) => Citadel.CitadelProps.InstallMore(gameDirectory, "the Dark Monk statuettes", new (int, string, Func<byte[], Body>)[]
+    // (on an entity of their own -- CitadelProps.InstallOwn, 2026-11-24 -- its body this number; whoever places one gives it that entity)
+    private static IEnumerable<(int, string, Func<byte[], Body>, short[]?)> Own => new (int, string, Func<byte[], Body>, short[]?)[] { (Generic, "a Dark Monk statuette", Build, Box) };
+    public static List<string> Install(string gameDirectory) => new() { Citadel.CitadelProps.InstallOwn(gameDirectory, "the Dark Monk statuettes", Own).Log };
+    public static int Entity(string gameDirectory) => Citadel.CitadelProps.InstallOwn(gameDirectory, "the Dark Monk statuettes", Own).Entity;
+    // A statuette's actor, on the statuettes' entity
+    public static SceneActorModel Actor(string gameDirectory, int x, int y, int z, int beta = 0)
     {
-        (Generic, "a Dark Monk statuette", Build),
-    });
+        var a = Citadel.CitadelProps.Actor(Generic, x, y, z, beta);
+        if (Entity(gameDirectory) is var e && e >= 0) a.Entity = e;
+        return a;
+    }
 
     // (its box: the plinth and the figure -- small, so Twinsen comes right up to it)
     public static readonly short[] Box = { -150, 0, -150, 150, 760, 150 };

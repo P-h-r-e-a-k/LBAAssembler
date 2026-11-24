@@ -908,6 +908,7 @@ void comportement_1()
             model.Hero.Beta = 0;
             int Pt((int X, int Y, int Z) p) => SceneOps.AddTrackPoint(model, new SceneTrackPoint(p.X, p.Y, p.Z));
             var car = Citadel.CitadelProps.Actor(HangarProps.FreighterBuggy, ArriveCar.X, ArriveCar.Y, ArriveCar.Z, 0);
+            if (HangarProps.Entity(b.GameDirectory) is var hangarEntity && hangarEntity >= 0) car.Entity = hangarEntity;
             car.Move = 3; car.Armor = WalkOverArmour;
             var carIndex = model.Actors.Count;
             var addCar = IslandBeatsA.Add(model, car, $@"void comportement_0()
