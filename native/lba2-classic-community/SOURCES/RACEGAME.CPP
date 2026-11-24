@@ -3476,6 +3476,9 @@ S32 RaceGame_AdvancedRow(S32 num) {
                                                                                                   : GPU_RENDERER_BACKEND_OPENGL;
     if (Renderer_ApplyChoice(want))
         WriteConfigFile();
+    // (the whole picture drawn again on the new window when the game goes on: its partial redraws -- the boxes round what moves -- would
+    // go on over a picture the new renderer never drew, black boxes round the actors until the next whole redraw)
+    FirstTime = AFF_ALL_FLIP;
     Log_Info("[racegame] the renderer: %s (asked for %s)", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()),
              want == GPU_RENDERER_BACKEND_OPENGL ? "OpenGL" : "software");
     return 1;

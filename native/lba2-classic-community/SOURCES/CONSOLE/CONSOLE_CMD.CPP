@@ -76,6 +76,9 @@ static void ApplyPendingRenderer(void) {
     s_rendererPending = -1;
     if (Renderer_ApplyChoice(want))
         WriteConfigFile();
+    /* the whole picture drawn again on the new window: the scene's partial redraws (the boxes round what moves) would go on over a
+       picture the new renderer never drew, black boxes round the actors until the next whole redraw */
+    FirstTime = AFF_ALL_FLIP;
     Console_Print("renderer: %s", GpuRenderer_BackendName(GpuRenderer_ActiveBackend()));
 }
 #include "../PERSO.H" /* WriteConfigValue (persist one setting) */
