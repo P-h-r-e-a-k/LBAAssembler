@@ -13,7 +13,7 @@ namespace LBAAssembler.Terrain;
 //   - Action by him: "Fancy a hovercraft?" -- ten kashes, yes or no; paid, HireVar 1: the engine (RACEMOD.CPP hovercraft=) puts Twinsen in
 //     his car at the water's edge (HireAt), the car the hovercraft, held on the sea and not drowned, his own car kept; given back on foot
 //     within HireReach of there (or off the island), his own car where it was, and HireVar 0. The sea all round: the island across from the
-//     hacienda and Kash's sea cave are driven to and walked into.
+//     hacienda are driven to and walked onto, and Kash's sea cave driven into -- on its water and up a ramp onto its ledge (SeaCaveRamp).
 internal static partial class RaceTrackStory
 {
     public const int HireVar = 275;
@@ -22,15 +22,68 @@ internal static partial class RaceTrackStory
     // (the two along the shore's edge, well apart and clear of the hire point -- they stood 800 apart, one in the other: the user,
     // 2026-11-22, "the two hydroglyders at the hire point appear on top of each other, let's have them separated")
     private static readonly (int X, int Y, int Z, int Beta)[] ParkedHovercraft = { (6600, 90, 8000, 1536), (8800, 150, 10500, 1400) };
-    // Kash's sea cave, behind the door the hovercraft is left at on the sea north of the hire: the game's own way in was by its boat, Twinsen
-    // aboard ("on the raft", game variable 143), and the cave's raft is there only then -- set as he goes in, cleared once he's back out in
-    // the hovercraft (RACEMOD.CPP hover_door_var=)
-    private const int SeaCave = 113, OnTheRaft = 143;
-    // (and in the cave, the hovercraft in the raft's place -- the cave's turtle raft, actor 2, still carries him, hidden: a stand-in of the
-    // hovercraft's own entity drawn where it is, him in it while it carries him; the user, 2026-11-23, "Driving into the racers cave to get
-    // the helmet switches to Twinsen arriving in the cave on the turtle instead". RACEMOD.CPP hover_door_var='s raft, HoverRaftFrame: the
-    // stand-in the cave's actor of that entity marked to be walked over)
+    // Kash's sea cave, behind the door on the sea north of the hire: driven into (drive_in=), the game's own way in -- its turtle raft,
+    // Twinsen aboard ("on the raft", game variable 143) -- never called, so the raft goes as the game's own script has it
+    private const int SeaCave = 113;
+    // (and in the cave, the hovercraft drawn by a stand-in of its own entity, marked to be walked over -- where he drives it or where it's
+    // parked: RACEMOD.CPP HoverRaftFrame. Placed at the raft's own place, actor 2's, till the engine moves it)
     private const int CaveRaft = 2;
+    // (the room's own car: the island's car actor -- scene 64's, entity 152 -- on the ledge at the ramp's head, facing it; its life the game's
+    // car's, less its getting in by standing on it: in by Action, out by Action, and the engine's init_buggy to keep it there)
+    private const int CarFrom = 64, CarEntity = 152;
+    private static readonly (int X, int Y, int Z, int Beta) CaveCarAt = (4864, 768, 11776, 0);
+    private const string CaveCarLife = @"void comportement_0()
+{
+    init_buggy(0);
+    if (12 == comportement_hero())
+    {
+        set_comportement(comportement_2);
+    }
+    else
+    {
+        set_comportement(comportement_1);
+    }
+}
+
+void comportement_1()
+{
+    if (12 == comportement_hero())
+    {
+        set_var_cube(30, 1);
+        set_comportement(comportement_2);
+    }
+    if (1 == action())
+    {
+        if (768 > angle_obj(0) && 1500 > distance(0))
+        {
+            set_var_cube(30, 1);
+            set_dir_obj(0, MOVE_BUGGY_MANUAL);
+            set_comportement(comportement_2);
+        }
+    }
+}
+
+void comportement_2()
+{
+    if (0 != var_cube(30))
+    {
+        if (0 == action())
+        {
+            set_var_cube(30, 0);
+        }
+    }
+    else if (2 == action())
+    {
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }
+    if (12 != comportement_hero())
+    {
+        set_dir_obj(0, MOVE_MANUAL);
+        set_comportement(comportement_1);
+    }
+}
+";
     // The hire scene's cube, (10, 8): its people and things seen from the cubes round it in world units (RACEMOD.CPP far_actor=)
     private const int HireCubeX = 10 * 32768, HireCubeZ = 8 * 32768;
     private static readonly (int X, int Z, int Beta) HireAt = (8074, 8824, 1536);
@@ -40,7 +93,6 @@ internal static partial class RaceTrackStory
     internal static string HovercraftLine =>
         $"hovercraft={HireVar} {RaceTrackIsland.Desert.IslandByte} {RaceTrackBaldinoCar.RacerEntity} {RaceTrackCharacterCars.HovercraftDriveGeneric} {RaceTrackCharacterCars.HovercraftGeneric} 1 " +
         $"{HireSeaY} {HireScene} {HireAt.X} {HireAt.Z} {HireAt.Beta} {HireReach}\n" +
-        $"hover_door_var={SeaCave} {OnTheRaft} 1 0 {CaveRaft}\n" +
         // (the hire man standing, and the two hovercraft, from round the hire scene -- the user, 2026-11-22: "We need to make sure the
         // hydroglyder hire scene the actors are visible from neighbouring squares")
         $"far_actor={RaceTrackIsland.Desert.IslandByte} {HireScene} {HireManEntity} 0 0 {HireCubeX + HireManAt.X} {HireManAt.Y} {HireCubeZ + HireManAt.Z} {HireManAt.Beta}\n" +
@@ -114,9 +166,15 @@ void comportement_1()
                 }
             return scripts => { foreach (var e in edits) e(scripts); };
         });
-        // the cave's stand-in: the parked hovercraft at the raft's place, hidden till the engine shows it (hired, the raft there)
+        // the cave driven into (the user, 2026-11-24: "We need to stop the scripting, have Twinsen back in the hydroglyder, and let's add a
+        // small slope that Twinsen can use to park on land"): the hovercraft through its door and on its water (drive_in=, RACEMOD.CPP), up
+        // the ramp onto the ledge (SeaCaveRamp) -- the turtle raft never called (no hover_door_var=; it goes, OnTheRaft 0, as the game's own
+        // script has it). The hovercraft's stand-in, drawn where he drives it or where it's parked (RACEMOD.CPP HoverRaftFrame), and the
+        // room's own car -- the island's car actor's (scene 64's, entity 152), parked on the ledge -- so that out of it there it stays,
+        // and in again by it (BUGGY.CPP LeaveBuggy, InitBuggy)
+        var islandCar = b.Store.SceneExists(CarFrom) ? b.Store.Load(CarFrom).Actors.FirstOrDefault(a => a.Entity == CarEntity) : null;
         if (racer is not null && b.Store.SceneExists(SeaCave))
-            b.Edit(SeaCave, "Kash's sea cave: the hovercraft in its raft's place (RACEMOD.CPP hover_door_var=, HoverRaftFrame)", model =>
+            b.Edit(SeaCave, "Kash's sea cave: the hovercraft driven in, its stand-in and the room's own car on the ledge (RACEMOD.CPP drive_in=, HoverRaftFrame)", model =>
             {
                 var raft = model.Actors.ElementAtOrDefault(CaveRaft);
                 if (raft is null) { b.Log.Add($"the sea cave's hovercraft left out: no raft (actor {CaveRaft}) in scene {SeaCave}"); return _ => { }; }
@@ -126,7 +184,15 @@ void comportement_1()
                 boat.Flags = 0x1000 | 0x200;   // (no shadow; hidden -- the engine shows it)
                 boat.Move = 0;
                 boat.Armor = WalkOverArmour;   // (walked over, nothing stopped by it: RACEMOD.CPP RaceMod_NoCollide)
-                return IslandBeatsA.Add(model, boat, "void comportement_0()\n{\n}\n");
+                var edits = new List<Action<SceneScripts>> { IslandBeatsA.Add(model, boat, "void comportement_0()\n{\n}\n") };
+                if (islandCar is null) b.Log.Add($"the sea cave's own car left out: no car (entity {CarEntity}) in scene {CarFrom}");
+                else
+                {
+                    var car = islandCar.Clone();
+                    (car.X, car.Y, car.Z, car.Beta) = CaveCarAt;
+                    edits.Add(IslandBeatsA.Add(model, car, CaveCarLife));
+                }
+                return scripts => { foreach (var e in edits) e(scripts); };
             });
     }
 }

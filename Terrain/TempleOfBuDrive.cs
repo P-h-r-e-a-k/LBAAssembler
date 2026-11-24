@@ -33,7 +33,7 @@ internal static class TempleOfBuDrive
 {
     public const int Scene = 10, OldFloor = 8, NewFloor = 9, Raise = 256;
     private const int CorridorDeck = 70;
-    private const int Size = 64, Height = 25;
+    internal const int Size = 64, Height = 25;
 
     // the cells whose floor goes up a layer (the door's hall, its corridor east)
     public static bool Raised(int x, int z) =>
@@ -95,7 +95,7 @@ internal static class TempleOfBuDrive
     private const int Junction = 20, FloorTile = 8;
 
     // A grid's cells, editable: the game's, the edits over them, and the edits written back
-    private sealed class GridCells
+    internal sealed class GridCells
     {
         public readonly int Scene, Number, Entry;
         public byte[] Raw;
@@ -260,7 +260,7 @@ internal static class TempleOfBuDrive
     }
 
     // the smooth stone's 3 x 3 pattern by place (its rows along z, its columns along x)
-    private static int Pattern(int x, int z) => ((z % 3 + 3) % 3) * 3 + (x % 3 + 3) % 3;
+    internal static int Pattern(int x, int z) => ((z % 3 + 3) % 3) * 3 + (x % 3 + 3) % 3;
 
     // The rail tracks gone, smooth floor in their place (the user, 2026-11-23: "We need to remove the rail tracks from the temple of Bu and
     // replace them with smooth ground"): every block of the minecart's track -- straights along x and z, curves, ends, the crossing -- the

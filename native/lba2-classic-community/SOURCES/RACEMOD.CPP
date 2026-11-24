@@ -15618,6 +15618,8 @@ static void SkidSound(void) {
 // The hovercraft over the sea: the island's ground under it below the sea's surface
 static int HoverOverWater(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    // (indoors, a room it's driven into: the brick under it water -- its code, as the game reads it for drowning, OBJECT.CPP)
+    if (CubeMode == CUBE_INTERIEUR) { const int cj = hero->CodeJeu >> 4; return cj == CJ_WATER || cj == CJ_ANIMATED_WATER; }
     return CubeMode == CUBE_EXTERIEUR && CalculAltitudeTerrain(hero->Obj.X, hero->Obj.Z, 0) < s_hoverSeaY + 40;
 }
 // (OBJECT.CPP's water: the hovercraft driven over it is held on it, not drowned)
@@ -23620,6 +23622,41 @@ static void HoverRaftFrame(void) {
                 if (stand <= 0 || stand >= (int)NbObjets) raft = stand = -1;
             }
     const int hired = s_hoverVar >= 0 && s_hoverVar < MAX_VARS_GAME && ListVarGame[s_hoverVar] == 2 && s_hoverResolved && s_hoverBody >= 0 && s_hoverAnim >= 0;
+    // (a room the hovercraft is driven into, drive_in= -- no raft: the stand-in is the hovercraft itself, drawn among the room's own, where
+    // he drives it, him in it and his car hidden, or where it's parked, nobody in it and the room's car actor hidden. The car's own drawing
+    // is the outside's, over the finished frame: DrawDriveAs. The user, 2026-11-24: "We need to stop the scripting, have Twinsen back in
+    // the hydroglyder, and let's add a small slope that Twinsen can use to park on land")
+    if (CubeMode == CUBE_INTERIEUR && NewCube == -1 && raft < 0 && s_hoverOn && hired) {
+        for (int a = 2; stand <= 0 && a < (int)NbObjets; a++)
+            if (ListObjet[a].IndexFile3D == s_hoverEntity3D && ListObjet[a].Armure == RACE_WALK_OVER) stand = a;
+        if (stand > 0) {
+            T_OBJET *st = &ListObjet[stand];
+            const int driving = Comportement == C_BUGGY;
+            T_OBJET *at = driving ? hero : (IsBuggyPresent() && NUM_BUGGY < NbObjets && NUM_BUGGY != stand ? &ListObjet[NUM_BUGGY] : NULL);
+            if (!at) {
+                st->Flags |= INVISIBLE;
+                if (s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
+                return;
+            }
+            const S32 body = driving ? s_hoverBody : (s_hoverParked >= 0 ? s_hoverParked : s_hoverBody);
+            if (s_hoverStandBody != body && GivePtrBody(body) && GivePtrAnim(s_hoverAnim)) {
+                st->Obj.Body.Num = -1; ObjectInitBody(&st->Obj, (void *)(uintptr_t)(U32)body);
+                st->Obj.Anim.Num = -1; ObjectInitAnim(&st->Obj, (void *)(uintptr_t)(U32)s_hoverAnim);
+                s_hoverStandBody = body;
+                Log_Info("[racemod] hovercraft: in scene %d driven in -- drawn as actor %d (BODY.HQR %d), %s", (int)NumCube, stand, (int)body,
+                         driving ? "Twinsen at its wheel" : "parked, nobody in it");
+            }
+            st->Flags &= ~INVISIBLE;
+            st->Obj.X = at->Obj.X; st->Obj.Y = at->Obj.Y; st->Obj.Z = at->Obj.Z; st->Obj.Beta = at->Obj.Beta & 4095;
+            ClearRealAngle(st);
+            if (driving) { if (!(hero->Flags & INVISIBLE)) { hero->Flags |= INVISIBLE; s_hoverRaftHid = 1; } }
+            else {
+                if (s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
+                at->Flags |= INVISIBLE;
+            }
+            return;
+        }
+    }
     if (raft < 0 || !hired || (ListObjet[raft].WorkFlags & OBJ_DEAD)) {
         if (s_hoverRaftHid) { hero->Flags &= ~INVISIBLE; s_hoverRaftHid = 0; }
         if (stand > 0) ListObjet[stand].Flags |= INVISIBLE;
@@ -23686,7 +23723,9 @@ static void HovercraftFrame(void) {
                  (int)hero->Obj.Z, (int)NumCube, (int)ListBuggy[1].Cube, (int)ListBuggy[1].X, (int)ListBuggy[1].Y, (int)ListBuggy[1].Z);
     }
     // (the hovercraft the one driven -- not his own car, the hovercraft parked meanwhile: KeptKind 2)
-    s_hoverOn = ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && CubeMode == CUBE_EXTERIEUR && KeptKind() != 2;
+    // (and in a room it may be driven into, drive_in= -- held on the room's water, drawn by its stand-in: HoverRaftFrame)
+    s_hoverOn = ListVarGame[s_hoverVar] == 2 && (S32)Island == s_hoverIsland && KeptKind() != 2
+                && (CubeMode == CUBE_EXTERIEUR || (CubeMode == CUBE_INTERIEUR && RaceMod_DriveIn((S32)NumCube)));
     if (s_hoverOn) { s_driveBody = s_hoverBody; s_driveAnim = s_hoverAnim; s_driveSmall = -1; }
     else if (s_hoverWasOn) s_driveBody = s_driveAnim = -1;
     s_hoverWasOn = s_hoverOn;
@@ -23710,7 +23749,8 @@ static void HovercraftFrame(void) {
         extern S32 RaceMod_ZoneOutside(S32 num);
         for (S32 i = 0; i < NbZones; i++) {
             const T_ZONE *zn = &ListZone[i];
-            if (zn->Type != 0 || RaceMod_ZoneOutside(zn->Num)) continue;
+            // (a room it may be driven into, drive_in=, is driven into: the car's own way through the door, OBJECT.CPP)
+            if (zn->Type != 0 || RaceMod_ZoneOutside(zn->Num) || RaceMod_DriveIn(zn->Num)) continue;
             if (hero->Obj.X < zn->X0 || hero->Obj.X > zn->X1 || hero->Obj.Z < zn->Z0 || hero->Obj.Z > zn->Z1 || hero->Obj.Y < zn->Y0 - 256 || hero->Obj.Y > zn->Y1) continue;
             s_hoverDocked = (int)NumCube; s_hoverDockedIn = 0;
             LeaveBuggy(C_NORMAL);

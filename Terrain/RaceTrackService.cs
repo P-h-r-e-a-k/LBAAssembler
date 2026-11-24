@@ -550,7 +550,12 @@ internal static class RaceTrackService
             if (tracks.Any(t => t.Options.Island.IleFile == RaceTrackIsland.Citadel.IleFile)) made.AddRange(LBAAssembler.Terrain.Citadel.CitadelMuseumDoor.ShutWindow(gameDirectory));
             // (the Temple of Bù on the Desert made drivable from its door to its stairs down: TempleOfBuDrive -- the story's door and its car's
             // own way to the hangar, RaceTrackStory.TempleDrive)
-            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Desert.IleFile)) made.AddRange(TempleOfBuDrive.Install(gameDirectory));
+            if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Desert.IleFile))
+            {
+                made.AddRange(TempleOfBuDrive.Install(gameDirectory));
+                // (and Kash's sea cave's ramp out of its water, the hovercraft driven in: SeaCaveRamp)
+                made.AddRange(SeaCaveRamp.Install(gameDirectory));
+            }
             // (and Kash's tomb's cave without its two stone divers, the candles by the tomb in sight: KashTombCave)
             if (tracks.Any(t => t.Options.Story && t.Options.Island.IleFile == RaceTrackIsland.Desert.IleFile)) made.AddRange(KashTombCave.RemoveStatues(gameDirectory));
             // (and Stella Entities, the club under the Emerald Moon's reactor, its hidden lift in Baldino's old cell: StellaEntities)

@@ -140,7 +140,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! Kash's tomb in the sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {TempleOfBuDrive.Lower} {HangarScene}\n" + GarageRaceLines()
+        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! Kash's tomb in the sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {TempleOfBuDrive.Lower} {HangarScene} {SeaCave}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\nwin_pull=1 {HalPullVar} 1 {HalPullDelay}\n" + MoonHelmetHooks()
         : island == RaceTrackIsland.Otringal ? OtringalRaceKeys
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -1119,9 +1119,16 @@ void comportement_1()
         {
             var life = scripts.GetText(0, ScriptKind.Life);
             if (!SpikeCheck.IsMatch(life)) { b.Log.Add($"the sea cave's spike pit left as it was: Twinsen's check over it (scene {SeaCave}) isn't the game's"); return; }
-            scripts.SetText(0, ScriptKind.Life, SpikeCheck.Replace(life, "if (4 != comportement_hero())", 1));
+            life = SpikeCheck.Replace(life, "if (4 != comportement_hero())", 1);
+            // (and come in at the wheel of the hovercraft -- the cave driven into, SeaCaveRamp: the game's own arrival, made for the raft, gave
+            // him his walk back as he came, and that took him out of it over the water, where he drowned)
+            if (ArrivalWalk.IsMatch(life))
+                life = ArrivalWalk.Replace(life, "swif (12 == l_track())\n    {\n        if (12 != comportement_hero())\n        {\n            set_dir(MOVE_MANUAL);\n        }\n    }", 1);
+            else b.Log.Add($"the sea cave's arrival left as it was: Twinsen's walk given back as he comes in (scene {SeaCave}) isn't the game's");
+            scripts.SetText(0, ScriptKind.Life, life);
         });
     }
+    private static readonly System.Text.RegularExpressions.Regex ArrivalWalk = new(@"swif \(12 == l_track\(\)\)\s*\{\s*set_dir\(MOVE_MANUAL\);\s*\}");
 
     private const int MoyaEntity = 149;
     private static readonly int[] MoyaBellScenes = { 55, 203 };
