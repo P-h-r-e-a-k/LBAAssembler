@@ -251,10 +251,20 @@ invisible(1);
     // (scenario zone 0) and the crossing's two cameras (zones 2 and 3, their targets in bricks). Its way in from the sea (0) and out (8) as
     // they were.
     private const int BerthShift = 12 * 512;
+    // (and its way in runs past the berth only so far before it backs in -- point 3, FerryOvershoot past the berth, point 2: moved south
+    // with the rest, the game's 4,736 ran its bow and cabin into the basin's south wall -- the user, 2026-11-24, "When the ferry is
+    // manouvering into place it clips into the side of the quay")
+    // (point 1, where its way in from the sea comes to the berth's line, FerryTurnIn past it: it runs on a little past each point)
+    private const int FerryOvershoot = 1300, FerryTurnIn = 900;
     private static void ShiftBerth(SceneModel model)
     {
         foreach (var i in new[] { 1, 2, 3, 5, 20, 4, 6, 7 })
             if (i < model.TrackPoints.Count) model.TrackPoints[i] = model.TrackPoints[i] with { Z = model.TrackPoints[i].Z + BerthShift };
+        if (model.TrackPoints.Count > 3)
+        {
+            model.TrackPoints[1] = model.TrackPoints[1] with { Z = model.TrackPoints[2].Z + FerryTurnIn };
+            model.TrackPoints[3] = model.TrackPoints[3] with { Z = model.TrackPoints[2].Z + FerryOvershoot };
+        }
         foreach (var z in model.Zones)
         {
             if (!((z.Type == 2 && z.Num == 0) || (z.Type == 1 && z.Num is 2 or 3))) continue;
