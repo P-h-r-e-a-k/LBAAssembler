@@ -207,6 +207,8 @@ T_COMPORTEMENT ListComportement[MAX_COMPORTEMENTS] = {
     {6, -1, NULL, CF_COMPORTEMENT // Buggy
                       | CF_HOLOMAP | CF_WEAPON},
     {7, -1, NULL, CF_HOLOMAP}, // Squelette
+    {0, -1, NULL, CF_COMPORTEMENT // Velo (the race mod's bike: F1-F4 or the behaviour menu's own get him off it)
+                      | CF_INVENTORY | CF_HOLOMAP},
 };
 
 char DefSysText[4][MULTI_TEXT_MAX] = {
@@ -695,7 +697,8 @@ void LoadFicPerso() {
     // initialisé en mode Normal
 
     for (n = MAX_COMPORTEMENTS - 1; n >= 0; n--, ptrcomp--) {
-        ptrobj->PtrFile3D = LoadFile3D(n);
+        // (the bike's entity isn't the game's: his own till SetComportement puts the race mod's in -- RACEMOD.CPP bike=)
+        ptrobj->PtrFile3D = LoadFile3D(n == C_VELO ? C_NORMAL : n);
 
         ptrcomp->PtrFile3d = ptrobj->PtrFile3D;
         ptrcomp->AnimRien = SearchAnim(GEN_ANIM_RIEN, NUM_PERSO);
@@ -931,6 +934,15 @@ void SetComportement(U8 comportement) {
 
     if (comportement >= MAX_COMPORTEMENTS)
         return;
+    // (the bike: its entity the race mod's -- none, and he stays on foot)
+    if (comportement == C_VELO) {
+        extern S32 RaceMod_BikeEntity(void);
+        const S32 bike = RaceMod_BikeEntity();
+        if (bike < 0)
+            comportement = C_NORMAL;
+        else
+            ListComportement[C_VELO].PtrFile3d = LoadFile3D(bike);
+    }
 
     switch (Comportement) // test ancien comportement
     {
@@ -1012,6 +1024,8 @@ void SetComportement(U8 comportement) {
     PtrComportement = &ListComportement[comportement];
 
     ptrobj->PtrFile3D = PtrComportement->PtrFile3d;
+    if (comportement == C_VELO)
+        PtrComportement->AnimRien = SearchAnim(GEN_ANIM_RIEN, NUM_PERSO);
 
     memogenbody = ptrobj->GenBody;
     ptrobj->GenBody = NO_BODY;

@@ -904,6 +904,13 @@ static int s_cardLastVar = -1, s_cardCountVar = -1, s_cardN = 0, s_cardSeen = -1
 // come; the dream's and the storm's pages, their quests' variables), among the track pages in page order (they are numbered in the
 // story's order) -- the user, 2026-11-24: "make sure the magic slate actually displays collected race tracks the same way as it shows the
 // retail images that are collectable for it"
+// bike=<entity> <game variable> [<scene>...]: Twinsen on a bike -- the hero's behaviour C_VELO, its entity this (LBA Assembler's
+// Citadel/TwinsenBike: his bodies on a track bike, his pedalling): on it as the variable comes to 1, off it as it goes back to 0; left
+// some other way (F1-F4, another behaviour) the variable 0; out of the scenes given (the bike's own place) the variable 0, the bike
+// left there -- the user, 2026-11-24: "let's do some work to allow Twinsen to cycle as this would fit in with the velodrome"
+#define RACE_BIKE_SCENES 4
+static int s_bikeEntity = -1, s_bikeVar = -1, s_bikeScenes[RACE_BIKE_SCENES], s_nbBikeScenes = 0, s_bikeWas = 0;
+S32 RaceMod_BikeEntity(void) { return s_bikeEntity; }
 #define RACE_MAX_SLATE 16
 typedef struct { int Page, Var, Value; } T_RACE_SLATE;
 static T_RACE_SLATE s_slate[RACE_MAX_SLATE];
@@ -5168,6 +5175,26 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "pool_anims")) sscanf(v, "%d %d %d %d", &s_poolSwimAnim, &s_poolTreadAnim, &s_poolDiveAnim, &s_poolFlipAnim);
         else if (!strcmp(key, "pool_splash")) s_poolSplash = atoi(v);
         else if (!strcmp(key, "pool_ladder")) s_hasPoolLadder = sscanf(v, "%d %d %d %d", &s_poolLadder[0], &s_poolLadder[1], &s_poolLadder[2], &s_poolLadder[3]) == 4;
+        else if (!strcmp(key, "bike")) {
+            int n = 0;
+            s_nbBikeScenes = 0;
+            if (sscanf(v, "%d %d%n", &s_bikeEntity, &s_bikeVar, &n) < 2 || s_bikeVar < 0 || s_bikeVar >= MAX_VARS_GAME) { s_bikeEntity = s_bikeVar = -1; }
+            else {
+                // (-1: the entity the game folder's TWINBIKE.TXT names, the build's -- LBA Assembler's Citadel/TwinsenBike)
+                if (s_bikeEntity < 0) {
+                    char path[ADELINE_MAX_PATH], line[96];
+                    GetResPath(path, sizeof(path), "TWINBIKE.TXT");
+                    if (FILE *f = fopen(path, "r")) {
+                        while (fgets(line, sizeof(line), f)) if (sscanf(line, "entity %d", &s_bikeEntity) == 1) break;
+                        fclose(f);
+                    }
+                    if (s_bikeEntity < 0) Log_Warn("[racemod] bike=: no TWINBIKE.TXT entity in the game folder -- no bike");
+                }
+                const char *p = v + n;
+                int scene, used;
+                while (s_nbBikeScenes < RACE_BIKE_SCENES && sscanf(p, "%d%n", &scene, &used) == 1) { s_bikeScenes[s_nbBikeScenes++] = scene; p += used; }
+            }
+        }
         else if (!strcmp(key, "slate_page") && s_nbSlate < RACE_MAX_SLATE) {
             T_RACE_SLATE *sl = &s_slate[s_nbSlate];
             if (sscanf(v, "%d %d %d", &sl->Page, &sl->Var, &sl->Value) == 3 && sl->Page >= 0 && sl->Page < 128 && sl->Var >= 0 && sl->Var < MAX_VARS_GAME) s_nbSlate++;
@@ -16087,7 +16114,7 @@ void RaceMod_LoadFile(const char *path) {
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
     s_nbPlaques = 0; s_plaqueOn = -1;   // (plaque=: the story file's too)
-    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_nbSlate = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
+    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_nbSlate = 0; s_bikeEntity = -1; s_bikeVar = -1; s_nbBikeScenes = 0; s_bikeWas = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -21010,6 +21037,37 @@ static void AchievementsFrame(S32 now) {
         if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "%s", title); snprintf(s_achId, sizeof(s_achId), "%s", ac->Id); snprintf(s_achHead, sizeof(s_achHead), "Achievement unlocked"); s_achUntil = now + 6000; }
     }
 }
+// The bike (bike=): Twinsen on it or off it by the story's variable, every frame
+static void BikeFrame(void) {
+    if (s_bikeEntity < 0 || s_bikeVar < 0 || NewCube != -1) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (hero->LifePoint <= 0) return;
+    const int want = ListVarGame[s_bikeVar] == 1, on = Comportement == C_VELO;
+    // (out of the bike's scenes: left there)
+    if (want && s_nbBikeScenes > 0) {
+        int here = 0;
+        for (int i = 0; i < s_nbBikeScenes; i++) if (s_bikeScenes[i] == (int)NumCube) here = 1;
+        if (!here) {
+            ListVarGame[s_bikeVar] = 0;
+            if (on) SetComportement(C_NORMAL);
+            Log_Info("[racemod] the bike: left behind as Twinsen came to scene %d", (int)NumCube);
+            s_bikeWas = 0;
+            return;
+        }
+    }
+    if (want && !s_bikeWas && !on && Comportement != C_BUGGY) {
+        SetComportement(C_VELO);
+        Log_Info("[racemod] the bike: Twinsen on it (entity %d, game variable %d)", s_bikeEntity, s_bikeVar);
+    } else if (want && s_bikeWas && !on) {
+        // (off it some other way -- F1-F4, an item's behaviour: the bike given up)
+        ListVarGame[s_bikeVar] = 0;
+        Log_Info("[racemod] the bike: Twinsen off it (behaviour %d)", (int)Comportement);
+    } else if (!want && on) {
+        SetComportement(C_NORMAL);
+        Log_Info("[racemod] the bike: Twinsen off it (game variable %d at %d)", s_bikeVar, (int)ListVarGame[s_bikeVar]);
+    }
+    s_bikeWas = ListVarGame[s_bikeVar] == 1 && Comportement == C_VELO;
+}
 // The slate's track pages (slate_page=), looked at a few times a second: each one due put in the slate, after the track pages before it
 static void SlateFrame(S32 now) {
     if (now < s_slateAt) s_slateAt = now - 500;
@@ -24333,6 +24391,7 @@ void RaceMod_Frame(void) {
     AchievementsFrame(TimerRefHR);
     PostcardsFrame(TimerRefHR);
     SlateFrame(TimerRefHR);
+    BikeFrame();
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
     VeloFrame(TimerRefHR);

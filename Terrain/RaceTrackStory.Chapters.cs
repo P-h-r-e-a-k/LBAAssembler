@@ -1160,6 +1160,9 @@ internal static partial class RaceTrackStory
         VeloRiderComets, VeloRiderComets2, VeloRiderExpress, VeloRiderExpress2,
         VeloCometsCoach, VeloExpressCoach, VeloMechanic, VeloSoigneur,
         VeloFanFlag, VeloFanGrobo, VeloFanGirl, VeloFanChild, VeloFanTeacher, VeloFanSphero,
+        // (the Comets' coach lends Twinsen their spare bike, 2026-11-25 -- RaceTrackStory.Velodrome, Citadel/TwinsenBike: his question, Twinsen's
+        // two answers, his word as he lends it; his question when Twinsen comes back on it, the two answers, his word as he takes it back)
+        VeloCoachAsk, VeloRideYes, VeloRideNo, VeloCoachLent, VeloCoachBackAsk, VeloGiveBack, VeloOneMoreLap, VeloCoachThanks,
     }
     private static int CitadelLaterId(Func<ChapterLine, int> say, CitadelLater line) => DartsTalkId(say, 0) + DartsTalkLines.Length + (int)line;
     internal static readonly string[][] CitadelLaterLines =
@@ -1488,6 +1491,46 @@ internal static partial class RaceTrackStory
             "Los Spheros no montan en bici. Nos caeríamos rodando. Pero nos encanta mirar.",
             "Gli Sphero non vanno in bici. Rotoleremmo giù. Però ci piace un sacco guardare.",
             "Os Spheros não andam de bicicleta. Íamos rolar por ali abaixo. Mas adoramos ver.",
+        },
+        new[]
+        {
+            "Fancy a few laps yourself? Our spare bike's just your size.",
+            "Ça te dirait de faire quelques tours ? Notre vélo de rechange est pile à ta taille.",
+            "Lust auf ein paar Runden? Unser Ersatzrad hat genau deine Größe.",
+            "¿Te apetece dar unas vueltas? Nuestra bici de repuesto es justo de tu talla.",
+            "Ti va di fare qualche giro? La nostra bici di riserva è proprio della tua misura.",
+            "Apetece-te dar umas voltas? A nossa bicicleta de reserva é mesmo do teu tamanho.",
+        },
+        new[] { "Yes, please!", "Oui, avec plaisir !", "Ja, gern!", "¡Sí, por favor!", "Sì, grazie!", "Sim, por favor!" },
+        new[] { "Not today.", "Pas aujourd'hui.", "Heute nicht.", "Hoy no.", "Oggi no.", "Hoje não." },
+        new[]
+        {
+            "There you go, the Comets' red. Lean into the banking and keep pedalling -- bring it back to me when you're done.",
+            "Et voilà, le rouge des Comets. Penche-toi dans le virage relevé et pédale -- ramène-le-moi quand tu as fini.",
+            "Bitte schön, das Rot der Comets. Leg dich in die Steilkurve und tritt in die Pedale -- bring es mir zurück, wenn du fertig bist.",
+            "Aquí la tienes, el rojo de los Comets. Inclínate en el peralte y no dejes de pedalear; devuélvemela cuando acabes.",
+            "Ecco qua, il rosso dei Comets. Piegati nella curva sopraelevata e pedala: riportamela quando hai finito.",
+            "Aqui tens, o vermelho dos Comets. Inclina-te na curva e continua a pedalar -- devolve-ma quando acabares.",
+        },
+        new[]
+        {
+            "Had enough? Shall I take the bike back?",
+            "Ça suffit pour aujourd'hui ? Je reprends le vélo ?",
+            "Genug für heute? Soll ich das Rad zurücknehmen?",
+            "¿Ya has tenido bastante? ¿Te recojo la bici?",
+            "Basta così? Riprendo la bici?",
+            "Já chega? Fico com a bicicleta?",
+        },
+        new[] { "Here you go.", "Tenez, la voilà.", "Hier, bitte.", "Aquí tiene.", "Ecco a lei.", "Aqui tem." },
+        new[] { "One more lap!", "Encore un tour !", "Noch eine Runde!", "¡Una vuelta más!", "Ancora un giro!", "Mais uma volta!" },
+        new[]
+        {
+            "Not bad for a first go! The Comets could use a rider like you.",
+            "Pas mal pour une première fois ! Les Comets auraient bien besoin d'un coureur comme toi.",
+            "Nicht schlecht fürs erste Mal! Die Comets könnten einen Fahrer wie dich gebrauchen.",
+            "¡Nada mal para ser la primera vez! A los Comets les vendría bien un ciclista como tú.",
+            "Niente male per la prima volta! Ai Comets servirebbe un corridore come te.",
+            "Nada mal para primeira vez! Os Comets precisavam de um ciclista como tu.",
         },
     };
 

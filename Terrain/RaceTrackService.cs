@@ -693,6 +693,8 @@ internal static class RaceTrackService
             if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelOveralls.Install(gameDirectory));
             // (and his pyjamas, from his everyday body as the overalls are -- Citadel/CitadelPyjamas, RaceTrackStory.Pyjamas)
             if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.CitadelPyjamas.Install(gameDirectory));
+            // (and Twinsen on a bike, his riding behaviour's entity -- each of his bodies on a track bike, after all of them: Citadel/TwinsenBike)
+            if (tracks.Any(t => t.Options.Story)) log.AddRange(LBAAssembler.Terrain.Citadel.TwinsenBike.Install(gameDirectory));
             // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is
             // used -- RaceSounds)
             log.AddRange(RaceSounds.Install(gameDirectory));

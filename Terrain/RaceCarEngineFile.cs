@@ -783,6 +783,9 @@ internal static class RaceCarEngineFile
             // (the museum security room's door with panes of its glass out: Twinsen's magic ball through it, at the mop and bucket -- Citadel/
             // CitadelMuseumDoor, RaceTrackStory.Chapters' the security room's mop; RACEMOD.CPP ball_through=)
             if (t.Story is { TiredText: >= 0 }) text.Append($"ball_through={Citadel.CitadelMuseumDoor.Scene} {Citadel.CitadelMuseumDoor.DoorActor}\n");
+            // (Twinsen on a bike: the Citadel Comets' spare, lent in the velodrome -- Citadel/TwinsenBike, its entity the game folder's
+            // TWINBIKE.TXT's; RACEMOD.CPP bike=)
+            if (t.Story is { TiredText: >= 0 }) text.Append($"bike=-1 {Citadel.TwinsenBike.BikeVar} {DomeVelodrome.Scene}\n");
             // (the house at night: everyone in it lit as dimly as its bricks -- Citadel/CitadelNightHouse.ActorLight)
             if (t.Story is { TiredText: >= 0 }) text.Append($"dark_scene={Citadel.CitadelNightHouse.Scene} {Citadel.CitadelNightHouse.ActorLight}\n");
             // (the story car left abandoned in another scene: Zoe has it brought home -- RaceTrackStory.CarAwayVar)

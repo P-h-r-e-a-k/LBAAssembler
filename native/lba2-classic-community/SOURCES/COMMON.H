@@ -978,8 +978,9 @@ typedef struct  {       S16    Num ;
 #define	C_SCAPH_EXT_SPOR       11	// Scaphandre Exterieur Sportif
 #define	C_BUGGY		       12	// Conduite du buggy
 #define	C_SKELETON	       13	// Squelette Electrique
+#define	C_VELO		       14	// a bike (the race mod's: its entity RACEMOD.CPP bike=, 2026-11-25)
 
-#define	MAX_COMPORTEMENTS      14
+#define	MAX_COMPORTEMENTS      15
 
 #define	START_TEXT_COMPORTEMENT	80
 
