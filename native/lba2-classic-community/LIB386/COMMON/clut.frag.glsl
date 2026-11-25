@@ -96,12 +96,13 @@ vec4 bilinearCLUT(vec2 tc, float widthMask, float heightMask,
 void main() {
     vec4 color;
     float alphaOverride = 0.0;
-    /* Select perspective-corrected or affine texture/Z varyings.
+    /* Select perspective-corrected or affine texture varyings.
        uPerspCorrect is 1 for Z-textured types (16-24), where the SW
-       rasterizer divides MapU/MapV/ZBuf by W = 1/Z; types 8-15
-       (SW POLYTEXT/POLYGTEX) interpolate affinely. */
+       rasterizer divides MapU/MapV by W = 1/Z; types 8-15
+       (SW POLYTEXT/POLYGTEX) interpolate affinely. The Z-buffer value
+       is affine in every SW filler (Fill_ZBuf_XSlope steps it across
+       the span), so vZ is never corrected. */
     vec2 tc = mix(vTexCoord, vTexCoordOverW / vInvW, float(uPerspCorrect));
-    float vZsel = mix(vZ, vZOverW / vInvW, float(uPerspCorrect));
     if (uPolyMode == 0) {
         /* Textured: atlas → CLUT → palette */
         tc = tc / 256.0;
@@ -187,7 +188,7 @@ void main() {
         float texel = texture(uAtlas, atlasUV).r * 255.0;
         /* Chroma key: type 24 is non-INCRUST (bit 2 clear), so index 0 is
            written unconditionally — no discard here. */
-        float fogDist = max(vZsel - uScaledFogNear, 0.0);
+        float fogDist = max(vZ - uScaledFogNear, 0.0);
         float fogRow16 = floor(fogDist * uFogRowScale);
         float clutRow = 12.0 + floor(mod(fogRow16, 256.0) / 16.0) * 16.0;
         color = clutLookup(texel, clutRow);
@@ -338,12 +339,13 @@ vec4 bilinearCLUT(vec2 tc, float widthMask, float heightMask,
 void main() {
     vec4 color;
     float alphaOverride = 0.0;
-    /* Select perspective-corrected or affine texture/Z varyings.
+    /* Select perspective-corrected or affine texture varyings.
        uPerspCorrect is 1 for Z-textured types (16-24), where the SW
-       rasterizer divides MapU/MapV/ZBuf by W = 1/Z; types 8-15
-       (SW POLYTEXT/POLYGTEX) interpolate affinely. */
+       rasterizer divides MapU/MapV by W = 1/Z; types 8-15
+       (SW POLYTEXT/POLYGTEX) interpolate affinely. The Z-buffer value
+       is affine in every SW filler (Fill_ZBuf_XSlope steps it across
+       the span), so vZ is never corrected. */
     vec2 tc = mix(vTexCoord, vTexCoordOverW / vInvW, float(uPerspCorrect));
-    float vZsel = mix(vZ, vZOverW / vInvW, float(uPerspCorrect));
     if (uPolyMode == 0) {
         /* Textured: atlas → CLUT → palette */
         tc = tc / 256.0;
@@ -423,7 +425,7 @@ void main() {
         float texel = texture2D(uAtlas, atlasUV).r * 255.0;
         /* Chroma key: type 24 is non-INCRUST (bit 2 clear), so index 0 is
            written unconditionally — no discard here. */
-        float fogDist = max(vZsel - uScaledFogNear, 0.0);
+        float fogDist = max(vZ - uScaledFogNear, 0.0);
         float fogRow16 = floor(fogDist * uFogRowScale);
         float clutRow = 12.0 + floor(mod(fogRow16, 256.0) / 16.0) * 16.0;
         color = clutLookup(texel, clutRow);

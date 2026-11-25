@@ -493,12 +493,13 @@ static const char *s_clutFragSrc =
     "        if (fl > 127.5) groundTile = 16.0;\n" /* (bit 7: the ground's, its atlas in tiles of 16 texels -- bilinearCLUT) */
     "    }\n"
     "    float lightRow = floor((vLight + 128.0) / 256.0 + lightAdd);\n"
-    /* Select perspective-corrected or affine texture/Z varyings.
+    /* Select perspective-corrected or affine texture varyings.
        uPerspCorrect is 1 for Z-textured types (16-24), where the SW
-       rasterizer divides MapU/MapV/ZBuf by W = 1/Z; types 8-15
-       (SW POLYTEXT/POLYGTEX) interpolate affinely. */
+       rasterizer divides MapU/MapV by W = 1/Z; types 8-15
+       (SW POLYTEXT/POLYGTEX) interpolate affinely. The Z-buffer value
+       is affine in every SW filler (Fill_ZBuf_XSlope steps it across
+       the span), so vZ is never corrected. */
     "    vec2 tc = mix(vTexCoord, vTexCoordOverW / vInvW, float(uPerspCorrect));\n"
-    "    float vZsel = mix(vZ, vZOverW / vInvW, float(uPerspCorrect));\n"
     "    if (polyMode == 0) {\n"
     /* Textured: atlas → CLUT → palette */
     "        tc = tc / 256.0;\n"
@@ -576,7 +577,11 @@ static const char *s_clutFragSrc =
        SW Filler_TextureZFogSmoothZBuf / ...NZW use a fixed CLUT base
        (PtrCLUTFog + 12*256) plus a per-pixel distance-based fog row,
        IGNORING Pt_Light entirely.  Replicating the SW math:
-       zBufVal = interpolated Pt_ZO (the batch aZ)
+       zBufVal = interpolated Pt_ZO (the batch aZ), affine across the
+                 screen as the SW Z-buffer is: on a sky or sea quad that
+                 runs to the horizon a perspective-correct Z is far
+                 nearer over most of it, and the fog would thin to clouds
+                 where the SW fills the fog colour
        fogDist = max(zBufVal - Fill_ScaledFogNear, 0)
        fogRow  = (fogDist * Fill_Fog_Factor) >> 8, masked & 0xF000
        CLUT index = PtrCLUTFog + 12*256 + fogRow + texel
@@ -594,7 +599,7 @@ static const char *s_clutFragSrc =
     "        float texel = texture2D(uAtlas, atlasUV).r * 255.0;\n"
     /* Chroma key: type 24 is non-INCRUST (bit 2 clear), so index 0 is
        written unconditionally — no discard here. */
-    "        float fogDist = max(vZsel - uScaledFogNear, 0.0);\n"
+    "        float fogDist = max(vZ - uScaledFogNear, 0.0);\n"
     "        float fogRow16 = floor(fogDist * uFogRowScale);\n"
     "        float clutRow = 12.0 + floor(mod(fogRow16, 256.0) / 16.0) * 16.0;\n"
     "        color = clutLookup(texel, clutRow);\n"

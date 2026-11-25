@@ -2138,12 +2138,34 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
     if (nbPoints < 3) {
         return 0;
     }
-
     /* Menu plasma/fire bars reuse POLY_TEXTURE (type 8) with RepMask
        0x3F3F but belong to the 2D overlay, not the 3D FBO. Let the SW
        rasterizer place them. */
     if (typePoly == POLY_TEXTURE && (RepMask & 0xFFFF) == 0x3F3F) {
         return 0;
+    }
+
+    /* A textured polygon wound the other way round on the screen is
+       taken and drawn as nothing, as the SW fillers draw it: Draw_Triangle
+       walks its left edge to the next corner and its right edge to the one
+       after, and wound the other way the left edge lies right of the right
+       one on every row, so no span is filled. The sky's plane (DrawSky) is
+       wound to face down: seen from above it -- Island of the Francos, the
+       Mosquibees' and Volcano's tracks, the camera higher than the island's
+       Sky_Y -- the SW draws none of it, and drawn here it covered the
+       ground. (Types 0-7 are left alone: a body's spheres and lines come
+       here as flat polygons wound either way, Fill_Poly_GpuOnly, and a
+       body's own polygons are culled by TestVisible before they come.) */
+    if (typePoly >= POLY_TEXTURE) {
+        S64 twiceArea = 0;
+        for (S32 i = 0; i < nbPoints; i++) {
+            const Struc_Point *p = &ptrPoints[i];
+            const Struc_Point *q = &ptrPoints[i + 1 < nbPoints ? i + 1 : 0];
+            twiceArea += (S64)p->Pt_XE * q->Pt_YE - (S64)q->Pt_XE * p->Pt_YE;
+        }
+        if (twiceArea > 0) {
+            return 1;
+        }
     }
 
     /* The texture's page: an object polygon's PtrMap is its page plus the polygon's texture window (AFF_OBJ.CPP's ObjPtrMap +
