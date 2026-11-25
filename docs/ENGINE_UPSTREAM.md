@@ -223,7 +223,7 @@ At the user's request ("Apparently upstream has added a new camera mode can we l
 **Ours, kept:** the camtrace line (our head: tick, eye, look, hero, cube, own, who; upstream's new fields at its end: iso, tx/ty/tz, hx/hz, pan, camt, ibl, fobj, auto, hxh/hzh); the RACEMOD include; the settings rows in our table's columns (no `SETTING_RECORDED` / `SETTING_BEFORE`).
 
 **Not taken:**
-- ba2d57ae (PR #869's new defaults: world anchor on, hold angle off, 900 ms shot blend) and 29625bc7 (moving an older lba2.cfg to them). They change how the Auto camera feels, and LBRA's default is the Auto camera in a car: left for the user to decide.
+- ba2d57ae (PR #869's new defaults: world anchor on, hold angle off, 900 ms shot blend) and 29625bc7 (moving an older lba2.cfg to them). They change how the Auto camera feels, and LBRA's default is the Auto camera in a car. The user, 2026-11-25: "As long as the camera options are there then I'm happy with the current defaults" -- our defaults stay (anchor off, hold on, 600 ms, the interior follow off); the three are still the console's `cam_world_anchor`, `cam_hold_angle`, `cam_shot_blend_ms` and lba2.cfg keys.
 - 8db2cb67 / 204149d1 (upstream's Graphics submenu): our Display page has its own renderer, filter and quality rows.
 
 **Checked:**
