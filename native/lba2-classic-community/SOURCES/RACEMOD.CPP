@@ -19275,8 +19275,10 @@ static void RaceCameraKey(void) {
     s_viewKeyWas = down;
     // (a view of its own -- inside the car, further back -- on a track whose camera is the classic one: the follow camera for it, the
     // view's hook its own -- RaceCameraEye -- and back to the classic one just behind)
-    if (s_camView != RACE_VIEW_BEHIND && !FollowCamera && CubeMode == CUBE_EXTERIEUR && !s_nbRaised && !s_nbLoops) { FollowCamera = TRUE; s_followForView = 1; }
-    else if (s_camView == RACE_VIEW_BEHIND && s_followForView) { FollowCamera = FALSE; s_followForView = 0; }
+    // (the car's views only while he is in it: on foot the Options' camera has the say -- "Auto in a car" turns the follow camera off
+    // as he gets out, and this turned it on again the next frame, the two at it every frame he walked outside, 2026-11-25)
+    if (s_camView != RACE_VIEW_BEHIND && !FollowCamera && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && !s_nbRaised && !s_nbLoops) { FollowCamera = TRUE; s_followForView = 1; }
+    else if (s_followForView && (s_camView == RACE_VIEW_BEHIND || Comportement != C_BUGGY)) { FollowCamera = FALSE; s_followForView = 0; }
 }
 
 // ---- the ghost car ------------------------------------------------------------------------------------------------------------------
