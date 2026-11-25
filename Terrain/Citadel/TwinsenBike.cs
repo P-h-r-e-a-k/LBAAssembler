@@ -21,7 +21,8 @@ namespace LBAAssembler.Terrain.Citadel;
 // Comets' spare bike, lent by their coach in the Dome of the Slate).
 internal static class TwinsenBike
 {
-    public const int BikeVar = 280;
+    // (a story variable of its own: 280-292 are the reruns' disqualified cars, 293 the demo's -- reference_game_variables_wide)
+    public const int BikeVar = 294;
     public const string FileName = "TWINBIKE.TXT";
     private const int HeroEntity = 0;
     // his bones (19, the same in each of his bodies), and the bike's two after them
