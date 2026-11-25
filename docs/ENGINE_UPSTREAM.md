@@ -211,6 +211,26 @@ At the user's request ("What is cinematics from HQR? This sounds like something 
   - The CD taken out 3 s into the film: "unable to read frame 104". The film ended and the dream began, with its dialogue.
   - No CD and no disc image: the film skipped, as before.
 
+## Eighth round (2026-11-25): the interior follow camera
+
+At the user's request ("Apparently upstream has added a new camera mode can we look into this please"). Upstream main was at `36076270` (2026-11-11); its camera work since the last review, in upstream order, branch `cam2` in the clone:
+- **Interior follow** (PR #847, designed by SIN): 3b8a78d5, 97ad2b3d, 74339ef4, dcf486f7, 26872f10, 0bc2de39, 34585187. `cam_interior` (cfg `FollowCameraInterior`), off by default: indoors the view keeps Twinsen in the middle and the room slides under him, a whole pixel at a time; it glides into, out of and between the designers' camera zones; the labyrinth (cubes 26, 202) keeps the classic camera.
+- **Its fix** (PR #860): 5aa858e5, the pan moves only with the bricks (a dialogue opened mid-glide drew the actors off their room).
+- **The Camera page** (PR #849): 321e7772. Advanced options' camera row opens a page: **Outdoors** (ours, three ways: Auto / Classic / Auto in a car) and **Indoors: Follow / Classic**. The page's menu ids are 2120/2121 (ours hold 2117-2119); upstream's `ui menu-camera` capture is in, without its `presented_matches_rendered` check (we don't have it).
+- **A scripted shot's eye off the ground** (PR #868): 3429dbb8, 4aee2a92, 833f7855, dcfb5d9d. `cam_zone_height`, on: the Auto camera only, in the frame only.
+- **The Auto camera's log line** for following another object: 064a9ac4.
+
+**Ours, kept:** the camtrace line (our head: tick, eye, look, hero, cube, own, who; upstream's new fields at its end: iso, tx/ty/tz, hx/hz, pan, camt, ibl, fobj, auto, hxh/hzh); the RACEMOD include; the settings rows in our table's columns (no `SETTING_RECORDED` / `SETTING_BEFORE`).
+
+**Not taken:**
+- ba2d57ae (PR #869's new defaults: world anchor on, hold angle off, 900 ms shot blend) and 29625bc7 (moving an older lba2.cfg to them). They change how the Auto camera feels, and LBRA's default is the Auto camera in a car: left for the user to decide.
+- 8db2cb67 / 204149d1 (upstream's Graphics submenu): our Display page has its own renderer, filter and quality rows.
+
+**Checked:**
+- Six of our interiors walked with `cam_interior` 0 and 1 (play steps `nov25icam`): the hotel lobby follows Twinsen; rooms held by a designer's shot (the bedroom, the sewer, the museum) are unchanged.
+- The race camera: the Long Table raced by the autodrive for 40 s with camtrace, this morning's engine against this one (camstats.py): eye from the car mean 8,084 / 8,193, min 3,013 / 4,035, 99% step 398 / 328, every frame the race's own rail camera. Run-to-run differences only.
+- The real menu in the sandbox: Options, Advanced options, Camera; both rows toggle. The choice is written with the other camera settings when the game quits.
+
 ## Left for later
 
 - **Not taken:**
