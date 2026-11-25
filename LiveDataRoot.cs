@@ -158,6 +158,11 @@ internal sealed class LiveDataRoot : IDisposable
         var detached = new List<string>();
         foreach (var path in System.IO.Directory.EnumerateFiles(directory))
         {
+            // (not a log or a temporary file: nothing writes game data into them, and a log is held open as it is written -- the
+            // installer's setup.log, its headless install's, came up linked during a fresh install on 2026-11-25 (something of the PC's
+            // own, its antivirus by the look of it, holding a second name to it) and couldn't be replaced: the whole build refused)
+            var ext = Path.GetExtension(path);
+            if (ext.Equals(".log", StringComparison.OrdinalIgnoreCase) || ext.Equals(".tmp", StringComparison.OrdinalIgnoreCase)) continue;
             if (new FileInfo(path).Length > most || LinkCount(path) < 2) continue;
             var temp = path + ".detach.tmp";
             File.Copy(path, temp, overwrite: true);

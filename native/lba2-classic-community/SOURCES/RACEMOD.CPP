@@ -899,6 +899,16 @@ static char s_achHead[32] = "Achievement unlocked";   // (... and the toast's fi
 // (RACEGAME.CPP RaceGame_Postcard, its Scrapbook page) -- the user, 2026-11-24: "a scrapbook feature that shows every postcard we've
 // gathered ... a per player feature so not all post cards have to be collected in a single playthrough"
 static int s_cardLastVar = -1, s_cardCountVar = -1, s_cardN = 0, s_cardSeen = -1;
+// slate_page=<page> <game variable> <value>: the magic slate's page of a story track (SCREEN.HQR's picture 2 x page), put in the slate --
+// the Cup's book of track maps -- once Twinsen has the slate (FLAG_ARDOISE) and the variable has reached the value (the track's chapter
+// come; the dream's and the storm's pages, their quests' variables), among the track pages in page order (they are numbered in the
+// story's order) -- the user, 2026-11-24: "make sure the magic slate actually displays collected race tracks the same way as it shows the
+// retail images that are collectable for it"
+#define RACE_MAX_SLATE 16
+typedef struct { int Page, Var, Value; } T_RACE_SLATE;
+static T_RACE_SLATE s_slate[RACE_MAX_SLATE];
+static int s_nbSlate = 0;
+static S32 s_slateAt = 0;
 // A sprint (sprint=, finishline=): the race from the start line to the finish line, once. Each opponent's line ends where it crosses the
 // finish (FinishS); the race's end -- the player over the line, or the one to beat there first -- is followed, RACE_SPRINT_END_MS later,
 // by the dream's waking up (wake=) or the race run again (a loss).
@@ -5158,6 +5168,10 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "pool_anims")) sscanf(v, "%d %d %d %d", &s_poolSwimAnim, &s_poolTreadAnim, &s_poolDiveAnim, &s_poolFlipAnim);
         else if (!strcmp(key, "pool_splash")) s_poolSplash = atoi(v);
         else if (!strcmp(key, "pool_ladder")) s_hasPoolLadder = sscanf(v, "%d %d %d %d", &s_poolLadder[0], &s_poolLadder[1], &s_poolLadder[2], &s_poolLadder[3]) == 4;
+        else if (!strcmp(key, "slate_page") && s_nbSlate < RACE_MAX_SLATE) {
+            T_RACE_SLATE *sl = &s_slate[s_nbSlate];
+            if (sscanf(v, "%d %d %d", &sl->Page, &sl->Var, &sl->Value) == 3 && sl->Page >= 0 && sl->Page < 128 && sl->Var >= 0 && sl->Var < MAX_VARS_GAME) s_nbSlate++;
+        }
         else if (!strcmp(key, "postcards")) { if (sscanf(v, "%d %d %d", &s_cardLastVar, &s_cardCountVar, &s_cardN) != 3) s_cardLastVar = -1; s_cardSeen = -1; }
         else if (!strcmp(key, "achieve") && s_nbAchs < RACE_MAX_ACH) {
             char kind[12];
@@ -16073,7 +16087,7 @@ void RaceMod_LoadFile(const char *path) {
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
     s_nbPlaques = 0; s_plaqueOn = -1;   // (plaque=: the story file's too)
-    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
+    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_nbSlate = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -20996,6 +21010,33 @@ static void AchievementsFrame(S32 now) {
         if (hit && RaceGame_Achieve(ac->Id, title, sizeof(title))) { snprintf(s_achText, sizeof(s_achText), "%s", title); snprintf(s_achId, sizeof(s_achId), "%s", ac->Id); snprintf(s_achHead, sizeof(s_achHead), "Achievement unlocked"); s_achUntil = now + 6000; }
     }
 }
+// The slate's track pages (slate_page=), looked at a few times a second: each one due put in the slate, after the track pages before it
+static void SlateFrame(S32 now) {
+    if (now < s_slateAt) s_slateAt = now - 500;
+    if (!s_nbSlate || now - s_slateAt < 500 || NewCube != -1 || !ListVarGame[FLAG_ARDOISE]) return;
+    s_slateAt = now;
+    int first = 128;
+    for (int i = 0; i < s_nbSlate; i++) if (s_slate[i].Page < first) first = s_slate[i].Page;
+    int added = 0;
+    for (int i = 0; i < s_nbSlate; i++) {
+        const T_RACE_SLATE *sl = &s_slate[i];
+        if (ListVarGame[sl->Var] < sl->Value) continue;
+        int have = 0;
+        for (int n = 0; n < NbArdoise; n++) if (ListArdoise[n] == sl->Page) have = 1;
+        if (have || NbArdoise >= MAX_ARDOISE) continue;
+        // (its place: after the game's own pages and the track pages before it)
+        int at = NbArdoise;
+        for (int n = 0; n < NbArdoise; n++) if (ListArdoise[n] >= first && ListArdoise[n] > sl->Page) { at = n; break; }
+        for (int n = NbArdoise; n > at; n--) ListArdoise[n] = ListArdoise[n - 1];
+        ListArdoise[at] = (S8)sl->Page;
+        NbArdoise++;
+        CurrentArdoise = (U8)at;
+        added++;
+        Log_Info("[racemod] the slate: track page %d in (game variable %d at %d), page %d of %d", sl->Page, sl->Var, (int)ListVarGame[sl->Var], at + 1, (int)NbArdoise);
+    }
+    // (the slate shown at the screen's corner, as the game's own pages do when one is added: GERELIFE.CPP LM_MEMO_ARDOISE)
+    if (added) InitIncrustDisp(INCRUST_INVENTORY | INCRUST_YCLIP, FLAG_ARDOISE, 0, 0, 0, 0, 3);
+}
 // The postcards (postcards=), looked at as the achievements are: the last card found -- the story's variable, the chapter's card -- put in
 // the player's scrapbook; with as many found as its number, every one before it too (a story saved before the scrapbook was), and past
 // the cards' number (the reward given, all thirteen found) the lot. Not in a replay: its variables are set for the egg's scene, not found.
@@ -24291,6 +24332,7 @@ void RaceMod_Frame(void) {
     PoolFrame(TimerRefHR);
     AchievementsFrame(TimerRefHR);
     PostcardsFrame(TimerRefHR);
+    SlateFrame(TimerRefHR);
     BowlFrame(TimerRefHR);
     BowlLanesFrame(TimerRefHR);
     VeloFrame(TimerRefHR);
@@ -25274,11 +25316,18 @@ static void DrawFarItems(void) {
     const int fresh = s_farBodiesScene != (int)NumCube;
     s_farBodiesScene = (int)NumCube;
     if (s_powerups && !NoItems() && !Qualifying() && MushroomsOut()) {
-        if (s_mushBody < 0 || fresh)
+        if (s_mushBody < 0 || fresh) {
+            int found = -1;
             for (int i = 0; i < s_nbMush; i++) {
                 const int a = MushroomActor(&s_mush[i]);
-                if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) { s_mushBody = ListObjet[a].Obj.Body.Num; break; }
+                if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) { found = ListObjet[a].Obj.Body.Num; break; }
             }
+            // (a scene with no box of its own -- the Long Table's 352, right after the start: none of the next scenes' boxes were drawn
+            // till one had been seen. Its fakes, hidden in every race scene, are the box's very copies: their body -- the user, 2026-11-24,
+            // "Let's fix the issue of a scene with no item boxes of its own not being able to draw the neighbours boxes")
+            if (found < 0) PoolBody(s_fakeScene, s_fakeActor, s_nbFakeActors, &found);
+            if (found >= 0) s_mushBody = found;
+        }
         for (int i = 0; i < s_nbMush; i++) {
             const T_RACE_MUSHROOM *m = &s_mush[i];
             if (m->HasWorld && m->HasY && m->Scene != (int)NumCube && !m->Back) DrawFarItem(s_mushBody, m->WX, m->Y, m->WZ, 0, 0, 0, &drawn);

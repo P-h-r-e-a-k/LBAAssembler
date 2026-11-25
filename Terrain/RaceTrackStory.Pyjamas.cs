@@ -18,6 +18,9 @@ namespace LBAAssembler.Terrain;
 //     RaceTrackStory.Evening's night house);
 //   - the house by day while he is in them: the front door shut (Twinsen's word there), his racing suit folded on the chair left of the bed
 //     (block 48, cell 5,3 of the house's grid) -- Action by it and he is dressed, his pyjamas folded there instead from then on;
+//   - whatever is on the chair, he can change into it with Action there, any time -- the user, 2026-11-24: "any clothes Twinsen has on the
+//     chair by his bed he should be able to switch to at any time by using action": dressed, his pyjamas are on it, and Action has him in
+//     them again (his clothes folded there instead, the front door shut till he dresses, as in the mornings);
 //   - and the game's first morning too, after the dream (the user, 2026-11-18: "When Twinsen wakes up initially let's have him wake up in
 //     his pyjamas, with his casual clothes on the chair for him to change into"): PolarDream's wake sets PyjamaVar to PyjamasOn, and in
 //     chapter 1 the chair holds his everyday clothes (FoldedCasual) -- dressed, he is in them (the engine's GEN_BODY_TUNIQUE: his everyday
@@ -37,6 +40,9 @@ internal static partial class RaceTrackStory
     // word at the door said once a visit)
     private const int ChairSeatX = 5 * 512 + 290, ChairSeatY = 2048 + 450, ChairSeatZ = 3 * 512 + 256;
     private const int DressZone = 94, PyjamaDoorTry = 95, PyjamaDoorSwitch = 14, PyjamaSaid = 47;
+    // (the chair's change made with Action: the key let go before the next -- the other change's own Action straight after it, the same
+    // press, put him back as he was. A cell variable of the day house's, free: 48)
+    private const int ChairHeld = 48;
 
     private static void Pyjamas(StoryParts p)
     {
@@ -84,6 +90,10 @@ internal static partial class RaceTrackStory
 
 void comportement_1()
 {{
+    if (0 == action())
+    {{
+        set_var_cube({ChairHeld}, 0);
+    }}
     if ({PyjamaDoorTry} == zone_obj(0))
     {{
         if (0 == var_cube({PyjamaSaid}))
@@ -98,18 +108,44 @@ void comportement_1()
     }}
     swif (1 == action())
     {{
-        if ({DressZone} == zone_obj(0) && {Driving} != comportement_hero())
+        if ({DressZone} == zone_obj(0) && {Driving} != comportement_hero() && 0 == var_cube({ChairHeld}))
         {{
             set_var_game({PyjamaVar}, {PyjamasOff});
             body({Citadel.CitadelProps.FoldedPyjamas});
             set_change_cube({PyjamaDoorSwitch}, 1);
+            set_var_cube({ChairHeld}, 1);
             set_comportement(comportement_2);
         }}
     }}
 }}
 
+// (dressed, his pyjamas on the chair: Action there and he is in them again, his clothes on the chair -- his everyday ones in chapter 1,
+// his racing suit after -- and the front door shut till he dresses)
 void comportement_2()
 {{
+    if (0 == action())
+    {{
+        set_var_cube({ChairHeld}, 0);
+    }}
+    swif (1 == action())
+    {{
+        if ({DressZone} == zone_obj(0) && {Driving} != comportement_hero() && 0 == var_cube({ChairHeld}))
+        {{
+            set_var_game({PyjamaVar}, {PyjamasOn});
+            if (1 >= chapter())
+            {{
+                body({Citadel.CitadelProps.FoldedCasual});
+            }}
+            else
+            {{
+                body({Citadel.CitadelProps.FoldedSuit});
+            }}
+            set_change_cube({PyjamaDoorSwitch}, 0);
+            set_var_cube({PyjamaSaid}, 0);
+            set_var_cube({ChairHeld}, 1);
+            set_comportement(comportement_1);
+        }}
+    }}
 }}
 ");
         });

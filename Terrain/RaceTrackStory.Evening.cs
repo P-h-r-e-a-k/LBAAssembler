@@ -1020,7 +1020,8 @@ goto(label_0);
     }}
     // (not yet sent to wash tonight: 0 -- or 3, dressed again after the game's first morning, which a played game has always had before the
     // spanking: with 0 only, the walk to the bathroom never came in the user's game, 2026-11-23)
-    if ({Scolded} == var_game({Drunk}) && (0 == var_game({PyjamaVar}) || {PyjamasOff} == var_game({PyjamaVar})) && {LiftShaftZone} == zone())
+    // (and 2, already in his pyjamas: since 2026-11-24 he can put them on at the chair any time)
+    if ({Scolded} == var_game({Drunk}) && (0 == var_game({PyjamaVar}) || {PyjamasOff} == var_game({PyjamaVar}) || {PyjamasOn} == var_game({PyjamaVar})) && {LiftShaftZone} == zone())
     {{
         set_var_cube({PyjamaWait}, 0);
         set_comportement(comportement_10);

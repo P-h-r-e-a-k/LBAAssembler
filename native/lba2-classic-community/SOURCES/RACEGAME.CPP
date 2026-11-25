@@ -1925,7 +1925,8 @@ static int AllBestPicture(void) {
     GhostOwnerName(name, sizeof(name));
     if (name[0]) snprintf(title, sizeof(title), "%s's best laps", name);
     else snprintf(title, sizeof(title), "Best laps");
-    static const char *const game = "Little Big Halloween Racing Adventure";
+    // (the game's name, RACEGAME.TXT's title= -- Little Big Racing Adventure since 2026-11-25, the Halloween edition's before)
+    const char *const game = s_title[0] ? s_title : "Little Big Racing Adventure";
     int missing;
     const S32 sum = SumOfBest(&missing);
     TimeText(time, sizeof(time), sum);

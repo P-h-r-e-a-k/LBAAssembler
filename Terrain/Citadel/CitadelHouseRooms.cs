@@ -221,6 +221,10 @@ stop();
             if (GridPaint.Info(library, block) is null) { log.Add($"The house's bathroom and kitchen left out: the house's library has no block {block}"); return log; }
             mirrored[block] = MirrorBlock(bkg, header, ref library, block, Brick, shade);
         }
+        // (the rooms' doorways' floor cells -- the floor's tile on the wall's rock, a block for each of the tile's three places along the
+        // front row: DoorwayFloorBlock)
+        var doorwayFloor = new int[3];
+        for (var p = 0; p < 3; p++) doorwayFloor[p] = DoorwayFloorBlock(bkg, header, ref library, Brick, p);
         bkg.SetStored(libraryEntry, library);
         int MirrorPos(int block, int pos)
         {
@@ -316,10 +320,14 @@ stop();
             // of the door is higher than the right side. We need to make sure the wall colour on the outside is consistent also"; the corner's
             // end post down with it)
             columns[(4, front)] = Shifted(15, 5, -2);
+            // (the doorway's two cells: the floor's tile on the walls' rock, flush with the walls' rock either side -- a floor tile alone,
+            // the floor stood over nothing, halfway up the wall beside it: SIN's picture, GitHub #25/#27, 2026-11-24. The rock's lower half
+            // under it, its upper half the doorway block's own: the lower half alone drew broken, white through it)
             for (var x = RoomX0; x <= RoomX1; x++)
                 columns[(x, front)] = x == gap || x == gap + 1
-                    ? new() { (FloorLayer, 31, Mod(x, 3) + 3 * Mod(front, 3)) }   // (no rock under: the rock's lower piece alone drew broken, white
-                                                                  // through it -- its upper half is the next block's)
+                    ? doorwayFloor[Mod(x, 3)] > 0
+                        ? new() { (FloorLayer - 1, Rock, 0), (FloorLayer, doorwayFloor[Mod(x, 3)], 0) }
+                        : new() { (FloorLayer, 31, Mod(x, 3) + 3 * Mod(front, 3)) }
                     : Shifted(8 + Mod(x, 2), 20, -2);
             for (var z = RoomZ0; z <= RoomZ1; z++) columns[(RoomX1 + 1, z)] = Shifted(28, 16 + Mod(z, 4), 3);
             columns[(RoomX1 + 1, 0)] = Column(28, 0);
@@ -622,6 +630,56 @@ void comportement_2()
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Write(spritesPath, sprites.ToBytes()).Write(ressPath, ress.ToBytes()).Commit();
         log.Add($"Twinsen's house: the bedroom's window left of the bed a doorway into the bathroom (scene {Bathroom}, its cells x {BathDoorX0}-{BathDoorX0 + 3}), the dining room's right-hand armchair gone for a doorway into the kitchen (scene {Kitchen}, x {KitchenDoorX0}-{KitchenDoorX0 + 3}): the house's own doorway and door (sprite {DoorSprite}) mirrored -- blocks {string.Join(", ", mirrored.Select(m => $"{m.Key} as {m.Value}"))}, sprite {mirrorSprite}; each room in the house's own bricks, its doorway in its front wall (x {BathGapX}-{BathGapX + 1}, {KitchenGapX}-{KitchenGapX + 1}), furnished ({CitadelProps.BathroomFittings.Length} and {CitadelProps.KitchenFittings.Length} fittings: the bath filled at its taps, the kitchen's chairs sat on)");
         return log;
+    }
+
+    // The house's library's floor tiles (block 31, 3 x 3: a cell's place x % 3 + 3 (z % 3)) and the rock under its front walls (block 60,
+    // two layers: its lower half, then its upper half under the low wall)
+    private const int FloorTile = 31, Rock = 60;
+
+    // A doorway's floor cell in a room's front wall (GitHub #25, #27): one brick, the rock's upper half with the floor tile's top -- the
+    // tile at its place `tilePos` along the front row (z % 3 = 0) -- drawn over its top face; the tile's shape and sound. A new block of the
+    // house's library (or the one a second pass made), -1 when the bricks aren't the game's.
+    private static int DoorwayFloorBlock(HqrFile bkg, MapBricks.BkgHeader header, ref byte[] library, Func<int, byte[]?> brick, int tilePos)
+    {
+        if (GridPaint.Info(library, FloorTile) is null || GridPaint.Info(library, Rock) is null) return -1;
+        var tile = GridPaint.Entries(library, FloorTile).FirstOrDefault(e => e.Pos == tilePos);
+        var rock = GridPaint.Entries(library, Rock).FirstOrDefault(e => e.Pos == 1);
+        if (tile.Brick < 0 || rock.Brick < 0 || brick(tile.Brick) is not { Length: >= 4 } top || brick(rock.Brick) is not { Length: >= 4 } face) return -1;
+        var number = CitadelMuseum.AddBrickPublic(bkg, header, CitadelMuseum.EncodeBrick(TileOnRock(GphImage.Decode(face), GphImage.Decode(top))));
+        var count = GridPaint.BlockCount(library);
+        for (var b = 1; b <= count; b++)
+        {
+            if (GridPaint.Info(library, b) is not { } other || (other.Dx, other.Dy, other.Dz) != (1, 1, 1)) continue;
+            var theirs = GridPaint.Entries(library, b).ToList();
+            if (theirs.Count == 1 && theirs[0].Brick == number && theirs[0].Shape == tile.Shape && theirs[0].Sound == tile.Sound) return b;
+        }
+        if (count >= 255) return -1;
+        library = GridPaint.AppendBlock(library, 1, 1, 1, 0);
+        library = GridPaint.SetEntry(library, count + 1, 0, number, tile.Shape, tile.Sound);
+        return count + 1;
+    }
+
+    // A brick's picture (48 x 38, its top face the diamond from (24, 0) to (24, 24)): `under`'s sides, `top`'s top face
+    private static GphImage TileOnRock(GphImage under, GphImage top)
+    {
+        const int W = 48, H = 38;
+        var canvas = new GphImage(W, H) { OffsetX = 0, OffsetY = 0 };
+        void Put(GphImage image, Func<int, int, bool> where)
+        {
+            for (var y = 0; y < image.Height; y++)
+                for (var x = 0; x < image.Width; x++)
+                {
+                    var i = y * image.Width + x;
+                    if (!image.Opaque[i]) continue;
+                    int cx = x + image.OffsetX, cy = y + image.OffsetY;
+                    if (cx < 0 || cx >= W || cy < 0 || cy >= H || !where(cx, cy)) continue;
+                    canvas.Pixels[cy * W + cx] = image.Pixels[i];
+                    canvas.Opaque[cy * W + cx] = true;
+                }
+        }
+        Put(under, (_, _) => true);
+        Put(top, (x, y) => Math.Abs(x - 23.5) / 24.0 + Math.Abs(y - 11.5) / 12.0 <= 1.0);
+        return canvas;
     }
 
     // A picture flipped left for right, `offsetX` -- its draw offset -- with it: a brick's offset over its cell (48 wide) mirrored about the

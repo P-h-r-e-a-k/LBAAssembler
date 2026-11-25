@@ -1122,6 +1122,10 @@ void SaveContexte(S32 savetimerrefhr) {
 #else
     LbaWrite(ListVarGame, RETAIL_VARS_GAME * sizeof(ListVarGame[0]));
     LbaWrite(ListVarCube, MAX_VARS_CUBE * sizeof(ListVarCube[0]));
+    // (the slate's pages past the game's five, into the wide variables the save keeps: the save's own room for them is five, as old
+    // saves have it -- the race mod's track pages, 2026-11-25)
+    for (n = MAX_ARDOISE_SAVED; n < MAX_ARDOISE; n++)
+        ListVarGame[ARDOISE_MORE_VAR + n - MAX_ARDOISE_SAVED] = (S16)(n < NbArdoise ? ListArdoise[n] + 1 : 0);
     SaveVarsWide(ListVarGame);
 #endif
 
@@ -1456,7 +1460,8 @@ void SaveContexte(S32 savetimerrefhr) {
     LbaWrite(ListBuggy, sizeof(S_BUGGY) * MAX_BUGGYS);
 
     // a integrer dans la prochaine version de sauvegarde
-    LbaWrite(ListArdoise, MAX_ARDOISE * sizeof(S8));
+    // (the save's room for the game's five; the rest in the wide variables, above)
+    LbaWrite(ListArdoise, MAX_ARDOISE_SAVED * sizeof(S8));
 
     LbaWriteByte(CurrentArdoise);
     LbaWriteByte(NbArdoise);
@@ -2160,10 +2165,18 @@ S32 LoadContexte(S32 *savetimerrefhr) {
         LbaReadByte(NumBuggy);
         LbaRead(ListBuggy, sizeof(S_BUGGY) * MAX_BUGGYS);
 
-        LbaRead(ListArdoise, MAX_ARDOISE * sizeof(S8));
+        LbaRead(ListArdoise, MAX_ARDOISE_SAVED * sizeof(S8));
 
         LbaReadByte(CurrentArdoise);
         LbaReadByte(NbArdoise);
+        // (the pages past the game's five from the wide variables -- none in a save from before them)
+        for (S32 k = MAX_ARDOISE_SAVED; k < MAX_ARDOISE; k++) {
+            const S16 kept = ListVarGame[ARDOISE_MORE_VAR + k - MAX_ARDOISE_SAVED];
+            ListArdoise[k] = (S8)(k < NbArdoise && kept > 0 ? kept - 1 : -1);
+        }
+        if (NbArdoise > MAX_ARDOISE) NbArdoise = MAX_ARDOISE;
+        while (NbArdoise > 0 && ListArdoise[NbArdoise - 1] < 0) NbArdoise--;
+        if (CurrentArdoise >= NbArdoise) CurrentArdoise = NbArdoise ? NbArdoise - 1 : 0;
         LbaReadLong(VueCamera);
     }
 

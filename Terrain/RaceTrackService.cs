@@ -1018,6 +1018,9 @@ internal static class RaceTrackService
             // (the island's two postcards, chapters 1 and 2 -- after the story's scenes are saved: RaceTrackStory.Eggs.Postcards.cs)
             story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, report, scenes, 1));
             story.Log.AddRange(RaceTrackStory.Postcards(gameDirectory, RaceTrackIsland.Citadel, town.Report, townScenes, 2));
+            // (the magic slate's two pages of the island's tracks: the storm's, a hidden page, and the town's -- RaceTrackStory.Slate.cs)
+            story.Log.AddRange(RaceTrackStory.SlatePage(gameDirectory, RaceTrackIsland.Citadel, report, 1));
+            story.Log.AddRange(RaceTrackStory.SlatePage(gameDirectory, RaceTrackIsland.Citadel, town.Report, 2));
             // (Raph's yell at the townsman on the storm track: its text last of all the island's, so none before it moves)
             var walker = RaceTrackStory.RaphWalkerLine(gameDirectory, story.Info, scenes);
             story.Log.AddRange(walker.Log);
@@ -1031,6 +1034,7 @@ internal static class RaceTrackService
             seller.AddRange(RaceTrackStory.RetireQuests(gameDirectory, options.Island));
             seller.AddRange(IslandRetell.Apply(gameDirectory, options.Island.IslandByte, IslandRetell.Celebration, "Celebration Island"));
             seller.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
+            seller.AddRange(RaceTrackStory.SlatePage(gameDirectory, options.Island, report));
             return (seller, new StoryInfo(-1, -1, true));
         }
         var retold = new (RaceTrackIsland Island, (int Retail, string[] Words)[] Lines, string Name)[]
@@ -1056,6 +1060,8 @@ internal static class RaceTrackService
         // (the island's easter eggs' part for the race file: RaceTrackStory.Eggs.cs)
         var eggs = RaceTrackStory.EggInfo(gameDirectory, options.Island, late);
         late.AddRange(RaceTrackStory.Postcards(gameDirectory, options.Island, report, scenes));
+        // (the island's track's page of the magic slate: RaceTrackStory.Slate.cs)
+        late.AddRange(RaceTrackStory.SlatePage(gameDirectory, options.Island, report));
         // (the Polar dream's easter eggs, chapter 0: RaceTrackStory.Eggs.Polar.cs)
         late.AddRange(RaceTrackStory.PolarEggs(gameDirectory, report, options.Island));
         // (the game's own quests kept out of the story's reach, island by island, before the retelling: RaceTrackStory.Retired.cs)

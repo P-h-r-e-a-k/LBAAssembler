@@ -806,6 +806,8 @@ internal static class RaceCarEngineFile
                 // (the speedrun records' slates by Kash's tomb: their plaques -- RaceTrackStory.Desert, KashSlates)
                 foreach (var line in RaceTrackStory.SlatePlaqueLines()) text.Append(line + "\n");
                 foreach (var line in RaceTrackStory.Achievements) text.Append(line + "\n");
+                // (the magic slate's track pages: RaceTrackStory.Slate)
+                foreach (var line in RaceTrackStory.SlateLines()) text.Append(line + "\n");
                 // (HAL on the radio: his number Twinsen's once he has beaten him on the Emerald Moon -- Q_HAL at HalWon -- and before then no
                 // one to call: HalHints)
                 text.Append($"hal_mended={RaceTrackStory.QHal} {RaceTrackStory.HalWon}\n");

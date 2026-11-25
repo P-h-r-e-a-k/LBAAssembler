@@ -60,7 +60,9 @@
 
 #define	SIZE_XPL                (131884L+RECOVER_AREA)	// size des .xpl
 #define	MAX_PALETTES		4
-#define	MAX_ARDOISE		5
+#define	MAX_ARDOISE		16	// (the game's 5 -- MAX_ARDOISE_SAVED, a save's own room -- and the race mod's track pages: 2026-11-25)
+#define	MAX_ARDOISE_SAVED	5
+#define	ARDOISE_MORE_VAR	1000	// (the pages past MAX_ARDOISE_SAVED kept in a save as wide game variables 1000-1010, each its page + 1)
 //#define	MAX_PCX			7
 
 #include "HQR_NAMES.H" /* *_HQR_NAME data filenames (split out for reuse) */

@@ -163,7 +163,7 @@ U8 *BufferTexture;
 U8 AnimateTexture = FALSE;
 
 /*--------- Ardoise ---------------------------*/
-S8 ListArdoise[MAX_ARDOISE] = {-1, -1, -1, -1, -1};
+S8 ListArdoise[MAX_ARDOISE] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 U8 CurrentArdoise = 0;
 U8 NbArdoise = 0;
