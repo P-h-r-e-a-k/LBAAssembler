@@ -495,6 +495,14 @@ internal static class NewLinesCommand
                 else { line.Character = character; line.Why = "text rule"; }
                 return;
             }
+        // (Twinsen's answer -- an add_choice in his own script -- and nothing else says it: his, whoever's table names it. Mr Paul's
+        // "Here are my twenty kashes." (ChapterLine.PaulPay) went to Mr Paul by its name and was voiced in his voice -- the user, 2026-11-25)
+        if (line.Said.Count > 0 && line.Said.All(s => s.Who.Person == "Twinsen") && line.Said.Any(s => s.How == "add_choice"))
+        {
+            line.Character = "Twinsen";
+            line.Why = "his answer";
+            return;
+        }
         // (its name in the story's tables: a story character's, or a line an unseen talker says for one)
         string? named = null;
         var story = false;
