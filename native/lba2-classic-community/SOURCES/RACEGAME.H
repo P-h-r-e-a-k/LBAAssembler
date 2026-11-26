@@ -35,6 +35,8 @@ S32 RaceGame_OptionsRow(S32 num);
 // row picked there that is the race game's: done (non-zero), or 0. BuildDisplayMenu: the engine's own renderer row left out of the Display
 // submenu while the race game is on (its renderer is chosen under Advanced options)
 U16 *RaceGame_AdvancedMenu(U16 *menu);
+U16 *RaceGame_CameraMenu(U16 *menu);
+S32 RaceGame_CameraRow(S32 num);
 S32 RaceGame_AdvancedRow(S32 num);
 // RACEMOD.CPP: the player changed the race camera's view during a race (V): kept for the next race (RACEGAME_SETTINGS.TXT camera=)
 void RaceGame_CameraChosen(S32 view);

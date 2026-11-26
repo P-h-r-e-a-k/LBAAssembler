@@ -33,10 +33,10 @@
  *                                         choice: manual)
  *     update_checked=<unix time>          when the game last started the updater (0: never)
  *     reports=ask|auto|off                bug reports (the installer's BugReport.cs): asked once, then sent or not; Options' Bug reports page
- *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Camera,
- *                                         window, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
+ *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Window and
+ *                                         updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
  *     camera=0|1|2                        the race camera's view: inside the car, just behind it, further back (the first
- *                                         time: Further back, 2026-10-21) -- Options, "Camera, window, updates", or V (a pad's
+ *                                         time: Further back, 2026-10-21) -- Options, Camera ("Race view"), or V (a pad's
  *                                         Back button) during a race (RACEMOD.CPP camera=; RaceGame_CameraChosen)
  *     ghost=0|1|3|4|5|7                   the ghost chosen last on a time trial's ghost page: none, the player's own best lap, the
  *                                         game's Easy, Medium, Hard or Extreme ghost (RACEMOD.CPP ghost=)
@@ -208,7 +208,9 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_PAUSE_TRACK 2465
 #define RG_ID_PAUSE_MAIN 2466
 #define RG_ID_REQUEST_FEATURE 2467          // ... and its Request feature (ReportBugPage)
-#define RG_ID_FEEDBACK 2468                 // the main menu's Feedback (FeedbackPage)
+#define RG_ID_FEEDBACK 2468                 // Options' Feedback (FeedbackPage)
+#define RG_ID_GAME_CAMERA 2120              // GAMEMENU.CPP's MENU_ID_CAMERA: the Camera page (GereCameraMenu)
+#define RG_ID_GAME_MOVIE_CAMERA 2106        // ... and its MENU_ID_MOVIE_CAMERA: the cut scenes' own camera angles (AllCameras)
 #define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
 #define RG_ID_SHARED 2470                   // ... its Shared tracks (TracksPage(1))
 #define RG_ID_STORY_TWO 2471                // Story Mode's Two players row: player 2 is Zoe (StoryMode, 2026-11-11)
@@ -596,7 +598,7 @@ static int s_beaten[RG_MAX_ENTRIES];
 static int s_trialLaps = 3;
 static const int s_trialLapsChoice[5] = {1, 3, 5, 10, 0};
 static int s_lapsRuns = 0;                  // (the laps page's rows say runs, not laps: a sprint's -- LapsPage)
-static const char *const s_cameraLabel[3] = {"Camera: inside the car", "Camera: just behind", "Camera: further back"};
+static const char *const s_cameraLabel[3] = {"Race view: inside the car", "Race view: just behind", "Race view: further back"};
 static long long s_updateChecked = 0;       // when the updater was last started (unix time; 0 never)
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[2] = {"New versions: Automatic", "New versions: Ask first"};
@@ -1426,7 +1428,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
     case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;   // (the game's own Controls row changes the keys)
-    case RG_ID_UPDATES: Label(string, "Camera, window, updates"); return 1;     // (the row's width: "Window mode, mini-map, updates" ran over it)
+    case RG_ID_UPDATES: Label(string, "Window and updates"); return 1;          // (the row's width: "Window mode, mini-map, updates" ran over it)
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
     case RG_ID_RACE_SKY: Label(string, s_raceSky ? "Sky in races: On" : "Sky in races: Off"); return 1;
@@ -2526,7 +2528,7 @@ void RaceGame_Qualified(S32 lap) {
 // (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
 // window, updates", its six rows a little higher)
 #define RG_UPD_ROWS 4                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
-#define RG_DISPLAY_ROWS 7
+#define RG_DISPLAY_ROWS 6
 #define RG_DISPLAY_Y 278                    // (its rows lower than the updates page's: six under a header at 8 had the header cut off by the window, the user, 2026-11-01)
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
@@ -3614,7 +3616,9 @@ static void ReportsPage(void) {
     }
 }
 
-// Options, "Camera, window, updates": the camera's view, the window, the mini-map, the sky in races, the renderer, and the updates' page
+// Options, "Window and updates": the window, the mini-map, the sky in races, the updates' page and the bug reports' (the race's view is on
+// the Camera page with the game's own cameras -- RaceGame_CameraMenu: the user, 2026-11-25, "we should have one single menu for all camera
+// items")
 static void DisplayPage(void) {
     ReadSettings();
     s_displayMenu[0] = 1;
@@ -3622,27 +3626,20 @@ static void DisplayPage(void) {
     s_displayMenu[2] = RG_DISPLAY_Y;
     s_displayMenu[3] = 0;
     SetRow(s_displayMenu, 0, RG_ID_BACK);
-    SetRow(s_displayMenu, 1, RG_ID_CAMERA);
-    SetRow(s_displayMenu, 2, RG_ID_WINDOW);
-    SetRow(s_displayMenu, 3, RG_ID_MINIMAP);
-    SetRow(s_displayMenu, 4, RG_ID_RACE_SKY);
+    SetRow(s_displayMenu, 1, RG_ID_WINDOW);
+    SetRow(s_displayMenu, 2, RG_ID_MINIMAP);
+    SetRow(s_displayMenu, 3, RG_ID_RACE_SKY);
     // (the renderer's row under the game's Advanced options -- RaceGame_AdvancedMenu: the user, 2026-11-19, "Can we move the rendering
     // option to under Advanced options please")
-    SetRow(s_displayMenu, 5, RG_ID_UPDATES_PAGE);
-    SetRow(s_displayMenu, 6, RG_ID_REPORTS);
+    SetRow(s_displayMenu, 4, RG_ID_UPDATES_PAGE);
+    SetRow(s_displayMenu, 5, RG_ID_REPORTS);
     for (;;) {
-        Page("Camera, window, updates", RG_DISPLAY_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
+        Page("Window and updates", RG_DISPLAY_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
         const S32 select = Menu(s_displayMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < RG_DISPLAY_ROWS; i++) if (s_displayMenu[4 + 2 * i + 1] == (U16)select) s_displayMenu[0] = (U16)i;
         if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
-        else if (select == RG_ID_CAMERA) {
-            // (inside the car, just behind, further back, and round again; a race on takes it at once -- RACEMOD.CPP)
-            s_camera = (s_camera + 1) % 3;
-            WriteSettings();
-            if (s_raceSp >= 0 && !s_raceOver) RaceMod_SetCameraView(s_camera);
-            Log_Info("[racegame] the camera: %s", s_cameraLabel[s_camera]);
-        } else if (select == RG_ID_MINIMAP) {
+        else if (select == RG_ID_MINIMAP) {
             s_minimap = !s_minimap;
             WriteSettings();
             Log_Info("[racegame] the mini-map: %s", s_minimap ? "on" : "off");
@@ -3662,14 +3659,54 @@ static void DisplayPage(void) {
 static U16 s_advMenu[4 + 2 * 12];
 U16 *RaceGame_AdvancedMenu(U16 *menu) {
     if (!RaceGame_On() || !menu || menu[1] + 1 > 12) return menu;
-    const int nb = menu[1];
+    // (its Camera and Movie camera rows left out: on the Camera page in Options with the race's view -- RaceGame_OptionsMenu)
+    U16 rows[4 + 2 * 12];
+    int nb = 0;
+    for (int i = 0; i < menu[1]; i++) {
+        if (menu[4 + 2 * i + 1] == RG_ID_GAME_CAMERA || menu[4 + 2 * i + 1] == RG_ID_GAME_MOVIE_CAMERA) continue;
+        rows[4 + 2 * nb] = menu[4 + 2 * i];
+        rows[4 + 2 * nb + 1] = menu[4 + 2 * i + 1];
+        nb++;
+    }
     // (the cursor where DoGameMenu left it in the copy, the copy being made again for each pick)
-    const U16 at = s_advMenu[1] == nb + 1 ? s_advMenu[0] : menu[0];
-    memcpy(s_advMenu, menu, (4 + 2 * nb) * sizeof(U16));
+    const U16 at = s_advMenu[1] == nb + 1 ? s_advMenu[0] : (U16)(menu[0] < nb ? menu[0] : 0);
+    memcpy(s_advMenu + 4, rows + 4, 2 * nb * sizeof(U16));
+    s_advMenu[2] = menu[2];
+    s_advMenu[3] = menu[3];
     SetRow(s_advMenu, nb, RG_ID_RENDERER);
     s_advMenu[1] = (U16)(nb + 1);
     s_advMenu[0] = at;
     return s_advMenu;
+}
+
+// GAMEMENU.CPP GereCameraMenu: the Camera page -- the game's own two cameras, then its movie camera (the cut scenes' own angles, from
+// Advanced options) and the race's view (inside the car, just behind, further back -- camera=; a race on takes it at once, RACEMOD.CPP):
+// every camera setting on one page; the game's own page when the race game isn't on.
+static U16 s_camMenu[4 + 2 * 8];
+U16 *RaceGame_CameraMenu(U16 *menu) {
+    if (!RaceGame_On() || !menu || menu[1] + 2 > 8) return menu;
+    const int nb = menu[1];
+    const U16 at = s_camMenu[1] == nb + 2 ? s_camMenu[0] : menu[0];
+    memcpy(s_camMenu, menu, (4 + 2 * nb) * sizeof(U16));
+    SetRow(s_camMenu, nb, RG_ID_GAME_MOVIE_CAMERA);
+    SetRow(s_camMenu, nb + 1, RG_ID_CAMERA);
+    s_camMenu[1] = (U16)(nb + 2);
+    s_camMenu[0] = at;
+    return s_camMenu;
+}
+S32 RaceGame_CameraRow(S32 num) {
+    if (!RaceGame_On() || (num != RG_ID_CAMERA && num != RG_ID_GAME_MOVIE_CAMERA)) return 0;
+    if (num == RG_ID_GAME_MOVIE_CAMERA) {
+        AllCameras ^= 1;
+        Log_Info("[racegame] the movie camera: %s", AllCameras ? "on" : "off");
+        return 1;
+    }
+    ReadSettings();
+    s_camera = (s_camera + 1) % 3;
+    WriteSettings();
+    if (s_raceSp >= 0 && !s_raceOver) RaceMod_SetCameraView(s_camera);
+    Log_Info("[racegame] %s", s_cameraLabel[s_camera]);
+    return 1;
 }
 S32 RaceGame_AdvancedRow(S32 num) {
     if (!RaceGame_On() || num != RG_ID_RENDERER) return 0;
@@ -3687,23 +3724,38 @@ S32 RaceGame_AdvancedRow(S32 num) {
     return 1;
 }
 
-// GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then the race's controls and power-ups (one row: the menu has
-// room for eight) and Updates (RaceGame_OptionsRow); the game's own menu when the race game isn't on.
+// GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then the Camera page (every camera setting on one page: the
+// game's own outdoor and indoor cameras with the race's view -- RaceGame_CameraMenu; the user, 2026-11-25, "we should have one single menu
+// for all camera items"), the race's controls and power-ups, the window and updates, and Feedback (the user, the same evening: "move
+// Feedback into the Options Menu"; RaceGame_OptionsRow); the game's own menu when the race game isn't on.
 static U16 s_optMenu[4 + 2 * 12];
 U16 *RaceGame_OptionsMenu(U16 *menu) {
-    if (!RaceGame_On() || !menu || menu[1] + 3 > 12) return menu;
+    if (!RaceGame_On() || !menu || menu[1] + 4 > 12) return menu;
     const int nb = menu[1];
     memcpy(s_optMenu, menu, (4 + 2 * nb) * sizeof(U16));
-    SetRow(s_optMenu, nb, RG_ID_CONTROLS);
-    SetRow(s_optMenu, nb + 1, RG_ID_UPDATES);
-    s_optMenu[1] = (U16)(nb + 2);
+    SetRow(s_optMenu, nb, RG_ID_GAME_CAMERA);
+    SetRow(s_optMenu, nb + 1, RG_ID_CONTROLS);
+    SetRow(s_optMenu, nb + 2, RG_ID_UPDATES);
+    SetRow(s_optMenu, nb + 3, RG_ID_FEEDBACK);
+    s_optMenu[1] = (U16)(nb + 4);
+    // (ten rows: the list a little lower, its top row clear of the title's ADVENTURE -- a short screen scrolls it, GameMenuLayout)
+    s_optMenu[2] = (U16)(menu[2] + 40);
     return s_optMenu;
 }
 
 S32 RaceGame_OptionsRow(S32 num) {
-    if (!RaceGame_On() || (num != RG_ID_CONTROLS && num != RG_ID_UPDATES)) return 0;
+    if (!RaceGame_On() || (num != RG_ID_CONTROLS && num != RG_ID_UPDATES && num != RG_ID_GAME_CAMERA && num != RG_ID_FEEDBACK)) return 0;
     if (num == RG_ID_UPDATES) {
         DisplayPage();
+        return 1;
+    }
+    if (num == RG_ID_GAME_CAMERA) {
+        extern S32 GereCameraMenu(void);
+        GereCameraMenu();
+        return 1;
+    }
+    if (num == RG_ID_FEEDBACK) {
+        FeedbackPage();
         return 1;
     }
     const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);
@@ -6357,7 +6409,8 @@ static S32 GameMenu(S32 inGame) {
     const S32 racing = nb;
     SetRow(s_mainMenu, nb++, RG_ID_RACING);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
-    SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
+    // (Feedback in the Options menu -- RaceGame_OptionsMenu: the user, 2026-11-25, "Next time we release a build move Feedback into the
+    // Options Menu")
     // (what this player has found: on every main menu -- the title's, the story's, after a race or a time trial (the user, 2026-11-14:
     // "Can we make sure all menu's are uniform please? This menu still misses the achievements option - after finishing a race"))
     SetRow(s_mainMenu, nb++, RG_ID_ACHIEVEMENTS);

@@ -3806,12 +3806,17 @@ S32 GereCameraMenu(void) {
     }
 
     while (!flag) {
-        select = DoGameMenu(CameraMenu);
+        // (the race game's copy, its race view row last: RACEGAME.CPP RaceGame_CameraMenu)
+        select = DoGameMenu(RaceGame_CameraMenu(CameraMenu));
 
         switch (select) {
         case 26:
         case 1000:
             flag = 1;
+            break;
+
+        default:
+            RaceGame_CameraRow(select);
             break;
 
         case MENU_ID_FOLLOW_CAMERA:
