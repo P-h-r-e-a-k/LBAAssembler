@@ -1994,6 +1994,24 @@ void comportement_1()
         }}
     }}");
             text = Loose(text, "if (1 == var_game(121))\n{\nadd_choice(354);\n}", "add_choice(354);");
+            // (the town circuit is won in this very scene -- its start line is the yard's -- so the gate above, read once as the scene
+            // starts, stayed shut till Twinsen left and came back: right after the race the Dino-Fly still said he was saving his wings for
+            // the Desert race (the user, 2026-11-26, "Immediately after the Citadel 2 race, Dinofly still tells Twinsen he's saving himself
+            // for the desert race, he should offer Twinsen a lift at this point as Twinsen can also take the ferry"). Read every frame in
+            // his waiting comportement too: the moment the race is won he gets up -- the game's own getting up once cured, his track's
+            // label 28 (anim 338, facing Twinsen, then standing, 334) -- and his next talk is the flights)
+            text = Loose(text, "void comportement_1()\n{", $@"void comportement_1()
+{{
+    if (0 == var_game({DinoFlies}) && 2 <= chapter() && 0 < var_game({RaceTrackStory.WonVar}) && 0 == var_game({DemoVar}))
+    {{
+        set_var_game({DinoFlies}, 1);
+        if (0 == var_game(94))
+        {{
+            set_var_game(94, 1);
+        }}
+        no_choc(0);
+        set_track(label_28);
+    }}");
             // (lying sick, not yet flying, he talks where he lies: no lifting his head first, his track's label 0 (anim 337), nor during his
             // line -- the lying body with that anim showed two heads, the user, 2026-11-24: "Dinofly lifting his head to talk to us leaves
             // his static model still so he has two heads". Standing, his own talking anim, 334, as before)
