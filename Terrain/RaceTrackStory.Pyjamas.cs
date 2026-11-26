@@ -149,5 +149,86 @@ void comportement_2()
 }}
 ");
         });
+
+        // the night's house (chapter 1's evening, home from the lighthouse): the same chair, the same change -- his pyjamas on it while he is
+        // dressed, Action by it and he is in them with his clothes there instead; his clothes while he is in them, and Action dresses him
+        // again. Sent to wash by Zoe (the Tralu bar's egg) he comes out of the bathroom in them as before, and the chair follows it (the user,
+        // 2026-11-26: "When Twinsen comes home after the lighthouse scene there's no pyjamas on the chair for him to change into ... he should
+        // be able to change into them if this easter egg hasn't been triggered"). No front door rule at night: Zoe's own word keeps it.
+        if (!p.Store.SceneExists(NightHouse)) return;
+        p.Edit(NightHouse, "the night's house: his pyjamas on the chair by the bed to change into, his clothes there while he is in them", model =>
+        {
+            var dress = new SceneZoneModel { Type = 2, Num = DressZone, X0 = ChairSeatX - 550, X1 = 7 * 512 + 254, Y0 = 2048 - 100, Y1 = 2048 + 1500, Z0 = 1720, Z1 = ChairSeatZ + 900, Info = new int[8] };
+            var under = model.Zones.FirstOrDefault(z => z.Type == 2 && z.X0 <= dress.X1 && dress.X0 <= z.X1 && z.Z0 <= dress.Z1 && dress.Z0 <= z.Z1 && z.Y0 <= dress.Y1 && dress.Y0 <= z.Y1);
+            if (under is not null) throw new NotTheGames($"the night chair's zone {dress.Num} would lie over the night house's zone {under.Num}");
+            if (model.Zones.Any(z => z.Type == 2 && z.Num == DressZone)) throw new NotTheGames($"the night house has a zone {DressZone} already");
+            model.Zones.Add(dress);
+            var clothes = Citadel.CitadelProps.Actor(Citadel.CitadelProps.FoldedPyjamas, ChairSeatX + Citadel.CitadelProps.FoldedShiftX, ChairSeatY, ChairSeatZ + Citadel.CitadelProps.FoldedShiftZ, 0);
+            clothes.Armor = WalkOverArmour;
+            var hisClothes = $@"if (1 >= chapter())
+        {{
+            body({Citadel.CitadelProps.FoldedCasual});
+        }}
+        else
+        {{
+            body({Citadel.CitadelProps.FoldedSuit});
+        }}";
+            return p.Add(model, clothes, $@"void comportement_0()
+{{
+    if ({PyjamasOn} == var_game({PyjamaVar}))
+    {{
+        {hisClothes}
+        set_comportement(comportement_2);
+    }}
+    else
+    {{
+        set_comportement(comportement_1);
+    }}
+}}
+
+// (his pyjamas on the chair: Action there and he is in them, his clothes there instead -- or in them by Zoe's washing, the chair after it)
+void comportement_1()
+{{
+    if (0 == action())
+    {{
+        set_var_cube({ChairHeld}, 0);
+    }}
+    if ({PyjamasOn} == var_game({PyjamaVar}))
+    {{
+        {hisClothes}
+        set_comportement(comportement_2);
+    }}
+    swif (1 == action())
+    {{
+        if ({DressZone} == zone_obj(0) && {Driving} != comportement_hero() && 0 == var_cube({ChairHeld}) && {PyjamasWash} != var_game({PyjamaVar}))
+        {{
+            set_var_game({PyjamaVar}, {PyjamasOn});
+            {hisClothes}
+            set_var_cube({ChairHeld}, 1);
+            set_comportement(comportement_2);
+        }}
+    }}
+}}
+
+// (his clothes on the chair, he in his pyjamas: Action there and he is dressed again, his pyjamas on the chair)
+void comportement_2()
+{{
+    if (0 == action())
+    {{
+        set_var_cube({ChairHeld}, 0);
+    }}
+    swif (1 == action())
+    {{
+        if ({DressZone} == zone_obj(0) && {Driving} != comportement_hero() && 0 == var_cube({ChairHeld}))
+        {{
+            set_var_game({PyjamaVar}, {PyjamasOff});
+            body({Citadel.CitadelProps.FoldedPyjamas});
+            set_var_cube({ChairHeld}, 1);
+            set_comportement(comportement_1);
+        }}
+    }}
+}}
+");
+        });
     }
 }
