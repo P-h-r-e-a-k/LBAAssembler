@@ -21984,11 +21984,18 @@ static void BowlLanesFrame(S32 now) {
 // The Dome of the Slate's velodrome's riders (VELOMAP.TXT, written with the room by LBA Assembler's DomeVelodrome): each rider an actor
 // of its own, carried round its lane's points at its speed -- turned along the lane, leaned into the banking as the points say, its
 // bodies shown in turn as it goes (the cranks a part further round in each: pedalling). A rider closes on the one ahead in its lane no
-// nearer than a wheel or two, and stops short of Twinsen standing in its way.
+// nearer than a wheel or two, and rides round Twinsen in its way -- over across the boards to the side of him with the room, back to its
+// lane once past -- or, with no room either side or no time to get over, stops short of him (the user, 2026-11-26: riding the other way
+// round, each rider stopped nose to nose with him, "make the riders swerve around him").
 #define VELO_LANES 4
 #define VELO_POINTS 400
 #define VELO_RIDERS 8
 #define VELO_BRAKE 12500.0f
+#define VELO_LOOK 20             // points of 250 looked ahead for Twinsen: 5,000 -- he on the bike the other way closes at 8,000 a second
+#define VELO_CLEAR 1000.0f       // how far across from him it passes, middle to middle: the boxes are square to the grid and the straights run
+                                 // along its diagonal -- at 650 across, 460 each way, the rider shoved him a cell aside as it went by
+#define VELO_SWERVE 1800.0f      // how fast it moves across the boards, a second
+#define VELO_HOLD_MS 1200        // and stays over for this long after he is no longer ahead
 typedef struct {
     int N;
     float X[VELO_POINTS], Y[VELO_POINTS], Z[VELO_POINTS], Lean[VELO_POINTS], S[VELO_POINTS + 1];
@@ -21996,6 +22003,8 @@ typedef struct {
 typedef struct {
     int Actor, Lane, Body0, Phases, Shown;
     float Speed, V, S, Cadence, Dist;
+    float Off, OffWant;          // across the boards from its lane, out positive: where it rides, where it is going
+    S32 Hold;                    // over until then
 } T_VELO_RIDER;
 static T_VELO_LANE s_vl[VELO_LANES];
 static T_VELO_RIDER s_vr[VELO_RIDERS];
@@ -22028,7 +22037,7 @@ static void VeloLoad(void) {
             l->X[l->N] = x; l->Y[l->N] = y; l->Z[l->N] = z; l->Lean[l->N] = w; l->N++;
         } else if (sscanf(line, "rider %d %d %f %f %d %d %f", &a, &b, &sp, &st, &c, &d, &cad) == 7 && s_vrN < VELO_RIDERS && b >= 0 && b < VELO_LANES) {
             T_VELO_RIDER *r = &s_vr[s_vrN++];
-            r->Actor = a; r->Lane = b; r->Speed = sp; r->V = sp; r->S = st; r->Body0 = c; r->Phases = d > 0 ? d : 1; r->Cadence = cad > 1 ? cad : 1000; r->Dist = 0; r->Shown = -1;
+            r->Actor = a; r->Lane = b; r->Speed = sp; r->V = sp; r->S = st; r->Body0 = c; r->Phases = d > 0 ? d : 1; r->Cadence = cad > 1 ? cad : 1000; r->Dist = 0; r->Shown = -1; r->Off = 0; r->OffWant = 0; r->Hold = 0;
         }
     }
     fclose(f);
@@ -22109,6 +22118,20 @@ static void VeloAt(const T_VELO_LANE *l, float s, float *x, float *y, float *z, 
     *x = l->X[lo] + (l->X[j] - l->X[lo]) * t; *y = l->Y[lo] + (l->Y[j] - l->Y[lo]) * t; *z = l->Z[lo] + (l->Z[j] - l->Z[lo]) * t;
     *lean = l->Lean[lo] + (l->Lean[j] - l->Lean[lo]) * t;
 }
+// the way out across the boards at (x, z) -- from the oval's spine, island units -- and the distance from the spine
+static void VeloOut(float x, float z, float *ox, float *oz, float *d) {
+    const T_VELO_BOWL *o = &s_bowl;
+    const double r2 = 0.70710678118654752, ax = x - o->Xc, az = z - o->Zc;
+    const double a = (ax - az) * r2, b = (ax + az) * r2, ea = fabs(a) - o->Lu;
+    double na = 0, nb = b >= 0 ? 1 : -1;
+    *d = (float)fabs(b);
+    if (ea > 0) {
+        const double dd = sqrt(ea * ea + b * b);
+        *d = (float)dd;
+        if (dd > 0) { na = (a >= 0 ? ea : -ea) / dd; nb = b / dd; }
+    }
+    *ox = (float)((na + nb) * r2); *oz = (float)((nb - na) * r2);
+}
 static void VeloFrame(S32 now) {
     static S32 last = 0;
     if (CubeMode != CUBE_INTERIEUR || NewCube != -1) { last = now; if (s_bowlRide) { ListObjet[NUM_PERSO].Flags |= CHECK_BRICK_COL | OBJ_FALLABLE; s_bowlRide = 0; } return; }
@@ -22131,12 +22154,54 @@ static void VeloFrame(S32 now) {
             float ahead = fmodf(s_vr[o].S - r->S + len, len);
             if (ahead > 0 && ahead < 1400) target = fminf(target, ahead < 900 ? s_vr[o].V * 0.85f : s_vr[o].V);
         }
-        // (looked for as far ahead as the rider needs to stop: from its pace at VELO_BRAKE, about 1,300 from 5,600)
-        for (int p = 1; p <= 8; p++) {
-            float px, py, pz, pl;
-            VeloAt(l, r->S + 250.0f * p, &px, &py, &pz, &pl);
-            const float hx = hero->Obj.X - px, hz = hero->Obj.Z - pz;
-            if (hx * hx + hz * hz < 520.0f * 520.0f && fabsf(hero->Obj.Y - py) < 1000) target = 0;
+        if (!s_bowl.On) {
+            // (no bowl to ride round him on: looked for as far ahead as the rider needs to stop -- from its pace at VELO_BRAKE, about 1,300
+            // from 5,600 -- and stopped short)
+            for (int p = 1; p <= 8; p++) {
+                float px, py, pz, pl;
+                VeloAt(l, r->S + 250.0f * p, &px, &py, &pz, &pl);
+                const float hx = hero->Obj.X - px, hz = hero->Obj.Z - pz;
+                if (hx * hx + hz * hz < 520.0f * 520.0f && fabsf(hero->Obj.Y - py) < 1000) target = 0;
+            }
+        } else {
+            // (Twinsen in its way: the nearest point ahead he is level with, along the lane, and within VELO_CLEAR of where it rides
+            // across it -- his place across the boards from the lane there)
+            int wayP = 0;
+            float wayLat = 0, wayD = 0;
+            for (int p = 1; p <= VELO_LOOK && !wayP; p++) {
+                float px, py, pz, pl, ox, oz, dl;
+                VeloAt(l, r->S + 250.0f * p, &px, &py, &pz, &pl);
+                VeloOut(px, pz, &ox, &oz, &dl);
+                const float hx = hero->Obj.X - px, hz = hero->Obj.Z - pz;
+                const float along = hx * oz - hz * ox, lat = hx * ox + hz * oz;
+                if (fabsf(along) <= 150.0f && fabsf(lat - r->Off) < VELO_CLEAR && fabsf(hero->Obj.Y - py) < 1200) { wayP = p; wayLat = lat; wayD = dl; }
+            }
+            if (wayP) {
+                // (over to one side of him, on the boards: between the infield's edge and the fence, a little in from each)
+                const float lo = (float)(s_bowl.R2 + 200) - wayD, hi = (float)(s_bowl.R3 - 300) - wayD;
+                const float in = fmaxf(lo, fminf(hi, wayLat - VELO_CLEAR)), out = fmaxf(lo, fminf(hi, wayLat + VELO_CLEAR));
+                const int inOk = wayLat - in >= VELO_CLEAR - 50, outOk = out - wayLat >= VELO_CLEAR - 50;
+                int ok = 1;
+                // (the side nearer where it rides now -- the shorter way over -- when both have the room)
+                if (inOk && outOk) r->OffWant = fabsf(in - r->Off) <= fabsf(out - r->Off) ? in : out;
+                else if (inOk) r->OffWant = in;
+                else if (outOk) r->OffWant = out;
+                else ok = 0;
+                r->Hold = now + VELO_HOLD_MS;
+                // (no room, or not over yet as it comes within its braking distance of him -- about 1,300 from 5,600: stops short)
+                if (!ok || (fabsf(r->Off - r->OffWant) > 150.0f && wayP <= 7)) target = 0;
+                else target = fminf(target, r->Speed * 0.8f);
+            } else if (now >= r->Hold) r->OffWant = 0;
+            // (across at VELO_SWERVE a second -- back towards its lane only where that doesn't take it into him beside it)
+            float next = r->Off + fmaxf(-VELO_SWERVE * dt, fminf(VELO_SWERVE * dt, r->OffWant - r->Off));
+            if (!wayP && next != r->Off) {
+                float px, py, pz, pl, ox, oz, dl;
+                VeloAt(l, r->S, &px, &py, &pz, &pl);
+                VeloOut(px, pz, &ox, &oz, &dl);
+                const float hx = hero->Obj.X - (px + ox * next), hz = hero->Obj.Z - (pz + oz * next);
+                if (hx * hx + hz * hz < VELO_CLEAR * VELO_CLEAR && fabsf(hero->Obj.Y - py) < 1200) next = r->Off;
+            }
+            r->Off = next;
         }
         const float dv = target - r->V;
         r->V += dv < 0 ? fmaxf(dv, -VELO_BRAKE * dt) : fminf(dv, 2200.0f * dt);
@@ -22144,6 +22209,16 @@ static void VeloFrame(S32 now) {
         float x, y, z, lean, nx, ny, nz, nl;
         VeloAt(l, r->S, &x, &y, &z, &lean);
         VeloAt(l, r->S + 250, &nx, &ny, &nz, &nl);
+        if (r->Off != 0 || r->OffWant != 0) {
+            // (over from its lane: on the boards' own height there, headed for where it will be across a wheel's length on)
+            float ox, oz, dl, nOff = r->Off + fmaxf(-125.0f, fminf(125.0f, r->OffWant - r->Off));
+            double dd, aa;
+            int st;
+            VeloOut(x, z, &ox, &oz, &dl);
+            x += ox * r->Off; z += oz * r->Off; y = (float)VeloDeck(x, z, &dd, &st, &aa);
+            VeloOut(nx, nz, &ox, &oz, &dl);
+            nx += ox * nOff; nz += oz * nOff; ny = (float)VeloDeck(nx, nz, &dd, &st, &aa);
+        }
         T_OBJET *a = &ListObjet[r->Actor];
         a->Obj.X = (S32)x; a->Obj.Y = (S32)y; a->Obj.Z = (S32)z;
         a->Obj.Beta = GetAngle2D(a->Obj.X, a->Obj.Z, (S32)nx, (S32)nz);
