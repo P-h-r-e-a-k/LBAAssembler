@@ -1097,6 +1097,9 @@ internal static class DomeVelodrome
     {
         Talkers.Clear();
         var map = new List<string> { $"scene {Scene}" };
+        // (the bowl's shape, for Twinsen on the bike: the engine carries him on the boards' own height -- the cells' collision, steps of whole
+        // layers on the turns, bounced him up and down and stopped him at the bends, the user, 2026-11-25; RACEMOD.CPP VeloBike, Deck here)
+        map.Add(FormattableString.Invariant($"bowl {Xc} {Zc} {Lu} {R0} {R2} {Wd} {R3} {Ft} {Fillet} {TanS} {TanT} {Kc} {FIn} {FOut} {GateHalf}"));
         var lanes = Lanes.Select(LanePoints).ToList();
         for (var k = 0; k < lanes.Count; k++)
         {

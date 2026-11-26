@@ -21997,6 +21997,11 @@ typedef struct {
 static T_VELO_LANE s_vl[VELO_LANES];
 static T_VELO_RIDER s_vr[VELO_RIDERS];
 static int s_vlN = 0, s_vrN = 0, s_veloScene = -1, s_veloLoaded = 0;
+// (the bowl's shape -- VELOMAP.TXT's bowl line, LBA Assembler's DomeVelodrome: the oval round its spine, the boards' banking -- for Twinsen on
+// the bike: VeloBike)
+typedef struct { int On; double Xc, Zc, Lu, R0, R2, Wd, R3, Ft, Fillet, TanS, TanT, Kc, FIn, FOut, GateHalf; } T_VELO_BOWL;
+static T_VELO_BOWL s_bowl;
+static int s_bowlRide = 0;
 static void VeloLoad(void) {
     if (s_veloLoaded) return;
     s_veloLoaded = 1;
@@ -22009,6 +22014,11 @@ static void VeloLoad(void) {
         int a, b, c, d;
         float x, y, z, w, sp, st, cad;
         if (sscanf(line, "scene %d", &a) == 1) s_veloScene = a;
+        else if (!strncmp(line, "bowl ", 5)) {
+            T_VELO_BOWL *o = &s_bowl;
+            o->On = sscanf(line + 5, "%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &o->Xc, &o->Zc, &o->Lu, &o->R0, &o->R2, &o->Wd, &o->R3,
+                           &o->Ft, &o->Fillet, &o->TanS, &o->TanT, &o->Kc, &o->FIn, &o->FOut, &o->GateHalf) == 15;
+        }
         else if (sscanf(line, "lane %d", &a) == 1 && a >= 0 && a < VELO_LANES) { lane = a; s_vl[a].N = 0; if (a >= s_vlN) s_vlN = a + 1; }
         else if (sscanf(line, "p %f %f %f %f", &x, &y, &z, &w) == 4 && lane >= 0 && s_vl[lane].N < VELO_POINTS) {
             T_VELO_LANE *l = &s_vl[lane];
@@ -22031,6 +22041,59 @@ static void VeloLoad(void) {
     }
     Log_Info("[racemod] velodrome: scene %d, %d lanes, %d riders", s_veloScene, s_vlN, s_vrN);
 }
+// The boards' height at (x, z), as LBA Assembler's DomeVelodrome models them (Oval, Bank, Deck): `d` the distance from the oval's spine,
+// `onStraight` whether he is beside a straight (not round a turn), `a` how far along the oval
+static double VeloDeck(double x, double z, double *d, int *onStraight, double *a) {
+    const T_VELO_BOWL *o = &s_bowl;
+    const double r2 = 0.70710678118654752, ax = x - o->Xc, az = z - o->Zc;
+    *a = (ax - az) * r2;
+    const double b = (ax + az) * r2, ea = fabs(*a) - o->Lu;
+    double psi;
+    if (ea <= 0) { *d = fabs(b); psi = b >= 0 ? 1.5707963267948966 : -1.5707963267948966; *onStraight = 1; }
+    else { *d = sqrt(ea * ea + b * b); psi = atan2(b, ea); *onStraight = 0; }
+    const double c = cos(psi), w = c <= 0 ? 0 : c * sqrt(c);
+    const double tan = o->TanS + (o->TanT - o->TanS) * w, k = o->Kc * w;
+    const double s = fmin(*d - o->R2, o->Wd);
+    double f;
+    if (s <= -o->Fillet) f = 0;
+    else if (s < o->Fillet) f = (s + o->Fillet) * (s + o->Fillet) / (4 * o->Fillet);
+    else f = s;
+    return o->FIn + tan * (f + k * f * f / o->Wd);
+}
+// Twinsen on the bike (bike=) in the velodrome: on the banking -- from the infield's edge to the fence -- carried on the boards' own height,
+// the cells' collision and his falling left off: the cells are steps of whole layers on the turns (banked to 42 degrees, more than the game's
+// slopes), and on them he bounced up and down and stood stopped at a step at the bends (the user, 2026-11-25: "he's unable to drive the
+// corner", "the bike seems to bounce up and down"). Kept inside the fence -- out only through a straight's gate, at its top edge, onto the
+// floor round the bowl; the infield and the floor round it the cells' own as before.
+static void VeloBike(void) {
+    T_OBJET *h = &ListObjet[NUM_PERSO];
+    const int ride = s_bowl.On && Comportement == C_VELO && (S32)NumCube == s_veloScene;
+    double d = 0, a = 0;
+    int straight = 0;
+    const double y = ride ? VeloDeck(h->Obj.X, h->Obj.Z, &d, &straight, &a) : 0;
+    const int gate = straight && fabs(a) <= s_bowl.GateHalf;
+    const int onBoards = ride && d >= s_bowl.R0 && (d <= s_bowl.R3 || (!gate && d <= s_bowl.R3 + s_bowl.Ft + 400));
+    if (!onBoards) {
+        if (s_bowlRide) { h->Flags |= CHECK_BRICK_COL | OBJ_FALLABLE; s_bowlRide = 0; Log_Info("[racemod] velodrome: the bike off the boards, on the cells again"); }
+        return;
+    }
+    if (!s_bowlRide) { s_bowlRide = 1; Log_Info("[racemod] velodrome: the bike on the boards -- carried on the banking"); }
+    h->Flags &= ~(CHECK_BRICK_COL | OBJ_FALLABLE);
+    // (the fence: back inside it, along the way out from the spine)
+    const double inner = s_bowl.R3 - 160;
+    if (d > inner && !gate) {
+        const double r2 = 0.70710678118654752, ax = h->Obj.X - s_bowl.Xc, az = h->Obj.Z - s_bowl.Zc;
+        double ea = fabs(a) - s_bowl.Lu, b = (ax + az) * r2, aa = a;
+        if (ea <= 0) b = b >= 0 ? inner : -inner;
+        else { const double k = inner / d; ea *= k; b *= k; aa = (a >= 0 ? 1 : -1) * (s_bowl.Lu + ea); }
+        h->Obj.X = (S32)(s_bowl.Xc + (aa + b) * r2);
+        h->Obj.Z = (S32)(s_bowl.Zc + (b - aa) * r2);
+        double dd; int st; double a2;
+        h->Obj.Y = (S32)VeloDeck(h->Obj.X, h->Obj.Z, &dd, &st, &a2);
+        return;
+    }
+    h->Obj.Y = (S32)(gate && d > s_bowl.R3 ? s_bowl.FOut : y);
+}
 // a lane's place `s` along it (any distance, round and round): where, and how far over
 static void VeloAt(const T_VELO_LANE *l, float s, float *x, float *y, float *z, float *lean) {
     const float len = l->S[l->N];
@@ -22045,8 +22108,9 @@ static void VeloAt(const T_VELO_LANE *l, float s, float *x, float *y, float *z, 
 }
 static void VeloFrame(S32 now) {
     static S32 last = 0;
-    if (CubeMode != CUBE_INTERIEUR || NewCube != -1) { last = now; return; }
+    if (CubeMode != CUBE_INTERIEUR || NewCube != -1) { last = now; if (s_bowlRide) { ListObjet[NUM_PERSO].Flags |= CHECK_BRICK_COL | OBJ_FALLABLE; s_bowlRide = 0; } return; }
     VeloLoad();
+    VeloBike();
     if ((S32)NumCube != s_veloScene || s_vrN < 1) { last = now; return; }
     const float dt = (float)fmin(0.1, fmax(0.0, (now - last) / 1000.0));
     last = now;
