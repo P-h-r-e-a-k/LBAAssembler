@@ -410,12 +410,24 @@ void MyGetInput() {
 void WaitNoInput(void) {
     MyGetInput();
 
+    // (a second at most: a pad's stick resting off centre, or a trigger, held the page here for ever with nothing drawn -- the menu audit,
+    // 2026-11-26. What is still held then is masked till let go, so it falls through to nothing)
+    ManageTime();
+    const U32 until = TimerSystemHR + 1000;
     while (MyKey OR Input OR MenuInput_Held()
 #ifdef LBA_EDITOR
                OR MyClick
 #endif
-    )
+    ) {
+        ManageTime();
+        if ((S32)(TimerSystemHR - until) >= 0) {
+            InitWaitNoInput(Input);
+            InitWaitNoKey();
+            MenuInput_Suppress(MENU_INPUT_ALL);
+            break;
+        }
         MyGetInput();
+    }
 }
 
 void WaitNoMenuInput(void) {

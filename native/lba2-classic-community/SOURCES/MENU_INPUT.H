@@ -18,5 +18,12 @@ extern void MenuInput_Suppress(U32 directions);
 extern U32 MenuInput_Suppressed(void);
 extern void MenuInput_Reset(U32 suppressed);
 extern S32 MenuInput_NavigationKey(void);
+/* A step this poll -- the poll a direction is pressed, then held after 350 ms every 90 ms (Fast: every 20 ms, for a slider) -- taken:
+   a second read the same poll has none. The menus' one way of stepping (the menu audit, 2026-11-26). */
+extern S32 MenuInput_TakeStep(U32 direction);
+extern S32 MenuInput_TakeStepFast(U32 direction);
+/* Directions held for the next poll that no key of this game's carries: the second player's arrows at a shared keyboard
+   (RACEGAME.CPP RaceGame_SharedKeys) */
+extern void MenuInput_Inject(U32 directions);
 
 #endif

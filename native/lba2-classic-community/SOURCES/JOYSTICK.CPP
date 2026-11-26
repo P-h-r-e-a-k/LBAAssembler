@@ -218,6 +218,10 @@ static void ApplyStickDirection(S16 x, S16 y, U32 keyLeft, U32 keyRight,
     float fy = (float)y;
     float mag2 = fx * fx + fy * fy;
     float dz = (float)JoystickDeadzone;
+    // (a direction once pushed lets go at four fifths of the deadzone: a stick resting at its edge flickered on and off, a step each time
+    // in a menu -- the menu audit, 2026-11-26)
+    if (*prevState != DIR_NEUTRAL)
+        dz *= 0.8f;
     if (mag2 < dz * dz) {
         *prevState = DIR_NEUTRAL;
         return;

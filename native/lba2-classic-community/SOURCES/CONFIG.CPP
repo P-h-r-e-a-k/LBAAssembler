@@ -656,8 +656,9 @@ S32 CheckKeyConfig(S32 key) {
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-#define REPEATDELAY 400
-#define REPEATRATE 40
+// (as every menu's: MENU_INPUT.CPP -- 400 then 40 here, the menu audit, 2026-11-26)
+#define REPEATDELAY 350
+#define REPEATRATE 90
 
 /* Harness capture state — see Config_RequestCapture() in CONFIG.H. When the
    path is non-empty, MenuConfig's modal loop counts down per iteration; on

@@ -1889,11 +1889,9 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
             timerdraw = 0;
         }
 
-        if (FlagMenuMouse && MenuMouse_GetRefCount() > 0) {
-            MyGetInput();
-        } else if (TimerRefHR > timeranotherkey) {
-            MyGetInput();
-        }
+        // (read every pass: the steps' own repeat paces a held key -- MENU_INPUT.CPP; it read every 150 ms without the menus' mouse)
+        (void)timeranotherkey;
+        MyGetInput();
 
         /* This loop compares MyKey against the navigation cluster directly, so
            the keypad legend has to be resolved before any of those tests. Page
@@ -1902,7 +1900,7 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
            without a dedicated navigation block. */
         MyKey = MenuKey_NumpadToNav(MyKey);
 
-        U32 navigation = TimerRefHR > timeranotherkey ? MenuInput_Get() : 0;
+        U32 navigation = (MenuInput_TakeStep(MENU_INPUT_DOWN) ? MENU_INPUT_DOWN : 0) | (MenuInput_TakeStep(MENU_INPUT_UP) ? MENU_INPUT_UP : 0);
 
         if (FlagMenuMouse && MenuMouse_GetRefCount() > 0) {
             S32 hitSel = -1;
@@ -2003,6 +2001,23 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
         DrawOneString(UI_CENTER_X, ys, ptrlist[select], draw);
         BoxUpdate();
 
+        // (round from the last to the first and back, as every other list: it stopped at the ends)
+        if ((navigation & MENU_INPUT_DOWN) AND select == nb - 1 AND nb > 1) {
+            select = 0;
+            start = 0;
+            flag = 1;
+            timerzoom = (flagnew AND select == nb - 1) ? TimerRefHR : 0;
+            timerdraw = TimerRefHR + TEMPO_SCREEN_SAVE;
+            navigation &= ~MENU_INPUT_DOWN;
+        }
+        if ((navigation & MENU_INPUT_UP) AND select == 0 AND nb > 1) {
+            select = nb - 1;
+            start = nb - NB_GAME_CHOICE > 0 ? nb - NB_GAME_CHOICE : 0;
+            flag = 1;
+            timerzoom = (flagnew AND select == nb - 1) ? TimerRefHR : 0;
+            timerdraw = TimerRefHR + TEMPO_SCREEN_SAVE;
+            navigation &= ~MENU_INPUT_UP;
+        }
         if (navigation & MENU_INPUT_DOWN) {
             if (select < (nb - 1)) {
                 select++;
@@ -2135,6 +2150,10 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
             }
         }
 
+        // (Page Up/Down, Home, End once a press: held, they went on every pass)
+        if (MyKey == K_GRAY_PAGE_UP OR MyKey == K_GRAY_PAGE_DOWN OR MyKey == K_GRAY_HOME OR MyKey == K_GRAY_END)
+            InitWaitNoKey();
+
         // Effacement d'une sauvegarde
         if (MyKey == K_D OR MyKey == K_BACKSPACE OR MyKey == K_GRAY_SUPPR) {
             CopyScreen(Screen, Log);
@@ -2180,7 +2199,7 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
             MyKey = K_ESC;
             Key = K_ESC;
         }
-        if (((MenuPad_Input() & I_FIRE) AND !MenuPad_Back()) OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER OR mouse_fire OR MenuPad_Accept()) {
+        if (((MenuPad_Input() & (I_RETURN | I_ACTION_M | I_ACTION_ALWAYS)) AND !MenuPad_Back()) OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER OR mouse_fire OR MenuPad_Accept()) {
             if (mouse_fire)
                 mouse_fire = 0;
             if (timerdraw) {
@@ -2688,14 +2707,13 @@ static void GameMenuApplyMouseWheelDoGameMenu(U16 *ptrmenu, S16 selected, S32 wy
 
     t = ptrmenu[4 + 0 + selected * 2];
     dir = (wy > 0) ? 1 : -1;
-    n = (wy > 0) ? wy : -wy;
-    if (n > 16)
-        n = 16;
+    // (every notch, four steps of the 127 each: one step a frame was taken and the other notches thrown away -- the menu audit, 2026-11-26)
+    n = ((wy > 0) ? wy : -wy) * 4;
+    if (n > 64)
+        n = 64;
+    (void)timerkey;
 
     for (i = 0; i < n; i++) {
-        if (TimerRefHR <= *timerkey)
-            break;
-        *timerkey = TimerRefHR + VOLUME_TIMER_KEY;
         applied = 0;
 
         switch (t) {
@@ -3026,7 +3044,9 @@ S32 DoGameMenu(U16 *ptrmenu) {
             }
         }
 
-        if (MenuInput_Get() & MENU_INPUT_DOWN) {
+        // (a step a press, and held, again after 350 ms every 90 ms: MENU_INPUT.CPP -- it stepped once a press and waited for every key
+        // to be let go, a press made meanwhile lost: the menu audit, 2026-11-26)
+        if (MenuInput_TakeStep(MENU_INPUT_DOWN)) {
 #ifdef DEMO
             if (ptrmenu == GameMainMenu) {
                 do {
@@ -3047,7 +3067,7 @@ S32 DoGameMenu(U16 *ptrmenu) {
             flag = 1;
         }
 
-        if (MenuInput_Get() & MENU_INPUT_UP) {
+        if (MenuInput_TakeStep(MENU_INPUT_UP)) {
 #ifdef DEMO
             if (ptrmenu == GameMainMenu) {
                 do {
@@ -3066,6 +3086,23 @@ S32 DoGameMenu(U16 *ptrmenu) {
             flag = 1;
         }
 
+        // (Page Up and Down a page of the rows, Home and End the first and the last: the long lists -- Resolution, the race game's Options)
+        if (MyKey == K_GRAY_PAGE_UP OR MyKey == K_GRAY_PAGE_DOWN OR MyKey == K_GRAY_HOME OR MyKey == K_GRAY_END) {
+            S32 yt, first, vis;
+            GameMenuLayout(ptrmenu, &yt, &first, &vis);
+            S32 to = MyKey == K_GRAY_HOME ? 0 : MyKey == K_GRAY_END ? nb - 1 : MyKey == K_GRAY_PAGE_UP ? selected - vis : selected + vis;
+            const S32 way = (MyKey == K_GRAY_HOME OR MyKey == K_GRAY_PAGE_DOWN) ? 1 : -1;
+            if (to < 0) to = 0;
+            if (to > nb - 1) to = nb - 1;
+            for (S32 guard = 0; guard < nb AND RaceGame_RowDisabled(ptrmenu[4 + 1 + to * 2]); guard++)
+                to = (to + way + nb) % nb;
+            if (to != selected) {
+                selected = (S16)to;
+                flag = 1;
+            }
+            InitWaitNoKey();
+        }
+
         switch (ptrmenu[4 + 0 + selected * 2]) // type
         {
         case 0: // text normal
@@ -3073,13 +3110,11 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         case 2: // volume sample
 
-            if ((MenuInput_Get() & MENU_INPUT_LEFT)
-                    AND TimerRefHR > timerkey AND SampleVolume > 0) {
+            if (SampleVolume > 0 AND MenuInput_TakeStepFast(MENU_INPUT_LEFT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 SampleVolume -= 1;
             }
-            if ((MenuInput_Get() & MENU_INPUT_RIGHT)
-                    AND TimerRefHR > timerkey AND SampleVolume < 127) {
+            if (SampleVolume < 127 AND MenuInput_TakeStepFast(MENU_INPUT_RIGHT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 SampleVolume += 1;
             }
@@ -3087,13 +3122,11 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         case 3: // volume voix (jouer 1 voix ?)
 
-            if ((MenuInput_Get() & MENU_INPUT_LEFT)
-                    AND TimerRefHR > timerkey AND VoiceVolume > 0) {
+            if (VoiceVolume > 0 AND MenuInput_TakeStepFast(MENU_INPUT_LEFT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 VoiceVolume -= 1;
             }
-            if ((MenuInput_Get() & MENU_INPUT_RIGHT)
-                    AND TimerRefHR > timerkey AND VoiceVolume < 127) {
+            if (VoiceVolume < 127 AND MenuInput_TakeStepFast(MENU_INPUT_RIGHT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 VoiceVolume += 1;
             }
@@ -3101,14 +3134,12 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         case 4: // volume musiques
 
-            if ((MenuInput_Get() & MENU_INPUT_LEFT)
-                    AND TimerRefHR > timerkey AND JingleVolume > 0) {
+            if (JingleVolume > 0 AND MenuInput_TakeStepFast(MENU_INPUT_LEFT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 JingleVolume -= 1;
                 SetVolumeJingle(JingleVolume);
             }
-            if ((MenuInput_Get() & MENU_INPUT_RIGHT)
-                    AND TimerRefHR > timerkey AND JingleVolume < 127) {
+            if (JingleVolume < 127 AND MenuInput_TakeStepFast(MENU_INPUT_RIGHT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 JingleVolume += 1;
                 SetVolumeJingle(JingleVolume);
@@ -3117,15 +3148,13 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         case 5: // volume cd
 #ifdef CDROM
-            if ((MenuInput_Get() & MENU_INPUT_LEFT)
-                    AND TimerRefHR > timerkey AND CDVolume > 0) {
+            if (CDVolume > 0 AND MenuInput_TakeStepFast(MENU_INPUT_LEFT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 CDVolume -= 1;
                 SetVolumeCD(CDVolume);
                 SetVolumeJingle(CDVolume);
             }
-            if ((MenuInput_Get() & MENU_INPUT_RIGHT)
-                    AND TimerRefHR > timerkey AND CDVolume < 127) {
+            if (CDVolume < 127 AND MenuInput_TakeStepFast(MENU_INPUT_RIGHT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 CDVolume += 1;
                 SetVolumeCD(CDVolume);
@@ -3136,8 +3165,7 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         case 6: // volume master
 
-            if ((MenuInput_Get() & MENU_INPUT_LEFT)
-                    AND TimerRefHR > timerkey AND MasterVolume > 0) {
+            if (MasterVolume > 0 AND MenuInput_TakeStepFast(MENU_INPUT_LEFT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 MasterVolume -= 1;
                 SetMasterVolumeSample(MasterVolume);
@@ -3146,8 +3174,7 @@ S32 DoGameMenu(U16 *ptrmenu) {
                 SetVolumeCD(CDVolume);
 #endif
             }
-            if ((MenuInput_Get() & MENU_INPUT_RIGHT)
-                    AND TimerRefHR > timerkey AND MasterVolume < 127) {
+            if (MasterVolume < 127 AND MenuInput_TakeStepFast(MENU_INPUT_RIGHT)) {
                 timerkey = TimerRefHR + VOLUME_TIMER_KEY;
                 MasterVolume += 1;
                 SetMasterVolumeSample(MasterVolume);
@@ -3294,10 +3321,10 @@ S32 DoGameMenu(U16 *ptrmenu) {
                 FadeMenu = FALSE;
             }
 
-            do {
-                DrawGameMenu(ptrmenu, TRUE);
-                MyGetInput();
-            } while (MyKey OR Input OR MenuInput_Held());
+            // (drawn and on: it waited here for every key and button to be let go -- a press made meanwhile, Enter with Down still held,
+            // was lost, and a stick resting off centre held the page: the menu audit, 2026-11-26. The steps' own repeat, MENU_INPUT.CPP,
+            // keeps a held direction from racing down the rows)
+            DrawGameMenu(ptrmenu, TRUE);
 
             flag = 0;
         } else {

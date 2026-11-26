@@ -1570,16 +1570,13 @@ static void TextFitted(S32 x, S32 y, S32 width, const char *utf8, S32 colour) {
 // (the pad's way followed every pass: the pass it is pushed, MyKey holds the pad's own scancode, K_GAMEPAD_BASE up, for "press any
 // key" -- the way left unrecorded then, the next pass took it for a new push and stepped again: "it skips over 1 car in every
 // horizontal step", a player on a controller, 2026-10-26)
+// (the menus' one way of stepping since 2026-11-26 -- MENU_INPUT.CPP MenuInput_TakeStep: the arrows, the keypad, the stick and the d-pad,
+// a step a press and, held, again after 350 ms every 90 ms, as the game's own menus; the stick read with the game's own deadzone and
+// its snap to the four ways -- it was read here by another reader, square and without them, and an arrow held stepped once)
 static S32 Step(S32 *padDir) {
-    S32 key = MyKey >= K_GAMEPAD_BASE ? 0 : MyKey;
-    const S32 raw = JoystickMenuNavOnly();
-    if (raw != *padDir) {
-        *padDir = raw;
-        if (!key && raw == K_LEFT) key = K_GRAY_LEFT;
-        else if (!key && raw == K_RIGHT) key = K_GRAY_RIGHT;
-    }
-    if (Input & I_LEFT || key == K_GRAY_LEFT) { InitWaitNoInput(I_LEFT); InitWaitNoKey(); return -1; }
-    if (Input & I_RIGHT || key == K_GRAY_RIGHT) { InitWaitNoInput(I_RIGHT); InitWaitNoKey(); return 1; }
+    (void)padDir;
+    if (MenuInput_TakeStep(MENU_INPUT_LEFT)) { InitWaitNoKey(); return -1; }
+    if (MenuInput_TakeStep(MENU_INPUT_RIGHT)) { InitWaitNoKey(); return 1; }
     return 0;
 }
 
@@ -1596,6 +1593,20 @@ static int Clicked(S32 *x, S32 *y) {
 }
 
 // (a pad's A picks and its B goes back, as in the game's menus: INPUT.CPP MenuPad_*)
+// The mouse moved since the last pass (the menus' mouse on): its place in (*x, *y). A list's row under it is chosen as the game's own
+// menus do (hover), only as it moves -- a pointer left still never takes the choice back from the keys. s_hoverX primed as a page opens.
+static S32 s_hoverX = -1, s_hoverY = -1;
+static int Hovered(S32 *x, S32 *y) {
+    const S32 mx = (S32)MouseX, my = (S32)MouseY;
+    const int moved = mx != s_hoverX || my != s_hoverY;
+    s_hoverX = mx;
+    s_hoverY = my;
+    if (!moved || !FlagMenuMouse) return 0;
+    *x = mx;
+    *y = my;
+    return 1;
+}
+
 static int Confirmed(void) {
     return MenuPad_Input() & I_RETURN || Input & I_ACTION_M || MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER || MyKey == K_SPACE || MenuPad_Accept();
 }
@@ -1694,6 +1705,9 @@ static void StatsSized(S32 cx, S32 y, S32 step, const T_RG_CAR *c, S32 starR, S3
 static void Padlock(S32 cx, S32 cy);
 static void PageLoopStart(S32 *padDir);
 static int Nav(S32 *padDir, S32 *dx, S32 *dy);
+static int PageKeys(int at, int n, int rows);
+static void PageLeave(void);
+static int GridUpDown(int at, int dy, int n, int cols);
 static int CarPage(const char *what, int trial) {
     if (s_nbCars <= 0) return -1;
     if (s_car < 0 || s_car >= s_nbCars) s_car = 0;
@@ -2090,13 +2104,13 @@ static int TimesPage(void) {
         const int rowOpen[3] = {1, sp == all ? sumOfBest > 0 : ownLap > 0, sp == all ? sumOfBest > 0 : anyGhost};
         if (!rowOpen[row]) row = 0;
         S32 mx, my;
-        if (Clicked(&mx, &my)) done = 1;
+        // (the right button leaves, as on every page: any click left it)
+        if (Clicked(&mx, &my) == 2) done = 1;
         // up and down: the row
         S32 dir = 0;
         // (the stick and the d-pad too, through the menus' own reader -- only a pad's triggers moved it: the menu audit, 2026-11-26)
-        const U32 menuWay = MenuInput_Get();
-        if (Input & I_UP || MyKey == K_UP || (menuWay & MENU_INPUT_UP)) { InitWaitNoInput(I_UP); InitWaitNoKey(); MenuInput_Suppress(MENU_INPUT_UP | MENU_INPUT_DOWN); dir = -1; }
-        else if (Input & I_DOWN || MyKey == K_DOWN || (menuWay & MENU_INPUT_DOWN)) { InitWaitNoInput(I_DOWN); InitWaitNoKey(); MenuInput_Suppress(MENU_INPUT_UP | MENU_INPUT_DOWN); dir = 1; }
+        if (MenuInput_TakeStep(MENU_INPUT_UP)) { InitWaitNoKey(); dir = -1; }
+        else if (MenuInput_TakeStep(MENU_INPUT_DOWN)) { InitWaitNoKey(); dir = 1; }
         for (int k = 1; dir && k < 3; k++) {
             const int r = ((row + dir * k) % 3 + 3) % 3;
             if (rowOpen[r]) { row = r; flag = 1; break; }
@@ -3138,7 +3152,12 @@ static int PlayersPage(void) {
             if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
             S32 mx, my;
             const int click = Clicked(&mx, &my);
-            if (click == 1 && my >= top - 8) {
+            S32 hx, hy;
+            if (Hovered(&hx, &hy) && hy >= top - 8 && hx >= cx - RG_PAGE_HALF && hx <= cx + RG_PAGE_HALF) {
+                const int row = (int)((hy - (top - 8)) / RG_PL_LINE);
+                if (row < n) at = row;
+            }
+            if (click == 1 && my >= top - 8 && mx >= cx - RG_PAGE_HALF && mx <= cx + RG_PAGE_HALF) {
                 const int row = (int)((my - (top - 8)) / RG_PL_LINE);
                 if (row < n) { at = row; chosen = row; }
             } else if (click == 2) chosen = n - 1;
@@ -3411,9 +3430,10 @@ static S32 BowlingPage(const T_RG_REPLAY *r) {
 // scrolling past the rows that fit (up and down, the mouse wheel, a click or a drag on the scrollbar down its right edge), a line of what an
 // earned one can do, the keys. Enter, or a click, on an earned one with a replay: watched or explored again.
 #define RG_ACH_LINE 34
+static int s_achAt = 0, s_achFirst = 0;     // (where Achievements was left: it opens there again)
 static S32 AchievementsPage(void) {
     ReadAch();
-    int at = 0, first = 0;
+    int &at = s_achAt, &first = s_achFirst;
     for (;;) {
         S32 padDir;
         PageLoopStart(&padDir);
@@ -3428,7 +3448,9 @@ static S32 AchievementsPage(void) {
             int rows = (int)((hintY - 16 - top) / RG_ACH_LINE);
             if (rows < 1) rows = 1;
             S32 dx, dy;
+            if (at >= n) at = n - 1;
             if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
+            at = PageKeys(at, n, rows);
             if (at < first) first = at;
             if (at >= first + rows) first = at - rows + 1;
             const S32 lx0 = cx - RG_PAGE_HALF + 14, lx1 = cx + RG_PAGE_HALF - 14;
@@ -3447,7 +3469,11 @@ static S32 AchievementsPage(void) {
             S32 mx, my;
             const int click = Clicked(&mx, &my);
             if (click == 2) chosen = -1;
-            else if (click == 1 && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
+            else if (Hovered(&mx, &my) && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
+                const int row = (int)((my - (top - 4)) / RG_ACH_LINE);
+                if (row < rows && first + row < n) at = first + row;
+            }
+            if (click == 1 && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
                 const int row = (int)((my - (top - 4)) / RG_ACH_LINE);
                 if (row < rows && first + row < n) { at = first + row; if (!AchRowDisabled(at)) chosen = at; }
             }
@@ -3471,7 +3497,7 @@ static S32 AchievementsPage(void) {
             Present();
             if (chosen != -2) break;
             if (Confirmed()) { WaitNoInput(); if (!AchRowDisabled(at)) chosen = at; }
-            else if (Escaped()) chosen = -1;
+            else if (Escaped()) { PageLeave(); chosen = -1; }
         }
         AsciiMode = FALSE;
         Page(NULL, 0);
@@ -3628,7 +3654,9 @@ static void ScrapbookPage(void) {
     ReadScrap();
     const int n = s_nbCards;
     if (n <= 0) return;
-    int at = 0;
+    static int s_scrapAt = 0;               // (where the Scrapbook was left: it opens there again)
+    int &at = s_scrapAt;
+    if (at >= n) at = 0;
     S32 padDir;
     PageLoopStart(&padDir);
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
@@ -3642,7 +3670,7 @@ static void ScrapbookPage(void) {
         S32 dx, dy;
         if (Nav(&padDir, &dx, &dy)) {
             if (dx) at = (at + dx + n) % n;
-            else if (dy) { const int t = at + dy * cols; if (t >= 0 && t < n) at = t; else if (dy > 0 && at / cols < (n - 1) / cols) at = n - 1; }
+            else if (dy) at = GridUpDown(at, dy, n, cols);
         }
         S32 mx, my;
         const int click = Clicked(&mx, &my);
@@ -3679,7 +3707,8 @@ static void ScrapbookPage(void) {
 
 static void FeedbackPage(void) {
     static U16 menu[4 + 2 * 3];
-    menu[0] = 1; menu[1] = 3; menu[2] = 280; menu[3] = 0;
+    if (!menu[1]) menu[0] = 1;              // (the row left last: it opens there again)
+    menu[1] = 3; menu[2] = 280; menu[3] = 0;
     SetRow(menu, 0, RG_ID_BACK);
     SetRow(menu, 1, RG_ID_REPORT_BUG);
     SetRow(menu, 2, RG_ID_REQUEST_FEATURE);
@@ -3697,7 +3726,8 @@ static void FeedbackPage(void) {
 static void ReportsPage(void) {
     static U16 menu[4 + 2 * 3];
     ReadSettings();
-    menu[0] = 1; menu[1] = 3; menu[2] = 240; menu[3] = 0;
+    if (!menu[1]) menu[0] = 1;
+    menu[1] = 3; menu[2] = 240; menu[3] = 0;
     SetRow(menu, 0, RG_ID_BACK);
     SetRow(menu, 1, RG_ID_REPORT_MODE);
     SetRow(menu, 2, RG_ID_REPORT_NOW);
@@ -3723,7 +3753,7 @@ static void ReportsPage(void) {
 // items")
 static void DisplayPage(void) {
     ReadSettings();
-    s_displayMenu[0] = 1;
+    if (!s_displayMenu[1]) s_displayMenu[0] = 1;    // (the row left last: it opens there again)
     s_displayMenu[1] = RG_DISPLAY_ROWS;
     s_displayMenu[2] = RG_DISPLAY_Y;
     s_displayMenu[3] = 0;
@@ -3865,7 +3895,10 @@ static U16 s_optMenu[4 + 2 * 12];
 U16 *RaceGame_OptionsMenu(U16 *menu) {
     if (!RaceGame_On() || !menu || menu[1] + 4 > 12) return menu;
     const int nb = menu[1];
+    // (the cursor where DoGameMenu left it in the copy: it opened on the game's own row every time)
+    const U16 at = s_optMenu[1] == nb + 4 ? s_optMenu[0] : menu[0];
     memcpy(s_optMenu, menu, (4 + 2 * nb) * sizeof(U16));
+    s_optMenu[0] = at;
     SetRow(s_optMenu, nb, RG_ID_GAME_CAMERA);
     SetRow(s_optMenu, nb + 1, RG_ID_CONTROLS);
     SetRow(s_optMenu, nb + 2, RG_ID_UPDATES);
@@ -3908,20 +3941,51 @@ static void Plot(S32 x, S32 y, U8 colour, S32 size);
 
 // A key of the four ways (the arrows, the pad's d-pad or stick; edge-only, as Step): *dx, *dy -1, 0 or 1. Non-zero: one was struck.
 static int Nav(S32 *padDir, S32 *dx, S32 *dy) {
+    (void)padDir;
     *dx = *dy = 0;
-    S32 key = MyKey >= K_GAMEPAD_BASE ? 0 : MyKey;   // (the pad's way followed every pass, as Step)
-    const S32 raw = JoystickMenuNavOnly();
-    if (raw != *padDir) {
-        *padDir = raw;
-        if (!key) key = raw;                // (K_UP .. K_RIGHT: the arrows' own scancodes)
-    }
-    if (Input & I_LEFT || key == K_GRAY_LEFT) { *dx = -1; InitWaitNoInput(I_LEFT); }
-    else if (Input & I_RIGHT || key == K_GRAY_RIGHT) { *dx = 1; InitWaitNoInput(I_RIGHT); }
-    else if (Input & I_UP || key == K_GRAY_UP) { *dy = -1; InitWaitNoInput(I_UP); }
-    else if (Input & I_DOWN || key == K_GRAY_DOWN) { *dy = 1; InitWaitNoInput(I_DOWN); }
+    // (the shared steps, as Step)
+    if (MenuInput_TakeStep(MENU_INPUT_LEFT)) *dx = -1;
+    else if (MenuInput_TakeStep(MENU_INPUT_RIGHT)) *dx = 1;
+    else if (MenuInput_TakeStep(MENU_INPUT_UP)) *dy = -1;
+    else if (MenuInput_TakeStep(MENU_INPUT_DOWN)) *dy = 1;
     else return 0;
     InitWaitNoKey();
     return 1;
+}
+
+// Page Up and Down, Home, End in a list of `n` rows `rows` to a page: the row they go to from `at` (a press each), or `at`
+static int PageKeys(int at, int n, int rows) {
+    int to = at;
+    if (MyKey == K_GRAY_PAGE_UP) to = at - rows;
+    else if (MyKey == K_GRAY_PAGE_DOWN) to = at + rows;
+    else if (MyKey == K_GRAY_HOME) to = 0;
+    else if (MyKey == K_GRAY_END) to = n - 1;
+    else return at;
+    InitWaitNoKey();
+    if (to < 0) to = 0;
+    if (to > n - 1) to = n - 1;
+    return to;
+}
+
+// A page left by Esc (or a pad's B, a right click): what is held then picks nothing on the page under it
+static void PageLeave(void) {
+    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
+    InitWaitNoKey();
+    MenuInput_Suppress(MENU_INPUT_ALL);
+}
+
+// Up or down a grid of `n` in rows of `cols` from `at`: the same column a row up or down; past the last row back to the top row's same
+// column, and from a row whose column the short last row hasn't, to the last; past the top to the last row's same column (or the row
+// above it). (Down past the end went into another column, the car grid; the Scrapbook stopped at its ends: the menu audit, 2026-11-26)
+static int GridUpDown(int at, int dy, int n, int cols) {
+    if (n <= 0 || cols <= 0) return at;
+    const int lastRow = (n - 1) / cols;
+    int t = at + dy * cols;
+    if (dy > 0 && t >= n) t = at / cols < lastRow ? n - 1 : at % cols;
+    else if (dy < 0 && t < 0) { t = lastRow * cols + at % cols; if (t >= n) t -= cols; }
+    if (t < 0) t = 0;
+    if (t >= n) t = n - 1;
+    return t;
 }
 
 // A page's own loop begins: the backdrop up, the keys of the page before let go.
@@ -3931,9 +3995,12 @@ static void PageLoopStart(S32 *padDir) {
     ManageTime();
     InitWaitNoKey();
     InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
-    *padDir = JoystickMenuNavOnly();
+    *padDir = 0;
+    MenuInput_Suppress(MENU_INPUT_ALL);     // (a way held as the page opens steps nothing till let go)
     AsciiMode = TRUE;
     s_clickWas = Click & 3;
+    s_hoverX = (S32)MouseX;                 // (where the pointer is as the page opens: only a move chooses)
+    s_hoverY = (S32)MouseY;
     ConsumeMouseWheelY();                   // (the page before's unread notches: GAMEMENU.CPP DoGameMenu)
 }
 
@@ -4057,7 +4124,9 @@ static int TracksPage(int shared) {
             const S32 top = RG_PAGE_TOP + oy + 50, keysY = RG_PAGE_BOTTOM + oy - 32, bestY = keysY - 30 - (shared ? 2 * RG_LINE : 0);
             const int rows = (int)((bestY - 16 - top) / RG_TRACK_LINE);
             S32 dx, dy;
+            if (at >= n) at = n - 1;
             if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
+            at = PageKeys(at, n, rows);
             if (at < first) first = at;
             if (at >= first + rows) first = at - rows + 1;
             const S32 lx0 = cx - RG_PAGE_HALF + 14, lx1 = cx + RG_PAGE_HALF - 14;
@@ -4079,7 +4148,11 @@ static int TracksPage(int shared) {
             S32 mx, my;
             const int click = Clicked(&mx, &my);
             if (click == 2) chosen = -1;
-            else if (click == 1 && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
+            else if (Hovered(&mx, &my) && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
+                const int row = (int)((my - (top - 4)) / RG_TRACK_LINE);
+                if (row < rows && first + row < n) at = first + row;
+            }
+            if (click == 1 && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
                 const int row = (int)((my - (top - 4)) / RG_TRACK_LINE);
                 if (row < rows && first + row < n) { at = first + row; chosen = list[at]; }
             }
@@ -4126,7 +4199,7 @@ static int TracksPage(int shared) {
             Present();
             if (chosen != -2) break;
             if (Confirmed()) { WaitNoInput(); chosen = list[at]; }
-            else if (Escaped()) chosen = -1;
+            else if (Escaped()) { PageLeave(); chosen = -1; }
         }
         AsciiMode = FALSE;
         Page(NULL, 0);
@@ -4557,8 +4630,8 @@ static int GridPage(const char *what, int trial) {
         const S32 px0 = cx + 4, px1 = cx + 316, py0 = 46 + oy, py1 = 198 + oy, pcx = (px0 + px1) / 2;
         S32 dx, dy;
         if (!typing && Nav(&padDir, &dx, &dy)) {
-            const int d = dx ? dx : dy * RG_GRID_COLS;
-            sel = ((sel + d) % s_nbGridView + s_nbGridView) % s_nbGridView;
+            if (dx) sel = ((sel + dx) % s_nbGridView + s_nbGridView) % s_nbGridView;
+            else sel = GridUpDown(sel, dy, s_nbGridView, RG_GRID_COLS);
         } else if (MyKey == K_PAGE_DOWN || MyKey == K_PAGE_UP) {
             const int page = ((sel / RG_GRID_PAGE + (MyKey == K_PAGE_DOWN ? 1 : -1)) % pages + pages) % pages;
             sel = page * RG_GRID_PAGE + sel % RG_GRID_PAGE;
@@ -5351,7 +5424,7 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
         Present();
         if (click == 2 || Escaped()) result = 0;
         // (Enter only: Space is a letter here)
-        else if (Input & I_RETURN || MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER) { WaitNoInput(); if (n || mayBeEmpty) result = 1; }
+        else if (MenuPad_Input() & I_RETURN || MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER || MenuPad_Accept()) { WaitNoInput(); if (n || mayBeEmpty) result = 1; }
     }
     TypedText_Stop();
     AsciiMode = FALSE;
@@ -5400,7 +5473,7 @@ static int AskPage(const char *what, const char *line, const char *keys) {
         Text(cx, y1 - 38, keys, RG_GREY);
         Present();
         if (click == 2 || Escaped()) { answer = 0; WaitNoInput(); break; }
-        if (click || Confirmed()) { WaitNoInput(); break; }
+        if (Confirmed()) { WaitNoInput(); break; }
     }
     AsciiMode = FALSE;
     Page(NULL, 0);
@@ -5712,6 +5785,10 @@ void RaceGame_SharedKeys(void) {
         if (down & RACENET_KEY_DOWN) Input |= I_DOWN;
         if (down & RACENET_KEY_LEFT) Input |= I_LEFT;
         if (down & RACENET_KEY_RIGHT) Input |= I_RIGHT;
+        // (and the menus' steps: a press each and its repeat, as the first player's arrows -- added to Input after its no-repeat, a held arrow
+        // stepped every pass on the race game's pages, and the game's own menus didn't move: the menu audit, 2026-11-26)
+        MenuInput_Inject((down & RACENET_KEY_UP ? MENU_INPUT_UP : 0) | (down & RACENET_KEY_DOWN ? MENU_INPUT_DOWN : 0) |
+                         (down & RACENET_KEY_LEFT ? MENU_INPUT_LEFT : 0) | (down & RACENET_KEY_RIGHT ? MENU_INPUT_RIGHT : 0));
         if (down & RACENET_KEY_ITEM) Input |= I_COMPORTEMENT | I_RETURN;
         if (down & RACENET_KEY_HANDBRAKE) Bindings_Inject(CAR_SLOT_HANDBRAKE);     // (RACEMOD.CPP HandbrakeKey)
         if (down & RACENET_KEY_VIEW) Bindings_Inject(CAR_SLOT_VIEW);
@@ -5746,7 +5823,7 @@ S32 RaceGame_LocalAlone(void) {
 
 // Two players on this PC. Non-zero: a race is set up
 static int LocalPage(int story) {
-    s_localMenu[0] = 1;
+    if (!s_localMenu[1]) s_localMenu[0] = 1;
     s_localMenu[1] = 4;
     s_localMenu[2] = 280;
     s_localMenu[3] = 0;
@@ -6139,7 +6216,7 @@ static int LobbyPage(void) {
         if (chat[0] && Escaped()) { chat[0] = 0; WaitNoInput(); chatKey = MyKey; continue; }
         if ((click == 2 || Escaped()) && s_localGuest <= 0) { result = 0; break; }
         if (rounds) {
-            const int enter = MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER;
+            const int enter = MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER || MenuPad_Accept();
             if (enter && chat[0]) { WaitNoInput(); RaceNet_Say(chat); chat[0] = 0; chatKey = MyKey; }
             // (the host, every one here: on to the vote)
             else if (picks && stage == RACENET_STAGE_LOBBY && (enter || click == 1)) {
@@ -6576,6 +6653,11 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_SCRAPBOOK);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
+    // (back from Options -- the game's own page, this menu built again after it: on Options, not Racing or Resume -- the menu audit,
+    // 2026-11-26)
+    static U16 s_mainBack = 0;
+    for (S32 i = 0; s_mainBack && i < nb; i++) if (s_mainMenu[4 + 2 * i + 1] == s_mainBack) s_mainMenu[0] = (U16)i;
+    s_mainBack = 0;
     s_mainMenu[1] = (U16)nb;
     // (eight or nine rows from 290 ran off the bottom of a 480-tall screen, Quit cut in half: the user's picture, 2026-10-31. Now a list
     // longer than the screen's room scrolls, GAMEMENU_MOUSE.CPP GameMenuLayout -- the user, 2026-11-14: "We can add a scrollbar if menus
@@ -6599,8 +6681,10 @@ static S32 GameMenu(S32 inGame) {
             }
             if (resume) return 1000;
             break;
-        case RG_ID_RESUME:
         case RG_ID_OPTIONS:
+            s_mainBack = RG_ID_OPTIONS;
+            return select;
+        case RG_ID_RESUME:
         case RG_ID_SAVE:
             return select;
         case RG_ID_FEEDBACK:
