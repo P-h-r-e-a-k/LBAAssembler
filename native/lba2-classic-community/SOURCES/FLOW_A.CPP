@@ -135,8 +135,9 @@ void GpuOverlay_Plate(void) {
 /* The picture on the screen as palette indices, into dst (ModeDesiredX x ModeDesiredY): Log over the GPU's frame as the present lays
    it -- Log's index 0 the frame's pixel, but inside the overlay's opaque rect, where it is black. The save's picture (SAVEGAME.CPP):
    scaled down from Log alone it was black wherever the GPU drew -- outdoors, every save made on OpenGL, its picture in the game menu's
-   box and the save list black. FALSE without a GPU renderer (Log is the picture). */
-S32 GpuOverlay_ScreenIndexed(U8 *dst) {
+   box and the save list black. FALSE without a GPU renderer (Log is the picture). `asShown` FALSE: the opaque rect left out -- the
+   picture under a menu that has pinned its rect already (the inventory's, the behaviour menu's background). */
+S32 GpuOverlay_ScreenIndexed(U8 *dst, S32 asShown) {
     if (!dst OR !GpuRenderer_IsActive() OR !Log OR !PtrPal)
         return FALSE;
     const U32 w = ModeDesiredX, h = ModeDesiredY;
@@ -146,7 +147,7 @@ S32 GpuOverlay_ScreenIndexed(U8 *dst) {
     for (U32 y = 0; y < h; y++)
         for (U32 x = 0; x < w; x++) {
             const size_t i = (size_t)y * w + x;
-            dst[i] = (log[i] != 0 OR GpuRenderer_InOverlayOpaque((S32)x, (S32)y)) ? log[i] : FrameIndex(i);
+            dst[i] = (log[i] != 0 OR (asShown AND GpuRenderer_InOverlayOpaque((S32)x, (S32)y))) ? log[i] : FrameIndex(i);
         }
     return TRUE;
 }

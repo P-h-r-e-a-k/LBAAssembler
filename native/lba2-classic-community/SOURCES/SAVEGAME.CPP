@@ -506,8 +506,8 @@ S32 SaveGame(S32 flagmess) {
             shown = (U8 *)malloc(need);
             shownSize = shown ? need : 0;
         }
-        extern S32 GpuOverlay_ScreenIndexed(U8 *dst);
-        const S32 gpu = GpuRenderer_IsActive() AND shown AND GpuOverlay_ScreenIndexed(shown);
+        extern S32 GpuOverlay_ScreenIndexed(U8 *dst, S32 asShown);
+        const S32 gpu = GpuRenderer_IsActive() AND shown AND GpuOverlay_ScreenIndexed(shown, TRUE);
         ScaleBox(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, gpu ? (void *)shown : Log, 0, 0, 159, 119, ImageStaging);
     }
     SaveBlock(ImageStaging, BufSpeak + 150000L, 0, 0, 159, 119);

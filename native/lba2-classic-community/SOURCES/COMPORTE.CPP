@@ -540,7 +540,12 @@ void MenuComportement(S32 affone) {
        both copy Screen into Log. */
     GpuRenderer_SetOverlayOpaqueRect(CTRL_X0, CTRL_Y0, CTRL_X1, CTRL_Y1 + 90);
     if (GpuRenderer_IsActive()) {
-        if (CubeMode == CUBE_EXTERIEUR)
+        // (outdoors: the GPU's frame read back, its actors in it -- INVENT.CPP MenuInventory's)
+        extern S32 GpuOverlay_ScreenIndexed(U8 *dst, S32 asShown);
+        extern S32 GpuScreenPlateStale;
+        if (CubeMode == CUBE_EXTERIEUR AND GpuOverlay_ScreenIndexed((U8 *)Screen, FALSE))
+            GpuScreenPlateStale = 1;
+        else if (CubeMode == CUBE_EXTERIEUR)
             AffGrilleExt_BuildScreenPlate();
         else if (GpuRenderer_IsSceneInterior())
             AffGrille_BuildScreenPlate();

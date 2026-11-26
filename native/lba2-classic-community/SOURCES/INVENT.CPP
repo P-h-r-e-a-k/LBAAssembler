@@ -1171,7 +1171,13 @@ void MenuInventory(U32 tempo) {
        the cleanroom --black-bg golden, which must stay scene-free. Interior
        with the flag off keeps the plate AFF_ALL copied out of Log. */
     if (GpuRenderer_IsActive() && !(s_inv_capture_path[0] && Console_GetCaptureBlackBg())) {
-        if (CubeMode == CUBE_EXTERIEUR)
+        // (outdoors: the GPU's frame read back, as the palette indices it was drawn with, its actors in it as the software's copy has
+        // them -- the ground rebuilt in software had none, nobody behind the wheel's slots; that ground where it can't be read back)
+        extern S32 GpuOverlay_ScreenIndexed(U8 *dst, S32 asShown);
+        extern S32 GpuScreenPlateStale;
+        if (CubeMode == CUBE_EXTERIEUR AND GpuOverlay_ScreenIndexed((U8 *)Screen, FALSE))
+            GpuScreenPlateStale = 1;
+        else if (CubeMode == CUBE_EXTERIEUR)
             AffGrilleExt_BuildScreenPlate();
         else if (GpuRenderer_IsSceneInterior())
             AffGrille_BuildScreenPlate();
