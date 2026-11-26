@@ -211,7 +211,7 @@ internal static class CitadelOveralls
             if (d >= bodies.Count || Entry(d) is not { } driverBytes) continue;
             try
             {
-                var driver = WithExtras(WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2)), 8, 4)), Body.Read(driverBytes, 2));
+                var driver = WithExtras(WithBackPatch(WithHelmet(Overalls(Body.Read(bodies.Read(Everyday), 2)), 10, 5)), Body.Read(driverBytes, 2));
                 log.Add($"the buggy's driver (BODY.HQR {d}): {driver.Vertices.Count} points, {driver.Faces.Count} polygons, {driver.Lines.Count} lines, {driver.Spheres.Count} spheres, {driver.Bones.Count} bones");
                 HqrWriter.ReplaceInFile(bodyPath, d, Lit(driver).Write());
                 log.Add($"the buggy's driver (BODY.HQR {d}): the racing suit and helmet, {driver.Vertices.Count} points, {driver.Bones.Count} bones");
@@ -396,9 +396,12 @@ internal static class CitadelOveralls
         return list;
     }
 
-    // The helmet on his head: a shell round the head bone's points -- red, a white stripe over the top, a dark visor across the face, the
-    // padding dark inside the rim -- its points the head's (added after the head's own, every later bone's moved along)
-    internal static Body WithHelmet(Body body, int around = 12, int down = 6, int headBone = Head)
+    // The helmet on his head: a shell round the head bone's points -- red, a white stripe over the top, the padding dark inside the rim --
+    // its points the head's (added after the head's own, every later bone's moved along). Open-faced: the shell cut away over his face
+    // from the brow to the rim, a white trim round the opening, his own face seen in it (the user, 2026-11-25: "The front of Twinsen's
+    // face in the car when he's wearing the helmet could use improving" -- a dark band of a visor painted across the shell, on the car's
+    // eight-by-four helmet a smudge)
+    internal static Body WithHelmet(Body body, int around = 12, int down = 6, int headBone = Head, bool padding = true, bool trimBothSides = true)
     {
         var world = body.World().ToList();
         var head = body.Bones[headBone];
@@ -438,14 +441,46 @@ internal static class CitadelOveralls
             var middle = at.Aggregate(Vector3.Zero, (s, p) => s + p) / at.Length;
             faces.Add((Vector3.Dot(n, middle - centre) < 0 ? q.Reverse().ToArray() : q, colour));
         }
+        // (the face's opening: the quads below the brow -- their middle under 25 degrees up -- within 57 degrees of straight ahead)
+        bool Open(int k, int i)
+        {
+            if (k < 0 || k + 1 >= Down) return false;
+            var mid = (((i % Around) + Around) % Around + 0.5f) * MathF.Tau / Around;
+            var fromFront = MathF.Abs(MathF.IEEERemainder(mid, MathF.Tau));
+            return (Lat(k) + Lat(k + 1)) / 2 < 25 * MathF.PI / 180 && fromFront < 1.0f;
+        }
         for (var i = 0; i < Around; i++)
         {
             var n = (i + 1) % Around;
             var mid = (i + 0.5f) * MathF.Tau / Around;
             Out(new[] { crown, rings[0][i], rings[0][n] }, Colour(mid, 1.4f) == White ? White : Bright);
-            for (var k = 0; k + 1 < Down; k++) Out(new[] { rings[k][i], rings[k][n], rings[k + 1][n], rings[k + 1][i] }, Colour(mid, (Lat(k) + Lat(k + 1)) / 2));
+            for (var k = 0; k + 1 < Down; k++)
+                if (!Open(k, i)) Out(new[] { rings[k][i], rings[k][n], rings[k + 1][n], rings[k + 1][i] }, Colour(mid, (Lat(k) + Lat(k + 1)) / 2) == Dark ? Bright : Colour(mid, (Lat(k) + Lat(k + 1)) / 2));
         }
-        // (the padding: a dark band inside the rim, both its sides drawn)
+        // (the opening's trim: a white band from each of its edges into the shell's thickness -- both its sides drawn, or (a body short of
+        // room, the car's) the one facing into the opening)
+        int Inward(int p) { var q = points[p]; points.Add(centre + (q - centre) * 0.86f); return points.Count - 1; }
+        var openingAt = centre + new Vector3(0, 0, radius.Z * 0.6f);
+        void Trim(int a, int b)
+        {
+            var q = new[] { a, b, Inward(b), Inward(a) };
+            if (trimBothSides) { faces.Add((q, White)); faces.Add((q.Reverse().ToArray(), White)); return; }
+            var at = q.Select(p => points[p]).ToArray();
+            var n = LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(at);
+            var middle = at.Aggregate(Vector3.Zero, (acc, p) => acc + p) / at.Length;
+            faces.Add((Vector3.Dot(n, openingAt - middle) > 0 ? q : q.Reverse().ToArray(), White));
+        }
+        for (var k = 0; k + 1 < Down; k++)
+            for (var i = 0; i < Around; i++)
+            {
+                if (!Open(k, i)) continue;
+                var n = (i + 1) % Around;
+                if (!Open(k - 1, i)) Trim(rings[k][i], rings[k][n]);
+                if (!Open(k, i - 1)) Trim(rings[k][i], rings[k + 1][i]);
+                if (!Open(k, i + 1)) Trim(rings[k][n], rings[k + 1][n]);
+            }
+        // (the padding: a dark band inside the rim, both its sides drawn -- left out on a body short of room, the car's, where it's never seen)
+        if (!padding) return AddToBone(body, world, headBone, points, faces);
         var inner = new int[Around];
         for (var i = 0; i < Around; i++) { inner[i] = points.Count; points.Add(On(Lat(Down - 1), i * MathF.Tau / Around, 0.82f) + new Vector3(0, 40, 0)); }
         for (var i = 0; i < Around; i++)
@@ -552,8 +587,8 @@ internal static class CitadelOveralls
             // ... "Is it possible that the remodelled car with Twinsen wearing his helmet has been made in the wrong colours?". Lit, its
             // lit polygons are Gouraud ones with every point's normal, its solid ones (type 0) and see-through ones (2) as they were)
             Body Lit(Body b) { b.Lit = true; return b; }
-            car = Lit(WithHelmet(Body.Read(bodies.Read(driving.Value.Body), 2), 8, 4, BuggyHead)).Write();
-            gun = firing is { } f ? Lit(WithHelmet(Body.Read(bodies.Read(f.Body), 2), 8, 4, BuggyHead)).Write() : car;
+            car = Lit(WithHelmet(Body.Read(bodies.Read(driving.Value.Body), 2), 10, 5, BuggyHead, padding: false, trimBothSides: false)).Write();
+            gun = firing is { } f ? Lit(WithHelmet(Body.Read(bodies.Read(f.Body), 2), 10, 5, BuggyHead, padding: false, trimBothSides: false)).Write() : car;
         }
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or ArgumentOutOfRangeException)
         { return new() { $"Twinsen's car with his helmet on: not made -- {e.Message}" }; }
