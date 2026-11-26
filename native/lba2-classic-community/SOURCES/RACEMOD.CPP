@@ -647,7 +647,7 @@ static int s_pitHidden = 0;
 // moment the day's race is waiting (PitGridFrame); the grid formed as he gets into his car, they on it and he where he is: he starts from the
 // pit lane (the user: "let's have Twinsen's car stuck in the pitlane as it's not working, and all the other cars lined up on the grid ...
 // When Twinsen fixes his car he should start from the pitlane instead")
-static int s_pitStartVar = -1, s_pitStartLeast = 0, s_pitStartBelow = 0, s_pitGridSet = 0;
+static int s_pitStartVar = -1, s_pitStartLeast = 0, s_pitStartBelow = 0, s_pitGridSet = 0, s_pitCarSet = 0;
 static int PitStart(void) {
     return s_pitStartVar >= 0 && s_pitStartVar < MAX_VARS_GAME && ListVarGame[s_pitStartVar] >= s_pitStartLeast && ListVarGame[s_pitStartVar] < s_pitStartBelow;
 }
@@ -24496,24 +24496,35 @@ void RaceMod_Frame(void) {
     // (no_qualify=: the race day come while the track is loaded -- the qualifying lap not begun: none, the grid formed as he drives up)
     if (s_phase == PHASE_QUALIFYING && s_laps == 0 && NoQualify()) { s_qualifying = 0; s_phase = PHASE_WAIT; Log_Info("[racemod] no_qualify: variable %d at %d -- no qualifying lap today", s_noQualVar, (int)ListVarGame[s_noQualVar]); }
     // (pit_start=: the others on the grid while the race waits for him -- once each time the race day is found waiting)
-    if (!PitStart()) s_pitGridSet = 0;
+    if (!PitStart()) { s_pitGridSet = 0; s_pitCarSet = 0; }
     else if (s_phase == PHASE_WAIT && !s_pitGridSet && s_nbSpots && s_car.HasLine) {
         s_pitGridSet = 1;
         int spot = 0;
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
             if (s_opp[n].Count && s_opp[n].Scenes && !OpponentAway(&s_opp[n])) OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
-        // (and his car into the pit lane's first spot, standing elsewhere in this scene with him out of it: a game saved on race day
-        // before the pit lane was his)
-        const int carN = NumBuggy & ~BUGGY_PRESENT;
-        if (!driving && s_nbPits && NumBuggy && carN > 0 && carN < (int)NbObjets && ListBuggy[0].Cube == (S32)NumCube &&
-            CurrentCubeX == s_pits[0].CubeX && CurrentCubeY == s_pits[0].CubeZ) {
-            S_BUGGY *ptb = &ListBuggy[0];
-            T_OBJET *car = &ListObjet[carN];
-            ptb->X = car->Obj.X = s_pits[0].X; ptb->Y = car->Obj.Y = s_pits[0].Y; ptb->Z = car->Obj.Z = s_pits[0].Z;
-            ptb->Beta = car->Obj.Beta = s_pits[0].Beta;
-            ClearRealAngle(car);
-        }
         Log_Info("[racemod] pit_start: variable %d at %d -- %d racers on the grid, Twinsen's car in the pit lane", s_pitStartVar, (int)ListVarGame[s_pitStartVar], spot);
+    }
+    // (and his car into the pit lane's first spot, once a race day, wherever on this island it stands with him out of it -- the grid where the
+    // qualifying lap stopped it, a game saved before the pit lane was his. Tried every frame till done: it was tried only as the grid formed,
+    // and only with him in the pit lane's part of the island then -- come down from the hotel, it stayed on the grid while the marshal said
+    // "it's waiting in the pit lane", the user, 2026-11-25. Not while car_held= keeps it: CarHeld gives it back on the pit spot itself)
+    if (PitStart() && !s_pitCarSet && !driving && s_nbPits && NumBuggy && NewCube == -1) {
+        S_BUGGY *ptb = &ListBuggy[0];
+        const int pit = CubeScene(s_pits[0].CubeX, s_pits[0].CubeZ);
+        if (pit >= 0 && ptb->Cube >= 0 && ptb->Cube != s_heldScene && LoadSceneIsland(ptb->Cube) == Island) {
+            const int carN = NumBuggy & ~BUGGY_PRESENT;
+            T_OBJET *car = carN > 0 && carN < (int)NbObjets ? &ListObjet[carN] : NULL;
+            const int from = ptb->Cube;
+            const int moved = from != pit || abs(ptb->X - s_pits[0].X) > 256 || abs(ptb->Z - s_pits[0].Z) > 256;
+            ptb->Cube = pit; ptb->X = s_pits[0].X; ptb->Y = s_pits[0].Y; ptb->Z = s_pits[0].Z; ptb->Beta = s_pits[0].Beta;
+            if (car && pit == (S32)NumCube) {
+                car->Obj.X = ptb->X; car->Obj.Y = ptb->Y; car->Obj.Z = ptb->Z; car->Obj.Beta = ptb->Beta;
+                if (from != pit) InitBody(GEN_BODY_NORMAL, (U8)carN);
+                ClearRealAngle(car);
+            } else if (car && from == (S32)NumCube) InitBody(NO_BODY, (U8)carN);
+            s_pitCarSet = 1;
+            if (moved) Log_Info("[racemod] pit_start: Twinsen's car from scene %d into the pit lane (scene %d at %d,%d,%d)", from, pit, (int)ptb->X, (int)ptb->Y, (int)ptb->Z);
+        }
     }
     if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && !Inert() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     RaceHideActors();
@@ -27261,7 +27272,7 @@ static void ResetTrack(void) {
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopCut = -1;
-    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_pitHidden = 0; s_pitStartVar = -1; s_pitGridSet = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
+    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_pitHidden = 0; s_pitStartVar = -1; s_pitGridSet = 0; s_pitCarSet = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
     FarBodiesForget(); s_fakeIconBody = -1;
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
