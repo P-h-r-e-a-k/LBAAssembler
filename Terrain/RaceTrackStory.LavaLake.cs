@@ -21,6 +21,10 @@ internal static partial class RaceTrackStory
     // group B's shared variables (docs above)
     // (not 236 and 237: the game keeps which videos have been seen in their bits, PLAYACF.CPP FLAG_ACF2/3 -- 2026-11-04)
     public const int RadioAnswered = 243, RaceDoneB = 246;
+    // (the chapter whose ringing was said -- group B's islands and the later ones (Volcano.cs RadioScript): once a chapter, not once each time
+    // an outside scene starts -- the user, 2026-11-26, Celebration: "our radio rings when we first arrive on the island, but it's also being
+    // triggered when we go into and out of the building". Unanswered, the call is still there in the inventory)
+    public const int RadioRang = 295;
     private const int LavaChapter = 6, FrancosStart = 257, FrancosDock = 109, ShipSwitch = 236;
     // (how near Twinsen takes a statuette: past its picture's box, which stops him 1274 from its place on two sides)
     private const int StatuetteTake = 1600;
@@ -652,8 +656,8 @@ stop();
         };
 
         // An island's arrival: while `when` holds as the scene starts, Lyra's line once (`notSaid` true until `setSaid` runs), then -- with
-        // the portable radio (item 26) -- "the radio is ringing" once a visit until Twinsen answers it from his inventory: Baldino's call for
-        // the chapter (var 236 set to it).
+        // the portable radio (item 26) -- "the radio is ringing" once a chapter (RadioRang), and answered from his inventory: Baldino's call
+        // for the chapter (var 236 set to it).
         public static string Arrival(string when, int chapter, string notSaid, string setSaid, int lyra, int ring, int baldino) => $@"void comportement_0()
 {{
     if ({when})
@@ -673,9 +677,9 @@ void comportement_1()
         {setSaid}
         message({lyra});
     }}
-    if (0 < var_game({Radio}) && {chapter} > var_game({RadioAnswered}) && 0 == var_cube(45))
+    if (0 < var_game({Radio}) && {chapter} > var_game({RadioAnswered}) && {chapter} > var_game({RadioRang}))
     {{
-        set_var_cube(45, 1);
+        set_var_game({RadioRang}, {chapter});
         message({ring});
     }}
     if (1 == use_inventory({Radio}) && {chapter} > var_game({RadioAnswered}))

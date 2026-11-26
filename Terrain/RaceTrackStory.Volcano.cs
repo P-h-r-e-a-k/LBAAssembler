@@ -577,8 +577,8 @@ void comportement_1()
             model.Zones.Add(made.Zone);
         }
 
-        // Baldino's call on arrival: with the radio, "the radio is ringing" once a visit until it is answered from the inventory; then his
-        // line (`call`), once a chapter (var 238 the chapter answered)
+        // Baldino's call on arrival: with the radio, "the radio is ringing" once a chapter (LavaLake's RadioRang: not each time an outside
+        // scene starts), answered from the inventory; then his line (`call`), once a chapter (var 238 the chapter answered)
         public static string RadioCall(int chapter, int ring, int call, string? here = null) => RadioScript(here ?? $"{chapter} == chapter()", chapter, ring, call);
 
         private static string RadioScript(string here, int chapter, int ring, int call) => $@"void comportement_0()
@@ -595,9 +595,9 @@ void comportement_1()
 
 void comportement_1()
 {{
-    if ({chapter} > var_game({LateRadioAnswered}) && 0 == var_cube({Once2}) && {Driving} != comportement_hero())
+    if ({chapter} > var_game({LateRadioAnswered}) && {chapter} > var_game({RadioRang}) && {Driving} != comportement_hero())
     {{
-        set_var_cube({Once2}, 1);
+        set_var_game({RadioRang}, {chapter});
         message({ring});
     }}
     if ({chapter} > var_game({LateRadioAnswered}) && 1 == use_inventory({Radio}))
