@@ -1434,7 +1434,6 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_TRIAL: Label(string, "Time trial"); return 1;
     case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
-    case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;
     case RG_ID_KEYS_FOOT: Label(string, "Keyboard: on foot"); return 1;
     case RG_ID_KEYS_CAR: Label(string, "Keyboard: in the car"); return 1;
     case RG_ID_PAD_FOOT: Label(string, "Controller: on foot"); return 1;
@@ -2563,6 +2562,8 @@ static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
         else snprintf(keys, sizeof(keys), "Esc: back");
         Text(cx, RG_PAGE_BOTTOM + oy - 32, keys, RG_GREY);
         Present();
+        // (a headless run, the console's skipmodals: each page drawn once and turned, as the dialogues are -- no key to wait for)
+        if (DbgSkipModals) { if (at + 1 < pages) at++; else done = 1; continue; }
         if (Confirmed()) { WaitNoInput(); if (at + 1 < pages) at++; else done = 1; }
         else if (Escaped()) { WaitNoInput(); done = 1; }
     }
@@ -2581,6 +2582,37 @@ static void Introduction(int sp, int trial) {
     if (controls) s_controlsSeen = 1;
     if (items) s_powerupsSeen = 1;
     WriteSettings();
+}
+
+// Story Mode's first race with power-ups, as its grid forms (RACEMOD.CPP): that race's power-ups page, once -- the same once as Track
+// select's first race (Introduction, powerups_seen): Story Mode had no page of them but the Options row's, gone since 2026-11-26 (the
+// user: "powerups we should show once, either at the start of a new game, or the start of a race/time trial"). Over the scene as it is
+// on the screen, the game's clock held while it is up; not with another player in the game. Non-zero: shown -- the scene to be drawn
+// whole again.
+S32 RaceGame_PowerUpsOnce(const char *raceFile) {
+    if (!RaceGame_On() || !s_storyOn || RaceGame_StoryTwo() || RaceNet_Others() > 0 || !raceFile || !raceFile[0]) return 0;
+    ReadSettings();
+    if (s_powerupsSeen) return 0;
+    static T_RACE_PAGE pg;
+    if (!RaceMod_ReadPage(raceFile, &pg) || pg.Trial || !pg.Count) {
+        Log_Info("[racegame] Story Mode's race: no power-ups page (%s: %s)", raceFile, pg.Trial ? "a time trial" : pg.Count ? "?" : "none read");
+        return 0;
+    }
+    SaveTimer();
+    // (the backdrop, Screen: the picture as shown -- on OpenGL outdoors the GPU's frame read back as the palette indices it was drawn
+    // with, as the inventory takes it; the page's own loop puts it back under the page every pass, Page)
+    extern S32 GpuOverlay_ScreenIndexed(U8 *dst, S32 asShown);
+    extern S32 GpuScreenPlateStale;
+    if (GpuRenderer_IsActive() && CubeMode == CUBE_EXTERIEUR && GpuOverlay_ScreenIndexed((U8 *)Screen, TRUE)) GpuScreenPlateStale = 1;
+    else CopyScreen(Log, Screen);
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+    Pages(&pg, 0, 1, 1);
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
+    RestoreTimer();
+    s_powerupsSeen = 1;
+    WriteSettings();
+    Log_Info("[racegame] Story Mode's first race with power-ups: their page shown (%d)", (int)pg.Count);
+    return 1;
 }
 
 // After the car, before a race: a qualifying lap, or none and Twinsen at the back of the grid (the opponents before him in their usual
@@ -3889,28 +3921,29 @@ S32 RaceGame_AdvancedRow(S32 num) {
 
 // GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then the Camera page (every camera setting on one page: the
 // game's own outdoor and indoor cameras with the race's view -- RaceGame_CameraMenu; the user, 2026-11-25, "we should have one single menu
-// for all camera items"), the race's controls and power-ups, the window and updates, and Feedback (the user, the same evening: "move
-// Feedback into the Options Menu"; RaceGame_OptionsRow); the game's own menu when the race game isn't on.
+// for all camera items"), the window and updates, and Feedback (the user, the same evening: "move Feedback into the Options Menu";
+// RaceGame_OptionsRow); the game's own menu when the race game isn't on. (No "Race controls, power-ups" row since 2026-11-26 -- the user:
+// "all controls should be on the controls menu - powerups we should show once": the keys are all on Options > Controls, the power-ups
+// page shows once before the first race that has them, Track select's or Story Mode's -- Introduction, RaceGame_PowerUpsOnce.)
 static U16 s_optMenu[4 + 2 * 12];
 U16 *RaceGame_OptionsMenu(U16 *menu) {
-    if (!RaceGame_On() || !menu || menu[1] + 4 > 12) return menu;
+    if (!RaceGame_On() || !menu || menu[1] + 3 > 12) return menu;
     const int nb = menu[1];
     // (the cursor where DoGameMenu left it in the copy: it opened on the game's own row every time)
-    const U16 at = s_optMenu[1] == nb + 4 ? s_optMenu[0] : menu[0];
+    const U16 at = s_optMenu[1] == nb + 3 ? s_optMenu[0] : menu[0];
     memcpy(s_optMenu, menu, (4 + 2 * nb) * sizeof(U16));
     s_optMenu[0] = at;
     SetRow(s_optMenu, nb, RG_ID_GAME_CAMERA);
-    SetRow(s_optMenu, nb + 1, RG_ID_CONTROLS);
-    SetRow(s_optMenu, nb + 2, RG_ID_UPDATES);
-    SetRow(s_optMenu, nb + 3, RG_ID_FEEDBACK);
-    s_optMenu[1] = (U16)(nb + 4);
-    // (ten rows: the list a little lower, its top row clear of the title's ADVENTURE -- a short screen scrolls it, GameMenuLayout)
+    SetRow(s_optMenu, nb + 1, RG_ID_UPDATES);
+    SetRow(s_optMenu, nb + 2, RG_ID_FEEDBACK);
+    s_optMenu[1] = (U16)(nb + 3);
+    // (nine rows: the list a little lower, its top row clear of the title's ADVENTURE -- a short screen scrolls it, GameMenuLayout)
     s_optMenu[2] = (U16)(menu[2] + 40);
     return s_optMenu;
 }
 
 S32 RaceGame_OptionsRow(S32 num) {
-    if (!RaceGame_On() || (num != RG_ID_CONTROLS && num != RG_ID_UPDATES && num != RG_ID_GAME_CAMERA && num != RG_ID_FEEDBACK)) return 0;
+    if (!RaceGame_On() || (num != RG_ID_UPDATES && num != RG_ID_GAME_CAMERA && num != RG_ID_FEEDBACK)) return 0;
     if (num == RG_ID_UPDATES) {
         DisplayPage();
         return 1;
@@ -3920,12 +3953,7 @@ S32 RaceGame_OptionsRow(S32 num) {
         GereCameraMenu();
         return 1;
     }
-    if (num == RG_ID_FEEDBACK) {
-        FeedbackPage();
-        return 1;
-    }
-    const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);
-    Pages(pg, 1, 1, 0);
+    FeedbackPage();
     return 1;
 }
 

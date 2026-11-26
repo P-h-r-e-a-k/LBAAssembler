@@ -2206,6 +2206,7 @@ static T_RACE_TRACK s_tracks[RACE_MAX_TRACKS];
 static int s_nbTracks = 0;
 static char s_loaded[260] = "";            // the car file loaded ("": none yet)
 static int s_ownTrack = 0;                 // it has a track of its own (a start line), not only the car and the set
+static int s_powerPageAsked = 0;           // the race's power-ups page asked for (RaceGame_PowerUpsOnce), as its grid formed
 static void ResetTrack(void);
 
 // speedometer=1: the gear and the speed on the race's display, bottom right (off since 2026-10-20 -- the user: "Let's drop the gear and
@@ -9196,6 +9197,12 @@ static void FormGrid(S32 now) {
         else used += snprintf(text + used, sizeof(text) - used, " %d %s %.2f s;", i + 1, s_order[i] < 0 ? "Twinsen" : s_opp[s_order[i]].Name, s_orderTime[i] / 1000.0);
     }
     Log_Info("%s", text);
+    // (Story Mode's first race with power-ups: their page as its grid forms, once -- RaceGame_PowerUpsOnce, the game's clock held while it is
+    // up, so the count-down runs from when it is put away)
+    if (!s_powerPageAsked && s_ownTrack && s_loaded[0]) {
+        s_powerPageAsked = 1;
+        if (RaceGame_PowerUpsOnce(s_loaded)) s_wantFlip = 1;
+    }
 }
 
 // A game that starts on foot beside the car on pole (Play's start, the scene's own start): Twinsen turned to face it, so the action key
@@ -14824,6 +14831,32 @@ S32 RaceMod_CarThrough(S32 num) {
 
 // (and not stood on, nor bumped by anything moving: OBJECT.CPP's other collision loops -- the footprints' box is the props' entity's)
 S32 RaceMod_WalkOver(S32 numobj) { return numobj > 0 && numobj < (S32)NbObjets && ListObjet[numobj].Armure == RACE_WALK_OVER; }
+
+// The faces some speakers have in the dialogue box (DIALFACES.TXT beside the game's data, written with the scenes by LBA Assembler's
+// Terrain/Polar/DreamVoiceFaces: "face <scene> <actor> <sprite>") -- MESSAGE.CPP draws the speaker's where the game draws a radio call's
+// picture, Zoe's or Baldino's, and keeps the text clear of it: the Polar dream's voices over the white, FunFrock's and Sendell's, unseen
+// (the user, 2026-11-26: "let's see if we can add a small picture of both characters faces to the text box to show who's saying it").
+// The sprite, or -1: none for that actor in this scene.
+#define DIAL_FACES 16
+static int s_dfN = -1, s_dfScene[DIAL_FACES], s_dfActor[DIAL_FACES], s_dfSprite[DIAL_FACES];
+S32 RaceMod_DialFace(S32 numobj) {
+    if (s_dfN < 0) {
+        s_dfN = 0;
+        char path[260], line[256];
+        GetResPath(path, sizeof(path), "DIALFACES.TXT");
+        FILE *f = fopen(path, "r");
+        if (f) {
+            int a, b, c;
+            while (fgets(line, sizeof(line), f) && s_dfN < DIAL_FACES)
+                if (sscanf(line, "face %d %d %d", &a, &b, &c) == 3 && c >= 0) { s_dfScene[s_dfN] = a; s_dfActor[s_dfN] = b; s_dfSprite[s_dfN] = c; s_dfN++; }
+            fclose(f);
+            Log_Info("[racemod] dialogue faces: %d speaker(s) (DIALFACES.TXT)", s_dfN);
+        }
+    }
+    for (int k = 0; k < s_dfN; k++)
+        if (s_dfScene[k] == (int)NumCube && s_dfActor[k] == numobj) return s_dfSprite[k];
+    return -1;
+}
 // no_recover=<scene> <generic body> ... (a line a scene, up to RACE_MAX_NO_RECOVER_SCENES): that inside scene's props of those bodies have no
 // brick redrawn over them (OBJECT.CPP: DrawRecover left out). Stella Entities' stage and catwalk (the user, 2026-11-16): the catwalk's cells
 // are real bricks so that Twinsen on the floor behind it is hidden by it (the bricks' shapes copy the background, the catwalk's pixels,
@@ -27397,6 +27430,7 @@ void RaceMod_Draw(void) {
 // Everything a track's file set up, back to how the engine starts (the car's handling too: the next file gives it again). The set's own
 // keys (track=, tired=) stay. The memory the old track's lines and road took is given back.
 static void ResetTrack(void) {
+    s_powerPageAsked = 0;
     s_window.On = s_window.Done = s_window.Again = 0;
     for (int n = 0; n <= RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = n < RACE_MAX_OPPONENTS ? &s_opp[n] : &s_guide;

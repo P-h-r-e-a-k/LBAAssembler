@@ -49,6 +49,7 @@ void RaceGame_GhostChosen(int mode);       // RACEMOD.CPP: the ghost raced now, 
 S32 RaceGame_RaceSkyOff(void);              // RACEMOD.CPP: Options has the sky off in races
 void RaceGame_TestKeys(int down);           // (tests: player 2's keys as if down, -1 the keyboard's)
 void RaceGame_SceneEntered(void);           // OBJECT.CPP: a scene entered (the autosave's moment) -- Story Mode's story.lba kept there
+S32 RaceGame_PowerUpsOnce(const char *raceFile);   // Story Mode's first race with power-ups: their page once, as its grid forms (non-zero: shown)
 int RaceGame_StoryTwo(void);              // Story Mode with two players: player 1's game, player 2's joined (2026-11-11, player 2 is Zoe)
 int RaceGame_StoryZoe(void);              // ... player 2's game, Zoe's, following player 1's story
 int RaceGame_StoryShare(void);
