@@ -3,6 +3,7 @@
 //
 
 #include "C_EXTERN.H" // include LBA2
+#include <GPU/GPURENDERER.H> /* the holomap drawn in software over the GPU picture (HoloMap) */
 #include "CONTROL.H"
 #include "DIRECTORIES.H"
 #include "INPUT.H"
@@ -1255,6 +1256,15 @@ void HoloMap() {
     UnsetClipWindow();
     SaveCamera();
 
+    // (OpenGL: the holomap is the game's own picture, drawn whole by the software fillers and shown over everything. The globe's and the
+    // island's polygons are z-buffered (Switch_Fillers(FILL_POLY_ZBUFFER)), and a z-buffered polygon went to the GPU's 3D target, which the
+    // holomap's loop never shows: the map wasn't drawn, its caption and cursor were, over the scene behind -- the user, 2026-11-25, "I can
+    // see the cursor from the holomap displayed, but not the actual map"; the 2D layer's black, see-through over the GPU's picture, showed
+    // the scene round it. A renderer switch, which reset the GPU's state, made it right till the next start.)
+    const S32 holoSoftwarePolys = GpuRenderer_GetSoftwarePolys();
+    GpuRenderer_SetSoftwarePolys(1);
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+
     TestCoulDial(COUL_PERSO);
     InitDial(2); //	FR_GAM.DIA
 
@@ -1313,6 +1323,8 @@ void HoloMap() {
     }
 
     FirstTime = AFF_ALL_FLIP;
+    GpuRenderer_SetSoftwarePolys(holoSoftwarePolys);
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
 
     RestoreClipWindow(); //	CinemaMode
 
