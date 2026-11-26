@@ -70,6 +70,17 @@ __attribute__((weak)) void ApplyHarnessKeys(void) {}
 void Record_PollHook(void);
 __attribute__((weak)) void Record_PollHook(void) {}
 
+// The keys gone down by their events since the last poll, and in the poll just taken (KeyWentDownLastPoll), in TabKeys' layout: a key
+// pressed and let go between two polls never shows in the polled state.
+static U8 TabKeysDownSince[TABKEYS_NUM_KEYS];
+static U8 TabKeysDownLast[TABKEYS_NUM_KEYS];
+
+S32 KeyWentDownLastPoll(U32 key) {
+    if (key >= PLATFORM_SCANCODE_COUNT)
+        return FALSE;
+    return (TabKeysDownLast[KeyIndex(key)] & KeyBit(key)) != 0;
+}
+
 // --- Private functions -------------------------------------------------------
 void UpdateKeyboardState() {
     ManageEvents();
@@ -78,6 +89,9 @@ void UpdateKeyboardState() {
     memset(TabKeys, 0, 256);
 
     g_platform.events.pump();
+    /* (the poll's keys gone down by their events, the pump's included: KeyWentDownLastPoll) */
+    memcpy(TabKeysDownLast, TabKeysDownSince, sizeof(TabKeysDownLast));
+    memset(TabKeysDownSince, 0, sizeof(TabKeysDownSince));
     const U8 *keystate = g_platform.input.keyboard_state();
     for (int keyIndex = 0; keyIndex < PLATFORM_SCANCODE_COUNT; keyIndex++) {
         if (keystate[keyIndex]) {
@@ -252,6 +266,8 @@ void HandleEventsKeyboard(const PlatformEvent *event) {
         && (ev->key.scancode == 68 || ((ev->key.scancode == 40 || ev->key.scancode == 88) && (ev->key.mod & 0x0300))))
         Keyboard_ToggleFullscreen();
 
+    if (ev->type == PLATFORM_EVENT_KEY_DOWN && !ev->key.repeat && (U32)ev->key.scancode < PLATFORM_SCANCODE_COUNT)
+        TabKeysDownSince[KeyIndex((U32)ev->key.scancode)] |= KeyBit((U32)ev->key.scancode);
     if (ev->type == PLATFORM_EVENT_KEY_DOWN && !ev->key.repeat)
         InputFlow_NoteKeyEvent(TRUE);
     else if (ev->type == PLATFORM_EVENT_KEY_UP)

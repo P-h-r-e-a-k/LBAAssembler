@@ -338,6 +338,7 @@
 #include "DIRECTORIES.H"
 #include "HQR_NAMES.H"
 #include "INPUT.H"
+#include "INPUT_BINDINGS.H"
 #include "RACEMOD.H"
 #include "RACEGAME.H"
 #include <SYSTEM/HQRLOAD.H>
@@ -14407,8 +14408,21 @@ static void PowerUps(S32 now, int driving) {
         SecondIntoBox(now);
     }
     const int gold = s_item[RACE_BOX] == PU_GOLD;
+    // (a tap of the power-up key shorter than a frame -- down and up again between two of the game's looks at the keyboard, KEYBOARD.CPP
+    // KeyWentDownLastPoll -- was never held, so no press at all, nor a word of it in the log: taken as a press now, and said so -- the user,
+    // 2026-11-26, "there are times it doesn't release and the button has to be pushed a second time". The keyboard's keys only: a pad's
+    // buttons are polled apart)
+    extern S32 RaceGame_LocalGuest(void);
+    int tap = 0;
+    if (!use && !s_useWas && !RaceGame_LocalGuest())
+        for (int k = 0; k < 2 && !tap; k++) {
+            const U32 key = k ? CarKeys[5].Key2 : CarKeys[5].Key1;
+            if (key && KeyWentDownLastPoll(key)) tap = 1;
+        }
+    if (tap) Log_Info("[racemod] item key tapped between two frames (down and up before the game looked): taken as a press");
+    const int press = (use && !s_useWas) || tap;
     int used = 0;
-    if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && ((use && !s_useWas)
+    if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && (press
             || (s_auto && s_autoDrop > 0 && now >= s_itemAt[RACE_BOX] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
         const int pu = s_item[RACE_BOX];
         // (the golden Gazogem stays in the box for its time, a boost at each press; any other item is used up, and what waits in the
@@ -14420,8 +14434,8 @@ static void PowerUps(S32 now, int driving) {
     }
     // (a press that used nothing, and why -- the user, 2026-10-21: items sometimes failing when the button is pressed; a press, unlike a
     // drop, wasn't logged at all: "Twinsen uses ..." is a press that worked)
-    if (use && !s_useWas && !used) {
-        const char *key = s_useHeld ? "the item key" : "Ctrl";
+    if (press && !used) {
+        const char *key = tap ? "the item key, a tap" : s_useHeld ? "the item key" : "Ctrl";
         if (!driving) Log_Info("[racemod] item press (%s) not used: not driving (Comportement %d, %s)", key, (int)Comportement, s_item[RACE_BOX] >= 0 ? s_puName[s_item[RACE_BOX]] : "box empty");
         else if (s_item[RACE_BOX] < 0) {
             if (s_usedAt) Log_Info("[racemod] item press (%s) not used: the item box is empty (the last item used %.1f s ago)", key, (now - s_usedAt) / 1000.0);

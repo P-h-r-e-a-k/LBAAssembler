@@ -38,6 +38,9 @@ void TypedText_Start(void);
 void TypedText_Stop(void);
 S32 TypedText_Take(char *out, S32 size);
 S32 CheckKey(U32 key);
+/* Whether a key went down by its events in the poll just taken (KEYBOARD.CPP): a key down and up again between two polls -- a tap
+   shorter than a frame -- never shows in the polled state (CheckKey). The race-track mode's power-up key reads it. */
+S32 KeyWentDownLastPoll(U32 key);
 void GetKeyScancodeName(char *string, U8 strMaxLen, U32 scanCode);
 
 void ManageKeyboard();
