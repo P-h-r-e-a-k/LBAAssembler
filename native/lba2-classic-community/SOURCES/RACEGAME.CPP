@@ -103,6 +103,7 @@
 #include "C_EXTERN.H"
 #include "CONFIG_FILE.H"
 #include "CONFIG.H"
+#include "MENU_INPUT.H"
 #include "CONSOLE/CONSOLE.H"
 #include "CONTROL.H"
 #include "DIRECTORIES.H"
@@ -2092,8 +2093,10 @@ static int TimesPage(void) {
         if (Clicked(&mx, &my)) done = 1;
         // up and down: the row
         S32 dir = 0;
-        if (Input & I_UP || MyKey == K_UP) { InitWaitNoInput(I_UP); InitWaitNoKey(); dir = -1; }
-        else if (Input & I_DOWN || MyKey == K_DOWN) { InitWaitNoInput(I_DOWN); InitWaitNoKey(); dir = 1; }
+        // (the stick and the d-pad too, through the menus' own reader -- only a pad's triggers moved it: the menu audit, 2026-11-26)
+        const U32 menuWay = MenuInput_Get();
+        if (Input & I_UP || MyKey == K_UP || (menuWay & MENU_INPUT_UP)) { InitWaitNoInput(I_UP); InitWaitNoKey(); MenuInput_Suppress(MENU_INPUT_UP | MENU_INPUT_DOWN); dir = -1; }
+        else if (Input & I_DOWN || MyKey == K_DOWN || (menuWay & MENU_INPUT_DOWN)) { InitWaitNoInput(I_DOWN); InitWaitNoKey(); MenuInput_Suppress(MENU_INPUT_UP | MENU_INPUT_DOWN); dir = 1; }
         for (int k = 1; dir && k < 3; k++) {
             const int r = ((row + dir * k) % 3 + 3) % 3;
             if (rowOpen[r]) { row = r; flag = 1; break; }

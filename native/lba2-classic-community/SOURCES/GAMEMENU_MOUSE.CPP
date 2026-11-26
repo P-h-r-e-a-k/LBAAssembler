@@ -214,7 +214,11 @@ S32 GameMenuMouseProcessDoGameMenu(U16 *ptrmenu, S16 *selected, S32 *flag) {
     prevLeft = (s_prevClick & 1) != 0;
     leftDownEdge = leftDown && !prevLeft;
     leftUpEdge = !leftDown && prevLeft;
+    // (the right button let go: back, as Esc -- the race game's pages took it so, the game's menus did nothing: the menu audit, 2026-11-26)
+    const S32 rightUpEdge = !(cur & 2) && (s_prevClick & 2);
     s_prevClick = cur;
+    if (rightUpEdge && s_pressRow < 0)
+        return 1000;
 
     // (a scrolling list's bar: a click or a drag on it scrolls there, as Track select's)
     {
