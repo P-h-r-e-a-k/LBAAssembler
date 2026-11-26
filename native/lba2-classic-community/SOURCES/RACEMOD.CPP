@@ -22339,7 +22339,10 @@ static void FruitReels(S32 now) {
                 const S32 t = now - s_fmAt;
                 angle = t < FM_SPIN_MS + r * FM_GAP_MS ? (S32)(((S64)t * FM_TURN / 1000 + r * 1365) & 4095) : FmFace(s_fmReel[r]);
             }
-            o->Obj.CurrentFrame[1 + r].Alpha = (S16)angle;
+            // (a body's frame holds its bones from 1 on, the cabinet's own, 0, has none: reel r's bone 1 + r is entry r -- as the frog's
+            // jaw, bone 1, is entry 0. At 1 + r the first reel stood still on its 7 and the other two turned: the user, 2026-11-26, "only
+            // the second two wheels spin")
+            o->Obj.CurrentFrame[r].Alpha = (S16)angle;
         }
     }
 }
