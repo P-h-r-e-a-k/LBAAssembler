@@ -101,6 +101,24 @@ extern S32 Bindings_CarHeld(S32 slot);
 extern void Bindings_Inject(S32 slot);
 extern void Bindings_ClearInjected(void);
 
+// Two players at one keyboard (RACEGAME.CPP RaceGame_SharedKeys, NETRACE.CPP RaceNet_SharedKeys): each player's driving keys, rows
+// 0-6 player 1's (on the left: W A S D, Q, E, R), 7-13 player 2's (the arrows, Right Ctrl, Right Shift, /) -- accelerate, brake, left,
+// right, item, handbrake, view. Keyboard keys only (each player's pad is their own), saved in lba2.cfg as TwoKeys<row>_1/_2.
+#define TWO_ROWS 7
+#define TWO_KEYS (2 * TWO_ROWS)
+#define TWO_ACCEL 0
+#define TWO_BRAKE 1
+#define TWO_LEFT 2
+#define TWO_RIGHT 3
+#define TWO_ITEM 4
+#define TWO_HANDBRAKE 5
+#define TWO_VIEW 6
+extern T_DEF_KEY TwoKeys[TWO_KEYS];
+extern const T_DEF_KEY TwoKeysDefault[TWO_KEYS];
+extern const S32 TwoKeySlot[TWO_KEYS];
+extern const char *const TwoKeyLabel[TWO_KEYS];
+extern void RestoreTwoKeys(void);
+
 // The other direction: which keys carry a slot, and which slot a key carries.
 //
 // InitInput folds the two tables into the flat (key, mask) array GetInput scans,

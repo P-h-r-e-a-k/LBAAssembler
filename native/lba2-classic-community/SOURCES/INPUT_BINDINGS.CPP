@@ -158,6 +158,22 @@ void RestoreCarKeys(S32 keyboard, S32 pad) {
     if (pad) memcpy(CarPadKeys, CarPadKeysDefault, sizeof(CarPadKeys));
 }
 
+// ---- Two players at one keyboard -------------------------------------------------------------------------------------------------------
+T_DEF_KEY TwoKeys[TWO_KEYS];
+const T_DEF_KEY TwoKeysDefault[TWO_KEYS] = {
+    {K_W, 0}, {K_S, 0}, {K_A, 0}, {K_D, 0}, {K_Q, 0}, {K_E, 0}, {K_R, 0},
+    {K_GRAY_UP, 0}, {K_GRAY_DOWN, 0}, {K_GRAY_LEFT, 0}, {K_GRAY_RIGHT, 0}, {K_CTRL_RIGHT, 0}, {K_SHIFT_RIGHT, 0}, {PLATFORM_SCANCODE_SLASH, 0},
+};
+const S32 TwoKeySlot[TWO_KEYS] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+const char *const TwoKeyLabel[TWO_KEYS] = {
+    "Player 1: accelerate", "Player 1: brake, reverse", "Player 1: steer left", "Player 1: steer right", "Player 1: use item",
+    "Player 1: handbrake", "Player 1: camera view",
+    "Player 2: accelerate", "Player 2: brake, reverse", "Player 2: steer left", "Player 2: steer right", "Player 2: use item",
+    "Player 2: handbrake", "Player 2: camera view",
+};
+
+void RestoreTwoKeys(void) { memcpy(TwoKeys, TwoKeysDefault, sizeof(TwoKeys)); }
+
 static S32 s_inCar = 0;
 static S32 s_switchArmed = 0;
 static U32 s_switchHeld = 0;

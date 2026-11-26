@@ -72,6 +72,8 @@ static S32 s_cfgRows = MAX_INPUT_SLOTS;
 static const S32 *s_cfgSlot = NULL;           // a row's slot (NULL: the row's own number)
 static const char *const *s_cfgLabel = NULL;  // a row's words (NULL: the game's own text)
 static const char *s_cfgTitle = NULL;         // the first column's heading (NULL: the game's own)
+static S32 s_cfgLen = 0;                      // the table's length (its slots, for the page's Previous)
+static void (*s_cfgRestore)(void) = NULL;     // its defaults (NULL: the game's own, RestoreInput)
 static S32 RowSlot(S32 row) { return s_cfgSlot ? s_cfgSlot[row] : row; }
 
 /* The config screen is a fixed 620-px-wide three-column layout (margins of
@@ -700,7 +702,7 @@ void Config_MainCapture(const char *path) {
 static void MenuConfigRun(void) {
     S32 oldselect;
     T_DEF_KEY *table = s_cfgTable ? s_cfgTable : DefKeys;
-    const S32 len = s_cfgTable ? CAR_SLOTS : MAX_INPUT_SLOTS;
+    const S32 len = s_cfgTable ? s_cfgLen : MAX_INPUT_SLOTS;
     T_DEF_KEY memo[CAR_SLOTS > MAX_INPUT_SLOTS ? CAR_SLOTS : MAX_INPUT_SLOTS];
     U32 lasttime;
     U32 repeattime;
@@ -896,8 +898,8 @@ static void MenuConfigRun(void) {
                 switch ((SelectConfig - s_cfgRows)) {
                 case 0: // Configuration par Défaut
                     memcpy(memo, table, sizeof(T_DEF_KEY) * len);
-                    if (s_cfgTable)
-                        RestoreCarKeys(TRUE, FALSE);
+                    if (s_cfgRestore)
+                        s_cfgRestore();
                     else
                         RestoreInput();
                     InitKeyStrings();
@@ -998,35 +1000,48 @@ void MenuConfig(void) {
     MenuConfigRun();
 }
 
-// A page over the car's keys or buttons: its rows the car page's, its heading its own; the on-foot page's place in its list kept
-static void CarView(S32 on, S32 *memoSelect) {
-    if (on) {
-        *memoSelect = SelectConfig;
-        SelectConfig = 0;
-        SelectKey = 0;
-        s_cfgRows = CAR_PAGE_ROWS;
-        s_cfgSlot = CarPageSlot;
-        s_cfgLabel = CarPageLabel;
-        s_cfgTitle = "In the car";
-    } else {
-        s_cfgTable = NULL;
-        s_cfgRows = MAX_INPUT_SLOTS;
-        s_cfgSlot = NULL;
-        s_cfgLabel = NULL;
-        s_cfgTitle = NULL;
-        SelectConfig = *memoSelect;
-        SelectKey = 0;
-        InitKeyStrings();
-    }
+// A page over another table (the car's keys or buttons, two players' keys): its rows, its words, its heading and defaults its own; the
+// on-foot page's place in its list kept
+static S32 s_viewMemo = 0;
+static void SetView(T_DEF_KEY *table, S32 len, S32 rows, const S32 *slots, const char *const *labels, const char *title, void (*restore)(void)) {
+    s_viewMemo = SelectConfig;
+    SelectConfig = 0;
+    SelectKey = 0;
+    s_cfgTable = table;
+    s_cfgLen = len;
+    s_cfgRows = rows;
+    s_cfgSlot = slots;
+    s_cfgLabel = labels;
+    s_cfgTitle = title;
+    s_cfgRestore = restore;
 }
+static void EndView(void) {
+    s_cfgTable = NULL;
+    s_cfgLen = 0;
+    s_cfgRows = MAX_INPUT_SLOTS;
+    s_cfgSlot = NULL;
+    s_cfgLabel = NULL;
+    s_cfgTitle = NULL;
+    s_cfgRestore = NULL;
+    SelectConfig = s_viewMemo;
+    SelectKey = 0;
+    InitKeyStrings();
+}
+static void RestoreCarKeyboard(void) { RestoreCarKeys(TRUE, FALSE); }
+static void RestoreCarPad(void) { RestoreCarKeys(FALSE, TRUE); }
 
 // The keyboard's page in the car (the race game's Options > Controls)
 void MenuConfigCar(void) {
-    S32 memo;
-    CarView(TRUE, &memo);
-    s_cfgTable = CarKeys;
+    SetView(CarKeys, CAR_SLOTS, CAR_PAGE_ROWS, CarPageSlot, CarPageLabel, "In the car", RestoreCarKeyboard);
     MenuConfigRun();
-    CarView(FALSE, &memo);
+    EndView();
+}
+
+// Two players at one keyboard: each player's driving keys (the race game's Options > Controls)
+void MenuConfigTwo(void) {
+    SetView(TwoKeys, TWO_KEYS, TWO_KEYS, TwoKeySlot, TwoKeyLabel, "Two players, one keyboard", RestoreTwoKeys);
+    MenuConfigRun();
+    EndView();
 }
 
 // The first column's heading on the next on-foot page (NULL: the game's own): the race game's "On foot"
@@ -1078,7 +1093,7 @@ static S32 CheckGamepadKeyConfig(S32 key) {
 static void MenuGamepadConfigRun(void) {
     S32 oldselect;
     T_DEF_KEY *table = s_cfgTable ? s_cfgTable : GamepadKeys;
-    const S32 len = s_cfgTable ? CAR_SLOTS : MAX_INPUT_SLOTS;
+    const S32 len = s_cfgTable ? s_cfgLen : MAX_INPUT_SLOTS;
     U32 lasttime;
     U32 repeattime;
     S32 ok = FALSE;
@@ -1270,8 +1285,8 @@ static void MenuGamepadConfigRun(void) {
                 switch ((SelectConfig - s_cfgRows)) {
                 case 0: // restore defaults
                     memcpy(MemoGamepadKeys, table, sizeof(T_DEF_KEY) * len);
-                    if (s_cfgTable)
-                        RestoreCarKeys(FALSE, TRUE);
+                    if (s_cfgRestore)
+                        s_cfgRestore();
                     else
                         memcpy(GamepadKeys, GamepadKeysDefault, sizeof(GamepadKeys));
                     InitGamepadKeyStrings();
@@ -1370,11 +1385,9 @@ void MenuGamepadConfig(void) {
 
 // The pad's page in the car (the race game's Options > Controls)
 void MenuGamepadConfigCar(void) {
-    S32 memo;
-    CarView(TRUE, &memo);
-    s_cfgTable = CarPadKeys;
+    SetView(CarPadKeys, CAR_SLOTS, CAR_PAGE_ROWS, CarPageSlot, CarPageLabel, "In the car", RestoreCarPad);
     MenuGamepadConfigRun();
-    CarView(FALSE, &memo);
+    EndView();
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀

@@ -19298,7 +19298,7 @@ void RaceMod_SetCameraView(int view) {
 static void RaceCameraKey(void) {
     const int down = Bindings_CarHeld(CAR_SLOT_VIEW);
     if (down && !s_viewKeyWas && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && NewCube == -1)
-        SetCameraView((s_camView + 1) % 3, "V");
+        SetCameraView((s_camView + 1) % 3, "the view key");
     s_viewKeyWas = down;
     // (a view of its own -- inside the car, further back -- on a track whose camera is the classic one: the follow camera for it, the
     // view's hook its own -- RaceCameraEye -- and back to the classic one just behind)

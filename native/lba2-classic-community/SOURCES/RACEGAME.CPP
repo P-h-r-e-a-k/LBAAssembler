@@ -232,7 +232,8 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_KEYS_FOOT 2497                // Options > Controls: the keyboard's page on foot (RaceGame_ControllerMenu)
 #define RG_ID_KEYS_CAR 2498                 // ... in the car
 #define RG_ID_PAD_FOOT 2499                 // ... the controller's on foot
-#define RG_ID_PAD_CAR 2500                  // ... in the car                // the main menu's Scrapbook: the postcards this player has found (ScrapbookPage, 2026-11-24)
+#define RG_ID_PAD_CAR 2500                  // ... in the car
+#define RG_ID_KEYS_TWO 2501                 // ... two players at one keyboard (MenuConfigTwo)                // the main menu's Scrapbook: the postcards this player has found (ScrapbookPage, 2026-11-24)
 #define RG_ID_SAVE 73                       // the game's own Save game (GAMEMENU.CPP's case 73): in the story's menu too (the user, 2026-11-24)
 static int StoryResolved(char *out);
 static int AchRowDisabled(int k);
@@ -1375,7 +1376,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
     if (s_on && num == RG_ID_REPLAY_END) { Label(string, "End the replay"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO && num != RG_ID_SCRAPBOOK && (num < RG_ID_KEYS_FOOT || num > RG_ID_PAD_CAR))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO && num != RG_ID_SCRAPBOOK && (num < RG_ID_KEYS_FOOT || num > RG_ID_KEYS_TWO))) return 0;
     // (a player's row: its name, marked when it is this game's)
     // (an achievement's row, a bowler's, the walk round the alley)
     if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) { char row[160]; AchRowLabel(num - RG_ID_ACH_FIRST, row, sizeof(row)); Label(string, row); return 1; }
@@ -1436,7 +1437,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_KEYS_FOOT: Label(string, "Keyboard: on foot"); return 1;
     case RG_ID_KEYS_CAR: Label(string, "Keyboard: in the car"); return 1;
     case RG_ID_PAD_FOOT: Label(string, "Controller: on foot"); return 1;
-    case RG_ID_PAD_CAR: Label(string, "Controller: in the car"); return 1;   // (the game's own Controls row changes the keys)
+    case RG_ID_PAD_CAR: Label(string, "Controller: in the car"); return 1;
+    case RG_ID_KEYS_TWO: Label(string, "Two players, one keyboard"); return 1;   // (the game's own Controls row changes the keys)
     case RG_ID_UPDATES: Label(string, "Window and updates"); return 1;          // (the row's width: "Window mode, mini-map, updates" ran over it)
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
@@ -2331,6 +2333,17 @@ static void CarKeyName(char *out, size_t size, S32 slot, int pad) {
     else if (key == K_GRAY_DOWN) snprintf(out, size, "Down arrow");
     else snprintf(out, size, "%s", name);
 }
+// A key of two players' at one keyboard (TwoKeys) as the pages say it
+static void TwoKeyName(char *out, size_t size, int row) {
+    const U32 key = TwoKeys[row].Key1 ? TwoKeys[row].Key1 : TwoKeys[row].Key2;
+    if (!key) { snprintf(out, size, "(none)"); return; }
+    if (key == K_GRAY_UP) { snprintf(out, size, "Up arrow"); return; }
+    if (key == K_GRAY_DOWN) { snprintf(out, size, "Down arrow"); return; }
+    if (key == PLATFORM_SCANCODE_SLASH) { snprintf(out, size, "/"); return; }
+    char name[64];
+    GetKeyText(name, key);
+    snprintf(out, size, "%s", name);
+}
 // Steering's two keys on one row: "Left, right" for the arrows, "Left stick" for the stick's two ways
 static void SteerName(char *out, size_t size, int pad) {
     const T_DEF_KEY *l = pad ? &CarPadKeys[2] : &CarKeys[2], *r = pad ? &CarPadKeys[3] : &CarKeys[3];
@@ -2365,22 +2378,37 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {name[7], RG_ON_FOOT},              // that the page still fits)
         {"P, Esc", "Pause, menu"},
     };
-    // (two players on one keyboard: each their side of it, RaceGame_SharedKeys. Each game's page says its own player's)
-    static const char *const keys1[][2] = {
-        {"W", "Accelerate"},
-        {"S", "Brake, reverse"},
-        {"A, D", "Steer"},
-        {"Q", "Use your item"},
-        {"E", "Handbrake"},
-        {"R", "Camera view"},
+    // (two players on one keyboard: each their side of it, RaceGame_SharedKeys -- the keys as set, TwoKeys. Each game's page says its
+    // own player's)
+    static char two[2][6][64];
+    for (int p = 0; p < 2; p++) {
+        const int r = p * TWO_ROWS;
+        TwoKeyName(two[p][0], sizeof(two[p][0]), r + TWO_ACCEL);
+        TwoKeyName(two[p][1], sizeof(two[p][1]), r + TWO_BRAKE);
+        char a[48], b[48];
+        TwoKeyName(a, sizeof(a), r + TWO_LEFT);
+        TwoKeyName(b, sizeof(b), r + TWO_RIGHT);
+        if (TwoKeys[r + TWO_LEFT].Key1 == K_GRAY_LEFT && TwoKeys[r + TWO_RIGHT].Key1 == K_GRAY_RIGHT) snprintf(two[p][2], sizeof(two[p][2]), "Left, right");
+        else snprintf(two[p][2], sizeof(two[p][2]), "%s, %s", a, b);
+        TwoKeyName(two[p][3], sizeof(two[p][3]), r + TWO_ITEM);
+        TwoKeyName(two[p][4], sizeof(two[p][4]), r + TWO_HANDBRAKE);
+        TwoKeyName(two[p][5], sizeof(two[p][5]), r + TWO_VIEW);
+    }
+    const char *const keys1[][2] = {
+        {two[0][0], "Accelerate"},
+        {two[0][1], "Brake, reverse"},
+        {two[0][2], "Steer"},
+        {two[0][3], "Use your item"},
+        {two[0][4], "Handbrake"},
+        {two[0][5], "Camera view"},
     };
-    static const char *const keys2[][2] = {
-        {"Up arrow", "Accelerate"},
-        {"Down arrow", "Brake, reverse"},
-        {"Left, right", "Steer"},
-        {"Right Ctrl", "Use your item"},
-        {"Right Shift", "Handbrake"},
-        {"/", "Camera view"},
+    const char *const keys2[][2] = {
+        {two[1][0], "Accelerate"},
+        {two[1][1], "Brake, reverse"},
+        {two[1][2], "Steer"},
+        {two[1][3], "Use your item"},
+        {two[1][4], "Handbrake"},
+        {two[1][5], "Camera view"},
     };
     const int guest = s_localGuest > 0 || RaceNet_Local();
     const char *const(*list)[2] = s_localGuest > 0 ? keys2 : guest ? keys1 : keys;
@@ -3756,8 +3784,8 @@ U16 *RaceGame_AdvancedMenu(U16 *menu) {
 static U16 s_ctlMenu[4 + 2 * 6];
 U16 *RaceGame_ControllerMenu(U16 *menu) {
     if (!RaceGame_On() || !menu) return menu;
-    const U16 at = s_ctlMenu[1] == 5 ? s_ctlMenu[0] : 1;
-    s_ctlMenu[1] = 5;
+    const U16 at = s_ctlMenu[1] == 6 ? s_ctlMenu[0] : 1;
+    s_ctlMenu[1] = 6;
     s_ctlMenu[2] = menu[2];
     s_ctlMenu[3] = menu[3];
     SetRow(s_ctlMenu, 0, menu[4 + 1]);      // (the game's own Back)
@@ -3765,6 +3793,7 @@ U16 *RaceGame_ControllerMenu(U16 *menu) {
     SetRow(s_ctlMenu, 2, RG_ID_KEYS_CAR);
     SetRow(s_ctlMenu, 3, RG_ID_PAD_FOOT);
     SetRow(s_ctlMenu, 4, RG_ID_PAD_CAR);
+    SetRow(s_ctlMenu, 5, RG_ID_KEYS_TWO);
     s_ctlMenu[0] = at;
     return s_ctlMenu;
 }
@@ -3775,6 +3804,7 @@ S32 RaceGame_ControllerRow(S32 num) {
     case RG_ID_KEYS_CAR: MenuConfigCar(); return 1;
     case RG_ID_PAD_FOOT: Config_FootTitle("On foot"); MenuGamepadConfig(); Config_FootTitle(NULL); return 1;
     case RG_ID_PAD_CAR: MenuGamepadConfigCar(); return 1;
+    case RG_ID_KEYS_TWO: MenuConfigTwo(); return 1;
     }
     return 0;
 }
@@ -5648,11 +5678,28 @@ void RaceGame_TestKeys(int down) { s_testKeys = down; }
 // Before the game reads the keyboard: the first player's game, in a race, leaves the second player's keys alone
 void RaceGame_KeysBefore(void) {
     if (s_localGuest > 0 || !RaceNet_Local() || s_gameMenus) return;
-    static const int keys[] = {K_UP, K_DOWN, K_LEFT, K_RIGHT, K_CTRL_RIGHT, K_SHIFT_RIGHT};
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-        TabKeys[keys[i]] = 0;
-        if (MyKey == keys[i]) MyKey = 0;
+    // (player 2's keys as set -- INPUT_BINDINGS.H TwoKeys, Options > Controls, "Two players, one keyboard")
+    for (int i = TWO_ROWS; i < TWO_KEYS; i++) {
+        const U32 keys[2] = {TwoKeys[i].Key1, TwoKeys[i].Key2};
+        for (int k = 0; k < 2; k++) {
+            if (!keys[k] || keys[k] >= 256) continue;
+            TabKeys[keys[k]] = 0;
+            if (MyKey == (S32)keys[k]) MyKey = 0;
+        }
     }
+}
+
+// One of player 1's keys at a shared keyboard (TwoKeys row 0-6) held -- and taken from the game, which reads it no other way
+static int TwoHeld(int row) {
+    int held = 0;
+    const U32 keys[2] = {TwoKeys[row].Key1, TwoKeys[row].Key2};
+    for (int k = 0; k < 2; k++) {
+        if (!keys[k] || keys[k] >= 256) continue;
+        if (TabKeys[keys[k]]) held = 1;
+        TabKeys[keys[k]] = 0;
+        if (MyKey == (S32)keys[k]) MyKey = 0;
+    }
+    return held;
 }
 
 void RaceGame_SharedKeys(void) {
@@ -5670,13 +5717,10 @@ void RaceGame_SharedKeys(void) {
         // (the first player, on the left of the screen, has the left of the keyboard in a race, the same keys as RaceNet_SharedKeys's other
         // side: a player's report, 2026-10-31, W A S D was the player on the right's. In the menus the arrows and Enter still work here:
         // the car grid's search is typed)
-        const int up = TabKeys[K_W], down = TabKeys[K_S], left = TabKeys[K_A], right = TabKeys[K_D], item = TabKeys[K_Q], brake = TabKeys[K_E], view = TabKeys[K_R];
+        // (player 1's keys as set: TwoKeys rows 0-6, Options > Controls)
         if (s_gameMenus) return;
-        static const int keys[] = {K_W, K_A, K_S, K_D, K_Q, K_E, K_R};
-        for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-            TabKeys[keys[i]] = 0;
-            if (MyKey == keys[i]) MyKey = 0;
-        }
+        const int up = TwoHeld(TWO_ACCEL), down = TwoHeld(TWO_BRAKE), left = TwoHeld(TWO_LEFT), right = TwoHeld(TWO_RIGHT), item = TwoHeld(TWO_ITEM),
+                  brake = TwoHeld(TWO_HANDBRAKE), view = TwoHeld(TWO_VIEW);
         Input &= ~(U32)(I_SAVE | I_ACTION_ALWAYS);
         if (up) Input |= I_UP;
         if (down) Input |= I_DOWN;
@@ -5994,13 +6038,24 @@ static int LobbyPage(void) {
             else SmallFitted(x0 + 16, y1 - 60, x1 - x0 - 32, "Type to chat", RG_GREY, -1);
         }
         // (each window its own player's keys: both said player 2's, the user, 2026-10-31, "the same controls for both cars")
-        if (s_localGuest > 0) {
-            Text(cx, y1 - 140, "Player 2: the arrow keys", RG_GREY);
-            Text(cx, y1 - 106, "Right Ctrl item, Right Shift handbrake, / view", RG_GREY);
-        }
-        else if (local) {
-            Text(cx, y1 - 140, "Player 1: W A S D", RG_GREY);
-            Text(cx, y1 - 106, "Q item, E handbrake, R view", RG_GREY);
+        // (the keys as set: TwoKeys, Options > Controls, "Two players, one keyboard")
+        if (s_localGuest > 0 || local) {
+            const int r = s_localGuest > 0 ? TWO_ROWS : 0;
+            char k[4][48], hint[2][200];
+            TwoKeyName(k[0], sizeof(k[0]), r + TWO_ACCEL);
+            TwoKeyName(k[1], sizeof(k[1]), r + TWO_LEFT);
+            TwoKeyName(k[2], sizeof(k[2]), r + TWO_BRAKE);
+            TwoKeyName(k[3], sizeof(k[3]), r + TWO_RIGHT);
+            if (TwoKeys[r + TWO_ACCEL].Key1 == K_GRAY_UP && TwoKeys[r + TWO_LEFT].Key1 == K_GRAY_LEFT)
+                snprintf(hint[0], sizeof(hint[0]), "Player %d: the arrow keys", r ? 2 : 1);
+            else
+                snprintf(hint[0], sizeof(hint[0]), "Player %d: %s %s %s %s", r ? 2 : 1, k[0], k[1], k[2], k[3]);
+            TwoKeyName(k[0], sizeof(k[0]), r + TWO_ITEM);
+            TwoKeyName(k[1], sizeof(k[1]), r + TWO_HANDBRAKE);
+            TwoKeyName(k[2], sizeof(k[2]), r + TWO_VIEW);
+            snprintf(hint[1], sizeof(hint[1]), "%s item, %s handbrake, %s view", k[0], k[1], k[2]);
+            Text(cx, y1 - 140, hint[0], RG_GREY);
+            Text(cx, y1 - 106, hint[1], RG_GREY);
         }
         if (picks && RaceNet_Turned()[0]) Text(cx, y1 - (rounds ? 242 : 72), RaceNet_Turned(), RG_ORANGE);
         // (the host's Enter picks the track, then their car; the second player's Enter on one keyboard is right Ctrl: Enter goes to the first's window,

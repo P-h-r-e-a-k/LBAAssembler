@@ -24,6 +24,8 @@ extern void MenuGamepadConfig(void);
 // The car's own keys and pad buttons (INPUT_BINDINGS.H CarKeys / CarPadKeys): the same pages over the car page's rows
 extern void MenuConfigCar(void);
 extern void MenuGamepadConfigCar(void);
+// Two players at one keyboard: each player's driving keys (INPUT_BINDINGS.H TwoKeys)
+extern void MenuConfigTwo(void);
 // The first column's heading on the on-foot pages (NULL: the game's own)
 extern void Config_FootTitle(const char *title);
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀

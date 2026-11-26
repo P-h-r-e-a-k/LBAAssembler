@@ -33,6 +33,7 @@
 
 #include <SDL3/SDL.h>
 #include <SYSTEM/LOG.H>
+#include "INPUT_BINDINGS.H"         // (two players at one keyboard: TwoKeys)
 
 #include <math.h>
 #include <stdio.h>
@@ -1057,6 +1058,60 @@ int RaceNet_NextEvent(T_RACENET_EVENT *out) {
 
 // The second player's keys, by where they are on the keyboard whatever its letters: W A S D, Q the item, E the handbrake, R the view. The second game never
 // has the keyboard's focus, so it asks Windows; only with one of the two games in front, or it would drive on what's typed elsewhere.
+#ifdef _WIN32
+// A key of the game's (an SDL scancode, as lba2.cfg keeps them) as Windows names it, for GetAsyncKeyState: 0 for one it has no name for
+static int VirtualKeyOf(U32 sc) {
+    if (sc >= 4 && sc <= 29) return 'A' + (int)(sc - 4);
+    if (sc >= 30 && sc <= 38) return '1' + (int)(sc - 30);
+    if (sc == 39) return '0';
+    if (sc >= 58 && sc <= 69) return VK_F1 + (int)(sc - 58);
+    if (sc >= 89 && sc <= 97) return VK_NUMPAD1 + (int)(sc - 89);
+    switch (sc) {
+    case 40: return VK_RETURN;
+    case 41: return VK_ESCAPE;
+    case 42: return VK_BACK;
+    case 43: return VK_TAB;
+    case 44: return VK_SPACE;
+    case 45: return VK_OEM_MINUS;
+    case 46: return VK_OEM_PLUS;
+    case 47: return VK_OEM_4;
+    case 48: return VK_OEM_6;
+    case 49: return VK_OEM_5;
+    case 51: return VK_OEM_1;
+    case 52: return VK_OEM_7;
+    case 53: return VK_OEM_3;
+    case 54: return VK_OEM_COMMA;
+    case 55: return VK_OEM_PERIOD;
+    // (the key by right Shift, / on most keyboards: by where it is, whatever the layout calls it -- as before)
+    case 56: return (int)MapVirtualKeyA(0x35, MAPVK_VSC_TO_VK);
+    case 73: return VK_INSERT;
+    case 74: return VK_HOME;
+    case 75: return VK_PRIOR;
+    case 76: return VK_DELETE;
+    case 77: return VK_END;
+    case 78: return VK_NEXT;
+    case 79: return VK_RIGHT;
+    case 80: return VK_LEFT;
+    case 81: return VK_DOWN;
+    case 82: return VK_UP;
+    case 84: return VK_DIVIDE;
+    case 85: return VK_MULTIPLY;
+    case 86: return VK_SUBTRACT;
+    case 87: return VK_ADD;
+    case 88: return VK_RETURN;
+    case 98: return VK_NUMPAD0;
+    case 99: return VK_DECIMAL;
+    case 224: return VK_LCONTROL;
+    case 225: return VK_LSHIFT;
+    case 226: return VK_LMENU;
+    case 228: return VK_RCONTROL;
+    case 229: return VK_RSHIFT;
+    case 230: return VK_RMENU;
+    }
+    return 0;
+}
+#endif
+
 int RaceNet_SharedKeys(void) {
 #ifdef _WIN32
     static DWORD first = 0;
@@ -1064,13 +1119,18 @@ int RaceNet_SharedKeys(void) {
     DWORD front = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &front);
     if (front != first && front != GetCurrentProcessId()) return 0;
-    // (the keyboard's right, for the player on the right: the arrows, right Ctrl, right Shift and the key by them, / on most keyboards)
-    static const struct { int Key; int Bit; } keys[] = {{VK_UP, RACENET_KEY_UP}, {VK_DOWN, RACENET_KEY_DOWN}, {VK_LEFT, RACENET_KEY_LEFT}, {VK_RIGHT, RACENET_KEY_RIGHT},
-                                                        {VK_RCONTROL, RACENET_KEY_ITEM}, {VK_RSHIFT, RACENET_KEY_HANDBRAKE}};
+    // (the keyboard's right, for the player on the right: player 2's keys as set -- INPUT_BINDINGS.H TwoKeys rows 7-13, Options > Controls,
+    // "Two players, one keyboard"; by default the arrows, right Ctrl, right Shift and the key by them, / on most keyboards)
+    static const int bits[TWO_ROWS] = {RACENET_KEY_UP, RACENET_KEY_DOWN, RACENET_KEY_LEFT, RACENET_KEY_RIGHT, RACENET_KEY_ITEM, RACENET_KEY_HANDBRAKE,
+                                       RACENET_KEY_VIEW};
     int down = 0;
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
-        if (GetAsyncKeyState(keys[i].Key) & 0x8000) down |= keys[i].Bit;
-    if (GetAsyncKeyState((int)MapVirtualKeyA(0x35, MAPVK_VSC_TO_VK)) & 0x8000) down |= RACENET_KEY_VIEW;
+    for (int i = 0; i < TWO_ROWS; i++) {
+        const U32 keys[2] = {TwoKeys[TWO_ROWS + i].Key1, TwoKeys[TWO_ROWS + i].Key2};
+        for (int k = 0; k < 2; k++) {
+            const int vk = keys[k] ? VirtualKeyOf(keys[k]) : 0;
+            if (vk && (GetAsyncKeyState(vk) & 0x8000)) down |= bits[i];
+        }
+    }
     return down;
 #else
     return 0;

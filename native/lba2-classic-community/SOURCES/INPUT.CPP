@@ -113,6 +113,14 @@ void ReadInputConfig(void) {
         snprintf(id, sizeof(id), "CarInput%d_2", slot);
         CarKeys[slot].Key2 = DefFileBufferReadValueDefault(id, CarKeysDefault[slot].Key2);
     }
+    // (two players at one keyboard: each player's driving keys -- TwoKeys<row>_1/_2)
+    RestoreTwoKeys();
+    for (n = 0; n < TWO_KEYS; n++) {
+        snprintf(id, sizeof(id), "TwoKeys%d_1", n);
+        TwoKeys[n].Key1 = DefFileBufferReadValueDefault(id, TwoKeysDefault[n].Key1);
+        snprintf(id, sizeof(id), "TwoKeys%d_2", n);
+        TwoKeys[n].Key2 = DefFileBufferReadValueDefault(id, TwoKeysDefault[n].Key2);
+    }
 
     InitInput();
 }
@@ -149,6 +157,12 @@ void WriteInputConfig(void) {
         DefFileBufferWriteValue(id, CarKeys[slot].Key1);
         snprintf(id, sizeof(id), "CarInput%d_2", slot);
         DefFileBufferWriteValue(id, CarKeys[slot].Key2);
+    }
+    for (n = 0; n < TWO_KEYS; n++) {
+        snprintf(id, sizeof(id), "TwoKeys%d_1", n);
+        DefFileBufferWriteValue(id, TwoKeys[n].Key1);
+        snprintf(id, sizeof(id), "TwoKeys%d_2", n);
+        DefFileBufferWriteValue(id, TwoKeys[n].Key2);
     }
 }
 
