@@ -50,6 +50,7 @@ internal static class BowlingRoom
     // (his potted plant, 81 and 40, left out: it stood before the poker table; his two fruit machines, 80, too since 2026-11-16 -- the alley's
     // own in their places, their reels turning in them: CitadelProps.BowlSlot)
     private static readonly HashSet<int> BoothBlocks = new() { 32, 33, 35, 36, 39, 205, 206 };
+    private const int BoothFoot = 35, BoothBackRow = 5;
     // the fruit machines (CitadelProps.BowlSlot actors, BowlingAlley): each cabinet's middle (world units), its front south (+z) -- seven in
     // a row against the north wall, left of the bar, the change machine at the row's lanes' end (the user, 2026-11-16: "the fruit machines
     // you've added they're obstructing the bowling, let's move them to the left of the bar where the currency exchange machine is. Let's
@@ -116,9 +117,14 @@ internal static class BowlingRoom
                     for (var y = 1; y < Height; y++)
                     {
                         var at = At(RickBooth.X0 + dx, y, RickBooth.Z0 + dz);
-                        if (cells[at] == 0 || !BoothBlocks.Contains(cells[at])) continue;
                         var (tx, tz) = (bx + dx, bz + dz);
                         if (tx < RoomX0 || tx > RoomX1 || tz < RoomZ0 || tz > RoomZ1) continue;
+                        // (the second back's foot: block 35 -- the seat's and that back's lower half, two cells across, two deep, two high --
+                        // has its back row's pieces in Rick's grid in the last cell only, something of his own in front of the rest; stamped
+                        // in the open it left a gap under the back the floor and Twinsen's feet showed through: the user, 2026-11-26, "their
+                        // brown base should extend all the way across")
+                        if (cells[at] == 0 && dz == BoothBackRow && y >= 1 && y <= 2) { Put(tx, y, tz, BoothFoot, dx % 2 + 2 * (y - 1) + 4); continue; }
+                        if (cells[at] == 0 || !BoothBlocks.Contains(cells[at])) continue;
                         Put(tx, y, tz, cells[at], cells[at + 1]);
                     }
 

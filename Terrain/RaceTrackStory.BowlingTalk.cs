@@ -153,8 +153,11 @@ internal static partial class RaceTrackStory
     };
     // (where the change machine stands: against the north wall at the end of the machines' row by the lanes, its back on the wall, its front
     // south -- the user, 2026-11-16: "move the currency exchange machine to the far left next to the bowling alley and have them all pushed
-    // back flush against the wall"; the machine 420 deep)
-    private const int BowlChangeX = BowlingRoom.ChangeMachineX, BowlChangeZ = BowlingRoom.MachineWallZ + 212;
+    // back flush against the wall"; the machine 420 deep). Its front level with the fruit machines' fronts, not its back on the wall: they are
+    // half as big again since 2026-11-23, their fronts 340 further out, and the first of them hid it from the camera (the user, 2026-11-26:
+    // "The change machine in the bowling area is partially hidden, let's bring it forwards level with the fruit machines")
+    private const int BowlChangeX = BowlingRoom.ChangeMachineX,
+        BowlChangeZ = BowlingRoom.MachineWallZ + (int)(Citadel.CitadelProps.SlotDeep * Citadel.CitadelProps.MachineScale) + 12 - 210;
 
     private static void BowlingTalk(IslandBeatsA b, string gameDirectory, List<string> log)
     {
