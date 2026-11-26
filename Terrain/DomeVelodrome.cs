@@ -689,8 +689,9 @@ internal static class DomeVelodrome
         Oval(x, z, out var a, out var b, out var d, out var psi, out _);
         var h = d <= R3 + Ft ? Deck(d, Bank(psi), out _) : FOut;
         var q = -b - (R3 + Ft + Walkway);
-        // (their front a little out, their ends further: the ends' line runs across the grid, and the cells it cuts let him half into them)
-        if (q >= -250 && Math.Abs(a) <= StandHalf + 600) return Height * Lay;
+        // (their front a little out, their ends further: the ends' line runs across the grid, and the cells it cuts let him half into them.
+        // 600 further walled a staircase of cells off the floor past their ends, 2026-11-26: 200)
+        if (q >= -250 && Math.Abs(a) <= StandHalf + 200) return Height * Lay;
         foreach (var (px, pz, layers) in Podium)
             if (x >= px * Cell && x <= (px + 2) * Cell && z >= pz * Cell && z <= (pz + 2) * Cell) h = Math.Max(h, FIn + layers * Lay);
         return h;
@@ -776,10 +777,12 @@ internal static class DomeVelodrome
                     }
                     else (top, shape) = Fit(x, z, null);
                 }
-                // (the wall's ring: a cell whose middle is within 300 of the wall's face solid to the top -- a jump at the wall carried
-                // him a fifth of a cell into it, its cells' middles in the room; the way out's doorway open)
+                // (the wall's ring: a cell whose middle is within 128 of the wall's face solid to the top -- a jump at the wall carried
+                // him a fifth of a cell into it, its cells' middles in the room; the way out's doorway open. Within 300, it stood up to
+                // half a cell of wall in front of the face all round: 2026-11-26, with the turns' walls the floor's way round their ends
+                // shut in places)
                 double mx = (x + 0.5) * Cell - Xc, mz = (z + 0.5) * Cell - Zc;
-                if (Math.Sqrt(mx * mx + mz * mz) > Rw - 300 && !InWayOut(mx, mz)) { top = Height - 1; shape = 1; }
+                if (Math.Sqrt(mx * mx + mz * mz) > Rw - 128 && !InWayOut(mx, mz)) { top = Height - 1; shape = 1; }
                 // the fence across the cell (not in a gate): solid to over the rails
                 var fence = -1;
                 double cxw = (x + 0.5) * Cell, czw = (z + 0.5) * Cell;
@@ -795,7 +798,12 @@ internal static class DomeVelodrome
                 // fence in them goes to its own cells' bricks -- Install, MovedPixel -- and walls them off by its own cells alone)
                 // (the gate: its middle cell -- the cells either side hold its posts, walls to walkers by their bricks anyway)
                 var margin = ea <= 0 ? Ft : 0;
-                if (dmin <= fenceLine - margin && dmax >= fenceLine + margin && !(ea <= 0 && Math.Abs(a) < GateHalf / 2))
+                // (round the turns, only the cells whose middle is inside the line: the boards' outer face drops sheer from their top edge
+                // to the floor there, and a cell the line cut anywhere was walled from the floor up -- up to a whole cell of wall standing
+                // out in front of the face, worst where the straights meet the turns; with the dome's wall ring it shut the floor's way
+                // round the bowl's ends to a gap he couldn't pass -- the user, 2026-11-26, "lots of invisible blocks stopping Twinsen
+                // walking". The cells inside are solid anyway: the turns' boards)
+                if (dmin <= fenceLine - margin && dmax >= fenceLine + margin && !(ea <= 0 && Math.Abs(a) < GateHalf / 2) && (ea <= 0 || dmid <= R3 + Ft))
                     fence = Math.Min(Height - 1, (int)Math.Ceiling((TopEdge(Bank(psi)) + PostH + 300) / Lay) - 1);
                 cols[x, z] = (top, shape, fence);
             }
@@ -806,21 +814,45 @@ internal static class DomeVelodrome
     // them -- goes to the brick of a neighbouring cell that is solid there, when its picture holds it: a brick in the open cell would wall
     // it (WorldColBrickFull), and the neighbour is on the fence's or the stands' side of the open cell, so it is drawn over Twinsen, or
     // under him, as the thing itself is (DrawOverBrick re-blits the bricks in front of him)
-    private static (int X, int Z) MovedPixel((int Top, int Shape, int Fence)[,] cols, M mat, int x, int y, int z, int gx, int gy)
+    // (and the bowl's outer face round the turns -- its boards' surface, a ground pixel, staying in a cell of the bowl -- and the dome's wall, its columns and its
+    // doors' frames: the face stands sheer over the floor, its cells cut by it open to walkers at the floor, and their bricks walled them
+    // up to a cell in front of the face -- the user, 2026-11-26, "lots of invisible blocks stopping Twinsen walking": the floor's way round
+    // the bowl's ends stopped short where the straights meet the turns)
+    // (the neighbours tried, nearest first: beside it at its own layer; then the cells before and behind it, and a layer up or down -- a
+    // brick's picture is 48 x 38, and a pixel in the part of its own cell's that no side neighbour's covers stayed in the open cell, a wall:
+    // the bowl's outer face round the turns, up to half a cell of wall in front of it -- the floor's way round the turns at 500 from the
+    // face stopped there, 2026-11-26)
+    private static readonly (int Dx, int Dy, int Dz)[] Moves =
     {
-        if (mat is not (M.Kick or M.Post or M.Rail or M.Stand or M.Seat)) return (x, z);
+        (1, 0, 0), (0, 0, 1), (-1, 0, 0), (0, 0, -1),
+        (1, 0, 1), (-1, 0, -1),
+        (1, 1, 0), (0, 1, 1), (-1, 1, 0), (0, 1, -1), (1, 1, 1), (-1, 1, -1),
+        (1, -1, 0), (0, -1, 1), (-1, -1, 0), (0, -1, -1), (1, -1, 1), (-1, -1, -1), (0, -1, 0),
+        (1, 2, 0), (0, 2, 1), (-1, 2, 0), (0, 2, -1), (1, 2, 1), (-1, 2, -1),
+    };
+
+    private static (int X, int Y, int Z) MovedPixel((int Top, int Shape, int Fence)[,] cols, M mat, bool ground, int x, int y, int z, int gx, int gy)
+    {
+        if (!(mat is M.Kick or M.Post or M.Rail or M.Stand or M.Seat or M.Wall or M.Column or M.Frame || mat == M.Bowl)) return (x, y, z);
         var (top, _, fence) = cols[x, z];
-        if (y <= top || y <= fence) return (x, z);
-        foreach (var (dx, dz) in new[] { (1, 0), (0, 1), (-1, 0), (0, -1) })
+        if (y <= top || y <= fence) return (x, y, z);
+        // (the boards' own surface stays in its cell -- the cells it is in are raised to it, Install -- but for a cell whose middle is out on
+        // the floor, never raised: the rim's top edge round the turns, a few layers over the floor, walled it)
+        if (mat == M.Bowl && ground)
         {
-            int nx = x + dx, nz = z + dz;
-            if (nx < 0 || nz < 0 || nx >= Size || nz >= Size) continue;
-            var (nt, _, nf) = cols[nx, nz];
-            if (y > nt && y > nf) continue;
-            int i = gx - 24 * (nx - nz) + 24, j = gy - 12 * (nx + nz) + 15 * (y + 1);
-            if (i >= 0 && i < 48 && j >= 0 && j < 38) return (nx, nz);
+            Oval((x + 0.5) * Cell, (z + 0.5) * Cell, out _, out _, out var dmid, out _, out _);
+            if (dmid <= R3 + Ft) return (x, y, z);
         }
-        return (x, z);
+        foreach (var (dx, dy, dz) in Moves)
+        {
+            int nx = x + dx, ny = y + dy, nz = z + dz;
+            if (nx < 0 || nz < 0 || nx >= Size || nz >= Size || ny < 0 || ny >= Height) continue;
+            var (nt, _, nf) = cols[nx, nz];
+            if (ny > nt && ny > nf) continue;
+            int i = gx - 24 * (nx - nz) + 24, j = gy - 12 * (nx + nz) + 15 * (ny + 1);
+            if (i >= 0 && i < 48 && j >= 0 && j < 38) return (nx, ny, nz);
+        }
+        return (x, y, z);
     }
 
     // ================================================================================================= into the game
@@ -861,7 +893,7 @@ internal static class DomeVelodrome
                 if (cell < 0) continue;
                 int cx = cell & 63, cy = cell >> 6 & 31, cz = cell >> 11;
                 int gx = Picture.X0 + col, gy = Picture.Y0 + row;
-                (cx, cz) = MovedPixel(cols, (M)(pic.Mat[row * W + col] & ~GroundPixel), cx, cy, cz, gx, gy);
+                (cx, cy, cz) = MovedPixel(cols, (M)(pic.Mat[row * W + col] & ~GroundPixel), (pic.Mat[row * W + col] & GroundPixel) != 0, cx, cy, cz, gx, gy);
                 // (the cell's brick: 48 x 38, its top corner the cell's top-back corner; a pixel past its bottom row goes to the cell under
                 // it, or the one in front)
                 foreach (var (dx, dy, dz) in new[] { (0, 0, 0), (0, -1, 0), (1, 0, 1), (1, -1, 1) })
@@ -870,6 +902,13 @@ internal static class DomeVelodrome
                     if (x >= Size || z >= Size || y < 0) continue;
                     int i = gx - 24 * (x - z) + 24, j = gy - 12 * (x + z) + 15 * (y + 1);
                     if (i < 0 || i >= 48 || j < 0 || j >= 38) continue;
+                    // (the cell under it or in front of it may be open to walkers where its own wasn't -- the bowl's face, its cells
+                    // inside the rim, put in the floor's cell in front: that one moved on to a solid neighbour as well, MovedPixel)
+                    if (dx != 0 || dy != 0)
+                    {
+                        var (mx, my, mz) = MovedPixel(cols, (M)(pic.Mat[row * W + col] & ~GroundPixel), (pic.Mat[row * W + col] & GroundPixel) != 0, x, y, z, gx, gy);
+                        if ((mx, my, mz) != (x, y, z)) { x = mx; y = my; z = mz; i = gx - 24 * (x - z) + 24; j = gy - 12 * (x + z) + 15 * (y + 1); }
+                    }
                     var key = x | y << 6 | z << 11;
                     if (!images.TryGetValue(key, out var image)) images[key] = image = new GphImage(48, 38);
                     image.Set(i, j, pic.Index[row * W + col]);
@@ -890,7 +929,11 @@ internal static class DomeVelodrome
                 var g = -1;
                 for (var y = Height - 1; y >= 0 && g < 0; y--) if (groundCells.Contains(x | y << 6 | z << 11)) g = y;
                 var (top, _, fence) = cols[x, z];
-                if (g > top && top < Height - 1)
+                // (only a cell whose middle is in the bowl: one the rim's top edge only cuts across from outside, its middle on the floor,
+                // was raised to the turns' rim -- a column of wall from the floor to the rim's top standing up to most of a cell out in
+                // front of the face, the floor's way round the bowl's ends stopped short: 2026-11-26)
+                Oval((x + 0.5) * Cell, (z + 0.5) * Cell, out _, out _, out var dcell, out _, out _);
+                if (g > top && top < Height - 1 && dcell <= R3 + Ft)
                 {
                     var (t, sh) = Fit(x, z, g);
                     cols[x, z] = (t, sh, fence);
@@ -1025,7 +1068,9 @@ internal static class DomeVelodrome
         Place(2, ((Podium[0].X + 1) * (int)Cell, (int)FIn + Podium[0].Layers * (int)Lay, (Podium[0].Z + 1) * (int)Cell));
         Place(3, AtOval(-Lu - 1000, 0, FIn));
         Place(4, AtOval(Lu + 1000, 0, FIn));
-        Place(5, AtOval(1800, -(R3 + Ft + Walkway / 2), FOut));
+        // (the third on the floor behind the near straight: on the walkway's middle it stood in the lane Twinsen walks, 380 wide between
+        // the fence's cells and the stands' -- the way along it shut, 2026-11-26)
+        Place(5, AtOval(1800, R3 + Ft + 2600, FOut));
         // (the riders' and the tents' bodies first: an entity of their own, CitadelProps.InstallVelodrome)
         var (veloEntity, veloLog) = Citadel.CitadelProps.InstallVelodrome(gameDirectory);
         log.Add(veloLog);
@@ -1154,8 +1199,9 @@ internal static class DomeVelodrome
         // them off, as the neighbour's flag-waving and the child's skipping did -- where, facing)
         // (the far walkway's fans in the middle of its clear lane, not against the stands: 1,480 out from the fence they stood within the
         // cells of the stands' staircase front, whose seats were redrawn over them -- only their heads showed over a row of seats, the user,
-        // 2026-11-25: "actors being drawn behind the chairs")
-        const double FanOut = 800;
+        // 2026-11-25: "actors being drawn behind the chairs"). And not in its lane's middle either: the lane Twinsen walks is 380 wide
+        // (588-968 from the fence's face) and a fan there shut it -- at the rails, leaning on them, 2026-11-26
+        const double FanOut = 330;
         var people = new (string Who, int Entity, int Body, int Anim, (int X, int Y, int Z) At, int Beta)[]
         {
             ("CometsCoach", 39, 0, 0, AtOval(FinishA, -(R0 - 350), FIn), FacingUp),
@@ -1174,6 +1220,10 @@ internal static class DomeVelodrome
             var a = SceneOps.BlankActor(SceneGame.Lba2, p.At.X, p.At.Y, p.At.Z, p.Entity);
             // (the record's body a signed byte, as the game's own scenes have it)
             a.Body = (sbyte)p.Body; a.Anim = p.Anim; a.Beta = p.Beta; a.Flags = 0x1000; a.CoulObj = RaceTrackStory.DefaultVoice; a.Armor = 51; a.LifePoints = -1; a.Move = 0;
+            // (the far walkway's fans walked past, not into: their boxes reached across the walkway's 380-wide lane from the rails and shut
+            // it -- 2026-11-26, Twinsen stopped by each as he went along it; a box made square on its smaller side, MINI_ZV, didn't do:
+            // RACEMOD.CPP RaceMod_NoCollide)
+            if (p.Who is "FanFlag" or "FanGrobo" or "FanGirl" or "FanChild") a.Armor = RaceTrackStory.WalkOverArmour;
             Add(a, p.Who);
         }
         return map;
