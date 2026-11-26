@@ -1149,16 +1149,20 @@ internal static class DomeVelodrome
         // the people: (who, entity, its body, its animation -- the game's own: the ferry quetch's look at his watch for the coach's stopwatch,
         // the neighbour's hand shading his eyes and his crouch at the stand, the grobo's trumpeting, the teacher's clapping; none that walks
         // them off, as the neighbour's flag-waving and the child's skipping did -- where, facing)
+        // (the far walkway's fans in the middle of its clear lane, not against the stands: 1,480 out from the fence they stood within the
+        // cells of the stands' staircase front, whose seats were redrawn over them -- only their heads showed over a row of seats, the user,
+        // 2026-11-25: "actors being drawn behind the chairs")
+        const double FanOut = 800;
         var people = new (string Who, int Entity, int Body, int Anim, (int X, int Y, int Z) At, int Beta)[]
         {
             ("CometsCoach", 39, 0, 0, AtOval(FinishA, -(R0 - 350), FIn), FacingUp),
             ("ExpressCoach", 111, 0, 0, AtOval(-FinishA, -(R0 - 350), FIn), FacingUp),
             ("Mechanic", 41, 0, 205, AtOval(-TentA + 520, KitB + 120, FIn), FacingLeft),
             ("Soigneur", 35, 0, 0, AtOval(TentA - 500, KitB, FIn), FacingDown),
-            ("FanFlag", 41, 55, 204, AtOval(-2600, -(R3 + Ft + 1480), FOut), FacingDown),
-            ("FanGrobo", 33, 0, 189, AtOval(3300, -(R3 + Ft + 1520), FOut), FacingDown),
-            ("FanGirl", 29, 45, 0, AtOval(-5400, -(R3 + Ft + 1480), FOut), FacingDown),
-            ("FanChild", 88, 0, 0, AtOval(5500, -(R3 + Ft + 1480), FOut), FacingDown),
+            ("FanFlag", 41, 55, 204, AtOval(-2600, -(R3 + Ft + FanOut), FOut), FacingDown),
+            ("FanGrobo", 33, 0, 189, AtOval(3300, -(R3 + Ft + FanOut + 40), FOut), FacingDown),
+            ("FanGirl", 29, 45, 0, AtOval(-5400, -(R3 + Ft + FanOut), FOut), FacingDown),
+            ("FanChild", 88, 0, 0, AtOval(5500, -(R3 + Ft + FanOut), FOut), FacingDown),
             ("FanTeacher", 89, 0, 295, AtOval(-2000, R3 + Ft + 900, FOut), FacingUp),
             ("FanSphero", 28, 43, 0, AtOval(2600, R3 + Ft + 900, FOut), FacingUp),
         };
