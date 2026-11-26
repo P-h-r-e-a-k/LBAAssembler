@@ -190,6 +190,10 @@ internal static partial class RaceTrackStory
         // (the cycle shop in the baggage claim's first room, and the Hoverboard left behind in it -- RaceTrackStory.CycleShop.cs)
         ShopWelcome,
         BoardStory, BoardBuy, BoardNo, BoardSold, BoardNoMoney, BoardLater, BoardAsk,
+        // (Miss Bloop's word on the security room's door, as long as it is shut: the user, 2026-11-26, "it's not that clear that Twinsen
+        // needs to throw his ball through it to unlock the door, let's give Miss. Bloop a line about the door is stuck as some hoodlum
+        // threw a ball through it")
+        BloopStuckDoor,
     }
     private static readonly string[][] ChapterLines =
     {
@@ -1139,6 +1143,16 @@ internal static partial class RaceTrackStory
             "Te lo dejo por 50 kashes. ¿Qué me dices?",
             "Te lo do per 50 kashes. Che ne dici?",
             "Podes ficar com ele por 50 kashes. Que me dizes?",
+        },
+        // (Miss Bloop on the security room's door, while it is shut)
+        new[]
+        {
+            "Mind you, the security room upstairs is shut. Its door has been stuck ever since some hoodlum threw a ball through the glass!",
+            "Remarquez, la salle de sécurité à l'étage est fermée. Sa porte est coincée depuis qu'un voyou a lancé une balle à travers la vitre !",
+            "Allerdings ist der Sicherheitsraum oben zu. Seine Tür klemmt, seit irgendein Rowdy einen Ball durch die Scheibe geworfen hat!",
+            "Eso sí, la sala de seguridad de arriba está cerrada. Su puerta está atascada desde que un gamberro lanzó una pelota a través del cristal.",
+            "Badate però, la sala di sicurezza di sopra è chiusa. La porta è bloccata da quando un teppista ha tirato una palla attraverso il vetro!",
+            "Mas atenção, a sala de segurança lá em cima está fechada. A porta está encravada desde que um vândalo atirou uma bola pelo vidro!",
         },
     };
 
@@ -3357,7 +3371,17 @@ void comportement_3()
 ");
             var track = $"label(0);\nstop();\n\nlabel({MopLabel});\nwait_nb_dizieme(3);\nlabel({MopLabel + 1});\nwait_nb_dizieme(2);\nlabel({MopLabel + 2});\nwait_nb_dizieme(1);\n" +
                         $"label({MopLabel + 3});\nwait_nb_dizieme(1);\nlabel({MopLabel + 4});\nwait_nb_dizieme(5);\nlabel({MopLabel + 5});\nstop();\n";
-            return scripts => { addMop(scripts); scripts.SetText(mopIndex, ScriptKind.Track, track); };
+            // (Miss Bloop, talked to while the door is shut -- the button's state, var_cube(2), 0 -- ends on the hint: whatever she has said
+            // before it, in every branch of her talk, the blueprints' too (HiddenPages' edit before this one))
+            var stuck = p.Say(ChapterLine.BloopStuckDoor);
+            return scripts =>
+            {
+                addMop(scripts);
+                scripts.SetText(mopIndex, ScriptKind.Track, track);
+                var bloop = scripts.GetText(9, ScriptKind.Life);
+                if (!bloop.Contains("set_var_cube(1, 0);")) throw new NotTheGames("Miss Bloop's talk");
+                scripts.SetText(9, ScriptKind.Life, bloop.Replace("set_var_cube(1, 0);", $"if (0 == var_cube({MuseumButtonState}))\n        {{\n            message({stuck});\n        }}\n        set_var_cube(1, 0);"));
+            };
         });
 
         // the museum: the picture of Twinsen with a cup on the hall's north wall (Citadel/CitadelMuseum), Action in front of it says what it
