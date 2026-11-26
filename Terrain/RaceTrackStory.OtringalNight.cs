@@ -31,11 +31,10 @@ internal static partial class RaceTrackStory
     public const int QNight = 277, NightTold = 1, NightClassic = 2, NightJunior = 3, NightSuite = 4, HotelLiftRide = 278;
     private const int PriceClassic = 100, PriceJunior = 250, PriceSuite = 500, CoilPrice = 10, PalaceRoom = 80;
     // Rick's bar: the singer (actor 28) on the stage while game variable 131 is 2 -- the guitarist (24) at 0 and 3
-    private const int Singer = 28, StageTurn = 131, SingerOnStage = 2;
-    private static readonly (int X, int Y, int Z) SingerSpot = (17408, 1024, 9728);
-    // (her room behind the stage: scene 134, in from the stage's back door at (6144, 1280, 5120) -- she a little way in, facing him)
-    private const int SingerRoom = 134, SingerBackY = 1280;
-    private static readonly (int X, int Z) SingerBack = (6400, 4600);
+    private const int Singer = 28;
+    // her room behind the stage (scene 134, in from the stage's back door): the game's singer sat at her dressing table there, actor 8 --
+    // her walking self, actor 11, hands over to it as she sits down
+    private const int SingerRoom = 134, SingerSeated = 8;
     // the lobby: the clerk (the doorman's uniform: scene 81's actor 8) by the lift, beside its doors, facing the room -- the reception desk
     // that stood facing the street's door is gone, and the sofa at the alcove's edge (the user, 2026-11-23: the desk "is ugly and seems to
     // have no point. It also stops Twinsen getting inside to speak to the race marshall"; the sofa "near the pool needs removing")
@@ -358,11 +357,14 @@ void comportement_3()
                 };
             });
 
-        // ---- Rick's bar: the singer on the stage while Twinsen has the letter or her answer -- talked to there, not now: wait in the back (the
-        // user, 2026-11-23: "If Twinsen tries to talk to the singer whilst she's on stage she should tell him to wait in the back for her and
-        // only talk to him there instead of mid-performance"); in her own room behind the stage (scene 134, the door at the stage's back --
-        // "she already has a back room she goes to behind the stage", the user) she takes the letter and writes back. Her word on the stage
-        // her own script's, in her singing (comportement_2)
+        // ---- Rick's bar and the room behind its stage: the singer where the game's own scripts have her (the user, 2026-11-25: "The singer
+        // in Otringal is only supposed to be either on the stage or in the backroom ... we should defer to the retail scripting and force
+        // Twinsen to wait until she's back stage sat at her dressing table"). The game's stage turn (game variable 131: 0 the guitarist on,
+        // 1 her going out, 2 her singing, 3 her coming off) is left alone. On the stage, talked to while Twinsen carries the letter or her
+        // answer: not now, wait in the back (the user, 2026-11-23). Behind the stage (scene 134) she sits at her dressing table as the game's
+        // actor 8 -- there when he comes in between her songs, or once she has come off the stage and sat down (her walking self, actor 11,
+        // hands over to it at its track 53): Twinsen's hello there (the hero's script: var_cube(0) 1 near her) gets the letter taken and
+        // her answer written, in place of her own word -- so nothing comes of it till she is sat at the table.
         if (b.Store.SceneExists(RickBar))
             b.Edit(RickBar, "Rick's bar: the singer on the stage while Twinsen carries the gazogem seller's letter -- not now, wait in the back", model =>
             {
@@ -377,37 +379,35 @@ void comportement_3()
         }}
     }}
 "));
-                    var hero = scripts.GetText(0, ScriptKind.Life);
-                    scripts.SetText(0, ScriptKind.Life, Loose(hero, "void comportement_0()\n{", $@"void comportement_0()
-{{
-    if ({DayRaceDay} == var_game({OtringalDay}) && {CoilLetter} <= var_game({QCoil}) && {CoilBought} > var_game({QCoil}))
-    {{
-        set_var_game({StageTurn}, {SingerOnStage});
-    }}"));
                 };
             });
         else b.Log.Add($"the singer's letter left out: no Rick's bar (scene {RickBar})");
-        // ---- her room behind the stage: the singer there between her songs while Twinsen carries the letter or her answer (her own actor
-        // there, the game's, is out of sight while she's on the stage)
-        if (b.Store.SceneExists(SingerRoom) && Copy(b.Originals, RickBar, Singer) is { } singer)
-            b.Edit(SingerRoom, "the singer's room behind Rick's stage: she takes the gazogem seller's letter and writes back", model =>
+        if (b.Store.SceneExists(SingerRoom))
+            b.Edit(SingerRoom, "the singer's room behind Rick's stage: sat at her dressing table, she takes the gazogem seller's letter and writes back", model =>
             {
-                (singer.X, singer.Y, singer.Z, singer.Beta) = (SingerBack.X, SingerBackY, SingerBack.Z, 0);
-                singer.Move = 0;
-                return IslandBeatsA.Add(model, singer, Talker($"{DayRaceDay} == var_game({OtringalDay}) && {CoilLetter} <= var_game({QCoil}) && {CoilBought} > var_game({QCoil})", $@"            if ({CoilLetter} == var_game({QCoil}))
-            {{
-                message_obj(0, {say(OtringalLine.TwinsenGiveLetter)});
-                message({say(OtringalLine.SingerReply)});
-                set_var_game({QCoil}, {CoilAnswer});
-                set_var_game({LetterSlot}, {ReplyHeld});
-                found_object({LetterSlot});
-            }}
-            else
-            {{
-                message({say(OtringalLine.SingerWaiting)});
-            }}", 2200));
+                return scripts =>
+                {
+                    var seated = scripts.GetText(SingerSeated, ScriptKind.Life);
+                    scripts.SetText(SingerSeated, ScriptKind.Life, AtStart(seated, "comportement_1", $@"    if (1 == var_cube(0) && 2200 > distance(0) && {DayRaceDay} == var_game({OtringalDay}) && {CoilLetter} <= var_game({QCoil}) && {CoilBought} > var_game({QCoil}))
+    {{
+        if ({CoilLetter} == var_game({QCoil}))
+        {{
+            message_obj(0, {say(OtringalLine.TwinsenGiveLetter)});
+            message({say(OtringalLine.SingerReply)});
+            set_var_game({QCoil}, {CoilAnswer});
+            set_var_game({LetterSlot}, {ReplyHeld});
+            found_object({LetterSlot});
+        }}
+        else
+        {{
+            message({say(OtringalLine.SingerWaiting)});
+        }}
+        set_var_cube(0, 0);
+    }}
+"));
+                };
             });
-        else b.Log.Add($"the singer's back room left out: no room behind the stage (scene {SingerRoom}) or no singer");
+        else b.Log.Add($"the singer's back room left out: no room behind the stage (scene {SingerRoom})");
     }
 
     // A lift's life: Action before it -- its doors open, Twinsen walks to them and is in (his comportement `hidden`: out of sight), the doors
