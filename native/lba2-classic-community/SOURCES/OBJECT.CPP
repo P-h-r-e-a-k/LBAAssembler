@@ -5757,6 +5757,16 @@ void AffScene(S32 flagflip) {
         extern void GpuOverlay_Unplate(void);
         GpuOverlay_Unplate();
         GpuSceneDrawing = 1;
+        // (the inventory's or the behaviour menu's software plate of the ground, built into Screen for the modal (EXTFUNC.CPP
+        // AffGrilleExt_BuildScreenPlate), emptied once the modal is done: outside it the GPU's exterior frame wants Screen empty -- the
+        // object pass's recover (ZBufBoxOverWrite2) copies Screen over each body's box where the ground is nearer, and kept, the menu's
+        // picture of the ground came back in boxes round the actors, from wherever the menu had been opened: the user's picture,
+        // 2026-11-25, "boxes around characters with OpenGL", boxes of brown ground round Zoe and Twinsen in the cut scene after Raph)
+        extern S32 GpuScreenPlateStale;
+        if (GpuScreenPlateStale AND GpuRenderer_IsActive() AND CubeMode == CUBE_EXTERIEUR AND !GpuRenderer_IsOverlayOpaque() AND Screen) {
+            memset(Screen, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+            GpuScreenPlateStale = 0;
+        }
     }
 
     S32 n, c, cmpt;

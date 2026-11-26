@@ -1337,6 +1337,9 @@ void AffGrilleExt() {
 #endif
 }
 
+// (set by the plate below: the next scene frame outside a modal empties Screen again -- OBJECT.CPP AffScene)
+S32 GpuScreenPlateStale = 0;
+
 void AffGrilleExt_BuildScreenPlate(void) {
     /* Terrain lives only in the FBO under a GPU backend, so after AFF_ALL
        CopyScreen(Log, Screen) the exterior Screen plate is zeros. 2D modals
@@ -1349,6 +1352,7 @@ void AffGrilleExt_BuildScreenPlate(void) {
     AffGrilleExt();
     GpuRenderer_SetSoftwarePolys(0);
     memset(Log, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+    GpuScreenPlateStale = 1;
 }
 
 /*══════════════════════════════════════════════════════════════════════════*

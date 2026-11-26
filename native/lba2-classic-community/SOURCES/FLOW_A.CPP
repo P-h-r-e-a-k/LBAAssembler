@@ -24,6 +24,13 @@ S32 GpuSceneDrawing = 0;
 static S32 s_platePinned = 0;
 static U8 *s_plateMask = NULL;       // the Screen pixels the plate filled (to empty again at the next scene frame)
 static size_t s_plateMaskSize = 0;
+// The Log pixels the plate filled, each with the colour it put there (0: not the plate's): at the next scene frame those still that colour
+// are emptied again. Kept, they showed the frame the plate was read from for the rest of a dialogue: its speaking steps redraw only the
+// speakers' boxes, every other pixel stayed the plate's -- the cut scene after Raph, Twinsen standing beside Zoe where he had been before
+// the script put him in his car (in software he is in it), and round each speaker a box of the live picture that didn't match the stale
+// one about it: the user's picture, 2026-11-25, "boxes around characters with OpenGL" (no renderer switch).
+static U8 *s_plateLog = NULL;
+static size_t s_plateLogSize = 0;
 static U8 s_lutPal[768];
 static U8 s_lut15[32768];            // RGB555 -> the palette's nearest colour (never index 0: see-through over the GPU)
 static S32 s_lutMade = 0;
@@ -63,20 +70,27 @@ void GpuOverlay_Plate(void) {
         rgb = (U32 *)malloc((size_t)w * h * sizeof(U32));
         rgbSize = rgb ? (size_t)w * h : 0;
     }
+    if (s_plateLogSize < (size_t)w * h) {
+        free(s_plateLog);
+        s_plateLog = (U8 *)calloc((size_t)w * h, 1);
+        s_plateLogSize = s_plateLog ? (size_t)w * h : 0;
+    }
     if (s_plateMaskSize < (size_t)w * h) {
         free(s_plateMask);
         s_plateMask = (U8 *)malloc((size_t)w * h);
         s_plateMaskSize = s_plateMask ? (size_t)w * h : 0;
     }
-    if (!rgb OR !s_plateMask OR !GpuRenderer_ReadbackPresented(rgb, w, h))
+    if (!rgb OR !s_plateMask OR !s_plateLog OR !GpuRenderer_ReadbackPresented(rgb, w, h))
         return;
     PlateLut();
     U8 *log = (U8 *)Log, *screen = (U8 *)Screen;
     for (size_t i = 0; i < (size_t)w * h; i++) {
         const U32 c = rgb[i];
         const U8 index = s_lut15[((c >> 9) & 0x7C00) | ((c >> 6) & 0x03E0) | ((c >> 3) & 0x001F)];
-        if (log[i] == 0)
+        if (log[i] == 0) {
             log[i] = index;
+            s_plateLog[i] = index;
+        }
         s_plateMask[i] = 0;
         if (screen AND screen[i] == 0) {
             screen[i] = index;
@@ -97,6 +111,14 @@ void GpuOverlay_Unplate(void) {
         for (size_t i = 0; i < (size_t)ModeDesiredX * ModeDesiredY; i++)
             if (s_plateMask[i])
                 screen[i] = 0;
+    // (and Log's: see-through again where it is still the plate's -- what was drawn or shaded over it since is the page's own and stays)
+    U8 *log = (U8 *)Log;
+    if (log AND s_plateLog AND s_plateLogSize >= (size_t)ModeDesiredX * ModeDesiredY)
+        for (size_t i = 0; i < (size_t)ModeDesiredX * ModeDesiredY; i++) {
+            if (s_plateLog[i] AND log[i] == s_plateLog[i])
+                log[i] = 0;
+            s_plateLog[i] = 0;
+        }
 }
 
 /* (a scene frame: the GPU's frame under the box darkened, Log's own pixels too) */
