@@ -176,7 +176,9 @@ void TakeBuggy(void) {
     sample = SAMPLE_BUGGY;
 #endif
 
-    if (IsSamplePlaying(sample)) {
+    // (not with the race-track mode's cars about: the first voice of the engine's sample is as likely an opponent's -- his own was stopped
+    // by its voice above; LeaveBuggy)
+    if (!RaceMod_Active() AND IsSamplePlaying(sample)) {
         HQ_StopOneSample(sample);
     }
 
@@ -246,7 +248,15 @@ void LeaveBuggy(U8 newcomportement) {
     sample = SAMPLE_BUGGY;
 #endif
 
-    if (IsSamplePlaying(sample)) {
+    if (RaceMod_Active()) {
+        // (his own engine loop, by its voice: by the sample's number the mixer stops the first voice of it it finds, and the race-track
+        // mode's other cars -- the opponents, the cars parked about -- run the same engine sample: one of theirs was stopped and his own
+        // went on after he got out, for good, nothing left to stop it -- the user, 2026-11-26, "a lot of the time Twinsen exiting the car
+        // doesn't stop the engine sound playing")
+        if ((ptrobj->SampleAlways & 0xFF000000) AND ptrobj->SampleAlways != 0xFFFFFFFF)
+            HQ_StopOneSample(ptrobj->SampleAlways);
+        ptrobj->SampleAlways = 0;
+    } else if (IsSamplePlaying(sample)) {
         HQ_StopOneSample(sample);
         ptrobj->SampleAlways = 0;
     }
