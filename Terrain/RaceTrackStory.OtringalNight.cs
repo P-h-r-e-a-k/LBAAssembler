@@ -222,6 +222,7 @@ void comportement_1()
 {{
     cinema_mode(1);
     set_dir_obj(0, NO_MOVE);
+    anim_obj(0, 0);
     body({HotelProps.LiftInsideOpen});
     set_track(label_10);
     set_comportement(comportement_1);
