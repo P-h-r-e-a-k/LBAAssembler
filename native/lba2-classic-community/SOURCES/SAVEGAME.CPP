@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include <SVGA/SCREEN.H>
+#include <GPU/GPURENDERER.H> /* GpuRenderer_IsActive: the save picture as the screen shows it */
 #include "DIRECTORIES.H"
 #include "IMAGE_LOAD.H" // ImageStaging — scratch for the thumbnail downscale
 #include "INPUT.H"
@@ -494,7 +495,21 @@ S32 SaveGame(S32 flagmess) {
     // widescreen, ~848-856), corrupting the bottom rows of the thumbnail.
     // ImageStaging (640*480) holds the scratch for every supported width and is
     // idle during a save. See tests/save_thumbnail.
-    ScaleBox(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, Log, 0, 0, 159, 119, ImageStaging);
+    // (on a GPU renderer, the picture as the screen shows it -- Log over the GPU's frame: Log alone was black wherever the GPU drew,
+    // every outdoor save made on OpenGL, FLOW_A.CPP GpuOverlay_ScreenIndexed)
+    {
+        static U8 *shown = NULL;
+        static size_t shownSize = 0;
+        const size_t need = (size_t)ModeDesiredX * (size_t)ModeDesiredY;
+        if (GpuRenderer_IsActive() AND shownSize < need) {
+            free(shown);
+            shown = (U8 *)malloc(need);
+            shownSize = shown ? need : 0;
+        }
+        extern S32 GpuOverlay_ScreenIndexed(U8 *dst);
+        const S32 gpu = GpuRenderer_IsActive() AND shown AND GpuOverlay_ScreenIndexed(shown);
+        ScaleBox(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, gpu ? (void *)shown : Log, 0, 0, 159, 119, ImageStaging);
+    }
     SaveBlock(ImageStaging, BufSpeak + 150000L, 0, 0, 159, 119);
     RemapPicture(BufSpeak + 150000L, 160 * 120);
 

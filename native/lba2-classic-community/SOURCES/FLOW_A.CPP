@@ -63,17 +63,46 @@ static void PlateLut(void) {
     s_lutMade = 1;
 }
 
+/* The GPU's frame read back, with the palette index each pixel was drawn with, which the GPU's target keeps
+   (GpuRenderer_ReadbackPresentedIndexed): the plate's and the save picture's. */
+static U32 *s_frameRgb = NULL;
+static U8 *s_frameDrawn = NULL;
+static size_t s_frameSize = 0;
+static S32 ReadFrame(U32 w, U32 h) {
+    if (s_frameSize < (size_t)w * h) {
+        free(s_frameRgb);
+        free(s_frameDrawn);
+        s_frameRgb = (U32 *)malloc((size_t)w * h * sizeof(U32));
+        s_frameDrawn = (U8 *)malloc((size_t)w * h);
+        s_frameSize = (s_frameRgb AND s_frameDrawn) ? (size_t)w * h : 0;
+    }
+    if (!s_frameSize OR !GpuRenderer_ReadbackPresentedIndexed(s_frameRgb, s_frameDrawn, w, h))
+        return FALSE;
+    PlateLut();
+    return TRUE;
+}
+
+/* One pixel of the frame read back as a palette index: the index it was drawn with, where its colour is still that index's (give or
+   take the smoothing of the textures) -- what a box shades next, through the palette's ramps, is then the index the software would
+   have shaded. The nearest colour of the whole palette was often another ramp's: the dialogue box's kerbs purple where the
+   software's are grey, dark paving flecked with light (2026-11-26). Not where it has changed since -- a shadow darkened it, a TRANS
+   polygon blended it: the nearest colour then. Never 0 (see-through over the GPU). */
+static U8 FrameIndex(size_t i) {
+    const U32 c = s_frameRgb[i];
+    const U8 d = s_frameDrawn[i];
+    if (d != 0) {
+        const S32 dr = (S32)((c >> 16) & 0xFF) - PtrPal[d * 3], dg = (S32)((c >> 8) & 0xFF) - PtrPal[d * 3 + 1],
+                  db = (S32)(c & 0xFF) - PtrPal[d * 3 + 2];
+        if (abs(dr) <= 48 AND abs(dg) <= 48 AND abs(db) <= 48)
+            return d;
+    }
+    return s_lut15[((c >> 9) & 0x7C00) | ((c >> 6) & 0x03E0) | ((c >> 3) & 0x001F)];
+}
+
 void GpuOverlay_Plate(void) {
     if (!GpuOverlayLive() OR !Log OR !PtrPal)
         return;
     const U32 w = ModeDesiredX, h = ModeDesiredY;
-    static U32 *rgb = NULL;
-    static size_t rgbSize = 0;
-    if (rgbSize < (size_t)w * h) {
-        free(rgb);
-        rgb = (U32 *)malloc((size_t)w * h * sizeof(U32));
-        rgbSize = rgb ? (size_t)w * h : 0;
-    }
     if (s_plateLogSize < (size_t)w * h) {
         free(s_plateLog);
         s_plateLog = (U8 *)calloc((size_t)w * h, 1);
@@ -84,35 +113,11 @@ void GpuOverlay_Plate(void) {
         s_plateMask = (U8 *)malloc((size_t)w * h);
         s_plateMaskSize = s_plateMask ? (size_t)w * h : 0;
     }
-    // (and the palette index each pixel was drawn with, which the GPU's target keeps: GpuRenderer_ReadbackPresentedIndexed)
-    static U8 *drawn = NULL;
-    static size_t drawnSize = 0;
-    if (drawnSize < (size_t)w * h) {
-        free(drawn);
-        drawn = (U8 *)malloc((size_t)w * h);
-        drawnSize = drawn ? (size_t)w * h : 0;
-    }
-    if (!rgb OR !drawn OR !s_plateMask OR !s_plateLog OR !GpuRenderer_ReadbackPresentedIndexed(rgb, drawn, w, h))
+    if (!s_plateMask OR !s_plateLog OR !ReadFrame(w, h))
         return;
-    PlateLut();
     U8 *log = (U8 *)Log, *screen = (U8 *)Screen;
     for (size_t i = 0; i < (size_t)w * h; i++) {
-        const U32 c = rgb[i];
-        // The index the pixel was drawn with, where its colour is still that index's (give or take the smoothing of the textures):
-        // what the box shades next, through the palette's ramps, is then the index the software would have shaded. The nearest colour
-        // of the whole palette was often another ramp's -- the dialogue box's kerbs purple where the software's are grey, dark paving
-        // flecked with light (2026-11-26). Not where it has changed since -- a shadow darkened it, a TRANS polygon blended it: the
-        // nearest colour then, as before.
-        const U8 d = drawn[i];
-        U8 index = 0;
-        if (d != 0) {
-            const S32 dr = (S32)((c >> 16) & 0xFF) - PtrPal[d * 3], dg = (S32)((c >> 8) & 0xFF) - PtrPal[d * 3 + 1],
-                      db = (S32)(c & 0xFF) - PtrPal[d * 3 + 2];
-            if (abs(dr) <= 48 AND abs(dg) <= 48 AND abs(db) <= 48)
-                index = d;
-        }
-        if (index == 0)
-            index = s_lut15[((c >> 9) & 0x7C00) | ((c >> 6) & 0x03E0) | ((c >> 3) & 0x001F)];
+        const U8 index = FrameIndex(i);
         if (log[i] == 0) {
             log[i] = index;
             s_plateLog[i] = index;
@@ -125,6 +130,25 @@ void GpuOverlay_Plate(void) {
     }
     GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)w - 1, (S32)h - 1);
     s_platePinned = 1;
+}
+
+/* The picture on the screen as palette indices, into dst (ModeDesiredX x ModeDesiredY): Log over the GPU's frame as the present lays
+   it -- Log's index 0 the frame's pixel, but inside the overlay's opaque rect, where it is black. The save's picture (SAVEGAME.CPP):
+   scaled down from Log alone it was black wherever the GPU drew -- outdoors, every save made on OpenGL, its picture in the game menu's
+   box and the save list black. FALSE without a GPU renderer (Log is the picture). */
+S32 GpuOverlay_ScreenIndexed(U8 *dst) {
+    if (!dst OR !GpuRenderer_IsActive() OR !Log OR !PtrPal)
+        return FALSE;
+    const U32 w = ModeDesiredX, h = ModeDesiredY;
+    if (!ReadFrame(w, h))
+        return FALSE;
+    const U8 *log = (const U8 *)Log;
+    for (U32 y = 0; y < h; y++)
+        for (U32 x = 0; x < w; x++) {
+            const size_t i = (size_t)y * w + x;
+            dst[i] = (log[i] != 0 OR GpuRenderer_InOverlayOpaque((S32)x, (S32)y)) ? log[i] : FrameIndex(i);
+        }
+    return TRUE;
 }
 
 void GpuOverlay_Unplate(void) {

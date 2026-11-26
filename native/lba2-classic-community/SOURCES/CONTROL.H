@@ -263,6 +263,8 @@ int Control_InputScheduleFrame(U32 startFrame, U32 durFrames, U32 mask);
    it is SDL_SCANCODE_UNKNOWN and also the filler in every unset binding slot. Gamepad
    scancodes (K_GAMEPAD_*) are accepted and land in the joystick tail. */
 int Control_KeyHold(U32 scancode, U32 delayPolls, U32 durPolls);
+/* `screenshot <path> <polls>`: the picture taken that many keyboard polls from now, inside a modal too */
+void Control_ShotAfter(const char *path, U32 polls);
 
 /* Drop every scheduled hold (console `key off`). */
 void Control_KeyClear(void);

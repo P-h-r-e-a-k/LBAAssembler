@@ -2161,10 +2161,26 @@ static void control_stick_apply(void) {
 /* Strong override of the weak hook in LIB386/SYSTEM/KEYBOARD.CPP. Runs inside
    UpdateKeyboardState, after it has rebuilt TabKeys[0..255] from SDL and after
    GetJoys has written the joystick tail, and before GetInput's CheckKey scan. */
+/* `screenshot <path> <polls>`: the picture taken a number of keyboard polls from now, as a `key` is held -- polls go on inside a
+   modal, where the ticks a harness schedules its commands by stand still (a menu over the scene, captured while it is open). Taken
+   at the poll itself: a modal reads its keys after it has shown its frame, and the inventory's and the behaviour menu's loops never
+   look for the console's pending screenshot. */
+static char s_shot_after_path[ADELINE_MAX_PATH];
+static U32 s_shot_after_poll = 0;
+void Control_ShotAfter(const char *path, U32 polls) {
+    snprintf(s_shot_after_path, sizeof(s_shot_after_path), "%s", path);
+    s_shot_after_poll = s_key_poll + (polls ? polls : 1);
+}
+
 extern "C" void ApplyHarnessKeys(void) {
     int i, w = 0;
 
     s_key_poll++;
+    if (s_shot_after_poll && s_key_poll >= s_shot_after_poll) {
+        s_shot_after_poll = 0;
+        Control_ScreenshotTo(s_shot_after_path);
+        Log_Info("[control] screenshot after polls: %s", s_shot_after_path);
+    }
     control_mouse_apply();
     control_stick_apply();
 

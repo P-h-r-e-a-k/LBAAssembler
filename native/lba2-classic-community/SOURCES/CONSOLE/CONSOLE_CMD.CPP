@@ -412,6 +412,7 @@ static void unique_shoot_path(const char *prefix, const char *ext, T_CAPTURE_SEQ
     st->seq += spare;
 }
 
+static int console_parse_count(const char *s, long *out, long least);
 static void cmd_screenshot(int argc, const char *argv[]) {
     static T_CAPTURE_SEQ seq = {0, 0};
     char path[ADELINE_MAX_PATH];
@@ -422,6 +423,13 @@ static void cmd_screenshot(int argc, const char *argv[]) {
         snprintf(path, sizeof(path), "%s", argv[1]);
     else
         unique_shoot_path("shot", "png", &seq, path, ADELINE_MAX_PATH);
+    // (screenshot <path> <polls>: that many keyboard polls from now, inside a menu too -- CONTROL.CPP Control_ShotAfter)
+    long polls = 0;
+    if (argc >= 3 && console_parse_count(argv[2], &polls, 1)) {
+        Control_ShotAfter(path, (U32)polls);
+        Console_Print("Screenshot after %ld poll(s): %s", polls, path);
+        return;
+    }
     Console_RequestScreenshot(path, 1); /* 1 = PNG via SavePNG in game */
     Console_Print("Screenshot (no console): %s", path);
 }
@@ -3339,7 +3347,7 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("timer", cmd_timer, "Advance timer by N ms (default 200)", "timer [ms]", "Advances high-res timer.");
     Console_RegisterCommandEx("status", cmd_status, "Print island, cube, chapter, objs, FPS, pos", "(no args)",
                               "Snapshot of current game state.");
-    Console_RegisterCommandEx("screenshot", cmd_screenshot, "Save next frame as PNG (no console)", "screenshot [path]",
+    Console_RegisterCommandEx("screenshot", cmd_screenshot, "Save next frame as PNG (no console)", "screenshot [path] [polls]",
                               "PNG to the path given, else under shoot/; console closes first.");
 #ifdef ENABLE_POLY_RECORDING
     Console_RegisterCommandEx("polyrec", cmd_polyrec, "Record the next frame's polygon draw calls",
