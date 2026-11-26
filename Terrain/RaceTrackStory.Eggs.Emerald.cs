@@ -35,57 +35,8 @@ internal static partial class RaceTrackStory
     // (past BowlerFar) puts it back up. Landed: "Tuesday's." -- and again whenever he's asked after; asked before, his boules that never come down.
     private const int SpaceSuit = 10, SpaceSuitBody = 0, BouleSprite = 157, BouleWait = 48, BouleSpeed = 1000, BouleDrop = 9000;
     private const int BowlerNear = 2500, BowlerFar = 5000;
-    // (how clear of the roads he stands, in cells)
-    private const double BowlerClear = 2.5;
-
-    // (gentle: no steeper than this over half a cell -- 30 degrees, under the 40 Twinsen walks up -- and how far out from a door, in cells)
-    private const double BowlerRise = 148, BowlerFrom = 3, BowlerTo = 12;
-
-    // A spot for him: from each door in turn, rings further out, the first off the roads (BowlerClear) on gentle ground whose straight
-    // way from the door is gentle too -- (island cells, the ground's height)
-    private static (double X, double Z, double Y)? BowlerSpot(RaceTrackReport report, List<(double X, double Z)> doors,
-        List<(double X0, double X1, double Y0, double Y1, double Z0, double Z1)> decors)
-    {
-        if (report.GroundAfter is not { } ground) return null;
-        // (no decor standing there -- a building over the spot, or on the straight way to it: the first try stood him in the moon base's
-        // entrance block, its ground low and gentle under it, and the game put him up on its roof; island cells)
-        bool Clear(double x, double z, double y, double pad)
-        {
-            double wx = x * 512, wz = z * 512, p = pad * 512;
-            return !decors.Any(d => wx + p > d.X0 && wx - p < d.X1 && wz + p > d.Z0 && wz - p < d.Z1 && d.Y1 > y + 100 && d.Y0 < y + 2000);
-        }
-        bool Gentle(double x0, double z0, double x1, double z1)
-        {
-            var steps = Math.Max(1, (int)Math.Ceiling(Math.Sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0)) / 0.5));
-            var last = ground(x0, z0);
-            for (var k = 1; k <= steps; k++)
-            {
-                double x = x0 + (x1 - x0) * k / steps, z = z0 + (z1 - z0) * k / steps;
-                var g = ground(x, z);
-                if (Math.Abs(g - last) > BowlerRise || !Clear(x, z, g, 0.5)) return false;
-                last = g;
-            }
-            return true;
-        }
-        foreach (var (dx, dz) in doors)
-            for (var r = BowlerFrom; r <= BowlerTo; r += 0.5)
-            {
-                var steps = (int)Math.Ceiling(2 * Math.PI * r / 0.5);
-                for (var k = 0; k < steps; k++)
-                {
-                    double a = 2 * Math.PI * k / steps, px = dx + r * Math.Sin(a), pz = dz + r * Math.Cos(a);
-                    if (OffRoads(report, px, pz) < BowlerClear) continue;
-                    var g = ground(px, pz);
-                    if (g < 200 || !Clear(px, pz, g, 1.5)) continue;
-                    if (!Gentle(px - 0.5, pz, px + 0.5, pz) || !Gentle(px, pz - 0.5, px, pz + 0.5)) continue;
-                    // (the way from the door, from a cell out of it -- the door's own zone is at the base's wall)
-                    double ox = dx + Math.Sin(a), oz = dz + Math.Cos(a);
-                    if (!Gentle(ox, oz, px, pz)) continue;
-                    return (px, pz, g);
-                }
-            }
-        return null;
-    }
+    // (how far beyond the moon base from the start line he stands, and how clear of the roads, in cells)
+    private const double BowlerBeyond = 9, BowlerClear = 2.5;
 
     private static void MoonPetanque(IslandBeatsA b, RaceTrackReport report, int upLine, int tuesdayLine)
     {
@@ -104,14 +55,16 @@ internal static partial class RaceTrackStory
         }
         if (doors.Count == 0 || report.StartLine.Count == 0) { b.Log.Add("the petanque player left out: no door into the moon base"); return; }
         double bx = doors.Average(d => d.X), bz = doors.Average(d => d.Z);
-        // (where he stands: walked to from a door into the base -- the user, 2026-11-21: "I'm not sure he's reachable on foot"; he stood 9
-        // cells beyond the base from the start line, off the roads, on a steep strip between the base's platform and the raised road, the
-        // goto planner's "nowhere to stand": Twinsen stopped 2,867 short. Now: out from a door, off the roads, on gentle ground, and the
-        // straight way to it from the door gentle all along)
-        var decors = IslandBake.DecorBoxes(IslandFile.Load(Path.Combine(b.GameDirectory, b.Island.IleFile)));
-        if (BowlerSpot(report, doors, decors) is not { } spot || b.SceneAt(spot.X, spot.Z) is not (var scene and >= 0))
+        // (where he stands: 9 cells beyond the base from the start line, off the roads -- his first place, back since 2026-11-26: on 11-22 he
+        // was moved to gentle ground walked to from a door, as the strip between the base's platform and the raised road there was too steep
+        // to reach him (the user, 2026-11-21: "I'm not sure he's reachable on foot"); since then the moon's every slope is walkable, against
+        // softlocks, and the user: "let's move him back to his original position, I think it should be accessible now")
+        var start = report.StartLine[0];
+        double dx = bx - start.X, dz = bz - start.Z, len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 1) { dx = 1; dz = 0; len = 1; }
+        if (OffRoadA(report, bx + dx / len * BowlerBeyond, bz + dz / len * BowlerBeyond, BowlerClear) is not { } spot || b.SceneAt(spot.X, spot.Z) is not (var scene and >= 0))
         {
-            b.Log.Add("the petanque player left out: no gentle ground off the roads walked to from a door of the moon base");
+            b.Log.Add("the petanque player left out: no ground off the roads beyond the moon base");
             return;
         }
         var at = Facing(spot, bx, bz);
