@@ -109,6 +109,8 @@ internal static class Program
             "ress" => Ress(game, int.Parse(args[2])),
             "header" => Header(args[1], int.Parse(args[2])),
             "bodyinfo" => BodyInfo(args[1], int.Parse(args[2])),
+            // portrait <game folder> <BODY.HQR entry> <out.png> [size] [yaw] [top fraction]: head and shoulders, see-through round them (LBRA's icon)
+            "portrait" => PortraitCommand.Run(args),
             // renderhqr <file.hqr> <index> <game folder for the palette> <out.png> [yaw]: any LBA2 body (OBJFIX, BODY, an OBL) rendered
             "renderhqr" => RenderHqr(args[1], int.Parse(args[2]), args[3], args[4], args.Length > 5 ? float.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 0.7f),
             // carviews <file.hqr> <index> <game folder for the palette> <out.png>: an LBA2 body from six sides (three-quarter views from above,
