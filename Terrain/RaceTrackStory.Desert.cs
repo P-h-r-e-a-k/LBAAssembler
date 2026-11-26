@@ -1530,6 +1530,7 @@ void comportement_2()
         // still there, he takes it -- the racing gear's second kind, as the clam gave it -- and after, a word to Kash. The hints: Flick's,
         // Zoe's, the gate's, the helmet's own texts, and a Desert islander's (IslandRetell.Desert, the game's 627 -- the clam's -- retold).
         CarFerryDesertQuay(b.Edit, IslandBeatsA.Add, l => Say(l));
+        FerryEveryChapter(b.Edit, DesertQuay, AltDesertQuay);
         b.Edit(PearlCave, "Kash's tomb in the sea cave, in the giant clam's place: the inscription, his helmet on it (Action takes it: the racing gear), a candlestick either end; Twinsen's look round a text of the game's (337, not 327)", model =>
         {
             var clamAt = model.Actors.ElementAtOrDefault(PearlClam) ?? throw new NotTheGames($"no clam (actor {PearlClam})");

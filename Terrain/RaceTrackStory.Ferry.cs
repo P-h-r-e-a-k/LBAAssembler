@@ -124,6 +124,37 @@ cinema_mode(0);
 cam_follow(0);
 ";
 
+    // The ferry in every chapter (the user, 2026-11-26: "After Twinsen wins the race on Desert Island the Ferry is gone, this is probably
+    // due to the retail chapter scripting, can we change this please so the ferry is always available"): the game takes the hovercraft and
+    // Mr. Paul away from both quays after its chapter 3 -- the story's Desert race won is its chapter 4 -- and the Desert's arrival no
+    // longer sees the hovercraft drawn (game variable 167); in its other scenes of the quays (197, 199) the same. Their chapter test made
+    // one that never holds; Citadel's Mr. Paul still comes with chapter 2, as the crossing does. (The Desert's ferry office's clerk is in
+    // every chapter already: Travels.)
+    private static void FerryEveryChapter(Action<int, string, Func<SceneModel, Action<SceneScripts>>> edit, params int[] scenes)
+    {
+        foreach (var scene in scenes)
+            edit(scene, "the ferry and Mr. Paul at the quay in every chapter -- not gone after the game's chapter 3", _ => scripts =>
+            {
+                void Keep(int actor, string from, string to, bool needed = true)
+                {
+                    var life = scripts.GetText(actor, ScriptKind.Life);
+                    if (!life.Contains(from)) { if (needed) throw new NotTheGames($"actor {actor}'s \"{from}\""); return; }
+                    scripts.SetText(actor, ScriptKind.Life, life.Replace(from, to));
+                }
+                if (scene is FerryScene or AltQuay)
+                {
+                    Keep(CitadelFerry, "if (3 < chapter())", "if (0 > chapter())");
+                    Keep(QuayFerryman, "if (4 == chapter() || 2 > chapter())", "if (2 > chapter())");
+                }
+                else
+                {
+                    Keep(DesertFerry, "if (3 < chapter())", "if (0 > chapter())");
+                    Keep(QuayFerryman, "if (3 < chapter())", "if (0 > chapter())");
+                    Keep(0, "3 == var_game(59) || 3 < chapter() || 0 == processor()", "3 == var_game(59) || 0 == processor()", needed: false);
+                }
+            });
+    }
+
     private static void CarFerryCitadel(Action<int, string, Func<SceneModel, Action<SceneScripts>>> edit, Func<SceneModel, SceneActorModel, string, Action<SceneScripts>> add,
         Func<ChapterLine, int> say)
     {

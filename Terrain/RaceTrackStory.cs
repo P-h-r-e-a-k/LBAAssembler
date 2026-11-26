@@ -1501,6 +1501,7 @@ void comportement_1()
 
         // 7b. the car ferry (RaceTrackStory.Ferry.cs): Twinsen drives aboard at Citadel's quay, the ticket shown to Mr. Paul from the car
         CarFerryCitadel(Edit, Add, Say);
+        FerryEveryChapter(Edit, FerryScene, AltQuay);
         // (and the hovercraft the island draws at the mooring, seen from every cube about: the car ferry)
         log.AddRange(FerryDecor(gameDirectory));
 
