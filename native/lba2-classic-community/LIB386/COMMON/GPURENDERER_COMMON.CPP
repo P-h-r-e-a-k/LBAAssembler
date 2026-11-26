@@ -2391,6 +2391,12 @@ S32 GpuRenderer_IsOverlayOpaque(void) {
            s_overlayOpaqueY1 > s_overlayOpaqueY0;
 }
 
+S32 GpuRenderer_InOverlayOpaque(S32 x, S32 y) {
+    /* The present shader's own test for one pixel (x1, y1 exclusive). */
+    return GpuRenderer_IsOverlayOpaque() && x >= s_overlayOpaqueX0 && x < s_overlayOpaqueX1 &&
+           y >= s_overlayOpaqueY0 && y < s_overlayOpaqueY1;
+}
+
 /* Overlay upload rect state (GPUPRESENT_DIRTY.H): last frame's nonzero
    bounds and the surface size they belong to. A size the plan has not seen
    is what drops the history. */
@@ -2557,8 +2563,17 @@ void GpuRenderer_ReadbackDepthBuffer(void) {
 // Colour readback of the offscreen target into a top-down 0x00RRGGBB buffer
 // (see GpuRenderer_ReadbackPresented in GPU/GPURENDERER.H). Used by --screenshot
 // so a GPU run captures the 3D the player sees, not only the Log overlay.
+// `index` (may be NULL): each pixel's palette index as the target keeps it in
+// its alpha (TargetReadColor's top byte), 0 where the backend keeps none.
 //──────────────────────────────────────────────────────────────────────────
+static S32 Common_ReadbackPresented(void *rgb, U8 *index, U32 width, U32 height);
 S32 GpuRenderer_ReadbackPresented(void *rgb, U32 width, U32 height) {
+    return Common_ReadbackPresented(rgb, NULL, width, height);
+}
+S32 GpuRenderer_ReadbackPresentedIndexed(void *rgb, U8 *index, U32 width, U32 height) {
+    return Common_ReadbackPresented(rgb, index, width, height);
+}
+static S32 Common_ReadbackPresented(void *rgb, U8 *index, U32 width, U32 height) {
     if (!s_active || rgb == NULL || width == 0 || height == 0) {
         return FALSE;
     }
@@ -2596,6 +2611,12 @@ S32 GpuRenderer_ReadbackPresented(void *rgb, U32 width, U32 height) {
             for (U32 sx = 0; sx < width; sx++) {
                 dstRow[sx] = srcRow[sx] & 0x00FFFFFFu;
             }
+            if (index != NULL) {
+                U8 *idxRow = index + sy * width;
+                for (U32 sx = 0; sx < width; sx++) {
+                    idxRow[sx] = (U8)(srcRow[sx] >> 24);
+                }
+            }
         }
     } else {
         /* SSAA: box-downsample each screen-pixel block (matches the present
@@ -2626,6 +2647,10 @@ S32 GpuRenderer_ReadbackPresented(void *rgb, U32 width, U32 height) {
                     n = 1;
                 }
                 dstRow[sx] = ((r / n) << 16) | ((g / n) << 8) | (b / n);
+                if (index != NULL) {
+                    /* (the block's top-left sample's: one drawn pixel's index, not an average of several) */
+                    index[sy * width + sx] = (U8)(s_colorBuf[(fyBase + scaleY - 1) * fboW + fx0] >> 24);
+                }
             }
         }
     }
@@ -2918,6 +2943,13 @@ S32 GpuRenderer_ReadbackPresented(void *rgb, U32 width, U32 height) {
     (void)height;
     return FALSE;
 }
+S32 GpuRenderer_ReadbackPresentedIndexed(void *rgb, U8 *index, U32 width, U32 height) {
+    (void)rgb;
+    (void)index;
+    (void)width;
+    (void)height;
+    return FALSE;
+}
 void GpuRenderer_SetVSync(S32 enabled) { (void)enabled; }
 void GpuRenderer_SetOverlayOpaqueRect(S32 x0, S32 y0, S32 x1, S32 y1) {
     (void)x0;
@@ -2979,6 +3011,11 @@ S32 GpuRenderer_DrawHudText(S32 x, S32 y, const char *str) {
     return 0;
 }
 S32 GpuRenderer_IsOverlayOpaque(void) { return 0; }
+S32 GpuRenderer_InOverlayOpaque(S32 x, S32 y) {
+    (void)x;
+    (void)y;
+    return 0;
+}
 void GpuRenderer_SnapshotTerrain(void) {}
 void GpuRenderer_RestoreTerrain(void) {}
 void GpuRenderer_Begin3DPass(void) {}

@@ -1434,7 +1434,12 @@ void Control_ScreenshotTo(const char *path) {
                 for (U32 y = 0; y < h; y++) {
                     for (U32 x = 0; x < w; x++) {
                         const U8 idx = logMem[y * w + x];
-                        if (idx == 0) {
+                        if (idx == 0 && GpuRenderer_InOverlayOpaque((S32)x, (S32)y)) {
+                            /* (inside the overlay's opaque rect -- a menu's, a dialogue's window -- index 0 is shown opaque black,
+                               as the present shader shows it: composed see-through, a dialogue's text shadows came out as the
+                               ground under them in the pictures, black on the screen) */
+                            composed[y * w + x] = 0;
+                        } else if (idx == 0) {
                             /* Transparent overlay: the FBO 3D shows through,
                                matching PresentFrame's paletteLUT[0] alpha 0. */
                             composed[y * w + x] = presented[y * w + x];

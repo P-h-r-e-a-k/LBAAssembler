@@ -140,7 +140,9 @@ typedef struct GpuRendererBackend {
     // unreadable.
     S32 (*TargetReadDepth)
     (void *dst, U32 width, U32 height);
-    // Colour readback of the offscreen target: U32 0x00RRGGBB, bottom-up
+    // Colour readback of the offscreen target: U32 0xAARRGGBB (AA the
+    // target's alpha -- the palette index the pixel was drawn with, where the
+    // backend keeps one there, as OpenGL's scene palette does; else 0), bottom-up
     // rows (GL's origin). width/height are the target's own size. FALSE if
     // the backend cannot read colour (the caller then falls back to Log).
     S32 (*TargetReadColor)

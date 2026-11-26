@@ -146,6 +146,8 @@ extern void ShadeBoxBlkOverlay(S32 X0, S32 Y0, S32 X1, S32 Y1, S32 deccoul);
 extern S32 GpuSceneDrawing;                 // AffScene drawing a frame
 extern void GpuOverlay_Plate(void);         // what is shown made Log's own, Log opaque till the next scene frame
 extern void GpuOverlay_Unplate(void);
+extern void GpuOverlay_KeepPlate(S32 x0, S32 y0, S32 x1, S32 y1); // that part of it the page's own, kept by the next Unplate
+extern void GpuOverlay_SceneFrame(S32 speaking);                // a scene frame begins: past a dialogue, its kept window let go
 extern U8 GpuOverlay_Black(void);           // a black other than index 0
 extern S32 GpuOverlay_LiveScene(void);
 extern void GpuOverlay_ShadeBegin(S32 deccoul);

@@ -34,9 +34,13 @@ static size_t s_plateLogSize = 0;
 static U8 s_lutPal[768];
 static U8 s_lut15[32768];            // RGB555 -> the palette's nearest colour (never index 0: see-through over the GPU)
 static S32 s_lutMade = 0;
+// The rows a dialogue's window has made its own (GpuOverlay_KeepPlate), shown opaque while it is up: its text's shadow and outline are
+// palette index 0, see-through over the GPU's frame anywhere else -- the light ground under every line's shadow where the software's is
+// black. Not a modal's pin of the overlay: the scene frames go on with the GPU's own shading round it (GpuOverlayLive).
+static S32 s_keepOn = 0, s_keepX0 = 0, s_keepY0 = 0, s_keepX1 = 0, s_keepY1 = 0;
 
 static S32 GpuOverlayLive(void) {
-    return GpuRenderer_IsActive() AND !GpuRenderer_GetSoftwarePolys() AND !GpuRenderer_IsOverlayOpaque();
+    return GpuRenderer_IsActive() AND !GpuRenderer_GetSoftwarePolys() AND (!GpuRenderer_IsOverlayOpaque() OR (s_keepOn AND !s_platePinned));
 }
 
 static void PlateLut(void) {
@@ -80,13 +84,35 @@ void GpuOverlay_Plate(void) {
         s_plateMask = (U8 *)malloc((size_t)w * h);
         s_plateMaskSize = s_plateMask ? (size_t)w * h : 0;
     }
-    if (!rgb OR !s_plateMask OR !s_plateLog OR !GpuRenderer_ReadbackPresented(rgb, w, h))
+    // (and the palette index each pixel was drawn with, which the GPU's target keeps: GpuRenderer_ReadbackPresentedIndexed)
+    static U8 *drawn = NULL;
+    static size_t drawnSize = 0;
+    if (drawnSize < (size_t)w * h) {
+        free(drawn);
+        drawn = (U8 *)malloc((size_t)w * h);
+        drawnSize = drawn ? (size_t)w * h : 0;
+    }
+    if (!rgb OR !drawn OR !s_plateMask OR !s_plateLog OR !GpuRenderer_ReadbackPresentedIndexed(rgb, drawn, w, h))
         return;
     PlateLut();
     U8 *log = (U8 *)Log, *screen = (U8 *)Screen;
     for (size_t i = 0; i < (size_t)w * h; i++) {
         const U32 c = rgb[i];
-        const U8 index = s_lut15[((c >> 9) & 0x7C00) | ((c >> 6) & 0x03E0) | ((c >> 3) & 0x001F)];
+        // The index the pixel was drawn with, where its colour is still that index's (give or take the smoothing of the textures):
+        // what the box shades next, through the palette's ramps, is then the index the software would have shaded. The nearest colour
+        // of the whole palette was often another ramp's -- the dialogue box's kerbs purple where the software's are grey, dark paving
+        // flecked with light (2026-11-26). Not where it has changed since -- a shadow darkened it, a TRANS polygon blended it: the
+        // nearest colour then, as before.
+        const U8 d = drawn[i];
+        U8 index = 0;
+        if (d != 0) {
+            const S32 dr = (S32)((c >> 16) & 0xFF) - PtrPal[d * 3], dg = (S32)((c >> 8) & 0xFF) - PtrPal[d * 3 + 1],
+                      db = (S32)(c & 0xFF) - PtrPal[d * 3 + 2];
+            if (abs(dr) <= 48 AND abs(dg) <= 48 AND abs(db) <= 48)
+                index = d;
+        }
+        if (index == 0)
+            index = s_lut15[((c >> 9) & 0x7C00) | ((c >> 6) & 0x03E0) | ((c >> 3) & 0x001F)];
         if (log[i] == 0) {
             log[i] = index;
             s_plateLog[i] = index;
@@ -105,7 +131,11 @@ void GpuOverlay_Unplate(void) {
     if (!s_platePinned)
         return;
     s_platePinned = 0;
-    GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
+    // (a dialogue's window kept opaque: s_keepOn -- the rect's far edges exclusive, as the present shader tests them)
+    if (s_keepOn)
+        GpuRenderer_SetOverlayOpaqueRect(s_keepX0, s_keepY0, s_keepX1 + 1, s_keepY1 + 1);
+    else
+        GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
     U8 *screen = (U8 *)Screen;
     if (screen AND s_plateMask AND s_plateMaskSize >= (size_t)ModeDesiredX * ModeDesiredY)
         for (size_t i = 0; i < (size_t)ModeDesiredX * ModeDesiredY; i++)
@@ -119,6 +149,48 @@ void GpuOverlay_Unplate(void) {
                 log[i] = 0;
             s_plateLog[i] = 0;
         }
+}
+
+/* A part of the plated picture the page has made its own, in Log and in Screen both: kept by GpuOverlay_Unplate as it is. A dialogue's
+   window (MESSAGE.CPP NewInitDialWindow): the rows from its top down shaded and copied into Screen, which the software keeps frozen
+   while the speakers' boxes redraw above it -- its page turns and the boxes cleaned over it come back from Screen. Emptied at the
+   next scene frame, the box's darkest pixels (shaded to the colour the plate had put there) went see-through, and Screen's copy
+   was emptied whole: each speaking step's clean of a box reaching into the window (the after-Raph cut scene's parked car, at the
+   bottom) left a hole of the bare ground there, the car gone from under the text. Put back from ScreenAux as the dialogue ends. */
+void GpuOverlay_KeepPlate(S32 x0, S32 y0, S32 x1, S32 y1) {
+    if (!s_platePinned OR !s_plateLog OR !s_plateMask)
+        return;
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+    if ((size_t)w * h > s_plateLogSize OR (size_t)w * h > s_plateMaskSize)
+        return;
+    if (x0 < 0)
+        x0 = 0;
+    if (y0 < 0)
+        y0 = 0;
+    if (x1 > w - 1)
+        x1 = w - 1;
+    if (y1 > h - 1)
+        y1 = h - 1;
+    s_keepOn = 1;
+    s_keepX0 = x0;
+    s_keepY0 = y0;
+    s_keepX1 = x1;
+    s_keepY1 = y1;
+    for (S32 y = y0; y <= y1; y++)
+        for (S32 x = x0; x <= x1; x++) {
+            s_plateLog[(size_t)y * w + x] = 0;
+            s_plateMask[(size_t)y * w + x] = 0;
+        }
+}
+
+/* A scene frame begins (OBJECT.CPP AffScene): one that isn't a dialogue's speaking step is past the dialogue -- its kept window
+   no longer shown opaque. */
+void GpuOverlay_SceneFrame(S32 speaking) {
+    if (!s_keepOn OR speaking)
+        return;
+    s_keepOn = 0;
+    if (!s_platePinned)
+        GpuRenderer_SetOverlayOpaqueRect(0, 0, 0, 0);
 }
 
 /* (a scene frame: the GPU's frame under the box darkened, Log's own pixels too) */

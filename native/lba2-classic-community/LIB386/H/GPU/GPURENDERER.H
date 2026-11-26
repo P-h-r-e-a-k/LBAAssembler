@@ -95,6 +95,9 @@ void GpuRenderer_ReadbackDepthBuffer(void);
 // so the caller can fall back to the software Log frame. Used by --screenshot
 // so a GPU run captures the 3D the player sees, not only the Log overlay.
 S32 GpuRenderer_ReadbackPresented(void *rgb, U32 width, U32 height);
+// The same, with each pixel's palette index too: the one the target keeps in
+// its alpha (the scene palette's, OpenGL), 0 where the backend keeps none.
+S32 GpuRenderer_ReadbackPresentedIndexed(void *rgb, U8 *index, U32 width, U32 height);
 
 // The engine's 3D pass. AffScene opens it around each exterior body draw
 // (ObjectDisplay, and the dart body draw) so non-Z-buffered body polys batch
@@ -275,6 +278,9 @@ void GpuRenderer_SetOverlayOpaqueRect(S32 x0, S32 y0, S32 x1, S32 y1);
 // black inside it). Hooks that punch Log to expose an FBO quad ask this
 // first: the punch would surface as black inside the pinned frame.
 S32 GpuRenderer_IsOverlayOpaque(void);
+// TRUE when pixel (x, y) of Log is inside that rect: its index 0 presented
+// opaque black (the screenshot's composite asks, to show what the screen does).
+S32 GpuRenderer_InOverlayOpaque(S32 x, S32 y);
 
 #ifdef __cplusplus
 }

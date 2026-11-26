@@ -5755,6 +5755,9 @@ void AffScene(S32 flagflip) {
     {
         extern S32 GpuSceneDrawing;
         extern void GpuOverlay_Unplate(void);
+        extern void GpuOverlay_SceneFrame(S32 speaking);
+        // (a dialogue's window kept opaque over the GPU's frame only while it speaks -- FLOW_A.CPP)
+        GpuOverlay_SceneFrame(FlagAnimWhoSpeak);
         GpuOverlay_Unplate();
         GpuSceneDrawing = 1;
         // (the inventory's or the behaviour menu's software plate of the ground, built into Screen for the modal (EXTFUNC.CPP

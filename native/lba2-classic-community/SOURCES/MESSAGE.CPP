@@ -1826,6 +1826,8 @@ void NewInitDialWindow() {
     //                              va recopier cette zone modulo 8... )
     CopyBlock(0, Dial_Y0, ModeDesiredX - 1, ModeDesiredY - 1, Log,
               0, Dial_Y0, Screen);
+    // (over the GPU's frame: those rows of the picture read back for the box, the dialogue's own from now on -- FLOW_A.CPP)
+    { extern void GpuOverlay_KeepPlate(S32, S32, S32, S32); GpuOverlay_KeepPlate(0, Dial_Y0, ModeDesiredX - 1, ModeDesiredY - 1); }
 
     //----- Display empty window
     BoxStaticAdd(Dial_X0, Dial_Y0, Dial_X1, Dial_Y1);
@@ -1865,6 +1867,7 @@ void HoloInitDialWindow() {
 
     CopyBlock(Dial_X0, Dial_Y0, Dial_X1, Dial_Y1, Log,
               Dial_X0, Dial_Y0, Screen);
+    { extern void GpuOverlay_KeepPlate(S32, S32, S32, S32); GpuOverlay_KeepPlate(Dial_X0, Dial_Y0, Dial_X1, Dial_Y1); }
 }
 /*-------------------------------------------------------------------------*/
 
@@ -2274,6 +2277,7 @@ void ClearWhoSpeak() {
 static char s_dial_capture_path[ADELINE_MAX_PATH] = "";
 static int s_dial_capture_countdown = 0;
 static int s_dial_capture_live = 0; /* Dial_RequestCaptureNext: the dialogue's own speaker kept */
+static int s_dial_capture_now = 0;  /* 1: this step's SpeakAnimation takes the picture (before its BoxUpdate); 2: taken */
 
 void SpeakAnimation() {
     S32 saveyclip;
@@ -2320,6 +2324,14 @@ void SpeakAnimation() {
         PtrWhoSpeak->Obj.X = XSpeak;
         PtrWhoSpeak->Obj.Y = YSpeak;
         PtrWhoSpeak->Obj.Z = ZSpeak;
+    }
+
+    // (a `dialshot` taken here, before BoxUpdate: its BoxClean puts the ground back over the actors' boxes in Log for the next frame, and
+    // a picture of Log after it had the software's actors gone -- Twinsen "missing" beside Zoe in the after-Raph cut scene, the older
+    // copies of the others baked into Screen shown instead, 2026-11-26)
+    if (s_dial_capture_now == 1) {
+        Control_ScreenshotTo(s_dial_capture_path);
+        s_dial_capture_now = 2;
     }
 
     BoxUpdate(); // For Char & perhaps Speaking guy...
@@ -2484,6 +2496,8 @@ void Dial(S32 text, S32 drawscene) {
         ret = NextDialCar();
 
         TestSpeak();
+        // (the step that ends a `dialshot`: its picture taken inside SpeakAnimation, the frame as it is presented -- below)
+        s_dial_capture_now = s_dial_capture_path[0] && (s_dial_capture_countdown - 1 <= 0 || ret == 0 || ret == 2) ? 1 : 0;
         SpeakAnimation();
         if (DialVideoPaced())
             DialPacedTick();
@@ -2498,7 +2512,9 @@ void Dial(S32 text, S32 drawscene) {
            text. */
         if (s_dial_capture_path[0]) {
             if (--s_dial_capture_countdown <= 0 || ret == 0 || ret == 2) {
-                Control_ScreenshotTo(s_dial_capture_path);
+                if (s_dial_capture_now != 2)
+                    Control_ScreenshotTo(s_dial_capture_path);
+                s_dial_capture_now = 0;
                 s_dial_capture_path[0] = '\0';
                 s_dial_capture_live = 0;
                 flagabort = 1;

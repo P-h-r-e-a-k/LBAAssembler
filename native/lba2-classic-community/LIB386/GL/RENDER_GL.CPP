@@ -1417,8 +1417,9 @@ static S32 GL_TargetReadColor(void *colorDst, U32 width, U32 height) {
         return FALSE;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
-    /* GL_RGBA bytes are R,G,B,A; swizzle into 0x00RRGGBB per pixel. GL
-       bottom-up rows already match the TargetReadColor contract. */
+    /* GL_RGBA bytes are R,G,B,A; swizzle into 0xAARRGGBB per pixel, the
+       alpha the palette index the scene palette wrote (GL_TexUpdatePalette's
+       scene copy). GL bottom-up rows already match the TargetReadColor contract. */
     static U8 *s_rgbaScratch = NULL;
     static U32 s_rgbaScratchBytes = 0;
     const U32 need = width * height * 4;
@@ -1436,7 +1437,7 @@ static S32 GL_TargetReadColor(void *colorDst, U32 width, U32 height) {
     U32 *dst = (U32 *)colorDst;
     for (U32 i = 0; i < count; i++) {
         const U8 *p = s_rgbaScratch + i * 4;
-        dst[i] = ((U32)p[0] << 16) | ((U32)p[1] << 8) | (U32)p[2];
+        dst[i] = ((U32)p[3] << 24) | ((U32)p[0] << 16) | ((U32)p[1] << 8) | (U32)p[2];
     }
     return TRUE;
 }
