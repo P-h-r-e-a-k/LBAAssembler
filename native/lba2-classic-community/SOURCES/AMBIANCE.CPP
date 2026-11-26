@@ -503,6 +503,16 @@ void ChoicePalette(void) {
     RestartRainSample = TRUE;
     PtrPal = PtrPalCurrent;
     PtrCLUTGouraud = PtrCLUTFog = PtrNuances;
+    // (the fog table just read into the same buffer as the last one: SetCLUT's copy of its current row, Fill_Logical_Palette, taken
+    // again -- SetCLUT leaves it as it is when the row's address is the one it had, and a view all in one fog band kept the last
+    // island's or palette's row for good: the software's volcano track, scene 102, its white lines and kerbs through the island it
+    // came from -- lavender grey where its own table makes them cream, as OpenGL, which reads the table itself, had them, 2026-11-26)
+    {
+        extern PTR_U8 PtrTruePal;
+        extern void SetCLUT(U32 defaultline);
+        PtrTruePal = NULL;
+        SetCLUT((U32)PalLevel);
+    }
 }
 
 /*──────────────────────────────────────────────────────────────────────────*/
