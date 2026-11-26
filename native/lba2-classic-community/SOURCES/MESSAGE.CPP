@@ -1797,6 +1797,15 @@ void TestAndDrawRadio(void) {
         } else {
             BoxMovingAdd(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
         }
+    } else if (FlagDisplayText) {
+        // (a speaker with a face of its own, the race-track mode's -- the Polar dream's voices over the white: drawn as a radio call's
+        // picture is, from the box's top right corner by its sprite's place in the table: RACEMOD.CPP RaceMod_DialFace)
+        extern S32 RaceMod_DialFace(S32 numobj);
+        const S32 face = RaceMod_DialFace(NumObjDial);
+        if (face >= 0) {
+            AffGraph(0, Dial_X1 + PtrZvExtra[face * 8 + 0], Dial_Y0 + PtrZvExtra[face * 8 + 1], HQR_Get(HQRPtrSprite, face));
+            BoxStaticAdd(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+        }
     }
 }
 
@@ -1932,6 +1941,12 @@ void GetNextLine() {
         }
 
         DialMaxSize = ((Dial_X1 - clipxmax) - (Dial_X0 + 8));
+    } else if (FlagDisplayText) {
+        // (and clear of a speaker's own face, on every line: it stands the box's height -- RaceMod_DialFace)
+        extern S32 RaceMod_DialFace(S32 numobj);
+        const S32 face = RaceMod_DialFace(NumObjDial);
+        if (face >= 0)
+            DialMaxSize = ((Dial_X1 - (8 - PtrZvExtra[face * 8 + 0])) - (Dial_X0 + 8));
     }
     //-----
     while (TRUE) {

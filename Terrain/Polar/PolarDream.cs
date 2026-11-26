@@ -105,60 +105,65 @@ internal static class PolarDream
     };
 
     // Sendell's word, fading with the white as Twinsen wakes, when he drove through her light on the dream's loop (an easter egg, the user,
-    // 2026-11-04 -- RaceTrackStory.Eggs.Polar.cs, EggSendell): said before Zoe's wake line, the text after it
+    // 2026-11-04 -- RaceTrackStory.Eggs.Polar.cs, EggSendell): said before Zoe's wake line, the text after it. Her words alone: her face
+    // in the box and her colour say whose they are (DreamVoiceFaces; until 2026-11-26 "A voice, fading with the white: ..." in Zoe's)
     private static readonly string[] SendellWake =
     {
-        "A voice, fading with the white: \"You found me again, Twinsen. You always do.\"",
-        "Une voix, qui s'efface avec le blanc : « Tu m'as encore trouvée, Twinsen. Tu me trouves toujours. »",
-        "Eine Stimme, die mit dem Weiß verblasst: \"Du hast mich wieder gefunden, Twinsen. Das tust du immer.\"",
-        "Una voz, que se apaga con el blanco: \"Me has vuelto a encontrar, Twinsen. Siempre lo haces.\"",
-        "Una voce, che svanisce col bianco: \"Mi hai ritrovata, Twinsen. Lo fai sempre.\"",
-        "Uma voz, a desvanecer-se com o branco: \"Encontraste-me outra vez, Twinsen. Encontras sempre.\"",
+        "You found me again, Twinsen. You always do.",
+        "Tu m'as encore trouvée, Twinsen. Tu me trouves toujours.",
+        "Du hast mich wieder gefunden, Twinsen. Das tust du immer.",
+        "Me has vuelto a encontrar, Twinsen. Siempre lo haces.",
+        "Mi hai ritrovata, Twinsen. Lo fai sempre.",
+        "Encontraste-me outra vez, Twinsen. Encontras sempre.",
     };
 
     // FunFrock's voice and Sendell's over the white as the dream ends (docs/LBRA_STORY_SCRIPT.md, chapter 0's finish: "What is said over it
     // depends on the race") -- said before Zoe's wake line, as Sendell's light's: the user, 2026-11-13, "FunFrock's head start in the dream"
     // (the head start itself is built: he drives off from the dock while Twinsen is on foot, chase_head=); caught him (DREAM_CAUGHT, 229) or not
     private const int DreamCaught = 229;
+    // (the words alone since 2026-11-26: FunFrock's and Sendell's faces in the box and their own colours say whose -- DreamVoiceFaces, the
+    // voices' actors in ApplyOpening; "FunFrock's voice, fading with the white: ..." and "Another voice, unseen: ..." before, in Zoe's colour)
     private static readonly string[][] FadeLines =
     {
         new[]
         {
-            "FunFrock's voice, fading with the white: \"Impossible! Nobody catches me... nobody...\"",
-            "La voix de FunFrock, qui s'efface avec le blanc : « Impossible ! Personne ne me rattrape... personne... »",
-            "FunFrocks Stimme, die mit dem Weiß verblasst: \"Unmöglich! Niemand holt mich ein... niemand...\"",
-            "La voz de FunFrock, que se apaga con el blanco: \"¡Imposible! Nadie me alcanza... nadie...\"",
-            "La voce di FunFrock, che svanisce col bianco: \"Impossibile! Nessuno mi raggiunge... nessuno...\"",
-            "A voz de FunFrock, a desvanecer-se com o branco: \"Impossível! Ninguém me apanha... ninguém...\"",
+            "Impossible! Nobody catches me... nobody...",
+            "Impossible ! Personne ne me rattrape... personne...",
+            "Unmöglich! Niemand holt mich ein... niemand...",
+            "¡Imposible! Nadie me alcanza... nadie...",
+            "Impossibile! Nessuno mi raggiunge... nessuno...",
+            "Impossível! Ninguém me apanha... ninguém...",
         },
         new[]
         {
-            "Another voice, unseen: \"Two worlds will race, Twinsen. And at the end of it, he will be waiting.\"",
-            "Une autre voix, invisible : « Deux mondes vont s'affronter, Twinsen. Et au bout de la course, il t'attendra. »",
-            "Eine andere Stimme, unsichtbar: \"Zwei Welten werden um die Wette fahren, Twinsen. Und am Ende wird er warten.\"",
-            "Otra voz, invisible: \"Dos mundos competirán, Twinsen. Y al final, él estará esperando.\"",
-            "Un'altra voce, invisibile: \"Due mondi correranno, Twinsen. E alla fine, lui ti aspetterà.\"",
-            "Outra voz, invisível: \"Dois mundos vão correr, Twinsen. E no fim, ele estará à espera.\"",
+            "Two worlds will race, Twinsen. And at the end of it, he will be waiting.",
+            "Deux mondes vont s'affronter, Twinsen. Et au bout de la course, il t'attendra.",
+            "Zwei Welten werden um die Wette fahren, Twinsen. Und am Ende wird er warten.",
+            "Dos mundos competirán, Twinsen. Y al final, él estará esperando.",
+            "Due mondi correranno, Twinsen. E alla fine, lui ti aspetterà.",
+            "Dois mundos vão correr, Twinsen. E no fim, ele estará à espera.",
         },
         new[]
         {
-            "FunFrock's voice, laughing, fading with the white: \"Too slow, Twinsen! Always one step behind!\"",
-            "La voix de FunFrock, qui rit et s'efface avec le blanc : « Trop lent, Twinsen ! Toujours un pas derrière ! »",
-            "FunFrocks Stimme, lachend, mit dem Weiß verblassend: \"Zu langsam, Twinsen! Immer einen Schritt hinterher!\"",
-            "La voz de FunFrock, riendo, apagándose con el blanco: \"¡Demasiado lento, Twinsen! ¡Siempre un paso por detrás!\"",
-            "La voce di FunFrock, ridendo, svanisce col bianco: \"Troppo lento, Twinsen! Sempre un passo indietro!\"",
-            "A voz de FunFrock, a rir, a desvanecer-se com o branco: \"Demasiado lento, Twinsen! Sempre um passo atrás!\"",
+            "Too slow, Twinsen! Always one step behind!",
+            "Trop lent, Twinsen ! Toujours un pas derrière !",
+            "Zu langsam, Twinsen! Immer einen Schritt hinterher!",
+            "¡Demasiado lento, Twinsen! ¡Siempre un paso por detrás!",
+            "Troppo lento, Twinsen! Sempre un passo indietro!",
+            "Demasiado lento, Twinsen! Sempre um passo atrás!",
         },
         new[]
         {
-            "Another voice, unseen: \"Two worlds will race, Twinsen. You will have your chance again. And at the end of it, he will be waiting.\"",
-            "Une autre voix, invisible : « Deux mondes vont s'affronter, Twinsen. Tu auras encore ta chance. Et au bout de la course, il t'attendra. »",
-            "Eine andere Stimme, unsichtbar: \"Zwei Welten werden um die Wette fahren, Twinsen. Du bekommst wieder deine Chance. Und am Ende wird er warten.\"",
-            "Otra voz, invisible: \"Dos mundos competirán, Twinsen. Tendrás otra oportunidad. Y al final, él estará esperando.\"",
-            "Un'altra voce, invisibile: \"Due mondi correranno, Twinsen. Avrai di nuovo la tua occasione. E alla fine, lui ti aspetterà.\"",
-            "Outra voz, invisível: \"Dois mundos vão correr, Twinsen. Terás outra oportunidade. E no fim, ele estará à espera.\"",
+            "Two worlds will race, Twinsen. You will have your chance again. And at the end of it, he will be waiting.",
+            "Deux mondes vont s'affronter, Twinsen. Tu auras encore ta chance. Et au bout de la course, il t'attendra.",
+            "Zwei Welten werden um die Wette fahren, Twinsen. Du bekommst wieder deine Chance. Und am Ende wird er warten.",
+            "Dos mundos competirán, Twinsen. Tendrás otra oportunidad. Y al final, él estará esperando.",
+            "Due mondi correranno, Twinsen. Avrai di nuovo la tua occasione. E alla fine, lui ti aspetterà.",
+            "Dois mundos vão correr, Twinsen. Terás outra oportunidade. E no fim, ele estará à espera.",
         },
     };
+    // (the voices' text colours, palette rows: FunFrock's grey-lilac of his robe, Sendell's cyan of her glow -- Zoe's is 4, Twinsen's 12)
+    private const int FunFrockColour = 13, SendellColour = 10;
 
     // The island's own texts after its name, in a language (a language this doesn't know: the English).
     public static IEnumerable<(int Id, string Text)> IslandTexts(int language)
@@ -246,6 +251,13 @@ internal static class PolarDream
             model.TrackPoints.Add(new SceneTrackPoint(Aside.X, Aside.Y, Aside.Z));
             foreach (var p in KissWay) model.TrackPoints.Add(new SceneTrackPoint(p.X, p.Y, p.Z));
             int bed = first, up = first + 1, aside = first + 2, kiss = first + 3;
+            // (the voices over the white: FunFrock's and Sendell's, unseen -- each its own colour of text and its face in the box, no bubble:
+            // DreamVoiceFaces, DIALFACES.TXT)
+            var faces = DreamVoiceFaces.Install(gameDirectory);
+            var ffVoice = model.Actors.Count;
+            model.Actors.Add(RaceTrackScenes.InvisibleHelper(bedX, bedY, bedZ, FunFrockColour));
+            var seVoice = model.Actors.Count;
+            model.Actors.Add(RaceTrackScenes.InvisibleHelper(bedX, bedY, bedZ, SendellColour));
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), WakeScene);
 
             var heroLife = scripts.GetText(0, ScriptKind.Life);
@@ -298,20 +310,22 @@ stop();
 {{
     if (1 == var_game({DreamVar}) && 161 == l_track())
     {{
+        bulle(0);
         if (1 == var_game({DreamCaught}))
         {{
-            message({wake + 2});
-            message({wake + 3});
+            message_obj({ffVoice}, {wake + 2});
+            message_obj({seVoice}, {wake + 3});
         }}
         else
         {{
-            message({wake + 4});
-            message({wake + 5});
+            message_obj({ffVoice}, {wake + 4});
+            message_obj({seVoice}, {wake + 5});
         }}
         if (1 == var_game({RaceTrackStory.EggSendell}))
         {{
-            message({wake + 1});
+            message_obj({seVoice}, {wake + 1});
         }}
+        bulle(1);
         message({wake});
         set_var_game({DreamVar}, 2);
         set_track(label_162);
@@ -365,7 +379,8 @@ stop();
             var built = scripts.Build();
             if (!built.Ok) return (false, $"scene {WakeScene}: the dream's waking up left out, its scripts would not compile: {string.Join("; ", built.Errors)}");
             store.SaveMany(new List<SceneChange> { new(WakeScene, SceneSerializer.Parse(SceneGame.Lba2, built.Record!), null) }, allowErrors: true);
-            return (true, $"scene {WakeScene}: won, Twinsen wakes up asleep in his bed (track point {bed}, animation {Asleep}), Zoe beside it wakes him (text {wake}), " +
+            DreamVoiceFaces.WriteMap(gameDirectory, new[] { (WakeScene, ffVoice, faces.FunFrock), (WakeScene, seVoice, faces.Sendell) });
+            return (true, $"{faces.Log}; FunFrock's voice actor {ffVoice}, Sendell's {seVoice}; scene {WakeScene}: won, Twinsen wakes up asleep in his bed (track point {bed}, animation {Asleep}), Zoe beside it wakes him (text {wake}), " +
                           $"steps back (point {aside}), he sits up and gets out of bed ({SitUp}, {GetUp}; point {up}), she comes round to him (points {kiss}-{kiss + 2}) and kisses him " +
                           $"(her animation {ZoeKiss}) before her own opening line");
         }

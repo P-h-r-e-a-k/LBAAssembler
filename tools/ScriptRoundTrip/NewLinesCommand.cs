@@ -181,7 +181,7 @@ internal static class NewLinesCommand
         (new(@"^The base's computer, HAL, has locked|^The start lights are on\. Let's race"), "Zoe", null),
         (new(@"^Her umbrella\. After yesterday"), "Sphero customer of pharmacy", null),
         (new(@"^FunFrock has the Emperor's teleporter|^Too slow\.\.\. FunFrock got to the teleporter|^Celebration Island\.\.\. the teleporter brought me|^Polar Island\? FunFrock has escaped|^No! FunFrock got to Sendell first|^No, FunFrock, come back!"), "Twinsen", null),
-        (new(@"^You'll never catch me!|^FunFrock's voice"), "FunFrock", null),
+        (new(@"^You'll never catch me!|^FunFrock's voice|^Impossible! Nobody catches me|^Too slow, Twinsen! Always one step behind"), "FunFrock", null),
         (new(@"^The souvenir seller[:,] |^You beat me fair and square, mister!|^Ha! Not fast enough, mister\."), "Souvenir seller", null),
         (new(@"^FunFrock: "), "FunFrock", null),
         (new(@"^Baldino(, on the radio)?: "), "Baldino", null),
@@ -189,6 +189,7 @@ internal static class NewLinesCommand
         (new(@"^Twinsen, did you get the Desert track open|^Well, Twinsen, have you found the Dean's pages|^By the way, could you ask Baldino for those sand filters|^I'm worried, Twinsen\. These space visitors"), "Zoe", null),
         (new(@"^Welcome to Zeelich, the planet of a thousand wonders|^In our workshops, our engineers|^If you don't meet with him, you might at least|^At the palace bend, you will get a look|^After the race, you will try your luck|^By no means!\s+You shouldn't leave Zeelich"), "Zeelich tour guide", null),
         (new(@"^Twinsen, the statue is gone and the Cup is yours|^It is I who must thank you, you won it for us|^Well, FunFrock's wish was much too powerful|it's me, Sendell"), "Sendell", null),
+        (new(@"^Two worlds will race, Twinsen|^You found me again, Twinsen"), "Sendell", null),   // (the Polar dream's waking: her voice over the white, her face in the box)
         (new(@"^(Another voice, unseen|A voice, fading)"), "Unseen voice", null),
         (new(@"Baldino here|^Twinsen\? Baldino\.|^Twinsen! My radio works|It's me, Baldino!"), "Baldino", null),
     };
