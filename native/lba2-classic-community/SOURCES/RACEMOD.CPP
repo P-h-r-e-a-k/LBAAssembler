@@ -648,6 +648,12 @@ static int s_pitHidden = 0;
 // pit lane (the user: "let's have Twinsen's car stuck in the pitlane as it's not working, and all the other cars lined up on the grid ...
 // When Twinsen fixes his car he should start from the pitlane instead")
 static int s_pitStartVar = -1, s_pitStartLeast = 0, s_pitStartBelow = 0, s_pitGridSet = 0, s_pitCarSet = 0;
+static int PitStart(void);
+// Twinsen's car's place on a pit-lane start (pit_start=): the pit lane's last spot, the far end of the lane where the others wait -- its
+// first, at the start line beside pole under the gantry, read as the front of the grid (the user, 2026-11-26, Otringal's race day:
+// "Twinsen started on the main track right at the front of the grid rather than to the side area in the pitlane where the other cars used
+// to wait"). NULL: the track has no pit lane.
+static const T_RACE_SPOT *PitCarSpot(void) { return s_nbPits > 0 ? &s_pits[s_nbPits - 1] : NULL; }
 static int PitStart(void) {
     return s_pitStartVar >= 0 && s_pitStartVar < MAX_VARS_GAME && ListVarGame[s_pitStartVar] >= s_pitStartLeast && ListVarGame[s_pitStartVar] < s_pitStartBelow;
 }
@@ -7292,8 +7298,9 @@ static void CarHeld(void) {
         return;
     }
     if (ptb->Cube != s_heldScene) return;
-    const int pit = PitStart() && s_nbPits ? CubeScene(s_pits[0].CubeX, s_pits[0].CubeZ) : -1;
-    if (pit >= 0) { ptb->Cube = pit; ptb->X = s_pits[0].X; ptb->Y = s_pits[0].Y; ptb->Z = s_pits[0].Z; ptb->Beta = s_pits[0].Beta; }
+    const T_RACE_SPOT *ps = PitCarSpot();
+    const int pit = PitStart() && ps ? CubeScene(ps->CubeX, ps->CubeZ) : -1;
+    if (pit >= 0) { ptb->Cube = pit; ptb->X = ps->X; ptb->Y = ps->Y; ptb->Z = ps->Z; ptb->Beta = ps->Beta; }
     else if (s_heldCube >= 0) { ptb->Cube = s_heldCube; ptb->X = s_heldX; ptb->Y = s_heldY; ptb->Z = s_heldZ; ptb->Beta = s_heldBeta; }
     else if (s_car.HasLine && CubeScene(s_car.LineCubeX, s_car.LineCubeZ) >= 0) {
         ptb->Cube = CubeScene(s_car.LineCubeX, s_car.LineCubeZ);
@@ -7307,7 +7314,7 @@ static void CarHeld(void) {
         ClearRealAngle(car);
     }
     Log_Info("[racemod] car_held: variable %d moved on -- the car back in scene %d at (%d,%d,%d)%s", s_heldVar, (int)ptb->Cube, (int)ptb->X, (int)ptb->Y, (int)ptb->Z,
-             pit >= 0 ? " (pit_start=: the pit lane's first spot)" : s_heldCube >= 0 ? "" : " (the start line: where it was taken from not known)");
+             pit >= 0 ? " (pit_start=: the pit lane's last spot)" : s_heldCube >= 0 ? "" : " (the start line: where it was taken from not known)");
     s_heldCube = -1;
 }
 
@@ -24682,19 +24689,20 @@ void RaceMod_Frame(void) {
             if (s_opp[n].Count && s_opp[n].Scenes && !OpponentAway(&s_opp[n])) OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
         Log_Info("[racemod] pit_start: variable %d at %d -- %d racers on the grid, Twinsen's car in the pit lane", s_pitStartVar, (int)ListVarGame[s_pitStartVar], spot);
     }
-    // (and his car into the pit lane's first spot, once a race day, wherever on this island it stands with him out of it -- the grid where the
+    // (and his car into the pit lane's last spot (PitCarSpot), once a race day, wherever on this island it stands with him out of it -- the grid where the
     // qualifying lap stopped it, a game saved before the pit lane was his. Tried every frame till done: it was tried only as the grid formed,
     // and only with him in the pit lane's part of the island then -- come down from the hotel, it stayed on the grid while the marshal said
     // "it's waiting in the pit lane", the user, 2026-11-25. Not while car_held= keeps it: CarHeld gives it back on the pit spot itself)
     if (PitStart() && !s_pitCarSet && !driving && s_nbPits && NumBuggy && NewCube == -1) {
         S_BUGGY *ptb = &ListBuggy[0];
-        const int pit = CubeScene(s_pits[0].CubeX, s_pits[0].CubeZ);
+        const T_RACE_SPOT *ps = PitCarSpot();
+        const int pit = CubeScene(ps->CubeX, ps->CubeZ);
         if (pit >= 0 && ptb->Cube >= 0 && ptb->Cube != s_heldScene && LoadSceneIsland(ptb->Cube) == Island) {
             const int carN = NumBuggy & ~BUGGY_PRESENT;
             T_OBJET *car = carN > 0 && carN < (int)NbObjets ? &ListObjet[carN] : NULL;
             const int from = ptb->Cube;
-            const int moved = from != pit || abs(ptb->X - s_pits[0].X) > 256 || abs(ptb->Z - s_pits[0].Z) > 256;
-            ptb->Cube = pit; ptb->X = s_pits[0].X; ptb->Y = s_pits[0].Y; ptb->Z = s_pits[0].Z; ptb->Beta = s_pits[0].Beta;
+            const int moved = from != pit || abs(ptb->X - ps->X) > 256 || abs(ptb->Z - ps->Z) > 256;
+            ptb->Cube = pit; ptb->X = ps->X; ptb->Y = ps->Y; ptb->Z = ps->Z; ptb->Beta = ps->Beta;
             if (car && pit == (S32)NumCube) {
                 car->Obj.X = ptb->X; car->Obj.Y = ptb->Y; car->Obj.Z = ptb->Z; car->Obj.Beta = ptb->Beta;
                 if (from != pit) InitBody(GEN_BODY_NORMAL, (U8)carN);
