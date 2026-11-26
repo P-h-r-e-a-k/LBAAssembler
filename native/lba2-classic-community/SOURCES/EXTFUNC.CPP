@@ -592,11 +592,14 @@ void AffichageActorsZBuf(void) {
         if (ptrobj->Obj.Body.Num < 0) continue; // no body assigned/loaded
         if (!RendererShowHiddenActors && ((ptrobj->Flags & INVISIBLE) || ptrobj->Obj.Y <= RACE_OUT_OF_SIGHT_Y)) continue; // (hidden: the game's, GLOBAL.CPP)
 #ifndef LBA2_RENDERER_HOST
-        // (the game on the GPU: only the objects baked into the background here, OBJ_BACKGROUND -- AffScene's frames that redraw the
-        // objects alone leave those out and put the terrain pass back, OBJECT.CPP's snapshot; every other one AffScene's object pass
-        // draws itself, each frame. Drawn here as well, they were in that snapshot as they stood when it was taken: a dialogue's speaker
-        // twice, Twinsen standing where he had got out of his car -- the user's picture, 2026-11-24, Zoe twice in the after-Raph scene)
-        if (GpuRenderer_IsActive() && !(ptrobj->Flags & OBJ_BACKGROUND)) continue;
+        // (the game: only the objects baked into the background here, OBJ_BACKGROUND -- AffScene's frames that redraw the objects alone
+        // leave those out and put the terrain pass back, OBJECT.CPP's snapshot on the GPU, Screen on the software; every other one
+        // AffScene's object pass draws itself, each frame. Drawn here as well, they were in that picture of the ground as they stood
+        // when it was taken: a dialogue's speaker twice, Twinsen standing where he had got out of his car -- the user's picture,
+        // 2026-11-24, Zoe twice in the after-Raph scene. The software too, 2026-11-26: its copy in Screen came back round each actor's
+        // box -- Zoe and the rabbit twice in that scene, the rabbit's older copy in a brown top; this pass is
+        // the editor's map view's, 751cb88, the original game's ground pass drew no actors)
+        if (!(ptrobj->Flags & OBJ_BACKGROUND)) continue;
 #endif
 
         LongWorldRotatePoint(ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
