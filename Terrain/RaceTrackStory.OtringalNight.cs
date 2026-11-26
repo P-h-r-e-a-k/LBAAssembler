@@ -284,11 +284,15 @@ void comportement_5()
             };
         });
 
-        // ---- the rooms: Action by the bed on the night his room is: asleep, the morning (race day), up, his word on the bed
+        // ---- the rooms: Action by the bed on the night his room is: asleep, the morning (race day), up, his word on the bed.
+        // (In bed he takes no notice of the bricks, nor falls: the Classic Room's and the Junior Suite's beds are the game's own rooms' bricks,
+        // solid in their whole box up to the canopy, and laid on the mattress he was pushed up out of them onto its top -- asleep in the air
+        // above the bed, the user, 2026-11-25. The Junior Suite's way up was the gap between the bed and the coffee table, narrower than him:
+        // stuck there, the same day; now off the bed's foot, in the open.)
         foreach (var (scene, night, bed, side, zone, wake) in new[]
                  {
                      (OtringalHotel.Classic, NightClassic, (X: 1280, Y: 256 + 450, Z: 3328, Beta: 1024), (X: 2900, Z: 3328), (X0: 512, X1: 3000, Z0: 2300, Z1: 4300), OtringalLine.WakeClassic),
-                     (OtringalHotel.Junior, NightJunior, (X: 1280, Y: 256 + 450, Z: 2300, Beta: 1024), (X: 2900, Z: 2300), (X0: 512, X1: 3000, Z0: 1300, Z1: 3300), OtringalLine.WakeJunior),
+                     (OtringalHotel.Junior, NightJunior, (X: 1280, Y: 256 + 450, Z: 2300, Beta: 1024), (X: 2800, Z: 3700), (X0: 512, X1: 3000, Z0: 1300, Z1: 3300), OtringalLine.WakeJunior),
                      (OtringalHotel.Suite, NightSuite, (X: OtringalHotel.SuiteBed.X, Y: 256 + HotelProps.BedTop + 10, Z: OtringalHotel.SuiteBed.Z, Beta: 0), (X: OtringalHotel.SuiteBed.X, Z: OtringalHotel.SuiteBed.Z + 1900), (X0: 6800, X1: 10100, Z0: 1000, Z1: 4700), OtringalLine.WakeSuite),
                  })
             b.Edit(scene, "a room upstairs at the hotel: Action by its bed on his night there -- asleep, the morning, his word on the bed", model =>
@@ -312,6 +316,8 @@ void comportement_1()
             set_dir(NO_MOVE);
             cinema_mode(1);
             message_obj(0, {say(OtringalLine.TwinsenSleep)});
+            brick_col(0);
+            fallable(0);
             pos_point({bedPoint});
             beta({bed.Beta});
             anim({Asleep_});
@@ -346,6 +352,8 @@ void comportement_3()
 {{
     if ({RoomUp} == l_track())
     {{
+        brick_col(1);
+        fallable(1);
         message_obj(0, {say(wake)});
         cinema_mode(0);
         set_dir(MOVE_MANUAL);

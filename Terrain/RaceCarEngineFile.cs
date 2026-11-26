@@ -742,6 +742,9 @@ internal static class RaceCarEngineFile
                 text.Append(RaceTrackStory.HovercraftLine);
                 // (the Imperial Hotel's lift car: the floor's music stopped as it loads, its own tune played in it -- RACEMOD.CPP quiet_scene=)
                 text.Append($"quiet_scene={OtringalHotel.LiftCar}\n");
+                // (and its two rooms whose beds are the game's own bricks, solid to the canopy: Twinsen lying in one has no brick drawn over
+                // him -- RACEMOD.CPP bed_scene=, RaceTrackStory.OtringalNight's rooms)
+                text.Append($"bed_scene={OtringalHotel.Classic} {OtringalHotel.Junior}\n");
                 // (at the wheel in his everyday clothes until the racing suit is his: RACEMOD.CPP twinsen_casual=, Citadel/CitadelOveralls)
                 text.Append($"twinsen_casual={Citadel.CitadelOveralls.CasualBuggy} {Citadel.CitadelOveralls.CasualBuggyFiring} {Citadel.CitadelOveralls.CasualBuggySmall}\n");
                 foreach (var (file, grate) in RaceTrackBuilder.GameShaftGrates)

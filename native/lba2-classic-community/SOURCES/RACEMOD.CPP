@@ -1980,6 +1980,13 @@ static int s_adultVar = -1;
 typedef struct { int Scene, Body[RACE_MAX_NO_RECOVER], Nb; } T_RACE_NO_RECOVER;
 static T_RACE_NO_RECOVER s_noRecover[RACE_MAX_NO_RECOVER_SCENES];
 static int s_nbNoRecoverScenes = 0;
+// bed_scene=<scene> ... (RaceMod_NoRecover): in those inside scenes Twinsen lying in bed -- asleep, sitting up, getting up -- has no brick
+// redrawn over him: the bed is the room's own bricks, solid to its canopy, and he lies within them (the Imperial Hotel's Classic Room and
+// Junior Suite: laid on the mattress he was drawn nowhere, every brick of the bed in front of him -- 2026-11-26)
+#define RACE_MAX_BED_SCENES 8
+static int s_bedScene[RACE_MAX_BED_SCENES], s_nbBedScenes = 0;
+#define RACE_GEN_ASLEEP 56
+#define RACE_GEN_GET_UP 58
 // carry_hero=<scene> <cube var> <up> <ahead>: in that scene, while the scene variable holds an actor's index (1-254), Twinsen is held up in
 // front of that actor -- <ahead> along its facing, <up> over its feet, turned to face it, and not falling -- whatever it does (CarryFrame):
 // Stella Entities' bouncer carrying him off the stage to the club's lift (the user, 2026-11-16, "If Twinsen manages to get onto the stage,
@@ -5999,6 +6006,14 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "seat_var")) { if (!setRead) s_seatVar = atoi(v); }
         else if (!strcmp(key, "seat_cube")) { if (!setRead) s_seatCube = atoi(v); }
         else if (!strcmp(key, "adult_var")) { if (!setRead) s_adultVar = atoi(v); }
+        else if (!strcmp(key, "bed_scene")) {
+            int scene, used = 0;
+            for (const char *q = v; s_nbBedScenes < RACE_MAX_BED_SCENES && sscanf(q, "%d%n", &scene, &used) == 1; q += used) {
+                int k = 0;
+                while (k < s_nbBedScenes && s_bedScene[k] != scene) k++;
+                if (k == s_nbBedScenes) s_bedScene[s_nbBedScenes++] = scene;
+            }
+        }
         else if (!strcmp(key, "no_recover")) {
             int scene, body, used = 0;
             if (!setRead && sscanf(v, "%d%n", &scene, &used) == 1) {
@@ -14815,6 +14830,15 @@ S32 RaceMod_WalkOver(S32 numobj) { return numobj > 0 && numobj < (S32)NbObjets &
 // bricks were redrawn over the catwalk itself. And a prop lying on furniture of bricks -- the clothes folded on the chair by Twinsen's
 // bed: in the chair's cell, so that he is drawn over them when he stands in front of it, the chair's bricks are not redrawn over them.
 S32 RaceMod_NoRecover(S32 numobj) {
+    if (numobj == NUM_PERSO) {
+        // (Twinsen in a bed of bricks: bed_scene=)
+        if (CubeMode != CUBE_INTERIEUR) return 0;
+        const T_OBJET *h = &ListObjet[NUM_PERSO];
+        if (h->GenAnim < RACE_GEN_ASLEEP || h->GenAnim > RACE_GEN_GET_UP) return 0;
+        for (int k = 0; k < s_nbBedScenes; k++)
+            if (s_bedScene[k] == (int)NumCube) return 1;
+        return 0;
+    }
     if (s_nbNoRecoverScenes <= 0 || CubeMode != CUBE_INTERIEUR || numobj <= 0 || numobj >= (S32)NbObjets) return 0;
     const T_OBJET *o = &ListObjet[numobj];
     for (int k = 0; k < s_nbNoRecoverScenes; k++) {

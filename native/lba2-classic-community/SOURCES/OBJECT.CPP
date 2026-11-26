@@ -5270,7 +5270,10 @@ S32 AffOneObject(T_SORT *pt) {
 
                     BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
                 } else if (RaceMod_NoRecover(numobj)) {
-                    // (a prop drawn whole into the background, no brick over it: RACEMOD.CPP no_recover=)
+                    // (a prop drawn whole into the background, no brick over it: RACEMOD.CPP no_recover=; or Twinsen lying in a bed of
+                    // bricks, bed_scene=. Its box still restored from the background next frame, as DrawRecover would have it: one
+                    // that moves -- Twinsen lying down -- left his head's sweep painted behind the pillow, 2026-11-26)
+                    BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
                 } else {
                     // (and a round prop in the background in front of it: RACEMOD.CPP occluder=)
                     RaceMod_Occlude(numobj);
