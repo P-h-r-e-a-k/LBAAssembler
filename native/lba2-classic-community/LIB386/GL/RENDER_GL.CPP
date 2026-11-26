@@ -243,6 +243,12 @@ static const char *s_fragSrc =
     "uniform int uLinear;\n"
     "uniform vec4 uOpaqueRect;\n" /* x0, y0, x1, y1 — x1<=x0 inactive */
     "uniform vec2 uSize;\n"
+    /* (the target's picture, a palette changed since it was drawn -- a fade: each pixel moved by its index's change between the
+       palette it was drawn with, uDrawnPal, and this frame's, uPalette; the index from the target's alpha at the texel's centre,
+       uSceneSize its size -- GpuRendererBackend.SetSceneDrawnPalette) */
+    "uniform sampler2D uDrawnPal;\n"
+    "uniform int uSceneFix;\n"
+    "uniform vec2 uSceneSize;\n"
     "varying vec2 vTexCoord;\n"
     "vec4 paletteLookup(float idx) {\n"
     "    return texture2D(uPalette, vec2((idx + 0.5) / 256.0, 0.5));\n"
@@ -265,6 +271,11 @@ static const char *s_fragSrc =
     "    vec4 color;\n"
     "    if (uIndexed == 0) {\n"
     "        color = texture2D(uTex, vTexCoord);\n"
+    "        if (uSceneFix != 0) {\n"
+    "            float idx = floor(texture2D(uTex, (floor(vTexCoord * uSceneSize) + 0.5) / uSceneSize).a * 255.0 + 0.5);\n"
+    "            vec2 pu = vec2((idx + 0.5) / 256.0, 0.5);\n"
+    "            color.rgb = clamp(color.rgb + texture2D(uPalette, pu).rgb - texture2D(uDrawnPal, pu).rgb, 0.0, 1.0);\n"
+    "        }\n"
     "        vec2 pixel = vTexCoord * uSize;\n"
     "        if (uOpaqueRect.z > uOpaqueRect.x && uOpaqueRect.w > uOpaqueRect.y &&\n"
     "            pixel.x >= uOpaqueRect.x && pixel.x < uOpaqueRect.z &&\n"
@@ -685,6 +696,11 @@ static GLint s_uIndexedLoc = -1;
 static GLint s_uLinearLoc = -1;
 static GLint s_uOpaqueRectLoc = -1;
 static GLint s_uSizeLoc = -1;
+static GLint s_uDrawnPalLoc = -1;  /* the scene palette fix (SetSceneDrawnPalette) */
+static GLint s_uSceneFixLoc = -1;
+static GLint s_uSceneSizeLoc = -1;
+static GLuint s_drawnPalTex = 0;    /* 256x1: the palette the target was drawn with, while this frame's differs */
+static S32 s_sceneFix = 0;
 static GLint s_aPosLoc = -1;
 static GLint s_aTexCoordLoc = -1;
 static U32 s_texWidth = 0; /* present surface size (engine pixel space) */
@@ -1045,6 +1061,9 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_uLinearLoc = glGetUniformLocation(s_program, "uLinear");
     s_uOpaqueRectLoc = glGetUniformLocation(s_program, "uOpaqueRect");
     s_uSizeLoc = glGetUniformLocation(s_program, "uSize");
+    s_uDrawnPalLoc = glGetUniformLocation(s_program, "uDrawnPal");
+    s_uSceneFixLoc = glGetUniformLocation(s_program, "uSceneFix");
+    s_uSceneSizeLoc = glGetUniformLocation(s_program, "uSceneSize");
     s_aPosLoc = glGetAttribLocation(s_program, "aPos");
     s_aTexCoordLoc = glGetAttribLocation(s_program, "aTexCoord");
 
@@ -1244,6 +1263,11 @@ static void GL_DestroyContext(void) {
     }
     if (s_paletteTex) {
         glDeleteTextures(1, &s_paletteTex);
+        if (s_drawnPalTex) {
+            glDeleteTextures(1, &s_drawnPalTex);
+            s_drawnPalTex = 0;
+        }
+        s_sceneFix = 0;
         s_paletteTex = 0;
     }
     if (s_clutPaletteTex) {
@@ -1613,6 +1637,40 @@ static void GL_TexUpdatePalette(const void *argb) {
                     s_capsBgra ? (GLenum)FMT_BGRA : (GLenum)GL_RGBA,
                     GL_UNSIGNED_BYTE, sceneCopy);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+/* The palette the target's picture was drawn with, while this frame's differs (GpuRendererBackend.SetSceneDrawnPalette): the
+   present's scene quad moves each pixel by its index's change between the two. The software fades its picture by fading the
+   palette; the target holds finished colours, and over a frame nobody drew again -- a fade to black leaving an outdoor scene, the
+   fade in of the next one, drawn while the palette was black -- OpenGL held the picture and cut to black, or stayed black and cut
+   to the picture (2026-11-26). NULL: the target as drawn. */
+static void GL_SetSceneDrawnPalette(const void *argb) {
+    if (argb == NULL) {
+        s_sceneFix = 0;
+        return;
+    }
+    if (!Window_GLMakeCurrent()) {
+        s_sceneFix = 0;
+        return;
+    }
+    if (!s_drawnPalTex) {
+        glGenTextures(1, &s_drawnPalTex);
+        glBindTexture(GL_TEXTURE_2D, s_drawnPalTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 1, 0, BgraSrcFormat(), GL_UNSIGNED_BYTE, NULL);
+    }
+    U32 copy[256];
+    memcpy(copy, argb, sizeof(copy));
+    if (!s_capsBgra) {
+        SwizzleBGRAtoRGBA(copy, 256);
+    }
+    glBindTexture(GL_TEXTURE_2D, s_drawnPalTex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 1, s_capsBgra ? (GLenum)FMT_BGRA : (GLenum)GL_RGBA, GL_UNSIGNED_BYTE, copy);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    s_sceneFix = 1;
 }
 
 /* Brick atlas: LUMINANCE_ALPHA, byte0 = palette index, byte1 = valid.
@@ -2345,6 +2403,15 @@ static void GL_DrawPresentQuad(S32 which, S32 linear, S32 opaqueX0,
         glUniform1i(s_uLinearLoc, 0);
         glUniform4f(s_uOpaqueRectLoc, 0.0f, 0.0f, 0.0f, 0.0f);
         glUniform2f(s_uSizeLoc, (float)s_texWidth, (float)s_texHeight);
+        /* (a palette changed since the target was drawn: GL_SetSceneDrawnPalette) */
+        glUniform1i(s_uSceneFixLoc, (s_sceneFix && s_drawnPalTex) ? 1 : 0);
+        if (s_sceneFix && s_drawnPalTex) {
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, s_drawnPalTex);
+            glUniform1i(s_uDrawnPalLoc, 2);
+            glUniform2f(s_uSceneSizeLoc, (float)s_fboWidth, (float)s_fboHeight);
+            glActiveTexture(GL_TEXTURE0);
+        }
 
         glBindBuffer(GL_ARRAY_BUFFER, s_fboVbo);
         glEnableVertexAttribArray(s_aPosLoc);
@@ -2381,6 +2448,7 @@ static void GL_DrawPresentQuad(S32 which, S32 linear, S32 opaqueX0,
         glUniform1i(s_uLinearLoc, linear);
         glUniform4f(s_uOpaqueRectLoc, (float)opaqueX0, (float)opaqueY0,
                     (float)opaqueX1, (float)opaqueY1);
+        glUniform1i(s_uSceneFixLoc, 0);
         glUniform2f(s_uSizeLoc, (float)s_texWidth, (float)s_texHeight);
 
         glBindBuffer(GL_ARRAY_BUFFER, s_vbo);
@@ -2861,6 +2929,7 @@ const GpuRendererBackend GpuRendererBackendGL = {
     D_DrawPresentQuad,
     GL_AtlasSlots,
     D_TexUpdateAtlasSlot,
+    GL_SetSceneDrawnPalette,
 };
 
 #endif /* USE_GPURENDERER */

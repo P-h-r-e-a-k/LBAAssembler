@@ -195,6 +195,10 @@ static const void *s_uploadedCLUT = NULL;
 static S32 s_paletteCheckedThisFrame = 0;
 static S32 s_paletteUploadedValid = 0;
 static U32 s_uploadedPalette[256];
+/* The palette the target's picture was last drawn with (each batch drawn: the palette uploaded for it), for the present's fix
+   when the palette has changed since -- a fade over a frame nobody draws again (GpuRendererBackend.SetSceneDrawnPalette) */
+static U32 s_drawnPalette[256];
+static S32 s_drawnPaletteValid = 0;
 
 /* ── Interior brick atlas (GpuScene phase 1) ────────────────────────────── */
 /* One RG8 page (R = palette index, G = valid; AffGraph RLE skip leaves
@@ -872,6 +876,10 @@ void GpuRenderer_FlushBatch(void) {
     Common_BuildDrawParams(&params);
     s_backend->DrawTriangles((const GpuVertex *)s_batchVerts,
                              s_batchVertCount, &params);
+    if (s_paletteUploadedValid) {
+        memcpy(s_drawnPalette, s_uploadedPalette, sizeof(s_drawnPalette));
+        s_drawnPaletteValid = 1;
+    }
 
     s_batchVertCount = 0;
     s_batchTriCount = 0;
@@ -2476,6 +2484,14 @@ void GpuRenderer_Present(const void *pixels, U32 pitch, U32 width,
        DrawPresentQuad: 0 = offscreen colour into the window, then
        1 = the 2D overlay on top. The backend presents inside the last
        call (swap / submit). */
+    /* (the target's picture under a palette changed since it was drawn -- a fade: the present moves each pixel by its index's
+       change, SetSceneDrawnPalette; this frame's palette uploaded for it whichever path the overlay takes) */
+    if (s_backend->SetSceneDrawnPalette != NULL) {
+        Common_UploadPalette();
+        const U32 *lut = GL_GetPaletteLUT();
+        const S32 changed = s_drawnPaletteValid && lut != NULL && memcmp(lut, s_drawnPalette, sizeof(s_drawnPalette)) != 0;
+        s_backend->SetSceneDrawnPalette(changed ? (const void *)s_drawnPalette : NULL);    }
+
     s_backend->ClearBackbuffer();
     s_backend->DrawPresentQuad(0, filterLinear, 0, 0, 0, 0);
     s_backend->DrawPresentQuad(1, filterLinear, ox0, oy0, ox1, oy1);
@@ -2600,6 +2616,27 @@ static S32 Common_ReadbackPresented(void *rgb, U8 *index, U32 width, U32 height)
 
     if (!s_backend->TargetReadColor(s_colorBuf, fboW, fboH)) {
         return FALSE;
+    }
+
+    /* (a palette changed since the target was drawn -- a fade: the colours as the present shows them, each pixel moved by its
+       index's change between the two palettes, SetSceneDrawnPalette; a screenshot or a recording taken mid-fade had the target as
+       drawn) */
+    {
+        const U32 *lutNow = GL_GetPaletteLUT();
+        if (s_backend->SetSceneDrawnPalette != NULL && s_drawnPaletteValid && lutNow != NULL &&
+            memcmp(lutNow, s_drawnPalette, sizeof(s_drawnPalette)) != 0) {
+            for (U32 i = 0; i < totalPixels; i++) {
+                const U32 p = s_colorBuf[i];
+                const U32 now = lutNow[p >> 24], was = s_drawnPalette[p >> 24];
+                U32 out = p & 0xFF000000u;
+                for (S32 sh = 0; sh <= 16; sh += 8) {
+                    S32 c = (S32)((p >> sh) & 0xFF) + (S32)((now >> sh) & 0xFF) - (S32)((was >> sh) & 0xFF);
+                    c = c < 0 ? 0 : (c > 255 ? 255 : c);
+                    out |= (U32)c << sh;
+                }
+                s_colorBuf[i] = out;
+            }
+        }
     }
 
     U32 *dst = (U32 *)rgb;

@@ -2351,8 +2351,37 @@ static void ControlPrePresent(U32 *frameBuffer, U32 pitch, U32 width, U32 height
     Control_ServiceListen();
     /* (a video being recorded -- the console's framedump, FRAMEDUMP.CPP: the frame as the window gets it, before the console's
        overlay) */
-    if (FrameDump_Active())
-        FrameDump_Frame(frameBuffer, pitch, width, height);
+    if (FrameDump_Active()) {
+        // (under a GPU renderer the window's picture is the GPU's frame with Log over it, as Control_ScreenshotTo composes it: the
+        // ARGB frame here is Log's alone -- a recording made on OpenGL was black wherever the GPU drew, every outdoor frame, 2026-11-26)
+        static U32 *rgb = NULL, *shown = NULL;
+        static size_t shownSize = 0;
+        const size_t n = (size_t)width * height;
+        S32 composed = FALSE;
+        if (GpuRenderer_IsActive() AND frameBuffer AND Log AND width == (U32)ModeDesiredX AND height == (U32)ModeDesiredY) {
+            if (shownSize < n) {
+                free(rgb);
+                free(shown);
+                rgb = (U32 *)malloc(n * sizeof(U32));
+                shown = (U32 *)malloc(n * sizeof(U32));
+                shownSize = (rgb AND shown) ? n : 0;
+            }
+            if (shownSize AND GpuRenderer_ReadbackPresented(rgb, width, height)) {
+                const U8 *log = (const U8 *)Log;
+                for (U32 y = 0; y < height; y++) {
+                    const U32 *src = (const U32 *)((const U8 *)frameBuffer + (size_t)y * pitch);
+                    for (U32 x = 0; x < width; x++) {
+                        const size_t i = (size_t)y * width + x;
+                        shown[i] = (log[i] == 0 AND !GpuRenderer_InOverlayOpaque((S32)x, (S32)y)) ? (rgb[i] | 0xFF000000u) : src[x];
+                    }
+                }
+                FrameDump_Frame(shown, width * 4, width, height);
+                composed = TRUE;
+            }
+        }
+        if (!composed)
+            FrameDump_Frame(frameBuffer, pitch, width, height);
+    }
     /* A console screenshot asked for in a modal's own loop (a menu: the race game's pages,
        2026-10-17) -- the main loop's capture below never runs there. Log is the buffer about
        to be presented, as there. */

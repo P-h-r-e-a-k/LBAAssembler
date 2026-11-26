@@ -228,6 +228,12 @@ typedef struct GpuRendererBackend {
     // TexUpdateAtlas), and uploads a page into a slot. GpuVertex.Slot then picks the page, so one batch spans pages.
     U32 (*AtlasSlots)(void);
     void (*TexUpdateAtlasSlot)(const void *lum, U32 slot);
+
+    // The palette the target's picture was drawn with (256 ARGB, as TexUpdatePalette's), when this frame's differs from it -- a fade
+    // over a frame nobody draws again, a palette switched under a frozen scene: the present then moves each pixel of the target by
+    // its palette index's change between the two (the index the target keeps in its alpha), as the software's picture, palette
+    // indices, follows its palette. NULL: the target as drawn. (A NULL function: the backend can't; the target shows as drawn.)
+    void (*SetSceneDrawnPalette)(const void *argb);
 } GpuRendererBackend;
 
 //──────────────────────────────────────────────────────────────────────────
