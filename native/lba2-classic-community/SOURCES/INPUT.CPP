@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include <SYSTEM/KEYBOARD.H>
+#include <SYSTEM/KEYBOARD_KEYS.H>
 #include <SYSTEM/TIMER.H>
 
 #include "INPUT.H"
@@ -103,6 +104,16 @@ void ReadInputConfig(void) {
         }
     }
 
+    // (the car's own keys -- CarInput<slot>_1/_2, today's keys where unset: docs/plan/REBIND_PLAN.md)
+    RestoreCarKeys(TRUE, FALSE);
+    for (n = 0; n < CAR_PAGE_ROWS; n++) {
+        const S32 slot = CarPageSlot[n];
+        snprintf(id, sizeof(id), "CarInput%d_1", slot);
+        CarKeys[slot].Key1 = DefFileBufferReadValueDefault(id, CarKeysDefault[slot].Key1);
+        snprintf(id, sizeof(id), "CarInput%d_2", slot);
+        CarKeys[slot].Key2 = DefFileBufferReadValueDefault(id, CarKeysDefault[slot].Key2);
+    }
+
     InitInput();
 }
 
@@ -130,6 +141,14 @@ void WriteInputConfig(void) {
 
         snprintf(id, sizeof(id), "Input%d_2", n);
         DefFileBufferWriteValue(id, DefKeys[n].Key2);
+    }
+
+    for (n = 0; n < CAR_PAGE_ROWS; n++) {
+        const S32 slot = CarPageSlot[n];
+        snprintf(id, sizeof(id), "CarInput%d_1", slot);
+        DefFileBufferWriteValue(id, CarKeys[slot].Key1);
+        snprintf(id, sizeof(id), "CarInput%d_2", slot);
+        DefFileBufferWriteValue(id, CarKeys[slot].Key2);
     }
 }
 
@@ -186,6 +205,15 @@ void ReadGamepadConfig(void) {
         GamepadKeys[n].Key2 =
             DefFileBufferReadValueDefault(id, GamepadKeysDefault[n].Key2);
     }
+    // (the car's own buttons: CarGamepad<slot>_1/_2)
+    RestoreCarKeys(FALSE, TRUE);
+    for (S32 n = 0; n < CAR_PAGE_ROWS; n++) {
+        const S32 slot = CarPageSlot[n];
+        snprintf(id, sizeof(id), "CarGamepad%d_1", slot);
+        CarPadKeys[slot].Key1 = DefFileBufferReadValueDefault(id, CarPadKeysDefault[slot].Key1);
+        snprintf(id, sizeof(id), "CarGamepad%d_2", slot);
+        CarPadKeys[slot].Key2 = DefFileBufferReadValueDefault(id, CarPadKeysDefault[slot].Key2);
+    }
 
     // Fold the freshly-loaded gamepad bindings into the combined input table.
     // Boot order runs this after ReadInputConfig()'s InitInput(), so this is
@@ -213,17 +241,80 @@ void WriteGamepadConfig(void) {
         snprintf(id, sizeof(id), "Gamepad%d_2", n);
         DefFileBufferWriteValue(id, GamepadKeys[n].Key2);
     }
+    for (S32 n = 0; n < CAR_PAGE_ROWS; n++) {
+        const S32 slot = CarPageSlot[n];
+        snprintf(id, sizeof(id), "CarGamepad%d_1", slot);
+        DefFileBufferWriteValue(id, CarPadKeys[slot].Key1);
+        snprintf(id, sizeof(id), "CarGamepad%d_2", slot);
+        DefFileBufferWriteValue(id, CarPadKeys[slot].Key2);
+    }
 }
 
 //-------------------------------------------------------------------------
+// The car's own slots with no Input bit -- the handbrake, the race's view (INPUT_BINDINGS.H CAR_SLOT_*): held when any of their keys or
+// buttons is, or when this poll put a press in (the second player's keys at a shared keyboard, RACEGAME.CPP RaceGame_SharedKeys)
+static U32 s_carInjected = 0;
+
+S32 Bindings_CarHeld(S32 slot) {
+    if (slot < 0 || slot >= CAR_SLOTS) return FALSE;
+    if (slot >= 32 && (s_carInjected & (1u << (slot - 32)))) return TRUE;
+    const U32 keys[4] = {CarKeys[slot].Key1, CarKeys[slot].Key2, CarPadKeys[slot].Key1, CarPadKeys[slot].Key2};
+    for (S32 i = 0; i < 4; i++)
+        if (keys[i] && CheckKey(keys[i])) return TRUE;
+    return FALSE;
+}
+
+void Bindings_Inject(S32 slot) {
+    if (slot >= 32 && slot < CAR_SLOTS) s_carInjected |= 1u << (slot - 32);
+}
+
+void Bindings_ClearInjected(void) { s_carInjected = 0; }
+
+//-------------------------------------------------------------------------
+// The pad in a menu, the usual way round: A picks, B goes back (Start, the menu's own button, closes it as before). The game binds B to
+// I_RETURN -- Enter, which picks in a menu -- so a menu reads I_RETURN less the pad's B (the user, 2026-11-25, "We need to look at
+// tightening up the controls on the menu": B picked the row and A did nothing, the other way round to every pad game)
+// (A and B pressed this poll, from TabKeys as GetInput left them -- the pad's state and a harness's `key pad-a` alike; MyKey's pad scancode
+// comes from the device alone, and only when no keyboard key is down)
+static S32 s_padAWas = 0, s_padBWas = 0, s_padAEdge = 0, s_padBEdge = 0;
+static void MenuPadEdges(S32 clear) {
+    const S32 a = !clear && CheckKey(K_GAMEPAD_A) != 0, b = !clear && CheckKey(K_GAMEPAD_B) != 0;
+    s_padAEdge = a && !s_padAWas;
+    s_padBEdge = b && !s_padBWas;
+    if (!clear) {
+        s_padAWas = a;
+        s_padBWas = b;
+    }
+}
+S32 MenuPad_Accept(void) { return s_padAEdge; }
+S32 MenuPad_Back(void) { return s_padBEdge; }
+U32 MenuPad_Input(void) { return CheckKey(K_GAMEPAD_B) ? Input & ~(U32)I_RETURN : Input; }
+
+//-------------------------------------------------------------------------
+// The game's own frame's read (PERSO.CPP MainLoop): the car's keys while Twinsen drives. Every other read -- the menus, the inventory, the
+// holomap, a dialogue, the remap pages -- takes the on-foot keys, so a key moved in the car never leaves a menu out of reach.
+static S32 s_gameRead = 0, s_gameCar = 0;
+
+void MyGetInputGame(S32 car) {
+    s_gameRead = 1;
+    s_gameCar = car;
+    MyGetInput();
+    s_gameRead = 0;
+}
+
 void MyGetInput() {
     S32 suppressConsole;
+    Bindings_ClearInjected();
+    Bindings_UseCar(s_gameRead && s_gameCar);
     // GetJoys() writes the gamepad state into TabKeys; GetInput() then folds
     // both keyboard and gamepad into Input through the combined table built by
     // InitInput(), so the pad honours NoRepeatInput like the keyboard does.
     GetJoys((U32 *)&TabKeys[256]);
     RaceGame_KeysBefore();
     GetInput(0); // no norepeat keys
+    // (a change of set: the keys held then do nothing till let go)
+    Input = Bindings_FilterSwitch(Input);
+    MenuPadEdges(FALSE);
 
     MyKey = Key;
     // Gamepad "press any key" parity: if no keyboard key was pressed this
@@ -251,6 +342,7 @@ void MyGetInput() {
         Key = 0;
         Input = 0;
         MyKey = 0;
+        MenuPadEdges(TRUE);
         /* Clear I_CAMERA keys (index 22 per INPUT.H) so they don't fire on the suppress frame. */
         TabKeys[DefKeys[22].Key1] = 0;
         TabKeys[DefKeys[22].Key2] = 0;
@@ -263,6 +355,7 @@ void MyGetInput() {
         Key = 0;
         MyKey = 0;
         Input = 0;
+        MenuPadEdges(TRUE);
         memset(TabKeys, 0, sizeof(TabKeys));
 #ifdef LBA_EDITOR
         MyClick = 0;

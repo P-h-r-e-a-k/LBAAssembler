@@ -14384,7 +14384,8 @@ static void PowerUps(S32 now, int driving) {
     // has stopped (a press while it turns does nothing, nor does holding the key on past its stop: a press from then on, the box ringed in
     // gold); the test pilot uses each item a moment after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user,
     // "let's map it to Ctrl instead as this shouldn't be used when driving anyway". No key chooses an item since 2026-10-17: there is one)
-    const int use = s_useHeld || CheckKey(K_CTRL) || CheckKey(K_CTRL_RIGHT);
+    // (the car's "Use power-up": Ctrl and Right Ctrl, a pad's LB, unless moved -- Options > Controls, INPUT_BINDINGS.CPP CarKeys)
+    const int use = s_useHeld;
     // (the golden Gazogem's time over: gone from the box -- and what waits in the second box moves in)
     if (s_item[RACE_BOX] == PU_GOLD && s_goldUntil && now >= s_goldUntil) {
         s_item[RACE_BOX] = -1; s_goldUntil = 0;
@@ -15689,9 +15690,10 @@ static double SlideGap(S32 beta) {
     return gap;
 }
 // (Z, or a pad's B -- 2026-11-23, the user: "We need the shift keys to work to load the inventory whilst Twinsen is in the car ... Let's put
-// handbrake on Z". Two players at one keyboard: their handbrake keys, E and Right Shift, come in as Z -- RACEGAME.CPP RaceGame_SharedKeys)
+// handbrake on Z" -- unless moved: the car's keys, Options > Controls, INPUT_BINDINGS.CPP CAR_SLOT_HANDBRAKE. Two players at one keyboard:
+// their handbrake keys, E and Right Shift, come in through Bindings_Inject -- RACEGAME.CPP RaceGame_SharedKeys)
 static int HandbrakeKey(void) {
-    return CheckKey(K_Z) || CheckKey(K_GAMEPAD_B);
+    return Bindings_CarHeld(CAR_SLOT_HANDBRAKE);
 }
 // Whether the player has the car: nothing drives it for him, and it isn't flying or going round a loop. (Across a cube's edge -- the
 // next scene, NewCube -- the slide goes on.)
@@ -16037,8 +16039,8 @@ U32 RaceMod_FilterInput(U32 input) {
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
     // (the inventory's key -- Shift, a pad's Y -- opens the inventory in the car too, but not in a race: RaceMod_CarInventory)
     if (RaceMod_Active() && Comportement == C_BUGGY && !RaceMod_CarInventory()) input &= ~(U32)I_INVENTORY;
-    // (a pad's Back button changes the camera's view in the car -- RaceCameraKey -- not the holomap)
-    if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
+    // (a pad's Back button changes the camera's view in the car -- RaceCameraKey -- not the holomap: in the car a key or button of the car's
+    // own actions is no on-foot action's, INPUT_BINDINGS.CPP InitInput)
     // (a ghost played back: the car is the ghost's -- nothing gets Twinsen out of it, nor fires, jumps or dodges)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) input &= ~(U32)(I_JOY | I_FIRE | I_ACTION | I_ESQUIVE);
     // (the hovercraft over the water: no getting out there -- HovercraftFrame)
@@ -19291,9 +19293,10 @@ void RaceMod_SetCameraView(int view) {
     SetCameraView(view, "raceview");
 }
 
-// Every frame: V, or a pad's Back button, goes round the camera's views while Twinsen drives -- inside, just behind, further back.
+// Every frame: V, or a pad's Back button (unless moved: the car's "Change view", Options > Controls), goes round the camera's views while
+// Twinsen drives -- inside, just behind, further back.
 static void RaceCameraKey(void) {
-    const int down = CheckKey(K_V) || CheckKey(K_GAMEPAD_BACK);
+    const int down = Bindings_CarHeld(CAR_SLOT_VIEW);
     if (down && !s_viewKeyWas && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && NewCube == -1)
         SetCameraView((s_camView + 1) % 3, "V");
     s_viewKeyWas = down;

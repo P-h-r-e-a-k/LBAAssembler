@@ -67,6 +67,40 @@ extern void InitInput(void);
 extern void RestoreInput(void);
 //-------------------------------------------------------------------------
 
+// In the car: a second set of keys and pad buttons for the car's own actions (docs/plan/REBIND_PLAN.md; the user, 2026-11-25: "perhaps
+// the same key binded one way for when twinsen is in a car and another when he isn't"). Indexed like the slots above -- 0-31 the Input
+// word's bits -- plus two of the car's own with no Input bit, read with Bindings_CarHeld: the handbrake and the race's view (Z and V,
+// a pad's B and Back, until then fixed in RACEMOD.CPP). Only the slots on the car's page (CarPageRows) are the car's; in the car every
+// other slot keeps its on-foot keys but for any the car's page uses.
+#define CAR_SLOT_HANDBRAKE 36
+#define CAR_SLOT_VIEW 37
+#define CAR_SLOTS 38
+#define CAR_PAGE_ROWS 11
+
+extern T_DEF_KEY CarKeys[CAR_SLOTS];
+extern T_DEF_KEY CarPadKeys[CAR_SLOTS];
+extern const T_DEF_KEY CarKeysDefault[CAR_SLOTS];
+extern const T_DEF_KEY CarPadKeysDefault[CAR_SLOTS];
+// The car page's rows, in order: each its slot and its words
+extern const S32 CarPageSlot[CAR_PAGE_ROWS];
+extern const char *const CarPageLabel[CAR_PAGE_ROWS];
+// Whether a slot is one of the car's own
+extern S32 Bindings_CarSlot(S32 slot);
+// The car's keys back to the defaults (keyboard, pad or both)
+extern void RestoreCarKeys(S32 keyboard, S32 pad);
+
+// Which set the Input word comes from: non-zero the car's. A change folds the table again, and the keys held at that moment are ignored
+// until they are let go (Bindings_FilterSwitch) -- the key that put him in the car does nothing in it.
+extern void Bindings_UseCar(S32 car);
+extern S32 Bindings_InCar(void);
+// After GetInput: the Input word less the keys held across a change of set
+extern U32 Bindings_FilterSwitch(U32 input);
+// One of the car's own slots (CAR_SLOT_*) held: any of its keys or buttons, or a press put in this poll (Bindings_Inject: the second
+// player's keys at a shared keyboard)
+extern S32 Bindings_CarHeld(S32 slot);
+extern void Bindings_Inject(S32 slot);
+extern void Bindings_ClearInjected(void);
+
 // The other direction: which keys carry a slot, and which slot a key carries.
 //
 // InitInput folds the two tables into the flat (key, mask) array GetInput scans,

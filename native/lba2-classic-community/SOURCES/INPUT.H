@@ -105,6 +105,12 @@ extern void ReadInputConfig(void);
 extern void WriteInputConfig(void);
 //-------------------------------------------------------------------------
 extern void MyGetInput(void);
+// The game's own frame's read: `car` non-zero, the car's keys (INPUT_BINDINGS.H Bindings_UseCar)
+extern void MyGetInputGame(S32 car);
+// The pad in a menu: A picks, B goes back (this pass); the Input word less the pad's B (the game's Enter)
+extern S32 MenuPad_Accept(void);
+extern S32 MenuPad_Back(void);
+extern U32 MenuPad_Input(void);
 //-------------------------------------------------------------------------
 extern void WaitNoInput(void);
 /* Drain only UI directions without charging their release time to gameplay. */

@@ -108,23 +108,113 @@ const T_DEF_KEY GamepadKeysDefault[MAX_INPUT_SLOTS] = {
 
 U32 NbInput = MAX_INPUT_SLOTS;
 
+// ---- In the car ------------------------------------------------------------------------------------------------------------------------
+// The defaults are the keys the car took before it had a set of its own: the on-foot keys of its slots, with the race's handbrake (Z, B)
+// and view (V, Back), and Right Ctrl for the power-up as RACEMOD.CPP read it.
+T_DEF_KEY CarKeys[CAR_SLOTS];
+T_DEF_KEY CarPadKeys[CAR_SLOTS];
+const T_DEF_KEY CarKeysDefault[CAR_SLOTS] = {
+    {K_GRAY_UP, K_NUMPAD_8},    // 0  I_UP: accelerate
+    {K_GRAY_DOWN, K_NUMPAD_2},  // 1  I_DOWN: brake, reverse
+    {K_GRAY_LEFT, K_NUMPAD_4},  // 2  I_LEFT: steer left
+    {K_GRAY_RIGHT, K_NUMPAD_6}, // 3  I_RIGHT: steer right
+    {K_ALT, 0},                 // 4  I_THROW: fire
+    {K_CTRL, K_CTRL_RIGHT},     // 5  I_COMPORTEMENT: use the power-up
+    {K_SHIFT, 0},               // 6  I_INVENTORY
+    {K_SPACE, K_NUMPAD_5},      // 7  I_ACTION_M: get out (stopped)
+    {K_W, K_GRAY_END},          // 8  I_ACTION_ALWAYS: get out (stopped)
+    {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+    {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+    {K_Z, 0},                   // 36 the handbrake
+    {K_V, 0},                   // 37 the race's view
+};
+const T_DEF_KEY CarPadKeysDefault[CAR_SLOTS] = {
+    {K_GAMEPAD_RTRIGGER, 0},    // 0  accelerate
+    {K_GAMEPAD_LTRIGGER, 0},    // 1  brake, reverse
+    {K_GAMEPAD_LSTICK_LEFT, 0}, // 2  steer left
+    {K_GAMEPAD_LSTICK_RIGHT, 0},// 3  steer right
+    {K_GAMEPAD_RSHOULDER, 0},   // 4  fire
+    {K_GAMEPAD_LSHOULDER, 0},   // 5  use the power-up
+    {K_GAMEPAD_Y, 0},           // 6  inventory
+    {K_GAMEPAD_X, 0},           // 7  get out
+    {K_GAMEPAD_A, 0},           // 8  get out
+    {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+    {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+    {K_GAMEPAD_B, 0},           // 36 the handbrake
+    {K_GAMEPAD_BACK, 0},        // 37 the race's view
+};
+const S32 CarPageSlot[CAR_PAGE_ROWS] = {0, 1, 2, 3, CAR_SLOT_HANDBRAKE, 5, 4, 8, 7, CAR_SLOT_VIEW, 6};
+const char *const CarPageLabel[CAR_PAGE_ROWS] = {"Accelerate", "Brake, reverse", "Steer left", "Steer right", "Handbrake", "Use power-up",
+                                                 "Fire", "Get out (stopped)", "Get out, more keys", "Change view", "Inventory"};
+
+S32 Bindings_CarSlot(S32 slot) {
+    for (S32 r = 0; r < CAR_PAGE_ROWS; r++)
+        if (CarPageSlot[r] == slot) return TRUE;
+    return FALSE;
+}
+
+void RestoreCarKeys(S32 keyboard, S32 pad) {
+    if (keyboard) memcpy(CarKeys, CarKeysDefault, sizeof(CarKeys));
+    if (pad) memcpy(CarPadKeys, CarPadKeysDefault, sizeof(CarPadKeys));
+}
+
+static S32 s_inCar = 0;
+static S32 s_switchArmed = 0;
+static U32 s_switchHeld = 0;
+
+// A key one of the car's own slots takes (keyboard or pad)
+static S32 CarTakes(U32 key) {
+    if (!key) return FALSE;
+    for (S32 r = 0; r < CAR_PAGE_ROWS; r++) {
+        const S32 s = CarPageSlot[r];
+        if (CarKeys[s].Key1 == key || CarKeys[s].Key2 == key || CarPadKeys[s].Key1 == key || CarPadKeys[s].Key2 == key) return TRUE;
+    }
+    return FALSE;
+}
+
+void Bindings_UseCar(S32 car) {
+    car = car ? 1 : 0;
+    if (car == s_inCar) return;
+    s_inCar = car;
+    InitInput();
+    s_switchArmed = 1;
+}
+
+S32 Bindings_InCar(void) { return s_inCar; }
+
+U32 Bindings_FilterSwitch(U32 input) {
+    // (the first read after a change: what is held now is ignored till it is let go)
+    if (s_switchArmed) { s_switchHeld = input; s_switchArmed = 0; }
+    s_switchHeld &= input;
+    return input & ~s_switchHeld;
+}
+
 //-------------------------------------------------------------------------
 void InitInput(void) {
     // Rebuild the combined table from the current keyboard (DefKeys) and gamepad
     // (GamepadKeys) bindings. Call after either changes (key remap, config load,
     // restore-defaults). Spell slots 32-35 stay out of the Input path and are
     // read via direct CheckKey(DefKeys[..]) in PERSO.CPP.
+    // In the car (Bindings_UseCar): the car's own slots from its tables, every other slot its on-foot keys but any the car's take.
     S32 n = 0;
     for (S32 i = 0; i < INPUT_TABLE_SLOTS; i++) {
         U32 mask = (1u << i);
-        CombinedInputKeys[n] = DefKeys[i].Key1;
-        CombinedInputMasks[n++] = mask;
-        CombinedInputKeys[n] = DefKeys[i].Key2;
-        CombinedInputMasks[n++] = mask;
-        CombinedInputKeys[n] = GamepadKeys[i].Key1;
-        CombinedInputMasks[n++] = mask;
-        CombinedInputKeys[n] = GamepadKeys[i].Key2;
-        CombinedInputMasks[n++] = mask;
+        U32 keys[4] = {DefKeys[i].Key1, DefKeys[i].Key2, GamepadKeys[i].Key1, GamepadKeys[i].Key2};
+        if (s_inCar) {
+            if (Bindings_CarSlot(i)) {
+                keys[0] = CarKeys[i].Key1;
+                keys[1] = CarKeys[i].Key2;
+                keys[2] = CarPadKeys[i].Key1;
+                keys[3] = CarPadKeys[i].Key2;
+            } else {
+                for (S32 k = 0; k < 4; k++)
+                    if (CarTakes(keys[k])) keys[k] = 0;
+            }
+        }
+        for (S32 k = 0; k < 4; k++) {
+            CombinedInputKeys[n] = keys[k];
+            CombinedInputMasks[n++] = mask;
+        }
     }
 
     NbInput = (U32)n;

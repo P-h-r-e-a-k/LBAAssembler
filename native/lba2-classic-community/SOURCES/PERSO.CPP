@@ -633,7 +633,8 @@ restartloop:
 
         LastInput = Input;
 
-        MyGetInput();
+        // (the car's keys while he drives in the race game -- docs/plan/REBIND_PLAN.md)
+        { extern S32 RaceMod_Active(void); MyGetInputGame(Comportement == C_BUGGY && RaceMod_Active()); }
 
         // Harness input timeline (docs/plan/INPUT_SIM_PLAN.md): OR the currently-held injected bits into
         // this frame's Input so the harness drives the hero without a keyboard. A `seq` hold is

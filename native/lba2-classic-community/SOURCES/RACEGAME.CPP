@@ -102,6 +102,7 @@
 #include <ctype.h>
 #include "C_EXTERN.H"
 #include "CONFIG_FILE.H"
+#include "CONFIG.H"
 #include "CONSOLE/CONSOLE.H"
 #include "CONTROL.H"
 #include "DIRECTORIES.H"
@@ -227,7 +228,11 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_BOWL_FIRST 2488
 #define RG_ID_BOWL_WALK 2492
 #define RG_ID_PLAYER_LAST 2492
-#define RG_ID_SCRAPBOOK 2496                // the main menu's Scrapbook: the postcards this player has found (ScrapbookPage, 2026-11-24)
+#define RG_ID_SCRAPBOOK 2496
+#define RG_ID_KEYS_FOOT 2497                // Options > Controls: the keyboard's page on foot (RaceGame_ControllerMenu)
+#define RG_ID_KEYS_CAR 2498                 // ... in the car
+#define RG_ID_PAD_FOOT 2499                 // ... the controller's on foot
+#define RG_ID_PAD_CAR 2500                  // ... in the car                // the main menu's Scrapbook: the postcards this player has found (ScrapbookPage, 2026-11-24)
 #define RG_ID_SAVE 73                       // the game's own Save game (GAMEMENU.CPP's case 73): in the story's menu too (the user, 2026-11-24)
 static int StoryResolved(char *out);
 static int AchRowDisabled(int k);
@@ -1370,7 +1375,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     if (s_on && num == RG_ID_QUIT) { Label(string, "Quit to the player menu"); return 1; }
     if (s_on && num == RG_ID_REPLAY_END) { Label(string, "End the replay"); return 1; }
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO && num != RG_ID_SCRAPBOOK)) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PLAYER_LAST) && num != RG_ID_RENDERER && num != RG_ID_STORY_DEMO && num != RG_ID_SCRAPBOOK && (num < RG_ID_KEYS_FOOT || num > RG_ID_PAD_CAR))) return 0;
     // (a player's row: its name, marked when it is this game's)
     // (an achievement's row, a bowler's, the walk round the alley)
     if (num >= RG_ID_ACH_FIRST && num < RG_ID_ACH_FIRST + 7) { char row[160]; AchRowLabel(num - RG_ID_ACH_FIRST, row, sizeof(row)); Label(string, row); return 1; }
@@ -1427,7 +1432,11 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_TRIAL: Label(string, "Time trial"); return 1;
     case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
-    case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;   // (the game's own Controls row changes the keys)
+    case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;
+    case RG_ID_KEYS_FOOT: Label(string, "Keyboard: on foot"); return 1;
+    case RG_ID_KEYS_CAR: Label(string, "Keyboard: in the car"); return 1;
+    case RG_ID_PAD_FOOT: Label(string, "Controller: on foot"); return 1;
+    case RG_ID_PAD_CAR: Label(string, "Controller: in the car"); return 1;   // (the game's own Controls row changes the keys)
     case RG_ID_UPDATES: Label(string, "Window and updates"); return 1;          // (the row's width: "Window mode, mini-map, updates" ran over it)
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
@@ -1583,8 +1592,11 @@ static int Clicked(S32 *x, S32 *y) {
     return released & 1 ? 1 : 2;
 }
 
-static int Confirmed(void) { return Input & I_RETURN || Input & I_ACTION_M || MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER || MyKey == K_SPACE; }
-static int Escaped(void) { return MyKey == K_ESC || Input & I_MENUS; }
+// (a pad's A picks and its B goes back, as in the game's menus: INPUT.CPP MenuPad_*)
+static int Confirmed(void) {
+    return MenuPad_Input() & I_RETURN || Input & I_ACTION_M || MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER || MyKey == K_SPACE || MenuPad_Accept();
+}
+static int Escaped(void) { return MyKey == K_ESC || Input & I_MENUS || MenuPad_Back(); }
 
 #define RG_ORANGE 243                       // the palette's fire orange, for the pages' headers
 #define RG_GREY (3 * 16 + 11)               // the greyed rows' colour (GAMEMENU.CPP COUL_TEXT_MENU_DISABLE)
@@ -2294,16 +2306,63 @@ static void PageFrame(const char *header) {
 #define RG_CONTROLS_TOP 44                  // (the first row's top under the page's top)
 #define RG_CONTROLS_FOOT 412                // (... and the last row's top no lower than this: clear of the page's keys at its foot)
 #define RG_ON_FOOT "Get out / back in"
+// A car key's name as the controls' page says it: the first key (or pad button) of one of the car's slots -- INPUT_BINDINGS.CPP CarKeys,
+// moved in Options > Controls (2026-11-26) -- the pad's buttons by their usual names
+extern void GetKeyText(char *string, U32 scan);   // CONFIG.CPP
+static void CarKeyName(char *out, size_t size, S32 slot, int pad) {
+    const T_DEF_KEY *k = pad ? &CarPadKeys[slot] : &CarKeys[slot];
+    const U32 key = k->Key1 ? k->Key1 : k->Key2;
+    if (!key) { snprintf(out, size, "(none)"); return; }
+    // (both Ctrls, the power-up's own two: "Ctrl")
+    if (!pad && k->Key1 == K_CTRL && k->Key2 == K_CTRL_RIGHT) { snprintf(out, size, "Ctrl"); return; }
+    if (key >= K_GAMEPAD_BASE && key < K_GAMEPAD_BASE + K_GAMEPAD_COUNT) {
+        static const char *const names[K_GAMEPAD_COUNT] = {
+            "A button", "B button", "X button", "Y button", "Back", "Guide", "Start", "Left stick press", "Right stick press",
+            "Left shoulder", "Right shoulder", "D-pad up", "D-pad down", "D-pad left", "D-pad right", "Left stick up", "Left stick down",
+            "Left stick left", "Left stick right", "Right stick up", "Right stick down", "Right stick left", "Right stick right",
+            "Left trigger", "Right trigger"};
+        snprintf(out, size, "%s", names[key - K_GAMEPAD_BASE]);
+        return;
+    }
+    char name[64];
+    GetKeyText(name, key);
+    // (the arrows as the page always called them)
+    if (key == K_GRAY_UP) snprintf(out, size, "Up arrow");
+    else if (key == K_GRAY_DOWN) snprintf(out, size, "Down arrow");
+    else snprintf(out, size, "%s", name);
+}
+// Steering's two keys on one row: "Left, right" for the arrows, "Left stick" for the stick's two ways
+static void SteerName(char *out, size_t size, int pad) {
+    const T_DEF_KEY *l = pad ? &CarPadKeys[2] : &CarKeys[2], *r = pad ? &CarPadKeys[3] : &CarKeys[3];
+    const U32 left = l->Key1 ? l->Key1 : l->Key2, right = r->Key1 ? r->Key1 : r->Key2;
+    if (!pad && left == K_GRAY_LEFT && right == K_GRAY_RIGHT) { snprintf(out, size, "Left, right"); return; }
+    if (pad && left == K_GAMEPAD_LSTICK_LEFT && right == K_GAMEPAD_LSTICK_RIGHT) { snprintf(out, size, "Left stick"); return; }
+    char a[48], b[48];
+    CarKeyName(a, sizeof(a), 2, pad);
+    CarKeyName(b, sizeof(b), 3, pad);
+    snprintf(out, size, "%s, %s", a, b);
+}
 static void DrawControls(const T_RACE_PAGE *pg) {
-    static const char *const keys[][2] = {
-        {"Up arrow", "Accelerate"},
-        {"Down arrow", "Brake, reverse"},
-        {"Left, right", "Steer"},
-        {"Ctrl", "Use your item"},
-        {"Z", "Handbrake"},                 // (2026-11-23: Z, Shift the inventory's again -- RACEMOD.CPP HandbrakeKey; the gears' row gone,
-        {"Shift", "Inventory, off the track"},  // the gears always by themselves)
-        {"V", "Camera view"},               // (2026-10-21: RACEMOD.CPP RaceCameraKey -- and the gears' row only for gears by hand, so
-        {"Space", RG_ON_FOOT},              // that the page still fits)
+    // (the keys as set: the car's own, Options > Controls -- the user, 2026-11-25, "allowing a user to reassign controls for everything
+    // including driving controls"; the page used to name the defaults whatever was set)
+    static char name[9][64];
+    CarKeyName(name[0], sizeof(name[0]), 0, 0);
+    CarKeyName(name[1], sizeof(name[1]), 1, 0);
+    SteerName(name[2], sizeof(name[2]), 0);
+    CarKeyName(name[3], sizeof(name[3]), 5, 0);
+    CarKeyName(name[4], sizeof(name[4]), CAR_SLOT_HANDBRAKE, 0);
+    CarKeyName(name[5], sizeof(name[5]), 6, 0);
+    CarKeyName(name[6], sizeof(name[6]), CAR_SLOT_VIEW, 0);
+    CarKeyName(name[7], sizeof(name[7]), 7, 0);
+    const char *const keys[][2] = {
+        {name[0], "Accelerate"},
+        {name[1], "Brake, reverse"},
+        {name[2], "Steer"},
+        {name[3], "Use your item"},
+        {name[4], "Handbrake"},             // (2026-11-23: Z, Shift the inventory's again -- RACEMOD.CPP HandbrakeKey; the gears' row gone,
+        {name[5], "Inventory, off the track"},  // the gears always by themselves)
+        {name[6], "Camera view"},           // (2026-10-21: RACEMOD.CPP RaceCameraKey -- and the gears' row only for gears by hand, so
+        {name[7], RG_ON_FOOT},              // that the page still fits)
         {"P, Esc", "Pause, menu"},
     };
     // (two players on one keyboard: each their side of it, RaceGame_SharedKeys. Each game's page says its own player's)
@@ -2324,16 +2383,28 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"/", "Camera view"},
     };
     const int guest = s_localGuest > 0 || RaceNet_Local();
-    const char *const (*list)[2] = s_localGuest > 0 ? keys2 : guest ? keys1 : keys;
+    const char *const(*list)[2] = s_localGuest > 0 ? keys2 : guest ? keys1 : keys;
     const size_t nbKeys = guest ? sizeof(keys2) / sizeof(keys2[0]) : sizeof(keys) / sizeof(keys[0]);
-    static const char *const pad[][2] = {
-        {"Right trigger", "Accelerate"},
-        {"Left trigger", "Brake, reverse"},
-        {"Left stick", "Steer"},
-        {"Left shoulder", "Use your item"},
-        {"B button", "Handbrake"},
-        {"X button", RG_ON_FOOT},
-        {"Back, Start", "Camera view, menu"},
+    static char padName[7][64];
+    CarKeyName(padName[0], sizeof(padName[0]), 0, 1);
+    CarKeyName(padName[1], sizeof(padName[1]), 1, 1);
+    SteerName(padName[2], sizeof(padName[2]), 1);
+    CarKeyName(padName[3], sizeof(padName[3]), 5, 1);
+    CarKeyName(padName[4], sizeof(padName[4]), CAR_SLOT_HANDBRAKE, 1);
+    CarKeyName(padName[5], sizeof(padName[5]), 7, 1);
+    {
+        char view[48];
+        CarKeyName(view, sizeof(view), CAR_SLOT_VIEW, 1);
+        snprintf(padName[6], sizeof(padName[6]), "%s, Start", view);
+    }
+    const char *const pad[][2] = {
+        {padName[0], "Accelerate"},
+        {padName[1], "Brake, reverse"},
+        {padName[2], "Steer"},
+        {padName[3], "Use your item"},
+        {padName[4], "Handbrake"},
+        {padName[5], RG_ON_FOOT},
+        {padName[6], "Camera view, menu"},
     };
     const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, kx = cx - RG_PAGE_HALF + 36, ax = cx - 40;
     const int onFoot = pg && pg->OnFoot;
@@ -3679,6 +3750,35 @@ U16 *RaceGame_AdvancedMenu(U16 *menu) {
     return s_advMenu;
 }
 
+// GAMEMENU.CPP GereControllerMenu: the race game's Controls -- the keyboard's page and the controller's, each on foot and in the car (the
+// user, 2026-11-25: "We need to be able to rebind keys for both controller and keyboard, and perhaps the same key binded one way for when
+// twinsen is in a car and another when he isn't"; docs/plan/REBIND_PLAN.md); the game's own page when the race game isn't on.
+static U16 s_ctlMenu[4 + 2 * 6];
+U16 *RaceGame_ControllerMenu(U16 *menu) {
+    if (!RaceGame_On() || !menu) return menu;
+    const U16 at = s_ctlMenu[1] == 5 ? s_ctlMenu[0] : 1;
+    s_ctlMenu[1] = 5;
+    s_ctlMenu[2] = menu[2];
+    s_ctlMenu[3] = menu[3];
+    SetRow(s_ctlMenu, 0, menu[4 + 1]);      // (the game's own Back)
+    SetRow(s_ctlMenu, 1, RG_ID_KEYS_FOOT);
+    SetRow(s_ctlMenu, 2, RG_ID_KEYS_CAR);
+    SetRow(s_ctlMenu, 3, RG_ID_PAD_FOOT);
+    SetRow(s_ctlMenu, 4, RG_ID_PAD_CAR);
+    s_ctlMenu[0] = at;
+    return s_ctlMenu;
+}
+S32 RaceGame_ControllerRow(S32 num) {
+    if (!RaceGame_On()) return 0;
+    switch (num) {
+    case RG_ID_KEYS_FOOT: Config_FootTitle("On foot"); MenuConfig(); Config_FootTitle(NULL); return 1;
+    case RG_ID_KEYS_CAR: MenuConfigCar(); return 1;
+    case RG_ID_PAD_FOOT: Config_FootTitle("On foot"); MenuGamepadConfig(); Config_FootTitle(NULL); return 1;
+    case RG_ID_PAD_CAR: MenuGamepadConfigCar(); return 1;
+    }
+    return 0;
+}
+
 // GAMEMENU.CPP GereCameraMenu: the Camera page -- the game's own two cameras, then its movie camera (the cut scenes' own angles, from
 // Advanced options) and the race's view (inside the car, just behind, further back -- camera=; a race on takes it at once, RACEMOD.CPP):
 // every camera setting on one page; the game's own page when the race game isn't on.
@@ -3801,6 +3901,7 @@ static void PageLoopStart(S32 *padDir) {
     *padDir = JoystickMenuNavOnly();
     AsciiMode = TRUE;
     s_clickWas = Click & 3;
+    ConsumeMouseWheelY();                   // (the page before's unread notches: GAMEMENU.CPP DoGameMenu)
 }
 
 // The code Track select asks for (RACEGAME.TXT tracks_code=), or Story Mode (story_code=): `what` the page's title, `want` the code.
@@ -5562,8 +5663,8 @@ void RaceGame_SharedKeys(void) {
         if (down & RACENET_KEY_LEFT) Input |= I_LEFT;
         if (down & RACENET_KEY_RIGHT) Input |= I_RIGHT;
         if (down & RACENET_KEY_ITEM) Input |= I_COMPORTEMENT | I_RETURN;
-        if (down & RACENET_KEY_HANDBRAKE) TabKeys[K_Z] |= 0x80;     // (the handbrake is Z since 2026-11-23: RACEMOD.CPP HandbrakeKey)
-        if (down & RACENET_KEY_VIEW) TabKeys[K_V] |= 0x80;
+        if (down & RACENET_KEY_HANDBRAKE) Bindings_Inject(CAR_SLOT_HANDBRAKE);     // (RACEMOD.CPP HandbrakeKey)
+        if (down & RACENET_KEY_VIEW) Bindings_Inject(CAR_SLOT_VIEW);
     }
     else if (RaceNet_Local()) {
         // (the first player, on the left of the screen, has the left of the keyboard in a race, the same keys as RaceNet_SharedKeys's other
@@ -5582,8 +5683,8 @@ void RaceGame_SharedKeys(void) {
         if (left) Input |= I_LEFT;
         if (right) Input |= I_RIGHT;
         if (item) Input |= I_COMPORTEMENT;
-        if (brake) TabKeys[K_Z] |= 0x80;
-        if (view) TabKeys[K_V] |= 0x80;
+        if (brake) Bindings_Inject(CAR_SLOT_HANDBRAKE);
+        if (view) Bindings_Inject(CAR_SLOT_VIEW);
     }
 }
 

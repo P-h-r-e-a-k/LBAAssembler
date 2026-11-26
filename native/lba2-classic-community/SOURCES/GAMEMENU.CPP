@@ -1958,7 +1958,8 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
                 save_press = -1;
             }
 
-            wy = ConsumeMouseWheelY();
+            // (the wheel up goes up the list, as in every other menu: it went down)
+            wy = -ConsumeMouseWheelY();
             while (wy > 0) {
                 if (select < (nb - 1)) {
                     select++;
@@ -2174,7 +2175,12 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
             timerdraw = TimerRefHR + TEMPO_SCREEN_SAVE;
         }
 
-        if (Input & I_FIRE OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER OR mouse_fire) {
+        // (a pad's B goes back, its A picks: INPUT.CPP MenuPad_*)
+        if (MenuPad_Back()) {
+            MyKey = K_ESC;
+            Key = K_ESC;
+        }
+        if (((MenuPad_Input() & I_FIRE) AND !MenuPad_Back()) OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER OR mouse_fire OR MenuPad_Accept()) {
             if (mouse_fire)
                 mouse_fire = 0;
             if (timerdraw) {
@@ -2908,6 +2914,8 @@ S32 DoGameMenu(U16 *ptrmenu) {
     InitWaitNoKey();
     InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
     MenuInput_Suppress(MENU_INPUT_ALL);
+    // (the wheel's notches a page before didn't read are not this one's: they moved a volume slider here, or the camera's zoom after)
+    ConsumeMouseWheelY();
 
     MenuIncrustText = NULL;
     MenuIncrustSprite = -1;
@@ -3350,7 +3358,8 @@ S32 DoGameMenu(U16 *ptrmenu) {
             }
         }
 
-        if (Input & I_RETURN OR Input & I_ACTION_M OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER) {
+        // (a pad's A picks and its B goes back: INPUT.CPP MenuPad_*)
+        if (MenuPad_Input() & I_RETURN OR Input & I_ACTION_M OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER OR MenuPad_Accept()) {
             WaitNoInput();
             AsciiMode = FALSE;
             return ptrmenu[4 + 1 + selected * 2]; // num mess
@@ -3358,7 +3367,7 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         if (MyKey == K_ESC
                          OR Input &
-            I_MENUS) {
+            I_MENUS OR MenuPad_Back()) {
             AsciiMode = FALSE;
             return 1000;
         }
@@ -3921,12 +3930,17 @@ S32 GereControllerMenu(void) {
     }
 
     while (!flag) {
-        select = DoGameMenu(ControllerMenu);
+        // (the race game's copy: the keyboard's and the controller's pages each on foot and in the car -- RACEGAME.CPP RaceGame_ControllerMenu)
+        select = DoGameMenu(RaceGame_ControllerMenu(ControllerMenu));
 
         switch (select) {
         case 26:
         case 1000:
             flag = 1;
+            break;
+
+        default:
+            RaceGame_ControllerRow(select);
             break;
 
         case 14: // Configuration Clavier (keyboard remap screen, source-guarded)

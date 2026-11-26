@@ -64,6 +64,16 @@
 S32 SelectConfig = 0;
 S32 SelectKey = 0;
 
+// The page's table (docs/plan/REBIND_PLAN.md): the on-foot keys by default, or the car's (MenuConfigCar / MenuGamepadConfigCar) -- the
+// car page's rows its slots, its words its own (the user, 2026-11-25: "the same key binded one way for when twinsen is in a car and
+// another when he isn't")
+static T_DEF_KEY *s_cfgTable = NULL;          // NULL: DefKeys or GamepadKeys, as the page
+static S32 s_cfgRows = MAX_INPUT_SLOTS;
+static const S32 *s_cfgSlot = NULL;           // a row's slot (NULL: the row's own number)
+static const char *const *s_cfgLabel = NULL;  // a row's words (NULL: the game's own text)
+static const char *s_cfgTitle = NULL;         // the first column's heading (NULL: the game's own)
+static S32 RowSlot(S32 row) { return s_cfgSlot ? s_cfgSlot[row] : row; }
+
 /* The config screen is a fixed 620-px-wide three-column layout (margins of
    10 each side in the 4:3 layout). At wider framebuffers, centre the 620-px
    region rather than letting it cling to the left edge — keeps the
@@ -71,9 +81,9 @@ S32 SelectKey = 0;
    centred UI (menus, save-load, config text). At 640, both edges resolve to
    the original 10 / 630 literals. */
 #define CFG_X0 ((S32)ModeDesiredX / 2 - 310)
-#define CFG_Y0 10
+#define CFG_Y0 ((S32)ModeDesiredY / 2 - (s_cfgRows * 10 + 105) / 2 > 10 ? (S32)ModeDesiredY / 2 - (s_cfgRows * 10 + 105) / 2 : 10)
 #define CFG_X1 ((S32)ModeDesiredX / 2 + 310)
-#define CFG_Y1 (CFG_Y0 + MAX_INPUT_SLOTS * 10 + 35)
+#define CFG_Y1 (CFG_Y0 + s_cfgRows * 10 + 35)
 
 #define ACTION_X (CFG_X0 + 20)
 #define KEY1_X (CFG_X0 + 371)
@@ -347,10 +357,11 @@ void GetKeyText(char *string, U32 scan) {
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 void InitKeyStrings(void) {
     S32 n;
+    const T_DEF_KEY *table = s_cfgTable ? s_cfgTable : DefKeys;
 
-    for (n = 0; n < MAX_INPUT_SLOTS; n++) {
-        GetKeyText(KeyStrings[n * 2], DefKeys[n].Key1);
-        GetKeyText(KeyStrings[n * 2 + 1], DefKeys[n].Key2);
+    for (n = 0; n < s_cfgRows; n++) {
+        GetKeyText(KeyStrings[n * 2], table[RowSlot(n)].Key1);
+        GetKeyText(KeyStrings[n * 2 + 1], table[RowSlot(n)].Key2);
     }
 }
 
@@ -384,7 +395,10 @@ void DrawOneConfig(S32 n) {
 
     BoxStaticAdd(x0, y0, x1, y1);
 
-    GetMultiText(START_ACTION_TXT + n, string);
+    if (s_cfgLabel)
+        strcpy(string, s_cfgLabel[n]);
+    else
+        GetMultiText(START_ACTION_TXT + n, string);
     GraphPrintf(FALSE, x, y, string);
 
     // Key 1
@@ -460,12 +474,12 @@ void DrawOneConfigMenu(S32 n) {
     S32 x0, y0, x1, y1;
     S32 y;
 
-    if (n < MAX_INPUT_SLOTS) {
+    if (n < s_cfgRows) {
         DrawOneConfig(n);
         return;
     }
 
-    n -= MAX_INPUT_SLOTS;
+    n -= s_cfgRows;
     y = CFG_MENU_Y0 + 7 + n * 10;
 
     GetMultiText(START_MENUS_TXT + CFG_TXT_DEFAUT + n, txt);
@@ -482,7 +496,7 @@ void DrawOneConfigMenu(S32 n) {
         ShadeBoxBlk(x0, y0, x1, y1, CONFIG_SHADE_LVL);
     }
 
-    if ((SelectConfig - MAX_INPUT_SLOTS) == n) {
+    if ((SelectConfig - s_cfgRows) == n) {
         CoulText(COUL_KEY, -1);
         BackupAngles(x0, y0, x1, y1);
         DrawConfigFire(x0, y0, x1, y1, FIRE_SELECT_MENU);
@@ -593,7 +607,10 @@ void DrawScreenConfig(S32 gamepadTripleFooter) {
 
     CoulText(COUL_CADRE, -1);
 
-    GetMultiText(START_MENUS_TXT + CFG_TXT_ACTION, string);
+    if (s_cfgTitle)
+        strcpy(string, s_cfgTitle);
+    else
+        GetMultiText(START_MENUS_TXT + CFG_TXT_ACTION, string);
     GraphPrintf(FALSE, ACTION_X, CFG_Y0 + 7, string);
 
     GetMultiText(START_MENUS_TXT + CFG_TXT_KEY1, string);
@@ -610,11 +627,11 @@ void DrawScreenConfig(S32 gamepadTripleFooter) {
 
     DrawStatusConfig(STATUS_MENU);
 
-    for (n = 0; n < MAX_INPUT_SLOTS; n++) {
+    for (n = 0; n < s_cfgRows; n++) {
         DrawOneConfig(n);
     }
 
-    for (n = MAX_INPUT_SLOTS; n < MAX_INPUT_SLOTS + 3; n++) {
+    for (n = s_cfgRows; n < s_cfgRows + 3; n++) {
         DrawOneConfigMenu(n);
     }
 
@@ -624,9 +641,11 @@ void DrawScreenConfig(S32 gamepadTripleFooter) {
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 S32 CheckKeyConfig(S32 key) {
     S32 n;
+    const T_DEF_KEY *table = s_cfgTable ? s_cfgTable : DefKeys;
 
-    for (n = 0; n < MAX_INPUT_SLOTS; n++) {
-        if (DefKeys[n].Key1 == key OR DefKeys[n].Key2 == key) {
+    // (a clash only within the page's own set: a key on foot may be another in the car)
+    for (n = 0; n < s_cfgRows; n++) {
+        if ((S32)table[RowSlot(n)].Key1 == key OR(S32) table[RowSlot(n)].Key2 == key) {
             return n;
         }
     }
@@ -678,8 +697,11 @@ void Config_MainCapture(const char *path) {
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-void MenuConfig(void) {
+static void MenuConfigRun(void) {
     S32 oldselect;
+    T_DEF_KEY *table = s_cfgTable ? s_cfgTable : DefKeys;
+    const S32 len = s_cfgTable ? CAR_SLOTS : MAX_INPUT_SLOTS;
+    T_DEF_KEY memo[CAR_SLOTS > MAX_INPUT_SLOTS ? CAR_SLOTS : MAX_INPUT_SLOTS];
     U32 lasttime;
     U32 repeattime;
     S32 ok = FALSE;
@@ -692,9 +714,8 @@ void MenuConfig(void) {
         memoclipwindow = TRUE;
     }
 
-    // premiere fois
-    if (!KeyStrings[0][0])
-        InitKeyStrings();
+    // (the page's own keys every time: the car's page and the pad's share the strings)
+    InitKeyStrings();
 
     PaletteSync(PtrPalNormal);
 
@@ -704,7 +725,7 @@ void MenuConfig(void) {
 
     oldselect = SelectConfig;
 
-    memcpy(MemoDefKeys, DefKeys, sizeof(T_DEF_KEY) * MAX_INPUT_SLOTS);
+    memcpy(memo, table, sizeof(T_DEF_KEY) * len);
 
     MyKey = 0;
     ManageTime();
@@ -728,6 +749,8 @@ void MenuConfig(void) {
         oldkey = MyKey;
         DetectJoys();
         MyGetInput();
+        // (a pad's B goes back here too, its A picks: INPUT.CPP MenuPad_*)
+        const S32 padBack = MenuPad_Back();
 
         MyKey = MenuKey_NumpadToNav(MyKey);
 
@@ -762,10 +785,14 @@ void MenuConfig(void) {
 #if defined(DEBUG_TOOLS) || defined(TEST_TOOLS)
         CheckSaveLogPcx(PtrPalNormal);
 #endif
+        if (!MyKey && padBack)
+            MyKey = K_ESC;
         if (!MyKey) {
             MyKey = MenuInput_NavigationKey();
 
-            if (!MyKey && (Input & ~I_JOY)) {
+            // (only a picking key picks: any other bound input -- a right-stick nudge, a trigger -- started a capture that only a keyboard's
+            // Esc could leave)
+            if (!MyKey && (MenuPad_Input() & (I_RETURN | I_ACTION_M | I_ACTION_ALWAYS))) {
                 MyKey = K_ENTER;
             }
         }
@@ -799,21 +826,21 @@ void MenuConfig(void) {
         if (MyKey == K_UP) {
             SelectConfig--;
             if (SelectConfig < 0)
-                SelectConfig = MAX_INPUT_SLOTS - 1 + 3;
+                SelectConfig = s_cfgRows - 1 + 3;
         } else if (MyKey == K_DOWN) {
             SelectConfig++;
-            if (SelectConfig >= (MAX_INPUT_SLOTS + 3))
+            if (SelectConfig >= (s_cfgRows + 3))
                 SelectConfig = 0;
         } else if (MyKey == K_ENTER) {
-            if (SelectConfig < MAX_INPUT_SLOTS) {
+            if (SelectConfig < s_cfgRows) {
                 S32 memokey;
                 U32 *ptr;
 
                 // define new key
                 if (SelectKey == 0) {
-                    ptr = &DefKeys[SelectConfig].Key1;
+                    ptr = &table[RowSlot(SelectConfig)].Key1;
                 } else {
-                    ptr = &DefKeys[SelectConfig].Key2;
+                    ptr = &table[RowSlot(SelectConfig)].Key2;
                 }
 
                 memokey = *ptr;
@@ -829,8 +856,9 @@ void MenuConfig(void) {
                     // Input-source guard: this is the keyboard rebind screen,
                     // so ignore any gamepad scancode the user happens to press.
                     // The parallel Game Controller screen handles pad bindings.
+                    // (but a pad's B leaves the capture, as the keyboard's Esc)
                     if (MyKey >= (S32)K_GAMEPAD_BASE) {
-                        MyKey = 0;
+                        MyKey = MyKey == (S32)K_GAMEPAD_B ? K_ESC : 0;
                     }
 
                     if ((TimerRefHR & 0xFF) < 127) // aff 2/3 eff 1/3
@@ -865,16 +893,19 @@ void MenuConfig(void) {
 
                 WaitNoInput();
             } else {
-                switch ((SelectConfig - MAX_INPUT_SLOTS)) {
+                switch ((SelectConfig - s_cfgRows)) {
                 case 0: // Configuration par Défaut
-                    memcpy(MemoDefKeys, DefKeys, sizeof(T_DEF_KEY) * MAX_INPUT_SLOTS);
-                    RestoreInput();
+                    memcpy(memo, table, sizeof(T_DEF_KEY) * len);
+                    if (s_cfgTable)
+                        RestoreCarKeys(TRUE, FALSE);
+                    else
+                        RestoreInput();
                     InitKeyStrings();
                     DrawScreenConfig(0);
                     break;
 
                 case 1: // Restaurer Configuration Précédente
-                    memcpy(DefKeys, MemoDefKeys, sizeof(T_DEF_KEY) * MAX_INPUT_SLOTS);
+                    memcpy(table, memo, sizeof(T_DEF_KEY) * len);
                     InitKeyStrings();
                     DrawScreenConfig(0);
                     break;
@@ -896,8 +927,8 @@ void MenuConfig(void) {
 
         case K_PAGE_DOWN:
             SelectConfig += 10;
-            if (SelectConfig >= (MAX_INPUT_SLOTS + 3))
-                SelectConfig = MAX_INPUT_SLOTS - 1 + 3;
+            if (SelectConfig >= (s_cfgRows + 3))
+                SelectConfig = s_cfgRows - 1 + 3;
             break;
 
         case K_HOME:
@@ -905,12 +936,12 @@ void MenuConfig(void) {
             break;
 
         case K_END:
-            SelectConfig = MAX_INPUT_SLOTS - 1 + 3;
+            SelectConfig = s_cfgRows - 1 + 3;
             break;
 
         case K_ESC:
-            if (SelectConfig != MAX_INPUT_SLOTS + 2) {
-                SelectConfig = MAX_INPUT_SLOTS + 2; // Menu Accepter Configuration
+            if (SelectConfig != s_cfgRows + 2) {
+                SelectConfig = s_cfgRows + 2; // Menu Accepter Configuration
             } else {
                 goto endloop;
             }
@@ -922,16 +953,16 @@ void MenuConfig(void) {
             oldselect = SelectConfig;
         }
 
-        if (SelectConfig < MAX_INPUT_SLOTS) {
+        if (SelectConfig < s_cfgRows) {
             if (MyKey == K_LEFT OR MyKey == K_RIGHT) {
                 SelectKey ^= 1;
             }
 
             if (MyKey == K_SUPPR) {
                 if (SelectKey == 0)
-                    DefKeys[SelectConfig].Key1 = 0;
+                    table[RowSlot(SelectConfig)].Key1 = 0;
                 else
-                    DefKeys[SelectConfig].Key2 = 0;
+                    table[RowSlot(SelectConfig)].Key2 = 0;
 
                 strcpy(KeyStrings[SelectConfig * 2 + SelectKey], KEY_STRING_EMPTY);
             }
@@ -941,7 +972,7 @@ endloop:
     if (!ok) // Sortie par <ESC>
     {
         // restaure config
-        memcpy(DefKeys, MemoDefKeys, sizeof(T_DEF_KEY) * MAX_INPUT_SLOTS);
+        memcpy(table, memo, sizeof(T_DEF_KEY) * len);
         InitKeyStrings();
     }
 
@@ -960,6 +991,47 @@ endloop:
     if (memoclipwindow) {
         RestoreClipWindow();
     }
+}
+
+// The keyboard's page on foot: the game's own (Options > Controls)
+void MenuConfig(void) {
+    MenuConfigRun();
+}
+
+// A page over the car's keys or buttons: its rows the car page's, its heading its own; the on-foot page's place in its list kept
+static void CarView(S32 on, S32 *memoSelect) {
+    if (on) {
+        *memoSelect = SelectConfig;
+        SelectConfig = 0;
+        SelectKey = 0;
+        s_cfgRows = CAR_PAGE_ROWS;
+        s_cfgSlot = CarPageSlot;
+        s_cfgLabel = CarPageLabel;
+        s_cfgTitle = "In the car";
+    } else {
+        s_cfgTable = NULL;
+        s_cfgRows = MAX_INPUT_SLOTS;
+        s_cfgSlot = NULL;
+        s_cfgLabel = NULL;
+        s_cfgTitle = NULL;
+        SelectConfig = *memoSelect;
+        SelectKey = 0;
+        InitKeyStrings();
+    }
+}
+
+// The keyboard's page in the car (the race game's Options > Controls)
+void MenuConfigCar(void) {
+    S32 memo;
+    CarView(TRUE, &memo);
+    s_cfgTable = CarKeys;
+    MenuConfigRun();
+    CarView(FALSE, &memo);
+}
+
+// The first column's heading on the next on-foot page (NULL: the game's own): the race game's "On foot"
+void Config_FootTitle(const char *title) {
+    s_cfgTitle = title;
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
@@ -986,28 +1058,32 @@ static S32 GamepadRebindAllowed(S32 scan) {
 }
 
 static void InitGamepadKeyStrings(void) {
-    for (S32 n = 0; n < MAX_INPUT_SLOTS; n++) {
-        GetKeyText(KeyStrings[n * 2], GamepadKeys[n].Key1);
-        GetKeyText(KeyStrings[n * 2 + 1], GamepadKeys[n].Key2);
+    const T_DEF_KEY *table = s_cfgTable ? s_cfgTable : GamepadKeys;
+    for (S32 n = 0; n < s_cfgRows; n++) {
+        GetKeyText(KeyStrings[n * 2], table[RowSlot(n)].Key1);
+        GetKeyText(KeyStrings[n * 2 + 1], table[RowSlot(n)].Key2);
     }
 }
 
 static S32 CheckGamepadKeyConfig(S32 key) {
-    for (S32 n = 0; n < MAX_INPUT_SLOTS; n++) {
-        if ((S32)GamepadKeys[n].Key1 == key OR(S32) GamepadKeys[n].Key2 == key) {
+    const T_DEF_KEY *table = s_cfgTable ? s_cfgTable : GamepadKeys;
+    for (S32 n = 0; n < s_cfgRows; n++) {
+        if ((S32)table[RowSlot(n)].Key1 == key OR(S32) table[RowSlot(n)].Key2 == key) {
             return n;
         }
     }
     return -1;
 }
 
-void MenuGamepadConfig(void) {
+static void MenuGamepadConfigRun(void) {
     S32 oldselect;
+    T_DEF_KEY *table = s_cfgTable ? s_cfgTable : GamepadKeys;
+    const S32 len = s_cfgTable ? CAR_SLOTS : MAX_INPUT_SLOTS;
     U32 lasttime;
     U32 repeattime;
     S32 ok = FALSE;
     S32 memoclipwindow = FALSE;
-    T_DEF_KEY MemoGamepadKeys[MAX_INPUT_SLOTS];
+    T_DEF_KEY MemoGamepadKeys[CAR_SLOTS > MAX_INPUT_SLOTS ? CAR_SLOTS : MAX_INPUT_SLOTS];
     S32 padMenuPrev7 = 0;
     S32 padMenuPrev8 = 0;
     S32 padMenuPrev9 = 0;
@@ -1030,7 +1106,7 @@ void MenuGamepadConfig(void) {
     oldselect = SelectConfig;
     SelectKey = 0;
 
-    memcpy(MemoGamepadKeys, GamepadKeys, sizeof(MemoGamepadKeys));
+    memcpy(MemoGamepadKeys, table, sizeof(T_DEF_KEY) * len);
 
     MyKey = 0;
     ManageTime();
@@ -1139,16 +1215,16 @@ void MenuGamepadConfig(void) {
         if (MyKey == K_UP) {
             SelectConfig--;
             if (SelectConfig < 0)
-                SelectConfig = MAX_INPUT_SLOTS - 1 + 3;
+                SelectConfig = s_cfgRows - 1 + 3;
         } else if (MyKey == K_DOWN) {
             SelectConfig++;
-            if (SelectConfig >= (MAX_INPUT_SLOTS + 3))
+            if (SelectConfig >= (s_cfgRows + 3))
                 SelectConfig = 0;
         } else if (MyKey == K_ENTER) {
-            if (SelectConfig < MAX_INPUT_SLOTS) {
+            if (SelectConfig < s_cfgRows) {
                 S32 memokey;
                 U32 *ptr =
-                    (SelectKey == 0) ? &GamepadKeys[SelectConfig].Key1 : &GamepadKeys[SelectConfig].Key2;
+                    (SelectKey == 0) ? &table[RowSlot(SelectConfig)].Key1 : &table[RowSlot(SelectConfig)].Key2;
                 memokey = (S32)*ptr;
 
                 WaitNoInput();
@@ -1191,16 +1267,19 @@ void MenuGamepadConfig(void) {
                 GetKeyText(KeyStrings[SelectConfig * 2 + SelectKey], (U32)MyKey);
                 WaitNoInput();
             } else {
-                switch ((SelectConfig - MAX_INPUT_SLOTS)) {
+                switch ((SelectConfig - s_cfgRows)) {
                 case 0: // restore defaults
-                    memcpy(MemoGamepadKeys, GamepadKeys, sizeof(MemoGamepadKeys));
-                    memcpy(GamepadKeys, GamepadKeysDefault, sizeof(GamepadKeys));
+                    memcpy(MemoGamepadKeys, table, sizeof(T_DEF_KEY) * len);
+                    if (s_cfgTable)
+                        RestoreCarKeys(FALSE, TRUE);
+                    else
+                        memcpy(GamepadKeys, GamepadKeysDefault, sizeof(GamepadKeys));
                     InitGamepadKeyStrings();
                     DrawScreenConfig(1);
                     break;
 
                 case 1: // restore previous
-                    memcpy(GamepadKeys, MemoGamepadKeys, sizeof(GamepadKeys));
+                    memcpy(table, MemoGamepadKeys, sizeof(T_DEF_KEY) * len);
                     InitGamepadKeyStrings();
                     DrawScreenConfig(1);
                     break;
@@ -1220,18 +1299,18 @@ void MenuGamepadConfig(void) {
             break;
         case K_PAGE_DOWN:
             SelectConfig += 10;
-            if (SelectConfig >= (MAX_INPUT_SLOTS + 3))
-                SelectConfig = MAX_INPUT_SLOTS - 1 + 3;
+            if (SelectConfig >= (s_cfgRows + 3))
+                SelectConfig = s_cfgRows - 1 + 3;
             break;
         case K_HOME:
             SelectConfig = 0;
             break;
         case K_END:
-            SelectConfig = MAX_INPUT_SLOTS - 1 + 3;
+            SelectConfig = s_cfgRows - 1 + 3;
             break;
         case K_ESC:
-            if (SelectConfig != MAX_INPUT_SLOTS + 2) {
-                SelectConfig = MAX_INPUT_SLOTS + 2;
+            if (SelectConfig != s_cfgRows + 2) {
+                SelectConfig = s_cfgRows + 2;
             } else {
                 goto endloop_pad;
             }
@@ -1243,23 +1322,23 @@ void MenuGamepadConfig(void) {
             oldselect = SelectConfig;
         }
 
-        if (SelectConfig < MAX_INPUT_SLOTS && MyKey == K_SUPPR) {
+        if (SelectConfig < s_cfgRows && MyKey == K_SUPPR) {
             if (SelectKey == 0)
-                GamepadKeys[SelectConfig].Key1 = 0;
+                table[RowSlot(SelectConfig)].Key1 = 0;
             else
-                GamepadKeys[SelectConfig].Key2 = 0;
+                table[RowSlot(SelectConfig)].Key2 = 0;
             GetKeyText(KeyStrings[SelectConfig * 2 + SelectKey], 0);
             DrawStatusConfig(STATUS_MENU);
         }
 
-        if (SelectConfig < MAX_INPUT_SLOTS && (MyKey == K_LEFT OR MyKey == K_RIGHT)) {
+        if (SelectConfig < s_cfgRows && (MyKey == K_LEFT OR MyKey == K_RIGHT)) {
             SelectKey ^= 1;
         }
     }
 endloop_pad:
     if (!ok) {
         // ESC without accepting — restore pre-entry values.
-        memcpy(GamepadKeys, MemoGamepadKeys, sizeof(GamepadKeys));
+        memcpy(table, MemoGamepadKeys, sizeof(T_DEF_KEY) * len);
     }
 
     s_ConfigGamepadTripleFooter = 0;
@@ -1282,6 +1361,20 @@ endloop_pad:
     if (memoclipwindow) {
         RestoreClipWindow();
     }
+}
+
+// The pad's page on foot: the game's own (Options > Controls)
+void MenuGamepadConfig(void) {
+    MenuGamepadConfigRun();
+}
+
+// The pad's page in the car (the race game's Options > Controls)
+void MenuGamepadConfigCar(void) {
+    S32 memo;
+    CarView(TRUE, &memo);
+    s_cfgTable = CarPadKeys;
+    MenuGamepadConfigRun();
+    CarView(FALSE, &memo);
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
@@ -1389,6 +1482,12 @@ S32 ConfirmMenu(char *ask, char *ok, char *cancel) {
             select ^= 1;
             MenuInput_Suppress(MENU_INPUT_ALL);
         }
+
+        // (a pad's A picks and its B says no: INPUT.CPP MenuPad_*)
+        if (MenuPad_Accept())
+            MyKey = K_ENTER;
+        else if (MenuPad_Back())
+            MyKey = K_ESC;
 
         switch (MyKey) {
         case K_ESC:

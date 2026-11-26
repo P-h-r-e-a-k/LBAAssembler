@@ -21,6 +21,11 @@ extern void Config_RequestCapture(const char *path);
 extern void Config_MainCapture(const char *path);
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 extern void MenuGamepadConfig(void);
+// The car's own keys and pad buttons (INPUT_BINDINGS.H CarKeys / CarPadKeys): the same pages over the car page's rows
+extern void MenuConfigCar(void);
+extern void MenuGamepadConfigCar(void);
+// The first column's heading on the on-foot pages (NULL: the game's own)
+extern void Config_FootTitle(const char *title);
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 extern S32 AskForCD(void);
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
