@@ -25,7 +25,10 @@ internal static partial class RaceTrackStory
     private const int StatueRisenVar = 79;
     // the temple (cube-local units): its back wall, the book's south half's top and middle; the ladder's place along the wall, over the strip
     // of ground east of it (cells z 39-41)
-    private const int TempleBackX = 13088, BookTop = 10660, LadderAtZ = 20300, BookStatuetteX = 11288, BookStatuetteZ = 19700;
+    // (moved a cell back from the road with the temple, RaceTrackIsland.TempleBack; the ladder over the strip's ground, z 40-41)
+    private const int TempleBackX = 13088 + RaceTrackIsland.TempleBack, BookTop = 10660, LadderAtZ = 20600, BookStatuetteX = 11288 + RaceTrackIsland.TempleBack, BookStatuetteZ = 19700;
+    // the temple's door into its inside (scene 93) and the way out of it, moved with it
+    private const int TempleInside = 93;
     // the lava's way (cube-local cells, the row z 28.5): the shore's edge at x 25; the slabs, a step apart (120: walked across as they
     // come up or slide by -- a Sporty jump does too); the block -- the causeway's deck from x 36
     private const double LavaRowZ = 28.5, SlabOneX = 26.13, SlabTwoX = 28.16, SlabThreeX = 30.2, BlockX = 32.66, SlideHalf = 2.2;
@@ -96,11 +99,33 @@ void comportement_2()
         // (a statuette turning slowly where it is: its track)
         const string TurningTrack = "label(0);\nangle(1024);\nangle(2048);\nangle(3072);\nangle(0);\ngoto(label_0);\n";
         int Ground(int x, int z) => (int)Math.Round(IslandOps.Altitude(ile, 7 * IslandFile.CubeSize + x, 7 * IslandFile.CubeSize + z) ?? 0);
+        // (and the door in the lava lake's raced copy of the scene, 223)
+        var raced = RaceTrackIsland.CelebrationLava.FirstScene;
+        if (store.SceneExists(raced))
+            GroupB.EditScene(store, raced, log, $"the temple's door into scene {TempleInside} in the raced copy, a cell back with it", model =>
+            {
+                foreach (var door in model.Zones.Where(z => z.Type == 0 && z.Num == TempleInside && z.X0 < 9500)) { door.X0 += RaceTrackIsland.TempleBack; door.X1 += RaceTrackIsland.TempleBack; }
+                return _ => { };
+            });
+        // (the way out of the temple's inside to its door, a cell back with it)
+        GroupB.EditScene(store, TempleInside, log, $"the way out of the temple to its door in scene {CelebrationScene}, a cell back with it", model =>
+        {
+            var moved = 0;
+            foreach (var exit in model.Zones.Where(z => z.Type == 0 && z.Num == CelebrationScene && z.Info[0] < 9000)) { exit.Info[0] += RaceTrackIsland.TempleBack; moved++; }
+            if (moved == 0) throw new NotTheGames($"no way out to scene {CelebrationScene}");
+            return _ => { };
+        });
         // (the island's cube for scene 95: (7,7) -- checked against the scene's own as it's edited)
         GroupB.EditScene(store, CelebrationScene, log, "the four Dark Monk statuettes, all there at once, found in any order (variables 296-299): on the temple's book (a ladder up its back), on a block in the lava (stepping slabs, sinking and sliding), over the lap's second and third jumps", model =>
         {
             if (model.CubeX != 7 || model.CubeY != 7) throw new NotTheGames($"scene {CelebrationScene} isn't cube (7,7)");
             var edits = new List<Action<SceneScripts>>();
+            // (the temple's door, a cell back with it)
+            foreach (var door in model.Zones.Where(z => z.Type == 0 && z.Num == TempleInside && z.X0 < 9500))
+            {
+                door.X0 += RaceTrackIsland.TempleBack; door.X1 += RaceTrackIsland.TempleBack;
+                log.Add($"the temple's door into scene {TempleInside}: a cell back with it, x {door.X0}..{door.X1}");
+            }
             var lakeShown = $"0 == var_game({StatueRisenVar})";
             void Put(SceneActorModel actor, string life, string? track = null)
             {

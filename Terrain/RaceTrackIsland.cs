@@ -206,7 +206,14 @@ internal sealed record RaceTrackIsland(
         // is blocking cars. The retail game also had blocks that floated in the lava which seem to have been repositioned and lost their
         // scripting, let's just remove them": the lava's six floating blocks, entity 218, and the gas monster, entity 222)
         OldActors = new[] { (95, 2), (95, 3), (95, 15), (95, 16), (95, 17), (95, 18), (95, 19), (95, 20), (95, 30) },
+        DecorShifts = CelebrationTempleBack,
     };
+    // (the temple a cell further from the road -- its door, on its west side, sat right at the raised road's edge: the user, 2026-11-26,
+    // "it's currently difficult for Twinsen to enter the building, let's nudge the entire building slightly further back to make this
+    // easier" -- both islands' temple, its book and its steps: cube (7,7), the decors at those places; scene 95's door and the way out
+    // of the temple's inside, scene 93, with it: RaceTrackStory.CelebrationStatuettes)
+    public const int TempleBack = 512;
+    private static readonly (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[] CelebrationTempleBack = { (7, 7, 11288, 18816, TempleBack, 0), (7, 7, 10752, 22144, TempleBack, 0) };
 
     // Celebration Island before the statue rises (CELEBRAT: the mesa's top a plateau round a lake of lava level with it, the temple on its
     // west edge, lava channels pouring off its north side): a figure of eight on the plateau, a loop over the north (a causeway over the
@@ -218,6 +225,7 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.CelebrationLava.json", null)
     {
         OtherFile = true, CopiesScene = 95, Title = "Celebration Island: the lava lake", Roster = RaceDriver.CelebrationLava,
+        DecorShifts = CelebrationTempleBack,
     };
 
     // The Elevator Platform (ASCENCE: the foot of the elevator from Otringal, a few decks on legs over the sea with the elevator's tower
@@ -350,6 +358,8 @@ internal sealed record RaceTrackIsland(
     public (int X0, int Z0, int X1, int Z1)[]? TwinCarWalls { get; init; }
     // The Temple of Bu's doorway widened for a car (TempleDoorway): the Desert's.
     public bool WideTempleDoor { get; init; }
+    // decors moved as the island is loaded, before its road is built: those of a cube at a place (cube-local), by so much
+    public (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[]? DecorShifts { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }
 
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,

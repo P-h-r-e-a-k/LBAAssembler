@@ -762,6 +762,11 @@ internal static class RaceTrackService
         // (an island made bigger for its track -- the Island of the Francos twice its size: IslandScaler -- its ground, its objects' bodies
         // and its scenes, from the originals, before the build adds its own)
         var island = IslandFile.Load(islandSource);
+        // (decors moved first: RaceTrackIsland.DecorShifts -- Celebration Island's temple, back from the road)
+        if (options.Island.DecorShifts is { } shifts)
+            foreach (var (cx, cz, sx, sz, dx, dz) in shifts)
+                if (island.CubeAt(cx, cz) is { } shiftCube)
+                    foreach (var d in shiftCube.Decors.Where(d => d.X == sx && d.Z == sz).ToList()) d.MoveTo(d.X + dx, d.Y, d.Z + dz);
         // (the lifts' frame, the retail one's, from the island's own file and OBL as the game has them: RaceTrackIsland.LiftLook)
         // (its grate floor alone: not its striped barriers and posts -- the user, 2026-10-28: "It also has the posts around it, we should remove
         // those so we're just left with the elevator pad")
