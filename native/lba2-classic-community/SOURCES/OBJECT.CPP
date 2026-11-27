@@ -129,11 +129,16 @@ static S32 TryGpuExtraSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
 // path the scaled walk is supported, so no scale gate: CalculeScaleFactorSprite
 // essentially always leaves extras scaled. No world Z: ScaleSpriteTransp
 // composes unconditionally and this hook must match.
+// Also without GpuScene, in any scene frame the GPU draws (GpuOverlay_LiveScene):
+// there the 3D is in the FBO and Log is see-through over it, so a sprite
+// blended into Log read index 0 -- black -- for the scene under it (the
+// protection spell's sparkles, the magic ball: dark), and Log, over the whole
+// frame, kept it over what was drawn after it (the race's car).
 static S32 TryGpuBlendSprite(S32 xp, S32 yp, S32 num, S32 factor,
                              const void *transPal) {
     const void *bank;
 
-    if (!GpuScene || !GpuRenderer_IsActive()) {
+    if (!(GpuScene OR GpuOverlay_LiveScene()) || !GpuRenderer_IsActive()) {
         return 0;
     }
     bank = HQR_Get(HQRPtrSpriteRaw, num);

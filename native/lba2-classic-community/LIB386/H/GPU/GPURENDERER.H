@@ -134,6 +134,8 @@ void GpuRenderer_ShadowBegin(S32 level, S32 zPlane);
 // but no depth test — the interior has no terrain in the FBO to occlude
 // against, matching the software ShadeBoxBlk path's plain darken.
 void GpuRenderer_ShadowBeginFlat(S32 level);
+// The same spans tinted to a palette colour, alpha256 of 256 of it, no depth test (a 2D blend over the frame); ShadowSpan/ShadowEnd after.
+void GpuRenderer_TintBegin(U8 colour, S32 alpha256);
 void GpuRenderer_ShadowSpan(S32 x0, S32 y, S32 x1);
 void GpuRenderer_ShadowEnd(void);
 

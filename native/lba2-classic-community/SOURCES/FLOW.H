@@ -153,6 +153,7 @@ extern U8 GpuOverlay_Black(void);           // a black other than index 0
 extern U8 GpuOverlay_Ink(U8 colour);         // a 2D colour drawn over the play's 3D view: index 0, see-through there, as that black
 extern S32 GpuOverlay_LiveScene(void);
 extern void GpuOverlay_ShadeBegin(S32 deccoul);
+extern void GpuOverlay_TintBegin(U8 colour, S32 alpha256);   // ... a run towards a palette colour instead (ShadeRun, ShadeEnd after)
 extern void GpuOverlay_ShadeRun(S32 x0, S32 y, S32 x1);
 extern void GpuOverlay_ShadeEnd(void);
 

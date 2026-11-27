@@ -618,7 +618,9 @@ static const char *s_clutFragSrc =
     /* Scene shadow span: flat black alpha-blended at flatColor alpha. The
        alpha is the CLUT row's average luminance loss (see Common_ShadowAlpha),
        so blending shadow * (1 - alpha) matches the ShadeBoxBlk darkening. */
-    "        color = vec4(0.0, 0.0, 0.0, flatColor);\n"
+    /* (flatRow >= 0: a tint's spans, GpuRenderer_TintBegin -- that palette colour at the alpha, not black) */
+    "        color = flatRow >= 0.0 ? vec4(texture2D(uPalette, vec2((flatRow + 0.5) / 256.0, 0.5)).rgb, flatColor)\n"
+    "                               : vec4(0.0, 0.0, 0.0, flatColor);\n"
     "    } else if (polyMode == 7) {\n"
     /* Brick atlas: R = palette index, G = valid (AffGraph RLE skip).
        NEAREST only; MapU/MapV are absolute texel coords. LUMINANCE_ALPHA
@@ -645,8 +647,9 @@ static const char *s_clutFragSrc =
     "        float srcIdx = floor(sl.x * 255.0 + 0.5);\n"
     "        if (srcIdx < 0.5) discard;\n"
     "        float logIdx = floor(sl.y * 255.0 + 0.5);\n"
-    "        float dstIdx = floor(texture2D(uBlendDst,\n"
-    "                                       (px + 0.5) / vec2(uBlendDstW, uBlendDstH))\n"
+    /* (uBlendDst's rows bottom-up, as GL_TargetCopyColorRect copies them: v flipped) */
+    "        vec2 dq = (px + 0.5) / vec2(uBlendDstW, uBlendDstH);\n"
+    "        float dstIdx = floor(texture2D(uBlendDst, vec2(dq.x, 1.0 - dq.y))\n"
     "                              .a * 255.0 + 0.5);\n"
     "        if (logIdx >= 0.5) dstIdx = logIdx;\n"
     "        float result = floor(texture2D(uTransPal,\n"
@@ -1741,13 +1744,22 @@ static void GL_TexUpdateSprites(const void *rg, U32 width, U32 height) {
 /* Blend table (mode 8): the 64 KB transpTable as a 256×256 LUMINANCE page,
    row = source index, column = destination index. */
 static void GL_TexUpdateTransPal(const void *lum) {
+    /* (the table a frame's blend sprites share, each of them handing it in:
+       uploaded only when it is not the one the texture already holds) */
+    static U8 s_transPalKept[256 * 256];
+    static GLuint s_transPalKeptTex = 0;
     if (lum == NULL) {
+        return;
+    }
+    if (s_transPalTex != 0 && s_transPalKeptTex == s_transPalTex &&
+        memcmp(s_transPalKept, lum, sizeof s_transPalKept) == 0) {
         return;
     }
     if (!Window_GLMakeCurrent()) {
         Log_Warn("[GL] TexUpdateTransPal: no context");
         return;
     }
+    memcpy(s_transPalKept, lum, sizeof s_transPalKept);
     if (s_transPalTex == 0) {
         glGenTextures(1, &s_transPalTex);
         glBindTexture(GL_TEXTURE_2D, s_transPalTex);
@@ -1762,6 +1774,7 @@ static void GL_TexUpdateTransPal(const void *lum) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_LUMINANCE,
                         GL_UNSIGNED_BYTE, lum);
     }
+    s_transPalKeptTex = s_transPalTex;
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -1801,16 +1814,18 @@ static void GL_TexUpdateBlendLog(const void *rg, U32 width, U32 height) {
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-/* Blend destination rect (mode 8): read the offscreen colour rect (engine
-   coordinates, top-down) and store it at (0,0) of the dst page with
-   engine-top-down rows. GL framebuffer rows run bottom-up, so the rect is
-   read at the flipped origin and the rows are reversed on the CPU. The
+/* Blend destination rect (mode 8): copy the offscreen colour rect (engine
+   coordinates, top-down) to (0,0) of the dst page on the GPU. GL
+   framebuffer rows run bottom-up, so the rect is copied from the flipped
+   origin and the page's rows stay bottom-up: the mode-8 shader samples it
+   with its v flipped. A copy, not a read back to the CPU: a frame's blend
+   sprites (the protection spell's sixteen sparkles, a magic ball and its
+   trail) each copy, and a read back waits for the GPU every time. The
    SSAA scale between the present surface and the FBO is applied to both
    the source rect and the flip origin; the shader normalises by engine
    pixels and lands on each block's centre texel. */
 static S32 GL_TargetCopyColorRect(U32 x, U32 y, U32 width, U32 height) {
-    U32 scale, needW, needH, rowBytes, row;
-    U8 *tmp;
+    U32 scale, needW, needH;
 
     if (!s_initialized || !s_fbo || width == 0 || height == 0) {
         return FALSE;
@@ -1827,7 +1842,6 @@ static S32 GL_TargetCopyColorRect(U32 x, U32 y, U32 width, U32 height) {
         return FALSE;
     }
 
-    rowBytes = width * scale * 4;
     needW = width * scale;
     needH = height * scale;
     if (s_blendDstTex == 0) {
@@ -1845,45 +1859,12 @@ static S32 GL_TargetCopyColorRect(U32 x, U32 y, U32 width, U32 height) {
         s_blendDstH = needH;
     }
 
-    {
-        const U32 need = rowBytes * (height * scale);
-        if (s_blendReadbackBytes < need) {
-            free(s_blendReadback);
-            s_blendReadback = (U8 *)malloc(need);
-            s_blendReadbackBytes = s_blendReadback ? need : 0;
-        }
-        if (s_blendReadback == NULL) {
-            glBindTexture(GL_TEXTURE_2D, 0);
-            return FALSE;
-        }
-    }
-
+    /* (page row 0 = the rect's bottom engine row) */
     glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
-    glReadPixels((GLint)(x * scale),
-                 (GLint)(s_fboHeight - ((y + height) * scale)),
-                 (GLsizei)(width * scale), (GLsizei)(height * scale),
-                 GL_RGBA, GL_UNSIGNED_BYTE, s_blendReadback);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (GLint)(x * scale),
+                        (GLint)(s_fboHeight - ((y + height) * scale)),
+                        (GLsizei)needW, (GLsizei)needH);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    /* Rows came up from the flipped origin: row 0 is the rect's bottom
-       engine row. Reverse them so the page reads top-down. */
-    tmp = (U8 *)malloc(rowBytes);
-    if (tmp == NULL) {
-        glBindTexture(GL_TEXTURE_2D, 0);
-        return FALSE;
-    }
-    for (row = 0; row < (height * scale) / 2; row++) {
-        U8 *a = s_blendReadback + row * rowBytes;
-        U8 *b = s_blendReadback + ((height * scale) - 1 - row) * rowBytes;
-        memcpy(tmp, a, rowBytes);
-        memcpy(a, b, rowBytes);
-        memcpy(b, tmp, rowBytes);
-    }
-    free(tmp);
-
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (GLsizei)(width * scale),
-                    (GLsizei)(height * scale), GL_RGBA, GL_UNSIGNED_BYTE,
-                    s_blendReadback);
     glBindTexture(GL_TEXTURE_2D, 0);
     return TRUE;
 }

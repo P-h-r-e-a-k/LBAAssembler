@@ -349,6 +349,7 @@
 extern U8 GpuOverlay_Black(void);
 extern S32 GpuOverlay_LiveScene(void);
 extern void GpuOverlay_ShadeBegin(S32 deccoul);
+extern void GpuOverlay_TintBegin(U8 colour, S32 alpha256);
 extern void GpuOverlay_ShadeRun(S32 x0, S32 y, S32 x1);
 extern void GpuOverlay_ShadeEnd(void);
 
@@ -26086,6 +26087,7 @@ enum { HAUNT_OUTSIDE, HAUNT_SHEET, HAUNT_EDGE, HAUNT_HOLLOW, HAUNT_BALLOON };
 #define RACE_HAUNT_BALLOON 0.5             // a balloon over the screen: this share of the way to its colour
 static U8 s_hauntTab[2 + RACE_BALLOONS][RACE_HAUNT_LEVELS + 1][256];  // [0] towards the sheet's colour, [1] towards black, [2..] towards a balloon's
 static U32 s_hauntPalSum = 0;
+static U8 s_hauntTint[2 + RACE_BALLOONS];  // each blend's colour itself: what the OpenGL renderer's frame is tinted towards (HauntGpu)
 static U8 *s_hauntMask = NULL;                        // the ghost's shape, s_hauntW x s_hauntH: HAUNT_OUTSIDE..HAUNT_HOLLOW
 static S32 s_hauntW = 0, s_hauntH = 0;
 
@@ -26158,8 +26160,16 @@ static void HauntTables(void) {
                 s_hauntTab[t][l][c] = (U8)PalNearest(r, g, b, 1);
             }
         }
+    for (int t = 0; t < 2 + RACE_BALLOONS; t++) s_hauntTint[t] = (U8)PalNearest(to[t][0], to[t][1], to[t][2], 1);
     Log_Info("[racemod] the screen's ghost: its blends made for the palette");
 }
+
+// Over the OpenGL renderer's frame the scene isn't in Log (FLOW_A.CPP): a blend of Log's see-through pixels -- the ghost over the screen,
+// the web, the passage's black -- read index 0, black, and showed a solid dark ghost where software's is see-through. Those pixels are left
+// see-through and the GPU's frame tinted under them instead, a run at a time: `tint` at `alpha256` of 256 (GpuOverlay_TintBegin); Log's
+// own pixels -- the HUD's -- blended as ever, none of them made index 0 (HauntInk). In software, and with the polygons drawn in software,
+// nothing changes.
+static U8 HauntInk(U8 c, S32 gpu) { return gpu && !c ? GpuOverlay_Black() : c; }
 
 // Over the scene (RaceMod_Draw), while Twinsen's screen is haunted.
 static void DrawHaunt(S32 now, S32 width, S32 height) {
@@ -26178,6 +26188,8 @@ static void DrawHaunt(S32 now, S32 width, S32 height) {
     const double share[5] = {0, RACE_HAUNT_FILL * e, RACE_HAUNT_EDGE * e, RACE_HAUNT_HOLLOW * e, RACE_HAUNT_BALLOON * e};
     int level[5], frac[5];
     for (int k = 0; k < 5; k++) { const double l = share[k] * RACE_HAUNT_LEVELS; level[k] = (int)l; frac[k] = (int)((l - level[k]) * 16); }
+    const S32 gpu = GpuOverlay_LiveScene();
+    U32 holes = 0;   // (the mask's values with a see-through pixel under them: each its own tint on the GPU's frame)
     for (S32 r = 0; r < s_hauntH; r++) {
         const S32 y = y0 + r;
         if (y < 0 || y >= height) continue;
@@ -26187,11 +26199,32 @@ static void DrawHaunt(S32 now, S32 width, S32 height) {
             const int k = m[c];
             const S32 x = x0 + c;
             if (!k || x < 0 || x >= width) continue;
+            if (gpu && !row[x]) { holes |= 1u << k; continue; }
             const int kind = k < HAUNT_BALLOON ? k : (int)HAUNT_BALLOON;
             int l = level[kind] + (frac[kind] > bayer[y & 3][x & 3] ? 1 : 0);
             if (l > RACE_HAUNT_LEVELS) l = RACE_HAUNT_LEVELS;
-            row[x] = s_hauntTab[k >= HAUNT_BALLOON ? 2 + k - HAUNT_BALLOON : k == HAUNT_HOLLOW][l][row[x]];
+            row[x] = HauntInk(s_hauntTab[k >= HAUNT_BALLOON ? 2 + k - HAUNT_BALLOON : k == HAUNT_HOLLOW][l][row[x]], gpu);
         }
+    }
+    for (int k = 1; holes && k < HAUNT_BALLOON + RACE_BALLOONS; k++) {
+        if (!(holes & (1u << k))) continue;
+        const int kind = k < HAUNT_BALLOON ? k : (int)HAUNT_BALLOON;
+        const S32 alpha = (S32)(share[kind] * 256 + 0.5);
+        if (alpha <= 0) continue;
+        GpuOverlay_TintBegin(s_hauntTint[k >= HAUNT_BALLOON ? 2 + k - HAUNT_BALLOON : k == HAUNT_HOLLOW], alpha);
+        for (S32 r = 0; r < s_hauntH; r++) {
+            const S32 y = y0 + r;
+            if (y < 0 || y >= height) continue;
+            const U8 *row = (const U8 *)Log + TabOffLine[y];
+            const U8 *m = s_hauntMask + r * s_hauntW;
+            S32 run = -1;
+            for (S32 c = 0; c <= s_hauntW; c++) {
+                const S32 x = x0 + c;
+                if (c < s_hauntW && m[c] == k && x >= 0 && x < width && !row[x]) { if (run < 0) run = x; continue; }
+                if (run >= 0) { GpuOverlay_ShadeRun(run, y, x - 1); run = -1; }
+            }
+        }
+        GpuOverlay_ShadeEnd();
     }
     const S32 bx0 = x0 < 0 ? 0 : x0, by0 = y0 < 0 ? 0 : y0, bx1 = x0 + s_hauntW - 1 >= width ? width - 1 : x0 + s_hauntW - 1, by1 = y0 + s_hauntH - 1 >= height ? height - 1 : y0 + s_hauntH - 1;
     if (bx0 <= bx1 && by0 <= by1) BoxMovingAdd(bx0, by0, bx1, by1);
@@ -26265,15 +26298,31 @@ static void DrawWebScreen(S32 now, S32 width, S32 height) {
     static const U8 bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
     const double l = RACE_WEB_SCREEN_SHARE * e * RACE_HAUNT_LEVELS;
     const int level = (int)l, frac = (int)((l - level) * 16);
+    const S32 gpu = GpuOverlay_LiveScene();   // (over the OpenGL renderer's frame: HauntInk)
+    int holes = 0;
     for (S32 y = y0; y < height; y++) {
         const U8 *m = s_webMask + (y - y0) * s_webMaskW;
         U8 *row = (U8 *)Log + TabOffLine[y];
         for (S32 x = 0; x < width; x++) {
             if (!m[x]) continue;
+            if (gpu && !row[x]) { holes = 1; continue; }
             int lv = level + (frac > bayer[y & 3][x & 3] ? 1 : 0);
             if (lv > RACE_HAUNT_LEVELS) lv = RACE_HAUNT_LEVELS;
-            row[x] = s_hauntTab[0][lv][row[x]];
+            row[x] = HauntInk(s_hauntTab[0][lv][row[x]], gpu);
         }
+    }
+    if (holes) {
+        GpuOverlay_TintBegin(s_hauntTint[0], (S32)(RACE_WEB_SCREEN_SHARE * e * 256 + 0.5));
+        for (S32 y = y0; y < height; y++) {
+            const U8 *m = s_webMask + (y - y0) * s_webMaskW;
+            const U8 *row = (const U8 *)Log + TabOffLine[y];
+            S32 run = -1;
+            for (S32 x = 0; x <= width; x++) {
+                if (x < width && m[x] && !row[x]) { if (run < 0) run = x; continue; }
+                if (run >= 0) { GpuOverlay_ShadeRun(run, y, x - 1); run = -1; }
+            }
+        }
+        GpuOverlay_ShadeEnd();
     }
     if (y0 < height) BoxMovingAdd(0, y0, width - 1, height - 1);
 }
@@ -26289,13 +26338,28 @@ static void DrawPassage(S32 now, S32 width, S32 height) {
     static const U8 bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
     const double l = e * RACE_HAUNT_LEVELS;
     const int level = (int)l, frac = (int)((l - level) * 16);
+    const S32 gpu = GpuOverlay_LiveScene();   // (over the OpenGL renderer's frame: HauntInk -- the black was index 0, see-through there)
+    int holes = 0;
     for (S32 y = 0; y < height; y++) {
         U8 *row = (U8 *)Log + TabOffLine[y];
         for (S32 x = 0; x < width; x++) {
+            if (gpu && !row[x]) { holes = 1; continue; }
             int lv = level + (frac > bayer[y & 3][x & 3] ? 1 : 0);
             if (lv > RACE_HAUNT_LEVELS) lv = RACE_HAUNT_LEVELS;
-            row[x] = s_hauntTab[1][lv][row[x]];
+            row[x] = HauntInk(s_hauntTab[1][lv][row[x]], gpu);
         }
+    }
+    if (holes) {
+        GpuOverlay_TintBegin(s_hauntTint[1], (S32)(e * 256 + 0.5));
+        for (S32 y = 0; y < height; y++) {
+            const U8 *row = (const U8 *)Log + TabOffLine[y];
+            S32 run = -1;
+            for (S32 x = 0; x <= width; x++) {
+                if (x < width && !row[x]) { if (run < 0) run = x; continue; }
+                if (run >= 0) { GpuOverlay_ShadeRun(run, y, x - 1); run = -1; }
+            }
+        }
+        GpuOverlay_ShadeEnd();
     }
     BoxMovingAdd(0, 0, width - 1, height - 1);
 }

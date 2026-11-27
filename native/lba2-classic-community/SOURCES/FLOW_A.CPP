@@ -258,6 +258,7 @@ U8 GpuOverlay_Ink(U8 colour) { return colour == 0 AND GpuOverlayLive() ? GpuOver
    given back to be darkened on the GPU's frame instead (GpuOverlay_ShadeRun) */
 S32 GpuOverlay_LiveScene(void) { return GpuSceneDrawing AND GpuOverlayLive(); }
 void GpuOverlay_ShadeBegin(S32 deccoul) { GpuRenderer_ShadowBeginFlat(deccoul); }   // (one batch: each begin flushes the GPU's)
+void GpuOverlay_TintBegin(U8 colour, S32 alpha256) { GpuRenderer_TintBegin(colour, alpha256); }   // (the race's ghost over the screen, its web)
 void GpuOverlay_ShadeRun(S32 x0, S32 y, S32 x1) { GpuRenderer_ShadowSpan(x0, y, x1); }
 void GpuOverlay_ShadeEnd(void) { GpuRenderer_ShadowEnd(); }
 

@@ -180,6 +180,7 @@ static U8 s_sceneClearIndex = 0;
 static GpuVertex s_shadowVerts[SHADOW_MAX_VERTS];
 static U32 s_shadowVertCount = 0;
 static float s_shadowAlpha = 0.0f;
+static float s_shadowTint = -1.0f;  /* -1 black; else the palette index the spans are tinted to (TintBegin) */
 static S32 s_shadowPlaneAZ = 32768; /* clip-Z of the shadow's ground plane */
 static S32 s_shadowDepthTest = 1;   /* 0 = interior flat (no FBO depth)    */
 static S32 s_shadowActive = 0;
@@ -984,6 +985,7 @@ static void Common_FlushShadowSpans(void) {
     params.polyMode = 6;
     params.alphaMode = 0;
     params.flatColor = s_shadowAlpha;
+    params.flatRow = s_shadowTint; /* (mode 6: the tint's palette index, -1 black) */
     params.blend = 1;
     params.depthTest = s_shadowDepthTest;
     params.depthWrite = 0;
@@ -1007,6 +1009,7 @@ void GpuRenderer_ShadowBegin(S32 level, S32 zPlane) {
     GpuRenderer_FlushBatch();
     s_shadowVertCount = 0;
     s_shadowAlpha = Common_ShadowAlpha(level);
+    s_shadowTint = -1.0f;
     s_shadowPlaneAZ = zPlane;
     s_shadowDepthTest = 1;
     s_shadowActive = 1;
@@ -1019,8 +1022,24 @@ void GpuRenderer_ShadowBeginFlat(S32 level) {
     GpuRenderer_FlushBatch();
     s_shadowVertCount = 0;
     s_shadowAlpha = Common_ShadowAlpha(level);
+    s_shadowTint = -1.0f;
     s_shadowPlaneAZ = 0;
     s_shadowDepthTest = 0; /* interior FBO has no terrain depth to test */
+    s_shadowActive = 1;
+}
+
+/* Spans of a palette colour over the frame, `alpha256` of 256 of it (0-256): what a 2D effect blending Log's own pixels towards a colour
+   -- the race's ghost over the screen, its web, its passage's black -- does to the GPU's frame, where Log is see-through. No depth test. */
+void GpuRenderer_TintBegin(U8 colour, S32 alpha256) {
+    if (!s_active) {
+        return;
+    }
+    GpuRenderer_FlushBatch();
+    s_shadowVertCount = 0;
+    s_shadowAlpha = (float)(alpha256 < 0 ? 0 : alpha256 > 256 ? 256 : alpha256) / 256.0f;
+    s_shadowTint = (float)colour;
+    s_shadowPlaneAZ = 0;
+    s_shadowDepthTest = 0;
     s_shadowActive = 1;
 }
 
@@ -1633,7 +1652,11 @@ S32 GpuRenderer_DrawBlendSprite(S32 x, S32 y, S32 factorx, S32 factory,
     S32 row;
     S32 col;
 
-    if (!s_active || !GpuScene || bank == NULL || transPal == NULL ||
+    /* (no GpuScene gate: the caller's -- a scene frame drawn on the GPU, its
+       3D in the FBO, the room's bricks in it or in Log alike, as the Log
+       index read beside each texel stands for the destination where Log
+       has one) */
+    if (!s_active || bank == NULL || transPal == NULL ||
         Log == NULL || TabOffLine == NULL) {
         return 0;
     }
@@ -3030,6 +3053,10 @@ void GpuRenderer_ShadowBegin(S32 level, S32 zPlane) {
     (void)zPlane;
 }
 void GpuRenderer_ShadowBeginFlat(S32 level) { (void)level; }
+void GpuRenderer_TintBegin(U8 colour, S32 alpha256) {
+    (void)colour;
+    (void)alpha256;
+}
 void GpuRenderer_ShadowSpan(S32 x0, S32 y, S32 x1) {
     (void)x0;
     (void)y;
