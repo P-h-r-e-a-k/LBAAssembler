@@ -20,7 +20,7 @@ internal static class CelebrationProps
     // into the next one's middle)
     public const int StepHalf = 512, StepDeep = 420;
     // the lift in the lava's middle: a slab a little smaller (LiftHalf: out of a standing jump's reach of every shore while it is down)
-    public const int LiftHalf = 360;
+    public const int LiftHalf = 448;
     // the block: its top at the actor's place, PillarHalf either way, a column down PillarDeep into the lava -- glowing only its last
     // PillarGlow, where the lava is
     public const int PillarHalf = 448, PillarDeep = 2500, PillarGlow = 520;

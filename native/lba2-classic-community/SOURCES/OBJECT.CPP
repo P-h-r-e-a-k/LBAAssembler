@@ -4413,6 +4413,9 @@ void DoDir(U8 numobj) {
             case C_JETPACK:
                 //			if( Input&I_UP )
                 {
+                    // (the hoverboard flying keeps its height over a floating stone it is over or near and above -- RACEMOD.CPP
+                    // RaceMod_JetFloor: the island's ground alone is under ShadowYHero)
+                    { extern S32 RaceMod_JetFloor(S32 floor); ShadowYHero = RaceMod_JetFloor(ShadowYHero); }
                     S32 ydec = ShadowYHero;
 
                     if (CubeMode == CUBE_EXTERIEUR) {

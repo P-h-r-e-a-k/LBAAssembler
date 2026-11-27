@@ -96,3 +96,68 @@ internal static class HeightGrid
         return 0;
     }
 }
+
+// ilecells <ILE> <global x0> <global z0> <x1> <z1>: each cell's two triangles -- blocking (Col), ground code -- and its corners' heights
+internal static class CellInfo
+{
+    public static int Run(string[] args)
+    {
+        var ile = IslandFile.Load(args[1]);
+        int x0 = int.Parse(args[2]), z0 = int.Parse(args[3]), x1 = int.Parse(args[4]), z1 = int.Parse(args[5]);
+        for (var gz = z0; gz <= z1; gz++)
+        {
+            var line = new List<string>();
+            for (var gx = x0; gx <= x1; gx++)
+            {
+                if (ile.CubeAt(gx / 64, gz / 64) is not { HasPolygons: true } cube) { line.Add("   none   "); continue; }
+                var a = new IslandPolygon(cube.Polygon(gx % 64, gz % 64, 0)); var b = new IslandPolygon(cube.Polygon(gx % 64, gz % 64, 1));
+                line.Add($"{gx % 64}:{(a.Col ? 'C' : '.')}{(b.Col ? 'C' : '.')}{a.CodeJeu},{b.CodeJeu}");
+            }
+            Console.WriteLine($"{gz % 64,3} " + string.Join(" ", line));
+        }
+        return 0;
+    }
+}
+
+// herocells <ILE> <global x0> <z0> <x1> <z1>: a map for Twinsen on foot -- L lava (9, 13), # a wall he can't pass (a blocking triangle not
+// the cars' own, code 10), c a wall for the cars only, . open ground; a cell's two triangles: the worse one
+internal static class HeroCells
+{
+    public static int Run(string[] args)
+    {
+        var ile = IslandFile.Load(args[1]);
+        int x0 = int.Parse(args[2]), z0 = int.Parse(args[3]), x1 = int.Parse(args[4]), z1 = int.Parse(args[5]);
+        Console.WriteLine("     " + string.Concat(Enumerable.Range(x0, x1 - x0 + 1).Select(x => (x % 64 % 10).ToString())));
+        for (var gz = z0; gz <= z1; gz++)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (var gx = x0; gx <= x1; gx++)
+            {
+                if (ile.CubeAt(gx / 64, gz / 64) is not { HasPolygons: true } cube) { sb.Append(' '); continue; }
+                char Of(IslandPolygon p) => p.CodeJeu is 9 or 13 ? 'L' : p.Col && p.CodeJeu != 10 ? '#' : p.Col ? 'c' : p.TexFlag == 0 && p.PolyFlag == 0 ? '~' : '.';
+                var a = Of(new IslandPolygon(cube.Polygon(gx % 64, gz % 64, 0))); var b = Of(new IslandPolygon(cube.Polygon(gx % 64, gz % 64, 1)));
+                sb.Append("L#c~.".IndexOf(a) <= "L#c~.".IndexOf(b) ? a : b);
+            }
+            Console.WriteLine($"{gz % 64,4} {sb}");
+        }
+        return 0;
+    }
+}
+
+// animframes <ANIM.HQR> <entry>: an LBA2 animation's keyframes -- time, root step, and its root record's master bits (1 the rotation, 2 no
+// gravity) -- to see which frames of an animation hold an actor up
+internal static class AnimFrames
+{
+    public static int Run(string[] args)
+    {
+        var data = LBAAssembler.HqrArchive.Open(args[1]).Read(int.Parse(args[2]));
+        int frames = BitConverter.ToUInt16(data, 0), bones = BitConverter.ToUInt16(data, 2), loop = BitConverter.ToUInt16(data, 4);
+        Console.WriteLine($"{frames} frames, {bones} bones, loop at {loop}");
+        for (var f = 0; f < frames; f++)
+        {
+            var o = 8 + f * (8 + bones * 8);
+            Console.WriteLine($"  frame {f}: {BitConverter.ToUInt16(data, o)} ms, step ({BitConverter.ToInt16(data, o + 2)}, {BitConverter.ToInt16(data, o + 4)}, {BitConverter.ToInt16(data, o + 6)}), master {BitConverter.ToInt16(data, o + 8)}");
+        }
+        return 0;
+    }
+}

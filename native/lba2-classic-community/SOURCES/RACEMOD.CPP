@@ -25334,6 +25334,29 @@ S32 RaceMod_HoverPack(S32 comp) {
     return Planet != 0 ? C_JETPACK : C_PROTOPACK;
 }
 
+// The hoverboard flying (the jet-pack's behaviour, off Twinsun) holds itself HEIGHT_JETPACK over the ground under it -- the island's ground and
+// its decors: the floating stones in Celebration Island's lava, actors, were nothing to it, so it flew at the lava's height past them and
+// under the statuette's column (the user, 2026-11-27: "The hoverboard should also work for Twinsen to navigate between the floating
+// stones"). A carrier near it -- its box within JET_CARRIER_REACH across -- whose top is no higher than Twinsen is ground too: from the lift at
+// its top the board keeps its height across to the column; from down at the lava it does not rise onto anything above it.
+#define JET_CARRIER_REACH 1000
+S32 RaceMod_JetFloor(S32 floor) {
+    if (!RaceMod_Active()) return floor;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 hx = hero->Obj.X, hz = hero->Obj.Z, hy = hero->Obj.Y;
+    for (S32 k = 0; k < NbObjets; k++) {
+        const T_OBJET *o = &ListObjet[k];
+        if (k == NUM_PERSO || !(o->Flags & OBJ_CARRIER) || (o->WorkFlags & OBJ_DEAD) || o->Obj.Body.Num == -1) continue;
+        const S32 top = o->Obj.Y + o->YMax;
+        if (top <= floor || top > hy + 64) continue;
+        const S32 dx = hx < o->Obj.X + o->XMin ? o->Obj.X + o->XMin - hx : hx > o->Obj.X + o->XMax ? hx - (o->Obj.X + o->XMax) : 0;
+        const S32 dz = hz < o->Obj.Z + o->ZMin ? o->Obj.Z + o->ZMin - hz : hz > o->Obj.Z + o->ZMax ? hz - (o->Obj.Z + o->ZMax) : 0;
+        if (dx > JET_CARRIER_REACH || dz > JET_CARRIER_REACH || (double)dx * dx + (double)dz * dz > (double)JET_CARRIER_REACH * JET_CARRIER_REACH) continue;
+        floor = top;
+    }
+    return floor;
+}
+
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
     // (not a won dream's car over its jump: wake_flight=; a car ferry's crossing: car_ferry='s hold)

@@ -38,11 +38,16 @@ internal static partial class RaceTrackStory
     // the beaches on the others -- and everywhere in it is a jump from somewhere but its middle: so the lift there, out of a standing
     // jump's reach from every shore while it is down (102 to spare), and the column for the statuette at 7,900, out of reach of every shore,
     // deck and slab (+714 at the most) but the lift at its top, 7,500 (cube-local cells; heights):
-    //   - the first slab in the lava river's mouth by the north beach, sinking under the lava and coming up;
-    //   - the second sliding between its home -- a jump from the lift -- and 1.5 cells east, waiting at home;
+    //   - the first slab off the west shore -- open ground to the lava's edge -- sinking under the lava and coming up; a jump from the lift
+    //     and from the second (the north beach's edge and the lava river's banks are rock Twinsen can't cross, on foot or on the hoverboard);
+    //   - the second sliding between its home -- a jump from the lift, and from the north-west corner's ground -- and 1.5 cells east;
     //   - the lift in the lake's middle: surfacing to 6,000, rising to 7,500, waiting, back down and under the lava;
     //   - the column a jump east of the lift at its top.
-    private const double StoneX = 33.5, StoneZ = 23.0, SlideHomeX = 30.35, SlideEastX = 31.85, SlideZ = 26.5, LiftX = 30.1, LiftZ = 29.9, BlockX = 33.4, BlockZ = 30.0;
+    // On the hoverboard (the user, 2026-11-27: "The hoverboard should also work for Twinsen to navigate between the floating stones") the way
+    // is flown: off Twinsun it flies 543 over the lava, and over a stone near and under it (RACEMOD.CPP RaceMod_JetFloor) -- out over the
+    // lava, onto a stone or the lift by letting go, up with the lift, and from its top across to the column; from down at the lava it
+    // rises onto nothing higher.
+    private const double StoneX = 26.75, StoneZ = 29.5, SlideHomeX = 30.35, SlideEastX = 31.85, SlideZ = 26.5, LiftX = 29.9, LiftZ = 29.7, BlockX = 33.4, BlockZ = 30.0;
     private const int SlabUp = 6000, SlabSunk = 5380, LavaLiftTop = 7500, BlockTop = 7900;
     // (an eruption of the lake's within this of the way moved off it -- an eruption hurts within 1,000)
     private const int EruptionClear = 1500;
@@ -180,7 +185,7 @@ void comportement_2()
             // the old slabs threw Twinsen off into the lava -- any near the way moved to the lake's open lava away from it)
             var way = new[] { (StoneX, StoneZ), (SlideHomeX, SlideZ), (SlideEastX, SlideZ), (LiftX, LiftZ), (BlockX, BlockZ) }.Select(c => (X: Cell(c.Item1), Z: Cell(c.Item2))).ToArray();
             bool NearWay(int x, int z) => way.Any(w => Math.Sqrt((double)(w.X - x) * (w.X - x) + (double)(w.Z - z) * (w.Z - z)) < EruptionClear);
-            var open = new Queue<(int X, int Z)>(new[] { (13600, 18200), (14336, 18688), (13312, 15300), (20700, 17400), (21000, 15600), (14600, 12500) }.Where(o => !NearWay(o.Item1, o.Item2)));
+            var open = new Queue<(int X, int Z)>(new[] { (13600, 18200), (14336, 18688), (13312, 15300), (20700, 17400), (21000, 15600), (14600, 12500), (21500, 18000), (20000, 19500) }.Where(o => !NearWay(o.Item1, o.Item2)));
             var taken = new HashSet<(int, int)>();
             for (var point = 34; point <= 44 && point < model.TrackPoints.Count; point++)
                 if (model.TrackPoints[point] is var tp && Math.Abs(tp.Y - 5700) < 200 && (NearWay(tp.X, tp.Z) || point is 36 or 37) && open.Count > 0)
@@ -219,7 +224,7 @@ void comportement_2()
                     $"goto_point_3d({low});\nspeed(420);\ngoto_point_3d({sunk});\nwait_nb_dizieme(15);\ngoto(label_0);\n");
             }
             Put(Turning(MonkStatuette.Actor(gameDirectory, Cell(BlockX), BlockTop, Cell(BlockZ), 3072)), Life(1, $"{FootTake} > distance_3d(0)", false), TurningTrack);
-            log.Add($"the lava's column at cell ({BlockX}, {BlockZ}), its top {BlockTop}; the lift at ({LiftX}, {LiftZ}), {SlabSunk} to {SlabUp} to {LavaLiftTop}; the sliding slab ({SlideHomeX}-{SlideEastX}, {SlideZ}), the sinking slab ({StoneX}, {StoneZ}), from the north beach");
+            log.Add($"the lava's column at cell ({BlockX}, {BlockZ}), its top {BlockTop}; the lift at ({LiftX}, {LiftZ}), {SlabSunk} to {SlabUp} to {LavaLiftTop}; the sliding slab ({SlideHomeX}-{SlideEastX}, {SlideZ}), the sinking slab ({StoneX}, {StoneZ}), from the west shore");
 
             // ---- 3, 4: over the second and third jumps -- the raised road's gaps, in the air over their middles
             var gaps = new List<(int[] Lip, int[] Land)>();
