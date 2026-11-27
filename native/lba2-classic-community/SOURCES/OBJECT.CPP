@@ -7281,10 +7281,21 @@ void CheckZoneSce(T_OBJET *ptrobj, U8 numobj) {
                             Rotate(ptrobj->XMin, ptrobj->ZMin, ptrobj->Obj.Beta + (896 * MUL_ANGLE) + (512 * MUL_ANGLE));
                             X0 += Nxw;
                             Z0 += Nzw;
+                            S32 wall = (X0 >= 0) AND(Z0 >= 0) AND(X0 <= 64 * SIZE_BRICK_XZ - 1) AND(Z0 <= 64 * SIZE_BRICK_XZ - 1)
+                                       AND(PtrWorldColBrick(X0, y + 256, Z0) != 0);
+                            // (and a race-track mod's ladder -- one of its own, up a wall the ground stops him short of, Celebration Island's temple:
+                            // the probe at his box's corner, turned, missed the wall walking straight at it and he stood at its foot -- the wall
+                            // straight ahead of him, near enough, does as well)
+                            extern S32 RaceMod_Active(void);
+                            if (!wall AND RaceMod_Active()) {
+                                Rotate(0, 320, ptrobj->Obj.Beta);
+                                X0 += Nxw;
+                                Z0 += Nzw;
+                                wall = (X0 >= 0) AND(Z0 >= 0) AND(X0 <= 64 * SIZE_BRICK_XZ - 1) AND(Z0 <= 64 * SIZE_BRICK_XZ - 1)
+                                       AND(PtrWorldColBrick(X0, y + 256, Z0) != 0);
+                            }
 
-                            if ((X0 >= 0) AND(Z0 >= 0)
-                                    AND(X0 <= 64 * SIZE_BRICK_XZ - 1) AND(Z0 <= 64 * SIZE_BRICK_XZ - 1)
-                                        AND(PtrWorldColBrick(X0, y + 256, Z0) != 0)) {
+                            if (wall) {
                                 FlagClimbing = CLIMBING_UP;
                                 ptrobj->WorkFlags &= ~(FALLING);
                                 StartYFalling = 0;

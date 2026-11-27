@@ -447,8 +447,11 @@ void DoTrack(U8 numobj) {
                     flag = FALSE;
                 }
                 ptrobj->Obj.X += mx; ptrobj->Obj.Y += my; ptrobj->Obj.Z += mz;
+                // (what it carries up and down with it -- across, the game's own carrying moves it (OBJECT.CPP CheckCarryBy, from the
+                // carrier's last place): moved here too, Twinsen on Celebration Island's sliding slab in the lava went twice as far as the
+                // slab and off its side, 2026-11-27)
                 for (S32 k = 0; k < NbObjets; k++)
-                    if (k != numobj && ListObjet[k].CarryBy == numobj) { ListObjet[k].Obj.X += mx; ListObjet[k].Obj.Y += my; ListObjet[k].Obj.Z += mz; }
+                    if (k != numobj && ListObjet[k].CarryBy == numobj) ListObjet[k].Obj.Y += my;
                 break;
             }
             if (ptrobj->Flags & SPRITE_3D) {

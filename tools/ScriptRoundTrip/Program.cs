@@ -249,6 +249,7 @@ internal static class Program
             "colourbodies" => PolarStudy.ColourBodies(args),
             "groundbanks" => PolarStudy.GroundBanks(args),
             "decorsnear" => PolarStudy.DecorsNear(args),
+            "lavamap" => LavaMap.Run(args),
             "waterpatches" => PolarStudy.WaterPatches(args),
             "hamalayi" => HamalayiStudy.Run(args),
             "hamalayiregion" => HamalayiStudy.Region(args),

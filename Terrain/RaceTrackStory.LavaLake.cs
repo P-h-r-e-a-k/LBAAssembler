@@ -197,7 +197,7 @@ internal static partial class RaceTrackStory
                     message({lava + (int)LavaLine.Stall});
                     if ({StallTold} > var_game({QStall}))
                     {{
-                        set_var_game({QStall}, {StallTold});
+                        set_var_game({QStall}, {StallTold});{StatuettesCounted()}
                     }}
                 }}
                 else
@@ -264,72 +264,9 @@ internal static partial class RaceTrackStory
         // round the scene's start, switched on as chapter 7 began.)
         if (store.SceneExists(FrancosStart)) TaxiStand(gameDirectory, store, report, lava, travels, log);
         else log.Add($"the taxi to the Francos: no scene {FrancosStart} yet (the Island of the Francos isn't built before the lava lake): the won race takes Twinsen to the Francos' dock, scene {FrancosDock}");
-        // the statuettes: on the ground by the lap at a fifth, two fifths... of the way round (invisible: Twinsen on foot within reach
-        // picks it up), each only once the one before is found -- in the order he walks to them from the dock. Scene 95 is played with
-        // no track in chapter 6 (the lava lake races in scene 223 only), so its raised road isn't a floor there: each is on the ground
-        // nearest that point of the lap that Twinsen can walk to from the dock, clear of the lava (the play-through of 2026-11-05: the
-        // first was over the lava at the raised road's height, the others 1900-2200 over the ground, out of distance()'s reach). The
-        // statuette's picture is solid (SPRITES.HQR 250's box in RESS.HQR's sprite boxes: 0 to 1024 across, -1024 to 0 deep, 2560 up):
-        // walking into its box from the north or the east Twinsen stops 1274 from its place, so it is taken within StatuetteTake of
-        // it, from any side (within 1200, 2026-11-05, he could take it only from the south or the west)
-        if (report is null || report.LapX.Length < 10) { log.Add("the lava lake's statuettes left out: no lap"); return log; }
-        IslandFile ile;
-        try { ile = IslandFile.Load(Path.Combine(gameDirectory, RaceTrackIsland.CelebrationLava.IleFile)); }
-        catch (Exception e) when (e is IOException or InvalidDataException) { log.Add($"the lava lake's statuettes left out: {e.Message}"); return log; }
-        GroupB.EditScene(store, CelebrationScene, log, "four Dark Monk statuettes on the ground by the lap, found in turn (Q_STALL 3-6), Zoe's word at the fourth", model =>
-        {
-            // (from the dock: the lap's start line, where Twinsen arrives -- the scene's own start is the statue track's, built after this)
-            var dock = report.StartLine.Count > 0 ? (report.StartLine[0].X, report.StartLine[0].Z) : (model.CubeX * 64 + model.Hero.X / 512.0, model.CubeY * 64 + model.Hero.Z / 512.0);
-            var walk = new StatuetteGround(ile, model, dock.Item1, dock.Item2);
-            if (walk.Reached == 0) throw new NotTheGames("no ground to walk on at the dock");
-            var edits = new List<Action<SceneScripts>>();
-            var placed = new List<(double X, double Z)>();
-            var spots = new List<(double X, double Z, double Y, int Lap)>();
-            for (var n = 0; n < 4; n++)
-            {
-                var i = (int)((n + 1) * report.LapX.Length / 5.0) % report.LapX.Length;
-                if (walk.Nearest(report.LapX[i], report.LapZ[i], placed) is not { } at) throw new NotTheGames($"no ground Twinsen can walk to by the lap's point {i}");
-                placed.Add((at.X, at.Z));
-                spots.Add((at.X, at.Z, at.Y, i));
-            }
-            // (found in the order he walks to them from the dock: the nearest first, the one furthest up the hill last)
-            spots = spots.OrderBy(s => walk.Walk(s.X, s.Z)).ToList();
-            for (var k = 0; k < 4; k++)
-            {
-                var (x, z, y, i) = spots[k];
-                // (a little 3D statuette, MonkStatuette -- the sprite was drawn statue-size: 2026-11-23)
-                var spot = MonkStatuette.Actor(gameDirectory, RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(y), RaceTrackScenes.CubeLocal(z, model.CubeY), 0);
-                spot.Flags |= RaceTrackScenes.InvisibleFlag;       // (seen only once it is the one to find)
-                log.Add($"statuette {k + 1} at cell ({x:0.#}, {z:0.#}), {y:0} on the ground, {Math.Sqrt((x - report.LapX[i]) * (x - report.LapX[i]) + (z - report.LapZ[i]) * (z - report.LapZ[i])):0.#} cells from the lap's point {i}, a walk of {walk.Walk(x, z)} cells from the dock");
-                edits.Add(GroupB.Add(model, spot, $@"void comportement_0()
-{{
-    if ({before} && {StallTold + k + 1} > var_game({QStall}))
-    {{
-        set_comportement(comportement_1);
-    }}
-    else
-    {{
-        suicide();
-    }}
-}}
-
-void comportement_1()
-{{
-    if ({StallTold + k} == var_game({QStall}))
-    {{
-        invisible(0);
-    }}
-    if ({StallTold + k} == var_game({QStall}) && {StatuetteTake} > distance(0))
-    {{
-        message({Say(LavaLine.Statuette)});
-        set_var_game({QStall}, {StallTold + k + 1});
-{(k == 3 ? $"        message_zoe({Say(LavaLine.ZoeFour)});\n" : "")}        suicide();
-    }}
-}}
-"));
-            }
-            return scripts => { foreach (var e in edits) e(scripts); };
-        });
+        // the statuettes: all four there at once, found in any order -- on the temple's book, in the lava's middle, over two of the lap's jumps
+        // (RaceTrackStory.CelebrationStatuettes; till 2026-11-27 four on the ground by the lap, one seen at a time)
+        CelebrationStatuettes(gameDirectory, store, report, lava, before, log);
         return log;
     }
 
