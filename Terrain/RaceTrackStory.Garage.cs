@@ -334,6 +334,11 @@ void comportement_1()
             reached.Add(((int)Math.Floor(wx / IslandFile.CubeSize), (int)Math.Floor(wz / IslandFile.CubeSize)));
         }
         var scenes = b.OutsideScenes.ToDictionary(s => (b.Store.Load(s).CubeX, b.Store.Load(s).CubeY));
+        // (the racers -- and their cars, and Baldino, who races too -- away at the race: out of sight from the grid's forming till the others
+        // are off the lap, the mechanics and Zoe staying -- the user, 2026-11-26, "During the desert island race the racers are still visible
+        // in the garage tent area"; "Baldino needs to go from the tent as he's driving in the race": RACEMOD.CPP racer_hide=, a figure's "away")
+        static bool AwayAtRace(string who) => who != "Zoe" && !who.StartsWith("a mechanic") && !who.StartsWith("a car lift");
+        var racerHides = new List<(int Scene, int Actor)>();
         foreach (var cube in reached)
         {
             if (!scenes.TryGetValue(cube, out var scene)) { log.Add($"the racers' garage: no outside scene for cube {cube}"); continue; }
@@ -356,6 +361,7 @@ void comportement_1()
                     }
                     actor.X = x; actor.Y = y; actor.Z = z;
                     actor.Beta = beta;
+                    if (AwayAtRace(who)) racerHides.Add((scene, model.Actors.Count));
                     edits.Add(IslandBeatsA.Add(model, actor, life));
                 }
                 return scripts => { foreach (var e in edits) e(scripts); };
@@ -372,9 +378,10 @@ void comportement_1()
             // (the cars and the lifts posed as they stand: no animation)
             var anim = actor.Entity == RaceTrackScenes.RacerEntity || actor.Entity == Citadel.CitadelProps.Prop ? -1 : actor.Anim;
             var when = who == "Baldino" ? $" {ChapterVar} 0 {DesertChapterLast} {QPages} 0 {PagesWon - 1}" : who == "Zoe" ? $" {ChapterVar} 0 {DesertChapterLast}" : "";
-            figures.Append($"figure={actor.Entity} {actor.Body & 255} {anim} {(int)Math.Round(wx)} {y} {(int)Math.Round(wz)} {beta}{when}\n");
+            figures.Append($"figure={actor.Entity} {actor.Body & 255} {anim} {(int)Math.Round(wx)} {y} {(int)Math.Round(wz)} {beta}{when}{(AwayAtRace(who) ? " away" : "")}\n");
         }
+        foreach (var (scene, actor) in racerHides) figures.Append($"racer_hide={scene} {actor}\n");
         File.WriteAllText(Path.Combine(gameDirectory, GarageFiguresFile), figures.ToString());
-        log.Add($"the racers' garage: {people.Count} placed (Baldino {(baldino is null ? "left out" : "there")} while {garageTime}), and drawn as figures from every cube but {string.Join(", ", reached)}");
+        log.Add($"the racers' garage: {people.Count} placed (Baldino {(baldino is null ? "left out" : "there")} while {garageTime}), and drawn as figures from every cube but {string.Join(", ", reached)}; {people.Count(p => AwayAtRace(p.Who))} away at the race ({racerHides.Count} scene actors)");
     }
 }

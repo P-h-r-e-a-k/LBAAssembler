@@ -63,6 +63,8 @@
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
  *     race_hide=<scene> <actor>  an actor the game needs, whose scripts switch doors, and who walks on the road: not drawn and no obstacle while
  *                                a car races, its scripts going on (hide_actor= moves it, and an actor that moves is back on the ground after them)
+ *     racer_hide=<scene> <actor> one of the racers, standing about off the road (the White Leaf Desert's garage tent): not drawn and no
+ *                                obstacle while they're away at the race -- the grid formed, or the others on the lap after its GO (RacersAway)
  *     raised=<file>              a raised road: lines "x z y half", its middle point by point in lap order and half its width, world
  *                                units from the island's corner. A floor of its own over the ground, at any grade (see "the raised road")
  *     statue=1                   Celebration Island drawn from its file with the statue (CELEBRA2), whatever game variable 79 says;
@@ -691,6 +693,7 @@ static int s_forgetLap = 0;                // the player's car was moved: the la
 static int s_hideScene[RACE_MAX_HIDDEN], s_hideActor[RACE_MAX_HIDDEN];
 #define RACE_MAX_RACE_HIDE 32
 static int s_raceHideScene[RACE_MAX_RACE_HIDE], s_raceHideActor[RACE_MAX_RACE_HIDE], s_raceHideWas[RACE_MAX_RACE_HIDE];   // race_hide=, and the flags each had
+static int s_raceHideAway[RACE_MAX_RACE_HIDE];   // (racer_hide=: hidden while the racers are away at the race, not while a car races)
 static int s_nbRaceHide = 0;
 static int s_nbHidden = 0;
 #define RACE_RESULTS_MS 4000               // how long the qualifying's grid is shown before the count-down
@@ -2301,6 +2304,7 @@ static int s_onlyNear = -1;                // RaisedAt looks only at the road's 
 static int s_rescueOn = 1;                 // rescue=: a car in the lava or the sea is put back on the road (RaceMod_Rescue)
 static int s_roamFree = 0;                 // roam_free=1: the car driven anywhere off the race -- no rescue then (RescueOn)
 static int RaceOn(void);
+static int RacersAway(void);
 // island_file=<island> <name>: while racing, that island is drawn from the file <name> instead of its own -- a track on an island file the
 // game never loads (MOON.ILE, the Emerald Moon's older copy, raced as island 3's)
 static int s_fileIsland = -1;
@@ -3075,6 +3079,7 @@ static T_RACE_PIT s_pit;
 #define RACE_MAX_FIGURE_CUBES 8
 typedef struct {
     int Entity, Body, Anim, Ready, Bad, NbWhen, WhenVar[2], WhenLo[2], WhenHi[2];
+    int Away;   // (a trailing "away": one of the racers -- not drawn while they're away at the race, RacersAway)
     S32 BodyIndex, AnimIndex, Beta;
     double X, Y, Z;
     T_OBJ_3D Obj;
@@ -3090,6 +3095,8 @@ static void ParseFigure(const char *v) {
         const char *rest = v + used;
         int a, lo, hi, n2 = 0;
         while (f.NbWhen < 2 && sscanf(rest, "%d %d %d%n", &a, &lo, &hi, &n2) == 3) { f.WhenVar[f.NbWhen] = a; f.WhenLo[f.NbWhen] = lo; f.WhenHi[f.NbWhen] = hi; f.NbWhen++; rest += n2; }
+        while (*rest == ' ') rest++;
+        if (!strncmp(rest, "away", 4)) f.Away = 1;
         s_figures[s_nbFigures++] = f;
     }
 }
@@ -3098,8 +3105,16 @@ static void ParseFigureCubes(const char *v) {
     int cx, cz, n2 = 0;
     while (s_nbFigCubes < RACE_MAX_FIGURE_CUBES && sscanf(rest, "%d %d%n", &cx, &cz, &n2) == 2) { s_figCubeX[s_nbFigCubes] = cx; s_figCubeZ[s_nbFigCubes] = cz; s_nbFigCubes++; rest += n2; }
 }
-// (figures=<file>: the figure= and figure_cubes= lines of a file in the game's folder -- the build writes the Desert garage's there, its
-// places only known once the island's story is built, after the race files are)
+// race_hide= / racer_hide=<scene> <actor>: hidden while a car races, or while the racers are away at the race
+static void ParseRaceHide(const char *v, int away) {
+    if (s_nbRaceHide >= RACE_MAX_RACE_HIDE) { Log_Warn("[racemod] too many race_hide/racer_hide lines: %s left out", v); return; }
+    if (sscanf(v, "%d %d", &s_raceHideScene[s_nbRaceHide], &s_raceHideActor[s_nbRaceHide]) != 2) return;
+    s_raceHideAway[s_nbRaceHide] = away;
+    s_raceHideWas[s_nbRaceHide++] = -1;
+}
+
+// (figures=<file>: the figure=, figure_cubes= and racer_hide= lines of a file in the game's folder -- the build writes the Desert garage's
+// there, its places only known once the island's story is built, after the race files are)
 static void LoadFigures(const char *name) {
     char path[260], line[256];
     GetResPath(path, sizeof(path), name);
@@ -3109,6 +3124,7 @@ static void LoadFigures(const char *name) {
         line[strcspn(line, "\r\n")] = 0;
         if (!strncmp(line, "figure_cubes=", 13)) ParseFigureCubes(line + 13);
         else if (!strncmp(line, "figure=", 7)) ParseFigure(line + 7);
+        else if (!strncmp(line, "racer_hide=", 11)) ParseRaceHide(line + 11, 1);
     }
     fclose(f);
     Log_Info("[racemod] figures: %d from %s, not drawn in %d cube(s)", s_nbFigures, name, s_nbFigCubes);
@@ -6086,10 +6102,8 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbTracks++;
             }
         }
-        else if (!strcmp(key, "race_hide")) {
-            if (s_nbRaceHide >= RACE_MAX_RACE_HIDE) Log_Warn("[racemod] too many race_hide lines: %s left out", v);
-            else if (sscanf(v, "%d %d", &s_raceHideScene[s_nbRaceHide], &s_raceHideActor[s_nbRaceHide]) == 2) s_raceHideWas[s_nbRaceHide++] = -1;
-        }
+        else if (!strcmp(key, "race_hide")) ParseRaceHide(v, 0);
+        else if (!strcmp(key, "racer_hide")) ParseRaceHide(v, 1);
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden >= RACE_MAX_HIDDEN) Log_Warn("[racemod] too many hide_actor lines: %s left out", v);
             else if (sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
@@ -10582,7 +10596,7 @@ static void DrawFigures(void) {
             const int a = f->WhenVar[k];
             if (a < 0 || a >= MAX_VARS_GAME || ListVarGame[a] < f->WhenLo[k] || ListVarGame[a] > f->WhenHi[k]) show = 0;
         }
-        if (!show) continue;
+        if (!show || (f->Away && RacersAway())) continue;
         T_OBJ_3D *o = &f->Obj;
         const S32 x = (S32)floor(f->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(f->Y + 0.5), z = (S32)floor(f->Z - CurrentCubeY * 32768.0 + 0.5);
         if (!f->Ready) {
@@ -12130,6 +12144,11 @@ static int Near(const T_OBJET *a, S32 x, S32 y, S32 z, S32 reach) {
 static int RaceRunning(void) {
     return s_phase == PHASE_RACE && (s_nbSpots ? s_goAt && TimerRefHR >= s_goAt : 1);
 }
+
+// Whether the racers are away at the race: the grid formed, or the others on the lap after its GO -- the racers standing about off the
+// road out of sight meanwhile (racer_hide=, a figure's "away": the White Leaf Desert's garage tent, the user, 2026-11-26, "During the desert
+// island race the racers are still visible in the garage tent area"; "Baldino needs to go from the tent as he's driving in the race")
+static int RacersAway(void) { return RaceMod_Active() && s_car.HasLine && (s_phase == PHASE_GRID || RaceOn()); }
 
 // Whether a race is on: other cars on the lap, after the grid's GO (not qualifying, nor the others waiting in the pits).
 static int RaceOn(void) {
@@ -14797,15 +14816,16 @@ static void WheelCleared(int racing) {
 }
 
 static void RaceHideActors(void) {
-    const int racing = CarRacing();
+    const int racing = CarRacing(), away = RacersAway();
     WheelCleared(racing);
     for (int i = 0; i < s_nbRaceHide; i++) {
         if (s_raceHideScene[i] != (S32)NumCube || s_raceHideActor[i] <= 0 || s_raceHideActor[i] >= NbObjets) { s_raceHideWas[i] = -1; continue; }
         T_OBJET *o = &ListObjet[s_raceHideActor[i]];
-        if (racing) {
+        if (s_raceHideAway[i] ? away : racing) {
             if (s_raceHideWas[i] < 0) {
                 s_raceHideWas[i] = (int)(o->Flags & (INVISIBLE | CHECK_OBJ_COL));
-                Log_Info("[racemod] actor %d of scene %d, entity %d: not there while a car races", s_raceHideActor[i], s_raceHideScene[i], (int)o->IndexFile3D);
+                Log_Info("[racemod] actor %d of scene %d, entity %d: not there while %s", s_raceHideActor[i], s_raceHideScene[i], (int)o->IndexFile3D,
+                         s_raceHideAway[i] ? "the racers are away at the race" : "a car races");
             }
             o->Flags = (o->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL;
         }
