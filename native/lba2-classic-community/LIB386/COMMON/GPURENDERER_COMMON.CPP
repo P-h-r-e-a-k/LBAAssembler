@@ -2393,6 +2393,13 @@ void GpuRenderer_SetOverlayOpaqueRect(S32 x0, S32 y0, S32 x1, S32 y1) {
     s_overlayOpaqueY1 = y1;
 }
 
+void GpuRenderer_GetOverlayOpaqueRect(S32 *x0, S32 *y0, S32 *x1, S32 *y1) {
+    *x0 = s_overlayOpaqueX0;
+    *y0 = s_overlayOpaqueY0;
+    *x1 = s_overlayOpaqueX1;
+    *y1 = s_overlayOpaqueY1;
+}
+
 S32 GpuRenderer_IsOverlayOpaque(void) {
     /* Same test the present shader runs on uOpaqueRect. */
     return s_overlayOpaqueX1 > s_overlayOpaqueX0 &&
@@ -2988,6 +2995,7 @@ S32 GpuRenderer_ReadbackPresentedIndexed(void *rgb, U8 *index, U32 width, U32 he
     return FALSE;
 }
 void GpuRenderer_SetVSync(S32 enabled) { (void)enabled; }
+void GpuRenderer_GetOverlayOpaqueRect(S32 *x0, S32 *y0, S32 *x1, S32 *y1) { *x0 = *y0 = *x1 = *y1 = 0; }
 void GpuRenderer_SetOverlayOpaqueRect(S32 x0, S32 y0, S32 x1, S32 y1) {
     (void)x0;
     (void)y0;

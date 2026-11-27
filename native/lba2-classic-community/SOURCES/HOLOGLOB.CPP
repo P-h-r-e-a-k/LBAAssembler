@@ -1263,7 +1263,8 @@ void HoloMap() {
     // the scene round it. A renderer switch, which reset the GPU's state, made it right till the next start.)
     const S32 holoSoftwarePolys = GpuRenderer_GetSoftwarePolys();
     GpuRenderer_SetSoftwarePolys(1);
-    GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+    // (x1, y1 exclusive -- the present's own test: the window's last column and row were left see-through)
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)ModeDesiredX, (S32)ModeDesiredY);
 
     TestCoulDial(COUL_PERSO);
     InitDial(2); //	FR_GAM.DIA

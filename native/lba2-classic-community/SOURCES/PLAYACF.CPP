@@ -38,6 +38,7 @@ extern "C" __declspec(dllimport) unsigned long __stdcall GetFileAttributesA(cons
 #include <FILEIO/SAVEPNG.H>
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/WINDOW.H> // AppActive
+#include <GPU/GPURENDERER.H> // the 2D layer opaque while a film plays
 
 static int videoLogEnabled = 0;
 
@@ -483,6 +484,14 @@ S32 PlayAcf(const char *name) {
         InitWaitNoKey();
         InitWaitNoInput(I_JOY | I_FIRE | I_MENUS);
 
+        /* (OpenGL: the film is the 2D layer, Log, whole -- and that layer's palette index 0 is see-through over the GPU's 3D picture
+           during play: the black bands round the film and its own darkest pixels showed the scene the film started over, coloured
+           through the film's palette, its road's perspective a skewed shape -- the user, 2026-11-26, "Watching a cutscene with OpenGL
+           turned on looks terrible". Opaque over the whole window while it plays, as the holomap is; what a menu had pinned put back.) */
+        S32 filmOpaque[4];
+        GpuRenderer_GetOverlayOpaqueRect(&filmOpaque[0], &filmOpaque[1], &filmOpaque[2], &filmOpaque[3]);
+        GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)ModeDesiredX, (S32)ModeDesiredY);
+
         unsigned long w = 0, h = 0;
         unsigned long f = 0;
         double usf = 0.0;
@@ -748,6 +757,9 @@ S32 PlayAcf(const char *name) {
         Cls();
         BoxStaticFullflip();
         SetBlackPal();
+
+        GpuRenderer_SetOverlayOpaqueRect(filmOpaque[0], filmOpaque[1], filmOpaque[2], filmOpaque[3]);
+        FirstTime = AFF_ALL_FLIP;
 
         HQ_ResumeSamples();
         InitWaitNoKey();

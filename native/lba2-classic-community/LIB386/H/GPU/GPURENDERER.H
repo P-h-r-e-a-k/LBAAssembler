@@ -278,6 +278,8 @@ void GpuRenderer_SetOverlayOpaqueRect(S32 x0, S32 y0, S32 x1, S32 y1);
 // black inside it). Hooks that punch Log to expose an FBO quad ask this
 // first: the punch would surface as black inside the pinned frame.
 S32 GpuRenderer_IsOverlayOpaque(void);
+// The rect pinned now (all 0 when none): a modal inside another -- a film started from a menu -- puts back the one it found
+void GpuRenderer_GetOverlayOpaqueRect(S32 *x0, S32 *y0, S32 *x1, S32 *y1);
 // TRUE when pixel (x, y) of Log is inside that rect: its index 0 presented
 // opaque black (the screenshot's composite asks, to show what the screen does).
 S32 GpuRenderer_InOverlayOpaque(S32 x, S32 y);

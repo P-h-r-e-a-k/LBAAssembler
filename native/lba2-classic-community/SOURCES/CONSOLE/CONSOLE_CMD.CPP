@@ -1436,6 +1436,22 @@ static void cmd_video(int argc, const char *argv[]) {
         Console_Print("Video logging: %s", VideoLogIsEnabled() ? "ON" : "OFF");
         return;
     }
+    /* video list | video play <name>: the films the game knows, and one played now over whatever is on screen -- a test of the
+       cinematics under each renderer (the user, 2026-11-26: "Watching a cutscene with OpenGL turned on looks terrible") */
+    if (strcmp(argv[1], "list") == 0) {
+        extern char *PtrAcf, *ListAcf, *EndListAcf;
+        if (!ListAcf || !EndListAcf || ListAcf >= EndListAcf) { Console_Print("video: no film list"); return; }
+        char *keep = PtrAcf, name[13];
+        PtrAcf = ListAcf;
+        while (GetAcfName(name)) Console_Print("  %s", name);
+        PtrAcf = keep;
+        return;
+    }
+    if (strcmp(argv[1], "play") == 0 && argc >= 3) {
+        Console_Print("video: playing %s", argv[2]);
+        PlayAcf(argv[2]);
+        return;
+    }
     Console_Print("Unknown video subcommand. Use: video help");
 }
 #endif
