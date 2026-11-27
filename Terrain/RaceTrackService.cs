@@ -819,6 +819,8 @@ internal static class RaceTrackService
             extra.Add($"{options.Island.IleFile}: at most {most} ground texture definitions in a cube with the road (room for {island.MaxGroundDefinitions})");
         }
         session.Step(0.65, "saving the island");
+        // (its edge's cliff triangles the build raised over their rock faces, drawn: RaceTrackCliffs)
+        if (RaceTrackCliffs.Close(island, IslandFile.Load(islandSource)) is { Length: > 0 } cliffs) extra.Add(cliffs);
         island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
         AppendBodies(Path.Combine(gameDirectory, options.Island.OblFile), report, options);
         if (options.Island.TwinIleFile is not null) session.Step(0.67, $"{options.Island.TwinIleFile}, the island in the other weather");
@@ -914,6 +916,8 @@ internal static class RaceTrackService
             report.Notes.Add($"cells x {x0}-{x1}, z {z0}-{z1} walled for the cars only ({walled} cells)");
         }
         RaceTrackBuilder.LiftShafts(twin, twinOptions, report);
+        // (the twin's raised cliff edges too: RaceTrackCliffs -- the town circuit's)
+        if (RaceTrackCliffs.Close(twin, IslandFile.Load(OriginalPath(gameDirectory, ile))) is { Length: > 0 } twinCliffs) main.Notes.Add($"{ile}: {twinCliffs}");
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)
