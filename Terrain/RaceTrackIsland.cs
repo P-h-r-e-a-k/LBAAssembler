@@ -82,7 +82,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Citadel = new("Citadel Island", "CITADEL.ILE", "CITADEL.OBL", 0, 42, 50, 27,
         "RaceTrackPlan.CitadelStorm.json", null)
     {
-        RoamFree = true,
+        RoamFree = true, RockFaces = true,
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
         // (58.6 frames a second at 848 x 480 to 60.2 at the island's own 60,000, 2026-11-02)
         View = (200000, 150000),
@@ -360,6 +360,9 @@ internal sealed record RaceTrackIsland(
     public bool WideTempleDoor { get; init; }
     // decors moved as the island is loaded, before its road is built: those of a cube at a place (cube-local), by so much
     public (int CubeX, int CubeZ, int X, int Z, int Dx, int Dz)[]? DecorShifts { get; init; }
+    // The faces the build cut or raised near-vertical drawn as the island's own cliff rock, not its earth or paving stretched up them:
+    // RaceTrackCliffs.Faces (Citadel Island, the user, 2026-11-26)
+    public bool RockFaces { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }
 
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,

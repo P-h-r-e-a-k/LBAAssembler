@@ -821,6 +821,7 @@ internal static class RaceTrackService
         session.Step(0.65, "saving the island");
         // (its edge's cliff triangles the build raised over their rock faces, drawn: RaceTrackCliffs)
         if (RaceTrackCliffs.Close(island, IslandFile.Load(islandSource)) is { Length: > 0 } cliffs) extra.Add(cliffs);
+        if (options.Island.RockFaces && RaceTrackCliffs.Faces(island, IslandFile.Load(islandSource)) is { Length: > 0 } faces) extra.Add(faces);
         island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
         AppendBodies(Path.Combine(gameDirectory, options.Island.OblFile), report, options);
         if (options.Island.TwinIleFile is not null) session.Step(0.67, $"{options.Island.TwinIleFile}, the island in the other weather");
@@ -918,6 +919,7 @@ internal static class RaceTrackService
         RaceTrackBuilder.LiftShafts(twin, twinOptions, report);
         // (the twin's raised cliff edges too: RaceTrackCliffs -- the town circuit's)
         if (RaceTrackCliffs.Close(twin, IslandFile.Load(OriginalPath(gameDirectory, ile))) is { Length: > 0 } twinCliffs) main.Notes.Add($"{ile}: {twinCliffs}");
+        if (options.Island.RockFaces && RaceTrackCliffs.Faces(twin, IslandFile.Load(OriginalPath(gameDirectory, ile))) is { Length: > 0 } twinFaces) main.Notes.Add($"{ile}: {twinFaces}");
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)

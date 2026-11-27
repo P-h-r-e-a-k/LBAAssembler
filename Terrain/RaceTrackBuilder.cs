@@ -6412,17 +6412,24 @@ internal static class RaceTrackBuilder
         var kept = 0;
         // (the flat colour showing past a kerb's stripe: each cell's land, read at a few points of its texture, came out gold now and then among the brown, in blocks along the kerb --
         // the user, 2026-11-01, Polar: "it's almost like we now have brown and yellow as well": the land along the kerb's, KerbColourReach cells either way)
-        var kerbLand = new Dictionary<(int, int), (double R, double G, double B)>();
+        // (and the commonest of them, not their average: Citadel Island's brown earth, green grass and grey paving averaged came out the
+        // yellow of its beaches -- a sand-coloured strip along the kerbs through the town, the user, 2026-11-26: "Patches of sand around the
+        // race track when there's no sand nearby normally". A flat-coloured land -- the town's earth -- gives its own colour, not the nearest)
+        var kerbLand = new Dictionary<(int, int), (int Bank, int Pos)>();
         if (o.Theme.Palette is { } kerbPalette)
             foreach (var (gx, gz) in kerbCells.Keys)
-                if (LandNear(gx, gz) is { } land && GroundColour(island, gx, gz, land.A, kerbPalette) is { } colour) kerbLand[(gx, gz)] = colour;
+                if (LandNear(gx, gz) is { } land)
+                {
+                    if (land.A.TexFlag == 0 && land.A.PolyFlag != 0) kerbLand[(gx, gz)] = (land.A.Bank, land.A.SampleStep);
+                    else if (GroundColour(island, gx, gz, land.A, kerbPalette) is { } colour) kerbLand[(gx, gz)] = FlatNearest(kerbPalette, colour.R, colour.G, colour.B);
+                }
         (int Bank, int Pos) KerbUnder(int gx, int gz)
         {
-            double r = 0, g = 0, b = 0; var n = 0;
+            var votes = new Dictionary<(int Bank, int Pos), int>();
             for (var dz = -KerbColourReach; dz <= KerbColourReach; dz++)
             for (var dx = -KerbColourReach; dx <= KerbColourReach; dx++)
-                if (kerbLand.TryGetValue((gx + dx, gz + dz), out var c)) { r += c.R; g += c.G; b += c.B; n++; }
-            return n > 0 && o.Theme.Palette is { } ramp ? FlatNearest(ramp, r / n, g / n, b / n) : o.Theme.Sand;
+                if (kerbLand.TryGetValue((gx + dx, gz + dz), out var c)) votes[c] = votes.TryGetValue(c, out var n) ? n + 1 : 1;
+            return votes.Count > 0 ? votes.OrderByDescending(v => v.Value).ThenBy(v => v.Key.Bank).ThenBy(v => v.Key.Pos).First().Key : o.Theme.Sand;
         }
         foreach (var ((gx, gz), kind) in kinds)
         {

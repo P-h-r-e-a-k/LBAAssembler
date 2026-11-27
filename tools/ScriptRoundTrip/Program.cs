@@ -251,6 +251,8 @@ internal static class Program
             "decorsnear" => PolarStudy.DecorsNear(args),
             "lavamap" => LavaMap.Run(args),
             "holes" => IslandHoles.Run(args),
+            "groundaudit" => GroundAudit.Run(args),
+            "steeplooks" => SteepLooks.Run(args),
             "waterpatches" => PolarStudy.WaterPatches(args),
             "hamalayi" => HamalayiStudy.Run(args),
             "hamalayiregion" => HamalayiStudy.Region(args),
