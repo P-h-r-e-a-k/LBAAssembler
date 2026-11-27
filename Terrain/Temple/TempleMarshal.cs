@@ -153,6 +153,31 @@ internal static class TempleMarshal
     // stands (842 up, 10 forward) -- the Imperial Hotel's Sup's own body, BODY.HQR 440 -- turned a quarter back with her (up to -z, forward
     // to up), and the bubble a little over it
     public static readonly (int X, int Y, int Z) LieHeadAt = (0, 606 + 10 + 250, -842);
+    // Lyra sat up on the lounger since 2026-11-27 (the user, 2026-11-26: "Lyra currently just lays on the sunbed and only moves her head, also
+    // her legs look weird, let's have her sat up, and to lift her head fully up when she talks to Twinsen"): her hips' bone leant back a
+    // little against the chair's raised back, both thighs forward along the seat, the shins nearly straight -- Sit, now and then her right
+    // knee drawn up and her head turned; SitTalk, her head lifted right up to whoever stands talking to her; SitScore, both arms up and down
+    // again, her score for a dive. The grid girl's entity's animations, as Lie is.
+    public const int Sit = 665, SitTalk = 666, SitScore = 667;
+    public const float SitPitch = -0.045f;
+    // (her body drawn this far under her actor's place -- bone 1 moved down, all of her hanging from it: her place over the lounger's bricks,
+    // not under its seat -- in the cells' order a brick of the seat at her place's layer or over it came "in front" of her and the game drew
+    // it again over her legs and hips: GRILLE.CPP DrawOverBrick)
+    public const int SitDrop = 700;
+    // Where she sits from: her hips' pivot over her origin, and her head's middle over the pivot as she stands -- her own body's, the build's
+    // (RaceTrackStory.Eggs.Otringal places her by them)
+    public static (int HipUp, int HeadAbove) SitGeometry(string gameDirectory)
+    {
+        Make(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(GridGirlRig.Retail), out var standing, GridGirlRig);
+        var world = standing.World();
+        var hip = world[standing.Bones[1].Pivot].Y;
+        var head = HeadBone(standing, world);
+        var headY = Enumerable.Range(standing.Bones[head].Start, standing.Bones[head].Count).Average(i => world[i].Y);
+        return ((int)Math.Round(hip), (int)Math.Round(headY - hip));
+    }
+    private static int HeadBone(Body standing, IReadOnlyList<Vector3> world) =>
+        Enumerable.Range(1, standing.Bones.Count - 1).Where(b => standing.Bones[b].Count > 0)
+            .OrderByDescending(b => Enumerable.Range(standing.Bones[b].Start, standing.Bones[b].Count).Average(i => world[i].Y)).First();
     public static List<string> InstallLying(string gameDirectory)
     {
         var r = GridGirlRig;
@@ -162,7 +187,7 @@ internal static class TempleMarshal
         var table = HqrArchive.Open(ressPath).Read(44);
         var entity = Lba2EntityTable.Parse(table).Entities.FirstOrDefault(e => e.Id == r.Entity);
         if (entity is null || !entity.Bodies.Any(b => b.Generic == r.Body)) return new() { $"WARNING: Lyra lying: entity {r.Entity} has no grid girl (body {r.Body}) -- none made" };
-        if (entity.Anims.Any(a => a.Generic == Lie)) return new() { $"Lyra lying: entity {r.Entity}'s animation {Lie} there already" };
+        if (entity.Anims.Any(a => a.Generic == Lie) && entity.Anims.Any(a => a.Generic == Sit)) return new() { $"Lyra lying and sitting: entity {r.Entity}'s animations {Lie} and {Sit} there already" };
         Make(HqrArchive.Open(bodyPath).Read(r.Retail), out var standing, r);
         // (not still: a few seconds as she lies, then her right knee drawn up and her head turned a little, a few seconds so, and back
         // -- the user, 2026-11-24: "she doesn't move at all")
@@ -202,11 +227,50 @@ internal static class TempleMarshal
             : new AnimBone(0, 0f, 0f, 0f)).ToArray();
         foreach (var (time, knee) in new[] { (LieHold, 0f), (LieMove, 0f), (LieHold, 1f), (LieMove, 1f) })
             anim.Frames.Add(new AnimFrame(time, 0, 0, 0, Pose(knee)));
+        // sitting: her left thigh and shin too -- the bone turning at the hips on her left, as the right one is found
+        var leftThigh = Enumerable.Range(2, standing.Bones.Count - 2)
+            .Where(b => world[standing.Bones[b].Pivot] is var p && p.X < -10 && p.Y > top * 0.25f && p.Y < top * 0.5f
+                        && standing.Bones.Any(c => c.Parent == b) && Reach(b) < p.Y * 0.25f && FromPelvis(b))
+            .OrderByDescending(b => world[standing.Bones[b].Pivot].Y).FirstOrDefault(-1);
+        var leftShin = leftThigh < 0 ? -1 : standing.Bones.FindIndex(c => c.Parent == leftThigh);
+        // (the thighs forward to lie along the seat: a quarter turn from hanging, less the hips' lean back; the shins a touch bent)
+        const float thighs = -0.25f - SitPitch, shins = 0.02f;
+        // (the hips: the bone hanging from bone 1 -- her body and her thighs hang from it -- leant back; bone 1 itself moved down, SitDrop)
+        var hips = standing.Bones.FindIndex(c => c.Parent == 1);
+        AnimBone[] SitPose(float knee, float lookUp, float arms) => Enumerable.Range(0, standing.Bones.Count).Select(i =>
+            i == 0 ? AnimBone.Neutral
+            : i == 1 ? new AnimBone(1, 0f, -SitDrop, 0f)
+            : i == hips ? new AnimBone(0, SitPitch, 0f, 0f)
+            : i == thigh ? new AnimBone(0, thighs - 0.12f * knee, 0f, 0f)
+            : i == shin ? new AnimBone(0, shins + 0.26f * knee, 0f, 0f)
+            : i == leftThigh ? new AnimBone(0, thighs, 0f, 0f)
+            : i == leftShin ? new AnimBone(0, shins, 0f, 0f)
+            : i == head ? new AnimBone(0, -0.07f * lookUp, 0.05f * knee * (1 - lookUp), 0f)
+            : i == r.GreenUpper || i == r.CheckUpper ? new AnimBone(0, -0.42f * arms, 0f, 0f)
+            : new AnimBone(0, 0f, 0f, 0f)).ToArray();
+        // (the frames' times in milliseconds -- the bike's are, TwinsenBike: a few seconds still, then the knee drawn up for a few)
+        var sit = new Anim { Game = 2, LoopFrame = 0 };
+        foreach (var (time, knee) in new[] { (3600, 0f), (900, 0f), (2800, 1f), (900, 1f) })
+            sit.Frames.Add(new AnimFrame(time, 0, 0, 0, SitPose(knee, 0f, 0f)));
+        var talk = new Anim { Game = 2, LoopFrame = 0 };
+        foreach (var (time, up) in new[] { (400, 1f), (1400, 1f), (700, 0.85f) })
+            talk.Frames.Add(new AnimFrame(time, 0, 0, 0, SitPose(0f, up, 0f)));
+        var score = new Anim { Game = 2, LoopFrame = 0 };
+        foreach (var (time, arms) in new[] { (250, 0f), (450, 1f), (2200, 1f), (450, 0f) })
+            score.Frames.Add(new AnimFrame(time, 0, 0, 0, SitPose(0f, 0.4f, arms)));
         var animIndex = HqrArchive.CountEntries(animPath);
-        File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(anim.Write())));
-        table = RaceTrackJumpAnim.WithAnim(table, r.Entity, Lie, animIndex);
+        var made = new List<(int Generic, Anim Anim)>();
+        if (!entity.Anims.Any(a => a.Generic == Lie)) made.Add((Lie, anim));
+        made.Add((Sit, sit)); made.Add((SitTalk, talk)); made.Add((SitScore, score));
+        var animBytes = File.ReadAllBytes(animPath);
+        for (var k = 0; k < made.Count; k++)
+        {
+            animBytes = HqrWriter.AppendEntry(animBytes, HqrWriter.StoredEntry(made[k].Anim.Write()));
+            table = RaceTrackJumpAnim.WithAnim(table, r.Entity, made[k].Generic, animIndex + k);
+        }
+        File.WriteAllBytes(animPath, animBytes);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        return new() { $"Lyra lying on her back (bone 1 a quarter turn; her right knee drawn up now and then -- bones {thigh} and {shin} -- her head, {head}, turned): ANIM.HQR {animIndex}, entity {r.Entity}'s animation {Lie}" };
+        return new() { $"Lyra lying on her back (bone 1 a quarter turn; her right knee drawn up now and then -- bones {thigh} and {shin} -- her head, {head}, turned), and sitting up (hips {SitPitch} back, thighs {thigh}/{leftThigh} forward, shins {shin}/{leftShin}; her head lifted talking; arms {r.GreenUpper}/{r.CheckUpper} up for a score): ANIM.HQR {animIndex}-{animIndex + made.Count - 1}, entity {r.Entity}'s animations {string.Join(", ", made.Select(m => m.Generic))}" };
     }
 
     // ---- where she stands -------------------------------------------------------------------------------------------------------

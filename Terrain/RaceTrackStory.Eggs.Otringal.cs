@@ -98,9 +98,15 @@ internal static partial class RaceTrackStory
     // instead": the game's own second deck chair (Citadel/CitadelProps.Pool: DeckChairs -- the first is Johnny Rocket's), her head to its
     // backrest, -z, her feet to +z, facing +z (TempleMarshal.Lie: the turned bone's pivot 468 up, her back 400 over her origin, her head
     // 1,054 along from it and her feet 468), the chair's middle 293 head-ward of her origin; no shadow -- hers was the massive one)
-    private const int LyraLyingBack = 400, LyraLyingMiddle = 293;
-    private static readonly (int X, int Y, int Z, int Beta) LyraAt = (Citadel.CitadelProps.DeckChairs[1].X,
-        Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.DeckChairSeat - LyraLyingBack, Citadel.CitadelProps.DeckChairs[1].Z + LyraLyingMiddle, 0);
+    // (since 2026-11-27 sitting up on it -- the user, 2026-11-26: "Lyra currently just lays on the sunbed and only moves her head, also her
+    // legs look weird, let's have her sat up, and to lift her head fully up when she talks to Twinsen" -- TempleMarshal.Sit: her hips'
+    // pivot LyraSeatUnder over the seat's sling, LyraBackOff ahead of the chair's raised back -- the back's cell, z 10, its front edge --
+    // her legs along the seat to +z, facing +z)
+    private const int LyraSeatUnder = 70, LyraBackOff = 200;
+    // (her hips' pivot over her origin and her head over the pivot, her own body's: TempleMarshal.SitGeometry -- these if it can't be read)
+    private const int LyraHipUp = 468, LyraHeadAbove = 560;
+    private static (int X, int Y, int Z, int Beta) LyraSitting(int hipUp) => (Citadel.CitadelProps.DeckChairs[1].X,
+        Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.DeckChairSeat + LyraSeatUnder - hipUp + Temple.TempleMarshal.SitDrop, Citadel.CitadelProps.DeckChairBackZ + 512 + LyraBackOff, 0);
     private const uint LyraNoShadow = 1u << 12;
 
     // (`talk`: Lyra's at the start line, the same by the pool: Twinsen who met her there first couldn't reach her to talk -- the user,
@@ -134,13 +140,20 @@ internal static partial class RaceTrackStory
         set_comportement(comportement_3);
     }}
 ";
-        b.Edit(HotelScene, $"Lyra by the hotel's pool: her score for the dive, a clover after it (var_cube {LyraClovers}, {LyraDives})", model =>
+        var (hipUp, headAbove) = (LyraHipUp, LyraHeadAbove);
+        try { (hipUp, headAbove) = Temple.TempleMarshal.SitGeometry(b.GameDirectory); }
+        catch (Exception e) when (e is InvalidDataException or IOException or IndexOutOfRangeException) { b.Log.Add($"Lyra sitting: her body not read ({e.Message}) -- placed by the usual numbers"); }
+        var lyraAt = LyraSitting(hipUp);
+        // (her head as she sits, leant back with her hips' bone: for her speech bubble, a little over it)
+        var lean = -Temple.TempleMarshal.SitPitch * 2 * Math.PI;
+        var headAt = (0, hipUp - Temple.TempleMarshal.SitDrop + (int)Math.Round(headAbove * Math.Cos(lean)) + 230, -(int)Math.Round(headAbove * Math.Sin(lean)));
+        b.Edit(HotelScene, $"Lyra by the hotel's pool, sitting up on the lounger: her score for the dive, a clover after it (var_cube {LyraClovers}, {LyraDives})", model =>
         {
-            var lyra = SceneOps.BlankActor(SceneGame.Lba2, LyraAt.X, LyraAt.Y, LyraAt.Z, LyraEntity);
+            var lyra = SceneOps.BlankActor(SceneGame.Lba2, lyraAt.X, lyraAt.Y, lyraAt.Z, LyraEntity);
             // (not shoved by what she lies on: CHECK_OBJ_COL off -- with it the engine pushed her out of the lounger's box and along the deck to
             // the ladder; and no brick collision nor falling -- on the game's deck chair, its bricks, the engine lifted her onto their top and
             // stood her up)
-            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Lie; lyra.Beta = LyraAt.Beta; lyra.Flags = LyraNoShadow;
+            lyra.Body = LyraBody; lyra.Anim = Temple.TempleMarshal.Sit; lyra.Beta = lyraAt.Beta; lyra.Flags = LyraNoShadow;
             // (walked past, not into: her box is the flag marshal's rig's, standing, its flags out -- about 3,400 round her -- and lying on the
             // lounger it walled off the deck all about the pool and the stairs up, invisible: the user, 2026-11-21, "There seems to be an
             // invisible wall here in the imperial hotel blocking Twinsen right in front of him" (three places; Twinsen's obj_col her, actor 20).
@@ -149,14 +162,14 @@ internal static partial class RaceTrackStory
             var index = model.Actors.Count;
             // (her speech bubble at her head as she lies -- the game puts it over her feet at her box's top, standing: well above and
             // beside her, the user, 2026-11-24: "Lyra's speech bubble is a little far from her head")
-            SpeechBubbleAt(b.GameDirectory, HotelScene, index, Temple.TempleMarshal.LieHeadAt);
+            SpeechBubbleAt(b.GameDirectory, HotelScene, index, headAt);
             // (her talking animation her lying one: the engine plays a speaker's set_anim_dial animation while she speaks -- by default the
             // talking one, standing, and with none of her own there the standing one -- then puts her back: talked to, she stood up through
             // the lounger and slid back, the user, 2026-11-21: "causes her to move and rubber band back ... causing her to stand through the
             // chair", MESSAGE.CPP InitWhoSpeak)
             var add = IslandBeatsA.Add(model, lyra, $@"void comportement_0()
 {{
-    set_anim_dial({Temple.TempleMarshal.Lie});
+    set_anim_dial({Temple.TempleMarshal.SitTalk});
     if ({when})
     {{
         set_comportement(comportement_1);
@@ -202,14 +215,13 @@ void comportement_3()
             {
                 add(scripts);
                 scripts.SetText(index, ScriptKind.Track, $@"label(0);
-anim({Temple.TempleMarshal.Lie});
+anim({Temple.TempleMarshal.Sit});
 stop();
 
 label(1);
-anim({LyraRaise});
+anim({Temple.TempleMarshal.SitScore});
 wait_anim();
-wait_nb_second(3);
-anim({Temple.TempleMarshal.Lie});
+anim({Temple.TempleMarshal.Sit});
 
 label(2);
 stop();
