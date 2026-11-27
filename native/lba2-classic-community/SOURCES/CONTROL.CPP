@@ -1418,18 +1418,31 @@ static void control_dump_state(const char *path) {
    Control_ScreenshotTo's composite under a GPU backend; on software, Log through the palette it is shown with. (A postcard's picture in
    the scrapbook, RACEMOD.CPP PostcardsFrame.) */
 static U32 *ComposedGpuFrame(void);
+
+/* The palette Log is shown with, as 0x00RRGGBB: the video's (SDL.CPP GL_GetPaletteLUT), which a lightning flash, a fade's step or a
+   film sets without touching the game's PtrPal -- a picture through PtrPal showed none of them. PtrPal itself while the video's
+   was never set (all white, its initial state). */
+static void ShownPalette(U32 out[256]) {
+    extern const U32 *GL_GetPaletteLUT(void);
+    const U32 *lut = GL_GetPaletteLUT();
+    S32 set = FALSE;
+    for (S32 i = 1; i < 256 AND !set; i++) set = (lut[i] & 0xFFFFFF) != 0xFFFFFF;
+    for (S32 i = 0; i < 256; i++)
+        out[i] = set ? lut[i] & 0xFFFFFF
+                     : ((U32)PtrPal[i * 3] << 16) | ((U32)PtrPal[i * 3 + 1] << 8) | (U32)PtrPal[i * 3 + 2];
+}
+
 U32 *Control_FrameRGB(void) {
     const U32 w = (U32)ModeDesiredX, h = (U32)ModeDesiredY;
     if (w == 0 || h == 0 || !Log || !PtrPal) return NULL;
     if (GpuRenderer_IsActive()) return ComposedGpuFrame();
     U32 *rgb = (U32 *)malloc(w * h * sizeof(U32));
     if (!rgb) return NULL;
-    const U8 *logMem = (const U8 *)Log, *pal = (const U8 *)PtrPal;
+    U32 pal[256];
+    ShownPalette(pal);
+    const U8 *logMem = (const U8 *)Log;
     for (U32 y = 0; y < h; y++)
-        for (U32 x = 0; x < w; x++) {
-            const U8 idx = logMem[y * w + x];
-            rgb[y * w + x] = ((U32)pal[idx * 3] << 16) | ((U32)pal[idx * 3 + 1] << 8) | (U32)pal[idx * 3 + 2];
-        }
+        for (U32 x = 0; x < w; x++) rgb[y * w + x] = pal[logMem[y * w + x]];
     return rgb;
 }
 
@@ -1443,7 +1456,17 @@ void Control_ScreenshotTo(const char *path) {
             return;
         }
     }
-    SavePNG((char *)path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPal);
+    if (Log AND PtrPal) {
+        U32 shown[256];
+        U8 pal[768];
+        ShownPalette(shown);
+        for (S32 i = 0; i < 256; i++) {
+            pal[i * 3] = (U8)(shown[i] >> 16);
+            pal[i * 3 + 1] = (U8)(shown[i] >> 8);
+            pal[i * 3 + 2] = (U8)shown[i];
+        }
+        SavePNG((char *)path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, pal);
+    }
 }
 
 static U32 *ComposedGpuFrame(void) {
@@ -1462,7 +1485,8 @@ static U32 *ComposedGpuFrame(void) {
             U32 *composed = (U32 *)malloc(w * h * sizeof(U32));
             if (composed) {
                 const U8 *logMem = (const U8 *)Log;
-                const U8 *pal = (const U8 *)PtrPal;
+                U32 pal[256];
+                ShownPalette(pal);
                 for (U32 y = 0; y < h; y++) {
                     for (U32 x = 0; x < w; x++) {
                         const U8 idx = logMem[y * w + x];
@@ -1476,10 +1500,7 @@ static U32 *ComposedGpuFrame(void) {
                                matching PresentFrame's paletteLUT[0] alpha 0. */
                             composed[y * w + x] = presented[y * w + x];
                         } else {
-                            composed[y * w + x] =
-                                ((U32)pal[idx * 3 + 0] << 16) |
-                                ((U32)pal[idx * 3 + 1] << 8) |
-                                (U32)pal[idx * 3 + 2];
+                            composed[y * w + x] = pal[idx];
                         }
                     }
                 }
