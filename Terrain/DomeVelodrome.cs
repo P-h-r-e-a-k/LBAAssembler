@@ -884,6 +884,9 @@ internal static class DomeVelodrome
         // (the cells the floor's and the boards' own pixels are in: none may be over the cell Twinsen stands in -- GRILLE.CPP
         // WorldColBrickFull takes any brick within his height for a wall over his head)
         var groundCells = new HashSet<int>();
+        // (and the cells with anything else in them -- a rail, a post, a wall, a seat, the rim's face: the rest are floor and boards facing up
+        // only, never in front of anyone on them -- VELOMAP.TXT "under", RACEMOD.CPP RaceMod_BrickUnder)
+        var standing = new HashSet<int>();
         var cols = Collision();
         const int W = Picture.W, H = Picture.H;
         for (var row = 0; row < H; row++)
@@ -913,6 +916,7 @@ internal static class DomeVelodrome
                     if (!images.TryGetValue(key, out var image)) images[key] = image = new GphImage(48, 38);
                     image.Set(i, j, pic.Index[row * W + col]);
                     if ((pic.Mat[row * W + col] & GroundPixel) != 0) groundCells.Add(key);
+                    else standing.Add(key);
                     break;
                 }
             }
@@ -1085,7 +1089,20 @@ internal static class DomeVelodrome
         scenes.SetStored(Scene + 1, roomRecord);
         scenes.SetStored(Outside + 1, outsideRecord);
         new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
+        // (the cells of nothing but floor and boards facing up, column by column, a bit a layer: never drawn again over a rider or anyone else --
+        // the banking's higher cells come "in front" of a rider below them in the cells' order, and the game drew them over his wheels and his
+        // legs: the user, 2026-11-26, "Twinsen shouldn't be passing through the track"; "there's also tiles being drawn over some of the
+        // other racers and not just Twinsen too")
+        var under = new Dictionary<(int X, int Z), uint>();
+        foreach (var key in images.Keys)
+        {
+            if (standing.Contains(key)) continue;
+            int ux = key & 63, uy = key >> 6 & 31, uz = key >> 11;
+            under[(ux, uz)] = (under.TryGetValue((ux, uz), out var m) ? m : 0u) | 1u << uy;
+        }
+        foreach (var ((ux, uz), m) in under.OrderBy(u => u.Key.Z).ThenBy(u => u.Key.X)) veloMap.Add($"under {ux} {uz} {m}");
         File.WriteAllLines(Path.Combine(gameDirectory, "VELOMAP.TXT"), veloMap);
+        log.Add($"the velodrome: {under.Values.Sum(m => System.Numerics.BitOperations.PopCount(m))} cells of floor and boards only, never drawn over anyone, of {images.Count}");
         log.Add($"The Dome of the Slate's velodrome (scene {Scene}): rendered in {renderTime:0.0} s, {images.Count} cells drawn, {newBricks} bricks, {raised} columns raised to their boards, " +
                 $"{entries.Count} places in {blocks} blocks (library {libraryNumber}), grid {gridNumber} ({grid.Length} bytes); the way in from scene {Outside} " +
                 $"arrives at ({ArrivalInfo.X}, {ArrivalInfo.Y}, {ArrivalInfo.Z}) less where in its door he was");

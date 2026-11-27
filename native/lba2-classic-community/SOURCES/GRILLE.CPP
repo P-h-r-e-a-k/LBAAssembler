@@ -778,6 +778,11 @@ void InitBufferCube() {
    GpuRenderer_IsSceneInterior (Cls leaves Log empty there, and mirroring an
    empty Log would paste zeros over the actor). */
 static void ReBlitOverActorBrick(const T_COLONB *ptrlbc) {
+    // (not a brick of nothing but floor or boards facing up -- the race-track mode's velodrome: such a brick is never in front of anyone
+    // standing or riding on it, whatever the cells' order says -- RACEMOD.CPP RaceMod_BrickUnder)
+    extern S32 RaceMod_BrickUnder(S32 xm, S32 ym, S32 zm);
+    if (RaceMod_BrickUnder(ptrlbc->Xm, ptrlbc->Ym, ptrlbc->Zm))
+        return;
     CopyMask(ptrlbc->Brick, ptrlbc->Xs, ptrlbc->Ys, BufferMaskBrick, Screen);
 }
 

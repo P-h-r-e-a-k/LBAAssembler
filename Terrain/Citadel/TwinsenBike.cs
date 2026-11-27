@@ -68,6 +68,9 @@ internal static class TwinsenBike
         // the bodies: each of his a bike's, once (his generic numbers share bodies)
         var bodyBytes = File.ReadAllBytes(bodyPath);
         var made = new Dictionary<int, int>();
+        // (the bike's reach from his middle -- its front tyre, its back one, a side -- the most of any of his bodies: the velodrome keeps all of
+        // it inside the fence, RACEMOD.CPP VeloBike -- the user, 2026-11-26, a wheel through the rail)
+        float front = 0, rear = 0, side = 0;
         foreach (var (_, index) in hero.Bodies)
         {
             if (made.ContainsKey(index)) continue;
@@ -75,6 +78,8 @@ internal static class TwinsenBike
             try { his = Body.Read(bodies.Read(index), 2); } catch (Exception bad) when (bad is InvalidDataException or IndexOutOfRangeException) { continue; }
             if (!Fits(his)) continue;
             var riding = OnBike(his, pose);
+            var (f, b, w) = Reach(his);
+            front = Math.Max(front, f); rear = Math.Max(rear, b); side = Math.Max(side, w);
             made[index] = CountOf(bodyBytes);
             bodyBytes = HqrWriter.AppendEntry(bodyBytes, HqrWriter.StoredEntry(riding.Write()));
         }
@@ -104,7 +109,8 @@ internal static class TwinsenBike
         records.Add(255);
         table = AppendEntity(table, records.ToArray());
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        File.WriteAllText(Path.Combine(gameDirectory, FileName), $"# Twinsen on a bike: his riding behaviour's entity (LBA Assembler, Citadel/TwinsenBike.cs)\nentity {e}\n");
+        File.WriteAllText(Path.Combine(gameDirectory, FileName), $"# Twinsen on a bike: his riding behaviour's entity (LBA Assembler, Citadel/TwinsenBike.cs)\nentity {e}\n" +
+            $"# the bike's reach from his middle: its front tyre, its back tyre, a side\nreach {(int)Math.Ceiling(front)} {(int)Math.Ceiling(rear)} {(int)Math.Ceiling(side)}\n");
         log.Add($"Twinsen's bike: entity {e} (his own entity's records), {made.Count} bodies of his on it ({string.Join(", ", made.Select(m => $"{m.Key} as {m.Value}"))}), animations {string.Join(", ", anims.Select((a, k) => $"{a.Item1} {animIndex[k]}"))}");
         return log;
     }
@@ -234,6 +240,16 @@ internal static class TwinsenBike
         anim.Frames.Add(new AnimFrame(500, 0, 0, 0, Bones(p, 0)));
         anim.Frames.Add(new AnimFrame(500, 0, 0, 0, Bones(p, 0)));
         return anim;
+    }
+
+    // The bike's reach from his middle (the body's origin): ahead to its front tyre's front, behind to its back tyre's back, and to a side (the
+    // bars, his hands on them) -- as BuildBike places them
+    private static (float Front, float Rear, float Side) Reach(Body his)
+    {
+        var own = Pose.Of(his);
+        float r = 0.5f * own.Leg;
+        var hand = HandAt(own);
+        return (own.Hip.Z + 1.12f * own.Leg + r, -(own.Hip.Z - 0.8f * own.Leg - r), Math.Max(Math.Abs(hand.X), 0.2f * own.Leg));
     }
 
     // ---- the body: his, the bike's frame and cranks added as bones of their own -------------------------------------------------------
