@@ -30,6 +30,8 @@ internal static partial class HotelProps
     // (the lift car's own: its doors seen from inside, shut and open; its back wall's lacquer, mirror and rail -- 2026-11-23, the user: "Let's add
     // an actual scene for the lift that Twinsen can walk inside": OtringalHotel.LiftCar)
     public const int LiftInside = 249, LiftInsideOpen = 250, LiftCarBack = 251;
+    // (the reception's counter, traditional, along z facing +x, its keys' cabinet behind the clerk -- 2026-11-27: HotelProps.Reception.cs)
+    public const int ReceptionCounter = 196;
 
     // (the palette's ramps, lit: a face's light takes it up to nine steps along its ramp -- each base low enough to stay in it)
     private const int Mahogany = 1 * 16 + 3, MahoganyDark = 1 * 16 + 1, Walnut = 1 * 16 + 5, Brass = 6 * 16 + 6, BrassDark = 6 * 16 + 3,
@@ -59,6 +61,8 @@ internal static partial class HotelProps
         (LiftFront, "the hotel's lift, its doors shut", h => BuildLift(h, false)),
         (LiftOpen, "the hotel's lift, its doors open", h => BuildLift(h, true)),
         (ReceptionDesk, "the hotel's reception desk", BuildReceptionDesk),
+        (ReceptionCounter, "the hotel's reception counter", BuildReceptionCounter),
+        (ReceptionKeys, "the reception's keys", BuildReceptionKeys), (ReceptionSign, "the reception's sign", BuildReceptionSign),
         (CorridorDoors, "the hotel's corridor, its sconces and prints", BuildCorridorDoors),
         (RoomDoor, "room 101's door", h => BuildRoomDoor(h, 101)), (RoomDoor + 1, "room 102's door", h => BuildRoomDoor(h, 102)),
         (RoomDoor + 2, "room 103's door", h => BuildRoomDoor(h, 103)), (RoomDoor + 3, "room 104's door", h => BuildRoomDoor(h, 104)),
@@ -95,6 +99,11 @@ internal static partial class HotelProps
         LiftCarBack => new short[] { -1000, 0, 0, 1000, 2600, 60 },
         // (the counter only: the board of keys behind it is drawn, the clerk stands between them -- its whole extent's box pushed him out)
         ReceptionDesk => new short[] { -1320, 0, -440, 1320, 1150, 440 },
+        // (the counter only, in the room's axes as placed at beta 0: along z, its depth along x -- the clerk stands behind it, by its cabinet)
+        ReceptionCounter => new short[] { -(short)CounterDeep, 0, -(short)CounterLong, (short)CounterDeep, 860, (short)CounterLong },
+        // (the cabinet behind the clerk, from the counter's middle: its front 980 back, 220 deep; the sign over it, walked under)
+        ReceptionKeys => new short[] { -1220, 0, -1000, -960, 2700, 1000 },
+        ReceptionSign => new short[] { -1, 0, -1, 1, 1, 1 },
         CorridorDoors => new short[] { 0, 0, 0, (short)(DoorPitch * (Rooms - 1)), 2200, 120 },
         >= RoomDoor and < RoomDoor + Rooms => new short[] { -800, 0, 0, 800, 2600, 120 },
         SuiteDoors => new short[] { -1300, 0, 0, 1300, 3000, 160 },
@@ -137,6 +146,8 @@ internal static partial class HotelProps
         ['U'] = new[] { "#.#", "#.#", "#.#", "#.#", "###" }, ['T'] = new[] { "###", ".#.", ".#.", ".#.", ".#." },
         ['H'] = new[] { "#.#", "#.#", "###", "#.#", "#.#" }, ['O'] = new[] { "###", "#.#", "#.#", "#.#", "###" },
         [' '] = new[] { ".", ".", ".", ".", "." },
+        // (the reception's RECEPTION, 2026-11-27)
+        ['C'] = new[] { "###", "#..", "#..", "#..", "###" }, ['N'] = new[] { "#..#", "##.#", "#.##", "#..#", "#..#" },
     };
     private static int Columns(string text) => text.Sum(ch => Font[ch][0].Length + 1) - 1;
     internal static int TextColumns(string text) => Columns(text);

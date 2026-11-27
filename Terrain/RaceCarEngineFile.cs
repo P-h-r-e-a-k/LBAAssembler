@@ -804,6 +804,9 @@ internal static class RaceCarEngineFile
                 text.Append($"pool_board={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.BoardX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.BoardTipX} {Citadel.CitadelProps.BoardZ} {Citadel.CitadelProps.PoolDeck + Citadel.CitadelProps.BoardHigh + 60} {Citadel.CitadelProps.BoardLandX} {Citadel.CitadelProps.BoardZ}\n");
                 text.Append($"pool_ladder={RaceTrackStory.HotelSceneNumber} {Citadel.CitadelProps.LadderFootX} {Citadel.CitadelProps.LadderZ} {Citadel.CitadelProps.LadderFace}\n");
                 text.Append($"pool_splash={RaceTrackStory.PoolSplash}\npool_anims={PoolSwim.Swim} {PoolSwim.Tread} {PoolSwim.Dive} {PoolSwim.Flip}\n");
+                // (the water for guests and day-pass holders: RaceTrackStory.OtringalNight's pass, the reception's)
+                var (ox, oy, oz, ob) = RaceTrackStory.PoolOutAt;
+                text.Append($"pool_pass={RaceTrackStory.PoolPass} 1 {ox} {oy} {oz} {ob} {RaceTrackStory.PoolPassText}\npool_refused={RaceTrackStory.PoolRefused}\n");
                 // (the achievements: RaceTrackStory.Achievements -- a game variable at a value, or a scene entered)
                 // (the Tavern's darts: RaceTrackStory.Darts)
                 foreach (var line in RaceTrackStory.DartsLines()) text.Append(line + "\n");

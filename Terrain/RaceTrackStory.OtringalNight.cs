@@ -38,7 +38,21 @@ internal static partial class RaceTrackStory
     // the lobby: the clerk (the doorman's uniform: scene 81's actor 8) by the lift, beside its doors, facing the room -- the reception desk
     // that stood facing the street's door is gone, and the sofa at the alcove's edge (the user, 2026-11-23: the desk "is ugly and seems to
     // have no point. It also stops Twinsen getting inside to speak to the race marshall"; the sofa "near the pool needs removing")
-    private static readonly (int X, int Z) ClerkAt = (OtringalHotel.LobbyLift.X + 650, OtringalHotel.LobbyLift.Z + 1700);
+    // (since 2026-11-27 behind a counter again -- the user, 2026-11-26: "we need to change the imperial hotel so the receptionist is behind
+    // the counter. Let's remodel the counter to a more traditional look complete with keys and pigeon holes": HotelProps.ReceptionCounter,
+    // its long side along z facing the room (+x), in front of him, its north end clear of the lift's doors; its keys' cabinet behind him.
+    // He a little forward from where he stood, between the two)
+    private static readonly (int X, int Z) ClerkAt = (OtringalHotel.LobbyLift.X + 824, OtringalHotel.LobbyLift.Z + 1700);
+    private static readonly (int X, int Z) CounterAt = (OtringalHotel.LobbyLift.X + 1474, OtringalHotel.LobbyLift.Z + 1700);
+    // the pool's day pass (game variable 300: 1 bought, or a room taken -- a guest swims) and its price; the engine keeps whoever hasn't one
+    // out of the water (RACEMOD.CPP pool_pass=: back on the deck at the steps' foot) -- the user, 2026-11-26, "allow Twinsen to be able to
+    // pay 50 zilitos for a day pass to the hotel to be able to use the swimming pool"
+    public const int PoolPass = 300, PoolPassPrice = 50;
+    internal static readonly (int X, int Y, int Z, int Beta) PoolOutAt = (16900, 2048, 8400, 0);
+    internal const string PoolPassText = "The pool is for guests -- a day pass is 50 zlitos at the reception.";
+    // (the scene variable the engine sets as it puts him out -- pool_refused= -- and the pool's attendant, by the steps' foot, saying why)
+    internal const int PoolRefused = 76;
+    private static readonly (int X, int Z, int Beta) AttendantAt = (17650, 8650, 3072);
     private const int HotelDoorman = 8, HotelGuardFar = 11, HotelBellboy = 4;
     // the hero's labels: to the lift's doors and into them; out of them on arriving; in bed, the night, up again; the lift car's walk out
     private const int ToLift = 220, AtLift = 222, FromLift = 224, OutOfLift = 225, Sleeping = 230, NightOver = 231, GettingUp = 232, RoomUp = 233,
@@ -77,6 +91,7 @@ internal static partial class RaceTrackStory
                     {{
                         give_gold_pieces({price});
                         set_var_game({QNight}, {night});
+                        set_var_game({PoolPass}, 1);
                         message({say(OtringalLine.ReceptionKey)});
                     }}
                 }}";
@@ -103,7 +118,76 @@ internal static partial class RaceTrackStory
             else
             {{
                 message({say(OtringalLine.ReceptionDay)});
+            }}
+            if (0 == var_game({PoolPass}))
+            {{
+                add_choice({say(OtringalLine.PassYes)});
+                add_choice({say(OtringalLine.PassNo)});
+                ask_choice({say(OtringalLine.PassOffer)});
+                if ({say(OtringalLine.PassYes)} == choice())
+                {{
+                    if ({PoolPassPrice} > nb_gold_pieces())
+                    {{
+                        message({say(OtringalLine.ReceptionShort)});
+                    }}
+                    else
+                    {{
+                        give_gold_pieces({PoolPassPrice});
+                        set_var_game({PoolPass}, 1);
+                        message({say(OtringalLine.PassSold)});
+                    }}
+                }}
+            }}
+            else
+            {{
+                message({say(OtringalLine.PassHeld)});
             }}")));
+            // (the pool's attendant at the steps' foot on the deck -- the hotel's bellboy's uniform -- who has put a swimmer without a pass
+            // out of the water says why; talked to, the pass or the swim)
+            if (Copy(b.Originals, HotelScene, HotelBellboy) is { } attendant)
+            {
+                (attendant.X, attendant.Y, attendant.Z, attendant.Beta) = (AttendantAt.X, Citadel.CitadelProps.PoolDeck, AttendantAt.Z, AttendantAt.Beta);
+                attendant.Move = 0;
+                adds.Add(IslandBeatsA.Add(model, attendant, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if (1 == var_cube({PoolRefused}))
+    {{
+        set_var_cube({PoolRefused}, 0);
+        message({say(OtringalLine.AttendantRefuse)});
+    }}
+    swif (1 == action())
+    {{
+        if (1500 > distance(0) && {Driving} != comportement_hero())
+        {{
+            if (0 == var_game({PoolPass}))
+            {{
+                message({say(OtringalLine.AttendantRefuse)});
+            }}
+            else
+            {{
+                message({say(OtringalLine.AttendantEnjoy)});
+            }}
+        }}
+    }}
+}}
+"));
+            }
+            // (the counter in front of him, the keys' cabinet behind him, the sign over it: three bodies round the counter's middle, each its
+            // own box -- HotelProps.Reception)
+            var counter = Citadel.CitadelProps.Actor(HotelProps.ReceptionCounter, CounterAt.X, OtringalHotel.LobbyFloorY, CounterAt.Z, 1024);
+            if (HotelProps.Entity(b.GameDirectory) is var counterEntity && counterEntity >= 0) counter.Entity = counterEntity;
+            adds.Add(IslandBeatsA.Add(model, counter, "void comportement_0()\n{\n}\n"));
+            foreach (var piece in new[] { HotelProps.ReceptionKeys, HotelProps.ReceptionSign })
+            {
+                var part = Citadel.CitadelProps.Actor(piece, CounterAt.X, OtringalHotel.LobbyFloorY, CounterAt.Z, 1024);
+                part.Entity = counter.Entity;
+                adds.Add(IslandBeatsA.Add(model, part, "void comportement_0()\n{\n}\n"));
+            }
             // the lift: Action before it with a room booked tonight -- its doors open, Twinsen walks into them, into the lift car (its zone on,
             // Twinsen in it: OtringalHotel.LiftCar, the ride there); back from it, out of the doors and they shut behind him
             var front = SceneOps.AddTrackPoint(model, new SceneTrackPoint(OtringalHotel.LobbyLift.X + OtringalHotel.LiftFrontOut, OtringalHotel.LobbyFloorY, OtringalHotel.LobbyLift.Z));

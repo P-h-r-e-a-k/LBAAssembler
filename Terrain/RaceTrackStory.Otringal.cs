@@ -57,6 +57,10 @@ internal static partial class RaceTrackStory
         SingerOnStage,
         // (the hotel's guards in chapter 5: a racer is a guest -- RaceTrackStory.OtringalNight, 2026-11-24)
         GuardGuest,
+        // (the reception's day pass for the pool -- RaceTrackStory.OtringalNight, 2026-11-27)
+        PassOffer, PassYes, PassNo, PassSold, PassHeld,
+        // (the pool's attendant, by the steps' foot: who hasn't a pass is put out of the water by him)
+        AttendantRefuse, AttendantEnjoy,
     }
     private static readonly string[][] OtringalLines =
     {
@@ -776,6 +780,69 @@ internal static partial class RaceTrackStory
             "Bienvenido al Hotel Imperial, señor. Para una habitación, la recepción está junto al ascensor.",
             "Benvenuto all'Hotel Imperiale, signore. Per una camera, la reception è vicino all'ascensore.",
             "Bem-vindo ao Hotel Imperial, senhor. Para um quarto, a receção é junto ao elevador.",
+        },
+        new[]
+        {
+            "The pool is for our guests, sir -- but a day pass is fifty zlitos. Shall I make you one out?",
+            "La piscine est réservée à nos clients, monsieur -- mais un pass journée coûte cinquante zlitos. Je vous en prépare un ?",
+            "Das Schwimmbad ist für unsere Gäste, der Herr -- aber ein Tagespass kostet fünfzig Zlitos. Soll ich Ihnen einen ausstellen?",
+            "La piscina es para nuestros huéspedes, señor -- pero un pase de día cuesta cincuenta zlitos. ¿Le preparo uno?",
+            "La piscina è per i nostri ospiti, signore -- ma un pass giornaliero costa cinquanta zlitos. Gliene preparo uno?",
+            "A piscina é para os nossos hóspedes, senhor -- mas um passe de dia custa cinquenta zlitos. Faço-lhe um?",
+        },
+        new[]
+        {
+            "A day pass for the pool, please.",
+            "Un pass journée pour la piscine, s'il vous plaît.",
+            "Einen Tagespass für das Schwimmbad, bitte.",
+            "Un pase de día para la piscina, por favor.",
+            "Un pass giornaliero per la piscina, per favore.",
+            "Um passe de dia para a piscina, por favor.",
+        },
+        new[]
+        {
+            "Not today, thanks.",
+            "Pas aujourd'hui, merci.",
+            "Heute nicht, danke.",
+            "Hoy no, gracias.",
+            "Non oggi, grazie.",
+            "Hoje não, obrigado.",
+        },
+        new[]
+        {
+            "Your pass, sir. The pool is down the steps -- towels by the loungers. Enjoy the water!",
+            "Votre pass, monsieur. La piscine est en bas des marches -- les serviettes près des transats. Bonne baignade !",
+            "Ihr Pass, der Herr. Das Schwimmbad liegt die Stufen hinunter -- Handtücher bei den Liegen. Viel Vergnügen im Wasser!",
+            "Su pase, señor. La piscina está bajando los escalones -- toallas junto a las tumbonas. ¡Disfrute del agua!",
+            "Il suo pass, signore. La piscina è giù per i gradini -- asciugamani vicino ai lettini. Buon bagno!",
+            "O seu passe, senhor. A piscina é descendo os degraus -- toalhas junto às espreguiçadeiras. Bom banho!",
+        },
+        new[]
+        {
+            "You've the run of the pool, sir -- the water's lovely today.",
+            "La piscine est à vous, monsieur -- l'eau est délicieuse aujourd'hui.",
+            "Das Schwimmbad steht Ihnen offen, der Herr -- das Wasser ist heute herrlich.",
+            "La piscina es toda suya, señor -- el agua está estupenda hoy.",
+            "La piscina è a sua disposizione, signore -- l'acqua oggi è splendida.",
+            "A piscina é toda sua, senhor -- a água hoje está ótima.",
+        },
+        new[]
+        {
+            "Out you come, sir! The pool's for guests -- day passes are fifty zlitos at the reception.",
+            "On sort de l'eau, monsieur ! La piscine est réservée aux clients -- les pass journée sont à cinquante zlitos à la réception.",
+            "Raus aus dem Wasser, der Herr! Das Schwimmbad ist für Gäste -- Tagespässe gibt es für fünfzig Zlitos an der Rezeption.",
+            "¡Fuera del agua, señor! La piscina es para huéspedes -- los pases de día cuestan cincuenta zlitos en la recepción.",
+            "Fuori dall'acqua, signore! La piscina è per gli ospiti -- i pass giornalieri costano cinquanta zlitos alla reception.",
+            "Para fora, senhor! A piscina é para hóspedes -- os passes de dia custam cinquenta zlitos na receção.",
+        },
+        new[]
+        {
+            "Enjoy your swim, sir! Mind the deep end.",
+            "Bonne baignade, monsieur ! Attention au grand bain.",
+            "Viel Spaß beim Schwimmen, der Herr! Vorsicht am tiefen Ende.",
+            "¡Disfrute del baño, señor! Cuidado con la parte honda.",
+            "Buona nuotata, signore! Attento alla parte profonda.",
+            "Bom banho, senhor! Cuidado com a parte funda.",
         },
     };
 

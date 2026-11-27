@@ -1013,6 +1013,11 @@ static U32 s_poolInput = 0;
 // (s_splashDue: Lyra scores the dive, and a score in mid-air came too soon)
 static S32 s_poolLadder[4], s_ladderUntil = 0, s_splashDue = 0, s_diveGlide = 0;
 static int s_hasPoolLadder = 0, s_boardSpaceWas = 0;
+// (pool_pass=: PoolRefused)
+static int s_poolPassVar = -1, s_poolPassLeast = 1;
+static int s_poolRefusedCube = -1;   // (pool_refused=<scene variable>: set to 1 as he's put out -- the pool's attendant says why)
+static S32 s_poolOut[4];
+static char s_poolPassText[160];
 static int PoolBoardDive(U32 input);
 // bowling_game=<bowler 0-3>: the alley's game (RACEGAME.CPP's Bowling page; BowlFrame): the player is one of the four bowlers, not Twinsen
 // replay_set=<var> <value> (any number), replay_gold=<n>: a replayed egg's variables, set once as the first scene loads (RaceMod_FootArrive)
@@ -5207,6 +5212,14 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "pool_board")) s_hasBoard = sscanf(v, "%d %d %d %d %d %d %d %d", &s_board[0], &s_board[1], &s_board[2], &s_board[3], &s_board[4], &s_board[5], &s_board[6], &s_board[7]) == 8;
         else if (!strcmp(key, "pool_anims")) sscanf(v, "%d %d %d %d", &s_poolSwimAnim, &s_poolTreadAnim, &s_poolDiveAnim, &s_poolFlipAnim);
         else if (!strcmp(key, "pool_splash")) s_poolSplash = atoi(v);
+        else if (!strcmp(key, "pool_refused")) s_poolRefusedCube = atoi(v);
+        else if (!strcmp(key, "pool_pass")) {
+            int n = 0;
+            s_poolPassText[0] = 0;
+            if (sscanf(v, "%d %d %d %d %d %d %n", &s_poolPassVar, &s_poolPassLeast, &s_poolOut[0], &s_poolOut[1], &s_poolOut[2], &s_poolOut[3], &n) >= 6) {
+                snprintf(s_poolPassText, sizeof(s_poolPassText), "%s", v + n);
+            } else s_poolPassVar = -1;
+        }
         else if (!strcmp(key, "pool_ladder")) s_hasPoolLadder = sscanf(v, "%d %d %d %d", &s_poolLadder[0], &s_poolLadder[1], &s_poolLadder[2], &s_poolLadder[3]) == 4;
         else if (!strcmp(key, "bike")) {
             int n = 0;
@@ -16220,7 +16233,7 @@ void RaceMod_LoadFile(const char *path) {
     s_compEntity = -1; s_compCube = -2;   // (companion=: the story file's too)
     s_twoVar = -1; s_dblEntity = -1; s_dblMark = 0; s_compInMark = 0;   // (two_players=: the story file's too)
     s_nbPlaques = 0; s_plaqueOn = -1;   // (plaque=: the story file's too)
-    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_nbSlate = 0; s_bikeEntity = -1; s_bikeVar = -1; s_nbBikeScenes = 0; s_bikeWas = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
+    s_nbAchs = 0; s_cardLastVar = -1; s_cardSeen = -1; s_nbSlate = 0; s_bikeEntity = -1; s_bikeVar = -1; s_nbBikeScenes = 0; s_bikeWas = 0; s_dtScene = -1; s_nbDtBoards = 0; s_nbFerries = 0; s_ferryWasSet = 0; s_dtAskVar = -1; s_dtPracticeEntity = -1; s_dtPracticeActor = -1; s_dtHasFace = 0; s_dtStandCube = -1; s_nbDtFoe = 0; s_dtHasZoe = 0; s_dtOn = 0; s_bowlGame = -1; s_bowlInit = 0; s_nbReplay = 0; s_dsVar = -1; s_dsStep = -1; s_replayGold = -1; s_replayPending = 1; s_replayMs = 0; s_replayOver = 0; s_replayEndVar = -1; s_replayEndDelay = 0; s_replayEndDue = 0; s_hasReplayAt = 0; s_nbPools = 0; s_hasBoard = 0; s_poolSwimAnim = s_poolTreadAnim = s_poolDiveAnim = s_poolFlipAnim = -1; s_poolSplash = -1; s_hasPoolLadder = 0; s_poolPassVar = -1; s_poolRefusedCube = -1;   // (pool=, pool_board=, pool_anims=, pool_splash=, pool_ladder=: the story file's too)
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -23621,6 +23634,24 @@ static int PoolBoardDive(U32 input) {
 static int PoolClimbing(const T_OBJET *hero) {
     return FlagClimbing || hero->GenAnim == GEN_ANIM_ECHELLE || hero->GenAnim == GEN_ANIM_MONTE || hero->GenAnim == GEN_ANIM_DESCEND || hero->GenAnim == GEN_ANIM_ECHDESC;
 }
+// pool_pass=<var> <least> <x> <y> <z> <beta> <text>: the water only while the game variable is that much or more -- the Imperial Hotel's day
+// pass, or a room (the user, 2026-11-26: "allow Twinsen to be able to pay 50 zilitos for a day pass to the hotel to be able to use the
+// swimming pool"); without it, into the water by any way -- the ladder, a dive, off the side -- he is back on the deck at that place, told
+static int PoolRefused(T_OBJET *hero, S32 now) {
+    if (s_poolPassVar < 0 || s_poolPassVar >= MAX_VARS_GAME || ListVarGame[s_poolPassVar] >= s_poolPassLeast) return 0;
+    s_swimming = 0; s_poolDive = 0; s_splashDue = 0;
+    FlagClimbing = FALSE;
+    hero->WorkFlags &= ~FALLING;
+    hero->Flags &= ~NO_SHADOW;
+    hero->Obj.X = s_poolOut[0]; hero->Obj.Y = s_poolOut[1]; hero->Obj.Z = s_poolOut[2]; hero->Obj.Beta = s_poolOut[3] & 4095;
+    ClearRealAngle(hero);
+    InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+    if (s_poolPassText[0]) { Message(s_poolPassText); s_messageUntil = now + 4500; }
+    if (s_poolRefusedCube >= 0 && s_poolRefusedCube < MAX_VARS_CUBE) ListVarCube[s_poolRefusedCube] = 1;
+    Log_Info("[racemod] pool_pass: variable %d is %d, under %d -- out of the water, back on the deck at (%d,%d,%d)", s_poolPassVar,
+             (int)ListVarGame[s_poolPassVar], s_poolPassLeast, (int)s_poolOut[0], (int)s_poolOut[1], (int)s_poolOut[2]);
+    return 1;
+}
 static void PoolFrame(S32 now) {
     if (!s_nbPools || CubeMode != CUBE_INTERIEUR || Comportement == C_BUGGY || NewCube != -1) { s_swimming = s_poolDive = 0; s_splashDue = 0; return; }
     T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -23644,6 +23675,7 @@ static void PoolFrame(S32 now) {
             hero->Obj.Y = (S32)(s_diveFromY + (floatY - s_diveFromY) * u + 700.0 * 4 * u * (1 - u));
             PoolAnim(hero, s_diveBack ? (s_poolFlipAnim >= 0 ? s_poolFlipAnim : GEN_ANIM_SAUTE) : (s_poolDiveAnim >= 0 ? s_poolDiveAnim : GEN_ANIM_SAUTE));
         } else {
+            if (PoolRefused(hero, now)) return;
             s_poolDive = 0; s_swimming = 1;
             s_poolX = s_diveLandX; s_poolZ = s_diveLandZ; s_poolY = hero->Obj.Y;
             s_splashDue = now + 1000;
@@ -23660,6 +23692,7 @@ static void PoolFrame(S32 now) {
         // (down the ladder: in the water he swims; up it, or just off it, he doesn't)
         if (PoolClimbing(hero) || now < s_ladderUntil) {
             if (here && FlagClimbing == CLIMBING_DOWN && hero->Obj.Y <= floatY - 150) {
+                if (PoolRefused(hero, now)) return;
                 FlagClimbing = FALSE;
                 s_swimming = 1;
                 s_poolX = hero->Obj.X; s_poolZ = hero->Obj.Z; s_poolY = hero->Obj.Y;
@@ -23669,6 +23702,7 @@ static void PoolFrame(S32 now) {
             return;
         }
         if (here && hero->Obj.Y <= here->Surface - 200 && hero->Obj.Y >= here->Floor - 100) {
+            if (PoolRefused(hero, now)) return;
             s_swimming = 1;
             s_poolX = hero->Obj.X; s_poolZ = hero->Obj.Z; s_poolY = hero->Obj.Y;
             // (in off the side, a jump or a fall: scored as a dive too)
