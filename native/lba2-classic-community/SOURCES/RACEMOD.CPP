@@ -1432,6 +1432,7 @@ static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
 // each looking like the item itself -- the user: "Let's reduce the time it takes to select a powerup. Currently when selecting a powerup
 // the last few frames show for too long, which can make a user think they've got a power up whilst it's still rotating")
 #define RACE_ITEM_ROLL_MS 900
+#define RACE_ITEM_EARLY_MS 500             // a press this long before the roulette stops is kept, the item used as it stops (PowerUps)
 #define RACE_ITEM_ROLL_STEPS 14            // (an item every 48 ms at first, every 96 ms at the end)
 #define RACE_ITEM_ROLL_SLOW 0.5            // the rate it ends at, of the rate it starts at
 #define RACE_ITEM_ROLL_SIZE 0.8            // the items going by drawn this much of their size, ...
@@ -1444,6 +1445,10 @@ static S32 s_itemAt[RACE_ITEM_SLOTS];
 static S32 s_takeAt = 0;                   // when he last took a mushroom's item (a car takes one from a row: the others beside it give way)
 static int s_useWas = 0;
 static S32 s_usedAt = 0;                    // when Twinsen last used an item (the press log: PowerUps)
+static S32 s_boxSince = 0;                  // when the item box last took an item (or a new stop time), ...
+static S32 s_useDownAt = 0;                 // ... the item key last pressed, ...
+static int s_pressKept = 0;                 // ... a press in the roulette's last RACE_ITEM_EARLY_MS kept for its stop, ...
+static S32 s_stopSeen = 0;                  // ... and the stop last handled (its s_itemAt)
 static S32 s_fullSaidAt = 0;               // (when the car was last at a mushroom left standing: the log says so again after 5 s away)
 static int s_useHeld = 0;                  // the behaviour key (Ctrl, the pad's left shoulder) down this frame: RaceMod_FilterInput
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
@@ -14436,8 +14441,9 @@ static void PowerUps(S32 now, int driving) {
     // (its sound as the item box's roulette stops on an item)
     PickupSoundFrame(now);
     // Ctrl -- the behaviour key, which does nothing else in the car (RaceMod_FilterInput) -- uses the item in the box once its roulette
-    // has stopped (a press while it turns does nothing, nor does holding the key on past its stop: a press from then on, the box ringed in
-    // gold); the test pilot uses each item a moment after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user,
+    // has stopped (the box ringed in gold); a press in the roulette's last RACE_ITEM_EARLY_MS, or the key pressed while it turns and held
+    // through its stop, uses it as it stops; an earlier press does nothing, nor does a key held since before the item came. The test pilot
+    // uses each item a moment after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user,
     // "let's map it to Ctrl instead as this shouldn't be used when driving anyway". No key chooses an item since 2026-10-17: there is one)
     // (the car's "Use power-up": Ctrl and Right Ctrl, a pad's LB, unless moved -- Options > Controls, INPUT_BINDINGS.CPP CarKeys)
     const int use = s_useHeld;
@@ -14461,9 +14467,40 @@ static void PowerUps(S32 now, int driving) {
         }
     if (tap) Log_Info("[racemod] item key tapped between two frames (down and up before the game looked): taken as a press");
     const int press = (use && !s_useWas) || tap;
+    // (a press a moment too early, or the key held on through the stop: the item used as the box stops -- the user's logs, 2026-11-26,
+    // had every press that "didn't release" made 9-405 ms before the roulette stopped, or the key held down through its stop; the user,
+    // 2026-11-27: "Fix the power up issue". A press in the roulette's last RACE_ITEM_EARLY_MS is kept for its stop; the key pressed while
+    // it turned and still down as it stops counts too. Only a press made since this item came into the box: the press that used the one
+    // before it -- the key still down as the second box's item moves in -- uses nothing more.)
+    static int boxWas = -2;
+    static S32 boxAtWas = 0;
+    if (s_item[RACE_BOX] != boxWas || s_itemAt[RACE_BOX] != boxAtWas) {
+        boxWas = s_item[RACE_BOX]; boxAtWas = s_itemAt[RACE_BOX];
+        s_boxSince = now; s_pressKept = 0;
+    }
+    if (press) s_useDownAt = now;
+    int kept = 0;
+    if (press && driving && s_item[RACE_BOX] >= 0 && now < s_itemAt[RACE_BOX] && s_itemAt[RACE_BOX] - now <= RACE_ITEM_EARLY_MS) {
+        s_pressKept = 1; kept = 1;
+        Log_Info("[racemod] item press %d ms before the item box stops on %s: kept, used as it stops", (int)(s_itemAt[RACE_BOX] - now),
+                 s_puName[s_item[RACE_BOX]]);
+    }
+    int atStop = 0;                         // (1 a press kept, 2 the key held through the stop)
+    if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && s_stopSeen != s_itemAt[RACE_BOX]) {
+        s_stopSeen = s_itemAt[RACE_BOX];
+        // (just stopped -- not one stopped long ago, the car left and driven again)
+        if (now - s_itemAt[RACE_BOX] < 250) {
+            if (s_pressKept) atStop = 1;
+            else if (use && s_useDownAt > s_boxSince) atStop = 2;
+        }
+        s_pressKept = 0;
+    }
     int used = 0;
-    if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && (press
+    if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && (press || atStop
             || (s_auto && s_autoDrop > 0 && now >= s_itemAt[RACE_BOX] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
+        if (atStop && !press)
+            Log_Info("[racemod] item used as the box stopped on %s: %s", s_puName[s_item[RACE_BOX]],
+                     atStop == 1 ? "a press kept from just before" : "the key pressed while it turned, held through the stop");
         const int pu = s_item[RACE_BOX];
         // (the golden Gazogem stays in the box for its time, a boost at each press; any other item is used up, and what waits in the
         // second box takes its place -- for the next press)
@@ -14474,21 +14511,21 @@ static void PowerUps(S32 now, int driving) {
     }
     // (a press that used nothing, and why -- the user, 2026-10-21: items sometimes failing when the button is pressed; a press, unlike a
     // drop, wasn't logged at all: "Twinsen uses ..." is a press that worked)
-    if (press && !used) {
+    if (press && !used && !kept) {
         const char *key = tap ? "the item key, a tap" : s_useHeld ? "the item key" : "Ctrl";
         if (!driving) Log_Info("[racemod] item press (%s) not used: not driving (Comportement %d, %s)", key, (int)Comportement, s_item[RACE_BOX] >= 0 ? s_puName[s_item[RACE_BOX]] : "box empty");
         else if (s_item[RACE_BOX] < 0) {
             if (s_usedAt) Log_Info("[racemod] item press (%s) not used: the item box is empty (the last item used %.1f s ago)", key, (now - s_usedAt) / 1000.0);
             else Log_Info("[racemod] item press (%s) not used: the item box is empty (none used yet)", key);
         }
-        else if (now < s_itemAt[RACE_BOX]) Log_Info("[racemod] item press (%s) not used: the item box still turning (%s, %d ms left) -- press again once it stops", key, s_puName[s_item[RACE_BOX]], (int)(s_itemAt[RACE_BOX] - now));
+        else if (now < s_itemAt[RACE_BOX]) Log_Info("[racemod] item press (%s) not used yet: the item box still turning (%s, %d ms left) -- used as it stops if the key is still down then, else press again", key, s_puName[s_item[RACE_BOX]], (int)(s_itemAt[RACE_BOX] - now));
         else Log_Info("[racemod] item press (%s) not used: %s (why not known)", key, s_puName[s_item[RACE_BOX]]);
     }
     // (the key held on past the roulette's stop: it needs letting go and pressing again -- said once a stop)
     static S32 heldSaid = 0;
-    if (use && s_useWas && driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && heldSaid != s_itemAt[RACE_BOX]) {
+    if (use && s_useWas && !used && driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && heldSaid != s_itemAt[RACE_BOX]) {
         heldSaid = s_itemAt[RACE_BOX];
-        Log_Info("[racemod] item key held as the item box stopped on %s: not used until it is let go and pressed again", s_puName[s_item[RACE_BOX]]);
+        Log_Info("[racemod] item key held as the item box stopped on %s, down since before the item came: not used until it is let go and pressed again", s_puName[s_item[RACE_BOX]]);
     }
     if (used) s_usedAt = now;
     s_useWas = use;
@@ -27798,7 +27835,7 @@ static void ResetTrack(void) {
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_footBody = -1; s_footChecked = 0; s_nbHooks = 0; s_nbFigures = 0; s_nbFigCubes = 0;
-    s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_boxSince = s_useDownAt = 0; s_pressKept = 0; s_stopSeen = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
