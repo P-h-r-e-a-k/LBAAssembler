@@ -253,6 +253,7 @@ internal static class Program
             "holes" => IslandHoles.Run(args),
             "groundaudit" => GroundAudit.Run(args),
             "steeplooks" => SteepLooks.Run(args),
+            "heights" => HeightGrid.Run(args),
             "waterpatches" => PolarStudy.WaterPatches(args),
             "hamalayi" => HamalayiStudy.Run(args),
             "hamalayiregion" => HamalayiStudy.Region(args),

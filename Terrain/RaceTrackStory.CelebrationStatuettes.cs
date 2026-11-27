@@ -12,8 +12,10 @@ namespace LBAAssembler.Terrain;
 // found none (2026-11-26: "I can't see them anywhere").
 //   - on the temple's book (the roof: decors 2-3 of the cube, the book's south half's top 10,660): a ladder up the temple's back -- its east
 //     wall, the door being on its west -- from the ground beside it (CelebrationProps.Ladder, the game's ladder zone, type 6);
-//   - on a block in the lava's middle, west of the causeway (CelebrationProps.Pillar): stepping slabs from the shore -- one sinking under
-//     the lava and coming up again, one sliding back and forth across the way, one sinking as the first comes up (carriers on their tracks);
+//   - on a column in the lava, west of the causeway (CelebrationProps.Pillar), high out of everyone's reach but the lift's: from the north
+//     beach a slab sinking under the lava and coming up again, one sliding back and forth, and the lift in the lava's middle -- surfacing,
+//     rising to the column's height, sinking back under (carriers on their tracks). Spaced for Twinsen's standing Sporty jump (the user,
+//     2026-11-27: "measure Twinsen's static jump distance ... then just design our lava timing puzzle around this distance");
 //   - over the lap's second and third jumps (the raised road's gaps: the lava causeway's, and the one behind the temple), in the air where
 //     the car flies -- taken driving (scene 95's road is driven outside a race: RaceCarEngineFile's _drive file).
 // Each its own game variable (StatuetteVars + k: 1 found); the seller's count (Q_STALL 2-6) goes up by one each time, once he has told of
@@ -29,11 +31,21 @@ internal static partial class RaceTrackStory
     private const int TempleBackX = 13088 + RaceTrackIsland.TempleBack, BookTop = 10660, LadderAtZ = 20600, BookStatuetteX = 11288 + RaceTrackIsland.TempleBack, BookStatuetteZ = 19700;
     // the temple's door into its inside (scene 93) and the way out of it, moved with it
     private const int TempleInside = 93;
-    // the lava's way (cube-local cells, the row z 28.5): the shore's edge at x 25; the slabs, a step apart (120: walked across as they
-    // come up or slide by -- a Sporty jump does too); the block -- the causeway's deck from x 36
-    private const double LavaRowZ = 28.5, SlabOneX = 26.13, SlabTwoX = 28.16, SlabThreeX = 30.2, BlockX = 32.66, SlideHalf = 2.2;
-    // heights: a slab's top up and sunk (under the lava's 5,700), the block's top
-    private const int SlabUp = 6000, SlabSunk = 5380, BlockTop = 6080;
+    // The lava's way, spaced for Twinsen's standing Sporty jump, measured on flat ground 2026-11-27 (E:/dump/TEMP/nov27/jump): 0.53 s
+    // crouched, then 1.04 s in the air, landing 1,919 ahead (1,826 where the last drop starts), at most 714 up (1,343 out) -- so a slab's
+    // middle 1,924 from the next's (StepHalf 512, 900 of lava between): jumped from about its middle, Twinsen lands in the next one's.
+    // The lake west of the causeway is small for that -- ten cells across, a road deck on two sides (up to 7,100 at the lap's jump lips) and
+    // the beaches on the others -- and everywhere in it is a jump from somewhere but its middle: so the lift there, out of a standing
+    // jump's reach from every shore while it is down (102 to spare), and the column for the statuette at 7,900, out of reach of every shore,
+    // deck and slab (+714 at the most) but the lift at its top, 7,500 (cube-local cells; heights):
+    //   - the first slab in the lava river's mouth by the north beach, sinking under the lava and coming up;
+    //   - the second sliding between its home -- a jump from the lift -- and 1.5 cells east, waiting at home;
+    //   - the lift in the lake's middle: surfacing to 6,000, rising to 7,500, waiting, back down and under the lava;
+    //   - the column a jump east of the lift at its top.
+    private const double StoneX = 33.5, StoneZ = 23.0, SlideHomeX = 30.35, SlideEastX = 31.85, SlideZ = 26.5, LiftX = 30.1, LiftZ = 29.9, BlockX = 33.4, BlockZ = 30.0;
+    private const int SlabUp = 6000, SlabSunk = 5380, LavaLiftTop = 7500, BlockTop = 7900;
+    // (an eruption of the lake's within this of the way moved off it -- an eruption hurts within 1,000)
+    private const int EruptionClear = 1500;
     // (taken within this of Twinsen: on foot, a statuette on a top he stands on; the car's, in the air -- distance_3d)
     private const int FootTake = 900, FlightTake = 1300, FlightOver = 450;
     // (the ladder's zone number in scene 95 -- switched: echelle)
@@ -164,13 +176,19 @@ void comportement_2()
 
             // ---- 2: the lava's block, and the slabs to it
             int Cell(double c) => (int)Math.Round(c * 512);
-            // (the lake's eruptions -- the game's, one burst after another at its points 34-44, hurting whoever is within 1,000: two of them
-            // in the slabs' lane, the one between the second and third slabs threw Twinsen off into the lava -- moved to the lake's open
-            // lava either side of the lane)
-            foreach (var (point, x, z) in new[] { (36, 13600, 18200), (37, 16400, 11900) })
-                if (point < model.TrackPoints.Count && model.TrackPoints[point] is var tp && Math.Abs(tp.Y - 5700) < 200)
-                    model.TrackPoints[point] = tp with { X = x, Z = z };
-            int rowZ = Cell(LavaRowZ);
+            // (the lake's eruptions -- the game's, one burst after another at its points 34-44, hurting whoever is within 1,000: one between
+            // the old slabs threw Twinsen off into the lava -- any near the way moved to the lake's open lava away from it)
+            var way = new[] { (StoneX, StoneZ), (SlideHomeX, SlideZ), (SlideEastX, SlideZ), (LiftX, LiftZ), (BlockX, BlockZ) }.Select(c => (X: Cell(c.Item1), Z: Cell(c.Item2))).ToArray();
+            bool NearWay(int x, int z) => way.Any(w => Math.Sqrt((double)(w.X - x) * (w.X - x) + (double)(w.Z - z) * (w.Z - z)) < EruptionClear);
+            var open = new Queue<(int X, int Z)>(new[] { (13600, 18200), (14336, 18688), (13312, 15300), (20700, 17400), (21000, 15600), (14600, 12500) }.Where(o => !NearWay(o.Item1, o.Item2)));
+            var taken = new HashSet<(int, int)>();
+            for (var point = 34; point <= 44 && point < model.TrackPoints.Count; point++)
+                if (model.TrackPoints[point] is var tp && Math.Abs(tp.Y - 5700) < 200 && (NearWay(tp.X, tp.Z) || point is 36 or 37) && open.Count > 0)
+                {
+                    var to = open.Dequeue();
+                    model.TrackPoints[point] = tp with { X = to.X, Z = to.Z };
+                    log.Add($"the lake's eruption at point {point}: from ({tp.X}, {tp.Z}) to ({to.X}, {to.Z}), off the way to the statuette");
+                }
             int Point(int x, int y, int z) => SceneOps.AddTrackPoint(model, new SceneTrackPoint(x, y, z));
             SceneActorModel Carrier(int generic, int x, int y, int z)
             {
@@ -178,27 +196,30 @@ void comportement_2()
                 a.Flags |= RaceTrackScenes.CarrierFlag | 1u << 12; a.Move = 3;
                 return a;
             }
-            var block = Carrier(CelebrationProps.Pillar, Cell(BlockX), BlockTop, rowZ);
+            var block = Carrier(CelebrationProps.Pillar, Cell(BlockX), BlockTop, Cell(BlockZ));
             Put(block, While(lakeShown));
-            // (the first and third slabs: sinking under the lava and coming up, one as the other goes down)
-            foreach (var (x, first) in new[] { (SlabOneX, true), (SlabThreeX, false) })
+            // (the first slab: up four seconds, then under the lava two)
             {
-                int up = Point(Cell(x), SlabUp, rowZ), sunk = Point(Cell(x), SlabSunk, rowZ);
-                var stay = first ? "label(0);\nspeed(420);\ngoto_point_3d({0});\nwait_nb_dizieme(36);\nspeed(520);\ngoto_point_3d({1});\nwait_nb_dizieme(22);\ngoto(label_0);\n"
-                                 : "label(0);\nspeed(520);\ngoto_point_3d({1});\nwait_nb_dizieme(22);\nspeed(420);\ngoto_point_3d({0});\nwait_nb_dizieme(36);\ngoto(label_0);\n";
-                Put(Carrier(CelebrationProps.Step, Cell(x), SlabUp, rowZ), While(lakeShown), string.Format(stay, up, sunk));
+                int up = Point(Cell(StoneX), SlabUp, Cell(StoneZ)), sunk = Point(Cell(StoneX), SlabSunk, Cell(StoneZ));
+                Put(Carrier(CelebrationProps.Step, Cell(StoneX), SlabUp, Cell(StoneZ)), While(lakeShown),
+                    $"label(0);\nspeed(420);\ngoto_point_3d({up});\nwait_nb_dizieme(40);\nspeed(520);\ngoto_point_3d({sunk});\nwait_nb_dizieme(20);\ngoto(label_0);\n");
             }
-            // (the second: sliding across the way and back, waiting a moment at each end -- and two seconds in line with the others as it
-            // passes, the moment to step on or off: walked on while it slid, it carried Twinsen sideways off its far side)
+            // (the second: two and a half seconds at home -- a jump from the lift -- then out east and back)
             {
-                int a = Point(Cell(SlabTwoX), SlabUp, Cell(LavaRowZ - SlideHalf)), b = Point(Cell(SlabTwoX), SlabUp, Cell(LavaRowZ + SlideHalf)),
-                    mid = Point(Cell(SlabTwoX), SlabUp, rowZ);
-                Put(Carrier(CelebrationProps.Step, Cell(SlabTwoX), SlabUp, Cell(LavaRowZ - SlideHalf)), While(lakeShown),
-                    $"label(0);\nspeed(650);\ngoto_point_3d({mid});\nwait_nb_dizieme(20);\ngoto_point_3d({b});\nwait_nb_dizieme(10);\n" +
-                    $"goto_point_3d({mid});\nwait_nb_dizieme(20);\ngoto_point_3d({a});\nwait_nb_dizieme(10);\ngoto(label_0);\n");
+                int home = Point(Cell(SlideHomeX), SlabUp, Cell(SlideZ)), east = Point(Cell(SlideEastX), SlabUp, Cell(SlideZ));
+                Put(Carrier(CelebrationProps.Step, Cell(SlideHomeX), SlabUp, Cell(SlideZ)), While(lakeShown),
+                    $"label(0);\nspeed(650);\ngoto_point_3d({home});\nwait_nb_dizieme(25);\ngoto_point_3d({east});\nwait_nb_dizieme(10);\ngoto(label_0);\n");
             }
-            Put(Turning(MonkStatuette.Actor(gameDirectory, Cell(BlockX), BlockTop, rowZ, 3072)), Life(1, $"{FootTake} > distance_3d(0)", false), TurningTrack);
-            log.Add($"the lava's block at cell ({BlockX}, {LavaRowZ}), its top {BlockTop}; slabs at x {SlabOneX} (sinking), {SlabTwoX} (sliding z {LavaRowZ - SlideHalf}-{LavaRowZ + SlideHalf}), {SlabThreeX} (sinking, the other way about)");
+            // (the lift: surfaced three seconds -- jumped onto from the second slab at home -- up to the column's height, three seconds there,
+            // down, under the lava a second and a half: who is still on it then goes into the lava)
+            {
+                int low = Point(Cell(LiftX), SlabUp, Cell(LiftZ)), top = Point(Cell(LiftX), LavaLiftTop, Cell(LiftZ)), sunk = Point(Cell(LiftX), SlabSunk, Cell(LiftZ));
+                Put(Carrier(CelebrationProps.Lift, Cell(LiftX), SlabSunk, Cell(LiftZ)), While(lakeShown),
+                    $"label(0);\nspeed(420);\ngoto_point_3d({low});\nwait_nb_dizieme(30);\nspeed(520);\ngoto_point_3d({top});\nwait_nb_dizieme(30);\n" +
+                    $"goto_point_3d({low});\nspeed(420);\ngoto_point_3d({sunk});\nwait_nb_dizieme(15);\ngoto(label_0);\n");
+            }
+            Put(Turning(MonkStatuette.Actor(gameDirectory, Cell(BlockX), BlockTop, Cell(BlockZ), 3072)), Life(1, $"{FootTake} > distance_3d(0)", false), TurningTrack);
+            log.Add($"the lava's column at cell ({BlockX}, {BlockZ}), its top {BlockTop}; the lift at ({LiftX}, {LiftZ}), {SlabSunk} to {SlabUp} to {LavaLiftTop}; the sliding slab ({SlideHomeX}-{SlideEastX}, {SlideZ}), the sinking slab ({StoneX}, {StoneZ}), from the north beach");
 
             // ---- 3, 4: over the second and third jumps -- the raised road's gaps, in the air over their middles
             var gaps = new List<(int[] Lip, int[] Land)>();

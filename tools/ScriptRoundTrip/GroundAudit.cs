@@ -73,3 +73,26 @@ internal static class SteepLooks
         return 0;
     }
 }
+
+// heights <ILE> <cube x> <cube z> <x0> <z0> <x1> <z1>: the ground's height (hundreds) at each cell's middle -- its corners' average -- of a
+// cube's cells x0..x1, z0..z1: the planning sheet for what is put at a height near the ground (the lava's slabs, the shore they're jumped from)
+internal static class HeightGrid
+{
+    public static int Run(string[] args)
+    {
+        var ile = IslandFile.Load(args[1]);
+        int cx = int.Parse(args[2]), cz = int.Parse(args[3]), x0 = int.Parse(args[4]), z0 = int.Parse(args[5]), x1 = int.Parse(args[6]), z1 = int.Parse(args[7]);
+        Console.WriteLine("     " + string.Concat(Enumerable.Range(x0, x1 - x0 + 1).Select(x => $"{x,4}")));
+        for (var z = z0; z <= z1; z++)
+        {
+            var row = Enumerable.Range(x0, x1 - x0 + 1).Select(x =>
+            {
+                int gx = cx * 64 + x, gz = cz * 64 + z;
+                var h = new[] { (0, 0), (1, 0), (0, 1), (1, 1) }.Select(c => (double)(ile.HeightAt(gx + c.Item1, gz + c.Item2) ?? 0)).Average();
+                return $"{(int)Math.Round(h / 100.0),4}";
+            });
+            Console.WriteLine($"{z,4} " + string.Concat(row));
+        }
+        return 0;
+    }
+}

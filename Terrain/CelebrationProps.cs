@@ -12,13 +12,18 @@ namespace LBAAssembler.Terrain;
 // own angle (the user's rule: lots of normals).
 internal static class CelebrationProps
 {
-    public const int Ladder = 1, Step = 2, Pillar = 3;
+    public const int Ladder = 1, Step = 2, Pillar = 3, Lift = 4;
     // the ladder: its foot at the actor's place, up its own +y LadderHigh, its rungs this far apart; against a wall on its own -z side
     public const int LadderHigh = 4900, RungGap = 250, LadderHalf = 230;
     // a stepping slab: its top at the actor's place (the box's top: a carrier carries what stands on it there), StepHalf either way, StepDeep down
-    public const int StepHalf = 460, StepDeep = 420;
-    // the block: its top at the actor's place, PillarHalf either way, down PillarDeep into the lava
-    public const int PillarHalf = 680, PillarDeep = 1100;
+    // (a cell wide: Twinsen's standing Sporty jump, measured 2026-11-27, lands 1,826-1,919 out -- from a slab's middle, 900 over the lava,
+    // into the next one's middle)
+    public const int StepHalf = 512, StepDeep = 420;
+    // the lift in the lava's middle: a slab a little smaller (LiftHalf: out of a standing jump's reach of every shore while it is down)
+    public const int LiftHalf = 360;
+    // the block: its top at the actor's place, PillarHalf either way, a column down PillarDeep into the lava -- glowing only its last
+    // PillarGlow, where the lava is
+    public const int PillarHalf = 448, PillarDeep = 2500, PillarGlow = 520;
     private const int Lacquer = 4 * 16 + 3, LacquerDark = 4 * 16 + 1, Rope = 1 * 16 + 5, Rock = 3 * 16 + 2, RockDark = 3 * 16 + 1, RockTop = 3 * 16 + 4,
         Ember = 4 * 16 + 12, EmberHot = 6 * 16 + 13;
 
@@ -29,6 +34,7 @@ internal static class CelebrationProps
         (Ladder, "the temple's ladder", BuildLadder, new short[] { -1, 0, -1, 1, 1, 1 }),
         (Step, "a stepping slab in the lava", BuildStep, new short[] { -StepHalf, -StepDeep, -StepHalf, StepHalf, 0, StepHalf }),
         (Pillar, "the block in the lava's middle", BuildPillar, new short[] { -PillarHalf, -PillarDeep, -PillarHalf, PillarHalf, 0, PillarHalf }),
+        (Lift, "the lift slab in the lava", BuildLift, new short[] { -LiftHalf, -StepDeep, -LiftHalf, LiftHalf, 0, LiftHalf }),
     };
     public static List<string> Install(string gameDirectory) => new() { Citadel.CitadelProps.InstallOwn(gameDirectory, What, Own).Log };
     public static int Entity(string gameDirectory) => Citadel.CitadelProps.InstallOwn(gameDirectory, What, Own).Entity;
@@ -73,16 +79,26 @@ internal static class CelebrationProps
         return m.ToBody(header);
     }
 
-    // The block in the lava's middle: a broad column of the same rock, deep into the lava, its top a slab like the steps' -- the statuette's
+    // The lift: a stepping slab a little smaller, the same rock -- it rises out of the lava high over it and sinks back
+    private static Body BuildLift(byte[] header)
+    {
+        var m = new CarMesh("the lift slab in the lava", new[] { -1 });
+        m.Light = 0.9f;
+        Slab(m, LiftHalf, StepDeep);
+        return m.ToBody(header);
+    }
+
+    // The block: a column of the same rock standing high out of the lava, its top a slab like the steps' -- the statuette's
     private static Body BuildPillar(byte[] header)
     {
         var m = new CarMesh("the block in the lava's middle", new[] { -1 });
         m.Light = 0.9f;
-        Slab(m, PillarHalf, PillarDeep);
+        Slab(m, PillarHalf, PillarDeep, PillarGlow);
         return m.ToBody(header);
     }
 
-    private static void Slab(CarMesh m, float half, float deep)
+    // (glow: how far up from its foot its sides glow hot -- a slab's whole lower half, the column's only at the lava)
+    private static void Slab(CarMesh m, float half, float deep, float glow = 0)
     {
         // (an octagon a little irregular -- a stone, not a coin -- its rings from the top down: the dome, the bevel, the sides, the hot foot)
         var r = half * 1.04f;
@@ -91,12 +107,12 @@ internal static class CelebrationProps
         var dome = Ring(-6, 0.62f, 0.03f);
         var edge = Ring(-30, 0.9f, 0.04f);
         var lip = Ring(-70, 1.0f, 0.05f);
-        var side = Ring(-deep * 0.55f, 0.97f, 0.06f);
+        var side = Ring(glow > 0 ? -(deep - glow) : -deep * 0.55f, 0.97f, 0.06f);
         var foot = Ring(-deep, 0.9f, 0.05f);
         m.Cap(dome, top, RockTop, new Vector3(0, -40, 0));
         m.Skin(dome, edge, i => i % 2 == 0 ? RockTop : Rock, new Vector3(0, -18, 0));
         m.Skin(edge, lip, i => i % 2 == 0 ? Rock : RockDark, new Vector3(0, -50, 0));
-        m.Skin(lip, side, i => i % 2 == 0 ? RockDark : Rock, new Vector3(0, -deep * 0.3f, 0));
-        m.Skin(side, foot, i => i % 2 == 0 ? Ember : EmberHot, new Vector3(0, -deep * 0.78f, 0));
+        m.Skin(lip, side, i => i % 2 == 0 ? RockDark : Rock, new Vector3(0, glow > 0 ? -(deep - glow) / 2 : -deep * 0.3f, 0));
+        m.Skin(side, foot, i => i % 2 == 0 ? Ember : EmberHot, new Vector3(0, glow > 0 ? -(deep - glow / 2) : -deep * 0.78f, 0));
     }
 }
