@@ -318,6 +318,7 @@ static const char *s_clutVertSrc =
     "attribute float aFlags;\n"
     "attribute float aSlot;\n"
     "uniform vec2 uScreenScale;\n" /* 2.0/resX, 2.0/resY */
+    "uniform vec2 uPixOffset;\n" /* engine pixels added to a polygon's corners: GL_DrawTriangles */
     /* Perspective-correct interpolation: the SW rasterizer
        (POLYTZF/POLYTEXZ, Z-textured types 16-24) interpolates
        MapU/MapV/ZBuf over W = 1/Z.  w=1.0 in clip space makes varyings
@@ -344,8 +345,8 @@ static const char *s_clutVertSrc =
     "    vFlat = aFlat;\n"
     "    vFlags = aFlags;\n"
     "    vSlot = aSlot;\n"
-    "    float cx = aPos.x * uScreenScale.x - 1.0;\n"
-    "    float cy = 1.0 - aPos.y * uScreenScale.y;\n"
+    "    float cx = (aPos.x + uPixOffset.x) * uScreenScale.x - 1.0;\n"
+    "    float cy = 1.0 - (aPos.y + uPixOffset.y) * uScreenScale.y;\n"
     /* Window depth = 1 - aZ/65535: the whole range, one 16-bit step per Z unit, as the software Z-buffer compares them (the
        upper half alone put two Z units in each step). */
     "    gl_Position = vec4(cx, cy, 1.0 - 2.0 * aZ / 65535.0, 1.0);\n"
@@ -729,6 +730,7 @@ static GLint s_clut_uAtlas = -1;
 static GLint s_clut_uCLUT = -1;
 static GLint s_clut_uPalette = -1;
 static GLint s_clut_uScreenScale = -1;
+static GLint s_clut_uPixOffset = -1;
 static GLint s_clut_uPolyMode = -1;
 static GLint s_clut_uFlatColor = -1;
 static GLint s_clut_uCLUTBaseRow = -1;
@@ -1101,6 +1103,7 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_clut_uCLUT = glGetUniformLocation(s_clutProgram, "uCLUT");
     s_clut_uPalette = glGetUniformLocation(s_clutProgram, "uPalette");
     s_clut_uScreenScale = glGetUniformLocation(s_clutProgram, "uScreenScale");
+    s_clut_uPixOffset = glGetUniformLocation(s_clutProgram, "uPixOffset");
     s_clut_uPolyMode = glGetUniformLocation(s_clutProgram, "uPolyMode");
     s_clut_uFlatColor = glGetUniformLocation(s_clutProgram, "uFlatColor");
     s_clut_uCLUTBaseRow = glGetUniformLocation(s_clutProgram, "uCLUTBaseRow");
@@ -2041,6 +2044,18 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
     /* Map GpuDrawParams onto the CLUT shader uniforms. */
     glUniform2f(s_clut_uScreenScale, params->screenScale[0],
                 params->screenScale[1]);
+    /* A polygon half a pixel down: the software fillers take each row's
+       edges, texture and depth at the row's top (Fill_CurXMin and the rest
+       stepped once a row from the top corner, 0.5 added only across), where
+       GL samples a pixel at its centre -- every sloped edge and texture
+       came out half a row off the software's (scene sweep, 51 pictures:
+       85.8% of pixels within 8 of the software's -> 92.4%). Sprites,
+       bricks, spans and blend quads are on the pixel grid already. */
+    {
+        const int poly = params->polyMode <= 5 ||
+                         params->polyMode == GPU_POLYMODE_PER_VERTEX;
+        glUniform2f(s_clut_uPixOffset, 0.0f, poly ? 0.5f : 0.0f);
+    }
     glUniform1i(s_clut_uPolyMode, params->polyMode);
     glUniform1i(s_clut_uPerVertex, params->polyMode == GPU_POLYMODE_PER_VERTEX ? 1 : 0);
     glUniform1f(s_clut_uAtlasSlots, (float)s_atlasSlots);
