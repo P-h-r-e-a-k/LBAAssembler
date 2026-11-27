@@ -81,6 +81,14 @@ S32 KeyWentDownLastPoll(U32 key) {
     return (TabKeysDownLast[KeyIndex(key)] & KeyBit(key)) != 0;
 }
 
+// Each key's presses by its events, auto-repeat left out: a count that only goes up, for a check against what the game read that no
+// press went missing on its way from the keyboard (KeyDownEvents).
+static U32 KeyDownEventCount[PLATFORM_SCANCODE_COUNT];
+
+U32 KeyDownEvents(U32 key) {
+    return key < PLATFORM_SCANCODE_COUNT ? KeyDownEventCount[key] : 0;
+}
+
 // --- Private functions -------------------------------------------------------
 void UpdateKeyboardState() {
     ManageEvents();
@@ -266,8 +274,10 @@ void HandleEventsKeyboard(const PlatformEvent *event) {
         && (ev->key.scancode == 68 || ((ev->key.scancode == 40 || ev->key.scancode == 88) && (ev->key.mod & 0x0300))))
         Keyboard_ToggleFullscreen();
 
-    if (ev->type == PLATFORM_EVENT_KEY_DOWN && !ev->key.repeat && (U32)ev->key.scancode < PLATFORM_SCANCODE_COUNT)
+    if (ev->type == PLATFORM_EVENT_KEY_DOWN && !ev->key.repeat && (U32)ev->key.scancode < PLATFORM_SCANCODE_COUNT) {
         TabKeysDownSince[KeyIndex((U32)ev->key.scancode)] |= KeyBit((U32)ev->key.scancode);
+        KeyDownEventCount[(U32)ev->key.scancode]++;
+    }
     if (ev->type == PLATFORM_EVENT_KEY_DOWN && !ev->key.repeat)
         InputFlow_NoteKeyEvent(TRUE);
     else if (ev->type == PLATFORM_EVENT_KEY_UP)

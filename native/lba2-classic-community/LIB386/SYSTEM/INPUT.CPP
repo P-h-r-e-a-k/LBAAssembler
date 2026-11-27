@@ -62,4 +62,9 @@ void ClearNoRepeatInput(void) {
     NoRepeatInput = 0;
 }
 
+// The inputs held back till they are let go (a check's log: RACEMOD.CPP PowerUps)
+U32 GetNoRepeatInput(void) {
+    return NoRepeatInput;
+}
+
 //***************************************************************************

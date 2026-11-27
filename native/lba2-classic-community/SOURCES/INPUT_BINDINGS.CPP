@@ -205,6 +205,8 @@ U32 Bindings_FilterSwitch(U32 input) {
     return input & ~s_switchHeld;
 }
 
+U32 Bindings_SwitchHeld(void) { return s_switchHeld; }
+
 //-------------------------------------------------------------------------
 void InitInput(void) {
     // Rebuild the combined table from the current keyboard (DefKeys) and gamepad

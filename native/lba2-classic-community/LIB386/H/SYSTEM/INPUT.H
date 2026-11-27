@@ -21,6 +21,9 @@ extern void GetInput(U32 norepeat);
 //──────────────────────────────────────────────────────────────────────────
 extern void ClearNoRepeatInput(void);
 
+// The inputs GetInput holds back till they are let go (its norepeat ones still down)
+extern U32 GetNoRepeatInput(void);
+
 //──────────────────────────────────────────────────────────────────────────
 #ifdef __cplusplus
 }

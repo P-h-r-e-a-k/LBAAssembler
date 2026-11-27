@@ -1451,6 +1451,7 @@ static int s_pressKept = 0;                 // ... a press in the roulette's las
 static S32 s_stopSeen = 0;                  // ... and the stop last handled (its s_itemAt)
 static S32 s_fullSaidAt = 0;               // (when the car was last at a mushroom left standing: the log says so again after 5 s away)
 static int s_useHeld = 0;                  // the behaviour key (Ctrl, the pad's left shoulder) down this frame: RaceMod_FilterInput
+static U32 s_filterPass = 0;               // the main loop's reads of the keys, counted (RaceMod_FilterInput): PowerUps' check of the item key
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
 static int s_startItem = -1;               // start_item=<n>: a power-up (PU_*) in Twinsen's item box as the race goes, his radio's car update
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
@@ -14527,6 +14528,39 @@ static void PowerUps(S32 now, int driving) {
         heldSaid = s_itemAt[RACE_BOX];
         Log_Info("[racemod] item key held as the item box stopped on %s, down since before the item came: not used until it is let go and pressed again", s_puName[s_item[RACE_BOX]]);
     }
+    // (a check on the item key itself: each time it goes down on the keyboard -- its own events, KEYBOARD.CPP KeyDownEvents -- a press is
+    // read here within a moment, or the log says none was and what the game's input held then. The user, 2026-11-27: "there's definitely
+    // situations where the item is already in my item box and the button isn't triggering it" -- the presses the logs had were all made as
+    // the roulette turned; this is for one that never reached them. The first call after each of the main loop's reads only: a message's
+    // redraws run this too, between reads, their keys a dialogue's. A press read just before its own event is counted -- the keys' state can
+    // be a pump ahead of their events -- takes that event with it)
+    {
+        static U32 evBase = 0, evAt = 0, lastPass = 0, lastSys = 0, pressSys = 0;
+        static int evPending = 0;
+        static char evWhy[160];
+        const U32 sys = (U32)SDL_GetTicks();
+        if (s_filterPass != lastPass) {
+            lastPass = s_filterPass;
+            const U32 k1 = CarKeys[5].Key1, k2 = CarKeys[5].Key2 != k1 ? CarKeys[5].Key2 : 0;
+            const U32 ev = (k1 ? KeyDownEvents(k1) : 0) + (k2 ? KeyDownEvents(k2) : 0);
+            const int raw = (k1 && CheckKey(k1)) || (k2 && CheckKey(k2));
+            if (press) pressSys = sys;
+            if (!driving || RaceGame_LocalGuest() || sys - lastSys > 250 || press || sys - pressSys < 100) { evBase = ev; evPending = 0; }
+            else if (ev != evBase && !evPending) {
+                evPending = 1; evAt = sys;
+                snprintf(evWhy, sizeof(evWhy), "as it was counted the key was %s, the game's input %s it", raw ? "down" : "up", use ? "had" : "hadn't");
+            }
+            if (evPending && sys - evAt >= 150) {
+                Log_Info("[racemod] the item key went down on the keyboard (%u time%s) and no press was read: %s; %u ms on the key is %s, the game's "
+                         "input %s it (held over a change of key set: %s, held back till let go: %s, read as held the frame before: %s), %s",
+                         (unsigned)(ev - evBase), ev - evBase == 1 ? "" : "s", evWhy, (unsigned)(sys - evAt), raw ? "down" : "up", use ? "has" : "hasn't",
+                         (Bindings_SwitchHeld() & I_COMPORTEMENT) ? "yes" : "no", (GetNoRepeatInput() & I_COMPORTEMENT) ? "yes" : "no", s_useWas ? "yes" : "no",
+                         s_item[RACE_BOX] < 0 ? "the box empty" : now < s_itemAt[RACE_BOX] ? "the box still turning" : s_puName[s_item[RACE_BOX]]);
+                evBase = ev; evPending = 0;
+            }
+            lastSys = sys;
+        }
+    }
     if (used) s_usedAt = now;
     s_useWas = use;
     // shrunk by an opponent's lightning: Twinsen's car at half its size while it lasts
@@ -16168,6 +16202,7 @@ U32 RaceMod_FilterInput(U32 input) {
     if (s_winStop && RaceMod_Active()) input &= (U32)(I_MENUS | I_PAUSE | I_HELP | I_SAVE | I_LOAD | I_OPTIONS | (s_winStop == 1 && Comportement == C_BUGGY ? I_JOY : 0)
                                                      | (s_rerunStep == 2 && Comportement != C_BUGGY ? I_JOY : 0));
     s_useHeld = (input & I_COMPORTEMENT) != 0;
+    s_filterPass++;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
     // (the inventory's key -- Shift, a pad's Y -- opens the inventory in the car too, but not in a race: RaceMod_CarInventory)
     if (RaceMod_Active() && Comportement == C_BUGGY && !RaceMod_CarInventory()) input &= ~(U32)I_INVENTORY;

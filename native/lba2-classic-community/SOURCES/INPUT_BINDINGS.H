@@ -95,6 +95,8 @@ extern void Bindings_UseCar(S32 car);
 extern S32 Bindings_InCar(void);
 // After GetInput: the Input word less the keys held across a change of set
 extern U32 Bindings_FilterSwitch(U32 input);
+// The Input bits that filter holds back now: held across the last change of set, not yet let go
+extern U32 Bindings_SwitchHeld(void);
 // One of the car's own slots (CAR_SLOT_*) held: any of its keys or buttons, or a press put in this poll (Bindings_Inject: the second
 // player's keys at a shared keyboard)
 extern S32 Bindings_CarHeld(S32 slot);

@@ -41,6 +41,9 @@ S32 CheckKey(U32 key);
 /* Whether a key went down by its events in the poll just taken (KEYBOARD.CPP): a key down and up again between two polls -- a tap
    shorter than a frame -- never shows in the polled state (CheckKey). The race-track mode's power-up key reads it. */
 S32 KeyWentDownLastPoll(U32 key);
+/* How many times a key has gone down by its events since the game started, auto-repeat left out (KEYBOARD.CPP): only ever goes up. Against
+   the presses the game read, it shows one lost on the way. The race-track mode's power-up key reads it. */
+U32 KeyDownEvents(U32 key);
 void GetKeyScancodeName(char *string, U8 strMaxLen, U32 scanCode);
 
 void ManageKeyboard();
