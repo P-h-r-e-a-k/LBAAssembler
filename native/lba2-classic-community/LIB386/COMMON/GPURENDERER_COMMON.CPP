@@ -2734,6 +2734,31 @@ void GpuRenderer_RestoreTerrain(void) {
 //──────────────────────────────────────────────────────────────────────────
 // Lifecycle
 //──────────────────────────────────────────────────────────────────────────
+/* The render target at the quality asked for, or the highest one under it the GPU can make: a target too large for it (a high render
+   quality in a large window: quality 4 in full screen at 1920x1080 is 7680x4320) failed to be made, and the frames went on with none
+   -- a black picture, or worse, a player's GL crash at quality 4 (LBRA #33). Quality kept at the one made, said in the log. */
+static S32 Common_TargetCreateFit(const GpuRendererBackend *be, U32 w, U32 h) {
+    /* (LBA2_GPU_TARGET_LIMIT=<pixels>: a GPU that can make nothing larger -- the fallback's test) */
+    static double s_limit = -1;
+    if (s_limit < 0) {
+        const char *e = getenv("LBA2_GPU_TARGET_LIMIT");
+        s_limit = e ? atof(e) : 0;
+    }
+    for (U32 q = s_renderQuality ? s_renderQuality : 1; q >= 1; q = q == 4 ? 2 : q - 1) {
+        if (s_limit > 0 && (double)w * q * h * q > s_limit) continue;
+        if (be->TargetCreate(w * q, h * q)) {
+            if (q != s_renderQuality) {
+                Log_Warn("[GPU] the render target at quality %u (%ux%u) couldn't be made: quality %u (%ux%u)", s_renderQuality,
+                         w * s_renderQuality, h * s_renderQuality, q, w * q, h * q);
+                s_renderQuality = q;
+            }
+            return TRUE;
+        }
+        be->TargetDestroy();
+    }
+    return FALSE;
+}
+
 S32 GpuRenderer_Init(GpuRendererBackendId backend, U32 resX, U32 resY) {
     /* NONE is the software rasterizer, which this layer never runs. */
     if (backend == GPU_RENDERER_BACKEND_NONE ||
@@ -2775,7 +2800,7 @@ S32 GpuRenderer_Init(GpuRendererBackendId backend, U32 resX, U32 resY) {
     s_presentDirtyW = 0;
     s_presentDirtyH = 0;
 
-    if (!be->TargetCreate(resX * s_renderQuality, resY * s_renderQuality)) {
+    if (!Common_TargetCreateFit(be, resX, resY)) {
         Log_Warn("[GPU] backend '%s' TargetCreate failed", be->identifier);
         GpuRenderer_Shutdown();
         return FALSE;
@@ -2864,8 +2889,7 @@ void GpuRenderer_Resize(U32 resX, U32 resY) {
     s_terrainValid = 0;
 
     s_backend->TargetDestroy();
-    if (!s_backend->TargetCreate(resX * s_renderQuality,
-                                 resY * s_renderQuality)) {
+    if (!Common_TargetCreateFit(s_backend, resX, resY)) {
         Log_Warn("[GPU] TargetCreate failed after resize to %ux%u",
                  resX, resY);
     }
@@ -2893,8 +2917,7 @@ void GpuRenderer_SetRenderQuality(U32 quality) {
     s_fboHasRoom = 0;
     s_terrainValid = 0;
     s_backend->TargetDestroy();
-    if (!s_backend->TargetCreate(s_resX * s_renderQuality,
-                                 s_resY * s_renderQuality)) {
+    if (!Common_TargetCreateFit(s_backend, s_resX, s_resY)) {
         Log_Warn("[GPU] TargetCreate failed at quality %u", quality);
     }
 }
