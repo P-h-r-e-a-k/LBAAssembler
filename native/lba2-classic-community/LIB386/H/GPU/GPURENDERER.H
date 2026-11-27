@@ -136,6 +136,9 @@ void GpuRenderer_ShadowBegin(S32 level, S32 zPlane);
 void GpuRenderer_ShadowBeginFlat(S32 level);
 // The same spans tinted to a palette colour, alpha256 of 256 of it, no depth test (a 2D blend over the frame); ShadowSpan/ShadowEnd after.
 void GpuRenderer_TintBegin(U8 colour, S32 alpha256);
+// A rect of palette indices (0 = none) mixed over the frame through a 256x256 table, row = the index, column = what is under it
+// (Log's, else the FBO's): the race's ghost car, drawn in software. x1/y1 exclusive. FALSE: not drawn, mix in Log.
+S32 GpuRenderer_BlendIndices(S32 x0, S32 y0, S32 x1, S32 y1, const U8 *src, U32 pitch, const void *table);
 void GpuRenderer_ShadowSpan(S32 x0, S32 y, S32 x1);
 void GpuRenderer_ShadowEnd(void);
 

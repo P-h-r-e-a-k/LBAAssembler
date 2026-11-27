@@ -20117,6 +20117,8 @@ static int GhostAt(const T_RACE_LAPGHOST *g, S32 t, double *x, double *y, double
 // again when the palette changes.
 static U8 s_ghostMix[256 * 256];
 static U8 s_ghostMixMade[256 * 256 / 8];
+static U8 s_ghostTable[256 * 256];           // (GhostRow)
+static U8 s_ghostRowMade[256];
 static U32 s_ghostPalSum = 0;
 static int s_ghostSix = 0;
 
@@ -20149,6 +20151,19 @@ static void GhostMixCheck(void) {
     s_ghostPalSum = sum;
     s_ghostSix = six;
     memset(s_ghostMixMade, 0, sizeof(s_ghostMixMade));
+    memset(s_ghostRowMade, 0, sizeof(s_ghostRowMade));
+}
+
+static U8 GhostMix(U8 under, U8 over);
+
+// ... the same mixes as a table for the GPU's blend (GpuRenderer_BlendIndices): row = the ghost's colour, column = the scene's under
+// it, a row made as its colour is first drawn
+static U8 GhostRow(U8 over) {
+    if (!s_ghostRowMade[over]) {
+        for (int d = 0; d < 256; d++) s_ghostTable[over << 8 | d] = GhostMix((U8)d, over);
+        s_ghostRowMade[over] = 1;
+    }
+    return over;
 }
 
 static U8 GhostMix(U8 under, U8 over) {
@@ -20171,6 +20186,8 @@ static U8 GhostMix(U8 under, U8 over) {
 // or solid when it is played back (`solid`: it is the car the camera follows).
 static U8 *s_ghostUnder = NULL;
 static size_t s_ghostUnderSize = 0;
+static U8 *s_ghostSrc = NULL;               // (OpenGL: the ghost's own pixels, a box of them, mixed on the GPU)
+static size_t s_ghostSrcSize = 0;
 
 // An online race, every frame (RaceMod_Frame): the count-down held till the host says go, and this car sent to the others, as a ghost's sample
 #define RACE_NET_EVERY 33                  // ms between a car's samples
@@ -20863,18 +20880,55 @@ static void DrawGhost(S32 now, S32 width, S32 height) {
     const T_RACE_DRAW kept = DrawKept();
     SetCLUT(FogClut(zr));
     Switch_Fillers(FILL_POLY_FOG_NZW);
-    if (ObjectDisplay(&s_ghostObj)) {
+    // (OpenGL: the scene is in the GPU's frame, not in Log, and a ghost drawn there was solid -- nothing of Log changed to mix. It is
+    // drawn into Log in software (hidden by the ground as ever: the object pass's depth is the GPU's, ReadbackDepthBuffer), Log put back,
+    // and its pixels mixed on the GPU with whatever is under them, Log's or the frame's -- GhostRow's table)
+    const S32 gpu = !solid && GpuOverlay_LiveScene();
+    const S32 softWas = gpu ? GpuRenderer_GetSoftwarePolys() : 0;
+    if (gpu) GpuRenderer_SetSoftwarePolys(1);
+    const S32 shown = ObjectDisplay(&s_ghostObj);
+    if (gpu) GpuRenderer_SetSoftwarePolys(softWas);
+    if (shown) {
         SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
         if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) {
             if (!solid) {
                 const S32 x0 = ClipXMin < 0 ? 0 : ClipXMin, x1 = ClipXMax >= width ? width - 1 : ClipXMax;
                 const S32 y0 = ClipYMin < 0 ? 0 : ClipYMin, y1 = ClipYMax >= height ? height - 1 : ClipYMax;
-                for (S32 r = y0; r <= y1; r++) {
-                    U8 *row = (U8 *)Log + TabOffLine[r];
-                    const U8 *was = s_ghostUnder + TabOffLine[r];
-                    for (S32 c = x0; c <= x1; c++)
-                        if (row[c] != was[c]) row[c] = GhostMix(was[c], row[c]);
+                int mixed = 0;
+                const size_t w = x1 >= x0 ? (size_t)(x1 - x0 + 1) : 0, need = y1 >= y0 ? w * (size_t)(y1 - y0 + 1) : 0;
+                if (gpu && need && s_ghostSrcSize < need) {
+                    U8 *p = (U8 *)realloc(s_ghostSrc, need);
+                    if (p) { s_ghostSrc = p; s_ghostSrcSize = need; }
                 }
+                if (gpu && need && s_ghostSrcSize >= need) {
+                    const U8 black = GpuOverlay_Black();
+                    for (S32 r = y0; r <= y1; r++) {
+                        U8 *row = (U8 *)Log + TabOffLine[r];
+                        const U8 *was = s_ghostUnder + TabOffLine[r];
+                        U8 *src = s_ghostSrc + (size_t)(r - y0) * w;
+                        for (S32 c = x0; c <= x1; c++) {
+                            if (row[c] == was[c]) { src[c - x0] = 0; continue; }
+                            src[c - x0] = GhostRow(row[c] ? row[c] : black);
+                            row[c] = was[c];
+                        }
+                    }
+                    mixed = GpuRenderer_BlendIndices(x0, y0, x1 + 1, y1 + 1, s_ghostSrc, (U32)w, s_ghostTable);
+                    if (!mixed)   // (the GPU couldn't: the ghost's pixels back in Log, mixed there)
+                        for (S32 r = y0; r <= y1; r++) {
+                            U8 *row = (U8 *)Log + TabOffLine[r];
+                            const U8 *src = s_ghostSrc + (size_t)(r - y0) * w;
+                            for (S32 c = x0; c <= x1; c++)
+                                if (src[c - x0]) row[c] = GhostMix(row[c], src[c - x0]);
+                        }
+                    mixed = 1;
+                }
+                if (!mixed)
+                    for (S32 r = y0; r <= y1; r++) {
+                        U8 *row = (U8 *)Log + TabOffLine[r];
+                        const U8 *was = s_ghostUnder + TabOffLine[r];
+                        for (S32 c = x0; c <= x1; c++)
+                            if (row[c] != was[c]) row[c] = GhostMix(was[c], row[c]);
+                    }
             }
             BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
         }

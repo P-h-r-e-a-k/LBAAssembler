@@ -1619,6 +1619,126 @@ S32 GpuRenderer_DrawFlowDot(S32 x, S32 y, U8 coul, U16 zoTop, U16 zoBot) {
     return 1;
 }
 
+/* The blend sprites' compose over a rect of source indices (x1, y1 exclusive; `src` its top left, `srcPitch` a row): each
+   source index other than 0 through `transPal` (row = source, column = destination) over the scene under it -- Log's index
+   where Log has one, else the FBO's (its alpha) -- into the FBO, Log punched to 0 there. FALSE: nothing drawn (the caller
+   draws in software). */
+static S32 Common_BlendCompose(S32 xMin, S32 yMin, S32 xMax, S32 yMax, const U8 *src,
+                               U32 srcPitch, const void *transPal) {
+    static U8 *s_packRg = NULL;
+    static U32 s_packRgBytes = 0;
+    GpuDrawParams params;
+    GpuVertex v[6];
+    U32 rectW;
+    U32 rectH;
+    U32 rectBytes;
+    S32 row;
+    S32 col;
+
+    rectW = (U32)(xMax - xMin);
+    rectH = (U32)(yMax - yMin);
+    rectBytes = rectW * rectH * 2;
+    if (s_packRgBytes < rectBytes) {
+        free(s_packRg);
+        s_packRg = (U8 *)malloc(rectBytes);
+        s_packRgBytes = s_packRg ? rectBytes : 0;
+    }
+    if (s_packRg == NULL) {
+        return 0; /* (a sprite's Screen* stay valid: software re-walks and publishes) */
+    }
+
+    for (row = 0; row < (S32)rectH; row++) {
+        const U8 *idxRow =
+            src + (U32)row * srcPitch;
+        U8 *rgRow = s_packRg + (U32)row * rectW * 2;
+        const U8 *logRow = (const U8 *)Log + TabOffLine[yMin + row];
+        for (col = 0; col < (S32)rectW; col++) {
+            rgRow[col * 2] = idxRow[col];
+            rgRow[col * 2 + 1] = logRow[xMin + col];
+        }
+    }
+
+    /* Prior draws must reach the target before the copy reads the rect. */
+    GpuRenderer_FlushBatch();
+
+    s_backend->TexUpdateTransPal(transPal);
+    s_backend->TexUpdateBlendLog(s_packRg, rectW, rectH);
+    if (!s_backend->TargetCopyColorRect((U32)xMin, (U32)yMin, rectW,
+                                        rectH)) {
+        return 0;
+    }
+
+    /* Punch only texels the sprite writes (source != 0): software leaves
+       Log alone where the walk skips, and index 0 is the present's
+       transparent hole that lets the FBO result show through. */
+    for (row = 0; row < (S32)rectH; row++) {
+        const U8 *rgRow = s_packRg + (U32)row * rectW * 2;
+        U8 *logRow = (U8 *)Log + TabOffLine[yMin + row];
+        for (col = 0; col < (S32)rectW; col++) {
+            if (rgRow[col * 2] != 0) {
+                logRow[xMin + col] = 0;
+            }
+        }
+    }
+
+    memset(&params, 0, sizeof params);
+    params.polyMode = 8;
+    params.bilinear = 0;
+    params.depthTest = 0;
+    params.depthWrite = 0;
+    params.blend = 0; /* opaque replace: colour and alpha both carry the
+                         composed index, which is what chains sprites */
+    params.screenScale[0] = s_screenScale[0];
+    params.screenScale[1] = s_screenScale[1];
+    params.clipX0 = xMin;
+    params.clipY0 = yMin;
+    params.clipX1 = xMax - 1;
+    params.clipY1 = yMax - 1;
+    /* Both pages are rect-sized and hold rect-local pixel rows, so the
+       shader's (px + 0.5) / size lands on the right texel directly. */
+    params.blendLogW = (float)rectW;
+    params.blendLogH = (float)rectH;
+    params.blendDstW = (float)rectW;
+    params.blendDstH = (float)rectH;
+
+    /* Quad with GpuRenderer_DrawSprite's winding; MapU/MapV are local rect
+       pixel coordinates so floor(vTexCoord) is the packed rect position. */
+    v[0].XE = (S16)xMin;
+    v[0].YE = (S16)yMin;
+    v[0].MapU = 0;
+    v[0].MapV = 0;
+    v[1].XE = (S16)xMax;
+    v[1].YE = (S16)yMin;
+    v[1].MapU = (U16)rectW;
+    v[1].MapV = 0;
+    v[2].XE = (S16)xMax;
+    v[2].YE = (S16)yMax;
+    v[2].MapU = (U16)rectW;
+    v[2].MapV = (U16)rectH;
+    v[3].XE = (S16)xMin;
+    v[3].YE = (S16)yMin;
+    v[3].MapU = 0;
+    v[3].MapV = 0;
+    v[4].XE = (S16)xMax;
+    v[4].YE = (S16)yMax;
+    v[4].MapU = (U16)rectW;
+    v[4].MapV = (U16)rectH;
+    v[5].XE = (S16)xMin;
+    v[5].YE = (S16)yMax;
+    v[5].MapU = 0;
+    v[5].MapV = (U16)rectH;
+    {
+        S32 k;
+        for (k = 0; k < 6; k++) {
+            v[k].Light = 0;
+            v[k].ZO = 0;
+            v[k].RepMask = 0;
+        }
+    }
+    s_backend->DrawTriangles(v, 6, &params);
+    return 1;
+}
+
 //──────────────────────────────────────────────────────────────────────────
 // Blend sprites (GpuScene phase 3): ScaleSpriteTransp's transpTable compose
 // on the GPU.
@@ -1639,18 +1759,9 @@ S32 GpuRenderer_DrawBlendSprite(S32 x, S32 y, S32 factorx, S32 factory,
                                 const void *bank, const void *transPal) {
     static U8 *s_walkIdx = NULL;
     static U32 s_walkIdxBytes = 0;
-    static U8 *s_packRg = NULL;
-    static U32 s_packRgBytes = 0;
     GpuBlendBounds b;
-    GpuDrawParams params;
-    GpuVertex v[6];
     U32 need;
-    U32 rectW;
-    U32 rectH;
-    U32 rectBytes;
     S32 walkOk;
-    S32 row;
-    S32 col;
 
     /* (no GpuScene gate: the caller's -- a scene frame drawn on the GPU, its
        3D in the FBO, the room's bricks in it or in Log alike, as the Log
@@ -1690,108 +1801,30 @@ S32 GpuRenderer_DrawBlendSprite(S32 x, S32 y, S32 factorx, S32 factory,
         return 1; /* sentinels: software would draw nothing either */
     }
 
-    rectW = (U32)(b.xMax - b.xMin);
-    rectH = (U32)(b.yMax - b.yMin);
-    rectBytes = rectW * rectH * 2;
-    if (s_packRgBytes < rectBytes) {
-        free(s_packRg);
-        s_packRg = (U8 *)malloc(rectBytes);
-        s_packRgBytes = s_packRg ? rectBytes : 0;
-    }
-    if (s_packRg == NULL) {
-        return 0; /* Screen* stay valid: software re-walks and publishes */
-    }
+    return Common_BlendCompose(b.xMin, b.yMin, b.xMax, b.yMax,
+                               s_walkIdx + (U32)b.yMin * s_resX + (U32)b.xMin,
+                               s_resX, transPal);
+}
 
-    for (row = 0; row < (S32)rectH; row++) {
-        const U8 *idxRow =
-            s_walkIdx + (U32)(b.yMin + row) * s_resX + (U32)b.xMin;
-        U8 *rgRow = s_packRg + (U32)row * rectW * 2;
-        const U8 *logRow = (const U8 *)Log + TabOffLine[b.yMin + row];
-        for (col = 0; col < (S32)rectW; col++) {
-            rgRow[col * 2] = idxRow[col];
-            rgRow[col * 2 + 1] = logRow[b.xMin + col];
-        }
-    }
-
-    /* Prior draws must reach the target before the copy reads the rect. */
-    GpuRenderer_FlushBatch();
-
-    s_backend->TexUpdateTransPal(transPal);
-    s_backend->TexUpdateBlendLog(s_packRg, rectW, rectH);
-    if (!s_backend->TargetCopyColorRect((U32)b.xMin, (U32)b.yMin, rectW,
-                                        rectH)) {
+/* A rect of palette indices blended over the frame through a 256x256 table (Common_BlendCompose): an effect drawn in
+   software whose pixels are each mixed with the scene under them -- the race's ghost car. x1, y1 exclusive; clipped to
+   the screen. FALSE when the GPU can't: the caller mixes in Log. */
+S32 GpuRenderer_BlendIndices(S32 x0, S32 y0, S32 x1, S32 y1, const U8 *src, U32 pitch, const void *table) {
+    if (!s_active || src == NULL || table == NULL || Log == NULL || TabOffLine == NULL) {
         return 0;
     }
-
-    /* Punch only texels the sprite writes (source != 0): software leaves
-       Log alone where the walk skips, and index 0 is the present's
-       transparent hole that lets the FBO result show through. */
-    for (row = 0; row < (S32)rectH; row++) {
-        const U8 *rgRow = s_packRg + (U32)row * rectW * 2;
-        U8 *logRow = (U8 *)Log + TabOffLine[b.yMin + row];
-        for (col = 0; col < (S32)rectW; col++) {
-            if (rgRow[col * 2] != 0) {
-                logRow[b.xMin + col] = 0;
-            }
-        }
+    if (s_backend->TexUpdateTransPal == NULL || s_backend->TexUpdateBlendLog == NULL ||
+        s_backend->TargetCopyColorRect == NULL) {
+        return 0;
     }
-
-    memset(&params, 0, sizeof params);
-    params.polyMode = 8;
-    params.bilinear = 0;
-    params.depthTest = 0;
-    params.depthWrite = 0;
-    params.blend = 0; /* opaque replace: colour and alpha both carry the
-                         composed index, which is what chains sprites */
-    params.screenScale[0] = s_screenScale[0];
-    params.screenScale[1] = s_screenScale[1];
-    params.clipX0 = b.xMin;
-    params.clipY0 = b.yMin;
-    params.clipX1 = b.xMax - 1;
-    params.clipY1 = b.yMax - 1;
-    /* Both pages are rect-sized and hold rect-local pixel rows, so the
-       shader's (px + 0.5) / size lands on the right texel directly. */
-    params.blendLogW = (float)rectW;
-    params.blendLogH = (float)rectH;
-    params.blendDstW = (float)rectW;
-    params.blendDstH = (float)rectH;
-
-    /* Quad with GpuRenderer_DrawSprite's winding; MapU/MapV are local rect
-       pixel coordinates so floor(vTexCoord) is the packed rect position. */
-    v[0].XE = (S16)b.xMin;
-    v[0].YE = (S16)b.yMin;
-    v[0].MapU = 0;
-    v[0].MapV = 0;
-    v[1].XE = (S16)b.xMax;
-    v[1].YE = (S16)b.yMin;
-    v[1].MapU = (U16)rectW;
-    v[1].MapV = 0;
-    v[2].XE = (S16)b.xMax;
-    v[2].YE = (S16)b.yMax;
-    v[2].MapU = (U16)rectW;
-    v[2].MapV = (U16)rectH;
-    v[3].XE = (S16)b.xMin;
-    v[3].YE = (S16)b.yMin;
-    v[3].MapU = 0;
-    v[3].MapV = 0;
-    v[4].XE = (S16)b.xMax;
-    v[4].YE = (S16)b.yMax;
-    v[4].MapU = (U16)rectW;
-    v[4].MapV = (U16)rectH;
-    v[5].XE = (S16)b.xMin;
-    v[5].YE = (S16)b.yMax;
-    v[5].MapU = 0;
-    v[5].MapV = (U16)rectH;
-    {
-        S32 k;
-        for (k = 0; k < 6; k++) {
-            v[k].Light = 0;
-            v[k].ZO = 0;
-            v[k].RepMask = 0;
-        }
+    if (x0 < 0) { src += -x0; x0 = 0; }
+    if (y0 < 0) { src += (U32)(-y0) * pitch; y0 = 0; }
+    if (x1 > (S32)s_resX) x1 = (S32)s_resX;
+    if (y1 > (S32)s_resY) y1 = (S32)s_resY;
+    if (x0 >= x1 || y0 >= y1) {
+        return 1;
     }
-    s_backend->DrawTriangles(v, 6, &params);
-    return 1;
+    return Common_BlendCompose(x0, y0, x1, y1, src, pitch, table);
 }
 
 //──────────────────────────────────────────────────────────────────────────
@@ -3056,6 +3089,16 @@ void GpuRenderer_ShadowBeginFlat(S32 level) { (void)level; }
 void GpuRenderer_TintBegin(U8 colour, S32 alpha256) {
     (void)colour;
     (void)alpha256;
+}
+S32 GpuRenderer_BlendIndices(S32 x0, S32 y0, S32 x1, S32 y1, const U8 *src, U32 pitch, const void *table) {
+    (void)x0;
+    (void)y0;
+    (void)x1;
+    (void)y1;
+    (void)src;
+    (void)pitch;
+    (void)table;
+    return 0;
 }
 void GpuRenderer_ShadowSpan(S32 x0, S32 y, S32 x1) {
     (void)x0;
