@@ -249,6 +249,11 @@ U8 GpuOverlay_Black(void) {
     return black;
 }
 
+/* A colour the 2D layer draws over the 3D view in play: palette index 0 is see-through there over the GPU's frame -- the black square
+   behind a notice's turning object (the magic slate's page, an item found: OBJECT.CPP AffAllIncrust) showed the scene through: that
+   black instead. Unchanged in software, under a modal's opaque rect and with the polygons drawn in software. */
+U8 GpuOverlay_Ink(U8 colour) { return colour == 0 AND GpuOverlayLive() ? GpuOverlay_Black() : colour; }
+
 /* The race's minimap darkens Log's own pixels under it: over the GPU's frame, in a scene frame, a see-through one is left see-through and
    given back to be darkened on the GPU's frame instead (GpuOverlay_ShadeRun) */
 S32 GpuOverlay_LiveScene(void) { return GpuSceneDrawing AND GpuOverlayLive(); }

@@ -150,6 +150,7 @@ extern void GpuOverlay_KeepPlate(S32 x0, S32 y0, S32 x1, S32 y1); // that part o
 extern void GpuOverlay_SceneFrame(S32 speaking);                // a scene frame begins: past a dialogue, its kept window let go
 extern S32 GpuOverlay_ScreenIndexed(U8 *dst, S32 asShown);                   // the picture on the screen as palette indices (GPU renderer)
 extern U8 GpuOverlay_Black(void);           // a black other than index 0
+extern U8 GpuOverlay_Ink(U8 colour);         // a 2D colour drawn over the play's 3D view: index 0, see-through there, as that black
 extern S32 GpuOverlay_LiveScene(void);
 extern void GpuOverlay_ShadeBegin(S32 deccoul);
 extern void GpuOverlay_ShadeRun(S32 x0, S32 y, S32 x1);

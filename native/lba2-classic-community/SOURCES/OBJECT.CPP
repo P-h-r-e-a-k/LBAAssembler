@@ -6580,7 +6580,7 @@ startaffscene:
 
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
             BackupAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
-            Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, 0);
+            Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, GpuOverlay_Ink(0)); // (OpenGL in play: index 0 is see-through -- FLOW_A.CPP)
 
             ptr3do = (U8 *)GivePtrObjFix(ptrdisp->Num);
 
