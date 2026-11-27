@@ -1,3 +1,4 @@
+using System.IO;
 using LBAAssembler.LbaScript;
 using LBAAssembler.Scenes;
 
