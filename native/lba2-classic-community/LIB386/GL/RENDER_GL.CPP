@@ -385,6 +385,7 @@ static const char *s_clutFragSrc =
     "uniform float uBlendLogH;\n"       /* blend page height in pixels (mode 8) */
     "uniform float uBlendDstW;\n"       /* dst rect width in pixels (mode 8) */
     "uniform float uBlendDstH;\n"       /* dst rect height in pixels (mode 8) */
+    "uniform float uBlendRectH;\n"      /* the blend rect's height in engine pixels (mode 8: the dst page's flip) */
     "varying vec2 vTexCoord;\n"
     "varying vec2 vTexCoordOverW;\n"
     "varying float vInvW;\n"
@@ -648,9 +649,10 @@ static const char *s_clutFragSrc =
     "        float srcIdx = floor(sl.x * 255.0 + 0.5);\n"
     "        if (srcIdx < 0.5) discard;\n"
     "        float logIdx = floor(sl.y * 255.0 + 0.5);\n"
-    /* (uBlendDst's rows bottom-up, as GL_TargetCopyColorRect copies them: v flipped) */
-    "        vec2 dq = (px + 0.5) / vec2(uBlendDstW, uBlendDstH);\n"
-    "        float dstIdx = floor(texture2D(uBlendDst, vec2(dq.x, 1.0 - dq.y))\n"
+    /* (uBlendDst's rows bottom-up from its corner, as GL_TargetCopyColorRect copies them, in a page that may be larger than the rect:
+       the rect's row py at uBlendRectH - py up it) */
+    "        vec2 dq = vec2((px.x + 0.5) / uBlendDstW, (uBlendRectH - (px.y + 0.5)) / uBlendDstH);\n"
+    "        float dstIdx = floor(texture2D(uBlendDst, dq)\n"
     "                              .a * 255.0 + 0.5);\n"
     "        if (logIdx >= 0.5) dstIdx = logIdx;\n"
     "        float result = floor(texture2D(uTransPal,\n"
@@ -749,6 +751,7 @@ static GLint s_clut_uBlendLogW = -1;
 static GLint s_clut_uBlendLogH = -1;
 static GLint s_clut_uBlendDstW = -1;
 static GLint s_clut_uBlendDstH = -1;
+static GLint s_clut_uBlendRectH = -1;
 
 /* ── GL state — textures ────────────────────────────────────────────────── */
 
@@ -781,6 +784,7 @@ static GLint s_clut_uTransDst = -1;
 static GLint s_clut_uTransDstSize = -1;
 static U32 s_blendDstW = 0;
 static U32 s_blendDstH = 0;
+static U32 s_blendDstScale = 1; /* the target's supersample at the last copy */
 static U8 *s_blendReadback = NULL; /* rect staging for TargetCopyColorRect */
 static U32 s_blendReadbackBytes = 0;
 static U8 *s_uploadScratch = NULL; /* repacked present rows (GLES drivers
@@ -1123,6 +1127,7 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_clut_uBlendLogH = glGetUniformLocation(s_clutProgram, "uBlendLogH");
     s_clut_uBlendDstW = glGetUniformLocation(s_clutProgram, "uBlendDstW");
     s_clut_uBlendDstH = glGetUniformLocation(s_clutProgram, "uBlendDstH");
+    s_clut_uBlendRectH = glGetUniformLocation(s_clutProgram, "uBlendRectH");
 
     Log_Info("[GL] CLUT shader compiled OK (aPos=%d aTexCoord=%d aLight=%d "
              "aZ=%d aRepMask=%d uAtlas=%d uCLUT=%d uPalette=%d uScreenScale=%d).",
@@ -1801,12 +1806,17 @@ static void GL_TexUpdateBlendLog(const void *rg, U32 width, U32 height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (s_blendLogW != width || s_blendLogH != height) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, (GLsizei)width,
-                     (GLsizei)height, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE,
+    /* (grown, never shrunk: a frame's blend sprites -- the protection
+       spell's sixteen sparkles, each its own size -- reallocated it each;
+       the rect sits at its corner, the shader normalises by the page) */
+    if (width > s_blendLogW || height > s_blendLogH) {
+        const U32 w = width > s_blendLogW ? width : s_blendLogW;
+        const U32 h = height > s_blendLogH ? height : s_blendLogH;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, (GLsizei)w,
+                     (GLsizei)h, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE,
                      NULL);
-        s_blendLogW = width;
-        s_blendLogH = height;
+        s_blendLogW = w;
+        s_blendLogH = h;
     }
     /* Rows are width*2 bytes; an odd width is not 4-byte aligned, so the
        default unpack stride would shift every row after the first. */
@@ -1855,12 +1865,15 @@ static S32 GL_TargetCopyColorRect(U32 x, U32 y, U32 width, U32 height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (s_blendDstW != needW || s_blendDstH != needH) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)needW,
-                     (GLsizei)needH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        s_blendDstW = needW;
-        s_blendDstH = needH;
+    if (needW > s_blendDstW || needH > s_blendDstH) { /* (grown only, as the log page) */
+        const U32 w = needW > s_blendDstW ? needW : s_blendDstW;
+        const U32 h = needH > s_blendDstH ? needH : s_blendDstH;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)w, (GLsizei)h, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        s_blendDstW = w;
+        s_blendDstH = h;
     }
+    s_blendDstScale = scale;
 
     /* (page row 0 = the rect's bottom engine row) */
     glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
@@ -2078,10 +2091,13 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
         }
     }
     if (params->polyMode == 8) {
-        glUniform1f(s_clut_uBlendLogW, params->blendLogW);
-        glUniform1f(s_clut_uBlendLogH, params->blendLogH);
-        glUniform1f(s_clut_uBlendDstW, params->blendDstW);
-        glUniform1f(s_clut_uBlendDstH, params->blendDstH);
+        /* (the pages as allocated -- grown, the rect at their corner -- in
+           engine pixels; the rect's own height for the dst page's flip) */
+        glUniform1f(s_clut_uBlendLogW, (float)s_blendLogW);
+        glUniform1f(s_clut_uBlendLogH, (float)s_blendLogH);
+        glUniform1f(s_clut_uBlendDstW, (float)s_blendDstW / (float)s_blendDstScale);
+        glUniform1f(s_clut_uBlendDstH, (float)s_blendDstH / (float)s_blendDstScale);
+        glUniform1f(s_clut_uBlendRectH, params->blendDstH);
     }
 
     /* TRANS/TRAME (blend) batches alpha-blend; everything else is opaque.
