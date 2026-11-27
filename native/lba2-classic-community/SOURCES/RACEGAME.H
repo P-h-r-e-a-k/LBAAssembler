@@ -18,6 +18,9 @@ S32 RaceGame_Achieve(const char *id, char *title, S32 size);
 S32 RaceGame_Achieved(const char *id);
 // A postcard found (RACEMOD.CPP postcards=): kept in the player's scrapbook (SCRAPBOOK.TXT); non-zero when it is new to it
 S32 RaceGame_Postcard(S32 card);
+// ... and the picture on it: the frame the player saw as they found it (0x00RRGGBB pixels, w x h -- CONTROL.CPP Control_FrameRGB),
+// kept beside the scrapbook as CARD<n>.BMP
+void RaceGame_PostcardPicture(S32 card, const U32 *rgb, S32 w, S32 h);
 // The bowling game's best score of a bowler, kept for the player: `score` (-1: only asked) kept when it is better; the best then
 S32 RaceGame_BowlingBest(S32 bowler, S32 score);                      // RACEGAME.TXT read: the main menu is the race game's
 // The race game's main menu, and its pages (Specials, a race or a time trial, the car, Best times): what MainGameMenu does next --

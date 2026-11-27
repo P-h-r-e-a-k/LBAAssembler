@@ -1414,7 +1414,39 @@ static void control_dump_state(const char *path) {
     fclose(f);
 }
 
+/* The frame the player sees as 0x00RRGGBB pixels, ModeDesiredX x ModeDesiredY, malloc'd (the caller frees it); NULL if it can't be had.
+   Control_ScreenshotTo's composite under a GPU backend; on software, Log through the palette it is shown with. (A postcard's picture in
+   the scrapbook, RACEMOD.CPP PostcardsFrame.) */
+static U32 *ComposedGpuFrame(void);
+U32 *Control_FrameRGB(void) {
+    const U32 w = (U32)ModeDesiredX, h = (U32)ModeDesiredY;
+    if (w == 0 || h == 0 || !Log || !PtrPal) return NULL;
+    if (GpuRenderer_IsActive()) return ComposedGpuFrame();
+    U32 *rgb = (U32 *)malloc(w * h * sizeof(U32));
+    if (!rgb) return NULL;
+    const U8 *logMem = (const U8 *)Log, *pal = (const U8 *)PtrPal;
+    for (U32 y = 0; y < h; y++)
+        for (U32 x = 0; x < w; x++) {
+            const U8 idx = logMem[y * w + x];
+            rgb[y * w + x] = ((U32)pal[idx * 3] << 16) | ((U32)pal[idx * 3 + 1] << 8) | (U32)pal[idx * 3 + 2];
+        }
+    return rgb;
+}
+
 void Control_ScreenshotTo(const char *path) {
+    const U32 w = (U32)ModeDesiredX;
+    const U32 h = (U32)ModeDesiredY;
+    if (GpuRenderer_IsActive() && w > 0 && h > 0) {
+        if (U32 *composed = ComposedGpuFrame()) {
+            SavePNGRGB((char *)path, composed, (S32)w, (S32)h);
+            free(composed);
+            return;
+        }
+    }
+    SavePNG((char *)path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPal);
+}
+
+static U32 *ComposedGpuFrame(void) {
     /* Capture the frame the player sees. On software that is Log (the
        presented buffer). Under a GPU backend the 3D lives in the offscreen
        target and Log is only the palette-index overlay (index 0 transparent),
@@ -1451,17 +1483,15 @@ void Control_ScreenshotTo(const char *path) {
                         }
                     }
                 }
-                SavePNGRGB((char *)path, composed, (S32)w, (S32)h);
-                free(composed);
                 free(presented);
-                return;
+                return composed;
             }
             free(presented);
         } else {
             free(presented);
         }
     }
-    SavePNG((char *)path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPal);
+    return NULL;
 }
 
 void Control_ClearCaptureTarget(void) {

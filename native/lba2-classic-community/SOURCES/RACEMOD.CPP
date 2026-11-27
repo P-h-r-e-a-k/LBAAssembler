@@ -343,6 +343,7 @@
 #include "INPUT_BINDINGS.H"
 #include "RACEMOD.H"
 #include "RACEGAME.H"
+#include "CONTROL.H"
 #include <SYSTEM/HQRLOAD.H>
 /* The HUD over the GPU renderer's frame (FLOW_A.CPP) */
 extern U8 GpuOverlay_Black(void);
@@ -21220,7 +21221,25 @@ static void SlateFrame(S32 now) {
 // The postcards (postcards=), looked at as the achievements are: the last card found -- the story's variable, the chapter's card -- put in
 // the player's scrapbook; with as many found as its number, every one before it too (a story saved before the scrapbook was), and past
 // the cards' number (the reward given, all thirteen found) the lot. Not in a replay: its variables are set for the egg's scene, not found.
+// (a card new to the scrapbook gets its picture: the frame a few frames on -- this runs as a frame starts to draw, so the one before it,
+// whole: the card's message closed and the "Into the scrapbook" note not up yet, it comes after -- RACEGAME.CPP RaceGame_PostcardPicture)
+#define CARD_SHOT_FRAMES 3
+static int s_cardShot = 0, s_cardShotWait = 0;
+static void PostcardNote(int card, S32 now) {
+    snprintf(s_achHead, sizeof(s_achHead), "Into the scrapbook");
+    snprintf(s_achText, sizeof(s_achText), "Postcard %d of %d", card, s_cardN);
+    snprintf(s_achId, sizeof(s_achId), "postcards");
+    s_achUntil = now + 6000;
+}
 static void PostcardsFrame(S32 now) {
+    if (s_cardShot) {
+        if (NewCube != -1 || RaceGame_Replaying()) { PostcardNote(s_cardShot, now); s_cardShot = 0; }
+        else if (--s_cardShotWait <= 0) {
+            if (U32 *rgb = Control_FrameRGB()) { RaceGame_PostcardPicture(s_cardShot, rgb, (S32)ModeDesiredX, (S32)ModeDesiredY); free(rgb); }
+            PostcardNote(s_cardShot, now);
+            s_cardShot = 0;
+        }
+    }
     if (s_cardLastVar < 0 || s_cardLastVar >= MAX_VARS_GAME || s_cardN <= 0 || NewCube != -1 || RaceGame_Replaying()) return;
     const int last = ListVarGame[s_cardLastVar];
     if (last == s_cardSeen) return;
@@ -21233,12 +21252,7 @@ static void PostcardsFrame(S32 now) {
     } else if (last > s_cardN && found >= s_cardN) {
         for (int k = 1; k <= s_cardN; k++) RaceGame_Postcard(k);
     }
-    if (fresh) {
-        snprintf(s_achHead, sizeof(s_achHead), "Into the scrapbook");
-        snprintf(s_achText, sizeof(s_achText), "Postcard %d of %d", last, s_cardN);
-        snprintf(s_achId, sizeof(s_achId), "postcards");
-        s_achUntil = now + 6000;
-    }
+    if (fresh) { s_cardShot = last; s_cardShotWait = CARD_SHOT_FRAMES; }
 }
 // ---- the bowling game (the user, 2026-11-12: "we control one of the four bowling characters and not Twinsen") ----------------------------------------
 // Six pins, ten frames: the player is the bowler chosen, Twinsen's own body hidden and glued to him (the camera follows). Left and Right slide him along

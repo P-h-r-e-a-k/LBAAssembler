@@ -90,6 +90,10 @@ void Control_DumpStateTo(const char *path);
    3D lives in the target, so SavePNG(Log) would write the UI over nothing. */
 void Control_ScreenshotTo(const char *path);
 
+/* The frame the player sees as 0x00RRGGBB pixels, ModeDesiredX x ModeDesiredY, malloc'd -- the caller frees it; NULL if it can't be had
+   (the same composite as Control_ScreenshotTo's under a GPU backend) */
+U32 *Control_FrameRGB(void);
+
 /* Cleanroom background for a --black-bg capture: the composed screenshot reads Log
    over the offscreen target, so a surface that zeroes Log/Screen for the golden has
    to zero the target as well, or the scene a GPU backend left there composes behind

@@ -3610,8 +3610,121 @@ S32 RaceGame_Postcard(S32 card) {
     return 1;
 }
 
-// A card on the page, its top left at (x0, y0): found, its picture -- the sky, the far hills, the ground, a sun or rain or stars and a
-// moon or the lava's glow -- in a white border with a stamp; not found, its back, the address's lines and the stamp's square, its number
+// The postcards' pictures (the user, 2026-11-26: "Generate applicable pictures for the scrapbook postcards"): the frame the player saw as they
+// found the card -- the place it is from, as their own game showed it -- taken a few frames on by RACEMOD.CPP PostcardsFrame, cropped to
+// the card's shape and kept beside SCRAPBOOK.TXT as CARD<n>.BMP (24-bit, RG_PIC_W x RG_PIC_H). A card found before there were pictures
+// keeps the drawn one: its sky, hills and ground.
+#define RG_PIC_W 160
+#define RG_PIC_H 100
+#define RG_BIG_W 128                        // (the chosen card's picture under the cards, beside its words)
+#define RG_BIG_H 80
+#define RG_THUMB_W 91                       // (... and on the card: its picture's inside)
+#define RG_THUMB_H 57
+static void CardPicPath(char *out, int card) {
+    char name[32];
+    snprintf(name, sizeof(name), "CARD%02d.BMP", card);
+    GetCfgPath(out, ADELINE_MAX_PATH, name);
+}
+static void PutLE(U8 *p, U32 v, int n) { for (int i = 0; i < n; i++) p[i] = (U8)(v >> (8 * i)); }
+static int s_picRead[RG_CARDS_MAX];         // (0 not looked for yet, 1 none, 2 read)
+void RaceGame_PostcardPicture(S32 card, const U32 *rgb, S32 w, S32 h) {
+    if (card < 1 || card > RG_CARDS_MAX || !rgb || w < RG_PIC_W || h < RG_PIC_H) return;
+    // (the middle of the frame in the card's shape, each pixel of the picture the average of the frame's under it)
+    S32 cw = w, ch = h;
+    if (cw * RG_PIC_H > ch * RG_PIC_W) cw = ch * RG_PIC_W / RG_PIC_H; else ch = cw * RG_PIC_H / RG_PIC_W;
+    const S32 ox = (w - cw) / 2, oy = (h - ch) / 2;
+    static U8 pix[RG_PIC_W * RG_PIC_H * 3];
+    for (int py = 0; py < RG_PIC_H; py++)
+        for (int px = 0; px < RG_PIC_W; px++) {
+            const S32 x0 = ox + px * cw / RG_PIC_W, x1 = ox + (px + 1) * cw / RG_PIC_W, y0 = oy + py * ch / RG_PIC_H, y1 = oy + (py + 1) * ch / RG_PIC_H;
+            U32 r = 0, g = 0, b = 0, n = 0;
+            for (S32 y = y0; y < (y1 > y0 ? y1 : y0 + 1); y++)
+                for (S32 x = x0; x < (x1 > x0 ? x1 : x0 + 1); x++) {
+                    const U32 c = rgb[y * w + x];
+                    r += (c >> 16) & 255; g += (c >> 8) & 255; b += c & 255; n++;
+                }
+            U8 *o = &pix[(py * RG_PIC_W + px) * 3];
+            o[0] = (U8)(r / n); o[1] = (U8)(g / n); o[2] = (U8)(b / n);
+        }
+    // (a BMP: rows bottom up, blue green red)
+    U8 head[54] = {'B', 'M'};
+    const U32 rowBytes = RG_PIC_W * 3, size = rowBytes * RG_PIC_H;
+    PutLE(head + 2, 54 + size, 4); PutLE(head + 10, 54, 4); PutLE(head + 14, 40, 4);
+    PutLE(head + 18, RG_PIC_W, 4); PutLE(head + 22, RG_PIC_H, 4); PutLE(head + 26, 1, 2); PutLE(head + 28, 24, 2); PutLE(head + 34, size, 4);
+    char path[ADELINE_MAX_PATH];
+    CardPicPath(path, card);
+    FILE *f = fopen(path, "wb");
+    if (!f) { Log_Info("[racegame] scrapbook: postcard %d's picture not written (%s)", (int)card, path); return; }
+    fwrite(head, 1, sizeof(head), f);
+    for (int y = RG_PIC_H - 1; y >= 0; y--)
+        for (int x = 0; x < RG_PIC_W; x++) { const U8 *p = &pix[(y * RG_PIC_W + x) * 3]; const U8 bgr[3] = {p[2], p[1], p[0]}; fwrite(bgr, 1, 3, f); }
+    fclose(f);
+    s_picRead[card - 1] = 0;
+    Log_Info("[racegame] scrapbook: postcard %d's picture taken from the %dx%d frame (%s)", (int)card, (int)w, (int)h, path);
+}
+// A card's picture in the menus' colours, at the card's size and the chosen card's: read once a page, its colours each the nearest of the
+// palette's (a 15-bit colour's nearest kept)
+static U8 s_picThumb[RG_CARDS_MAX][RG_THUMB_W * RG_THUMB_H], s_picBig[RG_CARDS_MAX][RG_BIG_W * RG_BIG_H];
+static U8 s_nearest[32768], s_nearestHave[32768];
+static U8 Nearest15(int r, int g, int b) {
+    const int k = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    if (!s_nearestHave[k]) { s_nearest[k] = NearestColour((r & ~7) + 4, (g & ~7) + 4, (b & ~7) + 4); s_nearestHave[k] = 1; }
+    return s_nearest[k];
+}
+static int CardPicture(int card) {
+    if (card < 1 || card > RG_CARDS_MAX) return 0;
+    int &state = s_picRead[card - 1];
+    if (state) return state == 2;
+    state = 1;
+    char path[ADELINE_MAX_PATH];
+    CardPicPath(path, card);
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    static U8 pix[RG_PIC_W * RG_PIC_H * 3];
+    U8 head[54];
+    const int ok = fread(head, 1, 54, f) == 54 && head[0] == 'B' && head[1] == 'M' && head[28] == 24
+                   && (head[18] | head[19] << 8) == RG_PIC_W && (head[22] | head[23] << 8) == RG_PIC_H;
+    if (ok) {
+        fseek(f, (long)(head[10] | head[11] << 8 | head[12] << 16 | (U32)head[13] << 24), SEEK_SET);
+        for (int y = RG_PIC_H - 1; y >= 0; y--)
+            for (int x = 0; x < RG_PIC_W; x++) {
+                U8 bgr[3] = {0, 0, 0};
+                if (fread(bgr, 1, 3, f) != 3) break;
+                U8 *p = &pix[(y * RG_PIC_W + x) * 3];
+                p[0] = bgr[2]; p[1] = bgr[1]; p[2] = bgr[0];
+            }
+    }
+    fclose(f);
+    if (!ok) return 0;
+    // (each size's pixel the average of the picture's under it)
+    struct { U8 *out; int w, h; } sizes[2] = {{s_picThumb[card - 1], RG_THUMB_W, RG_THUMB_H}, {s_picBig[card - 1], RG_BIG_W, RG_BIG_H}};
+    for (int s = 0; s < 2; s++)
+        for (int y = 0; y < sizes[s].h; y++)
+            for (int x = 0; x < sizes[s].w; x++) {
+                const int x0 = x * RG_PIC_W / sizes[s].w, x1 = (x + 1) * RG_PIC_W / sizes[s].w, y0 = y * RG_PIC_H / sizes[s].h, y1 = (y + 1) * RG_PIC_H / sizes[s].h;
+                int r = 0, g = 0, b = 0, n = 0;
+                for (int sy = y0; sy < (y1 > y0 ? y1 : y0 + 1); sy++)
+                    for (int sx = x0; sx < (x1 > x0 ? x1 : x0 + 1); sx++) { const U8 *p = &pix[(sy * RG_PIC_W + sx) * 3]; r += p[0]; g += p[1]; b += p[2]; n++; }
+                sizes[s].out[y * sizes[s].w + x] = Nearest15(r / n, g / n, b / n);
+            }
+    state = 2;
+    return 1;
+}
+// (the picture's pixels into the page, clipped to the screen)
+static void DrawPicture(S32 x0, S32 y0, const U8 *pic, int w, int h) {
+    for (int y = 0; y < h; y++) {
+        const S32 sy = y0 + y;
+        if (sy < 0 || sy >= (S32)ModeDesiredY) continue;
+        for (int x = 0; x < w; x++) {
+            const S32 sx = x0 + x;
+            if (sx >= 0 && sx < (S32)ModeDesiredX) ((U8 *)Log)[TabOffLine[sy] + sx] = pic[y * w + x];
+        }
+    }
+}
+
+// A card on the page, its top left at (x0, y0): found, its picture -- the frame the player saw as they found it, or one drawn: the sky,
+// the far hills, the ground, a sun or rain or stars and a moon or the lava's glow -- in a white border with a stamp; not found, its back,
+// the address's lines and the stamp's square, its number
 #define RG_CARD_W 100
 #define RG_CARD_H 66
 #define RG_CARD_GAP 14
@@ -3636,6 +3749,12 @@ static void DrawCard(S32 x0, S32 y0, int n, int got, int chosen) {
     }
     Box(x0, y0, x1, y1, paper);
     const S32 ix0 = x0 + 5, iy0 = y0 + 5, ix1 = x1 - 5, iy1 = y1 - 5, horizon = iy0 + (iy1 - iy0) * 55 / 100;
+    if (CardPicture(n)) {
+        DrawPicture(ix0, iy0, s_picThumb[n - 1], RG_THUMB_W, RG_THUMB_H);
+        Box(ix1 - 16, iy0 - 2, ix1 + 1, iy0 + 15, paper);
+        Box(ix1 - 13, iy0 + 1, ix1 - 2, iy0 + 12, red);
+        return;
+    }
     const U8 sky = NearestColour(cd->Sky[0], cd->Sky[1], cd->Sky[2]), far = NearestColour(cd->Far[0], cd->Far[1], cd->Far[2]),
              ground = NearestColour(cd->Ground[0], cd->Ground[1], cd->Ground[2]);
     Box(ix0, iy0, ix1, iy1, sky);
@@ -3684,6 +3803,9 @@ static void DrawCard(S32 x0, S32 y0, int n, int got, int chosen) {
 static void ScrapbookPage(void) {
     ReadCards();
     ReadScrap();
+    // (the pictures read again, in the palette the page has now)
+    memset(s_picRead, 0, sizeof(s_picRead));
+    memset(s_nearestHave, 0, sizeof(s_nearestHave));
     const int n = s_nbCards;
     if (n <= 0) return;
     static int s_scrapAt = 0;               // (where the Scrapbook was left: it opens there again)
@@ -3722,7 +3844,14 @@ static void ScrapbookPage(void) {
         if (s_cardGot[at]) {
             snprintf(line, sizeof(line), "Greetings from %s!", cd->Place);
             Text(cx, below, line, RG_ORANGE);
-            Wrapped(cx - RG_PAGE_HALF + 40, below + 32, 2 * RG_PAGE_HALF - 80, RG_LINE, cd->Words, LBAWHITE);
+            // (its picture larger, beside its words, where there's room under the cards)
+            if (CardPicture(at + 1) && below + 30 + RG_BIG_H + 2 <= keysY - 6) {
+                const U8 paper = NearestColour(238, 232, 214);
+                Box(left - 3, below + 27, left + RG_BIG_W + 2, below + 32 + RG_BIG_H, paper);
+                DrawPicture(left, below + 30, s_picBig[at], RG_BIG_W, RG_BIG_H);
+                Wrapped(left + RG_BIG_W + 20, below + 32, gridW - RG_BIG_W - 20, RG_LINE, cd->Words, LBAWHITE);
+            } else
+                Wrapped(cx - RG_PAGE_HALF + 40, below + 32, 2 * RG_PAGE_HALF - 80, RG_LINE, cd->Words, LBAWHITE);
         } else {
             snprintf(line, sizeof(line), "Postcard %d: not found yet", at + 1);
             Text(cx, below, line, RG_GREY);
