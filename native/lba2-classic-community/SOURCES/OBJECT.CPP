@@ -37,13 +37,20 @@ extern S32 FlagAnimWhoSpeak; // MESSAGE.CPP
 // exterior re-rotates the world point and uses the same GET_ZO the terrain
 // tiles carry. Raw sprites at a scale factor take DrawScaleSprite, whose
 // walk reproduces ScaleSprite's sampling before the quad depth-tests.
+// Outdoors also without GpuScene, in a scene frame the GPU draws (GpuOverlay_LiveScene): there the 3D is in the FBO and a sprite
+// drawn into Log stayed over everything the GPU drew after it -- a car passing in front of a dropped kash -- where the software's
+// later draws cover it. In the FBO it is depth-tested against the ground and drawn over in the scene's own order.
+static S32 GpuWorldSpritesOn(void) {
+    return GpuScene OR (CubeMode == CUBE_EXTERIEUR AND GpuOverlay_LiveScene());
+}
+
 static S32 TryGpuWorldSprite(S32 xp, S32 yp, S32 sprite, S32 xw, S32 yw,
                              S32 zw) {
     const void *bank;
     S32 rawFormat;
     U16 zo;
 
-    if (!GpuScene || !GpuRenderer_IsActive()) {
+    if (!GpuWorldSpritesOn() || !GpuRenderer_IsActive()) {
         return 0;
     }
     if (sprite >= 100) {
@@ -77,7 +84,7 @@ static S32 TryGpuAnim3DSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
     const void *bank;
     U16 zo;
 
-    if (!GpuScene || !GpuRenderer_IsActive()) {
+    if (!GpuWorldSpritesOn() || !GpuRenderer_IsActive()) {
         return 0;
     }
     bank = GetPtrAnim3DS(num);
@@ -102,7 +109,7 @@ static S32 TryGpuExtraSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
     const void *bank;
     U16 zo;
 
-    if (!GpuScene || !GpuRenderer_IsActive()) {
+    if (!GpuWorldSpritesOn() || !GpuRenderer_IsActive()) {
         return 0;
     }
     bank = HQR_Get(HQRPtrSpriteRaw, num);

@@ -1249,7 +1249,7 @@ S32 GpuRenderer_DrawSprite(S32 spriteIdx, S32 x, S32 y, U16 zo,
     GpuVertex *v;
     const U8 *data;
 
-    if (!s_active || !GpuScene || bank == NULL) {
+    if (!s_active || bank == NULL) { /* (GpuScene: the caller's gate, OBJECT.CPP GpuWorldSpritesOn) */
         return 0;
     }
     if (spriteIdx < 0) {
@@ -1369,7 +1369,7 @@ S32 GpuRenderer_DrawScaleSprite(S32 x, S32 y, S32 factorx, S32 factory,
     S32 walkOk;
     S32 row;
 
-    if (!s_active || !GpuScene || bank == NULL || Log == NULL ||
+    if (!s_active || bank == NULL || Log == NULL || /* (GpuScene: the caller's gate) */
         TabOffLine == NULL) {
         return 0;
     }
