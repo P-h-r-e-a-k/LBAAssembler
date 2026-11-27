@@ -858,6 +858,36 @@ void comportement_1()
                 return scripts => { foreach (var e in edits) e(scripts); };
             });
 
+        // Race day (the coil gone, then got): the start line's car stays where the race-track mode parks it -- the pit lane's far end
+        // (RACEMOD pit_start=) -- when Twinsen walks into the start line's scene. Its script, every track's (RaceTrackScenes.StartBuggyScript),
+        // puts the car back on the start line whenever the scene starts on foot (INIT_BUGGY 2), and the race-track mode moves it into the pit
+        // lane only once a race day -- done while he was still in the hotel -- so walking out of the Imperial Hotel put it back on pole, where
+        // the first of the others, set on the grid from pole, pushed it a car's length on (the user, 2026-11-26, "Check Twinsen's car position
+        // in my game, this is where Twinsen's car is getting put when he leaves the imperial hotel"; "More likely a different car pushing
+        // Twinsen's and displacing it"). So on race day the car is shown where it was left (INIT_BUGGY 0), the pit lane's spot.
+        b.Edit(scenes.StartScene, "race day: the start line's car left in the pit lane when Twinsen walks in (not put back on pole)", model =>
+        {
+            var count = model.Actors.Count;
+            return scripts =>
+            {
+                for (var i = 1; i < count; i++)
+                {
+                    var text = scripts.GetText(i, ScriptKind.Life);
+                    if (!text.Contains("init_buggy(2);")) continue;
+                    scripts.SetText(i, ScriptKind.Life, Loose(text, "else\n{\ninit_buggy(2);", $@"else if ({DayRaceDay} <= var_game({OtringalDay}) && {DayCoil + 1} > var_game({OtringalDay}))
+        {{
+            init_buggy(0);
+            set_comportement(comportement_1);
+        }}
+        else
+        {{
+            init_buggy(2);"));
+                    return;
+                }
+                throw new NotTheGames("no car putting itself on the start line (init_buggy(2))");
+            };
+        });
+
         // Lyra (at her plinth, and by the hotel's pool): the Esmers' 10 zlitos (Q_FEE 1), then the fee -- 30 zlitos, taken by her (Q_FEE 2).
         // (The steward by the line who sold a Travel Token is gone, and the token with him: the user, 2026-11-17, "The dog by the race track
         // currently sells us the travel token, but we have to talk to Lyra inside the Imperial hotel first, this makes no sense. Let's remove
