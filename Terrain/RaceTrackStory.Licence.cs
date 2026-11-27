@@ -213,7 +213,24 @@ internal static partial class RaceTrackStory
             var hero = model.Actors[0];
             (car.X, car.Y, car.Z, car.Beta) = (hero.X, hero.Y, hero.Z, 0);
             b.Log.Add($"the Temple of Bú's scene {scene}: a car of its own (actor {model.Actors.Count}), where Twinsen leaves it");
-            return IslandBeatsA.Add(model, car, CaveCarLife);
+            var doors = model.Actors.Count;
+            var add = IslandBeatsA.Add(model, car, CaveCarLife);
+            return scripts =>
+            {
+                add(scripts);
+                // (a door he comes in by gives Twinsen back his walking once it's open -- the game's set_dir_obj(0, MOVE_MANUAL), which takes
+                // him out of the car when he drives through it: the Esmers' base's door from the temple's second room, the user, 2026-11-26,
+                // "Entering into the Esmer base in the car seems to force Twinsen out of the car" -- "Twinsen can drive in scene 12 if he
+                // gets back into the car". Driving, he keeps the car)
+                for (var i = 1; i < doors; i++)
+                {
+                    var text = scripts.GetText(i, ScriptKind.Life);
+                    if (!text.Contains("set_door_up") || !text.Contains("set_dir_obj(0, MOVE_MANUAL);")) continue;
+                    scripts.SetText(i, ScriptKind.Life, text.Replace("set_dir_obj(0, MOVE_MANUAL);",
+                        "if (12 != comportement_hero())\n        {\n            set_dir_obj(0, MOVE_MANUAL);\n        }"));
+                    b.Log.Add($"the Temple of Bú's scene {scene}: door actor {i} lets Twinsen in the car keep it");
+                }
+            };
         }
         b.Edit(TempleScene, "the Temple of Bú driven through: the raised floors' actors and points raised, a car of the room's own", model =>
         {
