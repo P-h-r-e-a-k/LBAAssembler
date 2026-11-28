@@ -3092,12 +3092,12 @@ static void D_TexUpdatePresent(const void *pixels, U32 pitch, U32 width, U32 hei
 static void D_TexUpdateAtlas(const void *lum) {
     GL_OP_BEGIN("TexUpdateAtlas");
     GL_TexUpdateAtlas(lum);
-    GL_OP_END("TexUpdateAtlas", 1);
+    GL_OP_END("TexUpdateAtlas", 0);   /* (FRAME_CHECKED: below) */
 }
 static void D_TexUpdateCLUT(const void *lum) {
     GL_OP_BEGIN("TexUpdateCLUT");
     GL_TexUpdateCLUT(lum);
-    GL_OP_END("TexUpdateCLUT", 1);
+    GL_OP_END("TexUpdateCLUT", 0);    /* (FRAME_CHECKED) */
 }
 static void D_TexUpdatePalette(const void *argb) {
     GL_OP_BEGIN("TexUpdatePalette");
@@ -3107,12 +3107,12 @@ static void D_TexUpdatePalette(const void *argb) {
 static void D_TexUpdateBricks(const void *rg, U32 width, U32 height) {
     GL_OP_BEGIN("TexUpdateBricks %ux%u", width, height);
     GL_TexUpdateBricks(rg, width, height);
-    GL_OP_END("TexUpdateBricks", 1);
+    GL_OP_END("TexUpdateBricks", 0);  /* (FRAME_CHECKED) */
 }
 static void D_TexUpdateSprites(const void *rg, U32 width, U32 height) {
     GL_OP_BEGIN("TexUpdateSprites %ux%u", width, height);
     GL_TexUpdateSprites(rg, width, height);
-    GL_OP_END("TexUpdateSprites", 1);
+    GL_OP_END("TexUpdateSprites", 0); /* (FRAME_CHECKED) */
 }
 static void D_TexUpdateTransPal(const void *lum) {
     GL_OP_BEGIN("TexUpdateTransPal");
@@ -3145,7 +3145,11 @@ static void D_DrawTriangles(const GpuVertex *verts, U32 vertexCount, const GpuDr
     GL_DrawTriangles(verts, vertexCount, params);
     GL_OP_END("DrawTriangles", 0);
 }
-/* (a frame's composite starts here: the frame's count, its errors and the driver's messages) */
+/* (a frame's composite starts here: the frame's count, its errors and the driver's messages)
+   FRAME_CHECKED: the uploads made every frame -- the CLUT, the atlas pages (an animated texture's again each frame), the brick and
+   sprite pages -- are checked here, with the frame's drawing, not each on its own: glGetError waits for NVIDIA's driver thread
+   (threaded optimisation), and those waits were about a millisecond of an outdoor frame at 1280x800 (2026-11-28). An error is still
+   logged (as after "the frame's drawing") and the trail still has the operations in order; LBA2_GL_DEBUG checks after each again. */
 static void D_ClearBackbuffer(void) {
     s_glFrame++;
     GL_CheckErrors("the frame's drawing");
@@ -3166,7 +3170,7 @@ static void D_DrawPresentQuad(S32 which, S32 linear, S32 opaqueX0, S32 opaqueY0,
 static void D_TexUpdateAtlasSlot(const void *lum, U32 slot) {
     GL_OP_BEGIN("TexUpdateAtlasSlot %u", slot);
     GL_TexUpdateAtlasSlot(lum, slot);
-    GL_OP_END("TexUpdateAtlasSlot", 1);
+    GL_OP_END("TexUpdateAtlasSlot", 0); /* (FRAME_CHECKED) */
 }
 
 /* ── Backend vtable ─────────────────────────────────────────────────────── */
