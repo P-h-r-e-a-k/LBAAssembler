@@ -153,6 +153,8 @@ internal static partial class RaceTrackStory
             message({Say(WanniesLine.OldWannieClue)});
             change_cube({MosquibeesArrival});";
         // (heigh-ho, an easter egg: in the miners' scene the tunnel waits for their walk -- RaceTrackStory.Eggs.Wannies)
+        // (Lucy's tart without its slot: the black car's case file's -- RaceTrackStory.CaseFile.cs)
+        TartOff(store, log);
         var heighHo = HeighHoPlace(gameDirectory, store, originals, island, report, log);
         for (var s = island.FirstScene; s <= island.LastScene; s++)
             GroupB.EditScene(store, s, log, "Lyra's word on arrival (Q_GLOVE 1), Baldino's call on the radio, and after the race won the fragment, the old Wannie's clue and the tunnel", model =>

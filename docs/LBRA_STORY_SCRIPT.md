@@ -865,6 +865,15 @@ added to Mr. Paul's prize, and the two pages' pictures.
    >
    > **Zoe:** "Looking for something on a race track... or putting something on one."
 
+   **The black car's case file (built 2026-11-28; RaceTrackStory.CaseFile.cs).** Zoe hands it over right after her oil line, once:
+   "A black car with no plates, oil on the track... Here, Twinsen, my old folder..." (text 1090 of file 5). It's the tart's slot, item 25
+   (FLAG_TART_LUCI: Wannies Island's tart errand now runs on its own variable 64, without the slot), with model OBJFIX 25 and texts
+   25/125/225 of file 2. Used from the inventory (race file `case_file=25`; PERSO.CPP, in the car too) it opens RACEGAME.CPP
+   RaceGame_CaseFile, a page a clue from the game folder's CASEFILE.TXT. Each page is found once its variable is 1, set where the line
+   is said: 310 Citadel (set at the handover), 312 Moya's oil, 311 the Temple of Bú's witness, 313 HAL's log, 314 Otringal's marshal,
+   315 Lyra's Sup coins, 316 Rick's casino night, 317 Johnny Rocket's shuttle. 310-329 are the case file's. Chapters 6 and 7 have no
+   clue yet (drafts for the user). Console `ui casefile <png>` opens it for a test.
+
    The masked driver's car is past the finish again, and drives off.
 9. **To the moon.** Baldino:
    > **Baldino:** "You think you're fast? On the moon I've got a lander that would leave your car standing. Come and race me up there.

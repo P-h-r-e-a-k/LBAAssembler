@@ -676,6 +676,11 @@ through at night, slow, like it was looking for something."
 
 **Zoe:** "Looking for something on a race track... or putting something on one."
 
+**Zoe** (2026-11-28): "A black car with no plates, oil on the track... Here, Twinsen, my old folder. Write down everything you find out
+about that car. Sooner or later it'll all make sense." **Found:** The black car's case file. Use it from the inventory, in the car too:
+a page a clue, Left/Right to turn. Its first pages are Citadel's car past the finish and Moya's oil; later ones fill in as people tell
+Twinsen about the black car (the Temple of Bú's skeleton witness, HAL's log, Otringal's marshal, Lyra, Rick and Johnny Rocket).
+
 **9. To the moon.**
 
 **Baldino:** "You think you're fast? The Cup goes on to the Emerald Moon, and up there the moon base's own computer races -- HAL, never
@@ -1380,6 +1385,7 @@ The credits roll.
 | 3 | Wizard's Diploma | the Dean | the Desert track opened |
 | 3 | Hair dryer | the salesman in the Desert village, 30 kashes (Baldino lends them if short) | Baldino's rheostat |
 | 3 | Hoverboard | Baldino, for the hair dryer | riding; the racing helmet |
+| 3 | The black car's case file | Zoe, after the Desert race | the clues about the black car, a page each |
 | 5 | 10 zlitos | Lyra, from the Esmers | the entry fee (with the Casino's help) |
 | 5 | Translator | Lyra, from the Esmers | the control tower's staff, the space port's mechanic |
 | 5 | Travel Token | the steward, for 30 zlitos | the Otringal grid |

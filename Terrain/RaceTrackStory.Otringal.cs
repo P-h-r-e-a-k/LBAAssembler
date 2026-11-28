@@ -1006,6 +1006,7 @@ void comportement_1()
                     return IslandBeatsA.Add(model, johnny, Talker(otringal, CoilAsked(Say, OtringalLine.JohnnyCoil) + $@"            if ({FeeTold} == var_game({QFee}))
             {{
                 message({Say(OtringalLine.JohnnyCar)});
+                {Clue(ClueShuttle)}
                 message({Say(OtringalLine.JohnnyTaxi)});
             }}
             else

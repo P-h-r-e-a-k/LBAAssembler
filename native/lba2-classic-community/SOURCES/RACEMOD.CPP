@@ -1263,6 +1263,10 @@ extern T_INV_OBJ InitTabInv[MAX_INVENTORY];
 // behaviour menu's -- COMPORTE.CPP -- not made). Its own thing in it is the game's as ever: the Hoverboard in its slot, whose other kind is
 // the hair dryer Baldino wants the rheostat of (the user, 2026-11-27: "The hair dryer won't need its own inventory slot, it can use the
 // hoverboard slot, as Twinsen will never own both at the same time") -- the dryer neither flies nor shows the board's behaviour.
+// case_file=<slot> (2026-11-28): the black car's case file is this slot's thing -- used from the inventory, its pages
+// (RACEGAME.CPP RaceGame_CaseFile, PERSO.CPP), in the car too
+static int s_caseSlot = -1;
+S32 RaceMod_CaseFileSlot(void) { return RaceMod_Active() ? s_caseSlot : -1; }
 S32 RaceMod_InvKindHas(S32 slot) {
     for (int i = 0; i < s_nbInvKinds; i++)
         if (s_invKindSlot[i] == slot) {
@@ -5742,6 +5746,7 @@ static void Load(const char *path, int carOnly = 0) {
             const int slot = atoi(v);
             if (slot >= 0 && slot < 64) s_invCount |= 1ull << slot;
         }
+        else if (!strcmp(key, "case_file")) { s_caseSlot = atoi(v); if (s_caseSlot < 0 || s_caseSlot >= MAX_INVENTORY) s_caseSlot = -1; }
         else if (!strcmp(key, "inv_kinds")) {
             int slot, m[4], n;
             if ((n = sscanf(v, "%d %d %d %d %d", &slot, &m[0], &m[1], &m[2], &m[3])) >= 2 && slot >= 0 && slot < MAX_INVENTORY) {

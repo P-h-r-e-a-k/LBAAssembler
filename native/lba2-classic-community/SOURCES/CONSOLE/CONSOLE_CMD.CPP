@@ -642,6 +642,17 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
         Console_Print("ui inventory -> %s", argv[2]);
         return;
     }
+    if (argc >= 3 && !strcmp(argv[1], "casefile")) {
+        /* The black car's case file (RACEGAME.CPP RaceGame_CaseFile), as the inventory opens it: the screenshot armed for its first
+           frame (its page loop takes a pending one -- Shot), headless it closes after that frame (skipmodals). Then the scene faded
+           back in, as PERSO.CPP does. */
+        extern void RaceGame_CaseFileTo(const char *shot);
+        RaceGame_CaseFileTo(argv[2]);
+        FadeToBlack(PtrPalNormal);
+        FlagFade = TRUE;
+        Console_Print("ui casefile -> %s", argv[2]);
+        return;
+    }
     if (argc >= 3 && !strcmp(argv[1], "holomap")) {
         /* HoloMap fades to black, opens HoloGlobe (the rotating planet view),
            and runs until FlagHoloEnd.  Holo_RequestCapture arms a one-shot

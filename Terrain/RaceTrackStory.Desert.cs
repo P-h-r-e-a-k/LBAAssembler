@@ -1296,6 +1296,8 @@ void comportement_1()
         HairDryerDesert(b, dryerFirst);
         // (the racer stuck in the sand at the Temple bend, towed out: RaceTrackStory.Tow.cs -- placed with the eggs, below, once the lap's known)
         var towFirst = GroupB.AddLines(gameDirectory, DesertTexts, TowLines, log, "the tow's (the Desert)");
+        // (Zoe's word as she gives Twinsen the black car's case file, after the race: RaceTrackStory.CaseFile.cs)
+        var caseFirst = GroupB.AddLines(gameDirectory, DesertTexts, CaseLines, log, "the case file's (the Desert)");
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
@@ -1359,8 +1361,9 @@ void comportement_1()
         }}
         message({Say(DesertLine.RacerNext)});
         message({Say(DesertLine.MoyaOil)});
+        {Clue(ClueOil)}
         message_zoe({Say(DesertLine.ZoeOil)});
-        message({Say(DesertLine.BaldinoRocket)});
+{CaseHandover(caseFirst)}        message({Say(DesertLine.BaldinoRocket)});
 {BuAfterRace(Say)}        if (4 > chapter())
         {{
             inc_chapter();
@@ -1807,8 +1810,9 @@ void comportement_1()
         }}
         message_obj({racer}, {Say(DesertLine.RacerNext)});
         message_obj({moya}, {Say(DesertLine.MoyaOil)});
+        {Clue(ClueOil)}
         message_zoe({Say(DesertLine.ZoeOil)});
-        message_obj({bal}, {Say(DesertLine.BaldinoRocket)});
+{CaseHandover(caseFirst)}        message_obj({bal}, {Say(DesertLine.BaldinoRocket)});
         if ({MagicWon} > magic_level())
         {{
             set_magic_level({MagicWon});

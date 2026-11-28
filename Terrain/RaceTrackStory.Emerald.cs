@@ -1190,6 +1190,7 @@ void comportement_3()
             else if ({HalWon} == var_game({QHal}))
             {{
                 message({Say(MoonLine.HalLog)});
+                {Clue(ClueLaunch)}
             }}
             else
             {{

@@ -3866,6 +3866,125 @@ static void ScrapbookPage(void) {
     Page(NULL, 0);
 }
 
+// ---- the black car's case file (the user, 2026-11-27: "I like the idea of 'The black car's case file' slowly filling up with clues. This
+// would be a new in-game object that Twinsen can open from his inventory and inspect") ---------------------------------------------------
+// Opened from the inventory (PERSO.CPP: the race file's case_file= slot -- RACEMOD.CPP RaceMod_CaseFileSlot), a page a clue in the order the
+// story meets them. The pages are the game folder's CASEFILE.TXT, the build's (LBA Assembler RaceTrackStory.CaseFile):
+// "page <var> <least>|<island>|<title>|<note>|<where>" -- found once game variable <var> is <least> or more: its title, Twinsen's note and
+// the black car's photo clipped on; not yet, the island's name and where on the way to look (as the scrapbook's cards not found say).
+#define RG_CASE_MAX 24
+typedef struct { int Var, Least; char Island[48], Title[96], Note[320], Where[192]; } T_RG_CLUE;
+static T_RG_CLUE s_clues[RG_CASE_MAX];
+static int s_nbClues = -1;                  // (-1: CASEFILE.TXT not read yet)
+static void ReadClues(void) {
+    if (s_nbClues >= 0) return;
+    s_nbClues = 0;
+    memset(s_clues, 0, sizeof(s_clues));
+    char path[ADELINE_MAX_PATH], line[1024];
+    GetResPath(path, ADELINE_MAX_PATH, "CASEFILE.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    while (fgets(line, sizeof(line), f) && s_nbClues < RG_CASE_MAX) {
+        int var, least, used = 0;
+        if (sscanf(line, "page %d %d%n", &var, &least, &used) < 2 || !used) continue;
+        T_RG_CLUE *c = &s_clues[s_nbClues];
+        c->Var = var;
+        c->Least = least;
+        char *fields[4] = {c->Island, c->Title, c->Note, c->Where};
+        const size_t sizes[4] = {sizeof(c->Island), sizeof(c->Title), sizeof(c->Note), sizeof(c->Where)};
+        const char *p = line + used;
+        while (*p == ' ') p++;
+        if (*p == '|') p++;
+        for (int k = 0; k < 4; k++) {
+            size_t m = 0;
+            while (*p && *p != '|' && *p != '\r' && *p != '\n') { if (m + 1 < sizes[k]) fields[k][m++] = *p; p++; }
+            fields[k][m] = 0;
+            if (*p == '|') p++;
+        }
+        s_nbClues++;
+    }
+    fclose(f);
+}
+static int ClueFound(const T_RG_CLUE *c) { return c->Var >= 0 && c->Var < MAX_VARS_GAME && ListVarGame[c->Var] >= c->Least; }
+
+// The black car's photo, clipped to a found page: a print's white edge, a dusk sky over sand, the car black against it, a paperclip
+static void CluePhoto(S32 x, S32 y, S32 w, S32 h) {
+    Box(x - 5, y - 5, x + w + 4, y + h + 4, NearestColour(238, 232, 214));
+    const S32 horizon = y + h * 3 / 5;
+    Box(x, y, x + w - 1, horizon, NearestColour(92, 100, 138));
+    Box(x, y + h / 6, x + w - 1, horizon, NearestColour(150, 110, 120));
+    Box(x, horizon, x + w - 1, y + h - 1, NearestColour(168, 136, 92));
+    const U8 black = NearestColour(14, 14, 18), dark = NearestColour(46, 46, 52);
+    const S32 ground = horizon + h / 7, cx = x + w / 2;
+    Box(cx - w * 3 / 10, ground - h / 7, cx + w * 3 / 10, ground - h / 30, black);        // its body
+    Box(cx - w / 9, ground - h * 2 / 7, cx + w / 7, ground - h / 7, black);              // its cabin
+    Box(cx - w / 12, ground - h * 5 / 21, cx + w / 9, ground - h / 6, dark);             // its tinted window
+    Box(cx - w * 2 / 9, ground - h / 20, cx - w / 9, ground + h / 30, black);            // its wheels
+    Box(cx + w / 9, ground - h / 20, cx + w * 2 / 9, ground + h / 30, black);
+    Box(x + w - 34, y - 12, x + w - 26, y + 18, NearestColour(196, 196, 206));            // the paperclip
+    Box(x + w - 31, y - 9, x + w - 29, y + 12, NearestColour(120, 120, 132));
+}
+
+// The case file: one page at a time, Left/Right to turn it, Esc (or Enter, or the right button) to close it. Headless with the dialogues
+// skipped (console `skipmodals`): the first page drawn once and closed. `shot`: a screenshot of the first page drawn (the console's
+// `ui casefile`: asked for before the page, the frame pump took it of the dark backdrop first)
+void RaceGame_CaseFileTo(const char *shot) {
+    s_nbClues = -1;                         // (read again each time: a build since)
+    ReadClues();
+    memset(s_nearestHave, 0, sizeof(s_nearestHave));
+    const int n = s_nbClues;
+    if (n <= 0) { Log_Info("[racegame] the case file: no CASEFILE.TXT pages"); return; }
+    // (the scene behind it dark: a document read, not the menu's picture)
+    memset(Screen, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+    static int s_caseAt = -1;               // (the page left last: it opens there again; first, the newest found)
+    if (s_caseAt < 0 || s_caseAt >= n) { s_caseAt = 0; for (int k = 0; k < n; k++) if (ClueFound(&s_clues[k])) s_caseAt = k; }
+    int &at = s_caseAt;
+    int found = 0;
+    for (int k = 0; k < n; k++) found += ClueFound(&s_clues[k]);
+    Log_Info("[racegame] the case file opened: %d of %d clues, page %d", found, n, at + 1);
+    S32 padDir;
+    PageLoopStart(&padDir);
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+        S32 dx, dy;
+        if (Nav(&padDir, &dx, &dy) && dx) at = (at + dx + n) % n;
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        if (click == 2) break;
+        if (click == 1) at = (at + (mx < cx ? n - 1 : 1)) % n;
+        PageFrame("The black car's case file");
+        char line[400];
+        snprintf(line, sizeof(line), "%d of %d clues    Page %d of %d", found, n, at + 1, n);
+        SmallText(cx, RG_PAGE_TOP + oy + 40, line, RG_GREY, 0);
+        const T_RG_CLUE *c = &s_clues[at];
+        // (the note's small lines no wider than 400: each is drawn at full size first, half as wide again, and a line too wide for the
+        // screen at that size isn't drawn at all -- SmallText)
+        const S32 width = 400, left = cx - width / 2, keysY = RG_PAGE_BOTTOM + oy - 32;
+        if (ClueFound(c)) {
+            Text(cx, RG_PAGE_TOP + oy + 70, c->Island, RG_ORANGE);
+            CluePhoto(cx - 100, RG_PAGE_TOP + oy + 112, 200, 112);
+            Text(cx, RG_PAGE_TOP + oy + 244, c->Title, LBAWHITE);
+            SmallWrapped(left, RG_PAGE_TOP + oy + 284, width, 22, c->Note, LBAWHITE, 6);
+        } else {
+            Text(cx, RG_PAGE_TOP + oy + 70, c->Island, RG_GREY);
+            snprintf(line, sizeof(line), "Nothing on %s yet.", c->Island);
+            Text(cx, RG_PAGE_TOP + oy + 160, line, RG_GREY);
+            if (c->Where[0]) SmallWrapped(left, RG_PAGE_TOP + oy + 204, width, 22, c->Where, RG_GREY, 4);
+        }
+        Text(cx, keysY, "Left/Right: turn the page    Esc: close", RG_GREY);
+        if (shot && shot[0]) { Console_RequestScreenshot(shot, 1); shot = NULL; }
+        Present();
+        if (DbgSkipModals == 1) break;
+        if (Escaped() || Confirmed()) { WaitNoInput(); break; }
+    }
+    AsciiMode = FALSE;
+    Log_Info("[racegame] the case file closed at page %d", at + 1);
+}
+void RaceGame_CaseFile(void) { RaceGame_CaseFileTo(NULL); }
+
 static void FeedbackPage(void) {
     static U16 menu[4 + 2 * 3];
     if (!menu[1]) menu[0] = 1;              // (the row left last: it opens there again)

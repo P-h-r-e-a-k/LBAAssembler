@@ -33,6 +33,7 @@ internal static partial class RaceTrackStory
             else if (0 == var_game({QFee}))
             {{
                 message({say(OtringalLine.MarshalFull)});
+                {Clue(ClueEntry)}
                 message({say(OtringalLine.EsmerMoney)});
                 add_gold_pieces({StarterZlitos});
                 set_var_game({QFee}, {FeeFull});
@@ -77,6 +78,7 @@ internal static partial class RaceTrackStory
                         give_gold_pieces({Fee});
                         message({say(OtringalLine.LyraIn)});
                         message({say(OtringalLine.LyraBlackCar)});
+                        {Clue(ClueCoins)}
                         set_var_game({QFee}, {FeePaid});
                     }}
                 }}
@@ -84,6 +86,7 @@ internal static partial class RaceTrackStory
             else
             {{
                 message({say(OtringalLine.LyraBlackCar)});
+                {Clue(ClueCoins)}
             }}";
 
     // The witness and the coil

@@ -34,6 +34,7 @@ internal static partial class RaceTrackStory
             {{
                 message({lyra});
                 message({black});
+                {Clue(ClueCasino)}
             }}
             else
             {{

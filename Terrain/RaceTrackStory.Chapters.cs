@@ -1871,6 +1871,8 @@ void comportement_1()
                 message({EveningId(p.Say, EveningLine.ZoeHintFerry)});
             }}";
         p.Log.AddRange(ErrandsInstall(p.Store.Directory));
+        // (the black car's case file: its model, texts and pages -- RaceTrackStory.CaseFile.cs)
+        p.Log.AddRange(CaseFileInstall(p.Store.Directory));
         WizardNoRing(p);
         StormPeople(p);
         // (the Tralu's cave as the regulars' secret tavern in the storm -- Citadel/RaceTrackStory.TraluTavern.cs)

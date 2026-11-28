@@ -1205,6 +1205,17 @@ restartloop:
                 // (picked in the car: only what leaves him in it -- the holomap, the slate, the viewer, the note; a weapon, a spell, the
                 // protopack or the conch would change his behaviour, out of the car)
                 S32 invAct = RaceMod_InvKindHas(InventoryAction) ? -1 : InventoryAction;
+                // (the race mod's case_file=: the black car's case file read, its pages -- RACEGAME.CPP RaceGame_CaseFile; in the car too)
+                {
+                    extern S32 RaceMod_CaseFileSlot(void);
+                    extern void RaceGame_CaseFile(void);
+                    if (invAct >= 0 && invAct == RaceMod_CaseFileSlot()) {
+                        RaceGame_CaseFile();
+                        FadeToBlack(PtrPalNormal);
+                        FlagFade = TRUE;
+                        invAct = -1;
+                    }
+                }
                 if (carInv && invAct != FLAG_HOLOMAP && invAct != FLAG_ARDOISE && invAct != FLAG_VISIONNEUSE && invAct != FLAG_NOTE_BOURGMESTRE) invAct = -1;
                 switch (invAct) {
                 case FLAG_HOLOMAP: // holomap
