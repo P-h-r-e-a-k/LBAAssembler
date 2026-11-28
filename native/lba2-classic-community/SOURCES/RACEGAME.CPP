@@ -2249,7 +2249,12 @@ static void Shot(void) {
     char path[ADELINE_MAX_PATH];
     int png = 0;
     if (!Console_HasPendingScreenshot(path, sizeof(path), &png)) return;
-    if (png) SavePNG(path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPalNormal);
+    // (under a GPU renderer what the window shows: Log over the 3D target -- a page in the game, the case file's, over the scene it
+    // leaves see-through; Log alone showed index 0 black)
+    if (png) {
+        if (GpuRenderer_IsActive()) Control_ScreenshotTo(path);
+        else SavePNG(path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPalNormal);
+    }
     Console_ClearPendingScreenshot();
     Log_Info("[racegame] screenshot %s", path);
 }
@@ -3935,8 +3940,13 @@ void RaceGame_CaseFileTo(const char *shot) {
     memset(s_nearestHave, 0, sizeof(s_nearestHave));
     const int n = s_nbClues;
     if (n <= 0) { Log_Info("[racegame] the case file: no CASEFILE.TXT pages"); return; }
-    // (the scene behind it dark: a document read, not the menu's picture)
+    // (the scene behind it dark: a document read, not the menu's picture -- and under OpenGL the 2D layer opaque over the whole window
+    // while it's open, as a film's is: its index 0 is see-through over the 3D picture in play, and the scene showed behind the page;
+    // what a menu had pinned put back after)
     memset(Screen, 0, (size_t)ModeDesiredX * (size_t)ModeDesiredY);
+    S32 wasOpaque[4];
+    GpuRenderer_GetOverlayOpaqueRect(&wasOpaque[0], &wasOpaque[1], &wasOpaque[2], &wasOpaque[3]);
+    GpuRenderer_SetOverlayOpaqueRect(0, 0, (S32)ModeDesiredX, (S32)ModeDesiredY);
     static int s_caseAt = -1;               // (the page left last: it opens there again; first, the newest found)
     if (s_caseAt < 0 || s_caseAt >= n) { s_caseAt = 0; for (int k = 0; k < n; k++) if (ClueFound(&s_clues[k])) s_caseAt = k; }
     int &at = s_caseAt;
@@ -3982,6 +3992,8 @@ void RaceGame_CaseFileTo(const char *shot) {
         if (Escaped() || Confirmed()) { WaitNoInput(); break; }
     }
     AsciiMode = FALSE;
+    GpuRenderer_SetOverlayOpaqueRect(wasOpaque[0], wasOpaque[1], wasOpaque[2], wasOpaque[3]);
+    FirstTime = AFF_ALL_FLIP;
     Log_Info("[racegame] the case file closed at page %d", at + 1);
 }
 void RaceGame_CaseFile(void) { RaceGame_CaseFileTo(NULL); }
