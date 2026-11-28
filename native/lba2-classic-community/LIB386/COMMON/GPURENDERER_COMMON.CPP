@@ -1523,7 +1523,7 @@ S32 GpuRenderer_DrawFlowDot(S32 x, S32 y, U8 coul, U16 zoTop, U16 zoBot) {
     GpuVertex *v;
     S32 row;
 
-    if (!s_active || !GpuScene || Log == NULL || TabOffLine == NULL) {
+    if (!s_active || Log == NULL || TabOffLine == NULL) { /* (GpuScene: the caller's gate, FLOW.CPP AffParticleFlow) */
         return 0;
     }
     /* BoxFlow's own clip test: a dot it would not touch is consumed here

@@ -462,7 +462,11 @@ S32 AffParticleFlow(S_PART_FLOW *ptrf) {
     S32 defer;
     S32 dotN = 0;
 
-    defer = (GpuRenderer_IsActive() && GpuScene &&
+    /* (outdoors also without GpuScene, in a scene frame the GPU draws -- GpuOverlay_LiveScene, as OBJECT.CPP's opaque sprites: a dot
+       drawn into Log lay over everything the GPU drew after it -- a body passing in front of a fountain's spray, a car in front of its
+       sparks -- where the software's later draws cover it) */
+    extern S32 GpuOverlay_LiveScene(void);
+    defer = (GpuRenderer_IsActive() && (GpuScene || GpuOverlay_LiveScene()) &&
              CubeMode == CUBE_EXTERIEUR);
 
     ClearScreenMinMax();
@@ -502,7 +506,7 @@ S32 AffParticleFlow(S_PART_FLOW *ptrf) {
                         Plot(Xp, Yp, ptrd->Couleur);
                     else
 #endif
-                        if (!GpuRenderer_DrawFlowDot(Xp, Yp,
+                        if (!GpuScene || !GpuRenderer_DrawFlowDot(Xp, Yp,
                                                      (U8)ptrd->Couleur, 0,
                                                      0)) {
                         BoxFlow(Xp, Yp, ptrd->Couleur);
