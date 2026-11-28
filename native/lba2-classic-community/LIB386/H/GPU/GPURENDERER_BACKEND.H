@@ -238,6 +238,10 @@ typedef struct GpuRendererBackend {
     // its palette index's change between the two (the index the target keeps in its alpha), as the software's picture, palette
     // indices, follows its palette. NULL: the target as drawn. (A NULL function: the backend can't; the target shows as drawn.)
     void (*SetSceneDrawnPalette)(const void *argb);
+    // The depth read back at the engine's size from a target 2 to 4 times it (render quality): each block's nearest sample (the
+    // greatest window depth), bottom-up, 16-bit, as TargetReadDepth's -- kept on the GPU, the whole target not read and shrunk on the
+    // CPU. FALSE (or a NULL function): the caller reads the whole target.
+    S32 (*TargetReadDepthDown)(void *dst, U32 width, U32 height);
 } GpuRendererBackend;
 
 //──────────────────────────────────────────────────────────────────────────

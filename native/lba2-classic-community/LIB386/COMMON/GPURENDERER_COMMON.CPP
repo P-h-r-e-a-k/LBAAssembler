@@ -2597,6 +2597,27 @@ void GpuRenderer_ReadbackDepthBuffer(void) {
         return;
     }
 
+    // (a target larger than the engine's picture -- render quality 2 or 4: each block's nearest sample on the GPU, the engine's size
+    // read back -- the backend's TargetReadDepthDown; else the whole target, shrunk below)
+
+    if ((fboW != s_resX || fboH != s_resY) && s_backend->TargetReadDepthDown != NULL) {
+        static U16 *s_downBuf = NULL;
+        static U32 s_downSize = 0;
+        if (s_downSize < s_resX * s_resY) {
+            free(s_downBuf);
+            s_downBuf = (U16 *)malloc((size_t)s_resX * s_resY * sizeof(U16));
+            s_downSize = s_downBuf ? s_resX * s_resY : 0;
+        }
+        if (s_downBuf != NULL && s_backend->TargetReadDepthDown(s_downBuf, s_resX, s_resY)) {
+            for (U32 sy = 0; sy < s_resY; sy++) {
+                const U16 *srcRow = s_downBuf + (s_resY - 1 - sy) * s_resX;
+                U16 *dstRow = PtrZBuffer + sy * s_resX;
+                for (U32 sx = 0; sx < s_resX; sx++) dstRow[sx] = (U16)(65535u - srcRow[sx]);
+            }
+            return;
+        }
+    }
+
     const U32 totalPixels = fboW * fboH;
     static U16 *s_depthBuf = NULL;
     static U32 s_depthBufSize = 0;

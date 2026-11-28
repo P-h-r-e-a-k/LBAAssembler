@@ -1277,6 +1277,7 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     return TRUE;
 }
 
+static void GL_ReadDepthDownShutdown(void);   /* (the engine-size depth readback's objects, below) */
 static void GL_DestroyContext(void) {
     if (!s_initialized) {
         return;
@@ -1372,6 +1373,7 @@ static void GL_DestroyContext(void) {
         glDeleteProgram(s_clutProgram);
         s_clutProgram = 0;
     }
+    GL_ReadDepthDownShutdown();
 
     GL_DestroyFBO();
 
@@ -1466,6 +1468,176 @@ static S32 GL_TargetReadDepth(void *depthDst, U32 width, U32 height) {
     glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
     glReadPixels(0, 0, (GLsizei)width, (GLsizei)height, GL_DEPTH_COMPONENT,
                  GL_UNSIGNED_SHORT, depthDst);
+    return TRUE;
+#endif
+}
+
+/* The depth read back at the engine's size (render quality 2 or 4, 2026-11-28): the target's depth copied into a texture, a pass at
+   the engine's size keeping each block's nearest sample (the greatest window depth: the least Z the common layer's shrink kept) packed
+   in a colour's red and green, and that read back -- the whole target was read and shrunk on the CPU, 5.5 ms a frame at quality 4 and
+   640x480 (four times that at 1280x720). Desktop only: GLES 2.0 copies no depth. */
+#ifndef USE_GLES2
+static GLuint s_rbProgram = 0, s_rbFbo = 0, s_rbColorTex = 0, s_rbDepthTex = 0;
+static S32 s_rbFailed = 0;
+static U32 s_rbW = 0, s_rbH = 0, s_rbSrcW = 0, s_rbSrcH = 0;
+static GLint s_rb_aPos = -1, s_rb_uDepth = -1, s_rb_uSrcSize = -1, s_rb_uScale = -1;
+static U8 *s_rbPixels = NULL;
+static size_t s_rbPixelsSize = 0;
+static const char *s_rbVertSrc =
+    GLSL_VERT_HEADER
+    "attribute vec2 aPos;\n"
+    "void main() { gl_Position = vec4(aPos, 0.0, 1.0); }\n";
+static const char *s_rbFragSrc =
+    GLSL_FRAG_HEADER
+    "uniform sampler2D uDepth;\n"
+    "uniform vec2 uSrcSize;\n"
+    "uniform float uScale;\n"
+    "void main() {\n"
+    "    vec2 base = floor(gl_FragCoord.xy) * uScale;\n"
+    "    float best = 0.0;\n"
+    "    for (int j = 0; j < 4; j++) {\n"
+    "        for (int i = 0; i < 4; i++) {\n"
+    "            if (float(i) < uScale && float(j) < uScale) {\n"
+    "                best = max(best, texture2D(uDepth, (base + vec2(float(i), float(j)) + 0.5) / uSrcSize).r);\n"
+    "            }\n"
+    "        }\n"
+    "    }\n"
+    "    float d = floor(best * 65535.0 + 0.5);\n"
+    "    gl_FragColor = vec4(floor(d / 256.0) / 255.0, mod(d, 256.0) / 255.0, 0.0, 1.0);\n"
+    "}\n";
+
+static void GL_ReadDepthDownFree(void) {
+    if (s_rbFbo) { glDeleteFramebuffers(1, &s_rbFbo); s_rbFbo = 0; }
+    if (s_rbColorTex) { glDeleteTextures(1, &s_rbColorTex); s_rbColorTex = 0; }
+    if (s_rbDepthTex) { glDeleteTextures(1, &s_rbDepthTex); s_rbDepthTex = 0; }
+    s_rbW = s_rbH = s_rbSrcW = s_rbSrcH = 0;
+}
+#endif
+/* (with the context: its objects go with it -- a renderer switched away and back makes them again) */
+static void GL_ReadDepthDownShutdown(void) {
+#ifndef USE_GLES2
+    GL_ReadDepthDownFree();
+    if (s_rbProgram) {
+        glDeleteProgram(s_rbProgram);
+        s_rbProgram = 0;
+    }
+    s_rbFailed = 0;
+#endif
+}
+
+static S32 GL_TargetReadDepthDown(void *depthDst, U32 width, U32 height) {
+#ifdef USE_GLES2
+    (void)depthDst;
+    (void)width;
+    (void)height;
+    return FALSE;
+#else
+    if (!s_initialized || !s_fbo || !s_fboVbo || depthDst == NULL || width == 0 || height == 0 || s_rbFailed) {
+        return FALSE;
+    }
+    const U32 scale = s_fboWidth / width;
+    if (scale < 2 || scale > 4 || s_fboWidth != width * scale || s_fboHeight != height * scale) {
+        return FALSE;
+    }
+    if (!Window_GLMakeCurrent()) {
+        return FALSE;
+    }
+    if (!s_rbProgram) {
+        GLuint vert = CompileShader(GL_VERTEX_SHADER, s_rbVertSrc);
+        GLuint frag = CompileShader(GL_FRAGMENT_SHADER, s_rbFragSrc);
+        if (vert && frag) s_rbProgram = LinkProgram(vert, frag);
+        if (vert) glDeleteShader(vert);
+        if (frag) glDeleteShader(frag);
+        if (!s_rbProgram) {
+            s_rbFailed = 1;
+            Log_Warn("[GL] the depth read back at the engine's size: no program -- the whole target is read instead");
+            return FALSE;
+        }
+        s_rb_aPos = glGetAttribLocation(s_rbProgram, "aPos");
+        s_rb_uDepth = glGetUniformLocation(s_rbProgram, "uDepth");
+        s_rb_uSrcSize = glGetUniformLocation(s_rbProgram, "uSrcSize");
+        s_rb_uScale = glGetUniformLocation(s_rbProgram, "uScale");
+    }
+    if (s_rbW != width || s_rbH != height || s_rbSrcW != s_fboWidth || s_rbSrcH != s_fboHeight) {
+        GL_ReadDepthDownFree();
+        glGenTextures(1, &s_rbDepthTex);
+        glBindTexture(GL_TEXTURE_2D, s_rbDepthTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, (GLsizei)s_fboWidth, (GLsizei)s_fboHeight, 0, GL_DEPTH_COMPONENT,
+                     GL_UNSIGNED_INT, NULL);
+        glGenTextures(1, &s_rbColorTex);
+        glBindTexture(GL_TEXTURE_2D, s_rbColorTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)width, (GLsizei)height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glGenFramebuffers(1, &s_rbFbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, s_rbFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_rbColorTex, 0);
+        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            GL_ReadDepthDownFree();
+            s_rbFailed = 1;
+            Log_Warn("[GL] the depth read back at the engine's size: its framebuffer is incomplete (0x%x) -- the whole target is read instead",
+                     (unsigned)status);
+            return FALSE;
+        }
+        s_rbW = width;
+        s_rbH = height;
+        s_rbSrcW = s_fboWidth;
+        s_rbSrcH = s_fboHeight;
+        Log_Info("[GL] the depth read back at the engine's size: %ux%u from %ux%u", (unsigned)width, (unsigned)height,
+                 (unsigned)s_fboWidth, (unsigned)s_fboHeight);
+    }
+    const size_t need = (size_t)width * height * 4;
+    if (s_rbPixelsSize < need) {
+        free(s_rbPixels);
+        s_rbPixels = (U8 *)malloc(need);
+        s_rbPixelsSize = s_rbPixels ? need : 0;
+        if (!s_rbPixels) return FALSE;
+    }
+
+    const GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST);
+    /* the target's depth into the texture */
+    glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_rbDepthTex);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, (GLsizei)s_fboWidth, (GLsizei)s_fboHeight);
+    /* each block's nearest, at the engine's size */
+    glBindFramebuffer(GL_FRAMEBUFFER, s_rbFbo);
+    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glUseProgram(s_rbProgram);
+    glUniform1i(s_rb_uDepth, 0);
+    glUniform2f(s_rb_uSrcSize, (GLfloat)s_fboWidth, (GLfloat)s_fboHeight);
+    glUniform1f(s_rb_uScale, (GLfloat)scale);
+    glBindBuffer(GL_ARRAY_BUFFER, s_fboVbo);
+    glEnableVertexAttribArray((GLuint)s_rb_aPos);
+    glVertexAttribPointer((GLuint)s_rb_aPos, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (const void *)0);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glDisableVertexAttribArray((GLuint)s_rb_aPos);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    glReadPixels(0, 0, (GLsizei)width, (GLsizei)height, GL_RGBA, GL_UNSIGNED_BYTE, s_rbPixels);
+    /* (the state as the target's own passes leave it -- GL_TargetRestoreTerrain's) */
+    glBindFramebuffer(GL_FRAMEBUFFER, s_fbo);
+    glViewport(0, 0, (GLsizei)s_fboWidth, (GLsizei)s_fboHeight);
+    if (scissor) glEnable(GL_SCISSOR_TEST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    glDepthMask(GL_TRUE);
+
+    U16 *dst = (U16 *)depthDst;
+    const U8 *p = s_rbPixels;
+    for (size_t k = 0, n = (size_t)width * height; k < n; k++, p += 4)
+        dst[k] = (U16)((p[0] << 8) | p[1]);
     return TRUE;
 #endif
 }
@@ -2824,6 +2996,13 @@ static void D_TargetBindClear(U32 rgb) {
     GL_TargetBindClear(rgb);
     GL_OP_END("TargetBindClear", 0);
 }
+static S32 D_TargetReadDepthDown(void *dst, U32 width, U32 height) {
+    S32 ok;
+    GL_OP_BEGIN("TargetReadDepthDown %ux%u", width, height);
+    ok = GL_TargetReadDepthDown(dst, width, height);
+    GL_OP_END("TargetReadDepthDown", 1);
+    return ok;
+}
 static S32 D_TargetReadDepth(void *dst, U32 width, U32 height) {
     S32 ok;
     GL_OP_BEGIN("TargetReadDepth %ux%u", width, height);
@@ -2975,6 +3154,7 @@ const GpuRendererBackend GpuRendererBackendGL = {
     GL_AtlasSlots,
     D_TexUpdateAtlasSlot,
     GL_SetSceneDrawnPalette,
+    D_TargetReadDepthDown,
 };
 
 #endif /* USE_GPURENDERER */
