@@ -101,18 +101,18 @@ static S32 TryGpuAnim3DSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
     return GpuRenderer_DrawSprite(0, xp, yp, zo, bank, 0);
 }
 
-// TYPE_EXTRA opaque raw sprite: EXTRA_TRANSPARENT (blend table) stays on the
-// software blitter; opaque draws take DrawSprite at 1:1 and DrawScaleSprite
-// under CalculeScaleFactorSprite's factor.
-static S32 TryGpuExtraSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
-                             S32 zw) {
-    const void *bank;
+// TYPE_EXTRA opaque raw sprite (EXTRA_TRANSPARENT: TryGpuBlendBank below):
+// DrawSprite at 1:1 and DrawScaleSprite under CalculeScaleFactorSprite's factor.
+// (`bank`: the sprite's own bank, its sprite 0 drawn -- the HQR's, or a copy made of it: mirrored (MirroredRawSprite) or laid on its
+// side (TurnedRawSprite), each made once and kept, so the GPU's sprite cache, keyed by the bank's address, holds them as well;
+// `factorx`/`factory`: the scale across and down, unequal for a sprite laid on its side)
+static S32 TryGpuExtraBank(S32 xp, S32 yp, const void *bank, S32 factorx, S32 factory, S32 xw, S32 yw,
+                           S32 zw) {
     U16 zo;
 
     if (!GpuWorldSpritesOn() || !GpuRenderer_IsActive()) {
         return 0;
     }
-    bank = HQR_Get(HQRPtrSpriteRaw, num);
     if (bank == NULL) {
         return 0;
     }
@@ -123,9 +123,8 @@ static S32 TryGpuExtraSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
         LongWorldRotatePoint(xw, yw, zw);
         zo = GET_ZO(CameraZr - Z0);
     }
-    if (ScaleFactorSprite != DEF_SCALE_FACTOR) {
-        return GpuRenderer_DrawScaleSprite(xp, yp, ScaleFactorSprite,
-                                           ScaleFactorSprite, zo, bank);
+    if (factorx != DEF_SCALE_FACTOR || factory != DEF_SCALE_FACTOR) {
+        return GpuRenderer_DrawScaleSprite(xp, yp, factorx, factory, zo, bank);
     }
     return GpuRenderer_DrawSprite(0, xp, yp, zo, bank, 1);
 }
@@ -141,18 +140,16 @@ static S32 TryGpuExtraSprite(S32 xp, S32 yp, S32 num, S32 xw, S32 yw,
 // blended into Log read index 0 -- black -- for the scene under it (the
 // protection spell's sparkles, the magic ball: dark), and Log, over the whole
 // frame, kept it over what was drawn after it (the race's car).
-static S32 TryGpuBlendSprite(S32 xp, S32 yp, S32 num, S32 factor,
-                             const void *transPal) {
-    const void *bank;
-
+// (`bank`: as TryGpuExtraBank's -- the HQR's, or its mirrored or turned copy; the compose walks it each time, nothing cached)
+static S32 TryGpuBlendBank(S32 xp, S32 yp, const void *bank, S32 factorx, S32 factory,
+                           const void *transPal) {
     if (!(GpuScene OR GpuOverlay_LiveScene()) || !GpuRenderer_IsActive()) {
         return 0;
     }
-    bank = HQR_Get(HQRPtrSpriteRaw, num);
     if (bank == NULL) {
         return 0;
     }
-    return GpuRenderer_DrawBlendSprite(xp, yp, factor, factor, bank,
+    return GpuRenderer_DrawBlendSprite(xp, yp, factorx, factory, bank,
                                        transPal);
 }
 
@@ -5615,19 +5612,17 @@ S32 AffOneObject(T_SORT *pt) {
                 }
             }
             if (ptrextra->Flags & EXTRA_TRANSPARENT) {
-                /* (the GPU's sprite path reads the bank by its number: a mirrored sprite is drawn in software) */
-                if (bank != HQR_Get(HQRPtrSpriteRaw, num)
-                    OR !TryGpuBlendSprite(SpriteX, SpriteY, num,
-                                          ScaleFactorSprite, PtrTransPal)) {
+                /* (a mirrored sprite too: its copy's bank -- drawn into Log over the GPU's frame it was blended with Log's
+                   see-through index 0, dark, and lay over what was drawn after it) */
+                if (!TryGpuBlendBank(SpriteX, SpriteY, bank, ScaleFactorSprite, ScaleFactorSprite, PtrTransPal)) {
                     ScaleSpriteTransp(0, SpriteX, SpriteY,
                                       ScaleFactorSprite, ScaleFactorSprite,
                                       bank,
                                       PtrTransPal);
                 }
-            } else if (bank != HQR_Get(HQRPtrSpriteRaw, num)
-                       OR !TryGpuExtraSprite(SpriteX, SpriteY, num,
-                                             ptrextra->PosX, ptrextra->PosY,
-                                             ptrextra->PosZ)) {
+            } else if (!TryGpuExtraBank(SpriteX, SpriteY, bank, ScaleFactorSprite, ScaleFactorSprite,
+                                        ptrextra->PosX, ptrextra->PosY,
+                                        ptrextra->PosZ)) {
                 ScaleSprite(0, SpriteX, SpriteY,
                             ScaleFactorSprite, ScaleFactorSprite,
                             bank);
@@ -7040,8 +7035,14 @@ static S32 DrawTurnedExtra(T_EXTRA *e, S32 num) {
     const S32 length = (S32)(((S64)h * fx) >> 16);
     SpriteX = left ? x0 - length : x0;
     SpriteY = y0 - (S32)(((S64)root * fy) >> 16);
-    if (e->Flags & EXTRA_TRANSPARENT) ScaleSpriteTransp(0, SpriteX, SpriteY, fx, fy, turned, PtrTransPal);
-    else ScaleSprite(0, SpriteX, SpriteY, fx, fy, turned);
+    // (on the GPU's frame outdoors as the other extras: in Log a transparent one -- the race's steam jets across the road -- was blended
+    // with Log's see-through index 0, dark, and lay over the cars passing in front of it)
+    if (e->Flags & EXTRA_TRANSPARENT) {
+        if (!TryGpuBlendBank(SpriteX, SpriteY, turned, fx, fy, PtrTransPal))
+            ScaleSpriteTransp(0, SpriteX, SpriteY, fx, fy, turned, PtrTransPal);
+    } else if (!TryGpuExtraBank(SpriteX, SpriteY, turned, fx, fy, e->PosX, e->PosY, e->PosZ)) {
+        ScaleSprite(0, SpriteX, SpriteY, fx, fy, turned);
+    }
     return TRUE;
 }
 
