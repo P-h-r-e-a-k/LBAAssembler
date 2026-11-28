@@ -2335,7 +2335,16 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
     S32 polyLightRow = -1;
     if (Fill_Flag_Fog && PtrTruePal != NULL && PtrCLUTFog != NULL) {
         const U16 truePalRow = (U16)(((const U8 *)PtrTruePal - (const U8 *)PtrCLUTFog) >> 8);
-        if (typePoly == 0 || typePoly == 1 || typePoly == 3) {
+        // (a body's polygon across fog bands -- Fill_FogPerPixel, AFF_OBJ.CPP ObjFogPolygon: the software fogs it pixel by pixel by its
+        // depth and sets no row for it, so PtrTruePal was still the polygon before's, and GL drew the whole polygon in that one's band --
+        // a long decor's faces fogged in patches. Its palette row alone, marked 0x100, with flag bit 5: the shader adds each pixel's band
+        // from its depth, as POLY.CPP's Fill_FogBandOf has it)
+        if (Fill_FogPerPixel && (typePoly == 0 || typePoly == 1 || typePoly == POLY_TEXTURE || typePoly == POLY_TEXTURE_INCRUST)) {
+            const U16 marked = (U16)(0x100 | (truePalRow & 0x0F));
+            polyFlags |= 0x20;
+            if (typePoly <= 1) polyTexOffset = marked;
+            else polyLightRow = marked;
+        } else if (typePoly == 0 || typePoly == 1 || typePoly == 3) {
             polyFlat = Fill_Logical_Palette[polyFlat];
         } else if (typePoly == 4 || typePoly == 5) {
             polyFlags |= 0x20;
@@ -2348,6 +2357,15 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
     /* (the ground's textures, its atlas in tiles of 16 texels: the shader's smoothing keeps to a texel's own tile -- POLY.H) */
     if (Fill_GroundTiles && typePoly >= POLY_TEXTURE && typePoly <= POLY_TEXTURE_Z_FOG) {
         polyFlags |= 0x80;
+    }
+    // (the polygon's texture coordinates' box: the bilinear filter keeps to it -- GpuVertex.UMin)
+    U16 uMin = 0xFFFF, vMin = 0xFFFF, uMax = 0, vMax = 0;
+    for (S32 i = 0; i < nbPoints; i++) {
+        const U16 u = (U16)ptrPoints[i].Pt_MapU, v = (U16)ptrPoints[i].Pt_MapV;
+        if (u < uMin) uMin = u;
+        if (u > uMax) uMax = u;
+        if (v < vMin) vMin = v;
+        if (v > vMax) vMax = v;
     }
     for (S32 i = 1; i < nbPoints - 1; i++) {
         if (s_batchVertCount + 3 > BATCH_MAX_VERTS) {
@@ -2366,6 +2384,7 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
             dst[k].Flat = polyFlat;
             dst[k].Flags = polyFlags;
             dst[k].Slot = atlasSlot;
+            dst[k].UMin = uMin; dst[k].VMin = vMin; dst[k].UMax = uMax; dst[k].VMax = vMax;
         }
         s_batchVertCount += 3;
         s_batchTriCount++;

@@ -317,6 +317,7 @@ static const char *s_clutVertSrc =
     "attribute float aFlat;\n"
     "attribute float aFlags;\n"
     "attribute float aSlot;\n"
+    "attribute vec4 aUVBox;\n"
     "uniform vec2 uScreenScale;\n" /* 2.0/resX, 2.0/resY */
     "uniform vec2 uPixOffset;\n" /* engine pixels added to a polygon's corners: GL_DrawTriangles */
     /* Perspective-correct interpolation: the SW rasterizer
@@ -339,12 +340,14 @@ static const char *s_clutVertSrc =
     "varying float vFlat;\n"
     "varying float vFlags;\n"
     "varying float vSlot;\n"
+    "varying vec4 vUVBox;\n"
     "void main() {\n"
     "    vTexOffset = aTexOffset;\n"
     "    vMode = aMode;\n"
     "    vFlat = aFlat;\n"
     "    vFlags = aFlags;\n"
     "    vSlot = aSlot;\n"
+    "    vUVBox = aUVBox / 256.0;\n"
     "    float cx = (aPos.x + uPixOffset.x) * uScreenScale.x - 1.0;\n"
     "    float cy = 1.0 - (aPos.y + uPixOffset.y) * uScreenScale.y;\n"
     /* Window depth = 1 - aZ/65535: the whole range, one 16-bit step per Z unit, as the software Z-buffer compares them (the
@@ -398,6 +401,7 @@ static const char *s_clutFragSrc =
     "varying float vFlat;\n"
     "varying float vFlags;\n"
     "varying float vSlot;\n"
+    "varying vec4 vUVBox;\n"
     "uniform float uAtlasSlots;\n"    /* the atlas texture's page slots, stacked: 256 x 256*uAtlasSlots */
     "uniform int uPerVertex;\n"        /* 1 = GPU_POLYMODE_PER_VERTEX: mode, colour, flags and texture window from the vertex */
     /* The texel of a wrapped window position p in the atlas page: the
@@ -448,6 +452,13 @@ static const char *s_clutFragSrc =
        next tile's edge smoothed in drew a line along every cell's edge, Polar's ice slabs, 2026-11-21; 0 for any other texture) */
     "    float iu1 = (tile > 0.5 && mod(iu, tile) > tile - 1.5) ? iu : iu + 1.0;\n"
     "    float iv1 = (tile > 0.5 && mod(iv, tile) > tile - 1.5) ? iv : iv + 1.0;\n"
+    /* (a polygon's second texel kept within its own texture coordinates, its last column and row (GpuVertex.UMin..VMax, per-vertex
+       batches): two halves of a panel mapped to different parts of a texture smoothed in each other's neighbours -- a seam down the
+       middle, s049's cabinet, 2026-11-28; on the raw coordinates, before the window's wrap) */
+    "    if (uPerVertex != 0 && tile < 0.5 && vUVBox.z >= vUVBox.x) {\n"
+    "        if (floor(tc.x) + 1.0 > max(ceil(vUVBox.z) - 1.0, floor(vUVBox.x))) iu1 = iu;\n"
+    "        if (floor(tc.y) + 1.0 > max(ceil(vUVBox.w) - 1.0, floor(vUVBox.y))) iv1 = iv;\n"
+    "    }\n"
     "    /* Wrap each of the 4 texel positions */\n"
     "    vec2 p00 = vec2(mod(iu, widthMask + 1.0),\n"
     "                     mod(iv, heightMask + 1.0));\n"
@@ -469,6 +480,13 @@ static const char *s_clutFragSrc =
     "    vec4 c10 = clutLookup(t10, gouraudRow);\n"
     "    vec4 c01 = clutLookup(t01, gouraudRow);\n"
     "    vec4 c11 = clutLookup(t11, gouraudRow);\n"
+    /* (a cut-out's see-through neighbours -- index 0, black through the CLUT -- take the nearest texel's colour: their black smoothed
+       into the edge drew a dark fringe round leaves and railings that the software, drawing the edge hard, never has) */
+    "    if (chromaKey != 0) {\n"
+    "        if (t10 < 0.5) c10 = c00;\n"
+    "        if (t01 < 0.5) c01 = c00;\n"
+    "        if (t11 < 0.5) c11 = c00;\n"
+    "    }\n"
     /* (the colour smoothed, its alpha -- the palette index the target keeps, read under a TRANS polygon -- one texel's whole) */
     "    vec4 m = mix(mix(c00, c10, fu), mix(c01, c11, fu), fv);\n"
     "    m.a = c00.a;\n"
@@ -502,6 +520,12 @@ static const char *s_clutFragSrc =
        a Gouraud one carries in its texture window, a texel-is-index one (types 8/12, no light of their own) in its light
        (GpuRenderer_RenderTriangleList); bit 6: a dithered Gouraud type (Common_PolyState) */
     "        if (mod(floor(fl / 32.0), 2.0) > 0.5) fogRow = polyMode == 4 ? floor(vLight + 0.5) : to;\n"
+    /* (a row marked 0x100: a polygon across fog bands, fogged by each pixel's depth -- its palette row plus 16 times the band of its
+       Z-buffer value, quantised as the software's Fill_FogBandOf: (zbuf >> 6 << 6) + 32, 15 * (z - near) / (far - near)) */
+    "        if (fogRow > 255.5) {\n"
+    "            float zq = floor(vZ / 64.0) * 64.0 + 32.0;\n"
+    "            fogRow = mod(fogRow, 16.0) + 16.0 * clamp(floor(15.0 * (zq - uScaledFogNear) / max(65536.0 - uScaledFogNear, 1.0)), 0.0, 15.0);\n"
+    "        }\n"
     "        if (mod(floor(fl / 64.0), 2.0) > 0.5) lightAdd = ditherAt(gl_FragCoord.xy);\n"
     "        if (fl > 127.5) groundTile = 16.0;\n" /* (bit 7: the ground's, its atlas in tiles of 16 texels -- bilinearCLUT) */
     "    }\n"
@@ -547,6 +571,8 @@ static const char *s_clutFragSrc =
     "    } else if (polyMode == 1) {\n"
     /* Flat solid: single palette color */
     "        float palIdx = flatColor;\n"
+    /* (a fog filler's flat colour pixel by pixel through its row -- a polygon across fog bands; any other's was looked up already) */
+    "        if (fogRow >= 0.0) palIdx = texture2D(uCLUT, vec2((palIdx + 0.5) / 256.0, (fogRow + 0.5) / 256.0)).r * 255.0;\n"
     "        color = texture2D(uPalette,\n"
     "                 vec2((palIdx + 0.5) / 256.0, 0.5));\n"
     "    } else if (polyMode == 2) {\n"
@@ -726,6 +752,7 @@ static GLint s_clut_aMode = -1;
 static GLint s_clut_aFlat = -1;
 static GLint s_clut_aFlags = -1;
 static GLint s_clut_aSlot = -1;
+static GLint s_clut_aUVBox = -1;   /* (the polygon's texture coordinates' box: GpuVertex.UMin..VMax) */
 static GLint s_clut_uAtlasSlots = -1;
 static GLint s_clut_uPerVertex = -1;
 static GLint s_clut_uAtlas = -1;
@@ -1100,6 +1127,7 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_clut_aFlat = glGetAttribLocation(s_clutProgram, "aFlat");
     s_clut_aFlags = glGetAttribLocation(s_clutProgram, "aFlags");
     s_clut_aSlot = glGetAttribLocation(s_clutProgram, "aSlot");
+    s_clut_aUVBox = glGetAttribLocation(s_clutProgram, "aUVBox");
     s_clut_uAtlasSlots = glGetUniformLocation(s_clutProgram, "uAtlasSlots");
     s_clut_uPerVertex = glGetUniformLocation(s_clutProgram, "uPerVertex");
     s_clut_uPerspCorrect = glGetUniformLocation(s_clutProgram, "uPerspCorrect");
@@ -2246,6 +2274,10 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
         glEnableVertexAttribArray(s_clut_aSlot);
         glVertexAttribPointer(s_clut_aSlot, 1, GL_UNSIGNED_BYTE, GL_FALSE, (GLsizei)sizeof(GpuVertex), (const void *)19);
     }
+    if (s_clut_aUVBox >= 0) {
+        glEnableVertexAttribArray(s_clut_aUVBox);
+        glVertexAttribPointer(s_clut_aUVBox, 4, GL_UNSIGNED_SHORT, GL_FALSE, (GLsizei)sizeof(GpuVertex), (const void *)20);
+    }
 
     /* Depth rules resolved by the common layer (see Common_BuildDrawParams):
        GEQUAL for the terrain/bodies, ALWAYS for NZW coplanar animated polys,
@@ -2312,6 +2344,7 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
     if (s_clut_aFlat >= 0) glDisableVertexAttribArray(s_clut_aFlat);
     if (s_clut_aFlags >= 0) glDisableVertexAttribArray(s_clut_aFlags);
     if (s_clut_aSlot >= 0) glDisableVertexAttribArray(s_clut_aSlot);
+    if (s_clut_aUVBox >= 0) glDisableVertexAttribArray(s_clut_aUVBox);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
 }

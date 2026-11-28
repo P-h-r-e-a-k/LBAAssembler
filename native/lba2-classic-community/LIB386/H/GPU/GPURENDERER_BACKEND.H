@@ -102,6 +102,10 @@ typedef struct GpuVertex {
                    ///< bit 5 a fog filler's Gouraud or texel-is-index: each pixel's index through the current CLUT row (Gouraud: in
                    ///< TexOffset; types 8/12: in Light); bit 6 a dithered Gouraud type; bit 7 the ground's (smoothing within 16-texel tiles)
     U8 Slot;       ///< the atlas slot holding the polygon's page (a backend with AtlasSlots; 0 otherwise)
+    // The polygon's texture coordinates' box, MapU/MapV's units (GPU_POLYMODE_PER_VERTEX batches): the bilinear filter's second texel kept
+    // within it -- two halves of a panel mapped to different parts of a texture smoothed in each other's neighbours, a seam down the middle
+    // (2026-11-28). UMax < UMin: none. Appended last: the SDL3 backend reads the fields it knows, by name.
+    U16 UMin, VMin, UMax, VMax;
 } GpuVertex;
 
 /* GpuDrawParams.polyMode of a batch whose polygons carry their mode, colour, flags and texture window in their vertices. */
