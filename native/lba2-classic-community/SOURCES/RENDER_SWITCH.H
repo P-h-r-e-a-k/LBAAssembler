@@ -12,6 +12,9 @@
    Owned by this module, written on a successful Renderer_ApplyChoice and at boot
    by ReadConfigFile; the cfg "Renderer" key binds to it. */
 extern S32 DisplayRenderer;
+/* Bumped by every runtime switch of the present path (Renderer_ApplyChoice, success or fallback): what keeps a picture the old
+   renderer drew -- a dialogue's frozen background -- draws it again (MESSAGE.CPP SpeakAnimation). */
+extern S32 RendererSwitchCount;
 
 /* The renderer to boot with: the LBA2_GPU_RENDERER env override when present,
    else the cfg "Renderer" value read with the same transient, heap-free

@@ -20,6 +20,7 @@
 /* The renderer the player chose (0 = software). Values match GpuRendererBackendId
    so the cfg row and the menu agree without a mapping table. */
 S32 DisplayRenderer = GPU_RENDERER_BACKEND_NONE;
+S32 RendererSwitchCount = 0;
 
 /* Scratch-buffer size for the transient, heap-free boot read of lba2.cfg below,
    mirroring RES_SWITCH.CPP's RES_BOOT_CFG_BUFSZ: a fully-populated valid cfg is
@@ -125,6 +126,8 @@ S32 Renderer_ApplyChoice(GpuRendererBackendId id) {
        rebuilt. Shutdown also detaches the present/fill seams, so a half-built
        switch never drives a frame. */
     GpuRenderer_Shutdown();
+    /* (counted, for what holds a picture the old renderer drew: a dialogue's frozen background, MESSAGE.CPP SpeakAnimation) */
+    RendererSwitchCount++;
 
     if (!Renderer_WindowFor(id, resX, resY, fullscreen)) {
         /* The target window could not be created: put the present path back on

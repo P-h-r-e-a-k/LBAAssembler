@@ -16,6 +16,7 @@
 
 #include "CONSOLE/CONSOLE.H"
 #include "CONTROL.H"
+#include "RENDER_SWITCH.H" /* RendererSwitchCount (a dialogue drawn again after a switch) */
 #include "INPUT.H"
 
 #include <FILEIO/SAVEPNG.H>
@@ -34,6 +35,7 @@
 #include <dirent.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include "AMBIANCE.H"
@@ -2294,8 +2296,65 @@ static int s_dial_capture_countdown = 0;
 static int s_dial_capture_live = 0; /* Dial_RequestCaptureNext: the dialogue's own speaker kept */
 static int s_dial_capture_now = 0;  /* 1: this step's SpeakAnimation takes the picture (before its BoxUpdate); 2: taken */
 
+/* A dialogue over the scene (Dial) and the renderer switch count it has drawn for (RENDER_SWITCH.CPP RendererSwitchCount) */
+static S32 s_dialScene = 0;
+static S32 s_dialSwitchSeen = 0;
+
+/* The renderer switched while a dialogue was up (the console's `renderer`): the scene drawn again, whole, and the pictures the
+   dialogue keeps of it made again -- Screen (what its speaking steps clean the speakers' boxes from), ScreenAux (what it puts back
+   as it ends) -- its window's rows kept as they are (the text so far in Log, the empty window in Screen for the next page). Without
+   it the steps went on over a picture the new renderer never drew: under software the old GPU frame's see-through pixels black,
+   under OpenGL a new, empty target behind them -- the scene black round the speakers, or boxes of it (2026-11-24, nov24_2gl.png). */
+static void DialRedrawAfterSwitch(void) {
+    extern void GpuOverlay_Plate(void);
+    extern void GpuOverlay_KeepPlate(S32, S32, S32, S32);
+    const S32 w = (S32)ModeDesiredX, h = (S32)ModeDesiredY;
+    S32 y0 = FlagDisplayText ? Dial_Y0 : h;
+    if (y0 < 0)
+        y0 = 0;
+    if (y0 > h)
+        y0 = h;
+    const size_t off = (size_t)y0 * w, n = (size_t)(h - y0) * w;
+    static U8 *keep = NULL;
+    static size_t keepSize = 0;
+    if (n * 2 > keepSize) {
+        U8 *grown = (U8 *)realloc(keep, n * 2);
+        if (!grown)
+            return;
+        keep = grown;
+        keepSize = n * 2;
+    }
+    if (n) {
+        memcpy(keep, (U8 *)Log + off, n);
+        memcpy(keep + n, (U8 *)Screen + off, n);
+    }
+
+    AffScene(AFF_ALL_NO_FLIP);
+    CopyScreen(Screen, ScreenAux);   // (BackupScreen(FALSE) at the dialogue's start: the decors only)
+    GpuOverlay_Plate();              // (OpenGL: Log's and Screen's see-through pixels from the new frame, as at the dialogue's start)
+    if (!FlagAnimWhoSpeak)
+        CopyScreen(Log, Screen);     // (InitWhoSpeak's: a speaker who doesn't move, the picture held whole)
+    if (n) {
+        memcpy((U8 *)Log + off, keep, n);
+        memcpy((U8 *)Screen + off, keep + n, n);
+        GpuOverlay_KeepPlate(0, y0, w - 1, h - 1);
+    }
+    if (!FlagAnimWhoSpeak) {         // (the speaking steps draw these for a speaker who moves)
+        if (Bulle)
+            DrawBulle(NumObjDial);
+        TestAndDrawRadio();
+    }
+    BoxReset();
+    BoxStaticAdd(0, 0, w - 1, h - 1);
+}
+
 void SpeakAnimation() {
     S32 saveyclip;
+
+    if (s_dialScene AND s_dialSwitchSeen != RendererSwitchCount) {
+        s_dialSwitchSeen = RendererSwitchCount;
+        DialRedrawAfterSwitch();
+    }
 
     if (FlagZoomed)
         DrawOneInventory(InvSelect);
@@ -2447,6 +2506,9 @@ void Dial(S32 text, S32 drawscene) {
         BoxBlit();
     }
     //-----
+    // (over the scene: drawn again if the renderer switches while it is up -- SpeakAnimation)
+    s_dialScene = !(s_dial_capture_path[0] && Console_GetCaptureBlackBg()) && !(FlagDial & (DIAL_EXP | DIAL_DEM));
+    s_dialSwitchSeen = RendererSwitchCount;
 
     DialNbLine = 0; //  pour la démo le 02/08/96
 
@@ -2493,6 +2555,7 @@ void Dial(S32 text, S32 drawscene) {
         StopSpeak();
         ClearWhoSpeak();
         FlagAnimWhoSpeak = FALSE; // Cela pose-t-il un probleme ??
+        s_dialScene = 0;
         RestoreClip();
         InitWaitNoKey();
         InitWaitNoInput(I_FIRE | I_ACTION | I_MENUS);
@@ -2618,6 +2681,7 @@ void Dial(S32 text, S32 drawscene) {
     ClearWhoSpeak();
 
     FlagAnimWhoSpeak = FALSE; // Cela pose-t-il un probleme ??
+    s_dialScene = 0;
 
     //----- remplace le RestoreScreen pour le CinemaMode (c crade !)
     if (drawscene) {
