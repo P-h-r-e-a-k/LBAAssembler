@@ -681,6 +681,19 @@ through at night, slow, like it was looking for something."
 **Baldino:** "You think you're fast? The Cup goes on to the Emerald Moon, and up there the moon base's own computer races -- HAL, never
 beaten. The Esmers' freighter takes cars to the moon -- show your racing licence at the Temple of Bú, by the track."
 
+**The Temple of Bú** (2026-11-28) is the Cup's departure lounge for the Emerald Moon now, staffed by friendly skeletons. Twinsen drives
+through it to the Esmers' hangar (and can walk in on foot any time). Inside the door: the departure board, "EMERALD MOON / NOW BOARDING".
+
+- **The skeleton skittles.** Ten small skeletons stand in a triangle at the end of the wooden corridor. Drive through them and they fall
+  in a heap, then pull themselves together. Knock all ten down at once for a strike. (On foot: "We're the temple skittles! Go on, drive
+  through us. We always pull ourselves together.")
+- **The traffic warden** with his SLOW sign: "Reverent speed only, please! This is a temple, not a racetrack!"
+- **The tour guide and the tourists** in sun hats round Bú's old statue; **the miner** stuck in his cart since the rails were floored.
+- **Bú, patron of racers**, in a racing helmet and chequered scarf: leave five Kashes in his bowl for luck.
+- **The witness** by the last hall, holding his skull: "A black car came through here! Went by so fast my skull fell off." (A clue for
+  the black car's file.)
+- **The souvenir stall**, and **the xylophonist** playing the temple's tune on a ribcage.
+
 The Esmers' freighter takes Twinsen and his car to the Emerald Moon. (Baldino stays on Twinsun: he isn't on the moon at all.)
 
 ---

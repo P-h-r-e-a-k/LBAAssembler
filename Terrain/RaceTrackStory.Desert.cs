@@ -1296,10 +1296,13 @@ void comportement_1()
         HairDryerDesert(b, dryerFirst);
         // (the racer stuck in the sand at the Temple bend, towed out: RaceTrackStory.Tow.cs -- placed with the eggs, below, once the lap's known)
         var towFirst = GroupB.AddLines(gameDirectory, DesertTexts, TowLines, log, "the tow's (the Desert)");
+        // (the Temple of Bú remodelled: the Cup's departure lounge, its skeletons -- RaceTrackStory.TempleRemodel, after its drive's edits)
+        var templeFirst = GroupB.AddLines(gameDirectory, DesertTexts, TempleLines, log, "the Temple of Bú's remodel's (the Desert)");
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
         TempleDrive(b);
+        TempleRemodel(b, templeFirst);
         // (the cave on the islet across from the Hacienda shut by a rock fall: nothing of the story's in it -- HaciendaIsletCave)
         HaciendaIsletCave(b);
         // (Moya at her bells: she won't carry him -- MoyaRefuses)

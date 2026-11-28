@@ -88,6 +88,9 @@ internal static partial class RaceTrackStory
         // (the palace's dungeon, five layers under its rooms 159 and 163, its floor at 6,800: Twinsen in either, under 7,400)
         "achieve=dungeon below 159 7400",
         "achieve=dungeon below 163 7400",
+        // (the Temple of Bú's ten skeleton skittles down at once, a strike -- RaceTrackStory.TempleRemodel; shown once the engine's own list,
+        // RACEGAME.CPP s_ach, has "strike" in it)
+        $"achieve=strike var {StrikeVar} 1",
     };
     private const int LyraClovers = 72, LyraDives = 73, LyraEntity = GridGirl.Entity, LyraBody = 40 + Temple.TempleMarshal.NoFlags, LyraReady = 660, LyraRaise = 661;
     // (the clovers: the game variable FLAG_CLOVER (COMMON.H), at most MAX_CLOVER_BOX)
