@@ -231,6 +231,33 @@ static const char *s_vertSrc =
     "    vTexCoord = aTexCoord;\n"
     "}\n";
 
+/* (the target's picture at render quality 2 or 4 -- larger than the window's pixels: each window pixel the mean of the target's samples
+   under it, up to 4x4, its footprint from the texture coordinate's derivatives (any window size); one bilinear tap mixed only the 4
+   middle samples of a 4x4 block and left 12 out. Desktop only: GLES 2.0 has no derivatives without an extension) */
+#ifdef USE_GLES2
+#define GLSL_SCENE_BOX ""
+#else
+#define GLSL_SCENE_BOX \
+    "        if (uSceneBox != 0) {\n" \
+    "            vec2 fp = abs(vec2(dFdx(vTexCoord.x), dFdy(vTexCoord.y))) * uSceneSize;\n" \
+    "            if (fp.x > 1.5 || fp.y > 1.5) {\n" \
+    "                vec2 n = clamp(floor(fp + 0.5), 1.0, 4.0);\n" \
+    "                vec2 origin = vTexCoord * uSceneSize - fp * 0.5;\n" \
+    "                vec3 sum = vec3(0.0);\n" \
+    "                float cnt = 0.0;\n" \
+    "                for (int j = 0; j < 4; j++) {\n" \
+    "                    for (int i = 0; i < 4; i++) {\n" \
+    "                        if (float(i) < n.x && float(j) < n.y) {\n" \
+    "                            sum += texture2D(uTex, (origin + (vec2(float(i), float(j)) + 0.5) * fp / n) / uSceneSize).rgb;\n" \
+    "                            cnt += 1.0;\n" \
+    "                        }\n" \
+    "                    }\n" \
+    "                }\n" \
+    "                color.rgb = sum / cnt;\n" \
+    "            }\n" \
+    "        }\n"
+#endif
+
 /* Present composite: samples the FBO colour (ARGB path) or the Log overlay
    (either format) and, on the R8 path, resolves colour through the palette
    LUT. uIndexed/uLinear/uOpaqueRect/uSize mirror present.frag.glsl so both
@@ -249,6 +276,7 @@ static const char *s_fragSrc =
     "uniform sampler2D uDrawnPal;\n"
     "uniform int uSceneFix;\n"
     "uniform vec2 uSceneSize;\n"
+    "uniform int uSceneBox;\n"
     "varying vec2 vTexCoord;\n"
     "vec4 paletteLookup(float idx) {\n"
     "    return texture2D(uPalette, vec2((idx + 0.5) / 256.0, 0.5));\n"
@@ -271,6 +299,7 @@ static const char *s_fragSrc =
     "    vec4 color;\n"
     "    if (uIndexed == 0) {\n"
     "        color = texture2D(uTex, vTexCoord);\n"
+    GLSL_SCENE_BOX
     "        if (uSceneFix != 0) {\n"
     "            float idx = floor(texture2D(uTex, (floor(vTexCoord * uSceneSize) + 0.5) / uSceneSize).a * 255.0 + 0.5);\n"
     "            vec2 pu = vec2((idx + 0.5) / 256.0, 0.5);\n"
@@ -731,6 +760,7 @@ static GLint s_uSizeLoc = -1;
 static GLint s_uDrawnPalLoc = -1;  /* the scene palette fix (SetSceneDrawnPalette) */
 static GLint s_uSceneFixLoc = -1;
 static GLint s_uSceneSizeLoc = -1;
+static GLint s_uSceneBoxLoc = -1;   /* (the scene's box filter at render quality 2 and 4: GLSL_SCENE_BOX) */
 static GLuint s_drawnPalTex = 0;    /* 256x1: the palette the target was drawn with, while this frame's differs */
 static S32 s_sceneFix = 0;
 static GLint s_aPosLoc = -1;
@@ -1100,6 +1130,7 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_uDrawnPalLoc = glGetUniformLocation(s_program, "uDrawnPal");
     s_uSceneFixLoc = glGetUniformLocation(s_program, "uSceneFix");
     s_uSceneSizeLoc = glGetUniformLocation(s_program, "uSceneSize");
+    s_uSceneBoxLoc = glGetUniformLocation(s_program, "uSceneBox");
     s_aPosLoc = glGetAttribLocation(s_program, "aPos");
     s_aTexCoordLoc = glGetAttribLocation(s_program, "aTexCoord");
 
@@ -2622,11 +2653,13 @@ static void GL_DrawPresentQuad(S32 which, S32 linear, S32 opaqueX0,
         glUniform2f(s_uSizeLoc, (float)s_texWidth, (float)s_texHeight);
         /* (a palette changed since the target was drawn: GL_SetSceneDrawnPalette) */
         glUniform1i(s_uSceneFixLoc, (s_sceneFix && s_drawnPalTex) ? 1 : 0);
+        glUniform2f(s_uSceneSizeLoc, (float)s_fboWidth, (float)s_fboHeight);
+        /* (the target larger than the engine's picture -- render quality 2 or 4: each window pixel the mean of the samples under it) */
+        glUniform1i(s_uSceneBoxLoc, s_fboWidth > s_texWidth ? 1 : 0);
         if (s_sceneFix && s_drawnPalTex) {
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, s_drawnPalTex);
             glUniform1i(s_uDrawnPalLoc, 2);
-            glUniform2f(s_uSceneSizeLoc, (float)s_fboWidth, (float)s_fboHeight);
             glActiveTexture(GL_TEXTURE0);
         }
 
