@@ -15,14 +15,12 @@ in [LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md), which has the build notes; this
 - **Twinsen speaks first.** Whoever he talks to, he opens with his goal on that island ("I'm looking for whoever took my driving
   gloves.", "I need sand filters for my car's engine.", "Do you know where I can get an ignition coil?"), or a hello when he has none,
   and then they answer. He says it once a visit to each person; talked to again, they just answer. (Not to Zoe: she's at his side.)
-- **Zoe** is with Twinsen from chapter 2 on. She follows him on foot, and talking to her (Action beside her) gives a hint for whatever
-  he's stuck on. In a race she runs the pit box by the start line: drive slowly through it (under 20 km/h) for a pit stop, once a lap.
-  It refills your item box with a fuel can and undoes a shrink or a skid.
-- **Two players:** player 2 is Zoe. She never races in story mode. On foot she goes where she likes and can pick things up; in a race
-  she's in the pit box, and the pit stop is hers to give with Action as Twinsen's car comes through.
+- **Zoe** is Twinsen's mechanic on Twinsun (Citadel and the Desert), and stays behind when he leaves for the Emerald Moon. Talking to her
+  (Action beside her) gives a hint for whatever he's stuck on. The story's races have no pit stops: nobody stands in a pit box.
+- **Two players:** player 2 as Zoe is switched off for now. She never races in story mode.
 - **Baldino's radio** rings when Twinsen arrives on each island from chapter 2 on. Answer it from the inventory. Baldino has tuned the
   car for that track (its best setup) and gives a tip.
-- **The magic slate** gets a new page on each island: the map of the track there, with its start line, checkpoints and pit box. Open it
+- **The magic slate** gets a new page on each island: the map of the track there, with its start line and checkpoints. Open it
   from the inventory; left and right turn the pages. Two pages are hidden: see the secrets in chapters 1 and 2.
 
 **The tracks, in order:** Polar Island (the dream), Citadel 1 (the storm), Citadel 2 (the town circuit), the White Leaf Desert, the
@@ -466,7 +464,7 @@ how the Cup goes."
 
 **Found:** Portable Radio.
 
-**Zoe:** "You drive, I'll keep the car in one piece. I'll be in the pit box by the start line."
+**Zoe:** "You drive, I'll keep the car in one piece. If anything breaks, bring it straight to me."
 
 **9. The first call.** The radio beeps. The first time, a line on screen says: "The radio is ringing. Answer it from your inventory."
 Twinsen opens the inventory and uses the radio.
@@ -479,12 +477,10 @@ car before you ever knew it needed tuning: shorter gears for the town's tight co
 **10. The race.** Twinsen drives to the start line: out of the yard north, onto the circuit and round its east side to the grid behind
 the line. First a qualifying lap: over the line. Stopped at the line, the car is put on pole: "Qualifying lap: over the start line!"
 (Before the wheel is on: "Mr. Paul: six cars! Luc's a wheel short.") Then six cars on the grid: Twinsen, Mr. Paul,
-Raph, the Tralu, the thief and Luc's barrel. Flick drops the flag. Three laps; beat Mr. Paul. Zoe waves from the pit box on each lap.
+Raph, the Tralu, the thief and Luc's barrel. Flick drops the flag. Three laps; beat Mr. Paul.
 
 *Tip:* Mr. Paul drives a tugboat on wheels: slow off the line, hard to pass on the narrow streets. Get past him before the harbour
 straight.
-
-**Zoe** (at a pit stop): "Fuel's in, wheels are on. Go!"
 
 **11. Won.** The car brakes to a stop just past the line and Twinsen gets out; Mr. Paul comes over with the prize.
 
@@ -546,7 +542,7 @@ all week."
 
 **12. The ferry.** Zoe comes along from now on.
 
-**Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
+**Zoe:** "Every racer needs a mechanic. That's me. You drive, I'll fix."
 
 At the ferry office by the harbour, Mrs. Brune takes the ticket.
 
@@ -625,11 +621,8 @@ Raced without the filters: past the lap's second checkpoint, "Sand in the engine
 garage." The car crawls on, smoking, to the end: the race is lost, and run again with the filters in.
 
 **7. The race.** On the grid: the racer (the one to beat), Moya the turtle, the Dino-Fly, the Dean and Baldino. Flick drops the flag.
-Zoe is in the pit lane.
 
 *Tip:* the sand at the edges slows you down hard. Keep to the packed road and take Baldino's advice at the Temple bend.
-
-**Zoe** (at a pit stop): "In, out, fuel's in. Go!"
 
 **8. Won.** Out of the car by the start line, one after another:
 

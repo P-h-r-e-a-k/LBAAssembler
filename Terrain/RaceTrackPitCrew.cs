@@ -57,12 +57,9 @@ internal static class RaceTrackPitCrew
         return new[] { ZoeEntity, ZoeBody, Idle, Wave, (int)Math.Round(x * 512), (int)Math.Round(z * 512), (int)Math.Round(y), beta };
     }
 
-    // Whether a story race has her: from chapter 2 (the storm track's race is chapter 1's, the dream's chapter 0's), on Twinsun's islands
-    // only -- since she no longer comes along (the companion off, 2026-11-13), she stays on Twinsun: the user, 2026-11-14, "we have Zoe on
-    // the start line on the Emerald moon, since dropping companion Zoe let's leave her on Twinsun so she doesn't appear anywhere else"
-    // (Celebration Island and its lava lake out, 2026-11-19: they are Zeelich's -- the story reaches them by taxi from Otringal -- and she
-    // was still in their pits: the user, "We need to also remove Zoe from pitlanes, she's no longer coming with us and is staying behind
-    // on Twinsun")
-    private static readonly HashSet<string> Twinsun = new() { "Citadel Island", "Desert island" };
-    public static bool InStory(string? island, bool dream) => !dream && island is not null && Twinsun.Contains(island);
+    // Whether a story race has her: none does. Off Twinsun since 2026-11-14/19 (the user: "since dropping companion Zoe let's leave her on
+    // Twinsun"; "We need to also remove Zoe from pitlanes, she's no longer coming with us and is staying behind on Twinsun"), and off
+    // Twinsun's own two islands too since 2026-11-27 (the user: "Zoe needs dropping from the pitlane for Citadel and Desert Island"). The
+    // pit stop is hers (RACEMOD.CPP PitCrew runs only with pit_crew=), so no story race has a pit stop either.
+    public static bool InStory(string? island, bool dream) => false;
 }

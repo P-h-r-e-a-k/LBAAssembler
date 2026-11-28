@@ -514,12 +514,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "You drive, I'll keep the car in one piece. I'll be in the pit box by the start line.",
-            "Toi, tu conduis, moi je garde la voiture en un seul morceau. Je serai dans le stand, près de la ligne de départ.",
-            "Du fährst, ich halte das Auto in einem Stück. Ich bin in der Box an der Startlinie.",
-            "Tú conduces, yo mantengo el coche de una pieza. Estaré en el box, junto a la línea de salida.",
-            "Tu guidi, io tengo la macchina tutta intera. Sarò ai box, vicino alla linea di partenza.",
-            "Tu conduzes, eu mantenho o carro inteiro. Estarei na boxe, ao pé da linha de partida.",
+            "You drive, I'll keep the car in one piece. If anything breaks, bring it straight to me.",
+            "Toi, tu conduis, moi je garde la voiture en un seul morceau. Si quelque chose casse, apporte-la-moi tout de suite.",
+            "Du fährst, ich halte das Auto in einem Stück. Wenn etwas kaputtgeht, bring es gleich zu mir.",
+            "Tú conduces, yo mantengo el coche de una pieza. Si algo se rompe, tráemelo enseguida.",
+            "Tu guidi, io tengo la macchina tutta intera. Se si rompe qualcosa, portamela subito.",
+            "Tu conduzes, eu mantenho o carro inteiro. Se alguma coisa partir, traz-mo logo.",
         },
         new[]
         {
@@ -645,12 +645,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "Every race needs a pit crew. That's me. You drive, I'll fix.",
-            "Chaque course a besoin d'une équipe au stand. C'est moi. Toi, tu conduis, moi, je répare.",
-            "Jedes Rennen braucht eine Boxencrew. Das bin ich. Du fährst, ich schraube.",
-            "Toda carrera necesita un equipo en boxes. Esa soy yo. Tú conduces, yo arreglo.",
-            "Ogni gara ha bisogno di una squadra ai box. Sono io. Tu guidi, io aggiusto.",
-            "Todas as corridas precisam de uma equipa na boxe. Sou eu. Tu conduzes, eu arranjo.",
+            "Every racer needs a mechanic. That's me. You drive, I'll fix.",
+            "Chaque pilote a besoin d'une mécano. C'est moi. Toi, tu conduis, moi, je répare.",
+            "Jeder Fahrer braucht eine Mechanikerin. Das bin ich. Du fährst, ich schraube.",
+            "Todo piloto necesita una mecánica. Esa soy yo. Tú conduces, yo arreglo.",
+            "Ogni pilota ha bisogno di una meccanica. Sono io. Tu guidi, io aggiusto.",
+            "Todo o piloto precisa de uma mecânica. Sou eu. Tu conduzes, eu arranjo.",
         },
         new[]
         {

@@ -22,6 +22,11 @@ The same story as a player's guide, step by step with every line and no build no
 
 Twinsen is the one you play, always. There's no switching.
 
+**As built now (2026-11-28):** the companion and player 2's Zoe are switched off (2026-11-13). Zoe stays on Twinsun as Twinsen's
+mechanic (Citadel and the Desert), and no story race has a pit crew or a pit stop: `RaceTrackPitCrew.InStory` is false, so no story car
+file has `pit_crew=` (the user, 2026-11-27: "Zoe needs dropping from the pitlane for Citadel and Desert Island"). The design below is
+kept as it was planned.
+
 **Zoe joins him in chapter 2** as his pit crew, and goes with him to every island after that.
 
 - **One player:** Zoe is a companion. On foot she follows Twinsen at a few steps, as the game's own followers do (`MOVE_FOLLOW` on
@@ -673,7 +678,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > to hear how the Cup goes."
 
    Found: Portable Radio (item 26). Q_LUCCAR = 4. Luc goes back to his bar.
-   > **Zoe:** "You drive, I'll keep the car in one piece. I'll be in the pit box by the start line."
+   > **Zoe:** "You drive, I'll keep the car in one piece. If anything breaks, bring it straight to me."
 10. **The first call.** The radio rings: "The radio is ringing. Answer it from your inventory." Twinsen answers.
    > **Baldino (radio):** "Hello? Twinsen? Can you hear me? Excellent, the radio works! Listen, I've been reading about this Cup. I
    > tuned your car before you ever knew it needed tuning: shorter gears for the town's tight corners. Try not to scratch the paint."
@@ -737,7 +742,7 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
      Item 17 = 0. The slate copies the sheet: the Citadel 1 page, second in the book. Q_SHEET = 2.
      > **Zoe:** "Two tracks we've already raced, and the whole Cup still to come. Your slate's filling up."
 13. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
-   > **Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
+   > **Zoe:** "Every racer needs a mechanic. That's me. You drive, I'll fix."
 
    At the harbour, Mrs. Brune:
    > **Mrs. Brune:** "One ticket for the Desert... and the young lady goes free, she says she's crew."
@@ -826,8 +831,7 @@ added to Mr. Paul's prize, and the two pages' pictures.
    > **Baldino:** "I'm racing too, of course. I need to see how my work goes against my work."
 
    Car update: the Desert's best setup.
-7. **The race.** The line-up: the racer (the one to beat), Moya, the Dino-Fly, the Dean, Baldino (built). Zoe is in the pit lane.
-   - > **Zoe (pit stop):** "In, out, fuel's in. Go!"
+7. **The race.** The line-up: the racer (the one to beat), Moya, the Dino-Fly, the Dean, Baldino (built).
 8. **Won.**
    > **Flick:** "The Desert champion, beaten by a ferry-ticket driver! The Cup goes on, to the Emerald Moon."
    >
@@ -1545,7 +1549,7 @@ RaceTrackIsland.Wannies Ladders) goes up from that deck to the road, where his c
   - She stands beside Twinsen whenever a scene loads, and has her hint lines.
   - Her lines inside others' conversations are `message_obj(ZOE, ...)`.
   - Hidden while Twinsen drives; the pit crew takes over in the race.
-- **The pit crew:**
+- **The pit crew** (no story race writes it since 2026-11-27: RaceTrackPitCrew.InStory is false):
   - The engine draws Zoe in the pit box during a race (as the marshal is drawn), with an idle animation and a "wave in" animation.
   - Pit service: under 20 km/h through the box gives a fuel can, undoes a jolt, says one line; once a lap.
   - New keys `pit_crew=` (her entity, body, animations, the box) and `pit_line=`.
