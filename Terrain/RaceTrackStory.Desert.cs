@@ -141,7 +141,7 @@ internal static partial class RaceTrackStory
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
         island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! Kash's tomb in the sea cave keeps one.\n{TowGate}win={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {TempleOfBuDrive.Lower} {HangarScene} {SeaCave}\n" + GarageRaceLines()
-        : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\nwin_pull=1 {HalPullVar} 1 {HalPullDelay}\n" + MoonHelmetHooks()
+        : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\nwin_pull=1 {HalPullVar} 1 {HalPullDelay}\nstart_item_when={BuLuckVar} 1 {BuLuckItem}\n" + MoonHelmetHooks()
         : island == RaceTrackIsland.Otringal ? OtringalRaceKeys
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
         : null;
@@ -1298,10 +1298,13 @@ void comportement_1()
         var towFirst = GroupB.AddLines(gameDirectory, DesertTexts, TowLines, log, "the tow's (the Desert)");
         // (Zoe's word as she gives Twinsen the black car's case file, after the race: RaceTrackStory.CaseFile.cs)
         var caseFirst = GroupB.AddLines(gameDirectory, DesertTexts, CaseLines, log, "the case file's (the Desert)");
+        // (the Temple of Bú remodelled: the Cup's departure lounge, its skeletons -- RaceTrackStory.TempleRemodel, after its drive's edits)
+        var templeFirst = GroupB.AddLines(gameDirectory, DesertTexts, TempleLines, log, "the Temple of Bú's remodel's (the Desert)");
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
         TempleDrive(b);
+        TempleRemodel(b, templeFirst);
         // (the cave on the islet across from the Hacienda shut by a rock fall: nothing of the story's in it -- HaciendaIsletCave)
         HaciendaIsletCave(b);
         // (Moya at her bells: she won't carry him -- MoyaRefuses)

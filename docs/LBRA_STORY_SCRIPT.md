@@ -881,7 +881,42 @@ added to Mr. Paul's prize, and the two pages' pictures.
 
    `inc_chapter()` -> 4. `change_cube(229)`.
 
-**Flags:** Q_PAGES (215), item 30.
+   **The Temple of Bú remodelled (built 2026-11-28; RaceTrackStory.TempleRemodel.cs, TempleRemodelProps.cs).** The user, 2026-11-27:
+   "Let's implement all 10 of these temple of bu suggestions". The drivable temple (scene 10, with 11 below it) is now the Cup's
+   departure lounge for the Emerald Moon, staffed by friendly skeletons: the game's rabbibunny skeleton (entity 22), its blade left off,
+   dressed as more of that entity's bodies (60-69), with animations of its own (690 sitting, 691 playing, 692 the sign held up, 693 the
+   sign held). Nobody attacks; everyone answers Action in any chapter. Texts 1090-1110 of file 5.
+   - **Skeleton skittles:** ten small skeletons (body 60) in a bowling triangle across the car's way at the east end of the wooden
+     corridor (cells x 43-45.3, z 56.4-58.6). Armour 118, so the car and Twinsen go through them. The car within 900 of one: it falls in
+     a heap (anim 151), lies 8 s, gets up (147) and walks back to its spot. All ten down at once (scene variable 50 = 10): STRIKE_VAR
+     (305) = 1, and the race file's `achieve=strike var 305 1`: the achievement "Strike!" (Desert; RACEGAME.CPP s_ach). On foot: "We're
+     the temple skittles! Go on, drive through us..." (1090), or, lying in a heap, "Has anyone seen my shin bone?" (1091).
+   - **The traffic warden** (body 61, a tabard, a SLOW lollipop sign) at the corridor's end: the car near, he holds the sign up; talked
+     to, the strike first if there was one ("STRIKE! All ten at once!", 1094), "Reverent speed only, please!" (1092, once a visit), his
+     grumble after (1093). (Said to Twinsen on foot: in the car on the Desert he counts as racing, and RaceMod_Hush leaves lines out.)
+   - **The tour:** the guide (body 62, a cap, a flag; 1095) and three tourists in sun hats (63-65; 1096-1098) round the game's statue
+     of Bú in the east hall.
+   - **The miner** (body 68, a miner's helmet) sat in the game's minecart, stranded where the rails were (1099). The cart's own life is
+     gone (it rolled off rails that aren't there, and it hit Twinsen).
+   - **Bú, patron of racers:** a new statue in a racing helmet and a chequered scarf, holding a steering wheel, in the west hall (cells
+     27, 13.5), fire bowls either side. His luck shrine: "Leave five Kashes in his bowl" (1100; choices 1101/1102), paid: BU_LUCK (306)
+     = 1, kashes in the bowl (body 2), "Under that helmet, Bú seems to smile" (1103); no money: 1104; after: 1105. The luck: the Emerald Moon's
+     race begins with a golden Gazogem in the item box (its race file's `start_item_when=306 1 11`, RACEMOD.CPP, 2026-11-28), and BU_LUCK
+     goes back to 0 as it's given -- the luck is for the next race only, and the bowl takes kashes again.
+   - **The spaceport's approach:** the departure board on the door's hall's north wall (EMERALD MOON / NOW BOARDING, the second line
+     blinking), an Esmer sign, lane lights along both sides of the wooden corridor; in scene 11, lane lights and a sign at the base's
+     door.
+   - **The black car's clue:** its tyre marks along the last halls to the stairs down, and a skeleton witness holding his own skull
+     (body 66): "A black car came through here! Went by so fast my skull fell off..." (1106, 1107). Talked to: CASE_FILE_DESERT (311)
+     = 1, the Desert's page of the black car's case file.
+   - **The souvenir stall** (pennants, foam fingers) and its stallholder (body 69; 1108, 1109).
+   - **Halloween pieces:** fire bowls by the corridor's end (walked through) and by Bú, cobwebs in two corners, two flying rats (entity
+     23's body 60: twice the size, shaded) circling under the roof.
+   - **The music:** a skeleton (body 67, two mallets) playing a ribcage xylophone in the west hall (1110). His tune -- a skeleton's waltz
+     on bones, 8.6 s, made by the build (TempleRemodelProps.Tune) and put at SAMPLES.HQR's end -- plays from his track, round and round;
+     the scene's own music is stopped (`quiet_scene=10`).
+
+**Flags:** Q_PAGES (215), item 30; STRIKE_VAR (305), BU_LUCK (306), CASE_FILE_DESERT (311).
 
 ---
 

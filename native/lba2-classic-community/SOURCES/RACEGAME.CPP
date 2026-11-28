@@ -3279,6 +3279,7 @@ static const T_RG_ACH s_ach[] = {
     {"darts", "Citadel", "Deadly Darts"},   // (a game won in nine darts, its last visit the 170 checkout: RACEMOD.CPP DartAchieve)
     {"telescope", "Citadel", "Wizard cow love okay"},
     {"spanked", "Citadel", "Got spanked by Zoe"},
+    {"strike", "Desert", "Strike!"},        // (the Temple of Bú's ten skeleton skittles down at once: LBA Assembler RaceTrackStory.TempleRemodel)
     {"stella", "Moon", "Stella EnTitties"},
     {"bowling", "Otringal", "Bowling Baby!"},   // (the hidden bowling alley found: a title the page has room for)
     {"dungeon", "Palace", "Found the palace dungeon"},

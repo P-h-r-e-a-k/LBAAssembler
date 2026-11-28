@@ -28,7 +28,7 @@ internal static class HotelPreview
         return 0;
     }
 
-    private static void Draw(Body body, (byte R, byte G, byte B)[] palette, string path)
+    internal static void Draw(Body body, (byte R, byte G, byte B)[] palette, string path)
     {
         const float Scale = 4 * 24f / 512;
         var world = body.World();

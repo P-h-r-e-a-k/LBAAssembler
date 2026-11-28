@@ -287,6 +287,7 @@ internal static class Program
             "lba2scene" => CitadelRoomsCommand.Scene(args),
             "museumblock" => MuseumStudy.Block(args),
             "hotelpreview" => HotelPreview.Run(args),
+            "templeremodel" => TempleRemodelPreview.Run(args),
             "libstats" => CitadelRoomsCommand.LibStats(args),
             "lba1port" => CitadelRoomsCommand.Port(args),
             "cellinfo" => CitadelRoomsCommand.CellInfo(args),

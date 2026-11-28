@@ -1469,6 +1469,9 @@ static int s_useHeld = 0;                  // the behaviour key (Ctrl, the pad's
 static U32 s_filterPass = 0;               // the main loop's reads of the keys, counted (RaceMod_FilterInput): PowerUps' check of the item key
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
 static int s_startItem = -1;               // start_item=<n>: a power-up (PU_*) in Twinsen's item box as the race goes, his radio's car update
+// start_item_when=<var> <value> <n> (2026-11-28): the same, while a game variable has a value -- set back to 0 once given (the Temple of Bú's
+// shrine: kashes left in Bú's bowl, "Bú will smile on your next race", the Emerald Moon's race begun with a golden Gazogem)
+static int s_whenVar = -1, s_whenValue = 0, s_whenItem = -1;
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // (health and clovers were power-ups too: no one dies in a race, so they did nothing -- out since 2026-10-03)
@@ -1551,10 +1554,16 @@ static int BoxFree(void) { return s_item[RACE_BOX] < 0 && !(s_slotOn && !s_slotP
 // The car update's item (start_item=), in the box as the race begins -- at GO, or at the start line's first crossing in a race with no
 // grid: no roulette, it is his already.
 static void StartItem(S32 now) {
-    if (s_startItem < 0 || s_startItem >= PU_COUNT || !BoxFree()) return;
-    s_item[RACE_BOX] = s_startItem;
+    const int when = s_whenVar >= 0 && s_whenVar < MAX_VARS_GAME && ListVarGame[s_whenVar] == s_whenValue && s_whenItem >= 0 && s_whenItem < PU_COUNT;
+    const int item = s_startItem >= 0 ? s_startItem : when ? s_whenItem : -1;
+    if (item < 0 || item >= PU_COUNT || !BoxFree()) return;
+    s_item[RACE_BOX] = item;
     s_itemAt[RACE_BOX] = now;
-    Log_Info("[racemod] Twinsen starts with %s in his item box (start_item=)", s_puName[s_startItem]);
+    if (s_startItem < 0 && when) {
+        ListVarGame[s_whenVar] = 0;
+        Log_Info("[racemod] Twinsen starts with %s in his item box (start_item_when=: variable %d was %d, now 0)", s_puName[item], s_whenVar, s_whenValue);
+    } else
+        Log_Info("[racemod] Twinsen starts with %s in his item box (start_item=)", s_puName[item]);
 }
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
@@ -5822,6 +5831,9 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "shrunk_ms")) s_shrunkUntil = TimerRefHR + atoi(v);     // (tests: shrunk from the start)
         else if (!strcmp(key, "oil_icon")) s_oilIcon = atoi(v);
         else if (!strcmp(key, "start_item")) s_startItem = atoi(v);
+        else if (!strcmp(key, "start_item_when")) {
+            if (sscanf(v, "%d %d %d", &s_whenVar, &s_whenValue, &s_whenItem) != 3 || s_whenVar < 0 || s_whenVar >= MAX_VARS_GAME) s_whenVar = -1;
+        }
         else if (!strcmp(key, "gold_icon")) s_goldIcon = atoi(v);
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
@@ -27891,7 +27903,7 @@ static void ResetTrack(void) {
     s_hoverEntity = -1;
     if (s_footBody >= 0 && ListObjet[NUM_PERSO].GenBody == s_footBody) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_footBody = -1; s_footChecked = 0; s_nbHooks = 0; s_nbFigures = 0; s_nbFigCubes = 0;
-    s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_boxSince = s_useDownAt = 0; s_pressKept = 0; s_stopSeen = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_penguinWalk = 1; s_startItem = -1; s_whenVar = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_boxSince = s_useDownAt = 0; s_pressKept = 0; s_stopSeen = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
