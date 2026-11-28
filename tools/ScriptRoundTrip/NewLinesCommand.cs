@@ -150,6 +150,7 @@ internal static class NewLinesCommand
     private static readonly Dictionary<string, string> VoiceOf = new()
     {
         ["Lyra"] = "Female sup in the flying saucer", ["Race marshal"] = "Female sup in the flying saucer", ["Priest"] = "Sup priest", ["Brune sisters"] = "Mrs Brune", ["Moon bowler"] = "Quetch bowl player", ["Mechanic"] = "Mechanic owl",
+        ["Rabbibunny skeleton"] = "Rabbibunny in shop on Desert Island",
     };
     // ... and why that one
     private static readonly Dictionary<string, string> VoiceWhy = new()
@@ -160,6 +161,7 @@ internal static class NewLinesCommand
         ["Brune sisters"] = "their sister's voice, Mrs. Brune of the Citadel ferry",
         ["Moon bowler"] = "one of the Desert's bowlers, as the moon's bowler is one (in a space suit)",
         ["Mechanic"] = "the retail game's only mechanic line; a short one",
+        ["Rabbibunny skeleton"] = "the Temple of Bú's skeletons (the remodel, 2026-11-28) are rabbibunnies' bones, on the Desert: the Desert shop's rabbibunny",
     };
 
     // ---- lines no script names a speaker for (the race mode says them from its race files: gates, hints, chases; radios; voices off) or
@@ -172,6 +174,9 @@ internal static class NewLinesCommand
         (new("^\"[^\"]*\"$"), null, "a sign or a notice"),
         (new(@"^The radio is ringing\.|^The hatch closes\. The freighter shudders|^Twinsen sings |^The Emperor's bedroom\. Locked"), null, "narration"),
         (new(@"^The Esmers wave the car through the Temple|^The cars are wheeled into the stewards' garage"), null, "narration"),
+        // (the Temple of Bú's luck shrine: its inscription, and what the bowl does -- RaceTrackStory.TempleRemodel)
+        (new(@"^B\S*, PATRON OF RACERS\."), null, "a sign or a notice"),
+        (new(@"^The coins clink into the bowl\.|^You haven't got five Kashes\. B|^Your Kashes are in B\S* bowl\."), null, "narration"),
         (new("^\"[A-Z][A-Z' ]{3,}[:.!]|^OFFICIAL NOTICE|\\bSigned: "), null, "a sign or a notice"),
         (new(@"^Twinsen, the car's ready\. All it needs now is a driver with gloves"), "Zoe", null),
         // the race mode's own lines (race files: RACEMOD.CPP gate=, hints, chases, the walker's yell) and the voices off
