@@ -825,6 +825,8 @@ internal static class RaceCarEngineFile
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={RaceTrackStory.ErrandSlot} {RaceTrackStory.BaitModel} {RaceTrackStory.TyreModel} {RaceTrackStory.TrophyModel}\n");
             // (the racing gear's one slot: the gloves, then the gloves and the helmet -- Citadel/CitadelOveralls.GearModel)
             if (t.Story is { TiredText: >= 0 }) text.Append($"inv_kinds={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.HelmetSlot}\n");
+            // (the Hoverboard's slot: the board, or the hair dryer Baldino wants the rheostat of -- RaceTrackStory.HairDryer)
+            if (t.Story is { TiredText: >= 0 }) text.Append(RaceTrackStory.DryerSlotLine());
             // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)
             if (t.Dream is not null && island.Dream && t.StartScene >= 0) text.Append($"dream={t.StartScene}\n");
         }

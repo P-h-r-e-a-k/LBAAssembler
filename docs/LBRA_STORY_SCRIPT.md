@@ -831,6 +831,18 @@ added to Mr. Paul's prize, and the two pages' pictures.
    > **Baldino:** "I'm racing too, of course. I need to see how my work goes against my work."
 
    Car update: the Desert's best setup.
+
+   **The Hoverboard, for a hair dryer's rheostat (built 2026-11-28; LBA1's errand).** Citadel Cycles no longer sells the board (its
+   actor `suicide()`s). Baldino has it, and asks for a rheostat (LBA1's text, adapted) with the filters, or at his house. The salesman
+   in a grey suit (LBA1's entity 15 converted: entity 365, BODY.HQR 1039, ANIM.HQR 2211-2214; RaceTrackStory.HairDryer.cs,
+   HairDryerSalesman.cs) knocks at doors: scene 48 houses 22 and Citadel Cycles in chapters 0-2, selling nothing (text 1223 of file 3);
+   scene 60 houses 35, 36 and 40 from chapter 3 (texts 1073-1085 of file 5). Hidden and not solid while a race is on (game var 303,
+   RACE_ON_VAR, the engine's). The sale: an `ask_choice` (yes/no), 30 Kashes, `set_var_game(12, 2)` and `found_object(12)`: the dryer
+   is slot 12's second kind (race file `inv_kinds=12 12 161`; model OBJFIX 161 is LBA1's INVOBJ 19). With the slot's other kind in it
+   the J key, the item's use and the behaviour menu don't give the board's behaviour (RACEMOD.CPP RaceMod_InvKindHas). Baldino lends 30
+   Kashes once (var 302) to a Twinsen short of them. Handed the dryer: var 12 = 1, the Hoverboard found.
+
+   **Flags:** Q_DRYER (301: 1 asked, 2 bought, 3 given), BALDINO_LENT (302).
 7. **The race.** The line-up: the racer (the one to beat), Moya, the Dino-Fly, the Dean, Baldino (built).
 8. **Won.**
    > **Flick:** "The Desert champion, beaten by a ferry-ticket driver! The Cup goes on, to the Emerald Moon."

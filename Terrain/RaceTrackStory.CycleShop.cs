@@ -15,10 +15,10 @@ namespace LBAAssembler.Terrain;
 //     read (in quotes, no bubble: read, not said) and his question, buy it or not today -- bought, more kashes than he will ever have (they
 //     stopped at 999; since 2026-11-22 they stop at 9,999, and came in with 1,000 or more he finds the tags ten times higher); before the penny-farthing, the tandem, the racer's bike on the repair stand, the fitting bike, the jerseys or the
 //     wheels, its plaque read; before the owner, his welcome -- the racers at the Dome of the Slate, the prices on the bikes;
-//   - the Hoverboard left behind in the corner (the user: "if Twinsen uses action on it, have the shop keeper comment that one of his
-//     customers left it there ages ago as he nolonger wanted it, and he hadn't had the heart to throw it away, he then offers to sell it to
-//     Twinsen for 50 kashes"): Action before it, the owner's story of it, then his price -- a short question, yes or no; bought, the 50
-//     kashes paid, the board his (item 12, the game's found_object: its holomap arrow off as the crate's was) and gone from the corner;
+//   - (the Hoverboard left behind in the corner, sold for 50 kashes, 2026-11-21 to 11-27: no more -- the board is Baldino's on the Desert,
+//     for a hair dryer's rheostat, RaceTrackStory.HairDryer; the user, 2026-11-27: "Currently on Citadel Island everything is open to
+//     Twinsen straight away including the hoverboard, when it's not needed until Desert Island", "Let's move the hoverboard to Baldino")
+//     -- its prop gone from the corner;
 //   - the owner is the baggage claim's clerk (the user, 2026-11-21: "let's have it staffed by the same NPC who staffed the storage place
 //     that it's replacing"): gone from the baggage claim's hall (scene 5's actor 9, unseen there now, his one rule that matters kept: the
 //     guard letting Twinsen through to his own parcel, game variable 50, as he leaves by the street door);
@@ -40,7 +40,6 @@ internal static partial class RaceTrackStory
     {
         if (!p.Store.SceneExists(CycleShopRoom.Scene)) { p.Log.Add($"the cycle shop's talk left out: no scene {CycleShopRoom.Scene}"); return; }
         int Later(CitadelLater line) => CitadelLaterId(p.Say, line);
-        int buy = p.Say(ChapterLine.BoardBuy), no = p.Say(ChapterLine.BoardNo);
         int buyIt = Later(CitadelLater.ShopBuyIt), notToday = Later(CitadelLater.ShopNotToday);
         // a bike for sale: its tag read -- ten times the price if he came in with 1,000 kashes or more -- his question, his sigh if he would
         // buy it; a plaque: read
@@ -97,32 +96,7 @@ internal static partial class RaceTrackStory
     {{
         if ({Driving} != comportement_hero())
         {{
-            if (0 == var_game({HoverboardItem}) && {NearBoard} > distance_message({ShopBoard}))
-            {{
-                message_obj({ShopOwner}, {p.Say(ChapterLine.BoardStory)});
-                add_choice({buy});
-                add_choice({no});
-                ask_choice_obj({ShopOwner}, {p.Say(ChapterLine.BoardAsk)});
-                if ({buy} == choice())
-                {{
-                    if ({BoardPrice} <= nb_gold_pieces())
-                    {{
-                        give_gold_pieces({BoardPrice});
-                        message_obj({ShopOwner}, {p.Say(ChapterLine.BoardSold)});
-                        clr_holo_pos({BaggageArrow});
-                        found_object({HoverboardItem});
-                        set_var_game({HoverboardItem}, 1);
-                    }}
-                    else
-                    {{
-                        message_obj({ShopOwner}, {p.Say(ChapterLine.BoardNoMoney)});
-                    }}
-                }}
-                else
-                {{
-                    message_obj({ShopOwner}, {p.Say(ChapterLine.BoardLater)});
-                }}
-            }}{told}
+            {told.TrimStart()["else ".Length..]}
             else if ({NearOwner} > distance_message({ShopOwner}))
             {{
                 message_obj({ShopOwner}, {p.Say(ChapterLine.ShopWelcome)});
@@ -131,30 +105,8 @@ internal static partial class RaceTrackStory
     }}
 }}
 ");
-            // (the board gone once it is his: at the scene's start, or the moment he buys it)
-            scripts.SetText(ShopBoard, ScriptKind.Life, $@"void comportement_0()
-{{
-    if (1 == var_game({HoverboardItem}))
-    {{
-        suicide();
-    }}
-    else
-    {{
-        set_comportement(comportement_1);
-    }}
-}}
-
-void comportement_1()
-{{
-    if (1 == var_game({HoverboardItem}))
-    {{
-        background(1);
-        suicide();
-    }}
-}}
-");
-            // (background(1): the engine redraws the whole room at the next frame -- a prop gone mid-scene is otherwise left drawn where it
-            // stood till something else is drawn over it: the board still on the wall after the sale, 2026-11-21)
+            // (the board not in the shop: Baldino's on the Desert, for a hair dryer's rheostat -- RaceTrackStory.HairDryer)
+            scripts.SetText(ShopBoard, ScriptKind.Life, "void comportement_0()\n{\n    suicide();\n}\n");
         });
         // the baggage claim's hall: no crate with the Proto-Pack; its clerk gone to run the shop -- unseen, walked through, silent, his rule for
         // game variable 50 kept (the guard lets Twinsen through to his own parcel)

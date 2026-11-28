@@ -136,7 +136,7 @@ S32 GetPreviousMenuComp() {
                                         .Value)
             return (n);
 #else
-                                    ListVarGame[ptrmcomp->Enable])
+                                    (ListVarGame[ptrmcomp->Enable] AND !RaceMod_InvKindHas(ptrmcomp->Enable))) // (LBRA: RACEMOD.CPP RaceMod_InvKindHas)
             return (n);
 #endif
     }
@@ -165,7 +165,7 @@ S32 GetNextMenuComp() {
                                         .Value)
             return (n);
 #else
-                                    ListVarGame[ptrmcomp->Enable])
+                                    (ListVarGame[ptrmcomp->Enable] AND !RaceMod_InvKindHas(ptrmcomp->Enable))) // (LBRA: RACEMOD.CPP RaceMod_InvKindHas)
             return (n);
 #endif
     }

@@ -73,6 +73,8 @@ internal static partial class RaceTrackStory
             new[] { "La cantante ti ha dato la sua risposta per il venditore di gazogem.", "La risposta della cantante", "Una busta azzurra con un bacio di rossetto sul lembo. Per il venditore di gazogem della Città Bassa." },
             new[] { "A cantora deu-te a resposta dela para o vendedor de gazogem.", "A resposta da cantora", "Um envelope azul-claro com um beijo de batom na aba. Para o vendedor de gazogem da Cidade Baixa." },
         }),
+        // (the hair dryer, the Hoverboard's slot's other kind -- RaceTrackStory.HairDryer)
+        (DryerModel, DryerTexts),
         (TyreModel, new[]
         {
             new[] { "Felix gave you the old tyre he fished out of the harbour.", "Old tyre", "The tyre Felix fished out of the harbour. Zoe can fit it to Luc's barrel car." },
@@ -92,7 +94,11 @@ internal static partial class RaceTrackStory
         var objfix = HqrArchive.Open(objfixPath);
         var header = Body.Read(objfix.Read(20), 2, allowStatic: true).Header;
         var bodyHeader = Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(30), 2, allowStatic: true).Header;
-        var models = new (int Model, Func<byte[], Body> Build)[] { (LoveLetterModel, h => BuildEnvelope(h, reply: false)), (ReplyModel, h => BuildEnvelope(h, reply: true)), (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre), (TrophyModel, Citadel.CitadelProps.BuildTrophy) };
+        // (the hair dryer: LBA1's own; without LBA1's files the bait's tin stands in, said)
+        var dryer = HairDryerSalesman.Dryer(bodyHeader, gameDirectory);
+        if (dryer is null) log.Add($"WARNING: the hair dryer's model: no LBA1 (INVOBJ.HQR {HairDryerSalesman.Lba1DryerObject}) -- the bait's tin in its place");
+        var models = new (int Model, Func<byte[], Body> Build)[] { (LoveLetterModel, h => BuildEnvelope(h, reply: false)), (ReplyModel, h => BuildEnvelope(h, reply: true)), (BaitModel, h => Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)), (TyreModel, Citadel.CitadelProps.BuildTyre), (TrophyModel, Citadel.CitadelProps.BuildTrophy),
+            (DryerModel, h => dryer ?? Citadel.CitadelProps.BuildBait(h, InventoryBaitHeight)) };
         var bytes = File.ReadAllBytes(objfixPath);
         var count = HqrArchive.CountEntries(objfixPath);
         // (the entries up to the models: each empty one a copy of the game's first, never shown)

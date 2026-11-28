@@ -1256,10 +1256,21 @@ S32 RaceMod_InvCount(S32 slot) { return slot >= 0 && slot < 64 && ((s_invCount >
 // at the same time so they only need a single slot"). Kept once read, as inv_count=.
 #define RACE_MAX_INV_KINDS 6
 static int s_invKindSlot[RACE_MAX_INV_KINDS], s_invKindN[RACE_MAX_INV_KINDS], s_invKind[RACE_MAX_INV_KINDS][4], s_nbInvKinds = 0;
-// whether inv_kinds= gives a slot another thing (PERSO.CPP: the game's own use of it, a spell, not made)
+// (each slot's own thing: the game's first model for it in its starting table -- TabInv, which inv_kinds= writes over, is copied from it
+// only once a game starts: read at the race file's parsing it was all zeros, and no slot held its own thing -- the board never flew)
+extern T_INV_OBJ InitTabInv[MAX_INVENTORY];
+// whether inv_kinds= gives a slot another thing than its own just now (PERSO.CPP: the game's own use of it, a spell, the J key, the
+// behaviour menu's -- COMPORTE.CPP -- not made). Its own thing in it is the game's as ever: the Hoverboard in its slot, whose other kind is
+// the hair dryer Baldino wants the rheostat of (the user, 2026-11-27: "The hair dryer won't need its own inventory slot, it can use the
+// hoverboard slot, as Twinsen will never own both at the same time") -- the dryer neither flies nor shows the board's behaviour.
 S32 RaceMod_InvKindHas(S32 slot) {
     for (int i = 0; i < s_nbInvKinds; i++)
-        if (s_invKindSlot[i] == slot) return 1;
+        if (s_invKindSlot[i] == slot) {
+            int which = ListVarGame[slot] - 1;
+            if (which < 0) which = 0;
+            if (which >= s_invKindN[i]) which = s_invKindN[i] - 1;
+            return s_invKind[i][which] != InitTabInv[slot].TabObj3D[0];
+        }
     return 0;
 }
 void RaceMod_InvKinds(void) {
@@ -16405,6 +16416,9 @@ S32 RaceMod_MoveBeta(S32 beta) {
 // so the scenes' scripts can tell a story's race from one started on its line, which has none (Mr. Paul stops a car only then:
 // RaceTrackStory). 0 with no track, or none shut.
 #define RACE_GATE_VAR 209
+// Game variable RACE_ON_VAR: 1 from a qualifying lap's first crossing of the line, or the grid's forming, to the finish, else 0 -- the story's walkers (LBA1's hair
+// dryer salesman, RaceTrackStory.HairDryer) out of sight and walked through meanwhile, as race_hide= does the game's own
+#define RACE_ON_VAR 303
 // Every frame: the pipes over the road near Twinsen (steam=, drip=). A puff of steam from a pipe's top every so often, rising and
 // growing as it fades; a drop of oil falling from a pipe onto the road, and where it lands, a slick (DripOil; drawn and skidded on
 // with the power-ups' oil, Slicks).
@@ -24804,7 +24818,7 @@ void RaceMod_Frame(void) {
     FrogVarFrame();
     RaceMod_InvKinds();
     if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
-    if (!RaceMod_Active()) { IslandCarFrame(); return; }
+    if (!RaceMod_Active()) { ListVarGame[RACE_ON_VAR] = 0; IslandCarFrame(); return; }
     ActorsAt();
     FerryFrame(TimerRefHR);
     HovercraftFrame();
@@ -24854,6 +24868,8 @@ void RaceMod_Frame(void) {
     CarTraceLine();
     NoteScene();
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
+    // (the qualifying lap once its line is crossed -- a track waits in its qualifying phase all the while it isn't raced, Twinsen on foot)
+    ListVarGame[RACE_ON_VAR] = (S16)((Qualifying() && s_laps >= 1) || MushroomsOut() ? 1 : 0);
     for (int i = 0; i < s_nbHeld; i++)
         if (ListVarGame[s_held[i][0]] != s_held[i][1]) {
             ListVarGame[s_held[i][0]] = (S16)s_held[i][1];

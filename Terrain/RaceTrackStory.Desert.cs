@@ -1289,6 +1289,11 @@ void comportement_1()
         if (first < 0) return log;
         int Say(DesertLine line) => first + (int)line;
         var b = new IslandBeatsA(gameDirectory, RaceTrackIsland.Desert, log);
+        // (the hair dryer for Baldino's rheostat, the Hoverboard his: the salesman in the village, Baldino at the tent and at home --
+        // RaceTrackStory.HairDryer)
+        var dryerFirst = GroupB.AddLines(gameDirectory, DesertTexts, DryerDesertLines, log, "the hair dryer's (the Desert)");
+        var dryer = BaldinoDryer(dryerFirst);
+        HairDryerDesert(b, dryerFirst);
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
@@ -1719,7 +1724,7 @@ void comportement_1()
         // Baldino at his house: a copy of the game's own, the car's tune and his tip -- his greeting as his radio call was answered or not
         // (the sweep of 2026-11-05: "My radio works then" whether it was or not)
         // (and at the racers' garage before the race is won -- never in both: RaceTrackStory.Garage.cs)
-        DesertGarage(gameDirectory, b, report, Say, desert, Copy(b.Originals, BaldinoHouse, BaldinoActor), scenes.StartScene, log);
+        DesertGarage(gameDirectory, b, report, Say, desert, Copy(b.Originals, BaldinoHouse, BaldinoActor), scenes.StartScene, log, dryer);
         // (the Dean's oil over the road by the School while his pages are lost: RaceTrackStory.DeanOil)
         DeanOil(gameDirectory, b, report, log);
         // (the memory viewer -- item 24, the game's in Baldino's house for the taking (its actor 4), walked into or taken by Action -- out of the
@@ -1736,16 +1741,32 @@ void comportement_1()
         if (Copy(b.Originals, BaldinoHouse, BaldinoActor) is { } baldino)
         {
             b.Hide(BaldinoHouse, BaldinoActor, desert, "Baldino");
-            b.Edit(BaldinoHouse, "Baldino at his workbench, once he's not at the racers' garage: his tip, and he races too", model => IslandBeatsA.Add(model, baldino, Talker($"{desert} && {PagesWon} <= var_game({QPages})", $@"            if (3 == var_game({RadioAnsweredA}))
+            // (and the Hoverboard's rheostat, should the race be won before it: the dryer brought, the board; asked, his reminder)
+            b.Edit(BaldinoHouse, "Baldino at his workbench, once he's not at the racers' garage: his tip, and he races too; the Hoverboard's rheostat if it's still to do", model => IslandBeatsA.Add(model, baldino, Talker($"{desert} && {PagesWon} <= var_game({QPages})", $@"            if ({DryerBought} == var_game({QDryer}))
             {{
-                message({Say(DesertLine.BaldinoRadioWorks)});
+{dryer.Handover}
+            }}
+            else if ({DryerAsked} == var_game({QDryer}))
+            {{
+{dryer.Remind}
+            }}
+            else if (0 == var_game({QDryer}))
+            {{
+{dryer.Ask}
             }}
             else
             {{
-                message({Say(DesertLine.BaldinoNoCall)});
-            }}
-            message({Say(DesertLine.BaldinoTuned)});
-            message({Say(DesertLine.BaldinoRacing)});")));
+                if (3 == var_game({RadioAnsweredA}))
+                {{
+                    message({Say(DesertLine.BaldinoRadioWorks)});
+                }}
+                else
+                {{
+                    message({Say(DesertLine.BaldinoNoCall)});
+                }}
+                message({Say(DesertLine.BaldinoTuned)});
+                message({Say(DesertLine.BaldinoRacing)});
+            }}")));
         }
         else log.Add($"Baldino left out: no actor {BaldinoActor} in scene {BaldinoHouse}");
 

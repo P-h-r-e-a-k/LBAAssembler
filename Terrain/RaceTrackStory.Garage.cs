@@ -43,7 +43,7 @@ internal static partial class RaceTrackStory
 
     // The Desert race file's lines for the filters
     internal static string GarageRaceLines() =>
-        $"cube_shift_marks=1\ninv_kinds={FiltersSlot} {FiltersModel} {LoveLetterModel} {ReplyModel}\nbreakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\nfigures={GarageFiguresFile}\n" +
+        $"cube_shift_marks=1\ninv_kinds={FiltersSlot} {FiltersModel} {LoveLetterModel} {ReplyModel}\n{DryerSlotLine()}breakdown={QFilters} {FiltersFitted} {BreakdownCheckpoint} {BreakdownSpeed} {BreakdownText}\nfigures={GarageFiguresFile}\n" +
         // (and Chedil Amiradoo on his magic carpet, round the island: on the ground as the game had him, but never under the track's raised
         // ground nor stopped by its decors, and well over the road wherever he comes near it -- F14, the user, 2026-11-08: "raise his
         // actors path above ground", "check that during a race he won't be in the way of the track at any point": RACEMOD.CPP hover=)
@@ -179,7 +179,7 @@ void comportement_1()
     // The garage's people and cars, each in the scene of the cube it stands in (the tent may reach over a cube's edge: the Desert's does);
     // and Baldino's house without him while he's there. `desert`: the island's chapters (the story's); `baldino`: a copy of the game's
     // Baldino (null: none); `startScene`: the start line's (its grid cars, whose bodies the tent's cars are)
-    private static void DesertGarage(string gameDirectory, IslandBeatsA b, RaceTrackReport report, Func<DesertLine, int> say, string desert, SceneActorModel? baldino, int startScene, List<string> log)
+    private static void DesertGarage(string gameDirectory, IslandBeatsA b, RaceTrackReport report, Func<DesertLine, int> say, string desert, SceneActorModel? baldino, int startScene, List<string> log, DryerTalk dryer)
     {
         if (report.Garage is not { } g) { log.Add("the racers' garage left out: the island has no tent (RaceTrackBuilder.GarageTent)"); return; }
         FiltersInstall(gameDirectory, log);
@@ -289,14 +289,31 @@ void comportement_1()
             if (mechanic is not null)
                 foreach (var u in new[] { -1150.0, 550.0 }) people.Add((mechanic.Clone(), u, -350, (facingOut + 1024) % 4096, MechanicTalker(say(DesertLine.MechanicLift)), "a mechanic"));
         }
-        // Baldino: the filters, then (fitted) his tune and tip -- while it's garage time
+        // Baldino: the filters and the rheostat he wants for the Hoverboard (RaceTrackStory.HairDryer), then (fitted) his tune and tip --
+        // while it's garage time. The hair dryer brought: the board, first of all.
         if (baldino is not null)
-            people.Add((baldino.Clone(), baldinoU, baldinoV, baldinoBeta, Talker(garageTime, $@"            if (0 == var_game({QFilters}))
+            people.Add((baldino.Clone(), baldinoU, baldinoV, baldinoBeta, Talker(garageTime, $@"            if ({DryerBought} == var_game({QDryer}))
+            {{
+{dryer.Handover}
+            }}
+            else if (0 == var_game({QFilters}))
             {{
                 message({say(DesertLine.BaldinoFilters)});
                 set_var_game({FiltersSlot}, 1);
                 found_object({FiltersSlot});
                 set_var_game({QFilters}, {FiltersGiven});
+                if (0 == var_game({QDryer}))
+                {{
+{dryer.Ask}
+                }}
+            }}
+            else if ({DryerAsked} == var_game({QDryer}))
+            {{
+{dryer.Remind}
+            }}
+            else if (0 == var_game({QDryer}))
+            {{
+{dryer.Ask}
             }}
             else if ({FiltersFitted} > var_game({QFilters}))
             {{

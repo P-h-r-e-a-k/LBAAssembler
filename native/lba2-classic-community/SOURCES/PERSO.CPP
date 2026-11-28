@@ -1423,8 +1423,9 @@ restartloop:
                 }
 
                 if (SpellKeyDown(33)) { // ProtoPack/SuperJetPack
+                    // (LBRA: not while the slot holds another thing than the board -- RACEMOD.CPP RaceMod_InvKindHas)
                     if (!WaitNoKey33
-                            AND ListVarGame[FLAG_PROTOPACK]) {
+                            AND ListVarGame[FLAG_PROTOPACK] AND !RaceMod_InvKindHas(FLAG_PROTOPACK)) {
                         U8 comp;
 
                         if (TabInv[FLAG_PROTOPACK].IdObj3D == 1)

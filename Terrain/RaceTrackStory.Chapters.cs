@@ -1885,6 +1885,8 @@ void comportement_1()
         SecretChamber(p);
         Pyjamas(p);
         CycleShop(p);
+        // (LBA1's hair dryer salesman in the village, selling nothing on Citadel -- RaceTrackStory.HairDryer)
+        HairDryerCitadel(p);
         VelodromeTalk(p);
         Lighthouse(p);
         LighthouseClimb(p);

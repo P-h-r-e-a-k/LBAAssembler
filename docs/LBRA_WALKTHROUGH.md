@@ -540,6 +540,14 @@ all week."
 
   **Zoe:** "Two tracks we've already raced, and the whole Cup still to come. Your slate's filling up."
 
+- **The hair dryer salesman** (optional, 2026-11-28; from the first game). A man in a grey suit with a briefcase goes from door to door in
+  the village, knocking at house 22's and then at Citadel Cycles'. He sells nothing here:
+
+  **The salesman:** "Can't seem to sell a single hair dryer here. One of my colleagues is already out there trying his best. If this keeps
+  up, I'll have to move on to another island."
+
+  Citadel Cycles sells no Hoverboard any more: Baldino on the Desert has it.
+
 **12. The ferry.** Zoe comes along from now on.
 
 **Zoe:** "Every racer needs a mechanic. That's me. You drive, I'll fix."
@@ -616,6 +624,28 @@ in, tyres checked. Your car's ready, Twinsen. Go and win!")
 **Baldino** (once they're fitted): "Zoe's fitted the filters? Good. And I've given you a longer top gear for the long straights. And a
 word of advice: the champion brakes late at the Temple bend. Brake later." / "I'm racing too, of course. I need to see how my work goes
 against my work."
+
+**Baldino's Hoverboard and the hair dryer** (2026-11-28; the first game's rheostat). With the filters, or later at his house:
+
+**Baldino:** "One more thing, Twinsen. I've been working on a Hoverboard for days now: it glides you along just above the ground. My
+problem is that my last test ride wreaked a bit of havoc on the garden wall. It is rather difficult to fine tune the motor's power. I
+need a rheostat like the one you find in a hair dryer. Do you think you can find one of those for me?" (Asked again: "A rheostat, from a
+hair dryer. There's a salesman knocking on doors in the village by my house: try him.")
+
+The salesman from Citadel has come to the Desert too. He knocks at the village's doors (houses 35, 36 and 40). Before Baldino asks:
+"Aah, I see that you too have come to the Desert. You remember me, I sell hair dryers. Lovely hair dryers, door to door." / **Twinsen:**
+"Thanks, but I don't need a hair dryer." Once Baldino has asked:
+
+**The salesman:** "30 Kashes for a hair dryer, how about that? I normally sell them door to door, but customers are sparse, and you seem
+nice enough." -- *Yes, I'll take one.* (30 Kashes; **Found:** Hair dryer) / *Not now.* ("I'll be knocking on doors round here. You know
+where to find me.") With under 30 Kashes: "Thirty Kashes, no less. Come back when your pockets are fuller." Afterwards: "A satisfied
+customer at last! Wait till my colleague on Citadel hears about this."
+
+Short of Kashes, Baldino lends 30 once: "Short of Kashes? Here, thirty. Pay me back when you're champion."
+
+**Baldino** (the hair dryer brought): "So you found a hair dryer? Great! I'll be with you in a minute, just let me install the rheostat."
+/ "There. Your Hoverboard, tuned to a whisker: it won't knock down any more garden walls. Mind how you go!" **Found:** Hoverboard (in
+the hair dryer's place: the two share an inventory slot, and the hair dryer can't be ridden).
 
 Raced without the filters: past the lap's second checkpoint, "Sand in the engine! Zoe needs Baldino's sand filters: back to the
 garage." The car crawls on, smoking, to the end: the race is lost, and run again with the filters in.
@@ -1337,6 +1367,8 @@ The credits roll.
 | 2 | Slate page: Citadel 1 (optional) | the neighbour, once the gallic acid has brought out his sheet | the magic slate |
 | 3 | Three exam pages | beside the Desert road | the Dean |
 | 3 | Wizard's Diploma | the Dean | the Desert track opened |
+| 3 | Hair dryer | the salesman in the Desert village, 30 kashes (Baldino lends them if short) | Baldino's rheostat |
+| 3 | Hoverboard | Baldino, for the hair dryer | riding; the racing helmet |
 | 5 | 10 zlitos | Lyra, from the Esmers | the entry fee (with the Casino's help) |
 | 5 | Translator | Lyra, from the Esmers | the control tower's staff, the space port's mechanic |
 | 5 | Travel Token | the steward, for 30 zlitos | the Otringal grid |

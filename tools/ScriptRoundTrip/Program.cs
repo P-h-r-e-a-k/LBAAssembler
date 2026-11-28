@@ -277,6 +277,7 @@ internal static class Program
             "islandtexture" => IslandTextureCommand.Run(args),
             "groundcells" => GroundCellsCommand.Run(args),
             "animsheet" => AnimSheetCommand.Run(args),
+    "salesmansheet" => SalesmanSheet.Run(args),
             "bowlanims" => AnimSheetCommand.Bowlers(args),
             "islandfreetex" => IslandFreeTextureCommand.Run(args),
             "islandheights" => IslandHeightsCommand.Run(args),

@@ -2714,14 +2714,21 @@ S32 MyDial(S32 nummess) // attends une touche si autre page sinon continue
         TestSpeak();
         if (dialstat == 2) // encore 1 page
         {
-            while (MyKey OR Input) {
-                TestSpeak();
-                MyGetInput();
-            }
+            // (headless -- `skipmodals` -- the page turned without a key, as Dial's are: a question's text two pages long waited for
+            // one no one would press, and the run hung -- the hair dryer salesman's offer, 2026-11-28; paced: the page held to be read)
+            if (DialVideoPaced()) {
+                DialPacedHold();
+                DialNbLine = 0;
+            } else if (!DbgSkipModals) {
+                while (MyKey OR Input) {
+                    TestSpeak();
+                    MyGetInput();
+                }
 
-            while (!MyKey AND !Input) {
-                TestSpeak();
-                MyGetInput();
+                while (!MyKey AND !Input) {
+                    TestSpeak();
+                    MyGetInput();
+                }
             }
         } else {
             MyGetInput();
