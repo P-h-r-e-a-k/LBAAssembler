@@ -101,6 +101,15 @@ internal static class NewLinesCommand
 
     // characters whose voice no retail one stands in for (a voice off: the sample would be whoever's script says it)
     private static readonly HashSet<string> NoStandIn = new() { "Unseen voice", "HAL" };
+    // Characters the retail LBA2 never voiced whose voice LBA1 has: their sample.wav LBA1's own recordings of their lines (the user,
+    // 2026-11-28: "Can we use the salesman voice from lba1"). LBA1's TEXT.HQR is 14 files a language, (ids, texts) each, English, French,
+    // German, Spanish, Italian; its VOX files are laid out as LBA2's (text file 3 + n: <lang>_0nn.VOX, a text's place in its file's list
+    // its entry), Creative Voice Files, in English, French and German. The salesman: Principal Island's 167 and 189, Proxima's 42 and 45.
+    private static readonly Dictionary<string, (int File, int Id)[]> Lba1Voices = new()
+    {
+        ["Hair dryer salesman"] = new[] { (4, 167), (4, 189), (6, 42), (6, 45) },
+    };
+    private const int Lba1Files = 14, Lba1VoicedLanguages = 3;
     // entities that are one character wherever they stand (the game's and the build's): the souvenir seller of Celebration Island
     private static readonly Dictionary<int, string> EntityCharacters = new() { [RaceTrackStory.SellerEntity] = "Souvenir seller" };
 
@@ -404,6 +413,15 @@ internal static class NewLinesCommand
                 // (--samples-only: into the folders there only -- a character new since has none yet)
                 if (samplesOnly && !Directory.Exists(folder)) continue;
                 var hasVoice = voices.TryGetValue(character, out var voice);
+                // (a character LBA1 voiced, LBA2 never: LBA1's recordings of them -- in English, French and German; the others the English)
+                if (!hasVoice && Lba1Voices.TryGetValue(character, out var lba1Lines) && Lba1Sample(lba1Lines, lang, seconds) is { Wav: { } lba1Wav } lba1Sample)
+                {
+                    File.WriteAllBytes(Path.Combine(folder, "sample.wav"), lba1Wav);
+                    report.Append($"{LanguageNames[lang]}\t{character}\t(LBA1's own) {lba1Sample.From}\n");
+                    if (!samplesOnly)
+                        File.WriteAllText(Path.Combine(folder, "README.txt"), $"{character} is a character of the first game's, never voiced in LBA2: sample.wav is LBA1's own recordings of their lines ({lba1Sample.From}).\r\n", utf8);
+                    continue;
+                }
                 if (source == lang && hasVoice)
                 {
                     tracing = character;
@@ -452,7 +470,7 @@ internal static class NewLinesCommand
 
         Console.WriteLine($"newlines: {exported.Count} lines of {characters.Count} characters in {languages} languages written to {output} ({lines.Count - exported.Count} new texts left out: left_out.tsv)");
         foreach (var c in characters)
-            Console.WriteLine($"  {c}: {exported.Count(l => l.Character == c)} lines{(c == Unknown ? "" : !voices.TryGetValue(c, out var v) ? " (no voice to sample)" : v.Whose == c ? "" : $" (sample: {(v.Whose.Length == 0 ? "the retail recordings of the lines theirs retell" : v.Whose + "'s voice")})")}");
+            Console.WriteLine($"  {c}: {exported.Count(l => l.Character == c)} lines{(c == Unknown ? "" : !voices.TryGetValue(c, out var v) ? (Lba1Voices.ContainsKey(c) ? " (sample: LBA1's own recordings of them)" : " (no voice to sample)") : v.Whose == c ? "" : $" (sample: {(v.Whose.Length == 0 ? "the retail recordings of the lines theirs retell" : v.Whose + "'s voice")})")}");
         Console.WriteLine($"samples: {Path.Combine(output, "samples.tsv")}");
         return 0;
     }
@@ -697,6 +715,31 @@ internal static class NewLinesCommand
         }
         if (pcm.Count == 0) return (null, "");
         return (Wav(pcm), $"{pcm.Count / (double)Rate:0.0} s: {string.Join(", ", used.Select(u => $"{u.Key} ({u.Value} lines)"))}");
+    }
+
+    // A character's sample from LBA1's own recordings (Lba1Voices): their lines' places in LBA1's TEXT.HQR lists, those entries of its VOX
+    // files, in `lang` where LBA1 is voiced in it, else in English. Null: no LBA1 folder (the editor's, or LBA1_DIR).
+    private static (byte[]? Wav, string From)? Lba1Sample((int File, int Id)[] own, int lang, double seconds)
+    {
+        var lba1 = LBAAssembler.Terrain.RaceTrackService.Lba1Folder();
+        if (string.IsNullOrEmpty(lba1) || !File.Exists(Path.Combine(lba1, "TEXT.HQR"))) return null;
+        var l = lang < Lba1VoicedLanguages ? lang : 0;
+        var text = HqrArchive.Open(Path.Combine(lba1, "TEXT.HQR"));
+        var banks = new Dictionary<(int Lang, int File), List<Text>>();
+        foreach (var file in own.Select(o => o.File).Distinct())
+        {
+            var list = new List<Text>();
+            var entry = (l * Lba1Files + file) * 2;
+            if (text.IsValid(entry))
+            {
+                var ids = text.Read(entry);
+                for (var i = 0; i + 1 < ids.Length; i += 2) list.Add(new Text(BinaryPrimitives.ReadUInt16LittleEndian(ids.AsSpan(i)), i / 2, Array.Empty<byte>()));
+            }
+            banks[(l, file)] = list;
+        }
+        HqrArchive? Vox(string name) { var p = Path.Combine(lba1, "VOX", name); return File.Exists(p) ? HqrArchive.Open(p) : null; }
+        var (wav, from) = Sample(own.ToList(), l, banks, Vox, seconds);
+        return (wav, from.Length > 0 ? "LBA1's " + from : from);
     }
 
     // A VOX entry: a RIFF WAV -- LBA2's are IMA ADPCM, 22050 Hz mono -- whose first byte is a flag, not the 'R' (MESSAGE.CPP: FlagNextVoc,

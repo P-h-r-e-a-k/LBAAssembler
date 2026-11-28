@@ -98,7 +98,10 @@ internal static class HairDryerSalesman
         var bodyCount = HqrArchive.CountEntries(bodyPath);
         foreach (var e in Lba2EntityTable.Parse(table).Entities)
             if (e.Bodies.FirstOrDefault(b => b.Generic == 0) is { } first && first.Body < bodyCount && bodies.Read(first.Body).AsSpan().SequenceEqual(bodyBytes))
+            {
+                NameBody(gameDirectory, first.Body);
                 return (e.Id, $"the hair dryer salesman: entity {e.Id} (this build's already)");
+            }
         (table, var entity) = WithEntityEmpty(table);
         File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bodyBytes)));
         table = RaceTrackBaldinoCar.WithBody(table, entity, 0, bodyCount);
@@ -112,8 +115,16 @@ internal static class HairDryerSalesman
         }
         File.WriteAllBytes(animPath, animBytes);
         HqrWriter.ReplaceInFile(ressPath, 44, table);
+        NameBody(gameDirectory, bodyCount);
         return (entity, $"the hair dryer salesman: LBA1's entity {Lba1Entity} as entity {entity} (BODY.HQR {bodyCount}, ANIM.HQR {animIndex}-{animIndex + anims.Count - 1}: generics {string.Join(", ", anims.Select(a => a.Generic))})");
     }
+
+    // His body named in the game folder's BODY.HQD: who says his lines, for the voices' export (ScriptRoundTrip newlines: his voice is LBA1's
+    // own recordings of him -- the user, 2026-11-28, "Can we use the salesman voice from lba1")
+    public const string BodyName = "Hair dryer salesman (LBA1's door-to-door salesman, in a grey suit)";
+    private static void NameBody(string gameDirectory, int body) =>
+        File.WriteAllText(Path.Combine(gameDirectory, HqdWriter.SidecarName("BODY.HQR")),
+            HqdWriter.Describe(gameDirectory, "BODY.HQR", LBAAssembler.Scenes.SceneGame.Lba2, body, BodyName), System.Text.Encoding.Latin1);
 
     // The entity table with a new entity at its end, with no records yet (RaceTrackCharacterCars.WithEntityLike, none of another's)
     private static (byte[] Table, int Entity) WithEntityEmpty(byte[] table)
