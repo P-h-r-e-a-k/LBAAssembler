@@ -199,6 +199,10 @@ S32 GpuRenderer_DrawScaleSprite(S32 x, S32 y, S32 factorx, S32 factory,
 // index 0 unconditionally: BoxFlow wrote all four texels even at colour 0.
 S32 GpuRenderer_DrawFlowDot(S32 x, S32 y, U8 coul, U16 zoTop, U16 zoBot);
 
+// A run of one colour index on row y, x0..x1 inclusive, at depth zo, through the sprite batch as the flow dots: an extra's 2D
+// lines on the scene's frame outdoors (POF.CPP), unfogged as the software's Line(). Its Log pixels punched to 0. FALSE: not drawn.
+S32 GpuRenderer_DrawRun(S32 x0, S32 x1, S32 y, U8 coul, U16 zo);
+
 // Blend sprites (GpuScene phase 3): ScaleSpriteTransp's transpTable compose
 // on the GPU. GpuBlend_Walk (GPUBLEND_WALK.H) reproduces the software
 // walk's sampling and Screen* publication; the backend uploads the walk's

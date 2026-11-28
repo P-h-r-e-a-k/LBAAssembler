@@ -1619,6 +1619,101 @@ S32 GpuRenderer_DrawFlowDot(S32 x, S32 y, U8 coul, U16 zoTop, U16 zoBot) {
     return 1;
 }
 
+/* A run of one colour on row y, x0 to x1 inclusive, at depth zo, through the sprite batch as DrawFlowDot's dots: an extra's 2D
+   lines laid on the scene's frame (POF.CPP: a "pof"'s star) -- the index as it is (no fog: the software's Line() draws it so),
+   depth-tested against what the GPU drew before it and covered by what it draws after. Its Log pixels punched to 0 (the caller
+   drew them there in software first). FALSE: nothing drawn, Log's kept. */
+S32 GpuRenderer_DrawRun(S32 x0, S32 x1, S32 y, U8 coul, U16 zo) {
+    GpuBrickRect rect;
+    GpuVertex *v;
+    S32 row;
+    S32 x;
+
+    if (!s_active || Log == NULL || TabOffLine == NULL || coul == 0 || x1 < x0) {
+        return 0;
+    }
+    if (y < 0 || y >= (S32)s_resY || x0 < 0 || x1 >= (S32)s_resX) {
+        return 0;
+    }
+    if (!Common_ShelfReserve(2, 2, &rect)) {
+        return 0;
+    }
+    for (row = 0; row < 2; row++) {
+        U8 *dstRow = s_spriteAtlasData +
+                     (((U32)rect.y + (U32)row) * GPU_SPRITE_ATLAS_W + (U32)rect.x) * 2;
+        dstRow[0] = coul;
+        dstRow[1] = 1;
+        dstRow[2] = coul;
+        dstRow[3] = 1;
+    }
+    Common_ShelfCommit(2, 2);
+
+    Common_UploadPalette();
+    Common_UploadSprites();
+
+    if (s_batchVertCount > 0) {
+        if (s_currentTypePoly != (U32)GPU_SPRITE_TYPE ||
+            s_batchAtlas != (const void *)s_spriteAtlasData ||
+            s_batchClipX0 != ClipXMin || s_batchClipY0 != ClipYMin ||
+            s_batchClipX1 != ClipXMax || s_batchClipY1 != ClipYMax) {
+            GpuRenderer_FlushBatch();
+        }
+    }
+    s_currentTypePoly = (U32)GPU_SPRITE_TYPE;
+    s_currentColorPoly = 0;
+    s_batchAtlas = (const void *)s_spriteAtlasData;
+    s_batchCLUTGouraud = NULL;
+    s_batchZBuffer = 0;
+    s_batchNZW = 0;
+    s_batch3DPass = 0;
+    s_batchCLUTBaseRow = 0.0f;
+    s_batchClipX0 = ClipXMin;
+    s_batchClipY0 = ClipYMin;
+    s_batchClipX1 = ClipXMax;
+    s_batchClipY1 = ClipYMax;
+
+    if (s_batchVertCount + 6 > BATCH_MAX_VERTS) {
+        GpuRenderer_FlushBatch();
+    }
+    /* (one texel across the whole run: its texture coordinate stays within the cell's first texel) */
+    v = (GpuVertex *)(s_batchVerts + s_batchVertCount * sizeof(GpuVertex));
+    v[0].XE = (S16)x0;
+    v[0].YE = (S16)y;
+    v[0].MapU = (U16)rect.x;
+    v[0].MapV = (U16)rect.y;
+    v[1].XE = (S16)(x1 + 1);
+    v[1].YE = (S16)y;
+    v[1].MapU = (U16)(rect.x + 1);
+    v[1].MapV = (U16)rect.y;
+    v[2].XE = (S16)(x1 + 1);
+    v[2].YE = (S16)(y + 1);
+    v[2].MapU = (U16)(rect.x + 1);
+    v[2].MapV = (U16)(rect.y + 1);
+    v[3] = v[0];
+    v[4] = v[2];
+    v[5].XE = (S16)x0;
+    v[5].YE = (S16)(y + 1);
+    v[5].MapU = (U16)rect.x;
+    v[5].MapV = (U16)(rect.y + 1);
+    {
+        U32 k;
+        for (k = 0; k < 6; k++) {
+            v[k].Light = 0;
+            v[k].ZO = zo;
+            v[k].RepMask = 0;
+        }
+    }
+    s_batchVertCount += 6;
+    s_batchTriCount += 2;
+
+    {
+        U8 *logRow = (U8 *)Log + TabOffLine[y];
+        for (x = x0; x <= x1; x++)
+            logRow[x] = 0;
+    }
+    return 1;
+}
+
 /* The blend sprites' compose over a rect of source indices (x1, y1 exclusive; `src` its top left, `srcPitch` a row): each
    source index other than 0 through `transPal` (row = source, column = destination) over the scene under it -- Log's index
    where Log has one, else the FBO's (its alpha) -- into the FBO, Log punched to 0 there. FALSE: nothing drawn (the caller
@@ -3180,6 +3275,14 @@ S32 GpuRenderer_DrawFlowDot(S32 x, S32 y, U8 coul, U16 zoTop, U16 zoBot) {
     (void)coul;
     (void)zoTop;
     (void)zoBot;
+    return 0;
+}
+S32 GpuRenderer_DrawRun(S32 x0, S32 x1, S32 y, U8 coul, U16 zo) {
+    (void)x0;
+    (void)x1;
+    (void)y;
+    (void)coul;
+    (void)zo;
     return 0;
 }
 S32 GpuRenderer_DrawHudText(S32 x, S32 y, const char *str) {
