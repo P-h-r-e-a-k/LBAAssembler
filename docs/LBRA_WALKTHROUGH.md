@@ -990,7 +990,7 @@ your lunch."
 
 **4. The start.** There's no pit box on this track: Zoe goes to watch from the elevator's cage.
 
-**Zoe:** "No pit stops on this one. I'll be in the lift cage, watching. Just don't fall off."
+**Zoe:** "I'll be in the lift cage, watching. Just don't fall off."
 
 The monster climbs into his crate.
 

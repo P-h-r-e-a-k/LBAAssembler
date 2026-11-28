@@ -94,12 +94,12 @@ internal static partial class RaceTrackStory
         },
         new[]
         {
-            "No pit stops on this one. I'll be in the lift cage, watching. Just don't fall off.",
-            "Pas d'arrêt aux stands sur celle-ci. Je serai dans la cage de l'ascenseur, à regarder. Ne tombe pas, c'est tout.",
-            "Keine Boxenstopps bei diesem hier. Ich bin im Aufzugskäfig und schaue zu. Fall bloß nicht runter.",
-            "En esta no hay paradas en boxes. Estaré en la jaula del ascensor, mirando. Tú no te caigas.",
-            "Niente pit stop in questa. Sarò nella gabbia dell'ascensore, a guardare. Solo, non cadere.",
-            "Nesta não há paragens nas boxes. Vou estar na jaula do elevador, a ver. Só não caias.",
+            "I'll be in the lift cage, watching. Just don't fall off.",
+            "Je serai dans la cage de l'ascenseur, à regarder. Ne tombe pas, c'est tout.",
+            "Ich bin im Aufzugskäfig und schaue zu. Fall bloß nicht runter.",
+            "Estaré en la jaula del ascensor, mirando. Tú no te caigas.",
+            "Sarò nella gabbia dell'ascensore, a guardare. Solo, non cadere.",
+            "Vou estar na jaula do elevador, a ver. Só não caias.",
         },
         new[]
         {

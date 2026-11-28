@@ -24,8 +24,8 @@ Twinsen is the one you play, always. There's no switching.
 
 **As built now (2026-11-28):** the companion and player 2's Zoe are switched off (2026-11-13). Zoe stays on Twinsun as Twinsen's
 mechanic (Citadel and the Desert), and no story race has a pit crew or a pit stop: `RaceTrackPitCrew.InStory` is false, so no story car
-file has `pit_crew=` (the user, 2026-11-27: "Zoe needs dropping from the pitlane for Citadel and Desert Island"). The design below is
-kept as it was planned.
+file has `pit_crew=` (the user, 2026-11-27: "Zoe needs dropping from the pitlane for Citadel and Desert Island"; asked whether
+another crew should give pit stops instead, 2026-11-28: "No pitstops"). The design below is kept as it was planned.
 
 **Zoe joins him in chapter 2** as his pit crew, and goes with him to every island after that.
 
@@ -785,7 +785,7 @@ added to Mr. Paul's prize, and the two pages' pictures.
 | Moya the turtle, the Dino-Fly | the race's (built), on foot by the last bend | |
 | The racer, the Desert champion | the race's main | the grid |
 | Three exam pages | a new flat body | beside the road at 30, 55 and 80 % |
-| Zoe | the companion | with Twinsen; the pit lane in the race |
+| Zoe | the companion | with Twinsen (no pit stops in the story's races) |
 | The masked driver | the black car | past the finish |
 
 **Walkthrough:**
@@ -901,7 +901,7 @@ added to Mr. Paul's prize, and the two pages' pictures.
 | HAL's mechanics | the game's (scene 23 actors 12-15, entity 57) | hiding in the stores |
 | The radio | Portable Radio, already Twinsen's | |
 | Baldino | his lander, the race's main | the grid |
-| Zoe | the companion; the pit lane (built) in the race | |
+| Zoe | the companion | (no pit stops in the story's races) |
 | The masked driver | the black car | past the finish |
 
 **Walkthrough:**
@@ -1209,7 +1209,7 @@ the sword; the story's has the monster alone.)
    > **Baldino (radio):** "That platform's a rollercoaster. Grip, grip and more grip, I've given you all I've got. Hold on to your hat.
    > And your lunch."
 4. **The start.** Zoe goes to the lift cage:
-   > **Zoe:** "No pit stops on this one. I'll be in the lift cage, watching. Just don't fall off."
+   > **Zoe:** "I'll be in the lift cage, watching. Just don't fall off."
 
    The monster climbs into his crate:
    > **The monkey monster:** "RAAARGH! Go!"
