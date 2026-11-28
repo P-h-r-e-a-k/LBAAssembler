@@ -187,9 +187,9 @@ internal static partial class RaceTrackStory
         MuseumPassword, PasswordAntennas, PasswordSanta, PasswordSpoon, MuseumGoAhead, MuseumFunny,
         // (and his own answer to two of them -- the user, 2026-11-24)
         MuseumSantaReply, MuseumFailFunFrock,
-        // (the cycle shop in the baggage claim's first room, and the Hoverboard left behind in it -- RaceTrackStory.CycleShop.cs)
+        // (the cycle shop in the baggage claim's first room -- RaceTrackStory.CycleShop.cs; its Hoverboard's sale and lines gone 2026-11-28:
+        // Baldino has the board now, RaceTrackStory.HairDryer)
         ShopWelcome,
-        BoardStory, BoardBuy, BoardNo, BoardSold, BoardNoMoney, BoardLater, BoardAsk,
         // (Miss Bloop's word on the security room's door, as long as it is shut: the user, 2026-11-26, "it's not that clear that Twinsen
         // needs to throw his ball through it to unlock the door, let's give Miss. Bloop a line about the door is stuck as some hoodlum
         // threw a ball through it")
@@ -1078,71 +1078,6 @@ internal static partial class RaceTrackStory
             "¡Bienvenido a Citadel Cycles, venta y reparación! El negocio va bien desde que los corredores entrenan en la Cúpula de la Pizarra. Echa un vistazo: cada bici en venta lleva su precio.",
             "Benvenuto da Citadel Cycles, vendita e riparazioni! Gli affari vanno bene da quando i corridori si allenano alla Cupola dell'Ardesia. Dai un'occhiata: ogni bici in vendita ha il suo prezzo.",
             "Bem-vindo à Citadel Cycles, venda e reparação! O negócio vai bem desde que os ciclistas começaram a treinar na Cúpula da Ardósia. Dá uma vista de olhos: cada bicicleta à venda tem o preço.",
-        },
-        // (the Hoverboard left behind in the shop: the owner's story of it and his price, Twinsen's two answers, his three replies)
-        new[]
-        {
-            "Ah, that old hoverboard? One of my customers left it here ages ago, he said he didn't want it any more. I haven't had the heart to throw it away.",
-            "Ah, ce vieil hoverboard ? Un de mes clients l'a laissé ici il y a une éternité, il disait qu'il n'en voulait plus. Je n'ai pas eu le cœur de le jeter.",
-            "Ach, das alte Hoverboard? Ein Kunde hat es vor Ewigkeiten hier gelassen, er sagte, er wolle es nicht mehr. Ich hatte nicht das Herz, es wegzuwerfen.",
-            "Ah, ¿ese viejo hoverboard? Uno de mis clientes lo dejó aquí hace siglos, dijo que ya no lo quería. No he tenido valor para tirarlo.",
-            "Ah, quel vecchio hoverboard? Un mio cliente l'ha lasciato qui secoli fa, diceva che non lo voleva più. Non ho avuto il cuore di buttarlo.",
-            "Ah, esse hoverboard velho? Um cliente meu deixou-o cá há séculos, disse que já não o queria. Não tive coragem de o deitar fora.",
-        },
-        new[]
-        {
-            "Buy it for 50 kashes",
-            "L'acheter pour 50 kashes",
-            "Für 50 Kashes kaufen",
-            "Comprarlo por 50 kashes",
-            "Comprarlo per 50 kashes",
-            "Comprá-lo por 50 kashes",
-        },
-        new[]
-        {
-            "No thanks",
-            "Non merci",
-            "Nein danke",
-            "No, gracias",
-            "No, grazie",
-            "Não, obrigado",
-        },
-        new[]
-        {
-            "There you go, it's yours. Look after it!",
-            "Et voilà, il est à toi. Prends-en soin !",
-            "Bitte schön, es gehört dir. Pass gut darauf auf!",
-            "Aquí tienes, es tuyo. ¡Cuídalo bien!",
-            "Ecco qua, è tuo. Trattalo bene!",
-            "Aqui tens, é teu. Trata bem dele!",
-        },
-        new[]
-        {
-            "You haven't got 50 kashes, I'm afraid. Come back when you have.",
-            "Tu n'as pas 50 kashes, j'en ai peur. Reviens quand tu les auras.",
-            "Du hast leider keine 50 Kashes. Komm wieder, wenn du sie hast.",
-            "Me temo que no tienes 50 kashes. Vuelve cuando los tengas.",
-            "Temo che tu non abbia 50 kashes. Torna quando li avrai.",
-            "Receio que não tenhas 50 kashes. Volta quando os tiveres.",
-        },
-        new[]
-        {
-            "It'll be here if you change your mind.",
-            "Il sera là si tu changes d'avis.",
-            "Es bleibt hier, falls du es dir anders überlegst.",
-            "Estará aquí si cambias de idea.",
-            "Resterà qui se cambi idea.",
-            "Fica aqui se mudares de ideias.",
-        },
-        // (his price, the question the yes and no answer: short -- a long one paged before the answers)
-        new[]
-        {
-            "You can have it for 50 kashes. What do you say?",
-            "Tu peux l'avoir pour 50 kashes. Qu'en dis-tu ?",
-            "Du kannst es für 50 Kashes haben. Was meinst du?",
-            "Te lo dejo por 50 kashes. ¿Qué me dices?",
-            "Te lo do per 50 kashes. Che ne dici?",
-            "Podes ficar com ele por 50 kashes. Que me dizes?",
         },
         // (Miss Bloop on the security room's door, while it is shut)
         new[]
