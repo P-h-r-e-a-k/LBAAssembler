@@ -140,7 +140,7 @@ internal static partial class RaceTrackStory
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
-        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! Kash's tomb in the sea cave keeps one.\nwin={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {TempleOfBuDrive.Lower} {HangarScene} {SeaCave}\n" + GarageRaceLines()
+        island == RaceTrackIsland.Desert ? $"gate={TrophyShown} 1 Flick: show me your island winner's trophy!\ngate={QPages} 6 Flick: the Dean has shut the track!\ngate={Citadel.CitadelOveralls.GlovesSlot} {Citadel.CitadelOveralls.GearBoth} Flick: no helmet, no race! Kash's tomb in the sea cave keeps one.\n{TowGate}win={QPages} {PagesWon}\ninv_count={PagesSlot}\ndrive_marks={DriveMarksVar} {DriveMarks}\ndrive_in={TempleScene} {TempleOfBuDrive.Lower} {HangarScene} {SeaCave}\n" + GarageRaceLines()
         : island == RaceTrackIsland.Emerald ? $"gate={QHal} {HalMended} Lyra: HAL won't switch on the start lights!\nwin={QHal} {HalWon}\nno_suit=1\nfoot_body={Citadel.CitadelOveralls.HelmetBody}\nwin_pull=1 {HalPullVar} 1 {HalPullDelay}\n" + MoonHelmetHooks()
         : island == RaceTrackIsland.Otringal ? OtringalRaceKeys
         : island == RaceTrackIsland.Knartas ? $"gate={QFuel} {FuelOpen} De La Fontaine: not yet, Twinsen!\nwin={QFuel} {FuelWon}\n"
@@ -1294,6 +1294,8 @@ void comportement_1()
         var dryerFirst = GroupB.AddLines(gameDirectory, DesertTexts, DryerDesertLines, log, "the hair dryer's (the Desert)");
         var dryer = BaldinoDryer(dryerFirst);
         HairDryerDesert(b, dryerFirst);
+        // (the racer stuck in the sand at the Temple bend, towed out: RaceTrackStory.Tow.cs -- placed with the eggs, below, once the lap's known)
+        var towFirst = GroupB.AddLines(gameDirectory, DesertTexts, TowLines, log, "the tow's (the Desert)");
         // (won, Baldino takes him to the Esmers' hangar: the freighter to the moon -- RaceTrackStory.Hangar.cs)
         // (and the Temple of Bu's gate on the way: the racing licence, the car driven there -- RaceTrackStory.Licence.cs)
         TempleGate(b, report, scenes.StartScene, Say);
@@ -1846,6 +1848,7 @@ void comportement_1()
 
         // (the easter eggs: the fourth page, Bù's stone -- RaceTrackStory.Eggs.Desert.cs)
         DesertEggs(b, report, Say, desert);
+        DesertTow(b, report, towFirst);
         b.Save();
         log.Add($"the Desert's race file: gate={QPages} 6 (the diploma), win={QPages} {PagesWon}");
         return log;

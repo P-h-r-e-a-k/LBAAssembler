@@ -843,6 +843,16 @@ added to Mr. Paul's prize, and the two pages' pictures.
    Kashes once (var 302) to a Twinsen short of them. Handed the dryer: var 12 = 1, the Hoverboard found.
 
    **Flags:** Q_DRYER (301: 1 asked, 2 bought, 3 given), BALDINO_LENT (302).
+
+   **The tow (built 2026-11-28; RaceTrackStory.Tow.cs).** The Hamalayi rabbibunny (a Desert grid entrant, LBA1's) braked late at the
+   Temple bend and is beached in the sand beside it. His giant carrot is an actor of the racer entity, body Generic 75, placed where
+   the lap passes nearest the Temple's door, on the side away from the door (Bù's stone is on the door's side): scene 67, cell
+   (616.2, 647.1). The race file's fourth gate is `gate=304 2 Flick: a car's stuck in the sand at the Temple bend! Tow it out first.`
+   On foot, Action gets his two lines (texts 1086 and 1087 of file 5; Q_TOW = 1). Twinsen in his car within 2200 of him: "A tow!" (1088),
+   Q_TOW = 2, and his track pulls him onto the road at the bend. Then "Out! Thanks" (1089), and he drives off along the lap to the cube's
+   edge and is gone. No cut-scene bars, because the engine plays no cinema in the car on a track (RaceMod_NoCinema). No rope.
+
+   **Flags:** Q_TOW (304: 1 asked, 2 towed).
 7. **The race.** The line-up: the racer (the one to beat), Moya, the Dino-Fly, the Dean, Baldino (built).
 8. **Won.**
    > **Flick:** "The Desert champion, beaten by a ferry-ticket driver! The Cup goes on, to the Emerald Moon."

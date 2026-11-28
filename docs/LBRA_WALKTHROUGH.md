@@ -647,6 +647,17 @@ Short of Kashes, Baldino lends 30 once: "Short of Kashes? Here, thirty. Pay me b
 / "There. Your Hoverboard, tuned to a whisker: it won't knock down any more garden walls. Mind how you go!" **Found:** Hoverboard (in
 the hair dryer's place: the two share an inventory slot, and the hair dryer can't be ridden).
 
+**A racer in the sand** (2026-11-28). In the start scene, on the sand inside the hairpin by the Temple bend, the Hamalayi rabbibunny's
+giant carrot sits beached. Flick won't start the race until it's out ("Flick: a car's stuck in the sand at the Temple bend! Tow it out
+first.").
+
+**The Hamalayi rabbibunny** (on foot, Action): "Snow, I can drive on. Ice, I can drive on. Sand? Nobody told me about sand! I braked late
+at the Temple bend, like the champion does, and look at me now." / "Flick won't start the race with a car stuck in his sand trap. Bring
+your car round and tow me out, would you?"
+
+Drive up beside him: "A tow! Rope on... Gently now... Gently..." The carrot is pulled out onto the road: "Out! Thanks, Twinsen. See you
+on the grid. And from now on I brake early at this bend." He drives off, and races as usual.
+
 Raced without the filters: past the lap's second checkpoint, "Sand in the engine! Zoe needs Baldino's sand filters: back to the
 garage." The car crawls on, smoking, to the end: the race is lost, and run again with the filters in.
 
