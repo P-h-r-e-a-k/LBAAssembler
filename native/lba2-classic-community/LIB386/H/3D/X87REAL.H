@@ -83,12 +83,27 @@ static inline S32 X87RoundDouble(double v) {
 typedef long double X87_REAL;
 #define X87_REAL_MANT_DIG LDBL_MANT_DIG
 
+#if defined(__MINGW32__) && defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+// mingw-w64's lrintl is this one instruction (fldt, fistpl, ret: its long is 32 bits) behind a call the CRT keeps out of line, and the
+// Win64 convention passes a long double by address, so each rounding spilled the 80-bit value, called and loaded it back: about a
+// tenth of an outdoor OpenGL frame at 1280x800 went to it (the terrain's and the bodies' rotations and projections, 2026-11-28).
+// The same fistpl inline -- the same rounding, by the current mode, the same result.
+static inline S32 X87LrintlInline(X87_REAL v) {
+    long r;
+    __asm__ __volatile__("fistpl %0" : "=m"(r) : "t"(v) : "st");
+    return (S32)r;
+}
+#define X87_LRINTL(v) X87LrintlInline(v)
+#else
+#define X87_LRINTL(v) lrintl(v)
+#endif
+
 static inline S32 X87Round(X87_REAL v) {
-    return (S32)lrintl(v);
+    return (S32)X87_LRINTL(v);
 }
 
 static inline S32 X87Fistp(X87_REAL v) {
-    return (S32)lrintl(v);
+    return (S32)X87_LRINTL(v);
 }
 
 #else
