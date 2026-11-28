@@ -291,4 +291,21 @@ const struct MenuLabelRow LocalizedMenuLabels[MENU_LABEL_COUNT] = {
       "4x",
       "4x",
       "4x"}},
+    /* The Display submenu's Distance row (OpenGL only): the far ground as the software draws it, or in coarser blocks where they are a
+       few pixels wide (3DEXT/TERRAIN.CPP TerrainLodFar) -- the user, 2026-11-28: "an option to set draw distance either same as
+       software or level of detail at distance". */
+    {MENU_LABEL_DISTANCE_SOFTWARE,
+     {"Distance: same as software",
+      "Distance : comme le logiciel",
+      "Entfernung: wie Software",
+      "Distancia: como el software",
+      "Distanza: come il software",
+      "Distância: como o software"}},
+    {MENU_LABEL_DISTANCE_LOD,
+     {"Distance: level of detail",
+      "Distance : niveau de détail",
+      "Entfernung: Detailstufen",
+      "Distancia: nivel de detalle",
+      "Distanza: livello di dettaglio",
+      "Distância: nível de detalhe"}},
 };

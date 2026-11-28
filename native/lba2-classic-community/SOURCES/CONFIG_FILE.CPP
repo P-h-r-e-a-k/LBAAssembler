@@ -17,6 +17,7 @@
 #include <PLATFORM/PLATFORM.H> /* PLATFORM_FILTER_*, and why a mode was refused */
 #include <POLYGON/POLYFILT.H>  /* PolyTexFilter / EnvTexFilter */
 #include <GL/RENDER_GL.H>     /* DisplayTexFilter / RenderQuality (GPU renderer flags) */
+extern S32 TerrainLodFar;         /* 3DEXT/TERRAIN.CPP: OpenGL's distant ground (GpuFarDetail) */
 #include <SVGA/SCREEN.H>
 #include <SYSTEM/KEYBOARD.H>      /* Keyboard_ToggleFullscreen: F11 / Alt+Enter */
 #include <SYSTEM/KEYBOARD_KEYS.H> /* K_F12, the console toggle default */
@@ -171,6 +172,11 @@ static const T_SETTING BootSettings[] = {
        InitGraphics by Renderer_LoadBootQuality; the settings pass below reads
        the same key into the same global, so the boot value and a runtime menu
        change agree. The cvar write reaches the live backend via the hook. */
+    /* The far ground on OpenGL (Options > Display's Distance row): 0 as the software draws it, 1 level of detail -- far blocks of mixed
+       ground joined where a few pixels wide (3DEXT/TERRAIN.CPP TerrainLodFar) */
+    {"GpuFarDetail", NULL, "terrain_far", &TerrainLodFar, SETTING_OR_DEFAULT, FALSE, 0, 1,
+     NULL, NULL, NULL, NULL,
+     "OpenGL's distant ground (0 = the same as software, 1 = level of detail)"},
     {"RenderQuality", NULL, "quality", &RenderQuality, SETTING_OR_DEFAULT, 1, 1, 4,
      NULL, NULL, ApplyRenderQuality, NULL,
      "GPU render scale (1 = native, 2 = 2x, 4 = 4x)"},

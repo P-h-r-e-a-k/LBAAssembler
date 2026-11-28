@@ -103,6 +103,7 @@ S32 FlagShowEndDemo = FALSE;
 #define MENU_ID_DISPLAY_QUALITY 2119
 #define MENU_ID_CAMERA 2120
 #define MENU_ID_CAMERA_INTERIOR 2121
+#define MENU_ID_DISPLAY_DISTANCE 2122 /* (OpenGL: the far ground as the software draws it, or level of detail -- TerrainLodFar) */
 
 // Resolution sub-page rows occupy a reserved id range: row i carries id
 // MENU_ID_RESOLUTION_BASE + i, which BuildCustomMenuText and GereResolutionMenu
@@ -162,7 +163,7 @@ U16 GameOptionMenu[] = {
 // backend is live (software has nothing to scale) and Fullscreen only where
 // windowed mode exists. Max rows: Back + Resolution + Renderer + Bilinear +
 // Quality + Vsync + Fullscreen. See GereDisplayMenu + BuildDisplayMenu.
-#define DISPLAY_MENU_MAX_ROWS 7
+#define DISPLAY_MENU_MAX_ROWS 8
 U16 DisplayMenu[4 + DISPLAY_MENU_MAX_ROWS * 2];
 
 // Resolution sub-page, opened from the Display submenu's Resolution row.
@@ -566,6 +567,12 @@ static void BuildCustomMenuText(S32 num, char *string) {
                            : (PolyTexFilter != POLY_TEX_FILTER_OFF);
         CopyUtf8ToCp850(string, 256,
                         GetLocalizedMenuLabel(on ? MENU_LABEL_BILINEAR_ON : MENU_LABEL_BILINEAR_OFF));
+        break;
+    }
+
+    case MENU_ID_DISPLAY_DISTANCE: {
+        extern S32 TerrainLodFar; // 3DEXT/TERRAIN.CPP
+        CopyUtf8ToCp850(string, 256, GetLocalizedMenuLabel(TerrainLodFar ? MENU_LABEL_DISTANCE_LOD : MENU_LABEL_DISTANCE_SOFTWARE));
         break;
     }
 
@@ -3731,8 +3738,10 @@ static void BuildDisplayMenu(void) {
     if (!RaceGame_On())
         MenuSetEntry(DisplayMenu, row++, MENU_TYPE_RENDERER, MENU_ID_RENDERER);
     MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_BILINEAR);
-    if (GpuRenderer_ActiveBackend() != GPU_RENDERER_BACKEND_NONE)
+    if (GpuRenderer_ActiveBackend() != GPU_RENDERER_BACKEND_NONE) {
         MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_QUALITY);
+        MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_DISTANCE);
+    }
     MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_VSYNC);
     if (Window_SupportsWindowedMode())
         MenuSetEntry(DisplayMenu, row++, 0, MENU_ID_DISPLAY_FULLSCREEN);
@@ -3804,6 +3813,14 @@ S32 GereDisplayMenu(void) {
             GpuRenderer_SetRenderQuality((U32)RenderQuality);
             WriteConfigFile();
             break;
+
+        case MENU_ID_DISPLAY_DISTANCE: {
+            extern S32 TerrainLodFar; // 3DEXT/TERRAIN.CPP
+            TerrainLodFar ^= 1;
+            WriteConfigFile();
+            Log_Info("[display] distance: %s", TerrainLodFar ? "level of detail" : "same as software");
+            break;
+        }
 
         case MENU_ID_DISPLAY_FULLSCREEN:
             DisplayFullScreen ^= 1;

@@ -980,6 +980,13 @@ static inline U32 MaskVisibleStep(const U8 *p, S32 s) {
 #define TERRAIN_TILE 8
 #define TERRAIN_TILES (NB_COTE / TERRAIN_TILE)
 S32 TerrainLodPixels = 32;
+// Level of detail at distance (the race game's option, OpenGL only: 0 the ground as the software draws it -- the default -- 1 more of it
+// in blocks): a far block may join cells of different ground, drawn with its first cell's look, where the whole block is no wider than
+// TERRAIN_FAR_BLOCK_PIXELS on the screen -- a few pixels, where a cell is a pixel or less and its texture a colour. Its points still keep
+// to TerrainLodPixels / 8 of its flat corners (a hill's outline as before). At 1280x800 the far ground was ~100,000 triangles a frame,
+// most of them cells of mixed ground the same-look rule kept apart (2026-11-28).
+S32 TerrainLodFar = 0;
+#define TERRAIN_FAR_BLOCK_PIXELS 4.0
 static S32 DistSteps[TERRAIN_TILES + 2][TERRAIN_TILES + 2]; // [tz + 1][tx + 1]: the cube's tiles and the ring round it, by distance
 static S32 TileSteps[TERRAIN_TILES + 2][TERRAIN_TILES + 2]; // ... and the steps drawn (the cube's own tiles: as far as they fit)
 static U32 VertexStamp[(NB_COTE + 1) * (NB_COTE + 1)];     // a point worked out for this cube already (== VertexFrame)
@@ -1075,9 +1082,12 @@ static S32 TileStepFitted(S32 tx, S32 tz, S32 step, double d) {
         return 1;
     const T_TILE_FIT *fit = TileFitOf(tx, tz);
     const double most = TerrainLodPixels / 8.0; // pixels a point may move on the screen
+    const double cell = 512.0 * FRatioX / d;    // a cell's width on the screen at the tile's nearest point
+    const S32 far = TerrainLodFar AND GpuRenderer_IsActive();
     while (step > 1) {
         const S32 k = step == 2 ? 0 : (step == 4 ? 1 : 2);
-        if ((fit->Look & (1 << k)) AND fit->Bend[k] * FRatioX / d <= most)
+        const S32 look = (fit->Look & (1 << k)) OR (far AND cell * step <= TERRAIN_FAR_BLOCK_PIXELS);
+        if (look AND fit->Bend[k] * FRatioX / d <= most)
             break;
         step >>= 1;
     }
