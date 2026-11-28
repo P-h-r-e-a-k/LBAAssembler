@@ -174,6 +174,7 @@ void comportement_1()
             var o = officer.Clone();
             (o.X, o.Y, o.Z) = OfficerAt;
             o.Beta = 3072; o.Move = 0;
+            o.Body = MechanicWithTool;   // (a tool in his hand, not the mechanic's gun: RaceTrackStory.NoAttacks.cs)
             var officerIndex = model.Actors.Count;
             adds.Add(IslandBeatsA.Add(model, o, $@"void comportement_0()
 {{

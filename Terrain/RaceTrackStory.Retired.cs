@@ -71,15 +71,29 @@ internal static partial class RaceTrackStory
     private const int CellOpening = 9;
     // the Esmer soldiers (the game's entities 31 and 32: masked, yellow, armed) gone from every scene of an island, every chapter: the
     // Desert's -- the plaza, the harbour, the start line's scene, the Temple of Bu's hall -- shot Twinsen dead after the race was won (the
-    // user, 2026-11-14: "a lot of alien NPCs started attempting to kill Twinsen, can we remove them all please")
-    private static readonly int[] SoldierEntities = { 31, 32 };
-    private static bool SoldiersGone(RaceTrackIsland island) => island.IslandByte == 2;
+    // user, 2026-11-14: "a lot of alien NPCs started attempting to kill Twinsen, can we remove them all please"). And since the user's
+    // "This isn't a world where people hate Twinsen, the only mystery is the black car" (2026-11-27; the audit of 2026-11-28,
+    // RaceTrackStory.NoAttacks.cs), every armed occupation with no part in the story: the rest of the Desert's Esmers -- the Sups in light
+    // green with their guns (30), the robots (105), the Esmers hidden in trash cans (122) and in cacti (150), on sight in chapters 3 and 4 --
+    // the Emerald Moon's spike guards (49), the Wannies' and the Francos' guards, policemen and dogs (32, 49, 51, 56, the Wannies' trooper
+    // 201), Island CX's troopers and sword soldiers (184, 201, 248). (No person of the story's is of these entities on those islands.)
+    private static int[] SoldierEntities(RaceTrackIsland island) => island.IslandByte switch
+    {
+        2 => new[] { 31, 32, 30, 105, 122, 150 },
+        3 => new[] { 49 },
+        6 => new[] { 32, 49, 51, 201 },
+        8 => new[] { 32, 49, 51, 56 },
+        9 => new[] { 184, 201, 248 },
+        _ => Array.Empty<int>(),
+    };
+    private static bool SoldiersGone(RaceTrackIsland island) => SoldierEntities(island).Length > 0;
 
     // An island's retirements (RaceTrackService.Story: once the island's story is built, before its people are retold). Adds to nothing
     // else; what it did, the log.
     internal static List<string> RetireQuests(string gameDirectory, RaceTrackIsland island)
     {
-        var log = new List<string>();
+        // (and nobody else on the island attacks Twinsen: RaceTrackStory.NoAttacks.cs)
+        var log = NoAttacks(gameDirectory, island);
         var (people, doors) = island.IslandByte switch
         {
             0 => CitadelRetired(),
@@ -111,7 +125,7 @@ internal static partial class RaceTrackStory
             var shut = doors.Where(d => d.Scene == scene || d.Scene < 0).ToList();
             SceneModel model;
             try { model = store.Load(scene); } catch (Exception e) when (e is InvalidDataException or IOException) { continue; }
-            var soldiers = SoldiersGone(island) ? Enumerable.Range(1, model.Actors.Count - 1).Where(i => SoldierEntities.Contains(model.Actors[i].Entity)).ToList() : new List<int>();
+            var soldiers = SoldiersGone(island) ? Enumerable.Range(1, model.Actors.Count - 1).Where(i => SoldierEntities(island).Contains(model.Actors[i].Entity)).ToList() : new List<int>();
             if (mine.Count == 0 && shut.Count == 0 && soldiers.Count == 0) continue;
             var said = new List<string>();
             var zones = false;
@@ -147,13 +161,14 @@ internal static partial class RaceTrackStory
                 try
                 {
                     var life = scripts.GetText(a, ScriptKind.Life);
+                    if (!life.Contains("comportement_0", StringComparison.Ordinal)) continue;   // (no script: taken off the road by the race build)
                     var now = Gone("127 > chapter()")(life);
                     if (now == life) continue;
                     scripts.SetText(a, ScriptKind.Life, now);
                     edited = true;
-                    said.Add($"actor {a}: an Esmer soldier (entity {model.Actors[a].Entity}) gone");
+                    said.Add($"actor {a}: an armed soldier, guard or sentry (entity {model.Actors[a].Entity}) gone");
                 }
-                catch (NotTheGames e) { log.Add($"scene {scene} actor {a}: the Esmer soldier left: {e.Message}"); }
+                catch (NotTheGames e) { log.Add($"scene {scene} actor {a}: the armed soldier left: {e.Message}"); }
             }
             if (!edited && !zones) continue;
             byte[] record;

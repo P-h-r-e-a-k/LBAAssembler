@@ -278,6 +278,7 @@ stop();
         var barman = Copy(b.Originals, MoonBase, BaseMechanic);
         var guard = CopyOf(b.Originals, RickOffice, BossGuardEntity);
         if (bouncer is null || barman is null || guard is null) { b.Log.Add("Stella Entities' people left out: Rick's bouncer or guard isn't in Otringal's scenes, or the moon base's mechanic isn't in scene 23"); return; }
+        barman.Body = MechanicWithTool;   // (a tool in his hand, not the mechanic's gun: RaceTrackStory.NoAttacks.cs)
         b.Edit(StellaEntities.Scene, "Stella Entities' people: Rick's bouncers at the way in and the catwalk, his guard at the office's door, an Esmer barman", model =>
         {
             var adds = new List<Action<SceneScripts>>();

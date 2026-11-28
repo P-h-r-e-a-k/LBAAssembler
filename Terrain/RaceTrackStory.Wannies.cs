@@ -208,14 +208,16 @@ internal static partial class RaceTrackStory
         // ... and the deck round the elevator's foot outside (WanniesArrival): the game's two guards there (actors 4 and 5) go for Twinsen
         // on sight and hit him till he is dead -- the game's Twinsen fights them with the ball; the story's has none, and the deck is where he
         // walks between the elevator, the miner, the old Wannie and the ladder up to his car (the playthrough by inputs, 2026-11-07: killed
-        // there on the way to the ladder). Without a ball, they aren't there.
-        GroupB.EditScene(store, WanniesArrival, log, "the elevator's deck: its two guards gone while Twinsen has no magic ball to fight them with", _ => scripts =>
+        // there on the way to the ladder). They aren't there in the story's chapters, ball or not: the ball is still on his attic's shelf and
+        // the story's museum has it thrown -- with it, they were back on the deck (the audit of 2026-11-28; the user, 2026-11-27: "This
+        // isn't a world where people hate Twinsen, the only mystery is the black car")
+        GroupB.EditScene(store, WanniesArrival, log, "the elevator's deck: its two guards gone", _ => scripts =>
         {
             foreach (var guard in ElevatorDeckGuards)
             {
                 var text = scripts.GetText(guard, ScriptKind.Life);
                 if (!text.Contains("3000 > distance_message(0)")) throw new NotTheGames($"the deck's guard (actor {guard})");
-                scripts.SetText(guard, ScriptKind.Life, Loose(text, "void comportement_0()\n{", "void comportement_0()\n{\n    if (0 == var_game(1))\n    {\n        suicide();\n    }"));
+                scripts.SetText(guard, ScriptKind.Life, Loose(text, "void comportement_0()\n{", "void comportement_0()\n{\n    if (8 < chapter())\n    {\n        suicide();\n    }"));
             }
         });
         // (the easter eggs: heigh-ho's miners, and kiss the frog -- RaceTrackStory.Eggs.Wannies)

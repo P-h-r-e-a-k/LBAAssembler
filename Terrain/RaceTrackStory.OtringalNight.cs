@@ -208,11 +208,13 @@ void comportement_1()
                 // the guards (the doorman, actor 8, inside the door; actor 11, by the far end): in chapter 5 a racer is a guest -- their
                 // word a welcome and the way to the reception, not "members only, get moving", and bumped into, no fight (the user,
                 // 2026-11-24: "the guard at the front won't let Twinsen in so he can't buy a room" -- run into, the game's guard set on
-                // him with a second one, and spoken to, "You can't get in here")
+                // him with a second one, and spoken to, "You can't get in here"). No fight in any other chapter either (the user,
+                // 2026-11-27: "This isn't a world where people hate Twinsen, the only mystery is the black car" -- `5 != chapter()` had left
+                // the game's fight in all the others)
                 foreach (var (guard, refusal) in new[] { (HotelDoorman, 510), (HotelGuardFar, 511) })
                     try
                     {
-                        var life = Loose(scripts.GetText(guard, ScriptKind.Life), "if (0 == hit_by())", "if (0 == hit_by() && 5 != chapter())");
+                        var life = Loose(scripts.GetText(guard, ScriptKind.Life), "if (0 == hit_by())", "if (0 == hit_by() && 0 > chapter())");
                         life = Loose(life, $"message({refusal});", $"if (5 == chapter()) {{ message({say(OtringalLine.GuardGuest)}); }} else {{ message({refusal}); }}");
                         scripts.SetText(guard, ScriptKind.Life, life);
                     }
