@@ -106,6 +106,10 @@ typedef struct GpuVertex {
     // within it -- two halves of a panel mapped to different parts of a texture smoothed in each other's neighbours, a seam down the middle
     // (2026-11-28). UMax < UMin: none. Appended last: the SDL3 backend reads the fields it knows, by name.
     U16 UMin, VMin, UMax, VMax;
+    // The CLUT's base row the polygon was drawn with (PtrCLUTGouraud within PtrCLUTFog: SetCLUT's fog level, per terrain tile), read
+    // in GPU_POLYMODE_PER_VERTEX batches by a backend with PerVertexClutRow: a tile's new fog row then needn't end the batch -- at 1280x800
+    // the distant terrain across fog bands ended 500-800 batches a frame (2026-11-28). Appended last.
+    U16 ClutRow;
 } GpuVertex;
 
 /* GpuDrawParams.polyMode of a batch whose polygons carry their mode, colour, flags and texture window in their vertices. */
@@ -242,6 +246,9 @@ typedef struct GpuRendererBackend {
     // greatest window depth), bottom-up, 16-bit, as TargetReadDepth's -- kept on the GPU, the whole target not read and shrunk on the
     // CPU. FALSE (or a NULL function): the caller reads the whole target.
     S32 (*TargetReadDepthDown)(void *dst, U32 width, U32 height);
+    /* Non-zero: the backend's polygon shader reads GpuVertex.ClutRow in per-vertex batches, so polygons with different CLUT rows may share
+       a batch. NULL (the SDL3 backend): the batch's uniform row, a new row flushes. Appended last: the table is positional. */
+    S32 (*PerVertexClutRow)(void);
 } GpuRendererBackend;
 
 //──────────────────────────────────────────────────────────────────────────

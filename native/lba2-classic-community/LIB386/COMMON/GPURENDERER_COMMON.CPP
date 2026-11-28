@@ -2345,6 +2345,12 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
     const U8 polyBlend = typePoly == 2 ? 2 : typePoly == 3 ? 1 : 0;
     const S32 atlasSlots = (s_backend->AtlasSlots != NULL && s_backend->TexUpdateAtlasSlot != NULL) ? (S32)s_backend->AtlasSlots() : 0;
     const U8 polyPersp = (typePoly >= POLY_TEXTURE_Z && typePoly <= POLY_TEXTURE_Z_FOG) ? 1 : 0;
+    /* (the CLUT row in the vertices -- GpuVertex.ClutRow: a terrain tile's new fog row doesn't end the batch) */
+    const S32 rowPerVertex = s_backend->PerVertexClutRow != NULL && s_backend->PerVertexClutRow();
+    U16 polyClutRow = 0;
+    if (PtrCLUTFog != NULL && PtrCLUTGouraud != NULL) {
+        polyClutRow = (U16)(((const U8 *)PtrCLUTGouraud - (const U8 *)PtrCLUTFog) / 256);
+    }
 
     /* Flush on any change that alters GL state: a brick or sprite batch
        before, blending, perspective, the atlas page, the CLUT fog row,
@@ -2358,7 +2364,7 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
         if (s_currentTypePoly > POLY_TEXTURE_Z_FOG ||
             s_batchBlend != polyBlend || s_batchPersp != polyPersp ||
             (atlasSlots <= 1 && atlasPage != NULL && s_batchAtlas != (const void *)atlasPage) ||
-            s_batchCLUTGouraud != (const void *)PtrCLUTGouraud ||
+            (!rowPerVertex && s_batchCLUTGouraud != (const void *)PtrCLUTGouraud) ||
             s_batchZBuffer != Fill_Flag_ZBuffer ||
             s_batchNZW != Fill_Flag_NZW ||
             s_batch3DPass != Fill_Flag_3DPass ||
@@ -2480,6 +2486,7 @@ S32 GpuRenderer_RenderTriangleList(S32 typePoly, S32 colorPoly,
             dst[k].Flags = polyFlags;
             dst[k].Slot = atlasSlot;
             dst[k].UMin = uMin; dst[k].VMin = vMin; dst[k].UMax = uMax; dst[k].VMax = vMax;
+            dst[k].ClutRow = polyClutRow;
         }
         s_batchVertCount += 3;
         s_batchTriCount++;

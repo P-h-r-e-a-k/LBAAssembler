@@ -347,6 +347,7 @@ static const char *s_clutVertSrc =
     "attribute float aFlags;\n"
     "attribute float aSlot;\n"
     "attribute vec4 aUVBox;\n"
+    "attribute float aClutRow;\n"   /* GPU_POLYMODE_PER_VERTEX: the polygon's CLUT base row (GpuVertex.ClutRow) */
     "uniform vec2 uScreenScale;\n" /* 2.0/resX, 2.0/resY */
     "uniform vec2 uPixOffset;\n" /* engine pixels added to a polygon's corners: GL_DrawTriangles */
     /* Perspective-correct interpolation: the SW rasterizer
@@ -370,8 +371,10 @@ static const char *s_clutVertSrc =
     "varying float vFlags;\n"
     "varying float vSlot;\n"
     "varying vec4 vUVBox;\n"
+    "varying float vClutRow;\n"
     "void main() {\n"
     "    vTexOffset = aTexOffset;\n"
+    "    vClutRow = aClutRow;\n"
     "    vMode = aMode;\n"
     "    vFlat = aFlat;\n"
     "    vFlags = aFlags;\n"
@@ -431,6 +434,7 @@ static const char *s_clutFragSrc =
     "varying float vFlags;\n"
     "varying float vSlot;\n"
     "varying vec4 vUVBox;\n"
+    "varying float vClutRow;\n"
     "uniform float uAtlasSlots;\n"    /* the atlas texture's page slots, stacked: 256 x 256*uAtlasSlots */
     "uniform int uPerVertex;\n"        /* 1 = GPU_POLYMODE_PER_VERTEX: mode, colour, flags and texture window from the vertex */
     /* The texel of a wrapped window position p in the atlas page: the
@@ -524,6 +528,7 @@ static const char *s_clutFragSrc =
     "void main() {\n"
     "    vec4 color;\n"
     "    float alphaOverride = 0.0;\n"
+    "    float clutBase = uPerVertex != 0 ? vClutRow : uCLUTBaseRow;\n" /* (the polygon's own in per-vertex batches: GpuVertex.ClutRow) */
     "    int polyMode = uPolyMode;\n"
     "    float flatColor = uFlatColor;\n"
     "    float flatRow = uFlatRow;\n"
@@ -540,7 +545,7 @@ static const char *s_clutFragSrc =
     "        float fl = floor(vFlags + 0.5);\n"
     "        chromaKey = int(mod(fl, 2.0));\n"
     "        float rowKind = mod(floor(fl / 2.0), 4.0);\n"
-    "        flatRow = rowKind < 0.5 ? -1.0 : (rowKind < 1.5 ? uCLUTBaseRow : uCLUTBaseRow + flatColor);\n"
+    "        flatRow = rowKind < 0.5 ? -1.0 : (rowKind < 1.5 ? clutBase : clutBase + flatColor);\n"
     "        alphaMode = int(mod(floor(fl / 8.0), 4.0));\n"
     "        float to = floor(vTexOffset + 0.5);\n"
     "        texOff = vec2(mod(to, 256.0), floor(to / 256.0));\n"
@@ -574,7 +579,7 @@ static const char *s_clutFragSrc =
     /* SW init: Fill_CurGouraudMin = (Pt_Light << 8) + 0x8000.
         The +128 (0x80) rounding bias shifts the CLUT row by 1 in some
         cases — same bias applied in polyMode 2. */
-    "        float gouraudRow = lightRow + uCLUTBaseRow;\n"
+    "        float gouraudRow = lightRow + clutBase;\n"
     /* SW flat-textured fillers (Filler_TextureFlat / Filler_TextureZFlat)
        index the CLUT at the batch base row and never read Pt_Light, so
        flatRow >= 0 pins the row for those types. */
@@ -719,7 +724,7 @@ static const char *s_clutFragSrc =
     "    } else {\n"
     /* Gouraud table (types 6/7): CLUT lookup, color = column.
        Same +128 rounding bias as polyMode 0 (and the same dither, type 7). */
-    "        float gouraudRow = lightRow + uCLUTBaseRow;\n"
+    "        float gouraudRow = lightRow + clutBase;\n"
     "        vec2 clutUV = vec2((flatColor + 0.5) / 256.0,\n"
     "                           (gouraudRow + 0.5) / 256.0);\n"
     "        float palIdx = texture2D(uCLUT, clutUV).r * 255.0;\n"
@@ -782,7 +787,8 @@ static GLint s_clut_aMode = -1;
 static GLint s_clut_aFlat = -1;
 static GLint s_clut_aFlags = -1;
 static GLint s_clut_aSlot = -1;
-static GLint s_clut_aUVBox = -1;   /* (the polygon's texture coordinates' box: GpuVertex.UMin..VMax) */
+static GLint s_clut_aUVBox = -1;
+static GLint s_clut_aClutRow = -1; /* (the polygon's CLUT base row: GpuVertex.ClutRow) */   /* (the polygon's texture coordinates' box: GpuVertex.UMin..VMax) */
 static GLint s_clut_uAtlasSlots = -1;
 static GLint s_clut_uPerVertex = -1;
 static GLint s_clut_uAtlas = -1;
@@ -1159,6 +1165,7 @@ static S32 GL_CreateContext(U32 resX, U32 resY) {
     s_clut_aFlags = glGetAttribLocation(s_clutProgram, "aFlags");
     s_clut_aSlot = glGetAttribLocation(s_clutProgram, "aSlot");
     s_clut_aUVBox = glGetAttribLocation(s_clutProgram, "aUVBox");
+    s_clut_aClutRow = glGetAttribLocation(s_clutProgram, "aClutRow");
     s_clut_uAtlasSlots = glGetUniformLocation(s_clutProgram, "uAtlasSlots");
     s_clut_uPerVertex = glGetUniformLocation(s_clutProgram, "uPerVertex");
     s_clut_uPerspCorrect = glGetUniformLocation(s_clutProgram, "uPerspCorrect");
@@ -2481,6 +2488,10 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
         glEnableVertexAttribArray(s_clut_aUVBox);
         glVertexAttribPointer(s_clut_aUVBox, 4, GL_UNSIGNED_SHORT, GL_FALSE, (GLsizei)sizeof(GpuVertex), (const void *)20);
     }
+    if (s_clut_aClutRow >= 0) {
+        glEnableVertexAttribArray(s_clut_aClutRow);
+        glVertexAttribPointer(s_clut_aClutRow, 1, GL_UNSIGNED_SHORT, GL_FALSE, (GLsizei)sizeof(GpuVertex), (const void *)28);
+    }
 
     /* Depth rules resolved by the common layer (see Common_BuildDrawParams):
        GEQUAL for the terrain/bodies, ALWAYS for NZW coplanar animated polys,
@@ -2548,6 +2559,7 @@ static void GL_DrawTriangles(const GpuVertex *verts, U32 vertexCount,
     if (s_clut_aFlags >= 0) glDisableVertexAttribArray(s_clut_aFlags);
     if (s_clut_aSlot >= 0) glDisableVertexAttribArray(s_clut_aSlot);
     if (s_clut_aUVBox >= 0) glDisableVertexAttribArray(s_clut_aUVBox);
+    if (s_clut_aClutRow >= 0) glDisableVertexAttribArray(s_clut_aClutRow);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
 }
@@ -3029,6 +3041,9 @@ static void D_TargetBindClear(U32 rgb) {
     GL_TargetBindClear(rgb);
     GL_OP_END("TargetBindClear", 0);
 }
+/* (the CLUT shader reads GpuVertex.ClutRow in per-vertex batches: aClutRow) */
+static S32 GL_PerVertexClutRow(void) { return 1; }
+
 static S32 D_TargetReadDepthDown(void *dst, U32 width, U32 height) {
     S32 ok;
     GL_OP_BEGIN("TargetReadDepthDown %ux%u", width, height);
@@ -3188,6 +3203,7 @@ const GpuRendererBackend GpuRendererBackendGL = {
     D_TexUpdateAtlasSlot,
     GL_SetSceneDrawnPalette,
     D_TargetReadDepthDown,
+    GL_PerVertexClutRow,
 };
 
 #endif /* USE_GPURENDERER */
